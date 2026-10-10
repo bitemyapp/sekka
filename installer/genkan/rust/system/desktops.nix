@@ -117,6 +117,8 @@ let
   # Breeze with the ocean wave: Plasma falls back to Breeze for everything it
   # leaves out, as it does for Breeze Dark. Its files must be inside its own
   # directory: Plasma ignores package files that resolve elsewhere.
+  # The image plugin's FillMode=2 (PreserveAspectCrop) scales the original
+  # proportionally and crops to each display; do not pre-crop the source.
   breeze = "${pkgs.kdePackages.plasma-workspace}/share/plasma/look-and-feel/org.kde.breeze.desktop";
   plasmaThemeMetadata = pkgs.writeText "breeze-ocean-metadata.json" (
     builtins.toJSON {
@@ -138,7 +140,9 @@ let
     substitute ${breeze}/contents/defaults $theme/contents/defaults \
       --replace-fail Image=Next Image=tatami-ocean-wave
   '';
-  # Xfce's default backdrop is fixed when xfdesktop is built.
+  # Xfce's default backdrop is fixed when xfdesktop is built. Its default
+  # XFCE_BACKDROP_IMAGE_ZOOMED mode preserves aspect ratio and crops at
+  # display time, including on newly attached monitors.
   xfdesktop = pkgs.xfdesktop.overrideAttrs (old: {
     configureFlags = old.configureFlags or [ ] ++ [
       "--with-default-backdrop-filename=${wallpaper "looks-flat.jpg"}"
@@ -354,9 +358,11 @@ in
       [org.gnome.desktop.background]
       picture-uri='file://${wallpaper "foggy-forest.jpg"}'
       picture-uri-dark='file://${wallpaper "foggy-forest.jpg"}'
+      picture-options='zoom'
 
       [org.gnome.desktop.screensaver]
       picture-uri='file://${wallpaper "foggy-forest.jpg"}'
+      picture-options='zoom'
     '';
     environment.xfce.excludePackages = lib.mkIf (has "xfce") [ pkgs.xfdesktop ];
     # GNOME enables IBus, whose autostart entry skips only GNOME and KDE. In

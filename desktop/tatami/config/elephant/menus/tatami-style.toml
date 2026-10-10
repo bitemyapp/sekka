@@ -14,6 +14,12 @@ value = "tatami background"
 keywords = ["wallpaper"]
 
 [[entries]]
+text = "Background settings"
+icon = ""
+value = "tatami background settings"
+keywords = ["wallpaper", "scaling", "crop", "fit", "fill", "color", "monitor"]
+
+[[entries]]
 text = "Hyprland"
 icon = ""
 value = "tatami edit-config"

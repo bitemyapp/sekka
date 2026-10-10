@@ -83,6 +83,15 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 
 ## Screenshots and attribution
 
+Wallpapers retain their original published resolution and aspect ratio; desktop
+fill/zoom modes handle cropping for each display. Preserve the downloaded bytes
+and record their URL, dimensions and SHA-256 in
+`desktop/tatami/wallpapers/wallpapers.json`. See the [wallpaper documentation](desktop/tatami/wallpapers/README.md)
+and run `nix build .#checks.x86_64-linux.wallpapers` after changing the collection.
+`nix build .#checks.x86_64-linux.tatami-background` exercises Tatami's saved
+appearance settings, per-output inheritance, renderer arguments and menu commands
+using isolated state, without changing the host desktop.
+
 Keep original full-resolution PNGs and record how they were captured in `docs/screenshots.md`. Use real app captures, not generated mockups. Mark previews or historical images accurately. Preserve the original component licenses, SPDX declarations, artwork credits, and `docs/imports.json` provenance.
 
 `nix build .#screenshots --out-link result-screenshots` captures Genkan's debug
