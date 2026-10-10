@@ -60,6 +60,8 @@ pub enum Operation {
     ChangeSystem { change: SystemChange, what: String, adding: bool },
     /// Update some of a flake's inputs.
     UpdateFlake { inputs: Vec<String>, mode: Mode },
+    /// Update the distro, including migration from its predecessor repositories.
+    UpdateSekka,
     /// Update root's channels.
     UpdateChannels { mode: Mode },
     /// Make a flake input follow another branch of its repository, and
@@ -94,6 +96,7 @@ impl Operation {
             Operation::ChangeSystem { what, adding: true, .. } => format!("Installing {what} for everyone"),
             Operation::ChangeSystem { what, adding: false, .. } => format!("Removing {what}"),
             Operation::UpdateFlake { .. } | Operation::UpdateChannels { .. } => "Updating your system".to_owned(),
+            Operation::UpdateSekka => "Updating Sekka".to_owned(),
             Operation::FollowBranch { input, branch } => format!("Following {branch} for {input}"),
             Operation::Rollback { generation } => format!("Returning to generation {generation}"),
             Operation::Clean { .. } => "Cleaning up the store".to_owned(),
@@ -110,6 +113,7 @@ impl Operation {
             Operation::UpdateFlake { mode: Mode::Boot, .. } | Operation::UpdateChannels { mode: Mode::Boot } => {
                 "Ready: it takes over at the next restart".to_owned()
             }
+            Operation::UpdateSekka => "Sekka is ready. Restart when convenient to use it".to_owned(),
             Operation::UpdateFlake { .. } | Operation::UpdateChannels { .. } => "Your system is up to date".to_owned(),
             Operation::FollowBranch { input, branch } => format!("{input} follows {branch} now"),
             Operation::Rollback { generation } => format!("Generation {generation} is running"),
@@ -180,6 +184,11 @@ impl Operation {
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::UpdateFlake { inputs, mode } => update_steps(model, inputs, *mode),
+            Operation::UpdateSekka => {
+                let mut c = helper();
+                c.args(["change", "--sekka", "--mode", "boot"]);
+                vec![step(Run { command: c, as_root: true })]
+            }
             Operation::UpdateChannels { mode } => {
                 let mut c = helper();
                 c.args(["change", "--channels", "--mode", mode.arg()]);
@@ -346,6 +355,9 @@ mod tests {
         );
         assert_eq!(change.title(), "Installing htop for everyone");
         assert!(Operation::Rollback { generation: 3 }.is_system());
+        let update = Operation::UpdateSekka.steps(&model).remove(0)().unwrap().unwrap();
+        assert!(update.as_root);
+        assert_eq!(&args(update)[1..], ["change", "--sekka", "--mode", "boot"]);
         let try_it = try_command("nixpkgs", "cowsay", "cowsay", false);
         assert_eq!(try_it, ["env", "nix", "shell", "nixpkgs#cowsay", "--command", "cowsay"]);
     }

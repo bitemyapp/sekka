@@ -415,6 +415,25 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
         }
         content.append(&top);
 
+        if model.setup.kind == Kind::Flake
+            && std::fs::read_to_string(model.setup.dir.join("flake.nix"))
+                .is_ok_and(|text| yukimi_config::sekka::supported(&text))
+        {
+            let sekka = adw::PreferencesGroup::new();
+            let row = adw::ActionRow::builder()
+                .title("Update Sekka")
+                .subtitle("Get the newest Sekka and prepare it for your next restart. Your apps and settings stay. Updates for other sources are below.")
+                .build();
+            let button = gtk::Button::with_label("Update Sekka");
+            button.add_css_class("suggested-action");
+            button.set_valign(gtk::Align::Center);
+            let ctx = ctx.clone();
+            button.connect_clicked(move |_| ctx.run(Operation::UpdateSekka));
+            row.add_suffix(&button);
+            sekka.add(&row);
+            content.append(&sekka);
+        }
+
         if let Some(movements) = &movements {
             let older: Vec<&str> = movements
                 .iter()

@@ -65,6 +65,37 @@ For now, building an image is a developer workflow; see [DEVELOPERS.md](DEVELOPE
 
 Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
 
+## Updating an existing installation
+
+Open **Yukimi → Updates → Update Sekka**, or run:
+
+```sh
+sekka-update
+```
+
+Enter your administrator password when asked. Sekka downloads the update,
+builds your system, and prepares it for your next restart. It does not reboot
+automatically. Your account, installed applications, hardware configuration,
+and desktop choices stay in place. Previous generations remain available in
+Yukimi's History and the boot menu.
+
+If your installation predates this command (including the original graphical
+installer builds), run this once:
+
+```sh
+nix run github:bitemyapp/sekka/main#update
+```
+
+This also moves supported older installations from the separate Calamares,
+Tatami, and Yukimi repositories to Sekka. After restarting, the command and
+button above are available. If the build fails or you cancel before activation,
+the updater restores the configuration files it changed.
+
+This updates Sekka itself. NixOS base packages and independently pinned
+applications have their own updates on Yukimi's Updates page. To activate a
+Sekka update immediately, use `sekka-update --switch`; kernel and desktop
+changes can still need a restart.
+
 ## Questions, bugs, and contributions
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.

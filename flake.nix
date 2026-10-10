@@ -83,6 +83,11 @@
         ];
       };
       nixosConfigurations.installer = installer;
+      apps.${system}.update = {
+        type = "app";
+        program = "${inputs.yukimi.packages.${system}.yukimi}/bin/sekka-update";
+        meta.description = "Update an installed Sekka system, migrating predecessor installations automatically";
+      };
       packages.${system} = {
         default = self.packages.${system}.iso;
         iso = installer.config.system.build.isoImage;

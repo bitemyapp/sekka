@@ -43,6 +43,9 @@ const KEPT_LINES: i32 = 1000;
 
 /// Words for failures a person can act on.
 fn explain(error: &str, system: bool, stopped: bool) -> String {
+    if error.contains("System changes had already begun") {
+        return error.to_owned();
+    }
     if error.contains("dismissed") || error.contains("Not authorized") || error.contains("126") {
         return "Cancelled. Nothing was changed.".to_owned();
     }

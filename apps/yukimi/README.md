@@ -2,6 +2,13 @@
 
 *Snow-viewing for NixOS.*
 
+On Sekka, **Updates → Update Sekka** fetches the newest distro and builds it
+for your next restart in one action, with administrator authentication.
+The same operation is available as `sekka-update` (`--switch` activates now).
+Older installer configurations migrate automatically; external package pins
+keep their separate update controls below. For the bootstrap command, see
+the [Sekka update instructions](../../README.md#updating-an-existing-installation).
+
 A yukimi-shōji is a paper screen with a pane of glass set low in it, so you
 can sit in a warm room and watch the snow fall in the garden. Yukimi is that
 window onto a NixOS system. You can see what is installed and why, find what
