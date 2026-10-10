@@ -22,6 +22,8 @@
 //!   - `--follow input=branch`: make a flake input follow another branch of
 //!     its repository (its address in `flake.nix` changes) and update it;
 //!   - `--channels`: update root's channels.
+//!   - `--sekka`: migrate a predecessor installation if needed, then update
+//!     the Sekka input, preserving all independent dependency pins.
 //! - `rollback <generation>` switches to an earlier system generation, and
 //!   puts back the configuration it was built from.
 //! - `clean [--older-than-days n]` deletes old system generations and
@@ -38,11 +40,14 @@
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use yukimi_config::packages;
+use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
 use yukimi_system::setup::{Kind, Setup};
@@ -67,6 +72,23 @@ enum Phase {
 
 /// The phase, and the program running now (to stop when asked).
 static STATE: Mutex<(Phase, Option<u32>)> = Mutex::new((Phase::Working, None));
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn interrupt(_: libc::c_int) {
+    INTERRUPTED.store(true, Ordering::Relaxed);
+}
+
+fn stop() {
+    let mut state = state();
+    if state.0 == Phase::Committed {
+        return;
+    }
+    state.0 = Phase::Stopping;
+    if let Some(pid) = state.1 {
+        // SAFETY: signalling a process has no memory-safety preconditions.
+        unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+    }
+}
 
 fn state() -> std::sync::MutexGuard<'static, (Phase, Option<u32>)> {
     STATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -75,6 +97,21 @@ fn state() -> std::sync::MutexGuard<'static, (Phase, Option<u32>)> {
 /// Stop when standard input closes, if it is a pipe: that is how Yukimi
 /// asks. Standard input that is a terminal or /dev/null means nothing.
 fn watch_for_stop() {
+    // Terminal cancellation must follow the same rollback path as closing
+    // the GUI's pipe, not abruptly exit with a half-edited configuration.
+    // SAFETY: the signal handler only stores to a lock-free atomic.
+    unsafe {
+        libc::signal(libc::SIGINT, interrupt as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGTERM, interrupt as *const () as libc::sighandler_t);
+    }
+    std::thread::spawn(|| {
+        loop {
+            if INTERRUPTED.swap(false, Ordering::Relaxed) {
+                stop();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    });
     // SAFETY: fstat writes only into the struct it is given.
     let is_pipe = unsafe {
         let mut stat: libc::stat = std::mem::zeroed();
@@ -86,15 +123,7 @@ fn watch_for_stop() {
     std::thread::spawn(|| {
         let mut buffer = [0u8; 64];
         while matches!(std::io::stdin().read(&mut buffer), Ok(n) if n > 0) {}
-        let mut state = state();
-        if state.0 == Phase::Committed {
-            return;
-        }
-        state.0 = Phase::Stopping;
-        if let Some(pid) = state.1 {
-            // SAFETY: signalling a process has no memory-safety preconditions.
-            unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-        }
+        stop();
     });
 }
 
@@ -160,6 +189,9 @@ fn report(level: u8, message: &str) {
 
 fn command(program: &str) -> Command {
     let mut c = Command::new(program);
+    // Only the helper handles terminal cancellation. In particular, an
+    // activation already committed must finish even when Ctrl-C is pressed.
+    c.process_group(0);
     c.env_clear().env("PATH", PATH).env("HOME", "/root").env("LANG", "C.UTF-8").stdin(Stdio::null());
     if let Ok(archive) = std::fs::read_link("/run/current-system/sw/lib/locale/locale-archive") {
         c.env("LOCALE_ARCHIVE", archive);
@@ -301,7 +333,7 @@ fn save_configuration(setup: &Setup, generation: u32, replace: bool) -> Result<(
 /// changed since the running generation was built is left as it is, so
 /// that nothing written by hand is lost. Returns the files left alone.
 fn restore_choices(setup: &Setup, kept: &Path, running: Option<&Path>) -> Vec<PathBuf> {
-    let mut files = vec![setup.dir.join("flake.lock")];
+    let mut files = vec![setup.dir.join("flake.nix"), setup.dir.join("flake.lock")];
     files.extend(setup.main.clone());
     files.extend(setup.packages_file());
     let mut left = Vec::new();
@@ -467,6 +499,7 @@ struct Change {
     /// An input to follow another branch, and the branch.
     follow: Option<(String, String)>,
     channels: bool,
+    sekka: bool,
     mode: String,
 }
 
@@ -475,6 +508,10 @@ impl Change {
         let mut change = Change { mode: "switch".into(), ..Change::default() };
         let mut it = args.iter();
         while let Some(flag) = it.next() {
+            if flag == "--sekka" {
+                change.sekka = true;
+                continue;
+            }
             if flag == "--channels" {
                 change.channels = true;
                 continue;
@@ -524,6 +561,17 @@ impl Change {
         if change.lock.is_some() && change.update.is_empty() {
             return Err(Failure("--lock goes with --update".into()));
         }
+        if change.sekka {
+            if change.channels
+                || change.follow.is_some()
+                || change.lock.is_some()
+                || !change.update.is_empty()
+                || change.edits_main()
+            {
+                return Err(Failure("--sekka only goes with --mode".into()));
+            }
+            change.update.push("sekka".into());
+        }
         // An input that follows another branch is updated too, by the helper:
         // a lock file prepared beforehand would be for the old branch.
         if let Some((input, _)) = &change.follow {
@@ -556,6 +604,16 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
 fn change(args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
+    // Validate migration before touching any files. The GUI's detection is
+    // only a convenience; the privileged helper always checks again.
+    let sekka_flake = if change.sekka {
+        if setup.kind != Kind::Flake {
+            return Err(Failure("This installation has no Sekka flake to update".into()));
+        }
+        Some(sekka::prepare(&std::fs::read_to_string(setup.dir.join("flake.nix"))?)?)
+    } else {
+        None
+    };
     if setup.kind == Kind::Flake && change.channels {
         return Err(Failure("This system is a flake; it has no channels to update".into()));
     }
@@ -579,7 +637,10 @@ fn change(args: &[String]) -> Result<String> {
     // The configuration as it is belongs to the running generation: keep it,
     // so going back to that generation brings it back.
     if let Some(generation) = current_generation() {
-        let _ = save_configuration(&setup, generation, false);
+        let saved = save_configuration(&setup, generation, false);
+        if change.sekka {
+            saved?;
+        }
     }
     let lock_file = setup.dir.join("flake.lock");
     let flake_file = setup.dir.join("flake.nix");
@@ -588,6 +649,11 @@ fn change(args: &[String]) -> Result<String> {
     touched.extend(packages_file.clone());
     let backup = Backup::take(&touched);
     let attempt = || -> Result<String> {
+        if let Some(text) = &sekka_flake {
+            stage(1, "Preparing your Sekka configuration");
+            write_file(&setup, &flake_file, text)?;
+            stage_done(1);
+        }
         if let (Some(main), true) = (&main, change.edits_main()) {
             stage(1, "Writing your configuration");
             let mut configuration = std::fs::read_to_string(main)?;
@@ -774,6 +840,23 @@ fn main() -> ExitCode {
         report(0, "yukimi-helper must be started through pkexec");
         return ExitCode::from(2);
     }
+    // CLI and GUI must not edit the configuration or activate generations
+    // concurrently. The kernel releases this lock even after a crash.
+    let _guard = match std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open("/run/lock/yukimi.lock")
+        .and_then(|file| {
+            file.try_lock()?;
+            Ok(file)
+        }) {
+        Ok(file) => file,
+        Err(e) => {
+            report(0, &format!("Another Yukimi operation is running, or its lock is unavailable: {e}"));
+            return ExitCode::FAILURE;
+        }
+    };
     watch_for_stop();
     let result = match command {
         "change" => change(rest),
@@ -787,6 +870,13 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(Failure(message)) => {
+            let message = if state().0 == Phase::Committed {
+                format!(
+                    "System changes had already begun; the configuration was not restored. {message}. Review the log before restarting or retrying."
+                )
+            } else {
+                message
+            };
             report(0, &message);
             println!("{}", serde_json::json!({"ok": false, "error": message}));
             ExitCode::FAILURE
@@ -814,6 +904,16 @@ mod tests {
 
     #[test]
     fn changes_are_checked() {
+        assert_eq!(Change::parse(&args("--sekka --mode boot")).unwrap().update, vec!["sekka"]);
+        for bad in [
+            "--sekka --channels",
+            "--sekka --update nixpkgs",
+            "--sekka --follow sekka=main",
+            "--sekka --packages htop",
+            "--sekka --update sekka --lock /tmp/x",
+        ] {
+            assert!(Change::parse(&args(bad)).is_err(), "{bad}");
+        }
         let change = Change::parse(&args(
             "--packages htop,git --programs steam --unlist-system vim --unlist-user alice:thunderbird,kdePackages.kate \
              --update nixpkgs --lock /tmp/x.lock --mode boot",
@@ -894,6 +994,10 @@ mod tests {
         for d in [&config, &older, &running] {
             std::fs::create_dir_all(d).unwrap();
         }
+        // Migration changes flake.nix too; it must go back with its lock.
+        std::fs::write(older.join("flake.nix"), "old repositories").unwrap();
+        std::fs::write(running.join("flake.nix"), "sekka").unwrap();
+        std::fs::write(config.join("flake.nix"), "sekka").unwrap();
         // flake.lock: unchanged since generation 2, so it goes back to 1's.
         std::fs::write(older.join("flake.lock"), "lock 1").unwrap();
         std::fs::write(running.join("flake.lock"), "lock 2").unwrap();
@@ -907,6 +1011,7 @@ mod tests {
         std::fs::write(config.join("yukimi.nix"), "{ }").unwrap();
         let setup = Setup::detect_in(&config, Default::default(), "acer");
         let left = restore_choices(&setup, &older, Some(&running));
+        assert_eq!(std::fs::read_to_string(config.join("flake.nix")).unwrap(), "old repositories");
         assert_eq!(std::fs::read_to_string(config.join("flake.lock")).unwrap(), "lock 1");
         assert_eq!(std::fs::read_to_string(config.join("configuration.nix")).unwrap(), "{ a = 3; }");
         assert!(!config.join("yukimi.nix").exists());

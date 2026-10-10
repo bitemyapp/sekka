@@ -17,6 +17,7 @@ pub mod branch;
 pub mod edit;
 pub mod lock;
 pub mod packages;
+pub mod sekka;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {

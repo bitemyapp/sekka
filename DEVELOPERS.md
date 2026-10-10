@@ -67,7 +67,35 @@ The root lock retains distinct base-system and application Nixpkgs inputs, plus 
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
 
-Update the distro through Yukimi or `nix flake update sekka`, then rebuild. External inputs retain their independent update controls. Do not copy the root lock verbatim into an installed machine: it lacks the Sekka input until the installed lock is generated.
+Update the distro through **Yukimi → Updates → Update Sekka** or `sekka-update`.
+Both run the same privileged helper transaction: recognize/migrate the flake,
+back up the configuration, update only `sekka`, build the host, and activate
+with `boot`. `sekka-update --switch` activates immediately. External inputs
+retain their independent update controls. Do not copy the root lock verbatim
+into an installed machine: it lacks the Sekka input until the installed lock
+is generated.
+
+For installations without the new updater, `nix run github:bitemyapp/sekka/main#update`
+bootstraps it without installing a user profile package. The CLI uses the
+helper beside its own executable, including when run from the Nix store;
+polkit asks for administrator authentication. `--print-flake` prints the
+proposed configuration without mutation or authentication.
+
+Migration recognizes the predecessor installer's explicit input declarations
+and replaces only the three first-party inputs and the module reference.
+It preserves external URLs and locks, configuration modules, user choices,
+hardware settings, and `system.stateVersion`. Unrecognized customizations
+require manual migration. Failed builds and cancellation before activation
+restore the touched files. A helper process lock serializes Yukimi changes;
+configuration snapshots under `/var/lib/yukimi/configurations` accompany
+generations, including `flake.nix` for rollback across migration. Activation
+is allowed to finish once started; it never initiates a reboot.
+
+`python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
+helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
+failed builds, cancellation, concurrent operations, and rollback. Nix and
+systemd actions are stubbed; also evaluate/build a copy of the installed host
+flake to check actual module and dependency compatibility before deployment.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
 
