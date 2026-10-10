@@ -17,24 +17,6 @@ use yukimi_system::updates;
 
 use crate::model::Model;
 
-/// When a new system takes over.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
-    /// Now.
-    Switch,
-    /// At the next restart.
-    Boot,
-}
-
-impl Mode {
-    fn arg(self) -> &'static str {
-        match self {
-            Mode::Switch => "switch",
-            Mode::Boot => "boot",
-        }
-    }
-}
-
 /// A change to what the system installs: each part is left as it is when
 /// `None` (or empty).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -59,11 +41,11 @@ pub enum Operation {
     /// Install or remove for everyone; `what` names it for the dialog.
     ChangeSystem { change: SystemChange, what: String, adding: bool },
     /// Update some of a flake's inputs.
-    UpdateFlake { inputs: Vec<String>, mode: Mode },
+    UpdateFlake { inputs: Vec<String> },
     /// Update the distro, including migration from its predecessor repositories.
-    UpdateSekka,
+    UpdateSekka { inputs: Vec<String> },
     /// Update root's channels.
-    UpdateChannels { mode: Mode },
+    UpdateChannels,
     /// Make a flake input follow another branch of its repository, and
     /// update it to that branch's newest commit.
     FollowBranch { input: String, branch: String },
@@ -95,8 +77,8 @@ impl Operation {
             Operation::RemoveForMe { name } => format!("Removing {name}"),
             Operation::ChangeSystem { what, adding: true, .. } => format!("Installing {what} for everyone"),
             Operation::ChangeSystem { what, adding: false, .. } => format!("Removing {what}"),
-            Operation::UpdateFlake { .. } | Operation::UpdateChannels { .. } => "Updating your system".to_owned(),
-            Operation::UpdateSekka => "Updating Sekka".to_owned(),
+            Operation::UpdateFlake { .. } | Operation::UpdateChannels => "Updating your system".to_owned(),
+            Operation::UpdateSekka { .. } => "Updating Sekka".to_owned(),
             Operation::FollowBranch { input, branch } => format!("Following {branch} for {input}"),
             Operation::Rollback { generation } => format!("Returning to generation {generation}"),
             Operation::Clean { .. } => "Cleaning up the store".to_owned(),
@@ -110,11 +92,10 @@ impl Operation {
             Operation::RemoveForMe { name } => format!("{name} is removed"),
             Operation::ChangeSystem { what, adding: true, .. } => format!("{what} is installed for everyone"),
             Operation::ChangeSystem { what, adding: false, .. } => format!("{what} is removed"),
-            Operation::UpdateFlake { mode: Mode::Boot, .. } | Operation::UpdateChannels { mode: Mode::Boot } => {
-                "Ready: it takes over at the next restart".to_owned()
+            Operation::UpdateSekka { .. } => "Update prepared; checking completion".to_owned(),
+            Operation::UpdateFlake { .. } | Operation::UpdateChannels => {
+                "Update prepared; checking completion".to_owned()
             }
-            Operation::UpdateSekka => "Sekka is ready. Restart when convenient to use it".to_owned(),
-            Operation::UpdateFlake { .. } | Operation::UpdateChannels { .. } => "Your system is up to date".to_owned(),
             Operation::FollowBranch { input, branch } => format!("{input} follows {branch} now"),
             Operation::Rollback { generation } => format!("Generation {generation} is running"),
             Operation::Clean { .. } => "The store is tidy".to_owned(),
@@ -124,6 +105,12 @@ impl Operation {
     /// What to say when it worked, given what the helper reported.
     pub fn outcome(&self, out: &str) -> String {
         let report: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_default();
+        if self.is_update()
+            && let Ok(completion) =
+                serde_json::from_value::<yukimi_system::completion::Completion>(report["completion"].clone())
+        {
+            return completion.title().into();
+        }
         match self {
             Operation::Rollback { generation } if report["configuration"] == false => format!(
                 "Generation {generation} is running. Its configuration wasn't kept, so your next change builds on \
@@ -143,6 +130,10 @@ impl Operation {
     /// Whether this changes the whole system (and asks for a password).
     pub fn is_system(&self) -> bool {
         !matches!(self, Operation::InstallForMe { .. } | Operation::RemoveForMe { .. })
+    }
+
+    pub fn is_update(&self) -> bool {
+        matches!(self, Operation::UpdateSekka { .. } | Operation::UpdateFlake { .. } | Operation::UpdateChannels)
     }
 
     /// The steps that do it.
@@ -183,15 +174,18 @@ impl Operation {
                 c.args(["--mode", "switch"]);
                 vec![step(Run { command: c, as_root: true })]
             }
-            Operation::UpdateFlake { inputs, mode } => update_steps(model, inputs, *mode),
-            Operation::UpdateSekka => {
+            Operation::UpdateFlake { inputs } => update_steps(model, inputs),
+            Operation::UpdateSekka { inputs } => {
                 let mut c = helper();
-                c.args(["change", "--sekka", "--mode", "boot"]);
+                c.args(["change", "--sekka", "--mode", "auto"]);
+                if !inputs.is_empty() {
+                    c.args(["--update", &inputs.join(",")]);
+                }
                 vec![step(Run { command: c, as_root: true })]
             }
-            Operation::UpdateChannels { mode } => {
+            Operation::UpdateChannels => {
                 let mut c = helper();
-                c.args(["change", "--channels", "--mode", mode.arg()]);
+                c.args(["change", "--channels", "--mode", "auto"]);
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::FollowBranch { input, branch } => {
@@ -219,11 +213,11 @@ impl Operation {
 /// Updating a flake: the new lock file and its new sources, got ready as
 /// this user, then the helper. Without a cache directory to get it ready
 /// in, the helper fetches everything itself.
-fn update_steps(model: &Model, inputs: &[String], mode: Mode) -> Vec<Step> {
+fn update_steps(model: &Model, inputs: &[String]) -> Vec<Step> {
     let flake = model.setup.flake();
     let current = model.setup.dir.join("flake.lock");
     let mut helper_command = helper();
-    helper_command.args(["change", "--update", &inputs.join(","), "--mode", mode.arg()]);
+    helper_command.args(["change", "--update", &inputs.join(","), "--mode", "auto"]);
     let Some(dir) = crate::cache_dir() else {
         return vec![step(Run { command: helper_command, as_root: true })];
     };
@@ -355,9 +349,9 @@ mod tests {
         );
         assert_eq!(change.title(), "Installing htop for everyone");
         assert!(Operation::Rollback { generation: 3 }.is_system());
-        let update = Operation::UpdateSekka.steps(&model).remove(0)().unwrap().unwrap();
+        let update = Operation::UpdateSekka { inputs: vec![] }.steps(&model).remove(0)().unwrap().unwrap();
         assert!(update.as_root);
-        assert_eq!(&args(update)[1..], ["change", "--sekka", "--mode", "boot"]);
+        assert_eq!(&args(update)[1..], ["change", "--sekka", "--mode", "auto"]);
         let try_it = try_command("nixpkgs", "cowsay", "cowsay", false);
         assert_eq!(try_it, ["env", "nix", "shell", "nixpkgs#cowsay", "--command", "cowsay"]);
     }
@@ -365,13 +359,13 @@ mod tests {
     #[test]
     fn updates_get_ready_before_the_helper() {
         let model = Model::default();
-        let steps = Operation::UpdateFlake { inputs: vec!["nixpkgs".into()], mode: Mode::Boot }.steps(&model);
+        let steps = Operation::UpdateFlake { inputs: vec!["nixpkgs".into()] }.steps(&model);
         if crate::cache_dir().is_some() {
             assert_eq!(steps.len(), 3);
         }
         let helper = steps.into_iter().last().unwrap()().unwrap().unwrap();
         let args = args(helper);
         assert!(args.windows(2).any(|w| w == ["--update", "nixpkgs"]), "{args:?}");
-        assert!(args.windows(2).any(|w| w == ["--mode", "boot"]), "{args:?}");
+        assert!(args.windows(2).any(|w| w == ["--mode", "auto"]), "{args:?}");
     }
 }

@@ -27,6 +27,8 @@ pub struct Generation {
     pub kernel_version: Option<String>,
     /// The profile points at this one.
     pub current: bool,
+    /// This generation is actually active, independently of the boot selection.
+    pub active: bool,
     /// The machine started with this one.
     pub booted: bool,
 }
@@ -62,6 +64,7 @@ pub fn list(profile: &Path, booted: Option<&str>) -> Vec<Generation> {
                 .filter(|v| !v.is_empty());
             Some(Generation {
                 current: current.as_deref() == Some(file.as_str()),
+                active: false,
                 booted: booted == Some(target.as_str()),
                 number,
                 link,
@@ -82,7 +85,12 @@ pub fn system() -> Vec<Generation> {
         .ok()
         .and_then(|p| p.to_str().and_then(StorePath::parse))
         .map(|p| p.as_str().to_owned());
-    list(Path::new(SYSTEM_PROFILE), booted.as_deref())
+    let active = std::fs::canonicalize("/run/current-system").ok();
+    let mut generations = list(Path::new(SYSTEM_PROFILE), booted.as_deref());
+    for g in &mut generations {
+        g.active = active.as_deref() == Some(Path::new(g.target.as_str()));
+    }
+    generations
 }
 
 /// `system-42-link` is generation 42 of `system`.

@@ -50,6 +50,7 @@ use yukimi_config::packages;
 use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
+use yukimi_system::completion::{self, Receipt};
 use yukimi_system::setup::{Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
@@ -542,7 +543,7 @@ impl Change {
                 other => return Err(Failure(format!("Unknown option {other}"))),
             }
         }
-        if !matches!(change.mode.as_str(), "switch" | "boot") {
+        if !matches!(change.mode.as_str(), "auto" | "switch" | "boot") {
             return Err(Failure(format!("Unknown mode {}", change.mode)));
         }
         let attrs = change.unlist_system.iter().chain(change.unlist_user.iter().flat_map(|(_, a)| a));
@@ -562,15 +563,12 @@ impl Change {
             return Err(Failure("--lock goes with --update".into()));
         }
         if change.sekka {
-            if change.channels
-                || change.follow.is_some()
-                || change.lock.is_some()
-                || !change.update.is_empty()
-                || change.edits_main()
-            {
-                return Err(Failure("--sekka only goes with --mode".into()));
+            if change.channels || change.follow.is_some() || change.lock.is_some() || change.edits_main() {
+                return Err(Failure("--sekka only goes with --mode and --update".into()));
             }
-            change.update.push("sekka".into());
+            if !change.update.iter().any(|i| i == "sekka") {
+                change.update.push("sekka".into());
+            }
         }
         // An input that follows another branch is updated too, by the helper:
         // a lock file prepared beforehand would be for the old branch.
@@ -742,11 +740,39 @@ fn change(args: &[String]) -> Result<String> {
             return Err(e);
         }
     };
-    let mode = change.mode.as_str();
+    let active = std::fs::canonicalize("/run/current-system")?;
+    let booted = std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
+    let reasons = completion::plan(&booted, &active, Path::new(&system));
+    let mode = match change.mode.as_str() {
+        "auto" if reasons.is_empty() => "switch",
+        "auto" => "boot",
+        explicit => explicit,
+    };
+    let mut receipt =
+        Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
+    save_update(&receipt)?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
     activate(&setup, &system, mode)?;
+    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
+        return Err(Failure("Activation returned without making the built system current".into()));
+    }
+    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
+    save_update(&receipt)?;
     stage_done(4);
-    Ok(serde_json::json!({"ok": true, "system": system}).to_string())
+    Ok(serde_json::json!({"ok": true, "system": system, "mode": mode, "completion": completion::read_system()})
+        .to_string())
+}
+
+fn save_update(receipt: &Receipt) -> Result<()> {
+    use std::io::Write;
+    let path = Path::new(completion::RECEIPT);
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    let temporary = path.with_extension("new");
+    let mut file = std::fs::File::create(&temporary)?;
+    file.write_all(&serde_json::to_vec(receipt)?)?;
+    file.sync_all()?;
+    std::fs::rename(temporary, path)?;
+    Ok(())
 }
 
 fn rollback(args: &[String]) -> Result<String> {
@@ -767,6 +793,13 @@ fn rollback(args: &[String]) -> Result<String> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
     run(set, "Choosing the generation")?;
+    let mut receipt = Receipt {
+        system: std::fs::canonicalize(PROFILE)?,
+        boot_id: completion::boot_id(),
+        state: "activating".into(),
+        reasons: vec![],
+    };
+    save_update(&receipt)?;
     // The configuration follows the system, so the next change builds on
     // what this generation was made from.
     let kept = saved(generation).is_dir();
@@ -779,9 +812,16 @@ fn rollback(args: &[String]) -> Result<String> {
         }
     }
     switch(&format!("{PROFILE}/bin/switch-to-configuration"), "switch")?;
+    if std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
+        return Err(Failure("Rollback did not make the selected generation current".into()));
+    }
+    receipt.state = "activated".into();
+    save_update(&receipt)?;
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
-    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left}).to_string())
+    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,
+        "system": receipt.system, "mode": "switch", "completion": completion::read_system()})
+    .to_string())
 }
 
 fn clean(args: &[String]) -> Result<String> {
@@ -904,10 +944,13 @@ mod tests {
 
     #[test]
     fn changes_are_checked() {
+        assert_eq!(
+            Change::parse(&args("--sekka --update nixpkgs,sekka --mode auto")).unwrap().update,
+            vec!["nixpkgs", "sekka"]
+        );
         assert_eq!(Change::parse(&args("--sekka --mode boot")).unwrap().update, vec!["sekka"]);
         for bad in [
             "--sekka --channels",
-            "--sekka --update nixpkgs",
             "--sekka --follow sekka=main",
             "--sekka --packages htop",
             "--sekka --update sekka --lock /tmp/x",

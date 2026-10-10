@@ -22,6 +22,7 @@ use yukimi_system::updates::Release;
 use crate::model::{Model, Store};
 use crate::ops::Operation;
 
+mod completion;
 mod discover;
 mod history;
 mod installed;

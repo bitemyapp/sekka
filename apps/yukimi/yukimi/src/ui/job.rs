@@ -111,6 +111,11 @@ fn work(steps: Vec<crate::ops::Step>, stop: nix::Stop, sender: async_channel::Se
             }
         }
     }
+    let mut report: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_default();
+    yukimi_system::completion::finish_update(&mut report);
+    if report.get("completion").is_some() {
+        out = report.to_string();
+    }
     let _ = sender.send_blocking(Event::Done(Ok(out)));
 }
 
@@ -296,8 +301,12 @@ pub fn run(ctx: &Ctx, operation: Operation) {
                     match result {
                         Ok(out) => {
                             bar.set_fraction(1.0);
-                            status.set_text(&operation.done());
-                            ctx.toast(&operation.outcome(&out));
+                            status.set_text(&operation.outcome(&out));
+                            if operation.is_update() {
+                                ctx.show("updates");
+                            } else {
+                                ctx.toast(&operation.outcome(&out));
+                            }
                             ctx.reload();
                             let dialog = dialog.clone();
                             glib::timeout_add_local_once(Duration::from_millis(900), move || {

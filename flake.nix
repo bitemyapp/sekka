@@ -270,6 +270,11 @@
               touch $out
             '';
         yukimi = self.packages.${system}.yukimi;
+        update-completion = import ./nix/update-completion-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) yukimi;
+          yukimiModule = inputs.yukimi.nixosModules.default;
+        };
         tools = tools;
         template-lock = pkgs.runCommand "template-lock-tests" { } ''
           ${tools}/bin/respin-tools check-config template ${./templates/flake.nix.in} ${

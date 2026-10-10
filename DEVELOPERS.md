@@ -67,11 +67,16 @@ The root lock retains distinct base-system and application Nixpkgs inputs, plus 
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
 
-Update the distro through **Yukimi → Updates → Update Sekka** or `sekka-update`.
-Both run the same privileged helper transaction: recognize/migrate the flake,
-back up the configuration, update only `sekka`, build the host, and activate
-with `boot`. `sekka-update --switch` activates immediately. External inputs
-retain their independent update controls. Do not copy the root lock verbatim
+Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
+Both use the privileged helper transaction: recognize/migrate the flake,
+back up the configuration, update the selected inputs, and build the host once.
+The ordinary GUI action includes Sekka and sources with available newer revisions;
+the CLI updates only Sekka. Individual source rows retain their controls.
+The default `auto` mode compares boot artifacts, kernel parameters, startup
+compatibility, the declared display/graphics/sleep-manager identity, and NixOS
+switch inhibitors before choosing `switch` or `boot`. A missing compatibility
+manifest stages the transition for boot. `sekka-update --boot` and `--switch`
+remain explicit terminal overrides. Do not copy the root lock verbatim
 into an installed machine: it lacks the Sekka input until the installed lock
 is generated.
 
@@ -90,6 +95,34 @@ restore the touched files. A helper process lock serializes Yukimi changes;
 configuration snapshots under `/var/lib/yukimi/configurations` accompany
 generations, including `flake.nix` for rollback across migration. Activation
 is allowed to finish once started; it never initiates a reboot.
+
+`/var/lib/yukimi/update.json` records the built target and activation outcome,
+written atomically before and after activation. A failure cannot be mistaken
+for a ready boot just because the system profile moved. Completion is recomputed
+from selected, active and booted systems, rather than a sticky reboot flag.
+Booting the prepared generation clears its request. `sekka-update --status --json`
+exposes the same assessment used by the GUI. The GUI has one persistent completion
+row, with reboot taking precedence over sign-out; it does not repeatedly pop up
+dialogs or require Yukimi to autostart.
+
+Tatami records its loaded component identities at session launch in
+`$XDG_RUNTIME_DIR/tatami/update-session.json`. An unprivileged frontend invokes
+`tatami update-session` after a verified live switch. Safe configuration reloads
+advance only the fingerprints actually applied. Compositor/session environment
+changes wait for login, and failed reloads remain explicitly unverified.
+Unchanged pinned Hyprland configuration does not request sign-out. Active Keep
+Awake holders survive both NixOS live activation and appearance reloads; their
+implementation advances at a fresh session without dropping protection mid-update.
+
+```sh
+nix build .#checks.x86_64-linux.update-completion
+python3 tests/test_tatami_update.py /nix/store/…-tatami/bin/tatami -v
+```
+
+The completion VM exercises real live activation and a UEFI boot into a prepared
+generation, verifies that the restart request disappears, and captures the GUI.
+Namespace fixtures test helper transactions and Tatami reload failures without
+changing the host desktop.
 
 `python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,

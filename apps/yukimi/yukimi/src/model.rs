@@ -85,6 +85,7 @@ pub struct Store {
 pub struct Model {
     pub setup: Setup,
     pub info: SystemInfo,
+    pub completion: yukimi_system::completion::Completion,
     pub generations: Vec<Generation>,
     /// Packages the current user installed for themselves.
     pub user_packages: Vec<Element>,
@@ -111,6 +112,7 @@ impl Default for Model {
         Model {
             setup: Setup::detect_in(Path::new("/nonexistent"), Default::default(), ""),
             info: SystemInfo::default(),
+            completion: Default::default(),
             generations: Vec::new(),
             user_packages: Vec::new(),
             configured: Configured::default(),
@@ -133,6 +135,7 @@ impl Model {
         let setup = Setup::detect();
         let mut model = Model {
             info: SystemInfo::read(),
+            completion: yukimi_system::completion::read(),
             generations: generations::system(),
             user_packages: profile::user_elements(),
             user: std::env::var("USER").unwrap_or_default(),
@@ -213,7 +216,7 @@ impl Model {
     }
 
     pub fn current_generation(&self) -> Option<&Generation> {
-        self.generations.iter().find(|g| g.current)
+        self.generations.iter().find(|g| g.active)
     }
 
     /// Attributes the current user installed for themselves.

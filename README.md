@@ -77,15 +77,21 @@ Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Opti
 
 ## Updating an existing installation
 
-Open **Yukimi → Updates → Update Sekka**, or run:
+Open **Yukimi → Updates → Update** to get Sekka and the available source updates
+together. To update Sekka itself from a terminal, run:
 
 ```sh
 sekka-update
 ```
 
 Enter your administrator password when asked. Sekka downloads the update,
-builds your system, and prepares it for your next restart. It does not reboot
-automatically. Your account, installed applications, hardware configuration,
+builds your system, and applies changes safely. When a restart or sign-out is
+needed, Yukimi shows one completion message with a button to finish when you
+are ready. A restart also finishes desktop changes; you will not be asked to
+restart again for that same prepared update. Once preparation finishes,
+Yukimi can be closed: the computer starts the prepared system on its next boot.
+It never restarts or signs you out automatically.
+Your account, installed applications, hardware configuration,
 and desktop choices stay in place. Previous generations remain available in
 Yukimi's History and the boot menu.
 
@@ -101,10 +107,11 @@ Tatami, and Yukimi repositories to Sekka. After restarting, the command and
 button above are available. If the build fails or you cancel before activation,
 the updater restores the configuration files it changed.
 
-This updates Sekka itself. NixOS base packages and independently pinned
-applications have their own updates on Yukimi's Updates page. To activate a
-Sekka update immediately, use `sekka-update --switch`; kernel and desktop
-changes can still need a restart.
+The terminal command updates Sekka itself, preserving independent dependency
+pins. Yukimi's Update button includes available NixOS and application source
+updates in the same operation. Individual sources can still be updated from
+their rows. Run `sekka-update --status` to check whether anything remains to
+be applied.
 
 ## Questions, bugs, and contributions
 

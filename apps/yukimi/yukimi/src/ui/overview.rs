@@ -53,12 +53,12 @@ fn hero(ctx: &Ctx) -> gtk::Overlay {
     column.append(&hello);
     column.append(&name);
     column.append(&subtitle);
-    if model.info.restart_needed {
-        let pill = gtk::Label::new(Some("Restart to finish an update"));
-        pill.add_css_class("hero-pill");
-        pill.set_halign(gtk::Align::Start);
-        pill.set_margin_top(8);
-        column.append(&pill);
+    if model.completion.action != yukimi_system::completion::Action::None {
+        let status = gtk::Button::with_label(model.completion.title());
+        status.set_halign(gtk::Align::Start);
+        let ctx = ctx.clone();
+        status.connect_clicked(move |_| ctx.show("updates"));
+        column.append(&status);
     }
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&column));

@@ -167,10 +167,13 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
                 subtitle.push_str(&format!("  ·  Linux {kernel}"));
             }
             row.set_subtitle(&subtitle);
-            if generation.current {
+            if generation.active {
                 row.add_suffix(&badge("running", "current"));
             }
-            if generation.booted && !generation.current {
+            if generation.current && !generation.active {
+                row.add_suffix(&badge("selected for boot", "current"));
+            }
+            if generation.booted && !generation.active {
                 row.add_suffix(&badge("started with", "booted"));
             }
             let previous = i.checked_sub(1).map(|p| gens[p].clone());

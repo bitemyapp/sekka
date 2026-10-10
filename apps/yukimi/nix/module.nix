@@ -72,6 +72,24 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
+    # Changes which could tear down a live graphical session are prepared
+    # for boot. Unrelated package/source changes leave this identity alone.
+    environment.etc."yukimi/activation.json".text = builtins.toJSON {
+      version = 1;
+      displayManager = config.systemd.services.display-manager.serviceConfig or { };
+      # Restarting logind drops its inhibitor file descriptors. A power-manager
+      # transition must not open a sleep window during an overnight workload.
+      sleepManager = {
+        package = toString config.systemd.package;
+        settings = config.services.logind.settings;
+      };
+      graphics = {
+        package = toString config.hardware.graphics.package;
+        extraPackages = map toString config.hardware.graphics.extraPackages;
+        package32 = toString config.hardware.graphics.package32;
+        extraPackages32 = map toString config.hardware.graphics.extraPackages32;
+      };
+    };
     # The package carries its desktop entry, icon and polkit action, which
     # the system profile links into place.
     environment.systemPackages = [ cfg.package ];
