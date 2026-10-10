@@ -28,7 +28,7 @@ a = sys.argv[1:]
 with open('/state/commands', 'a') as out: out.write(json.dumps([name] + a) + '\n')
 if name == 'nix':
     if 'update' in a:
-        assert a[-1] == 'sekka', a
+        assert 'sekka' in a, a
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
         p('/etc/nixos/flake.lock').write_text('updated lock\n')
     elif 'eval' in a: print('["legacy-host"]')
@@ -39,6 +39,7 @@ if name == 'nix':
         print('/system-new')
     else: sys.exit(2)
 elif name == 'nix-env':
+    if p('/state/fail-profile').exists(): sys.exit(1)
     profile = p('/nix/var/nix/profiles/system')
     gen = a[-1] if '--switch-generation' in a else '2'
     profile.unlink()
@@ -47,6 +48,10 @@ elif name == 'systemd-run':
     assert a[-1] in ['boot', 'switch'], a
     if p('/state/fail-activation').exists(): sys.exit(1)
     p('/state/activation').write_text(json.dumps(a[-2:]))
+    if a[-1] == 'switch':
+        current = p('/run/current-system')
+        current.unlink()
+        current.symlink_to(p(a[-2]).parent.parent)
 else: sys.exit(2)
 '''
 
@@ -55,7 +60,7 @@ class Update(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='sekka-update-test-')
         self.root = Path(self.tmp.name)
-        for name in ['etc/nixos', 'run/lock', 'run/current-system/sw/bin',
+        for name in ['etc/nixos', 'run/lock', 'system-old/sw/bin', 'system-new/sw/bin', 'artifacts',
                      'nix/store', 'nix/var/nix/profiles', 'var/lib', 'state', 'tmp', 'root', 'bin']:
             (self.root / name).mkdir(parents=True, exist_ok=True)
         self.config = self.root / 'etc/nixos'
@@ -65,9 +70,23 @@ class Update(unittest.TestCase):
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
         for name in ['nix', 'nix-env', 'systemd-run']:
-            path = self.root / 'run/current-system/sw/bin' / name
+            path = self.root / 'system-old/sw/bin' / name
             path.write_text(f'#!{PYTHON}\n' + FAKE)
             path.chmod(0o755)
+            shutil.copy2(path, self.root / 'system-new/sw/bin' / name)
+        (self.root / 'run/current-system').symlink_to('/system-old')
+        (self.root / 'run/booted-system').symlink_to('/system-old')
+        for part in ['kernel', 'initrd', 'kernel-modules']:
+            (self.root / 'artifacts' / part).touch()
+        for system in ['system-old', 'system-new']:
+            base = self.root / system
+            (base / 'etc/yukimi').mkdir(parents=True)
+            (base / 'kernel-params').write_text('quiet')
+            (base / 'init-interface-version').write_text('2')
+            (base / 'switch-inhibitors').write_text('{}')
+            for part in ['kernel', 'initrd', 'kernel-modules']:
+                (base / part).symlink_to('/artifacts/' + part)
+        (self.root / 'system-new/etc/yukimi/activation.json').write_text('{"version":1}')
         profiles = self.root / 'nix/var/nix/profiles'
         for number, target in [(1, '/system-old'), (2, '/system-new')]:
             (profiles / f'system-{number}-link').symlink_to(target)
@@ -128,7 +147,7 @@ class Update(unittest.TestCase):
 
     def test_success_repeat_and_rollback(self):
         result = self.run_cmd('/bin/sekka-update')
-        self.assertIn('Restart when convenient', result.stdout)
+        self.assertIn('Restart to finish updating', result.stdout)
         migrated = (self.config / 'flake.nix').read_text()
         self.assertIn('inputs.sekka.url', migrated)
         self.assertEqual(json.loads((self.root / 'state/activation').read_text()),
@@ -140,6 +159,57 @@ class Update(unittest.TestCase):
         self.run_cmd('/bin/yukimi-helper', 'rollback', '1')
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
         self.assertEqual((self.config / 'flake.lock').read_text(), 'original lock\n')
+
+
+    def compatible_live_system(self):
+        (self.root / 'system-old/etc/yukimi/activation.json').write_text('{"version":1}')
+
+    def test_safe_live_update_needs_no_reboot(self):
+        self.compatible_live_system()
+        result = self.run_cmd('/bin/sekka-update')
+        self.assertIn('No computer restart is needed', result.stdout)
+        self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'switch')
+        self.assertEqual(json.loads((self.root / 'var/lib/yukimi/update.json').read_text())['state'], 'activated')
+
+    def test_all_selected_sources_build_and_activate_once(self):
+        self.compatible_live_system()
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications', '--mode', 'auto')
+        self.assertEqual(json.loads(result.stdout)['completion']['action'], 'none')
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
+
+    def test_kernel_update_prepares_once_then_reboot_clears_request(self):
+        self.compatible_live_system()
+        (self.root / 'system-new/kernel-params').write_text('quiet new-setting=1')
+        result = self.run_cmd('/bin/sekka-update')
+        self.assertIn('Restart to finish updating', result.stdout)
+        self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'boot')
+        for name in ['current-system', 'booted-system']:
+            (self.root / 'run' / name).unlink()
+            (self.root / 'run' / name).symlink_to('/system-new')
+        # Repeating the update after a successful boot must not ask again.
+        result = self.run_cmd('/bin/sekka-update')
+        self.assertIn('No computer restart is needed', result.stdout)
+        self.assertNotIn('Restart to finish', result.stdout)
+
+    def test_activation_failure_leaves_an_unverified_receipt(self):
+        (self.root / 'state/fail-activation').touch()
+        self.run_cmd('/bin/sekka-update', ok=False)
+        receipt = json.loads((self.root / 'var/lib/yukimi/update.json').read_text())
+        self.assertEqual(receipt['state'], 'activating')
+
+    def test_failure_before_profile_change_is_not_reported_as_applied(self):
+        (self.root / 'state/fail-profile').touch()
+        self.run_cmd('/bin/sekka-update', ok=False)
+        result = self.run_cmd('/bin/sekka-update', '--status', '--json')
+        self.assertEqual(json.loads(result.stdout)['action'], 'unknown')
+
+    def test_reboot_supersedes_unverified_desktop_without_another_request(self):
+        result = self.run_cmd('--setenv', 'XDG_CURRENT_DESKTOP', 'Tatami', '/bin/sekka-update')
+        self.assertIn('Restart to finish updating', result.stdout)
+        result = self.run_cmd('--setenv', 'XDG_CURRENT_DESKTOP', 'Tatami', '/bin/sekka-update', '--status', '--json')
+        self.assertEqual(json.loads(result.stdout)['action'], 'reboot')
 
     def test_cancel_and_concurrent_operation(self):
         (self.root / 'state/wait').touch()

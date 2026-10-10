@@ -247,6 +247,29 @@ in
       lib.listToAttrs (map etcFile files)
       // lib.listToAttrs (map menuRow menuNames)
       // {
+        "xdg/tatami/update.json".text = builtins.toJSON {
+          version = 1;
+          session = {
+            compositor = toString config.programs.hyprland.package;
+            sessionManager = toString config.programs.uwsm.package;
+            environment = builtins.hashString "sha256" config.environment.etc."xdg/uwsm/env-tatami".text;
+          };
+          # Hash file contents, not a monorepo source path. Adding a README
+          # or changing Genkan cannot make this desktop look out of date.
+          reload = {
+            config = builtins.hashString "sha256" (builtins.toJSON (map builtins.readFile files));
+            hyprland = builtins.hashString "sha256" (
+              builtins.toJSON {
+                root = toString hyprland;
+                files = map builtins.readFile (
+                  lib.filter (file: lib.hasPrefix "${./config/hypr}/" (toString file)) files
+                );
+              }
+            );
+            background = wallpaper;
+          };
+          keep_awake = "${tool}:${pkgs.systemd}";
+        };
         "xdg/tatami/hypr/hyprland.lua".source = hyprland;
         "xdg/tatami/elephant/menus/tatami-system.toml".source = systemMenu;
         "xdg/tatami/elephant/menus/tatami-backgrounds.toml".source = backgroundsMenu;

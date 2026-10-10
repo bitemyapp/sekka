@@ -99,6 +99,9 @@ fn set(enabled: bool) -> Result<()> {
     if protected(None)? != enabled {
         return Err("Could not verify Keep Awake with the system sleep manager".into());
     }
+    if !enabled {
+        crate::update::awake_stopped();
+    }
     // Keep hypridle running for explicit lock/sleep hooks. It respects our
     // idle inhibitor. This also repairs the predecessor toggle's stopped unit.
     if !util::run("systemctl", &["--user", "start", "tatami-hypridle.service"]) {

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! This computer at a glance.
-use std::path::Path;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SystemInfo {
@@ -9,10 +8,6 @@ pub struct SystemInfo {
     pub nixos_version: String,
     /// The running kernel, such as `7.2.8`.
     pub kernel: String,
-    /// The system running now differs from the one the machine started
-    /// with in its kernel, initrd or kernel modules, so a restart would
-    /// finish an update.
-    pub restart_needed: bool,
 }
 
 impl SystemInfo {
@@ -23,7 +18,6 @@ impl SystemInfo {
                 .map(|v| v.trim().to_owned())
                 .unwrap_or_default(),
             kernel: kernel_release(),
-            restart_needed: restart_needed(Path::new("/run/booted-system"), Path::new("/run/current-system")),
         }
     }
 
@@ -35,15 +29,6 @@ impl SystemInfo {
             None => &self.nixos_version,
         }
     }
-}
-
-/// Whether the parts of a system that only take effect on restart differ.
-pub fn restart_needed(booted: &Path, current: &Path) -> bool {
-    ["kernel", "initrd", "kernel-modules"].iter().any(|part| {
-        let a = std::fs::canonicalize(booted.join(part)).ok();
-        let b = std::fs::canonicalize(current.join(part)).ok();
-        a.is_some() && b.is_some() && a != b
-    })
 }
 
 /// This computer's name, as the kernel has it.

@@ -13,6 +13,9 @@
     "wayland-session-waitenv.service"
   ];
   unitConfig.StartLimitIntervalSec = 0;
+  # Preserve the inhibitor across live updates. Tatami reports a pending
+  # session change when an active holder's implementation changes.
+  restartIfChanged = false;
   enableDefaultPath = false;
   environment.PATH = "/run/wrappers/bin:/etc/profiles/per-user/%u/bin:/run/current-system/sw/bin";
   serviceConfig = {

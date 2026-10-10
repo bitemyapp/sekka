@@ -19,6 +19,7 @@
 //! - [`nix`]: running Nix itself.
 pub mod catalog;
 pub mod channels;
+pub mod completion;
 pub mod diff;
 pub mod generations;
 pub mod index;

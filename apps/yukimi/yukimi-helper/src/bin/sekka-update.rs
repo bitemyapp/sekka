@@ -9,17 +9,27 @@ extern "C" fn wait_for_helper(_: libc::c_int) {}
 
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--status"] || args == ["--status", "--json"] {
+        let completion = yukimi_system::completion::read();
+        if args.len() == 2 {
+            println!("{}", serde_json::to_string(&completion).map_err(|e| e.to_string())?);
+        } else {
+            println!("{}. {}", completion.title(), completion.description());
+        }
+        return Ok(());
+    }
     let mode = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
-        [] | ["--boot"] => "boot",
+        [] => "auto",
+        ["--boot"] => "boot",
         ["--switch"] => "switch",
         ["--print-flake"] => "preview",
         ["--help"] | ["-h"] => {
             println!(
-                "Usage: sekka-update [--boot | --switch | --print-flake]\n\nUpdate Sekka and prepare it for the next restart (default).\nUse --switch to activate immediately. No automatic reboot.\nOlder installer configurations migrate to Sekka automatically.\nIndependent Nixpkgs and application pins stay unchanged; update those in Yukimi.\nUse --print-flake to review the proposed flake without changing anything."
+                "Usage: sekka-update [--boot | --switch | --print-flake | --status [--json]]\n\nUpdate Sekka and apply safe changes automatically.\nUse --boot to prepare for restart, or --switch to request live activation. No automatic reboot.\nOlder installer configurations migrate to Sekka automatically.\nIndependent Nixpkgs and application pins stay unchanged; update those in Yukimi.\nUse --print-flake to review the proposed flake without changing anything.\nUse --status [--json] to read pending update completion without changing anything."
             );
             return Ok(());
         }
-        _ => return Err("Usage: sekka-update [--boot | --switch | --print-flake]".into()),
+        _ => return Err("Usage: sekka-update [--boot | --switch | --print-flake | --status [--json]]".into()),
     };
     let setup = yukimi_system::setup::Setup::detect();
     let text = std::fs::read_to_string(setup.dir.join("flake.nix")).map_err(|e| format!("Reading your flake: {e}"))?;
@@ -42,10 +52,7 @@ fn run() -> Result<(), String> {
         command.arg(&helper);
         command
     };
-    println!(
-        "Updating Sekka. {}",
-        if mode == "boot" { "It will take over at your next restart." } else { "It will activate now." }
-    );
+    println!("Updating Sekka. Any restart needed will be reported after preparation finishes.");
     let mut child = command
         .args(["change", "--sekka", "--mode", mode])
         // Keeping this pipe open lets the helper recover if the CLI exits.
@@ -78,14 +85,12 @@ fn run() -> Result<(), String> {
         let result: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_default();
         return Err(result["error"].as_str().unwrap_or("Update did not complete; see the messages above").into());
     }
-    println!(
-        "{}",
-        if mode == "boot" {
-            "Sekka is ready. Restart when convenient to use it."
-        } else {
-            "Sekka is updated. A restart may still be needed for kernel or desktop changes."
-        }
-    );
+    let mut report: serde_json::Value =
+        serde_json::from_str(out.trim()).map_err(|e| format!("Reading update result: {e}"))?;
+    yukimi_system::completion::finish_update(&mut report);
+    let completion: yukimi_system::completion::Completion =
+        serde_json::from_value(report["completion"].clone()).map_err(|e| format!("Reading completion status: {e}"))?;
+    println!("{}. {}", completion.title(), completion.description());
     Ok(())
 }
 

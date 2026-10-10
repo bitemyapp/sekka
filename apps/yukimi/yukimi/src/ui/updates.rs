@@ -14,7 +14,7 @@ use yukimi_system::{human_age, now};
 use super::widgets::{badge, clear, dim, heading, page};
 use super::{Ctx, UpdateCheck};
 use crate::model::Model;
-use crate::ops::{Mode, Operation};
+use crate::ops::Operation;
 
 /// How updating would move each source, as the last check found. Sources
 /// pointed elsewhere since are left out.
@@ -42,35 +42,25 @@ pub fn movements(model: &Model, check: &UpdateCheck) -> BTreeMap<String, Movemen
     found
 }
 
-/// Ask, then update: now, or set up for the next restart (kind to a kernel
-/// update, and to work in progress).
-fn update(ctx: &Ctx, inputs: Vec<String>, what: &str) {
-    let dialog = adw::AlertDialog::new(
-        Some(&format!("Update {what}?")),
-        Some(
-            "Yukimi fetches the newest versions and builds the new system, which asks for an administrator \
-             password and can take a while. It can take over now, or when the computer next starts. The current \
-             version stays in History, so you can always return to it.",
-        ),
-    );
-    dialog.add_responses(&[("cancel", "Cancel"), ("boot", "At next restart"), ("switch", "Now")]);
-    dialog.set_response_appearance("switch", adw::ResponseAppearance::Suggested);
-    dialog.set_default_response(Some("switch"));
-    dialog.set_close_response("cancel");
-    let (ctx2, channels) = (ctx.clone(), ctx.model().setup.kind == Kind::Channels);
-    dialog.connect_response(None, move |_, response| {
-        let mode = match response {
-            "switch" => Mode::Switch,
-            "boot" => Mode::Boot,
-            _ => return,
-        };
-        ctx2.run(if channels {
-            Operation::UpdateChannels { mode }
-        } else {
-            Operation::UpdateFlake { inputs: inputs.clone(), mode }
-        });
+/// Build one system before deciding whether anything disruptive is necessary.
+fn update(ctx: &Ctx, inputs: Vec<String>, _what: &str) {
+    let model = ctx.model();
+    let sekka = model.setup.kind == Kind::Flake
+        && std::fs::read_to_string(model.setup.dir.join("flake.nix"))
+            .is_ok_and(|text| yukimi_config::sekka::supported(&text));
+    let migrating = !model.inputs.iter().any(|i| i.name == "sekka");
+    ctx.run(if model.setup.kind == Kind::Channels {
+        Operation::UpdateChannels
+    } else if sekka && (inputs.iter().any(|i| i == "sekka") || migrating) {
+        Operation::UpdateSekka {
+            inputs: inputs
+                .into_iter()
+                .filter(|i| !migrating || !["calamares", "tatami", "yukimi"].contains(&i.as_str()))
+                .collect(),
+        }
+    } else {
+        Operation::UpdateFlake { inputs }
     });
-    dialog.present(Some(ctx.window()));
 }
 
 /// The buttons at the top: check, and update what has a newer version.
@@ -85,17 +75,27 @@ fn actions(ctx: &Ctx, movements: Option<&BTreeMap<String, Movement>>) -> gtk::Bo
         buttons.append(&busy);
         return buttons;
     }
-    let newer: Vec<String> = movements
+    let mut newer: Vec<String> = movements
         .map(|m| m.iter().filter(|(_, m)| matches!(m, Movement::Newer(_))).map(|(name, _)| name.clone()).collect())
         .unwrap_or_default();
     let channels = ctx.model().setup.kind == Kind::Channels;
+    // A single ordinary update includes Sekka and every newer selected source.
+    // It also remains usable to retry preparation or migrate a legacy install.
+    if !channels
+        && std::fs::read_to_string(ctx.model().setup.dir.join("flake.nix"))
+            .is_ok_and(|text| yukimi_config::sekka::supported(&text))
+        && !newer.iter().any(|input| input == "sekka")
+        && !movements.is_some_and(|m| matches!(m.get("sekka"), Some(Movement::Older(_))))
+    {
+        newer.push("sekka".into());
+    }
     if !newer.is_empty() {
         let what = match (channels, newer.as_slice()) {
             (true, _) => "the channels".to_owned(),
             (false, [one]) => one.clone(),
             (false, many) => format!("{} sources", many.len()),
         };
-        let all = gtk::Button::with_label(&format!("Update {what}"));
+        let all = gtk::Button::with_label("Update");
         all.add_css_class("pill");
         all.add_css_class("suggested-action");
         let ctx = ctx.clone();
@@ -415,23 +415,8 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
         }
         content.append(&top);
 
-        if model.setup.kind == Kind::Flake
-            && std::fs::read_to_string(model.setup.dir.join("flake.nix"))
-                .is_ok_and(|text| yukimi_config::sekka::supported(&text))
-        {
-            let sekka = adw::PreferencesGroup::new();
-            let row = adw::ActionRow::builder()
-                .title("Update Sekka")
-                .subtitle("Get the newest Sekka and prepare it for your next restart. Your apps and settings stay. Updates for other sources are below.")
-                .build();
-            let button = gtk::Button::with_label("Update Sekka");
-            button.add_css_class("suggested-action");
-            button.set_valign(gtk::Align::Center);
-            let ctx = ctx.clone();
-            button.connect_clicked(move |_| ctx.run(Operation::UpdateSekka));
-            row.add_suffix(&button);
-            sekka.add(&row);
-            content.append(&sekka);
+        if !ctx.loading() {
+            content.append(&super::completion::row(ctx, &model.completion));
         }
 
         if let Some(movements) = &movements {
@@ -452,8 +437,8 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
             } else if failures.is_empty() && movements.values().all(|m| *m == Movement::Current) {
                 let done = adw::StatusPage::builder()
                     .icon_name("emblem-ok-symbolic")
-                    .title("Everything is up to date")
-                    .description("Every source is at its newest version.")
+                    .title("No new updates available")
+                    .description("Your sources are current. The update status above shows whether anything still needs to be applied.")
                     .build();
                 done.add_css_class("compact");
                 content.append(&done);

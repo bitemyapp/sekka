@@ -16,6 +16,7 @@ mod network;
 mod power;
 mod terminal;
 mod toggle;
+mod update;
 mod util;
 mod weather;
 mod window;
@@ -88,6 +89,9 @@ dofile(\"{CONFIG}/hypr/hyprland.lua\")
 /// Start the compositor with the user's ~/.config/tatami/hyprland.lua if
 /// they have one (Setup › Hyprland makes it), otherwise session_config.
 fn session() -> ExitCode {
+    if let Err(error) = update::remember() {
+        eprintln!("tatami: update tracking unavailable: {error}");
+    }
     // The runtime directory outlives a session that ends while another is open.
     window::forget_monitors();
     let user = format!("{}/.config/tatami/hyprland.lua", util::home());
@@ -127,11 +131,37 @@ fn session() -> ExitCode {
 /// (/etc/xdg/uwsm/env-tatami) still takes a new login: uwsm reads it, and
 /// clears it at logout, only for the variables it set itself.
 fn reload() -> ExitCode {
+    match reload_parts(true) {
+        Ok(pinned) => {
+            let later = if pinned {
+                "Hyprland's configuration applies from the next login"
+            } else {
+                ""
+            };
+            println!("Tatami reloaded. {later}");
+            util::notify("\u{f0450}", "Tatami reloaded", later);
+            ExitCode::SUCCESS
+        }
+        Err(failed) => {
+            eprintln!("tatami: could not reload {failed}");
+            util::notify("\u{f0450}", "Tatami reload failed", &failed);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Reload only configuration which changed; pinned but unchanged Hyprland
+/// configuration is not a reason to ask for a new session.
+fn reload_parts(hypr_changed: bool) -> Result<bool, String> {
     let mut failed = vec![];
     if !util::run("systemctl", &["--user", "daemon-reload"]) {
         failed.push("systemd user units");
     }
-    let pinned = match window::reload_hyprland() {
+    let pinned = match if hypr_changed {
+        window::reload_hyprland()
+    } else {
+        window::Reload::Done
+    } {
         window::Reload::Done => false,
         window::Reload::Failed => {
             failed.push("Hyprland");
@@ -155,11 +185,15 @@ fn reload() -> ExitCode {
     let services: Vec<&str> = units
         .lines()
         .filter_map(|line| line.split_whitespace().next())
-        .filter(|name| *name != awake::UNIT && name.ends_with(".service"))
+        .filter(|name| {
+            *name != awake::UNIT
+                && *name != "tatami-keep-awake-temporary.service"
+                && name.ends_with(".service")
+        })
         .collect();
     let mut restart = vec!["--user", "try-restart"];
     restart.extend(services);
-    if restart.len() == 2 || !util::run("systemctl", &restart) {
+    if restart.len() > 2 && !util::run("systemctl", &restart) {
         failed.push("session units");
     }
     // Mako is among the restarted units: a notification sent before it is
@@ -170,23 +204,10 @@ fn reload() -> ExitCode {
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    let later = if pinned {
-        "Hyprland's configuration applies from the next login"
-    } else {
-        ""
-    };
     if failed.is_empty() {
-        println!("Tatami reloaded");
-        if pinned {
-            println!("{later}");
-        }
-        util::notify("\u{f0450}", "Tatami reloaded", later);
-        ExitCode::SUCCESS
+        Ok(pinned)
     } else {
-        let failed = failed.join(", ");
-        eprintln!("tatami: could not reload {failed}");
-        util::notify("\u{f0450}", "Tatami reload failed", &failed);
-        ExitCode::FAILURE
+        Err(failed.join(", "))
     }
 }
 
@@ -281,6 +302,15 @@ fn main() -> ExitCode {
             true
         }
         Some("reload") => return reload(),
+        Some("update-session") => {
+            return match update::apply() {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("tatami: {error}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
         Some("menu") => {
             menu::show(first(""));
             menu::walker_args(first("")).is_some()
