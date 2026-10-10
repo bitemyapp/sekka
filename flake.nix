@@ -232,7 +232,27 @@
           assert latest.hardware.nvidia.powerManagement.finegrained;
           pkgs.writeText "nvidia-on-media" latest.hardware.nvidia.package.version;
         tatami = self.packages.${system}.tatami;
+        tatami-background =
+          pkgs.runCommand "tatami-background-tests"
+            {
+              nativeBuildInputs = [ pkgs.python3 ];
+            }
+            ''
+              python3 ${./tests/test_tatami_background.py} ${self.packages.${system}.tatami}/bin/tatami
+              touch $out
+            '';
         displays = self.packages.${system}.displays;
+        wallpapers =
+          pkgs.runCommand "wallpaper-originals-check"
+            {
+              nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.pillow ])) ];
+            }
+            ''
+              python3 ${./tests/check_wallpapers.py} ${./desktop/tatami/wallpapers} ${
+                self.packages.${system}.wallpapers
+              }
+              touch $out
+            '';
         yukimi = self.packages.${system}.yukimi;
         tools = tools;
         template-lock = pkgs.runCommand "template-lock-tests" { } ''

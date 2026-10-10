@@ -301,9 +301,11 @@ in
       );
       # The background the user chose (Style › Background), a symlink in the
       # state directory that the helper makes point at the default until then.
+      # The helper reads the user's saved modes, colors and output overrides.
+      # Its default, fill, preserves aspect ratio and crops for each display.
       tatami-swaybg =
         lib.recursiveUpdate
-          (unit "Tatami background" "${lib.getExe pkgs.swaybg} -i %S/tatami/background -m fill")
+          (unit "Tatami background" "${lib.getExe tool} background run ${lib.getExe pkgs.swaybg}")
           {
             serviceConfig.ExecStartPre = "${lib.getExe tool} background ensure";
           };
@@ -394,6 +396,7 @@ in
     # Xfce list share/wallpapers, share/gnome-background-properties and
     # share/backgrounds from the system profile.
     environment.pathsToLink = [
+      "/share/tatami"
       "/share/backgrounds"
       "/share/wallpapers"
       "/share/gnome-background-properties"

@@ -34,6 +34,11 @@ The optional GitHub step can import your public SSH keys and set your Git identi
 
 Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS.
 
+Choose a wallpaper under **Style › Background**. **Style › Background settings**
+lets you fill, fit, stretch, center or tile it, or use a solid color, with separate
+choices for each display. Wallpapers keep their original resolution; your display
+settings control any cropping.
+
 [![Tatami desktop and application menu](docs/images/tour/installed-tatami-menu.png)](docs/images/tour/installed-tatami-menu.png)
 
 ### Yukimi: see and change your system

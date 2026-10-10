@@ -1,9 +1,36 @@
 # Wallpapers
 
 Photographs and renders offered as backgrounds by Tatami and, on systems from
-the NixOS graphical installer, by every desktop. Each is cropped to 16:10 and
-at most 3840×2400 pixels; `thumbnails/` has 480×300 previews for Tatami's
-background picker. `wallpapers.json` lists them for `package.nix`.
+the NixOS graphical installer, by every desktop. All 23 wallpapers retain
+their original published pixel dimensions and aspect ratios. The JPEGs are
+the unmodified downloads: Unsplash's `raw` image URLs with no resize, crop,
+format or quality parameters, and ESA/Hubble's full-resolution JPEG for the
+Lagoon Nebula (4782×6028). Nothing is upscaled or re-encoded.
+
+`wallpapers.json` records each source page, exact download URL, original
+dimensions and SHA-256 checksum. `package.nix` links every desktop to those
+same original files. `thumbnails/` contains separate 480×300 picker previews;
+those are never used as desktop backgrounds.
+
+Cropping happens on the display, preserving the image's proportions:
+
+| Desktop | Display mode |
+| --- | --- |
+| Tatami | `fill` by default; configurable in Style › Background settings, including per-display overrides |
+| Plasma | Image plugin's `FillMode=2` (`PreserveAspectCrop`, “Scaled and Cropped”) default |
+| GNOME | Explicit `picture-options='zoom'`, plus `zoom` in the wallpaper catalog |
+| Xfce | xfdesktop's `XFCE_BACKDROP_IMAGE_ZOOMED` default, separately for each monitor |
+
+These fill the screen without stretching, cropping only the excess at its
+edges when the image and display have different aspect ratios. User-selected
+display modes remain configurable in the desktop's wallpaper settings. Tatami's
+[wallpaper controls](../README.md#wallpaper-settings) also offer fit, stretch,
+center, tile and solid color, with a configurable background color.
+
+Run `nix build .#checks.x86_64-linux.wallpapers` to verify the originals'
+checksums and dimensions, the installed desktop links, and the GNOME catalog.
+When adding an image, preserve the full downloaded file and record its source
+dimensions and checksum; never resize it to a particular monitor's shape.
 
 They are not covered by Tatami's MIT OR Apache-2.0 license:
 
@@ -12,7 +39,7 @@ They are not covered by Tatami's MIT OR Apache-2.0 license:
   unaltered or to compile into a competing service. Credit is given anyway.
 - The Lagoon Nebula is © ESA/Hubble, released under
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit: NASA,
-  ESA, and STScI; cropped from [heic1808a](https://esahubble.org/images/heic1808a/).
+  ESA, and STScI; [heic1808a](https://esahubble.org/images/heic1808a/).
 
 | File | Title | By | License |
 |---|---|---|---|

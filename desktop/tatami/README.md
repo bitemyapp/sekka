@@ -94,7 +94,8 @@ The `tatami` helper (`tool/`) provides:
 - time, battery and keyboard backlight notifications
 - a terminal in the active window's directory, editor and browser launch
 - volume, microphone, brightness and media keys with OSD
-- the background picker, whose choice the lock screen also shows
+- the background picker, whose global choice the lock screen also shows, and
+  Style › Background settings for scaling, color and per-display wallpapers
 - the weather beside the clock: the conditions' icon, and on hover the
   temperature, place, feels-like temperature, wind, humidity and the next
   three days, from wttr.in (which finds the place from the IP address unless
@@ -253,6 +254,52 @@ environment (`env-tatami`) take a new login.
 
 New code is Rust; configuration stays declarative (Nix, TOML, JSONC, CSS and
 `hl.*` calls in `hyprland.lua`).
+
+## Wallpaper settings
+
+Use **Style › Background** or **Super+Ctrl+Space** to choose a wallpaper.
+**Style › Background settings** controls the image, scaling mode and background
+color for all displays or a particular display. The original image files stay
+intact; the display handles scaling and cropping.
+
+| Mode | Result |
+| --- | --- |
+| Fill (default) | Fill the screen without distortion, cropping excess edges |
+| Fit | Show the entire image without distortion, with the chosen color around it |
+| Stretch | Fill the screen by changing the image's proportions |
+| Center | Center at original size, cropping if larger than the display |
+| Tile | Repeat at original size |
+| Solid color | Hide the image and use the chosen color |
+
+Display overrides inherit any settings you have not overridden from the global
+defaults, including the wallpaper. They survive logout, rebuilds and reconnecting
+the display. Choosing another image does not reset its scaling mode or color.
+“Use defaults for this display” removes its overrides. The global reset clears
+all appearance overrides and restores Fill, keeping your global wallpaper choice.
+
+The same controls are available from the terminal:
+
+```sh
+tatami background settings
+tatami background mode fit
+tatami background color '#1a1b26'
+tatami background mode fill --output DP-1
+tatami background set /absolute/path/to/portrait.jpg --output DP-1
+tatami background color '#112233' --output DP-1
+tatami background reset --output DP-1
+tatami background status
+```
+
+CLI mode names are `fill`, `fit`, `stretch`, `center`, `tile`, and `solid_color`.
+Settings are saved in `$XDG_STATE_HOME/tatami/background.json` (normally
+`~/.local/state/tatami/background.json`); the existing `background` symlink keeps
+the global image choice compatible with older Tatami versions. The lock screen
+continues to use that global image with its own blurred presentation.
+
+A missing per-display image falls back to the global image when the wallpaper
+service starts. Once the file is available again, run `tatami reload` to restore
+it. An invalid settings file is preserved while the service uses defaults;
+`tatami background reset` recovers it explicitly.
 
 ## License
 

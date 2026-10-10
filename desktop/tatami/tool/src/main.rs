@@ -35,7 +35,10 @@ const USAGE: &str = "usage: tatami <command>
   displays apply [--dry-run]      keep and apply display settings (JSON on stdin)
   nightlight [on|off|status|KELVIN] Night Shift for the Displays window
   dns <dhcp|cloudflare|google|custom>     DNS for the connection in use
-  background [set <image>|ensure|path]    desktop background picker and choice
+  background                      wallpaper picker
+  background settings             wallpaper, scaling and color by display
+  background <set IMAGE|mode MODE|color HEX|reset> [--output NAME]
+  background status               show saved wallpaper settings
   weather [refresh|place]                 bar weather, refresh, choose the place
   terminal [command...]           terminal in the focused terminal's directory
   tui <command...>                terminal application (focuses an open one)
@@ -253,21 +256,12 @@ fn main() -> ExitCode {
             menu::walker_args(first("")).is_some()
         }
         Some("dns") => network::dns_command(first("")),
-        Some("background") => match first("") {
-            "" => {
-                background::pick();
-                true
+        Some("background") => match background::command(rest) {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!("tatami: {error}");
+                return ExitCode::FAILURE;
             }
-            "set" if rest.len() == 2 => background::set(&rest[1]),
-            "ensure" => {
-                background::ensure();
-                true
-            }
-            "path" => {
-                println!("{}", background::path().display());
-                true
-            }
-            _ => false,
         },
         Some("weather") => match first("") {
             "" => {
