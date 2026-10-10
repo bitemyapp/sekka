@@ -1,0 +1,12 @@
+{
+ "passed": true,
+ "store_path": "/nix/store/znfc41nd3a3jzbp2kqhjijcjcjfw7n52-nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso/iso/nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+ "iso_sha256": "fe5efe48d39f1f053be752d653d6c9264c2c938a4867a671d2fe8a12479b4513",
+ "bytes": 11839500288,
+ "installer_revision": "41b2e17a31eb62a96260f8e723f81483a096c26b",
+ "tatami_revision": "b925d7a9c956d323c2961640798929629576179a",
+ "yukimi_revision": "af29b80cb1f3fef7968b2c28cf222fb66b3da293",
+ "flake_lock_sha256": "8abb4d2674d120e8859e04375e8ae934afe5843b164f355910f5387935dc32d7",
+ "flake_checks_passed": true,
+ "notes": "Pure build of the pinned installer on wx-workstation with Tatami b925d7a and Yukimi af29b80. Every desktop includes Yukimi (github.com/bitemyapp/yukimi): installed systems get a `yukimi` flake input tracking its stable branch, the reference systems prebuild it, and its polkit action names its helper. nix flake check passed (9/9); 31 desktop and 34 application configurations evaluated, with Yukimi asserted on every desktop; all-inclusive VM install verified (five desktops, all 31 applications, 33.1 GB closure, 100.5 s click-to-complete, 0 bytes downloaded); 8 of 8 logins through Plasma Login Manager. On the installed system, Yukimi started from the Plasma menu and in Tatami; Check for updates answered per input (yukimi: couldn't check, its stable branch doesn't exist yet; calamares and tatami: would go back); removing Zed edited calamares.applications and rebuilt (60 s); returning to generation 1 restored Zed and the configuration (3 s)."
+}

@@ -1,0 +1,22 @@
+{
+  "applications": "all",
+  "disk_bus": "nvme",
+  "disk_size_gib": 80,
+  "error": "Guest command timed out: CALAMARES_TEST_FILESYSTEM='ext4' CALAMARES_TEST_PREVIOUS_FILESYSTEM='btrfs' CALAMARES_TEST_APPLICATIONS='all' '/workspace/.work/native-fixture/d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc/bin/calamares-vm-fixture' install > '/workspace/artifacts/uefi-nvme-ext4-1791148389686-35910/install.log' 2>&1",
+  "filesystem": "ext4",
+  "firmware": "uefi",
+  "gui": false,
+  "implementation": "native-rust",
+  "install": true,
+  "installer_revision": "d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc",
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "231a39d4501b62dcaf721851861a1f8589f3ef364dc95177d30d52fdd5e0eff0",
+  "live": "active\n1502\n1658\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}NAME    TRAN FSTYPE   LABEL\nloop0        squashfs \nsda     usb  iso9660  nixos-determinate-x86_64\n\u251c\u2500sda1       iso9660  nixos-determinate-x86_64\n\u2514\u2500sda2       vfat     EFIBOOT\nsr0     sata          \nnvme0n1 nvme          \n",
+  "live_kernel": "7.2.8",
+  "media": "usb-storage",
+  "media_config_permissions": "0:30000 1775 /nix/store\n0:0 444 /etc/calamares-nixos/settings.json\n",
+  "passed": false,
+  "previous_filesystem": "btrfs",
+  "qemu_acceleration": "tcg-single",
+  "scope": "Historical candidate interrupted by the old test harness 7500-second overall deadline, before installer completion. Not counted as a successful installation."
+}

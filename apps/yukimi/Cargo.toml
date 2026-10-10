@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/yukimi-store",
+    "crates/yukimi-config",
+    "crates/yukimi-system",
+    "yukimi",
+    "yukimi-helper",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bitemyapp/yukimi"
+rust-version = "1.90"
+
+[workspace.dependencies]
+yukimi-store = { path = "crates/yukimi-store" }
+yukimi-config = { path = "crates/yukimi-config" }
+yukimi-system = { path = "crates/yukimi-system" }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = "0.40"
+rnix = "0.14"
+# rnix's syntax trees; the version rnix itself uses, for its `AstNode` trait.
+rowan = "0.16"
+libc = "0.2"
+async-channel = "2"
+# Asking GitHub and FlakeHub for the newest version of a source.
+ureq = "3"
+gtk = { package = "gtk4", version = "0.10", features = ["v4_18"] }
+adw = { package = "libadwaita", version = "0.8", features = ["v1_7"] }
+glib = "0.21"
+gio = "0.21"
+
+[profile.release]
+lto = "thin"

@@ -1,0 +1,39 @@
+[
+  {
+    "repository": "bitemyapp/determinate-nixos-graphical",
+    "revision": "e483b80b3279c2baeece5fa1fe4dbf00a1932bcb",
+    "destination": ".",
+    "paths": [
+      "."
+    ]
+  },
+  {
+    "repository": "bitemyapp/calamares",
+    "revision": "c06188470a4b1e6d4c137d74c0932a8c936f35c7",
+    "destination": "installer/genkan",
+    "paths": [
+      "rust",
+      "nix",
+      "LICENSES",
+      "RUST-INSTALLER.md",
+      "RUST-TESTING.md",
+      "tests/vm-fixture"
+    ]
+  },
+  {
+    "repository": "bitemyapp/tatami",
+    "revision": "723c3ab5c029517dd7cd15f6234e295730c607c0",
+    "destination": "desktop/tatami",
+    "paths": [
+      "."
+    ]
+  },
+  {
+    "repository": "bitemyapp/yukimi",
+    "revision": "9f42aaad4ce43457b057b9a135ac130e53cf9457",
+    "destination": "apps/yukimi",
+    "paths": [
+      "."
+    ]
+  }
+]

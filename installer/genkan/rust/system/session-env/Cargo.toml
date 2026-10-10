@@ -1,0 +1,18 @@
+[package]
+name = "calamares-session-env"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Keeps one desktop session's environment out of the next"
+publish = false
+
+[dependencies]
+libc = "=0.2.177"
+serde_json = "=1.0.145"
+
+[[bin]]
+name = "calamares-session-env"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "s"

@@ -1,0 +1,12 @@
+/* The bar's panels (network, Bluetooth, display, power profile): the menu's
+ * look, after Omarchy 4's panels (shell/Ui/Panel.qml; MIT, see
+ * ../../../LICENSE): no dimmed screen, and an accent border. */
+@import url("file:///etc/xdg/tatami/walker/themes/tatami-default/style.css");
+
+window {
+  background: transparent;
+}
+
+.box-wrapper {
+  border-color: @accent;
+}

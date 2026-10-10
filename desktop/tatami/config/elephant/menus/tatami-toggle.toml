@@ -1,0 +1,42 @@
+# Toggle › in the Tatami menu (see tatami.toml).
+name = "tatami-toggle"
+name_pretty = "Toggle"
+parent = "tatami-trigger"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Stay Awake"
+icon = "󰅶"
+value = "tatami toggle idle"
+
+[[entries]]
+text = "Notifications"
+icon = "󰂛"
+value = "tatami toggle notifications"
+
+[[entries]]
+text = "Nightlight"
+icon = "󰔎"
+value = "tatami toggle nightlight"
+
+[[entries]]
+text = "Menu Bar"
+icon = "󰍜"
+value = "tatami toggle bar"
+
+[[entries]]
+text = "Workspace Layout"
+icon = "󱂬"
+value = "tatami toggle layout"
+
+[[entries]]
+text = "Window Gaps"
+icon = ""
+value = "tatami toggle gaps"
+
+[[entries]]
+text = "1-Window Ratio"
+icon = ""
+value = "tatami toggle aspect"

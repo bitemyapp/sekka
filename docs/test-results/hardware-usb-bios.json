@@ -1,0 +1,69 @@
+{
+  "blocks": [
+    {
+      "device": "usb",
+      "inserted": {
+        "active": true,
+        "backing_file_depth": 0,
+        "bps": 0,
+        "bps_rd": 0,
+        "bps_wr": 0,
+        "cache": {
+          "direct": false,
+          "no-flush": false,
+          "writeback": true
+        },
+        "children": [
+          {
+            "child": "file",
+            "node-name": "#block036"
+          }
+        ],
+        "detect_zeroes": "off",
+        "drv": "raw",
+        "encrypted": false,
+        "file": "/dev/fdset/1",
+        "image": {
+          "actual-size": 0,
+          "dirty-flag": false,
+          "filename": "/dev/fdset/1",
+          "format": "raw",
+          "limits": {
+            "max-hw-iov": 2048,
+            "max-hw-transfer": 1048576,
+            "max-iov": 1024,
+            "min-mem-alignment": 1,
+            "opt-mem-alignment": 4096,
+            "request-alignment": 1
+          },
+          "virtual-size": 32080200192
+        },
+        "iops": 0,
+        "iops_rd": 0,
+        "iops_wr": 0,
+        "node-name": "#block146",
+        "ro": true,
+        "write_threshold": 0
+      },
+      "io-status": "ok",
+      "locked": false,
+      "qdev": "/machine/peripheral-anon/device[3]/scsi.0/legacy[0]",
+      "removable": false,
+      "type": "unknown"
+    },
+    {
+      "device": "ide2-cd0",
+      "io-status": "ok",
+      "locked": false,
+      "qdev": "/machine/unattached/device[19]",
+      "removable": true,
+      "tray_open": false,
+      "type": "unknown"
+    }
+  ],
+  "firmware": "bios",
+  "live": "active\n1128\n1273\nactive\nnix (Determinate Nix 3.23.0) 2.35.2\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}NAME          SIZE TRAN RO FSTYPE   LABEL\nloop0   3819757568       1 squashfs \nsda    32080200192 usb   1 iso9660  nixos-determinate-x86_64\n├─sda1  3927244800       1 iso9660  nixos-determinate-x86_64\n└─sda2     3145728       1 vfat     EFIBOOT\nsr0     1073741312 sata  1          \n",
+  "passed": true,
+  "qemu_uid": 1000,
+  "read_only": true
+}

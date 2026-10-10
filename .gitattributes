@@ -1,0 +1,6 @@
+*.patch whitespace=-blank-at-eol
+
+# Preserve imported evidence, license text, and tab-delimited data verbatim.
+docs/test-results/*.log -whitespace
+installer/genkan/LICENSES/* -whitespace
+*.tsv -whitespace

@@ -1,0 +1,28 @@
+# Setup › Network › DNS › in the Tatami menu (see tatami.toml), as in Omarchy
+# 4: the DNS servers of the connection in use.
+name = "tatami-dns"
+name_pretty = "DNS"
+parent = "tatami-network"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "DHCP"
+icon = "\U000F0A5F"
+value = "tatami dns dhcp"
+
+[[entries]]
+text = "Cloudflare"
+icon = "\U000F015F"
+value = "tatami dns cloudflare"
+
+[[entries]]
+text = "Google"
+icon = "\U000F02AD"
+value = "tatami dns google"
+
+[[entries]]
+text = "Custom"
+icon = ""
+value = "tatami dns custom"

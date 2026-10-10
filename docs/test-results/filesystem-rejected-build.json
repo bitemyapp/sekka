@@ -1,0 +1,39 @@
+{
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_bytes": 3989078016,
+  "iso_sha256": "72ee216339133f0dc72d5e71826f4040217b5b9cfd353a546797b548e2145b5b",
+  "graphical_revision": "091af7b",
+  "installer_revision": "dc4127509d37c0e0d8144159744af0282a165127",
+  "flake_lock_sha256": "2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69",
+  "build_completed": true,
+  "desktop_configurations_evaluated": 47,
+  "dependency_test_environment": "Unmodified Nix derivations in full x86_64 NixOS VMs with native aarch64 QEMU TCG on OrbStack; successful outputs exported and imported into build store.",
+  "nix_dependency_tests": {
+    "syscall_compatibility": {
+      "passed": 798,
+      "skipped": 1,
+      "disabled": 1
+    },
+    "store": {
+      "passed": 727,
+      "disabled": 1
+    },
+    "expression": {
+      "passed": 366,
+      "disabled": 1
+    },
+    "functional": {
+      "passed": 218,
+      "skipped": 8,
+      "failed": 0
+    }
+  },
+  "outer_container_nix": {
+    "sandbox": false,
+    "filter_syscalls": false,
+    "note": "Required for macOS Linux translation. Full guest checks used normal Linux sandboxing."
+  },
+  "derivations_modified_to_skip_tests": false,
+  "release_eligible": false,
+  "rejection": "filesystem-uuid-rejection.json"
+}

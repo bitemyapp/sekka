@@ -1,0 +1,32 @@
+# Learn › in the Tatami menu (see tatami.toml).
+name = "tatami-learn"
+name_pretty = "Learn"
+parent = "tatami"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Keybindings"
+icon = ""
+value = "tatami keybindings"
+
+[[entries]]
+text = "Tatami"
+icon = ""
+value = "tatami browser https://github.com/bitemyapp/tatami/blob/stable/README.md"
+
+[[entries]]
+text = "Hyprland"
+icon = ""
+value = "tatami browser https://wiki.hypr.land/"
+
+[[entries]]
+text = "NixOS"
+icon = ""
+value = "tatami browser https://nixos.org/manual/nixos/stable/"
+
+[[entries]]
+text = "Bash"
+icon = "󱆃"
+value = "tatami browser https://devhints.io/bash"

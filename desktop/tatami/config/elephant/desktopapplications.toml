@@ -1,0 +1,7 @@
+show_actions = false
+only_search_title = true
+history = false
+# Entries Omarchy's launcher has no counterpart for: foot's client and
+# server modes, uwsm's unit manager, and the connection editor that the Wi-Fi
+# list opens as Network settings…
+blacklist = ["^footclient$", "^foot-server$", "^uuctl$", "^nm-connection-editor$"]

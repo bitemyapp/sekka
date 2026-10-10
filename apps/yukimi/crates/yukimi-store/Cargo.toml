@@ -1,0 +1,12 @@
+[package]
+name = "yukimi-store"
+description = "Read the Nix store: store paths, their names and versions, the store database, closures and garbage-collector roots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusqlite.workspace = true
+thiserror.workspace = true

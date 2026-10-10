@@ -1,0 +1,8 @@
+/.work/
+/artifacts/
+/result*
+__pycache__/
+*.pyc
+/rust/target/
+
+**/target/

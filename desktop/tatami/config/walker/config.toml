@@ -1,0 +1,62 @@
+# Tatami launcher and menu, after Omarchy 4's launcher and menu
+# (MIT, see ../LICENSE). The menu tree is in ../elephant/menus.
+force_keyboard_focus = true
+selection_wrap = true
+theme = "tatami-default"
+hide_action_hints = true
+hide_quick_activation = true
+
+[placeholders]
+"default" = { input = "Go…", list = "No matches" }
+"desktopapplications" = { input = "Apps…", list = "No matches" }
+
+[keybinds]
+quick_activate = []
+
+[columns]
+symbols = 1
+
+[providers]
+max_results = 256
+default = ["desktopapplications", "websearch"]
+
+# The Tatami menu (`tatami menu`): its root when the search is empty, and
+# a search across every menu entry and application once typing starts.
+[providers.sets.tatami]
+default = ["desktopapplications", "menus"]
+empty = ["menus:tatami"]
+
+# As in Omarchy's menu: Escape closes, Left goes back to the parent menu and
+# Right or Return opens a submenu.
+[providers.actions]
+fallback = [
+  { action = "menus:open", label = "open", after = "Nothing" },
+  { action = "menus:open", label = "open", bind = "Right", after = "Nothing" },
+  { action = "menus:default", label = "run", after = "Close" },
+  { action = "menus:parent", label = "back", bind = "Left", after = "Nothing" },
+  { action = "erase_history", label = "clear hist", bind = "ctrl h", after = "AsyncReload" },
+]
+
+[[providers.prefixes]]
+prefix = "/"
+provider = "providerlist"
+
+[[providers.prefixes]]
+prefix = "."
+provider = "files"
+
+[[providers.prefixes]]
+prefix = ":"
+provider = "symbols"
+
+[[providers.prefixes]]
+prefix = "="
+provider = "calc"
+
+[[providers.prefixes]]
+prefix = "@"
+provider = "websearch"
+
+[[providers.prefixes]]
+prefix = "$"
+provider = "clipboard"

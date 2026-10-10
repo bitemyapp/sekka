@@ -1,0 +1,16 @@
+{
+  "desktop": "plasmashell",
+  "error": "Guest command failed: PATH='/nix/store/jg8qzkbjpsvyv4yk4k79m06z16mbzyh4-respin-wifi-test-tools/bin':'/nix/store/jg8qzkbjpsvyv4yk4k79m06z16mbzyh4-respin-wifi-test-tools/sbin':/run/current-system/sw/bin '/workspace/.work/guest-target/x86_64-unknown-linux-musl/release/respin-tools' guest-wifi-test\nError: \"timeout\" \"40\" \"busctl\" \"--system\" \"call\" \"org.freedesktop.DBus\" \"/org/freedesktop/DBus\" \"org.freedesktop.DBus\" \"StartServiceByName\" \"su\" \"fi.w1.wpa_supplicant1\" \"0\" failed: Call failed: The name is not activatable\n\n",
+  "host_radio_attached": false,
+  "iso_sha256": "a06e860511db656850c7dcc4b91b348dcaebdfa2f321a7105ec7bd3df59e1978",
+  "kernel": "7.2.8",
+  "passed": false,
+  "profile": "Default",
+  "radio": "mac80211_hwsim",
+  "target_disk": false,
+  "tools": {
+    "lock_sha256": "2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69",
+    "sha256": "2ae4ec7e4db5880e659a22433bddf01d30e6336598a64a0d41def1bfe8989b77",
+    "store_path": "/nix/store/jg8qzkbjpsvyv4yk4k79m06z16mbzyh4-respin-wifi-test-tools"
+  }
+}

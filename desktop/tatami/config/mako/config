@@ -1,0 +1,36 @@
+# Tatami notifications after Omarchy 4's notification cards
+# (shell/plugins/notifications; MIT, see ../LICENSE) in Tokyo Night:
+# 380px cards with a 2px accent border, 5px from the bar and screen edge and
+# 8px apart, a 40px icon, bold 14px Liberation Sans summaries over slightly
+# dimmer bodies, and 5 s (low), 8 s (normal) or sticky (critical) lifetimes.
+anchor=top-right
+layer=overlay
+group-by=app-name,summary,body
+default-timeout=8000
+width=380
+outer-margin=5,5
+margin=0,0,8,0
+padding=10,12
+border-size=2
+border-radius=0
+max-icon-size=40
+font=Liberation Sans 10.5
+format=<b><span foreground="#a9b1d6">%s</span></b>\n%b
+text-color=#939aba
+border-color=#7aa2f7
+background-color=#1a1b26
+
+[urgency=low]
+default-timeout=5000
+
+[urgency=critical]
+default-timeout=0
+
+[mode=do-not-disturb]
+invisible=true
+
+[mode=do-not-disturb app-name=notify-send]
+invisible=false
+
+[summary~="Screenshot saved"]
+max-icon-size=80

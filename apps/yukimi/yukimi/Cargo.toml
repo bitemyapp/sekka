@@ -1,0 +1,20 @@
+[package]
+name = "yukimi"
+description = "Snow-viewing for NixOS: see what's installed, find what's available, and change it without editing config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+yukimi-store.workspace = true
+yukimi-config.workspace = true
+yukimi-system.workspace = true
+gtk.workspace = true
+adw.workspace = true
+glib.workspace = true
+gio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true

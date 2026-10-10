@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "installer_revision": "d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc",
+  "installer_package": "/nix/store/gsfinb7l01k9gl8cvq5yiayl3gnbb5dq-calamares-nixos-rust-0.1.0",
+  "run": "app-menu-1791146118701",
+  "scope": "Visual interaction with the new packaged installer imported into the previous filesystem-only live ISO. This is not final application-ISO validation.",
+  "base_iso_sha256": "2eb35dcb58f8104721a91a35e1e74625c2343a34bdf8adfcd922166806a2a39d",
+  "checks": {
+    "default_firefox_selected": true,
+    "search_filters_categories_and_descriptions": true,
+    "rustup_selects_build_tools": true,
+    "required_build_tools_cannot_be_deselected": true,
+    "deselecting_rustup_allows_build_tools_deselection": true,
+    "disabling_unfree_clears_and_disables_chrome": true,
+    "disabled_proprietary_choice_cannot_be_selected": true,
+    "docker_rootless_description_visible": true
+  },
+  "screenshots": {
+    "applications-menu.png": "27fec782e81c649a90af7f55d7a792249ee4108af06a51ea58f5f0d84a246119",
+    "applications-rustup-dependency.png": "3372bf1d39079c7a53b210ae427b8f59ce8654d391d226863d5f6d9d2478ece8",
+    "applications-proprietary-disabled.png": "590f660b2c14e2546383736acfc490fd671d6aa46ad022740865380a7eb54ffd",
+    "applications-docker.png": "3940bcf1bf2fc83e8775dd95648cd396eaa41219f7b2c8c3134fa5bef67dff6f"
+  },
+  "clean_shutdown": true
+}

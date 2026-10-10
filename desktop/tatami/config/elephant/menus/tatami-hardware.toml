@@ -1,0 +1,17 @@
+# Hardware › in the Tatami menu (see tatami.toml).
+name = "tatami-hardware"
+name_pretty = "Hardware"
+parent = "tatami-trigger"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Laptop Display"
+icon = "󰛧"
+value = "tatami laptop-display"
+
+[[entries]]
+text = "Touchpad"
+icon = "󰟸"
+value = "tatami touchpad toggle"

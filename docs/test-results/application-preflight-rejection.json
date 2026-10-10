@@ -1,0 +1,22 @@
+{
+  "applications": "firefox",
+  "disk_bus": "nvme",
+  "disk_size_gib": 40,
+  "error": "Guest command failed: CALAMARES_TEST_FILESYSTEM='xfs' CALAMARES_TEST_PREVIOUS_FILESYSTEM='ext4' CALAMARES_TEST_APPLICATIONS='firefox' '/workspace/.work/native-fixture/d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc/bin/calamares-vm-fixture' install > '/workspace/artifacts/uefi-nvme-xfs-1791153795896-48793/install.log' 2>&1\n",
+  "filesystem": "xfs",
+  "firmware": "uefi",
+  "gui": false,
+  "implementation": "native-rust",
+  "install": true,
+  "installer_revision": "d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc",
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "231a39d4501b62dcaf721851861a1f8589f3ef364dc95177d30d52fdd5e0eff0",
+  "live": "active\n1431\n1582\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}NAME    TRAN FSTYPE   LABEL\nloop0        squashfs \nsda     usb  iso9660  nixos-determinate-x86_64\n\u251c\u2500sda1       iso9660  nixos-determinate-x86_64\n\u2514\u2500sda2       vfat     EFIBOOT\nsr0     sata          \nnvme0n1 nvme          \n",
+  "live_kernel": "7.2.8",
+  "media": "usb-storage",
+  "media_config_permissions": "0:30000 1775 /nix/store\n0:0 444 /etc/calamares-nixos/settings.json\n",
+  "passed": false,
+  "previous_filesystem": "ext4",
+  "qemu_acceleration": "tcg-single",
+  "scope": "Rejected application candidate: cold XFS module load exceeded 15-second preflight deadline, before any disk writes."
+}

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tatami menu rows, after Omarchy 4's menu: a chevron on entries that open a submenu (state "submenu"). The module installs it as item_menus-NAME.xml for every menu. -->
+<interface>
+  <requires lib="gtk" version="4.0"></requires>
+  <object class="GtkBox" id="ItemBox">
+    <style>
+      <class name="item-box"></class>
+    </style>
+    <property name="orientation">horizontal</property>
+    <property name="spacing">10</property>
+    <child>
+      <object class="GtkLabel" id="ItemImageFont">
+        <style>
+          <class name="item-image-text"></class>
+        </style>
+        <property name="width-chars">2</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkImage" id="ItemImage">
+        <style>
+          <class name="item-image"></class>
+        </style>
+        <property name="icon-size">large</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="ItemTextBox">
+        <style>
+          <class name="item-text-box"></class>
+        </style>
+        <property name="orientation">vertical</property>
+        <property name="vexpand">true</property>
+        <property name="hexpand">true</property>
+        <property name="vexpand-set">true</property>
+        <property name="spacing">0</property>
+        <child>
+          <object class="GtkLabel" id="ItemText">
+            <style>
+              <class name="item-text"></class>
+            </style>
+            <property name="ellipsize">end</property>
+            <property name="vexpand_set">true</property>
+            <property name="vexpand">true</property>
+            <property name="xalign">0</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="ItemSubtext">
+            <style>
+              <class name="item-subtext"></class>
+            </style>
+            <property name="ellipsize">end</property>
+            <property name="vexpand_set">true</property>
+            <property name="vexpand">true</property>
+            <property name="xalign">0</property>
+            <property name="yalign">0</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel">
+        <style>
+          <class name="item-chevron"></class>
+        </style>
+        <property name="label">›</property>
+        <property name="valign">center</property>
+      </object>
+    </child>
+  </object>
+</interface>

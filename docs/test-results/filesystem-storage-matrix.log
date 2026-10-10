@@ -1,0 +1,38 @@
+   Compiling calamares-nixos v0.1.0 (/calamares/rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.87s
+     Running unittests src/lib.rs (/tmp/calamares-uuid-target/debug/deps/calamares_nixos-0d92f612d7751431)
+
+running 1 test
+PASS sector=512 ext4 -> ext4
+PASS sector=512 ext4 -> btrfs
+PASS sector=512 ext4 -> xfs
+PASS sector=512 btrfs -> ext4
+PASS sector=512 btrfs -> btrfs
+PASS sector=512 btrfs -> xfs
+PASS sector=512 xfs -> ext4
+PASS sector=512 xfs -> btrfs
+PASS sector=512 xfs -> xfs
+PASS sector=4096 ext4 -> ext4
+PASS sector=4096 ext4 -> btrfs
+PASS sector=4096 ext4 -> xfs
+PASS sector=4096 btrfs -> ext4
+PASS sector=4096 btrfs -> btrfs
+PASS sector=4096 btrfs -> xfs
+PASS sector=4096 xfs -> ext4
+PASS sector=4096 xfs -> btrfs
+PASS sector=4096 xfs -> xfs
+test filesystem::tests::real_reformat_mount_matrix ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 37.58s
+
+     Running unittests src/main.rs (/tmp/calamares-uuid-target/debug/deps/calamares_nixos-9dbd1370d779f0ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running unittests src/helper.rs (/tmp/calamares-uuid-target/debug/deps/calamares_nixos_helper-e5577a4f2cf40b02)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

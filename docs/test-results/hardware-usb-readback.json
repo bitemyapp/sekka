@@ -1,0 +1,9 @@
+{
+  "byte_comparison": true,
+  "cache_invalidated": true,
+  "device": "/dev/sda",
+  "device_bytes": 32080200192,
+  "iso_bytes": 3927244800,
+  "serial": "0374221060003525",
+  "sha256": "a06e860511db656850c7dcc4b91b348dcaebdfa2f321a7105ec7bd3df59e1978"
+}

@@ -1,0 +1,17 @@
+[package]
+name = "yukimi-system"
+description = "A NixOS system as a person sees it: generations, profiles, what changed, what is available, and progress while Nix works"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+yukimi-store.workspace = true
+yukimi-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+libc.workspace = true
+ureq.workspace = true

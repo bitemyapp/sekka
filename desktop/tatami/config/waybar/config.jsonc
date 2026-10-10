@@ -1,0 +1,247 @@
+// Tatami top bar after Omarchy 4's bar (shell/plugins/bar and
+// config/omarchy/shell.json; MIT, see ../LICENSE): the menu button and
+// workspaces on the left; the indicators, a centered clock and its balance in
+// the middle; tray, Bluetooth, network, audio, display and power on the right.
+{
+  "reload_style_on_change": true,
+  "layer": "top",
+  "position": "top",
+  "spacing": 0,
+  "height": 26,
+  "modules-left": [
+    "custom/tatami",
+    "hyprland/workspaces"
+  ],
+  "modules-center": [
+    "custom/screenrecording",
+    "custom/nightlight",
+    "custom/silence",
+    "custom/stay-awake",
+    "clock",
+    "custom/weather",
+    "custom/center-balance"
+  ],
+  "modules-right": [
+    "group/tray-expander",
+    "bluetooth",
+    "network",
+    "pulseaudio",
+    "custom/display",
+    "battery"
+  ],
+  "custom/tatami": {
+    "format": "",
+    "on-click": "tatami menu",
+    "on-click-right": "tatami terminal",
+    "tooltip-format": "Tatami menu\n\nSuper + Space"
+  },
+  "hyprland/workspaces": {
+    "on-click": "activate",
+    "format": "{icon}",
+    "format-icons": {
+      "default": "",
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9",
+      "10": "0",
+      "active": "󱓻"
+    },
+    "persistent-workspaces": {
+      "1": [],
+      "2": [],
+      "3": [],
+      "4": [],
+      "5": []
+    }
+  },
+  "custom/screenrecording": {
+    "exec": "tatami indicator screenrecording",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 8,
+    "on-click": "tatami screenrecord --menu"
+  },
+  "custom/nightlight": {
+    "exec": "tatami indicator nightlight",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 11,
+    "on-click": "tatami toggle nightlight"
+  },
+  "custom/silence": {
+    "exec": "tatami indicator notifications",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 10,
+    "on-click": "tatami toggle notifications"
+  },
+  "custom/stay-awake": {
+    "exec": "tatami indicator idle",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 9,
+    "on-click": "tatami toggle idle"
+  },
+  "clock": {
+    "format": "{:L%A %H:%M}",
+    "format-alt": "{:L%e %B W%V %Y}",
+    "format-alt-click": "click-right",
+    // The month as Omarchy's calendar panel shows it: a large title, week
+    // numbers and weekdays dimmed, today in the accent color. Scrolling over
+    // the clock moves between months.
+    "tooltip-format": "<tt><big>{calendar}</big></tt>",
+    "calendar": {
+      "mode": "month",
+      "weeks-pos": "left",
+      "on-scroll": 1,
+      "format": {
+        "months": "<span color='#c0caf5' size='x-large'><b>{}</b></span>",
+        "days": "<span color='#a9b1d6'>{}</span>",
+        "weeks": "<span color='#565f89'>{:%V}</span>",
+        "weekdays": "<span color='#565f89'><b>{}</b></span>",
+        "today": "<span color='#1a1b26' bgcolor='#7aa2f7'><b>{}</b></span>"
+      }
+    },
+    "actions": {
+      "on-scroll-up": "shift_up",
+      "on-scroll-down": "shift_down"
+    }
+  },
+  // The weather beside the clock: the current conditions, and on hover the
+  // temperature, wind, humidity and the next three days. A click fetches it
+  // again; a right click (or Setup › Weather) chooses the place.
+  "custom/weather": {
+    "exec": "tatami weather",
+    "return-type": "json",
+    "interval": 60,
+    "signal": 7,
+    "on-click": "tatami weather refresh",
+    "on-click-right": "tatami weather place"
+  },
+  "custom/center-balance": {
+    "format": " ",
+    "tooltip": false
+  },
+  "group/tray-expander": {
+    "orientation": "inherit",
+    "drawer": {
+      "transition-duration": 600,
+      "children-class": "tray-group-item"
+    },
+    "modules": [
+      "custom/expand-icon",
+      "tray"
+    ]
+  },
+  // The tray's opener, shown only while some application has a tray icon:
+  // Omarchy hides the tray when it is empty.
+  "custom/expand-icon": {
+    "exec": "tatami indicator tray",
+    "return-type": "json",
+    "interval": 5,
+    "tooltip": false
+  },
+  "tray": {
+    "icon-size": 12,
+    "spacing": 15
+  },
+  "bluetooth": {
+    "format": "󰂯",
+    "format-off": "󰂲",
+    "format-disabled": "󰂲",
+    "format-connected": "󰂱",
+    "format-no-controller": "",
+    "tooltip-format": "Devices connected: {num_connections}",
+    "on-click": "tatami bluetooth",
+    "on-click-right": "tatami bluetooth-toggle"
+  },
+  "network": {
+    "format-icons": [
+      "󰤯",
+      "󰤟",
+      "󰤢",
+      "󰤥",
+      "󰤨"
+    ],
+    "format": "{icon}",
+    "format-wifi": "{icon}",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰤮",
+    "tooltip-format-wifi": "{essid} ({frequency} GHz)",
+    "tooltip-format-ethernet": "Connected",
+    "tooltip-format-disconnected": "Disconnected",
+    "interval": 3,
+    "on-click": "tatami network"
+  },
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "",
+    "format-icons": {
+      "headphone": "󰋋",
+      "headset": "󰋋",
+      "default": [
+        "",
+        "",
+        ""
+      ]
+    },
+    "tooltip-format": "Playing at {volume}%",
+    "on-click": "tatami audio",
+    "on-click-right": "tatami volume mute-toggle",
+    "on-scroll-up": "tatami volume raise",
+    "on-scroll-down": "tatami volume lower"
+  },
+  "custom/display": {
+    "format": "󰍹",
+    "tooltip": false,
+    "on-click": "tatami display",
+    "on-scroll-up": "tatami brightness +5%",
+    "on-scroll-down": "tatami brightness 5%-"
+  },
+  "battery": {
+    "format": "{icon}",
+    "format-alt": "{capacity}% {icon}",
+    "format-alt-click": "click-right",
+    "format-full": "󰂅",
+    "format-icons": {
+      "charging": [
+        "󰢜",
+        "󰂆",
+        "󰂇",
+        "󰂈",
+        "󰢝",
+        "󰂉",
+        "󰢞",
+        "󰂊",
+        "󰂋",
+        "󰂅"
+      ],
+      "default": [
+        "󰁺",
+        "󰁻",
+        "󰁼",
+        "󰁽",
+        "󰁾",
+        "󰁿",
+        "󰂀",
+        "󰂁",
+        "󰂂",
+        "󰁹"
+      ]
+    },
+    "tooltip-format-discharging": "{power:>1.0f}W↓ {capacity}%",
+    "tooltip-format-charging": "{power:>1.0f}W↑ {capacity}%",
+    "interval": 5,
+    "on-click": "tatami power-profile",
+    "states": {
+      "warning": 20,
+      "critical": 10
+    }
+  }
+}

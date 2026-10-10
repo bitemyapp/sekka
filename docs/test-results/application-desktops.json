@@ -1,0 +1,754 @@
+{
+  "cases": {
+    "cinnamon": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/cgsl49bf1w6q3ic4n1x81baq5lm9fqxf-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "cinnamon-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/jlrnrpf8ziclbpjy59zjlf92sjb4hmb3-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "cinnamon-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/gyyapxkh5hzvh3gjnd69ax61y6ll0hy9-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "cinnamon-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/idrwq07hhn00iqha9jrx3jh6g09xin89-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/wn8alb00ap4hxvig1yi3ny2n3qzgg1wc-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/j7n5m3x03wwh871533a6kizarhybhiam-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/d64aqbag896v4i4xjnnzyy1pa0g993v8-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/63mxhs2kgiizfck0cn849bczpjvb221g-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/ai8xvyiw9jniqahyaaiqad0vq93yc84v-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/lvsxjzk5j2g8bckv9nqrpjhppjbak25z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/8c4gicirphvf3lib8qhdgki9wnvxd6b1-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/vi6xf30vqb6vw592lcx8pm3akq404m0q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "lxqt",
+      "derivation": "/nix/store/jj5v6r96w20ny4hmz5j7b39ly1l9xdlf-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "mate",
+      "derivation": "/nix/store/99lbhlq8ba6vvpilrxs38sj4pjarr2bi-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "mate",
+      "derivation": "/nix/store/wjny5l6iv5pa72l4cd0icpx1vwasbyfg-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/z2sw0bfp518mww1x3hr5hmn2bplqb75q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/fhlncwvcrc8q4477pkkldwiq86nmp51q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/fddyg6yl9mr7qrp38gav23rxaz1cr9m9-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/c28lajzrdnva2k6d8mj1ixf9zbccnhmv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/nff9i3kh72bjvfszfnyffgqwmpgp800q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/gnxpd22qdravwqrad11kqkqb6g8q155q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/5njhrgg8p8q8ms20pki6fy3b6wprhj8k-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/0b9wqjkqnfbyvsf46x4d55w200vpr7f1-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/n9lfkl5ycnfsf2by8jjqmzg3d0as6327-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/k6vbm0rx03nvyr9k98yk298z5bzdgqjp-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/wljvdmgwp21h8y0yh7py4azd3qs9gaic-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/a5p6yjd44s580k9ry9xncqqjih2c8ysp-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/1kkmrl625hw1vwphnxx0ava2nihxs2fy-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/k876aqv7lzvkpzn8zs3w15px1gwbv8z3-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/vdnrl0i3mzi23ql984ipzna28dmyyn2z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/9n7jii5q34gga0rv1i4z9gpnhxf4sixs-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/aad54416wn1r4wbrbmj70slqmp812179-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/yil9qi8ddkgxzh8zxqmw23w5fbk759gq-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/fr3z4lqcfjjyj8k0zj2x6gcw5hh9sikh-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/yiv99fslvbjlggxk9vrjfdalk17a888q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/s41lwidinmjg8s6aaah44vvf3kb0lkiq-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/vs3kld3r6v37afidh9vd416myvizjc46-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/basp6yclvzycp70nqakxqhc7xm0r2bxd-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/96y19vh5lsb70xjy0hkkll27861kkiif-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/jg458cnhpi9gmz2fh3d69b8l4daq3xrw-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/58xr7k6c6i6kp0ksdkxd0acvavjrhi1r-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/2yy21b6ipwki0kjldsgldsxcp8ipscbc-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/rclzhqjywkjsy9dya14igppafbsmbvvf-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/1cx6vb1yk98n3svx771427ihn01q0yp1-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/bhvck7109nrrd2y7blm7npzcj14c815r-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-mate": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/zf2f5gqd45dyickgpws5g2la9597ypp2-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    },
+    "xfce-mate-lxqt": {
+      "allowUnfree": true,
+      "bootDevice": "/dev/disk/by-uuid/A1B2-C3D4",
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/9bzp2ma2cchg7v6mj5gq2hpmvywwbsbx-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "redistributableFirmware": true,
+      "rootDevice": "/dev/disk/by-uuid/11111111-2222-3333-4444-555555555555",
+      "sessions": [
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "supplicantEnabled": true,
+      "zone": "America/Chicago"
+    }
+  },
+  "fingerprint": "b2c4df491ebde988616b101431ccbb562936ae116d93863f4931f0d90cee4f60:1ab98c5950de5484c81f3d1c52c5a657d0247e3eecb21c0c9cada9b8472ee079:8c6b7df3c2f4af1bb5aeff13bdf104d4608046871d90687a72d0534d1ffeb904:3aeac89ade48b1506399615efa0b1f5b5616271ce3bc23f985f39ceca59a9f69:5886e2fdacacd5d1e54e9ce6fd38ea20a94ef321e88f0f8410d6260991054c68:482ead0758eb5ea10a7a88f766a0b3c1cf86b393ff0859d713c93617c4a6a2d3:2d12d776bb8f402873938850b7417e718e6b24d69d01ab86ca5f1d0743604c7f",
+  "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb"
+}

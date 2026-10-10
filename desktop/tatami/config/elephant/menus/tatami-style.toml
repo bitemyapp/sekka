@@ -1,0 +1,20 @@
+# Style › in the Tatami menu (see tatami.toml), after Omarchy 4's, without
+# its theme, font and screensaver entries.
+name = "tatami-style"
+name_pretty = "Style"
+parent = "tatami"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Background"
+icon = ""
+value = "tatami background"
+keywords = ["wallpaper"]
+
+[[entries]]
+text = "Hyprland"
+icon = ""
+value = "tatami edit-config"
+keywords = ["config", "look"]

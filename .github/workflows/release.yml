@@ -1,0 +1,68 @@
+name: Build and publish Sekka ISO (disabled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed release tag on main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sekka-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Intentionally inhibited. Enabling requires a reviewed change to this line.
+    # There are no push, tag, schedule, or pull_request triggers.
+    if: ${{ false }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == bitemyapp/sekka ]]
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9][0-9A-Za-z._-]*$ ]]
+          revision=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")
+          git merge-base --is-ancestor "$revision" origin/main
+          git checkout --detach "$revision"
+          test -z "$(git status --porcelain)"
+      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Check components and build ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake check --no-update-lock-file --print-build-logs
+          nix build .#iso --no-update-lock-file --print-build-logs --out-link result-iso
+          git diff --exit-code -- flake.lock
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare-release.py result-iso/iso dist "$RELEASE_TAG"
+      - name: Publish prerelease after all assets upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" dist/assets/* --verify-tag \
+            --title "Sekka $RELEASE_TAG" --notes-file dist/release-notes.md \
+            --draft --prerelease
+          gh release edit "$RELEASE_TAG" --draft=false

@@ -1,0 +1,50 @@
+{
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_bytes": 3989078016,
+  "iso_sha256": "2eb35dcb58f8104721a91a35e1e74625c2343a34bdf8adfcd922166806a2a39d",
+  "installer_revision": "2c80fed7af924d9b2a959a8bd4ed70c7f5834cf8",
+  "flake_lock_sha256": "2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69",
+  "build_completed": true,
+  "desktop_configurations_evaluated": 47,
+  "dependency_test_environment": "Unmodified Nix derivations in full x86_64 NixOS VMs with native aarch64 QEMU TCG on OrbStack; successful outputs exported and imported into build store.",
+  "nix_dependency_tests": {
+    "syscall_compatibility": {
+      "passed": 798,
+      "skipped": 1,
+      "disabled": 1
+    },
+    "store": {
+      "passed": 727,
+      "disabled": 1
+    },
+    "expression": {
+      "passed": 366,
+      "disabled": 1
+    },
+    "functional": {
+      "passed": 218,
+      "skipped": 8,
+      "failed": 0
+    }
+  },
+  "outer_container_nix": {
+    "sandbox": false,
+    "filter_syscalls": false,
+    "note": "Required for macOS Linux translation. Full guest checks used normal Linux sandboxing."
+  },
+  "derivations_modified_to_skip_tests": false,
+  "graphical_base_revision": "091af7b",
+  "installer_source_hash": "sha256-qSqyQTyHPhVXs8o+GlLMhvbbHw9AAnbEma4i4R9dJPU=",
+  "graphical_working_changes": [
+    "nix/calamares-source.json",
+    "tests/desktop-matrix.nix",
+    "validation documentation"
+  ],
+  "release_validation": "All ten full ISO installation/reboot cases and installed graphical login passed; physical USB verification awaits macOS authentication.",
+  "flake_check_passed": true,
+  "native_runtime_tests": 35,
+  "compile_fail_doctests": 6,
+  "full_iso_install_boot_cases_passed": 10,
+  "installed_graphical_login_passed": true,
+  "written_usb_verification": "Pending macOS administrator authentication; no USB write has started."
+}

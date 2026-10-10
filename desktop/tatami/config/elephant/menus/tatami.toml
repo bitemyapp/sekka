@@ -1,0 +1,53 @@
+# The Tatami menu, after Omarchy 4's default/omarchy/omarchy-menu.jsonc
+# (MIT, see ../../LICENSE) without its Arch package, update and theme
+# entries. Entries run the `tatami` helper; Escape returns to the parent.
+name = "tatami"
+name_pretty = "Tatami"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Apps"
+icon = "󰀻"
+value = "tatami apps"
+state = ["submenu"]
+keywords = ["app", "applications"]
+
+[[entries]]
+text = "Learn"
+icon = "󰧑"
+submenu = "tatami-learn"
+state = ["submenu"]
+
+[[entries]]
+text = "Trigger"
+icon = "󱓞"
+submenu = "tatami-trigger"
+state = ["submenu"]
+
+[[entries]]
+text = "Style"
+icon = "\uEBCF"
+submenu = "tatami-style"
+state = ["submenu"]
+keywords = ["background", "wallpaper", "theme"]
+
+[[entries]]
+text = "Setup"
+icon = ""
+submenu = "tatami-setup"
+state = ["submenu"]
+keywords = ["settings"]
+
+[[entries]]
+text = "About"
+icon = ""
+value = "tatami about"
+
+[[entries]]
+text = "System"
+icon = ""
+submenu = "tatami-system"
+state = ["submenu"]
+keywords = ["power-menu"]

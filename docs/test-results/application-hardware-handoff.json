@@ -1,0 +1,123 @@
+{
+  "status": "incomplete",
+  "passed": false,
+  "reason": "User requested immediate USB flashing for physical-hardware testing; stop emulated tests without treating partial progress as a pass.",
+  "stopped_at": "2026-10-05T00:35:47.124398+00:00",
+  "iso_sha256": "e7ec2362952305081c6e5ed6332962a13a50159f1f10352806607b93bbc45c37",
+  "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb",
+  "cases": [
+    {
+      "run": "bios-virtio-btrfs-1791155890087-52546",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-bios-virtio-btrfs-xfs-firefox.log"
+    },
+    {
+      "run": "bios-virtio-ext4-1791155890092-52545",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-bios-virtio-ext4-btrfs-none.log"
+    },
+    {
+      "run": "bios-virtio-xfs-1791155890189-52548",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-bios-virtio-xfs-ext4-firefox.log"
+    },
+    {
+      "run": "uefi-nvme-btrfs-1791155291435-51239",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme-btrfs-xfs-firefox.log"
+    },
+    {
+      "run": "uefi-nvme-ext4-1791155291435-51237",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme-ext4-btrfs-all.log"
+    },
+    {
+      "run": "uefi-nvme-xfs-1791155291435-51236",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme-xfs-ext4-firefox.log"
+    },
+    {
+      "run": "uefi-nvme4k-btrfs-1791155291435-51240",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme4k-btrfs-xfs-firefox.log"
+    },
+    {
+      "run": "uefi-nvme4k-ext4-1791155291435-51238",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme4k-ext4-btrfs-rustup.log"
+    },
+    {
+      "run": "uefi-nvme4k-xfs-1791155890094-52544",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-nvme4k-xfs-ext4-firefox.log"
+    },
+    {
+      "run": "uefi-virtio-ext4-1791155890143-52547",
+      "status": "interrupted_for_requested_hardware_test",
+      "passed": false,
+      "last_progress": {
+        "kind": "progress",
+        "step": 4,
+        "message": "Building and installing NixOS (downloads can take a while)"
+      },
+      "log": "artifacts/native-rust/final-application-matrix-uefi-virtio-ext4-blank-firefox.log"
+    }
+  ],
+  "installed_application_runtime": "not_run",
+  "physical_boot": "pending_user_test",
+  "under_one_minute_install": "target_not_measured"
+}

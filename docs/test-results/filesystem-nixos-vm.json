@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-04",
+  "check": "checks.x86_64-linux.storage",
+  "installer_revision": "2c80fed7af924d9b2a959a8bd4ed70c7f5834cf8",
+  "installer_source_hash": "sha256-qSqyQTyHPhVXs8o+GlLMhvbbHw9AAnbEma4i4R9dJPU=",
+  "environment": "NixOS VM under QEMU TCG in a disposable Linux container on macOS",
+  "kernel": "6.18.54",
+  "nix_outer_sandbox": false,
+  "nix_filter_syscalls": false,
+  "passed": true,
+  "script_seconds": 204.2,
+  "cases": [
+    {
+      "sector_bytes": 512,
+      "previous": "ext4",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "ext4",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "ext4",
+      "target": "xfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "btrfs",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "btrfs",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "btrfs",
+      "target": "xfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "xfs",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "xfs",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 512,
+      "previous": "xfs",
+      "target": "xfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "ext4",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "ext4",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "ext4",
+      "target": "xfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "btrfs",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "btrfs",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "btrfs",
+      "target": "xfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "xfs",
+      "target": "ext4",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "xfs",
+      "target": "btrfs",
+      "passed": true
+    },
+    {
+      "sector_bytes": 4096,
+      "previous": "xfs",
+      "target": "xfs",
+      "passed": true
+    }
+  ],
+  "efi_fat32_sector_sizes": [
+    512,
+    4096
+  ],
+  "checks": [
+    "uncached filesystem probe",
+    "explicit mount type",
+    "write and read after remount",
+    "FAT32 EFI mounts",
+    "directly probed UUID changes after every replacement",
+    "FAT32 replacement with a primed blkid cache"
+  ],
+  "limits": [
+    "temporary loop devices, not an NVMe controller",
+    "not a final-ISO install or installed-system boot",
+    "physical ThinkPad retest pending"
+  ]
+}

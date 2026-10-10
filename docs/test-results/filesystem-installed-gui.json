@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "source_run": "boot-uefi-1791109468658-78184",
+  "iso_sha256": "2eb35dcb58f8104721a91a35e1e74625c2343a34bdf8adfcd922166806a2a39d",
+  "installer_revision": "2c80fed7af924d9b2a959a8bd4ed70c7f5834cf8",
+  "disk_only_boot": true,
+  "graphical_login": true,
+  "qemu_acceleration": "tcg-single",
+  "verification": "ROOT_FILESYSTEM=ext4\nnix (Determinate Nix 3.23.0) 2.35.2\n\nfh 0.1.27\n\nHARDWARE_DEFAULTS=redistributable-firmware,unfree,wpa_supplicant\nDESKTOP_SESSION=plasma\nDESKTOPS=plasma,xfce\nPASS: America/Chicago, winter CST/summer CDT; Wi-Fi credentials and user restrictions persisted root-only and loaded by NetworkManager\n2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69  /etc/nixos/flake.lock\n\nPASS: installed system, password hash and PAM authentication, locked root, escaped configuration, desktop and Determinate services\n"
+}

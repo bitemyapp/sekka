@@ -1,0 +1,519 @@
+{
+  "cases": {
+    "cinnamon": {
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/gck3w42643rc9rmwy5f82j2wf1kq1pwk-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland"
+      ],
+      "zone": "America/Chicago"
+    },
+    "cinnamon-lxqt": {
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/a3l9b6gh5g9n9vff9vyid69rfljaj73w-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "cinnamon-mate": {
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/62vzk3imyw9mza8hilkjlb2a0z66sx41-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate"
+      ],
+      "zone": "America/Chicago"
+    },
+    "cinnamon-mate-lxqt": {
+      "defaultSession": "cinnamon",
+      "derivation": "/nix/store/qj06ykq9v611lr4f5dqq8lzzz57ycnq8-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/w97xgby8f6i9xnawpf0ykwpzh4mmhi8w-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-lxqt": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/g22xm9166af4lb6q2pv65mx82nikl0kw-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-mate": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/1an8zsczl581qlgd7pfmm4b61p7shz57-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-mate-lxqt": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/g8pka4lav2yvbafbx5r78c2ahi3gnvp6-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/zff46i12f44j52r9dmn5l7pxp3g8k1x6-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-lxqt": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/p9wgha2zih832nx78kav6n4idrjz3s3j-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-mate": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/3vcfsdwjx3an7yn694835blzp99zbl4h-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "gnome-xfce-mate-lxqt": {
+      "defaultSession": "gnome",
+      "derivation": "/nix/store/15wibn8b61l7rbw83sdzgf5k2x56zfgl-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "lxqt": {
+      "defaultSession": "lxqt",
+      "derivation": "/nix/store/k4rri7gywvqz2w3qz3djawvw2x12y0rg-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "mate": {
+      "defaultSession": "mate",
+      "derivation": "/nix/store/ag7avs5fcz64jrbaxbr8p2mia6ljhk92-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate"
+      ],
+      "zone": "America/Chicago"
+    },
+    "mate-lxqt": {
+      "defaultSession": "mate",
+      "derivation": "/nix/store/gcdjjn2wbv644613aqnkyi74x0la649z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/4khzy69p4qhaqv524dafq46bxi54lb2n-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/xikh24wldd14xb89ghx0p5p4spjh5xsv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/cn4ayprdqzi9vj1fsj6zgl1fc58wa573-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/wcnzd38imkma5wxvksrn897high9nwaz-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-cinnamon-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/ansrkn3awyx8k1hgb9dw5d7a9n5zjb5n-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/n5cc8rs6lqj984y2pa0nxvfx05aq1zkz-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/sliy9gsf8m8ljrv7mpkjznn1w1d4ki5z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/8dnvx65kiw95djbsd7f5x0df0bjnj15c-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/md592rwrid5d5cg1dgbp468zvvdp0d35-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/5fklwgsvm05cq5rgqr919m7mja5il1ca-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/9nzfmwzb3mgvlf96p3chgkdcgpbvfxji-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/m1b8c1gxw1r12vnysi0qfbyc7lc1bcy4-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-gnome-xfce-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/qx2diwyx0sg625ikl8bd2184i38n15w9-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "gnome",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/y0pms462ka77p65wzcl17habyds3dch5-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/qzh1jmjznsfvrg6m1w1biic0h3kl3f84-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/3kp11g6044g3fb2bq1y42cx9xdqrfjp0-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/s4sq470z4y1jmmcdzyd3q6ss8myd2ymi-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/dbkifmqpdxviazdnif80h3j9px7wpg27-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/n17pdq2msv6wm4mrvr4yhfpck25zj1db-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/yfzkn18icawsn4r0wy5l1c54x1390qp0-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-cinnamon-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/by28k9jzafskc1720cwwcizjpda6n58z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/ml8ifk4534cnkawhb9ji0cd4rvgdjkh7-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-mate": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/6wwv1rsawa71yi3p79zixjbdvys86wwv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "plasma-xfce-mate-lxqt": {
+      "defaultSession": "plasma",
+      "derivation": "/nix/store/91g0y6q4q6pgack3052bywdlfrf3zrag-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "plasma",
+        "plasmax11",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/iyb4p671j96nk5msw0lvqvp0is6z6qsr-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/9d54j971a2i82k68aq903rw2f7h5ml7s-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-lxqt": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/9sqww990q4b943n4072niybcaq8lfxgs-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-mate": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/bsf4m4b48i4irfa0r3gas0a0mzajcmf9-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-cinnamon-mate-lxqt": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/2fxs923flavj96j9r47fmym9435jjifg-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "cinnamon",
+        "cinnamon2d",
+        "cinnamon-wayland",
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-lxqt": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/pc6gb9j6mlcx3qkxy89yp95b3dmkf3k5-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-mate": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/p94dj5jar949nydcjzdx5yvvfvjki92k-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    },
+    "xfce-mate-lxqt": {
+      "defaultSession": "xfce",
+      "derivation": "/nix/store/bsg9q9w40vsn1d9q5wksg1gwif1bwr6m-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "sessions": [
+        "mate",
+        "lxqt",
+        "xfce"
+      ],
+      "zone": "America/Chicago"
+    }
+  },
+  "fingerprint": "0ed8a33800600707143798e9a99006be55ef2b1bef30e2b483413cdbc096227b:2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69:b4af93fcbe3b5a825bb399c363d00c261b8415d4bdcf1b00c45ae610e2c01808",
+  "installer_revision": "393bfad55aba29dc7cd8e007576c921abdd0afca"
+}

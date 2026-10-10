@@ -1,0 +1,35 @@
+Writing the user-requested hardware-test candidate. Full emulated installation and application runtime validation remain incomplete.
+Unmount of all volumes on disk4 was successful
+{"stage": "write", "bytes": 8388608, "total": 9560510464, "seconds": 0.2}
+{"stage": "write", "bytes": 1149239296, "total": 9560510464, "seconds": 15.3}
+{"stage": "write", "bytes": 2097152000, "total": 9560510464, "seconds": 30.3}
+{"stage": "write", "bytes": 2642411520, "total": 9560510464, "seconds": 45.4}
+{"stage": "write", "bytes": 3196059648, "total": 9560510464, "seconds": 60.6}
+{"stage": "write", "bytes": 3749707776, "total": 9560510464, "seconds": 75.7}
+{"stage": "write", "bytes": 4303355904, "total": 9560510464, "seconds": 91.0}
+{"stage": "write", "bytes": 4848615424, "total": 9560510464, "seconds": 106.1}
+{"stage": "write", "bytes": 5343543296, "total": 9560510464, "seconds": 121.3}
+{"stage": "write", "bytes": 5679087616, "total": 9560510464, "seconds": 136.6}
+{"stage": "write", "bytes": 6014631936, "total": 9560510464, "seconds": 151.7}
+{"stage": "write", "bytes": 6350176256, "total": 9560510464, "seconds": 166.9}
+{"stage": "write", "bytes": 6694109184, "total": 9560510464, "seconds": 182.3}
+{"stage": "write", "bytes": 7038042112, "total": 9560510464, "seconds": 197.4}
+{"stage": "write", "bytes": 7373586432, "total": 9560510464, "seconds": 212.6}
+{"stage": "write", "bytes": 7709130752, "total": 9560510464, "seconds": 227.8}
+{"stage": "write", "bytes": 8044675072, "total": 9560510464, "seconds": 243.0}
+{"stage": "write", "bytes": 8380219392, "total": 9560510464, "seconds": 258.1}
+{"stage": "write", "bytes": 8715763712, "total": 9560510464, "seconds": 273.1}
+{"stage": "write", "bytes": 9051308032, "total": 9560510464, "seconds": 288.1}
+{"stage": "write", "bytes": 9386852352, "total": 9560510464, "seconds": 303.3}
+{"stage": "write", "bytes": 9560510464, "total": 9560510464, "seconds": 311.1}
+Unmount of all volumes on disk4 was successful
+{"stage": "readback", "bytes": 8388608, "total": 9560510464, "seconds": 0.1}
+{"stage": "readback", "bytes": 2306867200, "total": 9560510464, "seconds": 15.1}
+{"stage": "readback", "bytes": 4596957184, "total": 9560510464, "seconds": 30.1}
+{"stage": "readback", "bytes": 6115295232, "total": 9560510464, "seconds": 45.2}
+{"stage": "readback", "bytes": 7348420608, "total": 9560510464, "seconds": 60.2}
+{"stage": "readback", "bytes": 8581545984, "total": 9560510464, "seconds": 75.2}
+{"stage": "readback", "bytes": 9560510464, "total": 9560510464, "seconds": 87.2}
+{"passed": true, "device": "disk4", "vendor": "SanDisk", "serial_suffix": "be1c", "capacity": 123048296448, "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso", "bytes_verified": 9560510464, "sha256": "e7ec2362952305081c6e5ed6332962a13a50159f1f10352806607b93bbc45c37", "tail_zero_bytes": 1048576, "uid": 0, "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb", "release_matrix_complete_at_write": false, "application_runtime_complete_at_write": false, "purpose": "User requested immediate physical-hardware testing; unfinished emulated tests are not passes"}
+Disk /dev/disk4 ejected
+PASS: SanDisk written, every ISO byte compared, and drive ejected. Physical boot and install testing remain pending.

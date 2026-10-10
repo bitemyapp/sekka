@@ -1,0 +1,58 @@
+/* Tatami on-screen display after Omarchy 4's OSD card
+ * (shell/plugins/osd/Osd.qml; MIT, see ../LICENSE) in Tokyo Night: a square
+ * card with a 2px accent border and 16px padding, a 6px bar filled with the
+ * accent over a dimmed track, and a bold 14px value. */
+@define-color background #1a1b26;
+@define-color foreground #a9b1d6;
+@define-color accent #7aa2f7;
+
+window#osd {
+  border-radius: 0;
+  border: 2px solid @accent;
+  background: alpha(@background, 0.97);
+}
+
+window#osd #container {
+  margin: 16px;
+}
+
+window#osd image {
+  color: @foreground;
+}
+
+window#osd label {
+  font-family: 'JetBrainsMono Nerd Font';
+  font-size: 14px;
+  font-weight: bold;
+  color: @foreground;
+}
+
+window#osd progressbar,
+window#osd segmentedprogress {
+  min-height: 6px;
+  min-width: 142px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+}
+
+window#osd trough,
+window#osd segment {
+  min-height: 6px;
+  border-radius: 0;
+  border: none;
+  background: alpha(@foreground, 0.45);
+}
+
+window#osd progress,
+window#osd segment.active {
+  min-height: 6px;
+  border-radius: 0;
+  border: none;
+  background: @accent;
+}
+
+window#osd progressbar:disabled,
+window#osd image:disabled {
+  opacity: 0.5;
+}

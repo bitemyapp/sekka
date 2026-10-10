@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Style › Background: a row per wallpaper with a small preview; the large
+     preview beside the list (preview.xml) shows the selected one. -->
+<interface>
+  <requires lib="gtk" version="4.0"></requires>
+  <object class="GtkBox" id="ItemBox">
+    <style>
+      <class name="item-box"></class>
+      <class name="background-item"></class>
+    </style>
+    <property name="orientation">horizontal</property>
+    <property name="spacing">12</property>
+    <child>
+      <object class="GtkPicture" id="ItemImage">
+        <style>
+          <class name="background-thumbnail"></class>
+        </style>
+        <property name="content-fit">cover</property>
+        <property name="can-shrink">true</property>
+        <property name="width-request">64</property>
+        <property name="height-request">40</property>
+        <property name="valign">center</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="ItemText">
+        <style>
+          <class name="item-text"></class>
+        </style>
+        <property name="ellipsize">end</property>
+        <property name="hexpand">true</property>
+        <property name="xalign">0</property>
+      </object>
+    </child>
+  </object>
+</interface>

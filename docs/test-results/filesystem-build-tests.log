@@ -1,0 +1,25 @@
+nix-check-vm-readable.log
+vm-test-run-determinate-nix-syscall-check> machine # [ DISABLED ] Config.DISABLED_reapplyUnknownSettings
+vm-test-run-determinate-nix-syscall-check> machine # [  SKIPPED ] CompressionDecompression/CompressionDecompressionTest.invalidDecompression/none (8 ms)
+vm-test-run-determinate-nix-syscall-check> machine # [  PASSED  ] 798 tests.
+vm-test-run-determinate-nix-syscall-check> machine # [  SKIPPED ] 1 test, listed below:
+vm-test-run-determinate-nix-syscall-check> machine # [  SKIPPED ] CompressionDecompression/CompressionDecompressionTest.invalidDecompression/none
+vm-test-run-determinate-nix-syscall-check> machine #   YOU HAVE 1 DISABLED TEST
+vm-test-run-determinate-nix-syscall-check> PASS: unmodified Determinate Nix syscall compatibility test
+vm-test-run-determinate-nix-syscall-check> test script finished in 158.39s
+nix-store-check-vm.log
+vm-test-run-determinate-nix-store-check> machine # [ DISABLED ] DerivedPathTest_RapidCheck.DISABLED_prop_legacy_round_rip
+vm-test-run-determinate-nix-store-check> machine # [  PASSED  ] 727 tests.
+vm-test-run-determinate-nix-store-check> machine #   YOU HAVE 1 DISABLED TEST
+vm-test-run-determinate-nix-store-check> PASS: unmodified Determinate Nix store tests
+vm-test-run-determinate-nix-store-check> test script finished in 162.97s
+nix-final-check-vm.log
+vm-test-run-determinate-nix-final-checks> machine # [ DISABLED ] JSONValueTest.DISABLED_Path
+vm-test-run-determinate-nix-final-checks> machine # [  PASSED  ] 366 tests.
+vm-test-run-determinate-nix-final-checks> machine #   YOU HAVE 1 DISABLED TEST
+vm-test-run-determinate-nix-final-checks> machine # 226/226 local-overlay-store - nix-functional-tests:stale-file-handle                 OK              9.49s
+vm-test-run-determinate-nix-final-checks> machine # Ok:                218
+vm-test-run-determinate-nix-final-checks> machine # Fail:              0
+vm-test-run-determinate-nix-final-checks> machine # Skipped:           8
+vm-test-run-determinate-nix-final-checks> PASS: unmodified Nix expression and functional suites
+vm-test-run-determinate-nix-final-checks> test script finished in 799.97s

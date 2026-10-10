@@ -1,0 +1,294 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* NixOS-branded libadwaita styling for the native installer. */
+
+:root {
+  --accent-bg-color: #5277c3;
+  --accent-fg-color: #ffffff;
+  --accent-color: #3f63ad;
+  --nixos-light-blue: #7ebae4;
+  --nixos-blue: #5277c3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-color: #8fbfe8;
+  }
+}
+
+/* Sidebar: brand header and step list. */
+.installer-sidebar {
+  background-image: linear-gradient(180deg,
+      alpha(#5277c3, 0.16) 0%,
+      alpha(#7ebae4, 0.05) 45%,
+      transparent 80%);
+}
+
+.brand-title {
+  font-weight: 800;
+  font-size: 1.15em;
+  letter-spacing: 0.02em;
+}
+
+.brand-subtitle {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.step-list {
+  background: transparent;
+}
+
+.step-list row {
+  border-radius: 10px;
+  margin: 2px 8px;
+  padding: 6px 8px;
+}
+
+.step-badge {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85em;
+  background-color: alpha(currentColor, 0.1);
+}
+
+.step-current .step-badge {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+.step-done .step-badge {
+  background-color: alpha(var(--success-color), 0.18);
+  color: var(--success-color);
+}
+
+.step-current .step-title {
+  font-weight: 700;
+}
+
+.step-future {
+  opacity: 0.55;
+}
+
+/* Welcome page. */
+.hero-logo {
+  -gtk-icon-size: 128px;
+  margin-bottom: 6px;
+}
+
+.hero-title {
+  font-size: 2.4em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.hero-subtitle {
+  font-size: 1.1em;
+  opacity: 0.8;
+}
+
+.feature-card {
+  padding: 18px;
+  border-radius: 14px;
+}
+
+.feature-icon {
+  -gtk-icon-size: 28px;
+  color: var(--accent-color);
+  padding: 10px;
+  border-radius: 12px;
+  background-color: alpha(var(--accent-bg-color), 0.12);
+}
+
+.feature-title {
+  font-weight: 700;
+}
+
+.warning-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background-color: alpha(var(--warning-bg-color), 0.16);
+  color: var(--warning-fg-color);
+}
+
+.warning-card label {
+  color: var(--view-fg-color);
+}
+
+.erase-card {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background-color: alpha(var(--destructive-bg-color), 0.12);
+}
+
+.erase-card .erase-title {
+  font-weight: 800;
+  color: var(--destructive-color);
+}
+
+/* Disk layout preview. */
+.layout-bar {
+  min-height: 34px;
+}
+
+.legend {
+  font-size: 0.9em;
+}
+
+/* Desktop cards. */
+button.card.desktop-card {
+  padding: 14px;
+  border-radius: 14px;
+}
+
+button.card.desktop-card:checked {
+  background-image: none;
+  background-color: alpha(var(--accent-bg-color), 0.08);
+  box-shadow: inset 0 0 0 2px var(--accent-bg-color);
+  color: inherit;
+}
+
+button.card.desktop-card:checked:hover {
+  background-image: none;
+  background-color: alpha(var(--accent-bg-color), 0.13);
+}
+
+.desktop-card .card-check {
+  opacity: 0;
+  color: var(--accent-color);
+}
+
+.desktop-card:checked .card-check {
+  opacity: 1;
+}
+
+.desktop-card .card-description {
+  opacity: 0.75;
+  font-size: 0.92em;
+}
+
+.monogram {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.15em;
+}
+
+.monogram-plasma { background-image: linear-gradient(135deg, #3daee9, #1d6fa5); }
+.monogram-gnome { background-image: linear-gradient(135deg, #62a0ea, #1a5fb4); }
+.monogram-xfce { background-image: linear-gradient(135deg, #5294e2, #2a5c9a); }
+.monogram-hyprland { background-image: linear-gradient(135deg, #33ccff, #00b37a); }
+.monogram-tatami { background-image: linear-gradient(135deg, #7aa2f7, #2b2f4a); }
+
+/* Small pills for application traits. */
+.badge {
+  font-size: 0.78em;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: alpha(currentColor, 0.1);
+}
+
+.badge.proprietary {
+  background-color: alpha(var(--warning-bg-color), 0.22);
+}
+
+.badge.terminal {
+  background-color: alpha(var(--accent-bg-color), 0.16);
+}
+
+.badge.required {
+  background-color: alpha(var(--success-bg-color), 0.2);
+}
+
+/* Background activity in the bottom bar. */
+.activity {
+  font-size: 0.88em;
+  opacity: 0.75;
+}
+
+/* Review and installation progress. */
+.prep-card {
+  padding: 4px 0;
+}
+
+.success-icon {
+  color: var(--success-color);
+}
+
+.error-icon {
+  color: var(--error-color);
+}
+
+.pending-icon {
+  opacity: 0.35;
+}
+
+.elapsed {
+  font-size: 2.6em;
+  font-weight: 300;
+  font-feature-settings: "tnum";
+}
+
+.install-title {
+  font-size: 1.8em;
+  font-weight: 800;
+}
+
+.install-progress trough,
+.install-progress progress {
+  min-height: 10px;
+  border-radius: 999px;
+}
+
+.log-view {
+  font-family: monospace;
+  font-size: 0.85em;
+  padding: 8px;
+  background-color: transparent;
+}
+
+.failure-view {
+  font-family: monospace;
+  font-size: 0.9em;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.done-time {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: var(--success-color);
+}
+
+.done-page .icon {
+  color: var(--success-color);
+}
+
+/* Time zone map. */
+.zone-card zonemap {
+  margin: 6px 6px 0 6px;
+}
+
+.zone-info {
+  padding: 10px 18px 12px 18px;
+}
+
+.zone-name {
+  font-size: 1.3em;
+  font-weight: 800;
+}
+
+.zone-time {
+  font-size: 1.3em;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
+.zone-status {
+  padding: 4px 6px 4px 18px;
+  min-height: 40px;
+}
