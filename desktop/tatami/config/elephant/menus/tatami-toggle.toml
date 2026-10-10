@@ -7,7 +7,7 @@ hide_from_providerlist = true
 action = "%VALUE%"
 
 [[entries]]
-text = "Stay Awake"
+text = "Keep Awake"
 icon = "󰅶"
 value = "tatami toggle idle"
 

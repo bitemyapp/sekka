@@ -2,6 +2,7 @@
 //! `tatami`: session launcher and desktop commands for the Tatami session
 //! (keyboard-driven Hyprland inspired by Omarchy), replacing the Bash `omarchy-*` scripts of Omarchy 4
 //! (https://github.com/basecamp/omarchy, MIT) that it is modelled on.
+mod awake;
 mod background;
 mod browser;
 mod capture;
@@ -27,6 +28,7 @@ pub const CONFIG: &str = "/etc/xdg/tatami";
 const USAGE: &str = "usage: tatami <command>
   session                         start Hyprland with the Tatami configuration
   restore                         apply remembered toggles (session start)
+  awake <on|off|toggle|status>      verified system Keep Awake
   reload                          apply a rebuilt Tatami to the running session
   menu [learn|trigger|capture|screenrecord|toggle|hardware|setup|network|dns|system]
   apps | emoji | keybindings | about | power-profile | edit-config
@@ -138,7 +140,26 @@ fn reload() -> ExitCode {
         window::Reload::Pinned => true,
     };
     // Only the units that are running: the on-demand nightlight stays off.
-    if !util::run("systemctl", &["--user", "try-restart", "tatami-*.service"]) {
+    // An appearance reload must not briefly drop an active sleep inhibitor.
+    let units = util::output(
+        "systemctl",
+        &[
+            "--user",
+            "list-units",
+            "--plain",
+            "--no-legend",
+            "tatami-*.service",
+        ],
+    )
+    .unwrap_or_default();
+    let services: Vec<&str> = units
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| *name != awake::UNIT && name.ends_with(".service"))
+        .collect();
+    let mut restart = vec!["--user", "try-restart"];
+    restart.extend(services);
+    if restart.len() == 2 || !util::run("systemctl", &restart) {
         failed.push("session units");
     }
     // Mako is among the restarted units: a notification sent before it is
@@ -246,6 +267,15 @@ fn main() -> ExitCode {
     let first = |default: &'static str| rest.first().map_or(default, String::as_str);
     let ok = match args.first().map(String::as_str) {
         Some("session") => return session(),
+        Some("awake") => {
+            return match awake::command(first("status")) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("tatami: {error}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
         Some("restore") => {
             window::restore();
             true
@@ -456,10 +486,7 @@ fn main() -> ExitCode {
             true
         }
         Some("toggle") => match first("") {
-            "idle" => {
-                toggle::idle();
-                true
-            }
+            "idle" => toggle::idle(),
             "nightlight" => {
                 toggle::nightlight();
                 true

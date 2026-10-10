@@ -12,5 +12,6 @@
     ./desktops.nix
     ./nvidia.nix
     ./tuning.nix
+    ./usb-wake.nix
   ];
 }

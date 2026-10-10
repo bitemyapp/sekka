@@ -615,7 +615,7 @@ hl.bind("SUPER + ALT + comma", hl.dsp.exec_cmd("makoctl invoke"), { description 
 hl.bind("SUPER + SHIFT + ALT + comma", hl.dsp.exec_cmd("makoctl restore"), { description = "Restore last notification" })
 
 -- Toggles
-hl.bind("SUPER + CTRL + I", hl.dsp.exec_cmd("tatami toggle idle"), { description = "Toggle locking on idle" })
+hl.bind("SUPER + CTRL + I", hl.dsp.exec_cmd("tatami toggle idle"), { description = "Toggle Keep Awake" })
 hl.bind("SUPER + CTRL + N", hl.dsp.exec_cmd("tatami toggle nightlight"), { description = "Toggle nightlight" })
 hl.bind("SUPER + CTRL + Delete", hl.dsp.exec_cmd("tatami laptop-display"), { description = "Toggle laptop display" })
 

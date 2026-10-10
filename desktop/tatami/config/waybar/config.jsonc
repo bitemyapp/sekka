@@ -84,7 +84,7 @@
   "custom/stay-awake": {
     "exec": "tatami indicator idle",
     "return-type": "json",
-    "interval": "once",
+    "interval": 2,
     "signal": 9,
     "on-click": "tatami toggle idle"
   },

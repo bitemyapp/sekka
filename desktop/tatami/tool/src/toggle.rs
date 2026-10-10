@@ -4,7 +4,6 @@
 use crate::util;
 use std::{thread, time::Duration};
 
-const IDLE_UNIT: &str = "tatami-hypridle.service";
 const BAR_UNIT: &str = "tatami-waybar.service";
 const SUNSET_UNIT: &str = "tatami-hyprsunset.service";
 pub const IDLE_SIGNAL: i32 = 9;
@@ -28,14 +27,11 @@ fn flip(unit: &str) -> bool {
     now
 }
 
-/// Stay Awake: stop or start locking and screen blanking on idle.
-pub fn idle() {
-    if flip(IDLE_UNIT) {
-        util::notify("\u{f0176}", "Locking the computer when idle", "");
-    } else {
-        util::notify("\u{f0176}", "Staying awake", "");
-    }
-    util::signal_waybar(IDLE_SIGNAL);
+/// Compatibility with existing bar/menu/key bindings.
+pub fn idle() -> bool {
+    crate::awake::command("toggle")
+        .map_err(|error| eprintln!("tatami: {error}"))
+        .is_ok()
 }
 
 pub fn bar() {
@@ -197,12 +193,7 @@ pub fn indicator(which: &str) -> String {
             "Allow Notifications",
             "Silence Notifications",
         ),
-        "idle" => indicator_json(
-            "\u{f0176}",
-            !active(IDLE_UNIT),
-            "Allow Idle Lock & Screensaver",
-            "Stay Awake",
-        ),
+        "idle" => crate::awake::indicator(),
         "screenrecording" => indicator_json(
             "\u{f0ec2}",
             crate::capture::recording(),
