@@ -1,0 +1,18 @@
+[package]
+name = "tatami"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Session launcher and desktop commands for the Tatami session"
+publish = false
+
+[dependencies]
+libc = "=0.2.177"
+serde_json = "=1.0.145"
+
+[[bin]]
+name = "tatami"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "s"

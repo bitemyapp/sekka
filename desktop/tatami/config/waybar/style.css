@@ -1,0 +1,116 @@
+/* Tatami top bar after Omarchy 4's bar (shell/plugins/bar/Bar.qml, the
+ * qs.Ui bar buttons and the Tokyo Night shell theme; MIT, see ../LICENSE):
+ * 26px tall, JetBrainsMono Nerd Font 12px, 8px edge margins, 20px workspace
+ * slots, 21px indicator slots and 27px icon slots with 13px glyphs. */
+@define-color foreground #a9b1d6;
+@define-color background #1a1b26;
+
+* {
+  background-color: @background;
+  color: @foreground;
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+  font-family: 'JetBrainsMono Nerd Font';
+  font-size: 12px;
+}
+
+.modules-left {
+  margin-left: 8px;
+}
+
+.modules-right {
+  margin-right: 8px;
+}
+
+#custom-tatami {
+  padding: 0 7.5px;
+}
+
+#workspaces button {
+  all: initial;
+  min-width: 20px;
+  margin: 0 0.5px;
+  padding: 0;
+}
+
+/* Empty workspaces are dimmed, but the active one stays bright, as in Omarchy. */
+#workspaces button.empty:not(.active) {
+  opacity: 0.5;
+}
+
+/* Indicators keep their slot beside the clock; inactive ones show on hover. */
+#custom-screenrecording,
+#custom-nightlight,
+#custom-silence,
+#custom-stay-awake {
+  min-width: 21px;
+  padding: 0;
+  font-size: 10px;
+}
+
+#custom-screenrecording.inactive,
+#custom-nightlight.inactive,
+#custom-silence.inactive,
+#custom-stay-awake.inactive {
+  opacity: 0;
+}
+
+#custom-screenrecording.inactive:hover,
+#custom-nightlight.inactive:hover,
+#custom-silence.inactive:hover,
+#custom-stay-awake.inactive:hover {
+  opacity: 0.45;
+}
+
+/* Recording, as in Omarchy: the indicator in the error color. */
+#custom-screenrecording.active {
+  color: #f7768e;
+}
+
+#custom-weather {
+  min-width: 21px;
+  padding: 0;
+  font-size: 13px;
+}
+
+#clock {
+  padding: 0 8.5px;
+}
+
+/* As wide as the indicators less the weather, so the clock sits at the
+   exact center. */
+#custom-center-balance {
+  min-width: 63px;
+  padding: 0;
+}
+
+#custom-expand-icon,
+#bluetooth,
+#network,
+#pulseaudio,
+#custom-display,
+#battery {
+  min-width: 27px;
+  padding: 0;
+  font-size: 13px;
+}
+
+#tray {
+  padding: 0 6px;
+}
+
+/* Room for the calendar and weather cards. */
+tooltip {
+  background-color: alpha(@background, 0.97);
+  border: 1px solid @foreground;
+  padding: 8px 10px;
+}
+
+tooltip label {
+  background-color: transparent;
+}
+
+.hidden {
+  opacity: 0;
+}

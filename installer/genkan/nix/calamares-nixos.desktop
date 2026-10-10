@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Genkan — Install Sekka
+Comment=Install Sekka, a NixOS desktop with Determinate Nix
+Exec=calamares-nixos
+Icon=system-software-install
+Terminal=false
+Categories=System;

@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "device": "disk4",
+  "vendor": "SanDisk",
+  "serial_suffix": "be1c",
+  "capacity": 123048296448,
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "bytes_verified": 9560510464,
+  "sha256": "e7ec2362952305081c6e5ed6332962a13a50159f1f10352806607b93bbc45c37",
+  "tail_zero_bytes": 1048576,
+  "uid": 0,
+  "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb",
+  "release_matrix_complete_at_write": false,
+  "application_runtime_complete_at_write": false,
+  "purpose": "User requested immediate physical-hardware testing; unfinished emulated tests are not passes",
+  "boot_verification": "Deferred to user on physical hardware, per request",
+  "ejected": true
+}

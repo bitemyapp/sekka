@@ -1,0 +1,209 @@
+BdsDxe: loading Boot0004 "Linux Boot Manager" from HD(1,GPT,AC51942D-7C25-4AAC-A323-FA26B9925869,0x800,0x200000)/\EFI\systemd\systemd-bootx64.efi
+BdsDxe: starting Boot0004 "Linux Boot Manager" from HD(1,GPT,AC51942D-7C25-4AAC-A323-FA26B9925869,0x800,0x200000)/\EFI\systemd\systemd-bootx64.efi
+
+ 
+               NixOS                   Reboot Into Firmware Interface                                               Boot in 5s.                                            ──────────────────────────────────────────                                            Boot in 4s.                                            ──────────────────────────────────────────                                            Boot in 3s.                                            ──────────────────────────────────────────                                            Boot in 2s.                                            ──────────────────────────────────────────                                            Boot in 1s.                                            ──────────────────────────────────────────[    0.881253] Oops: int3: 0000 [#1] SMP NOPTI
+[    0.881474] CPU: 1 UID: 0 PID: 14 Comm: kworker/u16:1 Not tainted 7.2.8 #1-NixOS PREEMPT(lazy) 
+[    0.881543] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS edk2-stable202408-prebuilt.qemu.org 08/13/2024
+[    0.881696] Workqueue: async async_run_entry_fn
+[    0.881911] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    0.881975] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    0.882010] RSP: 0018:ff73c019c0114fb8 EFLAGS: 00000096
+[    0.882026] RAX: 0000000000000000 RBX: ff43d8c381931b40 RCX: ffffffff96401954
+[    0.882034] RDX: ff43d8c55e7e3000 RSI: 0000000000010000 RDI: 0000000000000001
+[    0.882042] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[    0.882052] R10: 0000000000000000 R11: ff73c019c0114ff8 R12: 0000000000000000
+[    0.882059] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    0.882095] FS:  0000000000000000(0000) GS:ff43d8c55e7e3000(0000) knlGS:0000000000000000
+[    0.882105] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[    0.882112] CR2: 0000000000000000 CR3: 000000017e422000 CR4: 0000000000751ef0
+[    0.882185] PKRU: 55555554
+[    0.882219] Call Trace:
+[    0.882321]  <IRQ>
+[    0.882557]  ? irqtime_account_irq+0x33/0xd0
+[    0.882610]  irqtime_account_irq+0x33/0xd0
+[    0.882634]  sysvec_apic_timer_interrupt+0x66/0x80
+[    0.882695]  </IRQ>
+[    0.882701]  <TASK>
+[    0.882705]  asm_sysvec_apic_timer_interrupt+0x1a/0x20
+[    0.882770] RIP: 0010:xxh64_update+0x156/0x2e0
+[    0.882784] Code: c8 48 be 4f eb d4 27 3d ae b2 c2 48 b9 87 ca eb 85 b1 79 37 9e 4c 89 6c 24 28 4c 8b 53 08 48 8b 7b 10 4c 8b 6b 18 4c 8b 63 20 <48> 8b 10 48 83 c0 20 48 0f af d6 4c 01 d2 48 c1 c2 1f 48 0f af d1
+[    0.882789] RSP: 0018:ff73c019c0087bd8 EFLAGS: 00010206
+[    0.882795] RAX: ff73c019c062ab58 RBX: ff73c019c025d538 RCX: 9e3779b185ebca87
+[    0.882800] RDX: 09380d720b71e23e RSI: c2b2ae3d27d4eb4f RDI: df6ea1b22d3ec603
+[    0.882804] RBP: ff73c019c061f6f8 R08: ff73c019c063f6d8 R09: ff73c019c061f6d8
+[    0.882809] R10: 08e149fb66553de0 R11: ff73c019c063f6b8 R12: 09380d720b71e23e
+[    0.882814] R13: cfc5379aec3223bb R14: 0000000000009447 R15: 0000000000009447
+[    0.882840]  ZSTD_decompressContinue.part.0+0x3f2/0x4a0
+[    0.882855]  ZSTD_decompressContinueStream+0x10d/0x150
+[    0.882865]  ZSTD_decompressStream+0x701/0xc50
+[    0.882882]  ? __pfx_error+0x10/0x10
+[    0.882895]  unzstd+0x41e/0x530
+[    0.882909]  ? __pfx_flush_buffer+0x10/0x10
+[    0.882924]  ? __pfx_unzstd+0x10/0x10
+[    0.882933]  unpack_to_rootfs+0x146/0x300
+[    0.882944]  ? __pfx_error+0x10/0x10
+[    0.882956]  do_populate_rootfs+0x6e/0x180
+[    0.882966]  async_run_entry_fn+0x36/0x160
+[    0.882977]  ? tracer_init_tracefs_work_func+0x1ea/0x240
+[    0.882989]  process_one_work+0x1a1/0x380
+[    0.883002]  worker_thread+0x16e/0x2d0
+[    0.883014]  ? __pfx_worker_thread+0x10/0x10
+[    0.883023]  kthread+0xe4/0x120
+[    0.883033]  ? __pfx_kthread+0x10/0x10
+[    0.883043]  ret_from_fork+0x250/0x330
+[    0.883055]  ? __pfx_kthread+0x10/0x10
+[    0.883064]  ret_from_fork_asm+0x1a/0x30
+[    0.883085]  </TASK>
+[    0.883111] Modules linked in:
+[    0.883308] Oops: int3: 0000 [#2] SMP NOPTI
+[    0.883339] ---[ end trace 0000000000000000 ]---
+[    0.883417] CPU: 3 UID: 0 PID: 0 Comm: swapper/3 Tainted: G      D             7.2.8 #1-NixOS PREEMPT(lazy) 
+[    0.883495] Tainted: [D]=DIE
+[    0.883514] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS edk2-stable202408-prebuilt.qemu.org 08/13/2024
+[    0.883522] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    0.883540] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    0.883546] RSP: 0018:ff73c019c017cfb8 EFLAGS: 00000096
+[    0.883554] RAX: 0000000000000001 RBX: ff43d8c3819851c0 RCX: 0000000000000001
+[    0.883558] RDX: ff43d8c55e8e3000 RSI: 0000000000010000 RDI: 0000000000000003
+[    0.883563] RBP: 0000000000000001 R08: 00000000000020d4 R09: 0000000000000001
+[    0.883567] R10: 0000000000000000 R11: ff73c019c017cff8 R12: 0000000000000000
+[    0.883571] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    0.883576] FS:  0000000000000000(0000) GS:ff43d8c55e8e3000(0000) knlGS:0000000000000000
+[    0.883581] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[    0.883586] CR2: 0000000000000000 CR3: 000000017e422000 CR4: 0000000000751ef0
+[    0.883591] PKRU: 55555554
+[    0.883594] Call Trace:
+[    0.883600]  <IRQ>
+[    0.883604]  ? __pfx_read_tsc+0x10/0x10
+[    0.883614]  ? ktime_get+0xe5/0x160
+[    0.883628]  irqtime_account_irq+0x33/0xd0
+[    0.883640]  sysvec_apic_timer_interrupt+0x66/0x80
+[    0.883653]  </IRQ>
+[    0.883656]  <TASK>
+[    0.883659]  asm_sysvec_apic_timer_interrupt+0x1a/0x20
+[    0.883670] RIP: 0010:pv_native_safe_halt+0xf/0x20
+[    0.883680] Code: 20 d0 c3 cc cc cc cc 0f 1f 40 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa eb 07 0f 00 2d 03 24 1f 00 fb f4 <c3> cc cc cc cc 90 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90
+[    0.883685] RSP: 0018:ff73c019c00d7ec0 EFLAGS: 00010286
+[    0.883691] RAX: 0000000000000003 RBX: 0000000000000000 RCX: 0000000000000000
+[    0.883695] RDX: ff43d8c3819851c0 RSI: 0000000000000000 RDI: 00000000000020cc
+[    0.883699] RBP: ff43d8c3819851c0 R08: 00000000000020cc R09: ff43d8c55e8e3000
+[    0.883703] R10: 0000000000000402 R11: 0000000000000000 R12: 0000000000000000
+[    0.883707] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    0.883718]  default_idle+0x9/0x20
+[    0.883728]  default_idle_call+0x30/0x110
+[    0.883739]  do_idle+0x1f3/0x2e0
+[    0.883752]  ? schedule_idle+0x22/0x40
+[    0.883761]  cpu_startup_entry+0x29/0x30
+[    0.883772]  start_secondary+0x119/0x150
+[    0.883783]  common_startup_64+0x13e/0x151
+[    0.883801]  </TASK>
+[    0.883804] Modules linked in:
+[    0.883813] ---[ end trace 0000000000000000 ]---
+[    0.883830] pstore: dump skipped in NMI path because of concurrent dump
+[    0.883820] Oops: int3: 0000 [#3] SMP NOPTI
+[    0.883858] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    0.883864] CPU: 0 UID: 0 PID: 1 Comm: swapper/0 Tainted: G      D             7.2.8 #1-NixOS PREEMPT(lazy) 
+[    0.883869] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    0.883875] RSP: 0018:ff73c019c0114fb8 EFLAGS: 00000096
+[    0.883880] RAX: 0000000000000000 RBX: ff43d8c381931b40 RCX: ffffffff96401954
+[    0.883885] RDX: ff43d8c55e7e3000 RSI: 0000000000010000 RDI: 0000000000000001
+[    0.883889] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[    0.883893] R10: 0000000000000000 R11: ff73c019c0114ff8 R12: 0000000000000000
+[    0.883898] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    0.883902] FS:  0000000000000000(0000) GS:ff43d8c55e8e3000(0000) knlGS:0000000000000000
+[    0.883907] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[    0.883912] CR2: 0000000000000000 CR3: 000000017e422000 CR4: 0000000000751ef0
+[    0.883916] PKRU: 55555554
+[    0.883919] Tainted: [D]=DIE
+[    0.883929] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS edk2-stable202408-prebuilt.qemu.org 08/13/2024
+[    0.883949] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    0.884003] Kernel panic - not syncing: Fatal exception in interrupt
+[    6.960187] Shutting down cpus with NMI
+[    6.961138] Kernel Offset: 0x15400000 from 0xffffffff81000000 (relocation range: 0xffffffff80000000-0xffffffffbfffffff)
+[    7.292926] fbcon: Taking over console
+[    7.293014] Oops: int3: 0000 [#5] SMP NOPTI
+[    7.293039] CPU: 3 UID: 0 PID: 0 Comm: swapper/3 Tainted: G      D W           7.2.8 #1-NixOS PREEMPT(lazy) 
+[    7.293053] Tainted: [D]=DIE, [W]=WARN
+[    7.293056] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS edk2-stable202408-prebuilt.qemu.org 08/13/2024
+[    7.293064] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    7.293094] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    7.293102] RSP: 0018:ff73c019c017cb68 EFLAGS: 00000092
+[    7.293115] RAX: 0000000000000004 RBX: ff43d8c4f7bc15c0 RCX: ff43d8c381f83c01
+[    7.293119] RDX: 0000000000000001 RSI: 0000000000000000 RDI: 0000000000000003
+[    7.293123] RBP: ff43d8c4f7bc15c0 R08: 0000000000000006 R09: 0000000000000003
+[    7.293128] R10: ff73c019c017ca10 R11: ff73c019c017c9e8 R12: ff73c019c017cbc0
+[    7.293132] R13: 0000000000000000 R14: 0000000000000008 R15: ff43d8c55e8e3000
+[    7.293140] FS:  0000000000000000(0000) GS:ff43d8c55e8e3000(0000) knlGS:0000000000000000
+[    7.293146] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[    7.293151] CR2: 0000000000000000 CR3: 000000017e422000 CR4: 0000000000751ef0
+[    7.293158] PKRU: 55555554
+[    7.293162] Call Trace:
+[    7.293176]  <IRQ>
+[    7.293183]  ? ttwu_queue_wakelist+0x29/0x120
+[    7.293206]  update_rq_clock+0x39/0x200
+[    7.293219]  ? raw_spin_rq_lock_nested+0x26/0xb0
+[    7.293230]  try_to_wake_up+0x283/0x830
+[    7.293246]  kick_pool+0x52/0x140
+[    7.293258]  __queue_work+0x3c2/0x570
+[    7.293271]  queue_work_on+0x91/0xb0
+[    7.293282]  fbcon_output_notifier.cold+0x30/0x3a
+[    7.293295]  notifier_call_chain+0x70/0x110
+[    7.293308]  vt_console_print+0x390/0x4a0
+[    7.293326]  console_flush_one_record+0x2b3/0x500
+[    7.293344]  console_flush_on_panic+0x9c/0xc0
+[    7.293355]  vpanic+0x2d1/0x410
+[    7.293370]  panic+0x6b/0x70
+[    7.293385]  oops_end.cold+0xc/0x26
+[    7.293396]  exc_int3+0x264/0x330
+[    7.293411]  asm_exc_int3+0x39/0x40
+[    7.293423] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    7.293435] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    7.293440] RSP: 0018:ff73c019c017cfb8 EFLAGS: 00000096
+[    7.293446] RAX: 0000000000000001 RBX: ff43d8c3819851c0 RCX: 0000000000000001
+[    7.293451] RDX: ff43d8c55e8e3000 RSI: 0000000000010000 RDI: 0000000000000003
+[    7.293455] RBP: 0000000000000001 R08: 00000000000020d4 R09: 0000000000000001
+[    7.293459] R10: 0000000000000000 R11: ff73c019c017cff8 R12: 0000000000000000
+[    7.293463] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    7.293475]  ? sched_clock_cpu+0x9/0x1f0
+[    7.293488]  ? sched_clock+0x10/0x30
+[    7.293499]  ? __pfx_read_tsc+0x10/0x10
+[    7.293508]  ? ktime_get+0xe5/0x160
+[    7.293519]  irqtime_account_irq+0x33/0xd0
+[    7.293531]  sysvec_apic_timer_interrupt+0x66/0x80
+[    7.293545]  </IRQ>
+[    7.293548]  <TASK>
+[    7.293552]  asm_sysvec_apic_timer_interrupt+0x1a/0x20
+[    7.293563] RIP: 0010:pv_native_safe_halt+0xf/0x20
+[    7.293574] Code: 20 d0 c3 cc cc cc cc 0f 1f 40 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa eb 07 0f 00 2d 03 24 1f 00 fb f4 <c3> cc cc cc cc 90 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90
+[    7.293579] RSP: 0018:ff73c019c00d7ec0 EFLAGS: 00010286
+[    7.293585] RAX: 0000000000000003 RBX: 0000000000000000 RCX: 0000000000000000
+[    7.293589] RDX: ff43d8c3819851c0 RSI: 0000000000000000 RDI: 00000000000020cc
+[    7.293593] RBP: ff43d8c3819851c0 R08: 00000000000020cc R09: ff43d8c55e8e3000
+[    7.293597] R10: 0000000000000402 R11: 0000000000000000 R12: 0000000000000000
+[    7.293601] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    7.293613]  default_idle+0x9/0x20
+[    7.293625]  default_idle_call+0x30/0x110
+[    7.293636]  do_idle+0x1f3/0x2e0
+[    7.293649]  ? schedule_idle+0x22/0x40
+[    7.293660]  cpu_startup_entry+0x29/0x30
+[    7.293671]  start_secondary+0x119/0x150
+[    7.293682]  common_startup_64+0x13e/0x151
+[    7.293701]  </TASK>
+[    7.293705] Modules linked in:
+[    7.293718] ---[ end trace 0000000000000000 ]---
+[    7.559898] RIP: 0010:sched_clock_cpu+0x9/0x1f0
+[    7.559975] Code: cc cc 0f 1f 40 00 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 f3 0f 1e fa 48 83 ec 18 66 <90> e8 61 19 ee ff 48 03 05 ca 78 2e 02 48 89 c2 48 89 d0 48 83 c4
+[    7.559985] RSP: 0018:ff73c019c0114fb8 EFLAGS: 00000096
+[    7.559999] RAX: 0000000000000000 RBX: ff43d8c381931b40 RCX: ffffffff96401954
+[    7.560004] RDX: ff43d8c55e7e3000 RSI: 0000000000010000 RDI: 0000000000000001
+[    7.560009] RBP: 0000000000000000 R08: 0000000000000000 R09: 0000000000000000
+[    7.560013] R10: 0000000000000000 R11: ff73c019c0114ff8 R12: 0000000000000000
+[    7.560018] R13: 0000000000000000 R14: 0000000000000000 R15: 0000000000000000
+[    7.560035] FS:  0000000000000000(0000) GS:ff43d8c55e8e3000(0000) knlGS:0000000000000000
+[    7.560041] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[    7.560046] CR2: 0000000000000000 CR3: 000000017e422000 CR4: 0000000000751ef0
+[    7.560054] PKRU: 55555554
+[    7.560062] Kernel panic - not syncing: Fatal exception in interrupt
+[    7.560091] Kernel Offset: 0x15400000 from 0xffffffff81000000 (relocation range: 0xffffffff80000000-0xffffffffbfffffff)
+[    7.970238] ---[ end Kernel panic - not syncing: Fatal exception in interrupt ]---

@@ -1,0 +1,13 @@
+Corrected ISO, UEFI NVMe/ext4 over Btrfs, during installation before reboot.
+Run: uefi-nvme-ext4-1791107300445-74574
+
+DEVNAME=/dev/nvme0n1p1
+UUID=171D-97F1
+TYPE=vfat
+  fileSystems."/".device = lib.mkForce "/dev/disk/by-uuid/fe7d2505-443e-4e52-ba22-39ed6f7d9328";
+  fileSystems."/boot".device = lib.mkForce "/dev/disk/by-uuid/171D-97F1";
+lrwxrwxrwx 1 root root 15 Oct  4 04:50 0000-0001 -> ../../nvme0n1p1
+lrwxrwxrwx 1 root root 10 Oct  4 04:49 1234-5678 -> ../../sda2
+lrwxrwxrwx 1 root root 15 Oct  4 04:50 171D-97F1 -> ../../nvme0n1p1
+lrwxrwxrwx 1 root root 10 Oct  4 04:49 1980-01-01-00-00-00-00 -> ../../sda1
+lrwxrwxrwx 1 root root 15 Oct  4 04:50 fe7d2505-443e-4e52-ba22-39ed6f7d9328 -> ../../nvme0n1p2

@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "store_path": "/nix/store/d5vfmm7mv6fl39d4zvyn3ji910lafngv-nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso/iso/nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "231a39d4501b62dcaf721851861a1f8589f3ef364dc95177d30d52fdd5e0eff0",
+  "bytes": 9560502272,
+  "installer_revision": "d7c7e9231c9e8a6a6397d855a56ecf4c82a337dc",
+  "flake_lock_sha256": "1ab98c5950de5484c81f3d1c52c5a657d0247e3eecb21c0c9cada9b8472ee079",
+  "flake_checks_passed": true,
+  "package_cache_closure_bytes": 22093309808
+}

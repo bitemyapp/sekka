@@ -1,0 +1,2 @@
+# Copy the chosen symbol, then paste it into the focused window.
+command = 'wl-copy && hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"SHIFT\", key = \"Insert\" })"'

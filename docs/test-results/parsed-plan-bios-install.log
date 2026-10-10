@@ -1,0 +1,14 @@
+{"kind":"failed","message":"Reserved username"}
+{"kind":"failed","message":"Select at least one desktop environment"}
+{"kind":"failed","message":"Wi-Fi transfer is disabled but profiles were supplied"}
+{"kind":"failed","message":"Type ERASE followed by the selected device path to confirm"}
+{"kind":"progress","step":0,"message":"Checking installation media, settings, target identity and pinned inputs"}
+{"kind":"progress","step":0,"message":"Preflight passed; no disk writes were made"}
+{"kind":"progress","step":0,"message":"Checking installation media, settings, target identity and pinned inputs"}
+{"kind":"progress","step":1,"message":"Erasing the selected disk and creating a GPT partition table"}
+{"kind":"progress","step":2,"message":"Formatting and mounting the new filesystems"}
+{"kind":"progress","step":3,"message":"Generating hardware settings and the pinned Determinate flake"}
+{"kind":"progress","step":4,"message":"Building and installing NixOS (downloads can take a while)"}
+{"kind":"progress","step":5,"message":"Flushing writes and unmounting the installed system"}
+{"kind":"progress","step":6,"message":"Installation complete. Shut down, remove the installer media, then boot the installed disk."}
+{"kind":"complete"}

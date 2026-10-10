@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Yukimi
+GenericName=Software
+Comment=See what's installed, find what's available, and change it without editing config
+Exec=yukimi
+Icon=io.github.bitemyapp.Yukimi
+Terminal=false
+Categories=System;PackageManager;Settings;GTK;
+Keywords=nix;nixos;packages;software;install;update;store;generations;flake;
+StartupNotify=true

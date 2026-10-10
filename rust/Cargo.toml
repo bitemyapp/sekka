@@ -1,0 +1,19 @@
+[package]
+name = "respin-tools"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "=1.0.100"
+base64 = "=0.22.1"
+libc = "=0.2.177"
+serde_json = "=1.0.145"
+sha2 = "=0.10.9"
+signal-hook = "=0.3.18"
+tempfile = "=3.23.0"
+
+[[bin]]
+name = "respin-tools"
+path = "src/main.rs"

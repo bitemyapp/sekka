@@ -1,0 +1,19 @@
+{
+  "backend_completed": true,
+  "firmware": "uefi",
+  "graphical_login": true,
+  "gui": true,
+  "implementation": "native-rust",
+  "install": true,
+  "installed": "nix (Determinate Nix 3.23.0) 2.35.2\n\nfh 0.1.27\n\nHARDWARE_DEFAULTS=redistributable-firmware,unfree,wpa_supplicant\nDESKTOP_SESSION=plasma\nDESKTOPS=plasma\nPASS: America/Chicago, winter CST/summer CDT; Wi-Fi credentials and user restrictions persisted root-only and loaded by NetworkManager\n2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69  /etc/nixos/flake.lock\n\nPASS: installed system, password hash and PAM authentication, locked root, escaped configuration, desktop and Determinate services\n",
+  "installed_kernel": "7.2.8",
+  "installer_revision": "ffe4d9faad2c99220de0b6855c215fed209a63f7",
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "26444afb6b01cc35b6e226de06308ba3301570888afe0ef4ab139d9b7b1f5ef5",
+  "live": "active\n1163\n1291\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}NAME   TRAN   FSTYPE   LABEL\nloop0         squashfs \nsda    usb    iso9660  nixos-determinate-x86_64\n├─sda1        iso9660  nixos-determinate-x86_64\n└─sda2        vfat     EFIBOOT\nsr0    sata            \nvda    virtio          \n",
+  "live_kernel": "7.2.8",
+  "live_wifi_unchanged": true,
+  "media": "usb-storage",
+  "media_config_permissions": "0:30000 1775 /nix/store\n0:0 444 /etc/calamares-nixos/settings.json\n",
+  "passed": true
+}

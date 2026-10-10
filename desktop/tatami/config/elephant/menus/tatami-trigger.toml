@@ -1,0 +1,34 @@
+# Trigger › in the Tatami menu (see tatami.toml).
+name = "tatami-trigger"
+name_pretty = "Trigger"
+parent = "tatami"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Emoji"
+icon = ""
+value = "tatami emoji"
+keywords = ["emoji", "emojis"]
+
+[[entries]]
+text = "Capture"
+icon = ""
+submenu = "tatami-capture"
+state = ["submenu"]
+keywords = ["capture", "screenshot"]
+
+[[entries]]
+text = "Toggle"
+icon = "󰔎"
+submenu = "tatami-toggle"
+state = ["submenu"]
+keywords = ["toggle", "toggles"]
+
+[[entries]]
+text = "Hardware"
+icon = ""
+submenu = "tatami-hardware"
+state = ["submenu"]
+keywords = ["hardware", "hw"]

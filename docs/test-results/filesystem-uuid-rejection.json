@@ -1,0 +1,12 @@
+{
+  "release_eligible": false,
+  "iso_sha256": "72ee216339133f0dc72d5e71826f4040217b5b9cfd353a546797b548e2145b5b",
+  "installer_revision": "dc4127509d37c0e0d8144159744af0282a165127",
+  "failed_run": "uefi-nvme-ext4-1791104392064-70754",
+  "installed_boot_uuid": "6099-DDBC",
+  "actual_boot_uuid": "60F4-E5D4",
+  "failure": "Installed system entered emergency mode waiting for its obsolete EFI filesystem UUID. Root mount and installation had completed.",
+  "evidence": "gui-1791106391129-73374.png",
+  "usb_written": false,
+  "other_cases": "UEFI 4Kn NVMe/ext4 passed. Other cases were interrupted after this release-blocking failure."
+}

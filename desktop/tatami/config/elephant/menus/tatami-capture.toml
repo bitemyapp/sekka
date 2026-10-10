@@ -1,0 +1,36 @@
+# Capture › in the Tatami menu (see tatami.toml).
+name = "tatami-capture"
+name_pretty = "Capture"
+parent = "tatami-trigger"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Screenshot"
+icon = "\uF030"
+value = "tatami screenshot"
+
+[[entries]]
+text = "Screenrecord"
+icon = "\uF03D"
+submenu = "tatami-screenrecord"
+state = ["submenu"]
+keywords = ["record", "video", "screencast"]
+
+[[entries]]
+text = "Text"
+icon = "󰴑"
+value = "tatami capture text"
+keywords = ["ocr"]
+
+[[entries]]
+text = "QR Code"
+icon = "󰐲"
+value = "tatami capture qr"
+keywords = ["qr", "barcode"]
+
+[[entries]]
+text = "Color"
+icon = "󰃉"
+value = "tatami color-picker"

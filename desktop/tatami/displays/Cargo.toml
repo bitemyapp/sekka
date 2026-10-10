@@ -1,0 +1,20 @@
+[package]
+name = "tatami-displays"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "The Displays window of the Tatami session"
+publish = false
+
+[dependencies]
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+async-channel = "2"
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+serde_json = "1"
+
+[[bin]]
+name = "tatami-displays"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "s"

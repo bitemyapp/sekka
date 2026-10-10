@@ -1,0 +1,15 @@
+{
+  "error": "Interrupted",
+  "firmware": "uefi",
+  "gui": false,
+  "implementation": "native-rust",
+  "install": true,
+  "installer_revision": "d2fd201d94327a4aae0d91bb40de1963509f0573",
+  "iso": "nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "a06e860511db656850c7dcc4b91b348dcaebdfa2f321a7105ec7bd3df59e1978",
+  "live": "active\n1150\n1294\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}NAME   TRAN   FSTYPE   LABEL\nloop0         squashfs \nsda    usb    iso9660  nixos-determinate-x86_64\n├─sda1        iso9660  nixos-determinate-x86_64\n└─sda2        vfat     EFIBOOT\nsr0    sata            \nvda    virtio          \n",
+  "live_kernel": "7.2.8",
+  "media": "usb-storage",
+  "media_config_permissions": "0:30000 1775 /nix/store\n0:0 444 /etc/calamares-nixos/settings.json\n",
+  "passed": false
+}

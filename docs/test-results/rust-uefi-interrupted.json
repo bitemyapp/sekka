@@ -1,0 +1,11 @@
+{
+  "error": "Interrupted",
+  "firmware": "uefi",
+  "implementation": "rust-script",
+  "install": true,
+  "iso": "nixos-graphical-determinate-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "898b3200704b64c1a7b46d346bad4298caf08c637d06bfb2e9c39069efdfa00a",
+  "live": "active\n1181\n1313\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\nNAME   TRAN   FSTYPE   LABEL\nloop0         squashfs \nsda    usb    iso9660  nixos-determinate-x86_64\n├─sda1        iso9660  nixos-determinate-x86_64\n└─sda2        vfat     EFIBOOT\nsr0    sata            \nvda    virtio          \n",
+  "media": "usb-storage",
+  "passed": false
+}

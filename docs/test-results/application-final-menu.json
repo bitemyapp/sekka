@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "scope": "Rendered application tab on the corrected application ISO; Firefox default, catalog descriptions and search visible. Earlier interaction checks are recorded separately.",
+  "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb",
+  "iso_sha256": "e7ec2362952305081c6e5ed6332962a13a50159f1f10352806607b93bbc45c37",
+  "screenshot": "artifacts/uefi-nvme-ext4-1791155291435-51237/gui-1791155649438-52215.png"
+}

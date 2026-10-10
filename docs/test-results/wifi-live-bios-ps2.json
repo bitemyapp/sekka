@@ -1,0 +1,19 @@
+{
+  "firmware": "bios",
+  "input": "Ps2",
+  "input_delivery": true,
+  "iso_sha256": "26444afb6b01cc35b6e226de06308ba3301570888afe0ef4ab139d9b7b1f5ef5",
+  "live": "active\n1145\n1287\n7.2.8\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}nix (Determinate Nix 3.23.0) 2.35.2\n",
+  "passed": true,
+  "pointer_devices": [
+    {
+      "absolute": false,
+      "current": true,
+      "index": 2,
+      "name": "QEMU PS/2 Mouse"
+    }
+  ],
+  "profile": "Default",
+  "session": "Seat=seat0\nType=wayland\nActive=yes\n",
+  "target_disk": false
+}

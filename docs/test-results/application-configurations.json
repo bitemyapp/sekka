@@ -1,0 +1,1079 @@
+{
+  "passed": true,
+  "installer_revision": "41b2e17a31eb62a96260f8e723f81483a096c26b",
+  "flake_lock_sha256": "8abb4d2674d120e8859e04375e8ae934afe5843b164f355910f5387935dc32d7",
+  "source": "respin-tools check-selections (rust/src/builder.rs) with the fixture built from the pinned installer revision",
+  "application_cases": {
+    "all": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/gwm4a6p6ayia1vwvaj6ipar60vccvzmb-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": true,
+      "manifest": {
+        "packages": [
+          {
+            "name": "firefox-157.0",
+            "path": "/nix/store/lgbq880lk5n71rgji3x2drap4515argh-firefox-157.0",
+            "version": "157.0"
+          },
+          {
+            "name": "chromium-154.0.8037.97",
+            "path": "/nix/store/wr1s4hnl63va97hxr4bx8i96k7sj96y6-chromium-154.0.8037.97",
+            "version": "154.0.8037.97"
+          },
+          {
+            "name": "google-chrome-154.0.8037.97",
+            "path": "/nix/store/ds7933z0wp7872ic6zqzrwsbpj0m8g6l-google-chrome-154.0.8037.97",
+            "version": "154.0.8037.97"
+          },
+          {
+            "name": "codex-0.160.0",
+            "path": "/nix/store/322fyprpqvqqn5m34mdxmn180470hcgw-codex-0.160.0",
+            "version": "0.160.0"
+          },
+          {
+            "name": "chatgpt-26.930.41038",
+            "path": "/nix/store/ql08sh7zbp7fl1lpf0mc942jfdnr293s-chatgpt-26.930.41038",
+            "version": "26.930.41038"
+          },
+          {
+            "name": "claude-code-2.1.289",
+            "path": "/nix/store/9z5nmkhkdyl6gssspn67k190qa25w3p2-claude-code-2.1.289",
+            "version": "2.1.289"
+          },
+          {
+            "name": "claude-desktop-2.9939.4",
+            "path": "/nix/store/04aqzk79x5ydwyr3qdcdcvsg1ag3rrj1-claude-desktop-2.9939.4",
+            "version": "2.9939.4"
+          },
+          {
+            "name": "omp-18.6.1",
+            "path": "/nix/store/8kx5sy46gzn6g8i3z04xgjg64nlnpi5i-omp-18.6.1",
+            "version": "18.6.1"
+          },
+          {
+            "name": "opencode-1.18.34",
+            "path": "/nix/store/sx3d1rnw6ncfv7d5jlaxxdz7hgw1yxpc-opencode-1.18.34",
+            "version": "1.18.34"
+          },
+          {
+            "name": "zed-editor-1.22.0",
+            "path": "/nix/store/j7y0acvm99dcdmsf0f7llbb5hjmpq88j-zed-editor-1.22.0",
+            "version": "1.22.0"
+          },
+          {
+            "name": "vscode-1.139.1",
+            "path": "/nix/store/cfx4yz0xx7lcvcci5dw4s0x928cvzw38-vscode-1.139.1",
+            "version": "1.139.1"
+          },
+          {
+            "name": "neovim-0.12.5",
+            "path": "/nix/store/2q27asz53bjk6spzk6dxckw2pvf9bqpy-neovim-0.12.5",
+            "version": "0.12.5"
+          },
+          {
+            "name": "ghostty-1.3.1",
+            "path": "/nix/store/i5zqr903i6yb642h9amwh5174n5bmfc4-ghostty-1.3.1",
+            "version": "1.3.1"
+          },
+          {
+            "name": "kitty-0.49.2",
+            "path": "/nix/store/0ypxg9c0zkky9ynazn179lkpp0ing8qd-kitty-0.49.2",
+            "version": "0.49.2"
+          },
+          {
+            "name": "gcc-wrapper-16.2.0",
+            "path": "/nix/store/j1938gsbvbhkyz4kbmvjk56r479mkw3s-gcc-wrapper-16.2.0",
+            "version": "16.2.0"
+          },
+          {
+            "name": "gnumake-4.4.1",
+            "path": "/nix/store/z565rgmn9vccv2h0g87z725pw610jmm8-gnumake-4.4.1",
+            "version": "4.4.1"
+          },
+          {
+            "name": "binutils-wrapper-2.46",
+            "path": "/nix/store/fy8mxgdjvjvmagv2igmj428a9j17hpcf-binutils-wrapper-2.46",
+            "version": "2.46"
+          },
+          {
+            "name": "cmake-4.4.3",
+            "path": "/nix/store/jcvvpih1046akxcwh9hdiak5q24jqcf0-cmake-4.4.3",
+            "version": "4.4.3"
+          },
+          {
+            "name": "ninja-1.13.2",
+            "path": "/nix/store/4nsdla28c4177ssp0hlyv5l2yzj8wcba-ninja-1.13.2",
+            "version": "1.13.2"
+          },
+          {
+            "name": "pkg-config-wrapper-0.29.2",
+            "path": "/nix/store/b9izmrfjp0qnnyahdwwrzdwi87s1h179-pkg-config-wrapper-0.29.2",
+            "version": "0.29.2"
+          },
+          {
+            "name": "git-2.55.0",
+            "path": "/nix/store/lg46w7hrjx7kylsh6645c9l975i8h43b-git-2.55.0",
+            "version": "2.55.0"
+          },
+          {
+            "name": "patch-2.8",
+            "path": "/nix/store/dsfqcffzgwhrnkq1v9g9s3p55czrxk8l-patch-2.8",
+            "version": "2.8"
+          },
+          {
+            "name": "rustup-1.29.1",
+            "path": "/nix/store/s5g2mz2zr526hfvzf7si9ghsd221nn6z-rustup-1.29.1",
+            "version": "1.29.1"
+          },
+          {
+            "name": "lazygit-0.65.1",
+            "path": "/nix/store/4af6ccvig5clcsdh4ygggs8ww3gqajgx-lazygit-0.65.1",
+            "version": "0.65.1"
+          },
+          {
+            "name": "docker-29.8.1",
+            "path": "/nix/store/v6jng9n24gd7x2nnxw5arxq6j53z7s67-docker-29.8.1",
+            "version": "29.8.1"
+          },
+          {
+            "name": "docker-compose-5.5.1",
+            "path": "/nix/store/60fd61rd0q57pg591nj1i4gh5rzgnbyp-docker-compose-5.5.1",
+            "version": "5.5.1"
+          },
+          {
+            "name": "libreoffice-26.8.0.3-wrapped",
+            "path": "/nix/store/zai31972hvw299kmmm15dxn7aryrc0ns-libreoffice-26.8.0.3-wrapped",
+            "version": "26.8.0.3"
+          },
+          {
+            "name": "obsidian-1.13.7",
+            "path": "/nix/store/4ra7pcv5lam1lrjw2y101jadlkc7m5qk-obsidian-1.13.7",
+            "version": "1.13.7"
+          },
+          {
+            "name": "bitwarden-desktop-2026.9.0",
+            "path": "/nix/store/g8djqqajp56ijrskzfswwc6804957i9h-bitwarden-desktop-2026.9.0",
+            "version": "2026.9.0"
+          },
+          {
+            "name": "signal-desktop-8.28.0",
+            "path": "/nix/store/1wc15xrcln8y6s4pj3faq7fv63lk0fji-signal-desktop-8.28.0",
+            "version": "8.28.0"
+          },
+          {
+            "name": "discord-1.0.160",
+            "path": "/nix/store/xhv3hjiwy54gd4rp2ggwdn96qcg17px2-discord-1.0.160",
+            "version": "1.0.160"
+          },
+          {
+            "name": "telegram-desktop-7.2.8",
+            "path": "/nix/store/mzvyrngwg9i05kxkcpd2ci616c1s60wm-telegram-desktop-7.2.8",
+            "version": "7.2.8"
+          },
+          {
+            "name": "slack-4.51.180",
+            "path": "/nix/store/q1jqmgjws0wxmdyvhbz78fwdnv5616q4-slack-4.51.180",
+            "version": "4.51.180"
+          },
+          {
+            "name": "vlc-3.0.24",
+            "path": "/nix/store/s5q6s4vj4cr9b0k0id189yay0ajhd4ia-vlc-3.0.24",
+            "version": "3.0.24"
+          },
+          {
+            "name": "spotify-1.2.95.453.g0eeebbed",
+            "path": "/nix/store/63svqs1rdhlrhm02m9918mvx7gynvq0c-spotify-1.2.95.453.g0eeebbed",
+            "version": "1.2.95.453.g0eeebbed"
+          },
+          {
+            "name": "obs-studio-32.2.2",
+            "path": "/nix/store/raxgwpyj4187gx9czcfmcpi35y84d2qw-obs-studio-32.2.2",
+            "version": "32.2.2"
+          },
+          {
+            "name": "gimp-3.2.6",
+            "path": "/nix/store/1dj39x75j0zd8fy74vmjrwp1sifpk3q2-gimp-3.2.6",
+            "version": "3.2.6"
+          },
+          {
+            "name": "inkscape-1.4.4",
+            "path": "/nix/store/c014zxzkvnfjmdh5bzqwxamxkfdvpinm-inkscape-1.4.4",
+            "version": "1.4.4"
+          },
+          {
+            "name": "steam-1.0.0.87",
+            "path": "/nix/store/z1spmmfnyyj9p1zvzxgy8igx8mzilb7f-steam-1.0.0.87",
+            "version": "1.0.0.87"
+          }
+        ],
+        "selected": [
+          "firefox",
+          "chromium",
+          "google-chrome",
+          "codex",
+          "chatgpt",
+          "claude-code",
+          "claude-desktop",
+          "oh-my-pi",
+          "opencode",
+          "zed",
+          "vscode",
+          "neovim",
+          "ghostty",
+          "kitty",
+          "build-tools",
+          "rustup",
+          "lazygit",
+          "docker",
+          "libreoffice",
+          "obsidian",
+          "bitwarden",
+          "signal",
+          "discord",
+          "telegram",
+          "slack",
+          "vlc",
+          "spotify",
+          "obs-studio",
+          "gimp",
+          "inkscape",
+          "steam"
+        ]
+      },
+      "rootlessDocker": true
+    },
+    "bitwarden": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/1n0jxaymr6x4qp21mwj96p1cq1zcf9ax-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "bitwarden-desktop-2026.9.0",
+            "path": "/nix/store/g8djqqajp56ijrskzfswwc6804957i9h-bitwarden-desktop-2026.9.0",
+            "version": "2026.9.0"
+          }
+        ],
+        "selected": [
+          "bitwarden"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "build-tools": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/nprma15rp34gajrlfmm93i45byj3wghv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "gcc-wrapper-16.2.0",
+            "path": "/nix/store/j1938gsbvbhkyz4kbmvjk56r479mkw3s-gcc-wrapper-16.2.0",
+            "version": "16.2.0"
+          },
+          {
+            "name": "gnumake-4.4.1",
+            "path": "/nix/store/z565rgmn9vccv2h0g87z725pw610jmm8-gnumake-4.4.1",
+            "version": "4.4.1"
+          },
+          {
+            "name": "binutils-wrapper-2.46",
+            "path": "/nix/store/fy8mxgdjvjvmagv2igmj428a9j17hpcf-binutils-wrapper-2.46",
+            "version": "2.46"
+          },
+          {
+            "name": "cmake-4.4.3",
+            "path": "/nix/store/jcvvpih1046akxcwh9hdiak5q24jqcf0-cmake-4.4.3",
+            "version": "4.4.3"
+          },
+          {
+            "name": "ninja-1.13.2",
+            "path": "/nix/store/4nsdla28c4177ssp0hlyv5l2yzj8wcba-ninja-1.13.2",
+            "version": "1.13.2"
+          },
+          {
+            "name": "pkg-config-wrapper-0.29.2",
+            "path": "/nix/store/b9izmrfjp0qnnyahdwwrzdwi87s1h179-pkg-config-wrapper-0.29.2",
+            "version": "0.29.2"
+          },
+          {
+            "name": "git-2.55.0",
+            "path": "/nix/store/lg46w7hrjx7kylsh6645c9l975i8h43b-git-2.55.0",
+            "version": "2.55.0"
+          },
+          {
+            "name": "patch-2.8",
+            "path": "/nix/store/dsfqcffzgwhrnkq1v9g9s3p55czrxk8l-patch-2.8",
+            "version": "2.8"
+          }
+        ],
+        "selected": [
+          "build-tools"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "chatgpt": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/rphwxmlvjrcjfz0ks9iha1n30ygvv6yv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "chatgpt-26.930.41038",
+            "path": "/nix/store/ql08sh7zbp7fl1lpf0mc942jfdnr293s-chatgpt-26.930.41038",
+            "version": "26.930.41038"
+          }
+        ],
+        "selected": [
+          "chatgpt"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "chromium": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/8kflra077ig19bkj8bj68jlbwg8wjh7j-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "chromium-154.0.8037.97",
+            "path": "/nix/store/wr1s4hnl63va97hxr4bx8i96k7sj96y6-chromium-154.0.8037.97",
+            "version": "154.0.8037.97"
+          }
+        ],
+        "selected": [
+          "chromium"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "claude-code": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/b2qrghlf8rkk0gznq9ddq9vx39v1znjg-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "claude-code-2.1.289",
+            "path": "/nix/store/9z5nmkhkdyl6gssspn67k190qa25w3p2-claude-code-2.1.289",
+            "version": "2.1.289"
+          }
+        ],
+        "selected": [
+          "claude-code"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "claude-desktop": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/p62apg5rch23vxg4fm0asxnwyfhbl0kp-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "claude-desktop-2.9939.4",
+            "path": "/nix/store/04aqzk79x5ydwyr3qdcdcvsg1ag3rrj1-claude-desktop-2.9939.4",
+            "version": "2.9939.4"
+          }
+        ],
+        "selected": [
+          "claude-desktop"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "codex": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/cd23vwyzrkd7d2b11nrnhrmq94mkikh1-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "codex-0.160.0",
+            "path": "/nix/store/322fyprpqvqqn5m34mdxmn180470hcgw-codex-0.160.0",
+            "version": "0.160.0"
+          }
+        ],
+        "selected": [
+          "codex"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "discord": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/ag8jfz150ifxlpqlh6b4l309dhk4v3za-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "discord-1.0.160",
+            "path": "/nix/store/xhv3hjiwy54gd4rp2ggwdn96qcg17px2-discord-1.0.160",
+            "version": "1.0.160"
+          }
+        ],
+        "selected": [
+          "discord"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "docker": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/pl2d5azdmfl59gcsny7ccnrlix244i2i-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": true,
+      "manifest": {
+        "packages": [
+          {
+            "name": "docker-29.8.1",
+            "path": "/nix/store/v6jng9n24gd7x2nnxw5arxq6j53z7s67-docker-29.8.1",
+            "version": "29.8.1"
+          },
+          {
+            "name": "docker-compose-5.5.1",
+            "path": "/nix/store/60fd61rd0q57pg591nj1i4gh5rzgnbyp-docker-compose-5.5.1",
+            "version": "5.5.1"
+          }
+        ],
+        "selected": [
+          "docker"
+        ]
+      },
+      "rootlessDocker": true
+    },
+    "firefox": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/fajm04n2368ksanr1c5jql5hc3lxv3j1-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "firefox-157.0",
+            "path": "/nix/store/lgbq880lk5n71rgji3x2drap4515argh-firefox-157.0",
+            "version": "157.0"
+          }
+        ],
+        "selected": [
+          "firefox"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "free-only": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/zhdffysanpxwn6n04sr0hh6jbvak8pqa-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": true,
+      "manifest": {
+        "packages": [
+          {
+            "name": "firefox-157.0",
+            "path": "/nix/store/lgbq880lk5n71rgji3x2drap4515argh-firefox-157.0",
+            "version": "157.0"
+          },
+          {
+            "name": "chromium-154.0.8037.97",
+            "path": "/nix/store/wr1s4hnl63va97hxr4bx8i96k7sj96y6-chromium-154.0.8037.97",
+            "version": "154.0.8037.97"
+          },
+          {
+            "name": "codex-0.160.0",
+            "path": "/nix/store/322fyprpqvqqn5m34mdxmn180470hcgw-codex-0.160.0",
+            "version": "0.160.0"
+          },
+          {
+            "name": "omp-18.6.1",
+            "path": "/nix/store/8kx5sy46gzn6g8i3z04xgjg64nlnpi5i-omp-18.6.1",
+            "version": "18.6.1"
+          },
+          {
+            "name": "opencode-1.18.34",
+            "path": "/nix/store/sx3d1rnw6ncfv7d5jlaxxdz7hgw1yxpc-opencode-1.18.34",
+            "version": "1.18.34"
+          },
+          {
+            "name": "zed-editor-1.22.0",
+            "path": "/nix/store/j7y0acvm99dcdmsf0f7llbb5hjmpq88j-zed-editor-1.22.0",
+            "version": "1.22.0"
+          },
+          {
+            "name": "neovim-0.12.5",
+            "path": "/nix/store/2q27asz53bjk6spzk6dxckw2pvf9bqpy-neovim-0.12.5",
+            "version": "0.12.5"
+          },
+          {
+            "name": "ghostty-1.3.1",
+            "path": "/nix/store/i5zqr903i6yb642h9amwh5174n5bmfc4-ghostty-1.3.1",
+            "version": "1.3.1"
+          },
+          {
+            "name": "kitty-0.49.2",
+            "path": "/nix/store/0ypxg9c0zkky9ynazn179lkpp0ing8qd-kitty-0.49.2",
+            "version": "0.49.2"
+          },
+          {
+            "name": "gcc-wrapper-16.2.0",
+            "path": "/nix/store/j1938gsbvbhkyz4kbmvjk56r479mkw3s-gcc-wrapper-16.2.0",
+            "version": "16.2.0"
+          },
+          {
+            "name": "gnumake-4.4.1",
+            "path": "/nix/store/z565rgmn9vccv2h0g87z725pw610jmm8-gnumake-4.4.1",
+            "version": "4.4.1"
+          },
+          {
+            "name": "binutils-wrapper-2.46",
+            "path": "/nix/store/fy8mxgdjvjvmagv2igmj428a9j17hpcf-binutils-wrapper-2.46",
+            "version": "2.46"
+          },
+          {
+            "name": "cmake-4.4.3",
+            "path": "/nix/store/jcvvpih1046akxcwh9hdiak5q24jqcf0-cmake-4.4.3",
+            "version": "4.4.3"
+          },
+          {
+            "name": "ninja-1.13.2",
+            "path": "/nix/store/4nsdla28c4177ssp0hlyv5l2yzj8wcba-ninja-1.13.2",
+            "version": "1.13.2"
+          },
+          {
+            "name": "pkg-config-wrapper-0.29.2",
+            "path": "/nix/store/b9izmrfjp0qnnyahdwwrzdwi87s1h179-pkg-config-wrapper-0.29.2",
+            "version": "0.29.2"
+          },
+          {
+            "name": "git-2.55.0",
+            "path": "/nix/store/lg46w7hrjx7kylsh6645c9l975i8h43b-git-2.55.0",
+            "version": "2.55.0"
+          },
+          {
+            "name": "patch-2.8",
+            "path": "/nix/store/dsfqcffzgwhrnkq1v9g9s3p55czrxk8l-patch-2.8",
+            "version": "2.8"
+          },
+          {
+            "name": "rustup-1.29.1",
+            "path": "/nix/store/s5g2mz2zr526hfvzf7si9ghsd221nn6z-rustup-1.29.1",
+            "version": "1.29.1"
+          },
+          {
+            "name": "lazygit-0.65.1",
+            "path": "/nix/store/4af6ccvig5clcsdh4ygggs8ww3gqajgx-lazygit-0.65.1",
+            "version": "0.65.1"
+          },
+          {
+            "name": "docker-29.8.1",
+            "path": "/nix/store/v6jng9n24gd7x2nnxw5arxq6j53z7s67-docker-29.8.1",
+            "version": "29.8.1"
+          },
+          {
+            "name": "docker-compose-5.5.1",
+            "path": "/nix/store/60fd61rd0q57pg591nj1i4gh5rzgnbyp-docker-compose-5.5.1",
+            "version": "5.5.1"
+          },
+          {
+            "name": "libreoffice-26.8.0.3-wrapped",
+            "path": "/nix/store/zai31972hvw299kmmm15dxn7aryrc0ns-libreoffice-26.8.0.3-wrapped",
+            "version": "26.8.0.3"
+          },
+          {
+            "name": "bitwarden-desktop-2026.9.0",
+            "path": "/nix/store/g8djqqajp56ijrskzfswwc6804957i9h-bitwarden-desktop-2026.9.0",
+            "version": "2026.9.0"
+          },
+          {
+            "name": "signal-desktop-8.28.0",
+            "path": "/nix/store/1wc15xrcln8y6s4pj3faq7fv63lk0fji-signal-desktop-8.28.0",
+            "version": "8.28.0"
+          },
+          {
+            "name": "telegram-desktop-7.2.8",
+            "path": "/nix/store/mzvyrngwg9i05kxkcpd2ci616c1s60wm-telegram-desktop-7.2.8",
+            "version": "7.2.8"
+          },
+          {
+            "name": "vlc-3.0.24",
+            "path": "/nix/store/s5q6s4vj4cr9b0k0id189yay0ajhd4ia-vlc-3.0.24",
+            "version": "3.0.24"
+          },
+          {
+            "name": "obs-studio-32.2.2",
+            "path": "/nix/store/raxgwpyj4187gx9czcfmcpi35y84d2qw-obs-studio-32.2.2",
+            "version": "32.2.2"
+          },
+          {
+            "name": "gimp-3.2.6",
+            "path": "/nix/store/1dj39x75j0zd8fy74vmjrwp1sifpk3q2-gimp-3.2.6",
+            "version": "3.2.6"
+          },
+          {
+            "name": "inkscape-1.4.4",
+            "path": "/nix/store/c014zxzkvnfjmdh5bzqwxamxkfdvpinm-inkscape-1.4.4",
+            "version": "1.4.4"
+          }
+        ],
+        "selected": [
+          "firefox",
+          "chromium",
+          "codex",
+          "oh-my-pi",
+          "opencode",
+          "zed",
+          "neovim",
+          "ghostty",
+          "kitty",
+          "build-tools",
+          "rustup",
+          "lazygit",
+          "docker",
+          "libreoffice",
+          "bitwarden",
+          "signal",
+          "telegram",
+          "vlc",
+          "obs-studio",
+          "gimp",
+          "inkscape"
+        ]
+      },
+      "rootlessDocker": true
+    },
+    "ghostty": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/v71v0bwqim8g5rsjgis2mlg08vnbzh2n-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "ghostty-1.3.1",
+            "path": "/nix/store/i5zqr903i6yb642h9amwh5174n5bmfc4-ghostty-1.3.1",
+            "version": "1.3.1"
+          }
+        ],
+        "selected": [
+          "ghostty"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "gimp": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/4bsjialcw8nhb283jkx28aza8h6chz0q-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "gimp-3.2.6",
+            "path": "/nix/store/1dj39x75j0zd8fy74vmjrwp1sifpk3q2-gimp-3.2.6",
+            "version": "3.2.6"
+          }
+        ],
+        "selected": [
+          "gimp"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "google-chrome": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/npcrmi0g0gmylz3qvipbhv4bq04si5n6-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "google-chrome-154.0.8037.97",
+            "path": "/nix/store/ds7933z0wp7872ic6zqzrwsbpj0m8g6l-google-chrome-154.0.8037.97",
+            "version": "154.0.8037.97"
+          }
+        ],
+        "selected": [
+          "google-chrome"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "inkscape": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/cfqz64g1cspizk64qz2jk7gaaq863x2m-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "inkscape-1.4.4",
+            "path": "/nix/store/c014zxzkvnfjmdh5bzqwxamxkfdvpinm-inkscape-1.4.4",
+            "version": "1.4.4"
+          }
+        ],
+        "selected": [
+          "inkscape"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "kitty": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/bbxnv2cxs5qx0rp7if5lqca0jxgzclfr-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "kitty-0.49.2",
+            "path": "/nix/store/0ypxg9c0zkky9ynazn179lkpp0ing8qd-kitty-0.49.2",
+            "version": "0.49.2"
+          }
+        ],
+        "selected": [
+          "kitty"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "lazygit": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/vsbkvssd9r9mb47f20r3p5csm0rgpmfr-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "lazygit-0.65.1",
+            "path": "/nix/store/4af6ccvig5clcsdh4ygggs8ww3gqajgx-lazygit-0.65.1",
+            "version": "0.65.1"
+          },
+          {
+            "name": "git-2.55.0",
+            "path": "/nix/store/lg46w7hrjx7kylsh6645c9l975i8h43b-git-2.55.0",
+            "version": "2.55.0"
+          }
+        ],
+        "selected": [
+          "lazygit"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "libreoffice": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/z6y76cz2aji3cwbr7xpqlqqi3j4a60x8-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "libreoffice-26.8.0.3-wrapped",
+            "path": "/nix/store/zai31972hvw299kmmm15dxn7aryrc0ns-libreoffice-26.8.0.3-wrapped",
+            "version": "26.8.0.3"
+          }
+        ],
+        "selected": [
+          "libreoffice"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "neovim": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/fklfngsww4mf14pcv207im3bdpw1q7cv-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "neovim-0.12.5",
+            "path": "/nix/store/2q27asz53bjk6spzk6dxckw2pvf9bqpy-neovim-0.12.5",
+            "version": "0.12.5"
+          }
+        ],
+        "selected": [
+          "neovim"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "none": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/2f0iiy2xvw1fiasi4w6cxswcisf4bwsi-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [],
+        "selected": []
+      },
+      "rootlessDocker": false
+    },
+    "obs-studio": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/2qagm6lycgpbmkfps2i3gk7ifr6xai7r-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "obs-studio-32.2.2",
+            "path": "/nix/store/raxgwpyj4187gx9czcfmcpi35y84d2qw-obs-studio-32.2.2",
+            "version": "32.2.2"
+          }
+        ],
+        "selected": [
+          "obs-studio"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "obsidian": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/m2wjql0sx4syahia81lsdwh3hlml8bla-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "obsidian-1.13.7",
+            "path": "/nix/store/4ra7pcv5lam1lrjw2y101jadlkc7m5qk-obsidian-1.13.7",
+            "version": "1.13.7"
+          }
+        ],
+        "selected": [
+          "obsidian"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "oh-my-pi": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/kmyrcjajwxpi2kbsw2gqpj31mpy9z6gi-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "omp-18.6.1",
+            "path": "/nix/store/8kx5sy46gzn6g8i3z04xgjg64nlnpi5i-omp-18.6.1",
+            "version": "18.6.1"
+          }
+        ],
+        "selected": [
+          "oh-my-pi"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "opencode": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/qs0vh8pygxp8xaxb3sj0wga4m6ycs71g-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "opencode-1.18.34",
+            "path": "/nix/store/sx3d1rnw6ncfv7d5jlaxxdz7hgw1yxpc-opencode-1.18.34",
+            "version": "1.18.34"
+          }
+        ],
+        "selected": [
+          "opencode"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "rustup": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/dkn43ip9ljs5f1aj11n4wpfzgfh76mc9-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "gcc-wrapper-16.2.0",
+            "path": "/nix/store/j1938gsbvbhkyz4kbmvjk56r479mkw3s-gcc-wrapper-16.2.0",
+            "version": "16.2.0"
+          },
+          {
+            "name": "gnumake-4.4.1",
+            "path": "/nix/store/z565rgmn9vccv2h0g87z725pw610jmm8-gnumake-4.4.1",
+            "version": "4.4.1"
+          },
+          {
+            "name": "binutils-wrapper-2.46",
+            "path": "/nix/store/fy8mxgdjvjvmagv2igmj428a9j17hpcf-binutils-wrapper-2.46",
+            "version": "2.46"
+          },
+          {
+            "name": "cmake-4.4.3",
+            "path": "/nix/store/jcvvpih1046akxcwh9hdiak5q24jqcf0-cmake-4.4.3",
+            "version": "4.4.3"
+          },
+          {
+            "name": "ninja-1.13.2",
+            "path": "/nix/store/4nsdla28c4177ssp0hlyv5l2yzj8wcba-ninja-1.13.2",
+            "version": "1.13.2"
+          },
+          {
+            "name": "pkg-config-wrapper-0.29.2",
+            "path": "/nix/store/b9izmrfjp0qnnyahdwwrzdwi87s1h179-pkg-config-wrapper-0.29.2",
+            "version": "0.29.2"
+          },
+          {
+            "name": "git-2.55.0",
+            "path": "/nix/store/lg46w7hrjx7kylsh6645c9l975i8h43b-git-2.55.0",
+            "version": "2.55.0"
+          },
+          {
+            "name": "patch-2.8",
+            "path": "/nix/store/dsfqcffzgwhrnkq1v9g9s3p55czrxk8l-patch-2.8",
+            "version": "2.8"
+          },
+          {
+            "name": "rustup-1.29.1",
+            "path": "/nix/store/s5g2mz2zr526hfvzf7si9ghsd221nn6z-rustup-1.29.1",
+            "version": "1.29.1"
+          }
+        ],
+        "selected": [
+          "build-tools",
+          "rustup"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "signal": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/hvrj3y8y70i9x9bs9j1qvrc7b9zrd43z-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "signal-desktop-8.28.0",
+            "path": "/nix/store/1wc15xrcln8y6s4pj3faq7fv63lk0fji-signal-desktop-8.28.0",
+            "version": "8.28.0"
+          }
+        ],
+        "selected": [
+          "signal"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "slack": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/33spcdbvy9gnz1si0i29kpaqlhqsm5mf-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "slack-4.51.180",
+            "path": "/nix/store/q1jqmgjws0wxmdyvhbz78fwdnv5616q4-slack-4.51.180",
+            "version": "4.51.180"
+          }
+        ],
+        "selected": [
+          "slack"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "spotify": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/4gzpykgr54g7wwr0dfq0xww5sm55f2zy-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "spotify-1.2.95.453.g0eeebbed",
+            "path": "/nix/store/63svqs1rdhlrhm02m9918mvx7gynvq0c-spotify-1.2.95.453.g0eeebbed",
+            "version": "1.2.95.453.g0eeebbed"
+          }
+        ],
+        "selected": [
+          "spotify"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "steam": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/5agrjn9a23zch0xqylybgn6dif558xxl-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "steam-1.0.0.87",
+            "path": "/nix/store/z1spmmfnyyj9p1zvzxgy8igx8mzilb7f-steam-1.0.0.87",
+            "version": "1.0.0.87"
+          }
+        ],
+        "selected": [
+          "steam"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "telegram": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/m3fh8zq5ixgcgrf68c85xd28r2018m71-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "telegram-desktop-7.2.8",
+            "path": "/nix/store/mzvyrngwg9i05kxkcpd2ci616c1s60wm-telegram-desktop-7.2.8",
+            "version": "7.2.8"
+          }
+        ],
+        "selected": [
+          "telegram"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "vlc": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/p1p645w4sdkpf24sxymlfmck0s31898k-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "vlc-3.0.24",
+            "path": "/nix/store/s5q6s4vj4cr9b0k0id189yay0ajhd4ia-vlc-3.0.24",
+            "version": "3.0.24"
+          }
+        ],
+        "selected": [
+          "vlc"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "vscode": {
+      "allowUnfree": true,
+      "derivation": "/nix/store/b5m6w0s7vazax04a82psdp5zc5bh1gl7-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "vscode-1.139.1",
+            "path": "/nix/store/cfx4yz0xx7lcvcci5dw4s0x928cvzw38-vscode-1.139.1",
+            "version": "1.139.1"
+          }
+        ],
+        "selected": [
+          "vscode"
+        ]
+      },
+      "rootlessDocker": false
+    },
+    "zed": {
+      "allowUnfree": false,
+      "derivation": "/nix/store/56v712hma6yr9i8y5486mbdzg2an77kc-nixos-system-desktop-test-26.11.20261001.c59305b.drv",
+      "dockerLinger": null,
+      "manifest": {
+        "packages": [
+          {
+            "name": "zed-editor-1.22.0",
+            "path": "/nix/store/j7y0acvm99dcdmsf0f7llbb5hjmpq88j-zed-editor-1.22.0",
+            "version": "1.22.0"
+          }
+        ],
+        "selected": [
+          "zed"
+        ]
+      },
+      "rootlessDocker": false
+    }
+  },
+  "desktop_case_count": 31
+}

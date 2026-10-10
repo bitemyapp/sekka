@@ -1,0 +1,19 @@
+{
+  "firmware": "uefi",
+  "input": "Usb",
+  "input_delivery": true,
+  "iso_sha256": "a06e860511db656850c7dcc4b91b348dcaebdfa2f321a7105ec7bd3df59e1978",
+  "live": "active\n1145\n1294\n7.2.8\n{\"kernel\":\"latest\",\"state_version\":\"26.11\",\"template_dir\":\"/etc/calamares-nixos\",\"test_diagnostics\":false,\"zoneinfo\":\"/nix/store/n8fqcpnr5ni28l3i9svqa70wz46798v9-tzdata-2026d/share/zoneinfo\"}nix (Determinate Nix 3.23.0) 2.35.2\n",
+  "passed": true,
+  "pointer_devices": [
+    {
+      "absolute": true,
+      "current": true,
+      "index": 2,
+      "name": "QEMU HID Tablet"
+    }
+  ],
+  "profile": "Default",
+  "session": "Seat=seat0\nType=wayland\nActive=yes\n",
+  "target_disk": false
+}

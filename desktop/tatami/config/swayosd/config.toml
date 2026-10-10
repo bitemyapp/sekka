@@ -1,0 +1,7 @@
+# Omarchy 4's on-screen display: near the bottom of the screen, gone after
+# 1.2 seconds, with the percentage beside the bar.
+[server]
+show_percentage = true
+max_volume = 100
+top_margin = 0.93
+duration = 1200

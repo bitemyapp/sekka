@@ -1,0 +1,30 @@
+# The authentication agent's colors (hyprpolkitagent takes its palette from
+# the Qt platform theme): Tokyo Night, read through Qt's built-in KDE platform
+# theme. Only the agent's unit points XDG_CONFIG_HOME here.
+[General]
+ColorScheme=TokyoNightDark
+font=JetBrainsMono Nerd Font,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Colors:Window]
+BackgroundNormal=26,27,38
+ForegroundNormal=169,177,214
+
+[Colors:View]
+BackgroundNormal=26,27,38
+BackgroundAlternate=36,40,59
+ForegroundNormal=192,202,245
+ForegroundInactive=86,95,137
+ForegroundLink=122,162,247
+ForegroundVisited=187,154,247
+
+[Colors:Button]
+BackgroundNormal=36,40,59
+ForegroundNormal=192,202,245
+
+[Colors:Selection]
+BackgroundNormal=122,162,247
+ForegroundNormal=26,27,38
+
+[Colors:Tooltip]
+BackgroundNormal=26,27,38
+ForegroundNormal=192,202,245

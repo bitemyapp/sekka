@@ -1,0 +1,23 @@
+# Screenrecord › in the Tatami menu (see tatami.toml). While a recording is
+# running, any of these stops it, as does the bar's recording indicator.
+name = "tatami-screenrecord"
+name_pretty = "Screenrecord"
+parent = "tatami-capture"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "With no audio"
+icon = "\uF03D"
+value = "tatami screenrecord"
+
+[[entries]]
+text = "With desktop audio"
+icon = "\uF03D"
+value = "tatami screenrecord --desktop-audio"
+
+[[entries]]
+text = "With desktop + microphone audio"
+icon = "\uF03D"
+value = "tatami screenrecord --desktop-audio --microphone"

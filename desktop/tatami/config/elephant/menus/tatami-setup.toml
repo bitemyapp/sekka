@@ -1,0 +1,50 @@
+# Setup › in the Tatami menu (see tatami.toml), after Omarchy 4's: Monitors
+# and Network first. Audio, Bluetooth and the power profile, which Omarchy 4
+# reaches only from its bar panels, stay here too, so search finds them.
+name = "tatami-setup"
+name_pretty = "Setup"
+parent = "tatami"
+fixed_order = true
+hide_from_providerlist = true
+action = "%VALUE%"
+
+[[entries]]
+text = "Monitors"
+icon = "\U000F0379"
+value = "tatami display"
+keywords = ["display", "brightness", "scale", "resolution", "refresh", "arrange", "hdr", "night shift"]
+
+[[entries]]
+text = "Network"
+icon = "\U000F06F3"
+submenu = "tatami-network"
+state = ["submenu"]
+keywords = ["wifi", "wi-fi", "wireless", "dns"]
+
+[[entries]]
+text = "Audio"
+icon = "\U000F04C3"
+value = "tatami audio"
+keywords = ["sound", "volume", "speakers"]
+
+[[entries]]
+text = "Bluetooth"
+icon = "\U000F00AF"
+value = "tatami bluetooth"
+
+[[entries]]
+text = "Weather"
+icon = "\uE30D"
+value = "tatami weather place"
+keywords = ["location", "city", "forecast"]
+
+[[entries]]
+text = "Power Profile"
+icon = "\U000F140B"
+value = "tatami power-profile"
+
+[[entries]]
+text = "Hyprland"
+icon = ""
+value = "tatami edit-config"
+keywords = ["config", "keybindings", "input"]

@@ -1,0 +1,12 @@
+{
+  "firmware": "uefi",
+  "media": "usb-storage",
+  "iso": "nixos-graphical-determinate-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "df70e2d97e07cee6ba5b6e1c09d1b4ddd046fe799449b28782cb5fd04cfcd0e1",
+  "install": true,
+  "passed": true,
+  "live": "active\n1196\n1329\nnix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\nNAME   TRAN   FSTYPE   LABEL\nloop0         squashfs \nsda    usb    iso9660  nixos-determinate-x86_64\n\u251c\u2500sda1        iso9660  nixos-determinate-x86_64\n\u2514\u2500sda2        vfat     EFIBOOT\nsr0    sata            \nvda    virtio          \n",
+  "resumed_from": "uefi-20261003-175025",
+  "disk_only_boot": true,
+  "installed": "nix (Determinate Nix 3.23.0) 2.35.2\nfh 0.1.27\nactive\nactive\nuid=1000(respintest) gid=100(users) groups=100(users),1(wheel),57(networkmanager)\n2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69  /etc/nixos/flake.lock\nid: \u2018nixos\u2019: no such user\n"
+}

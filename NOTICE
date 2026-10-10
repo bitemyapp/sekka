@@ -1,0 +1,28 @@
+Unofficial NixOS graphical installer with Determinate Nix
+
+The flake inputs, lock file and Determinate integration are adapted from:
+  DeterminateSystems/nixos-iso
+  https://github.com/DeterminateSystems/nixos-iso
+  revision 72a5c3aaddbd58b339a76bc4e98945d9ff981b1e
+  Copyright 2025 Determinate Systems, Inc. (Apache-2.0)
+
+Changes replace the minimal environment with the official NixOS graphical base
+and Plasma desktop, integrate a NixOS-focused Rust/GTK4 Calamares fork, preserve
+the pinned Determinate configuration, and add rootless build/QEMU verification.
+
+The build imports NixOS/nixpkgs (MIT) and the GPL-3.0-or-later Rust installer:
+  https://github.com/bitemyapp/calamares
+  Exact revision/content hash: nix/calamares-source.json
+The fork retains upstream Calamares history and licensing. Its Nix package
+builds only the new Rust implementation, not the original C++/Python engine.
+The prior Calamares extension patch and PyO3 bridge are removed on this branch.
+
+This community respin is not an official release of NixOS or Determinate
+Systems. Names and existing upstream artwork identify the software included;
+they do not imply endorsement. Bundled software retains its own licenses.
+
+Sekka integrates the NixOS-specific Rust installer from bitemyapp/calamares
+(GPL-3.0-or-later), Tatami, and Yukimi. Component licenses and author notices
+remain in their source directories. The root Apache-2.0 license applies to
+original image orchestration; it does not replace component or artwork licenses.
+See docs/imports.json for exact source revisions and paths.

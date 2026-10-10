@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Yukimi</vendor>
+  <vendor_url>https://github.com/bitemyapp/yukimi</vendor_url>
+  <icon_name>io.github.bitemyapp.Yukimi</icon_name>
+  <action id="io.github.bitemyapp.Yukimi.change-system">
+    <description>Change the system's packages, version or storage</description>
+    <message>Yukimi needs an administrator's password to change the system</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@out@/bin/yukimi-helper</annotate>
+  </action>
+</policyconfig>

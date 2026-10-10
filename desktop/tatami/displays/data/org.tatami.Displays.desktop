@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Displays
+Comment=Arrange displays and set their resolution, refresh rate, scale, rotation and color
+Exec=tatami-displays
+Icon=preferences-desktop-display
+Categories=Settings;HardwareSettings;
+Keywords=monitor;screen;resolution;refresh;scale;rotation;hdr;mirror;brightness;night shift;
+StartupNotify=true

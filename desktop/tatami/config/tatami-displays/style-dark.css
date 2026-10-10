@@ -1,0 +1,120 @@
+/* The Displays window (tatami-displays) in Tatami's look: Tokyo Night, as
+ * the menu, the bar and the notifications have it (walker, waybar and mako
+ * here, and the authentication agent's polkit/kdeglobals), with
+ * JetBrainsMono Nerd Font, square corners and a #7aa2f7 accent. It is
+ * libadwaita's stylesheet with its colors replaced, so the window keeps its
+ * layout. A dark one ("-dark"): the window is dark, whatever the session's
+ * light or dark preference, as these colors are. */
+
+:root {
+  --accent-bg-color: #7aa2f7;
+  --accent-fg-color: #1a1b26;
+  --accent-color: #7aa2f7;
+  --destructive-bg-color: #f7768e;
+  --destructive-fg-color: #1a1b26;
+  --destructive-color: #f7768e;
+  --success-bg-color: #9ece6a;
+  --success-fg-color: #1a1b26;
+  --success-color: #9ece6a;
+  --warning-bg-color: #e0af68;
+  --warning-fg-color: #1a1b26;
+  --warning-color: #e0af68;
+  --error-bg-color: #f7768e;
+  --error-fg-color: #1a1b26;
+  --error-color: #f7768e;
+
+  --window-bg-color: #1a1b26;
+  --window-fg-color: #a9b1d6;
+  --view-bg-color: #1a1b26;
+  --view-fg-color: #c0caf5;
+  --headerbar-bg-color: #1a1b26;
+  --headerbar-fg-color: #a9b1d6;
+  --headerbar-border-color: #a9b1d6;
+  --headerbar-backdrop-color: #1a1b26;
+  --headerbar-shade-color: rgb(0 0 0 / 36%);
+  --headerbar-darker-shade-color: rgb(0 0 0 / 50%);
+  --card-bg-color: #24283b;
+  --card-fg-color: #c0caf5;
+  --card-shade-color: rgb(0 0 0 / 36%);
+  --dialog-bg-color: #1a1b26;
+  --dialog-fg-color: #a9b1d6;
+  --popover-bg-color: #24283b;
+  --popover-fg-color: #c0caf5;
+  --popover-shade-color: rgb(0 0 0 / 36%);
+  --thumbnail-bg-color: #24283b;
+  --thumbnail-fg-color: #c0caf5;
+  --active-toggle-bg-color: #7aa2f7;
+  --active-toggle-fg-color: #1a1b26;
+  --shade-color: rgb(0 0 0 / 36%);
+  --scrollbar-outline-color: rgb(0 0 0 / 50%);
+  --border-color: rgb(169 177 214 / 15%);
+
+  /* Square, as Tatami's windows, menu and panels. */
+  --window-radius: 0px;
+}
+
+window,
+dialog,
+popover {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+window,
+.card,
+.boxed-list,
+list.boxed-list > row,
+preferencesgroup .boxed-list > row,
+button,
+dropdown > button,
+popover > contents,
+popover > arrow,
+dialog.alert floating-sheet,
+dialog.alert sheet,
+toast {
+  border-radius: 0;
+}
+
+/* The selected row, button or choice: tinted, its text in the accent, as in
+ * the menu. */
+popover row:selected,
+popover row:hover {
+  background-color: rgb(169 177 214 / 8%);
+  color: #7aa2f7;
+}
+
+/* The arrangement: displays as the menu's cards. */
+.arrangement {
+  border-radius: 0;
+  background-color: rgb(169 177 214 / 4%);
+}
+
+.display-tile {
+  background-image: none;
+  background-color: #24283b;
+  border: 2px solid rgb(169 177 214 / 35%);
+  border-radius: 0;
+  color: #c0caf5;
+}
+
+.display-tile.selected {
+  border-color: #7aa2f7;
+  box-shadow: none;
+}
+
+.display-tile .menu-bar {
+  border-radius: 0;
+  background-color: #a9b1d6;
+}
+
+.scale-choice {
+  border-radius: 0;
+}
+
+.scale-choice:checked {
+  background-color: rgb(169 177 214 / 8%);
+  color: #7aa2f7;
+}
+
+.scale-screen {
+  border-radius: 0;
+}

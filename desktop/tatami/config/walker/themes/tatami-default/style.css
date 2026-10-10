@@ -1,0 +1,154 @@
+/* Tatami menu and launcher after Omarchy 4's menu card (shell/plugins/
+ * menu/Menu.qml and the Tokyo Night shell.toml; MIT, see ../../../LICENSE):
+ * a dimmed screen, a 300px card with a 2px foreground border and 18px padding,
+ * a "Go…" header, 50px rows with an 18px glyph in a 36px column and 16px
+ * labels, a faint chevron on submenus, and the selected row tinted with an
+ * accent label and no outline. */
+@define-color background #1a1b26;
+@define-color foreground #a9b1d6;
+@define-color accent #7aa2f7;
+
+* {
+  all: unset;
+}
+
+* {
+  font-family: 'JetBrainsMono Nerd Font', monospace;
+  font-size: 16px;
+  color: @foreground;
+}
+
+/* The full-screen scrim behind the card (Walker clears the window's classes). */
+window {
+  background: alpha(@background, 0.5);
+}
+
+scrollbar {
+  opacity: 0;
+}
+
+.normal-icons,
+.large-icons {
+  -gtk-icon-size: 18px;
+}
+
+.box-wrapper {
+  background: @background;
+  border: 2px solid @foreground;
+  padding: 18px;
+}
+
+.search-container {
+  min-height: 34px;
+}
+
+.input {
+  font-size: 16px;
+  caret-color: @foreground;
+}
+
+.input placeholder {
+  opacity: 0.58;
+}
+
+.input selection {
+  background: alpha(@accent, 0.35);
+}
+
+.content-container {
+  margin-top: 6px;
+}
+
+.elephant-hint,
+.placeholder {
+  font-size: 14px;
+  opacity: 0.7;
+  padding: 24px 0;
+}
+
+child {
+  margin-bottom: 3px;
+}
+
+.item-box {
+  min-height: 50px;
+  padding: 0 8px;
+}
+
+child:selected .item-box {
+  background: alpha(@foreground, 0.08);
+}
+
+child:selected .item-box * {
+  color: @accent;
+}
+
+.item-image-text {
+  font-size: 18px;
+  min-width: 36px;
+  margin-right: -4px;
+}
+
+.item-image {
+  min-width: 36px;
+  margin-right: -4px;
+}
+
+.item-text-box {
+  padding: 8px 0;
+}
+
+.item-text {
+  font-weight: 500;
+}
+
+.item-subtext {
+  font-size: 11px;
+  opacity: 0.52;
+}
+
+child:selected .item-subtext {
+  color: @foreground;
+}
+
+/* Entries that open a submenu end in a faint chevron (menu-item.xml). */
+.item-chevron {
+  opacity: 0;
+  margin-right: 6px;
+}
+
+.submenu .item-chevron {
+  opacity: 0.36;
+}
+
+child:selected .item-chevron {
+  color: @foreground;
+}
+
+/* Style › Background: rows with a small preview, and the selected
+   wallpaper large beside them. */
+.background-item {
+  min-height: 52px;
+}
+
+.preview-box {
+  margin-left: 16px;
+  border: 2px solid @accent;
+}
+
+.current {
+  font-style: italic;
+}
+
+.keybinds,
+.keybind-hints {
+  opacity: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.error {
+  padding: 10px;
+  color: #f7768e;
+}

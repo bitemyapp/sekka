@@ -1,0 +1,9 @@
+# Applications started from the launcher become systemd services of their
+# own (as with Omarchy's uwsm-app) that keep this service's environment,
+# which includes the Tatami configuration directory (see `launch` in
+# tool/src/util.rs). The service manager starts them, so restarting
+# Elephant (`tatami reload`) does not end them: with systemd-run --scope
+# they were Elephant's children, and Claude Desktop's NixOS sandbox
+# (bwrap --die-with-parent) ended with it.
+launch_prefix = "tatami launch"
+terminal_cmd = "xdg-terminal-exec"

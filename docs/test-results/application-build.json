@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "store_path": "/nix/store/1m4nwxx54gyjbn4gwr4wacd9s5vdwykq-nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso/iso/nixos-graphical-determinate-rust-26.11.20261001.c59305b-x86_64-linux.iso",
+  "iso_sha256": "e7ec2362952305081c6e5ed6332962a13a50159f1f10352806607b93bbc45c37",
+  "bytes": 9560510464,
+  "installer_revision": "8547c691978b76c39a6fcbdcaf67d782331d1adb",
+  "graphical_revision": "1bcc838",
+  "flake_lock_sha256": "1ab98c5950de5484c81f3d1c52c5a657d0247e3eecb21c0c9cada9b8472ee079",
+  "flake_checks_passed": true,
+  "package_cache_closure_bytes": 22093309808,
+  "notes": "Cold module deadline fix; exact current tools and final flake checks passed. Independent copied-image checksum matched builder."
+}

@@ -1,0 +1,17 @@
+{
+  "clean_shutdown": true,
+  "desktop": "xfce4-session",
+  "host_radio_attached": false,
+  "iso_sha256": "26444afb6b01cc35b6e226de06308ba3301570888afe0ef4ab139d9b7b1f5ef5",
+  "kernel": "7.2.8",
+  "passed": true,
+  "profile": "Compatibility",
+  "radio": "mac80211_hwsim",
+  "target_disk": false,
+  "tools": {
+    "lock_sha256": "2a1e300d41e32889d2f108a9405294cf89f0a196d755bfc4bf43b8eea9852d69",
+    "sha256": "2ae4ec7e4db5880e659a22433bddf01d30e6336598a64a0d41def1bfe8989b77",
+    "store_path": "/nix/store/jg8qzkbjpsvyv4yk4k79m06z16mbzyh4-respin-wifi-test-tools"
+  },
+  "wifi": "QEMU guest, temporary root, no pre-existing radios\nSCAN_FOUND=RESPIN_TEST_ONLY\nCONNECTION_ATTEMPT=1\nConnected to 02:00:00:00:01:00 (on wlan0)\n\tSSID: RESPIN_TEST_ONLY\n\tfreq: 2412.0\n\tRX: 949 bytes (14 packets)\n\tTX: 673 bytes (8 packets)\n\tsignal: -30 dBm\n\trx bitrate: 1.0 MBit/s\n\ttx bitrate: 54.0 MBit/s\n\tbss flags: short-slot-time\n\tdtim period: 2\n\tbeacon int: 100\n\nPING 192.0.2.1 (192.0.2.1) from 192.0.2.2 wlan0: 56(84) bytes of data.\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=0.122 ms\n64 bytes from 192.0.2.1: icmp_seq=2 ttl=64 time=0.125 ms\n64 bytes from 192.0.2.1: icmp_seq=3 ttl=64 time=0.223 ms\n\n--- 192.0.2.1 ping statistics ---\n3 packets transmitted, 3 received, 0% packet loss, time 2028ms\nrtt min/avg/max/mdev = 0.122/0.156/0.223/0.046 ms\n\nCONNECTION_ATTEMPT=2\nConnected to 02:00:00:00:01:00 (on wlan0)\n\tSSID: RESPIN_TEST_ONLY\n\tfreq: 2412.0\n\tRX: 949 bytes (14 packets)\n\tTX: 673 bytes (8 packets)\n\tsignal: -30 dBm\n\trx bitrate: 1.0 MBit/s\n\ttx bitrate: 54.0 MBit/s\n\tbss flags: short-slot-time\n\tdtim period: 2\n\tbeacon int: 100\n\nPING 192.0.2.1 (192.0.2.1) from 192.0.2.2 wlan0: 56(84) bytes of data.\n64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=0.248 ms\n64 bytes from 192.0.2.1: icmp_seq=2 ttl=64 time=0.199 ms\n64 bytes from 192.0.2.1: icmp_seq=3 ttl=64 time=0.192 ms\n\n--- 192.0.2.1 ping statistics ---\n3 packets transmitted, 3 received, 0% packet loss, time 2045ms\nrtt min/avg/max/mdev = 0.192/0.213/0.248/0.024 ms\n\nSUPPLICANT_BEFORE_TEARDOWN=active\nSUPPLICANT_AFTER_TEARDOWN\nActiveState=active\nSubState=running\nNRestarts=0\nExecMainStatus=0\n\nWIFI_SCAN_CONNECT_RECONNECT_PASS\n\n"
+}
