@@ -99,6 +99,44 @@ flake to check actual module and dependency compatibility before deployment.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
 
+## Keep Awake and USB wake
+
+`tatami awake on|off|toggle|status` controls a session-owned user service with
+real logind `sleep:idle:handle-lid-switch` block inhibitors. The saved intent
+is in `$XDG_STATE_HOME/tatami/keep-awake` (normally `~/.local/state/tatami`).
+It is restored at Tatami login, released at logout, and independent of Waybar
+and workload applications. The service reports readiness only after verifying
+its own inhibitor, restarts on failure, and checks for lost inhibition every
+second. The bar checks actual inhibition every two seconds and shows a warning
+when the requested protection is unavailable. Appearance reloads exclude this
+service. Hypridle stays running and respects the idle inhibitor, preserving
+explicit lock/sleep hooks.
+
+Keep Awake blocks normal suspend, hibernation, idle actions, and lid-close
+sleep; administrators can still deliberately bypass inhibitors. It cannot
+prevent power loss or firmware/thermal shutdown. Do not infer protection from
+a stopped idle daemon or promise uninterrupted operation through those events.
+
+The `calamares.usbWake.enable` option defaults to true. Udev enables wake only
+along USB keyboard/mouse ancestor paths, including hubs and controllers; a
+oneshot reapplies the rules at boot/activation and before sleep. It leaves
+unrelated peripherals and autosuspend policy alone. Turning the option off
+removes the policy; existing kernel wake attributes reset on reconnect/reboot.
+
+```sh
+nix build .#checks.x86_64-linux.keep-awake .#checks.x86_64-linux.usb-wake --no-update-lock-file
+python3 -m unittest discover -s tests -p test_usb_wake.py -v
+systemd-inhibit --list
+tatami awake status
+```
+
+The VM check exercises real logind/polkit inhibition, rejected suspend, holder
+failure recovery, logind restart, boot persistence, disable, and failed-start
+indicators. It never suspends the host. USB fixtures check ancestor traversal,
+unrelated-device isolation, repeated application, and reconnect-like resets.
+Physical USB wake must still be checked on each machine with Keep Awake off;
+record keyboard/mouse, hub, dock, firmware, and sleep mode when diagnosing it.
+
 ## Release workflow: deliberately disabled
 
 `.github/workflows/release.yml` has only a manual trigger and an unconditional `if: ${{ false }}` on its sole job. No dispatch, push, tag, or schedule can currently build or publish an image through it. **Do not enable it as part of ordinary maintenance.**

@@ -68,6 +68,12 @@
   color: #f7768e;
 }
 
+/* A saved request without a verified inhibitor is a failure, not an active cup. */
+#custom-stay-awake.warning {
+  color: #f7768e;
+  opacity: 1;
+}
+
 #custom-weather {
   min-width: 21px;
   padding: 0;

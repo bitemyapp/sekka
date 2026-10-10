@@ -268,6 +268,7 @@ in
         )
       );
     systemd.user.services = {
+      tatami-keep-awake = import ./keep-awake.nix { inherit lib pkgs tool; };
       tatami-waybar =
         lib.recursiveUpdate
           (unit "Tatami top bar" "${lib.getExe pkgs.waybar} -c ${configDir}/waybar/config.jsonc -s ${configDir}/waybar/style.css")

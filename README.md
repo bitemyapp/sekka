@@ -39,6 +39,16 @@ lets you fill, fit, stretch, center or tile it, or use a solid color, with separ
 choices for each display. Wallpapers keep their original resolution; your display
 settings control any cropping.
 
+For long downloads, builds, or overnight work, turn on **Keep Awake** using
+the coffee cup in the bar or **Super + Ctrl + I**. It prevents sleep, automatic
+screen locking, and lid-close sleep until you turn it off, and remembers your
+choice at your next login. You can still lock the screen yourself. A red coffee
+cup means protection could not be verified and needs attention.
+
+Sekka also enables USB keyboard and mouse wake paths, including their parent
+hubs. Waking from an intentional suspend still depends on the hardware and
+firmware; try a key or mouse button if mouse movement does not wake it.
+
 [![Tatami desktop and application menu](docs/images/tour/installed-tatami-menu.png)](docs/images/tour/installed-tatami-menu.png)
 
 ### Yukimi: see and change your system

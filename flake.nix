@@ -237,6 +237,17 @@
           assert latest.hardware.nvidia.powerManagement.finegrained;
           pkgs.writeText "nvidia-on-media" latest.hardware.nvidia.package.version;
         tatami = self.packages.${system}.tatami;
+        keep-awake = import ./nix/keep-awake-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tatami;
+        };
+        usb-wake = pkgs.runCommand "usb-wake-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+          mkdir -p installer/genkan/rust/system tests
+          cp ${./installer/genkan/rust/system/usb-wake.py} installer/genkan/rust/system/usb-wake.py
+          cp ${./tests/test_usb_wake.py} tests/test_usb_wake.py
+          python3 -m unittest discover -s tests -p test_usb_wake.py -v
+          touch $out
+        '';
         tatami-background =
           pkgs.runCommand "tatami-background-tests"
             {
