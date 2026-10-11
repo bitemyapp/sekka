@@ -75,7 +75,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed(f"ln -s {live} /nix/var/nix/profiles/system-100-link")
     machine.succeed("touch /run/test-slow-activation")
     machine.succeed("systemd-run --unit=test-updater-client --property=StandardOutput=journal --property=StandardError=journal yukimi-helper rollback 100")
-    machine.wait_for_file("/run/test-activation-started")
+    machine.wait_until_succeeds("test -e /run/test-activation-started", timeout=30)
     machine.succeed("systemctl kill --signal=SIGKILL test-updater-client.service")
     machine.wait_until_succeeds("grep -q '\"state\":\"activated\"' /var/lib/yukimi/update.json")
     machine.wait_until_succeeds("grep -l '\"ok\":true' /var/lib/yukimi/operations/*/result.json")

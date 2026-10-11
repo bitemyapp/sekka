@@ -157,7 +157,7 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
         for unit in units {
             let relative = format!("etc/systemd/{scope}/{unit}");
             match (unit_definition(&active.join(&relative)), unit_definition(&target.join(&relative))) {
-                (Ok(old), Ok(new)) if old == new => (),
+                (Ok(old), Ok(new)) if old == new || dbus_reload_only(unit, &old, &new) => (),
                 _ => reasons.push(format!("A session-critical service changed ({unit}).")),
             }
         }
@@ -205,6 +205,45 @@ fn unit_definition(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, std::io::Er
         Err(e) => return Err(e),
     }
     Ok(result)
+}
+
+/// NixOS reloads D-Bus when its policy/service catalog changes. Those generated
+/// restart-trigger paths vary even for an ordinary application installation.
+/// Only ignore that trigger: executable, environment, dependencies, and reload
+/// policy changes must still require a fresh start.
+fn dbus_reload_only(unit: &str, old: &BTreeMap<String, Vec<u8>>, new: &BTreeMap<String, Vec<u8>>) -> bool {
+    if !matches!(unit, "dbus.service" | "dbus-broker.service") {
+        return false;
+    }
+    let without_trigger = |files: &BTreeMap<String, Vec<u8>>| -> Option<BTreeMap<String, String>> {
+        let mut reload = false;
+        let mut result = BTreeMap::new();
+        // systemd reads the base unit first, then drop-ins in lexical order.
+        let base = files.get_key_value("unit")?;
+        for (name, bytes) in std::iter::once(base).chain(files.iter().filter(|(name, _)| *name != "unit")) {
+            let mut section = "";
+            let mut contents = String::new();
+            for line in std::str::from_utf8(bytes).ok()?.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    section = trimmed;
+                }
+                if let Some((key, value)) = trimmed.split_once('=') {
+                    if section == "[Service]" && key.trim() == "X-ReloadIfChanged" {
+                        reload = value.trim() == "true";
+                    }
+                    if section == "[Unit]" && key.trim() == "X-Restart-Triggers" {
+                        continue;
+                    }
+                }
+                contents.push_str(line);
+                contents.push('\n');
+            }
+            result.insert(name.clone(), contents);
+        }
+        reload.then_some(result)
+    };
+    matches!((without_trigger(old), without_trigger(new)), (Some(a), Some(b)) if a == b)
 }
 
 /// UWSM intentionally does not put XDG_SESSION_ID in the shared application
@@ -572,6 +611,36 @@ mod tests {
         std::fs::write(f.new.join("etc/systemd/system/plasmalogin.service"), "[Service]\nExecStart=/new/login\n")
             .unwrap();
         assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("display-manager.service")));
+    }
+    #[test]
+    fn dbus_catalog_reload_does_not_require_restart_but_binary_and_policy_changes_do() {
+        let f = Fixture::new();
+        for (system, trigger) in [(&f.old, "old-catalog"), (&f.new, "new-catalog")] {
+            let dir = system.join("etc/systemd/system");
+            std::fs::create_dir_all(dir.join("dbus-broker.service.d")).unwrap();
+            std::fs::write(
+                dir.join("dbus-broker.service"),
+                "[Service]\nExecStart=/same/dbus-broker\nType=notify-reload\n",
+            )
+            .unwrap();
+            std::fs::write(
+                dir.join("dbus-broker.service.d/overrides.conf"),
+                format!("[Unit]\nX-Restart-Triggers={trigger}\n[Service]\nX-ReloadIfChanged=true\n"),
+            )
+            .unwrap();
+        }
+        assert!(plan(&f.old, &f.old, &f.new).is_empty());
+        let unit = f.new.join("etc/systemd/system/dbus-broker.service");
+        let original = std::fs::read_to_string(&unit).unwrap();
+        std::fs::write(&unit, original.replace("/same/", "/new/")).unwrap();
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("dbus-broker")));
+        std::fs::write(unit, original).unwrap();
+        std::fs::write(
+            f.new.join("etc/systemd/system/dbus-broker.service.d/zzz-policy.conf"),
+            "[Service]\nX-ReloadIfChanged=false\n",
+        )
+        .unwrap();
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("dbus-broker")));
     }
     #[test]
     fn missing_evidence_and_failed_activation_never_claim_success() {

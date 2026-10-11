@@ -77,7 +77,10 @@ compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
 switch inhibitors before choosing `switch` or `boot`. Configuration changes,
 branch changes, and rollbacks use the same planner. A missing compatibility
-manifest stages the transition for boot. `sekka-update --boot` explicitly
+manifest stages the transition for boot. D-Bus catalog trigger changes remain
+live when both unit definitions specify reload-on-change and every other unit
+setting matches; changes to its executable or reload policy still stage for boot.
+`sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
 pre-switch check also rejects unsafe activation from older updaters and other
