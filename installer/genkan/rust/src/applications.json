@@ -16,6 +16,7 @@
   {"id":"build-tools","name":"Development build tools","description":"C/C++ compiler and headers, Make, binutils, CMake, Ninja, pkg-config, Git, patch, and file.","category":"Development tools","packages":["gcc","gnumake","binutils","cmake","ninja","pkg-config","git","patch","file"]},
   {"id":"rustup","name":"Rustup","description":"Install and manage Rust toolchains. Also selects Development build tools. Run rustup default stable after installation.","category":"Development tools","packages":["rustup"],"requires":["build-tools"]},
   {"id":"lazygit","name":"Lazygit","description":"Review changes, stage files, and manage Git commits in the terminal.","category":"Development tools","packages":["lazygit","git"],"terminal":"lazygit"},
+  {"id":"gh","name":"GitHub CLI","description":"Work with GitHub pull requests, issues, releases, and repositories from the terminal. Sign in with gh auth login after installation.","category":"Development tools","packages":["gh","git"]},
   {"id":"docker","name":"Docker Engine + Compose","description":"Run development containers without administrator privileges using rootless Docker. Linux alternative to OrbStack.","category":"Development tools","packages":["docker","docker-compose"]},
   {"id":"libreoffice","name":"LibreOffice","description":"Create documents, spreadsheets, and presentations.","category":"Productivity","packages":["libreoffice"]},
   {"id":"obsidian","name":"Obsidian","description":"Write Markdown notes and connect ideas with links.","category":"Productivity","packages":["obsidian"],"unfree":true},

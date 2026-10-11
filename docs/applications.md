@@ -1,6 +1,6 @@
 # Optional applications
 
-The installer presents 31 choices with checkboxes, categories, search and short
+The installer presents 32 choices with checkboxes, categories, search and short
 descriptions. Firefox starts selected. Empty selection is supported. The review
 screen lists the normalized selection, and the privileged helper validates it
 again. Unknown IDs, duplicate requests and proprietary selections without
