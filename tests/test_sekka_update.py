@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parents[1]
 PYTHON = Path(sys.executable).resolve()
 
 FAKE = r'''
-import json, os, pathlib, sys, time
+import json, os, pathlib, signal, subprocess, sys, time
 p = pathlib.Path
 name = p(sys.argv[0]).name
 a = sys.argv[1:]
@@ -45,13 +45,40 @@ elif name == 'nix-env':
     profile.unlink()
     profile.symlink_to('system-' + gen + '-link')
 elif name == 'systemd-run':
+    assert '--pipe' not in a, a
+    unit = a[a.index('--unit') + 1]
+    command = a[a.index('__worker') - 1:]
+    log = next(x.split('append:', 1)[1] for x in a if x.startswith('--property=StandardOutput='))
+    with open(log, 'ab') as out:
+        child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
+    p('/state/' + unit).write_text(str(child.pid))
+elif name == 'systemctl':
+    if '--user' in a:
+        if 'wayland-wm@tatami.service' in a:
+            print('ActiveState=active\nInvocationID=tatami-instance\nEnvironmentFiles=/run/user/1000/uwsm/env_session.conf (ignore_errors=yes)')
+        else: print('ActiveState=inactive\nMainPID=0')
+    elif 'kill' in a:
+        os.kill(int(p('/state/' + a[-1]).read_text()), signal.SIGINT)
+    elif 'show' in a:
+        try:
+            pid = int(p('/state/' + a[a.index('show') + 1]).read_text())
+            state = p(f'/proc/{pid}/stat').read_text().split(') ')[1].split()[0]
+            print('inactive' if state == 'Z' else 'active')
+        except (OSError, ValueError): print('inactive')
+    else: sys.exit(2)
+elif name == 'switch-to-configuration':
     assert a[-1] in ['boot', 'switch'], a
+    p('/state/activating').touch()
+    if p('/state/slow-activation').exists():
+        for _ in range(20):
+            print('activation progress', file=sys.stderr, flush=True)
+            time.sleep(.1)
     if p('/state/fail-activation').exists(): sys.exit(1)
-    p('/state/activation').write_text(json.dumps(a[-2:]))
+    p('/state/activation').write_text(json.dumps([sys.argv[0], a[-1]]))
     if a[-1] == 'switch':
         current = p('/run/current-system')
         current.unlink()
-        current.symlink_to(p(a[-2]).parent.parent)
+        current.symlink_to(p(sys.argv[0]).parent.parent)
 else: sys.exit(2)
 '''
 
@@ -69,7 +96,7 @@ class Update(unittest.TestCase):
         (self.config / 'flake.lock').write_text('original lock\n')
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
-        for name in ['nix', 'nix-env', 'systemd-run']:
+        for name in ['nix', 'nix-env', 'systemd-run', 'systemctl']:
             path = self.root / 'system-old/sw/bin' / name
             path.write_text(f'#!{PYTHON}\n' + FAKE)
             path.chmod(0o755)
@@ -81,6 +108,10 @@ class Update(unittest.TestCase):
         for system in ['system-old', 'system-new']:
             base = self.root / system
             (base / 'etc/yukimi').mkdir(parents=True)
+            (base / 'bin').mkdir()
+            switch = base / 'bin/switch-to-configuration'
+            switch.write_text(f'#!{PYTHON}\n' + FAKE)
+            switch.chmod(0o755)
             (base / 'kernel-params').write_text('quiet')
             (base / 'init-interface-version').write_text('2')
             (base / 'switch-inhibitors').write_text('{}')
@@ -153,6 +184,7 @@ class Update(unittest.TestCase):
         self.assertEqual(json.loads((self.root / 'state/activation').read_text()),
                          ['/system-new/bin/switch-to-configuration', 'boot'])
         self.assertEqual((self.config / 'hardware-configuration.nix').read_text(), '# hardware untouched')
+        self.compatible_live_system()
         self.run_cmd('/bin/sekka-update', '--switch')
         self.assertEqual((self.config / 'flake.nix').read_text(), migrated)
         self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'switch')
@@ -210,6 +242,81 @@ class Update(unittest.TestCase):
         self.assertIn('Restart to finish updating', result.stdout)
         result = self.run_cmd('--setenv', 'XDG_CURRENT_DESKTOP', 'Tatami', '/bin/sekka-update', '--status', '--json')
         self.assertEqual(json.loads(result.stdout)['action'], 'reboot')
+
+    def test_explicit_switch_cannot_bypass_session_safety(self):
+        result = self.run_cmd('/bin/sekka-update', '--switch', ok=False)
+        self.assertIn('Live activation was refused', result.stderr)
+        self.assertFalse((self.root / 'state/activation').exists())
+        self.assertEqual((self.root / 'nix/var/nix/profiles/system').readlink(), Path('system-1-link'))
+        self.unchanged()
+
+    def test_rollback_stages_a_disruptive_transition(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/sekka-update')
+        (self.root / 'system-old/etc/yukimi/activation.json').write_text('{"version":2}')
+        result = self.run_cmd('/bin/yukimi-helper', 'rollback', '1')
+        self.assertEqual(json.loads(result.stdout)['mode'], 'boot')
+        self.assertEqual((self.root / 'run/current-system').readlink(), Path('/system-new'))
+
+    def test_target_precheck_protects_legacy_live_activation(self):
+        result = self.run_cmd('/bin/yukimi-helper', 'check-activation', '/system-new', 'switch', ok=False)
+        self.assertIn('Live activation was refused', result.stderr)
+        self.run_cmd('/bin/yukimi-helper', 'check-activation', '/system-new', 'boot')
+        self.unchanged()
+
+    def test_closed_frontend_pipes_do_not_interrupt_committed_activation(self):
+        self.compatible_live_system()
+        (self.root / 'state/slow-activation').touch()
+        process = subprocess.Popen(self.base + ['/bin/yukimi-helper', 'change', '--sekka'],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            for _ in range(200):
+                if (self.root / 'state/activating').exists(): break
+                time.sleep(.05)
+            self.assertTrue((self.root / 'state/activating').exists())
+            process.stdout.close()
+            process.stderr.close()
+            process.stdin.close()
+            self.assertEqual(process.wait(timeout=10), 0)
+            self.assertEqual(json.loads((self.root / 'var/lib/yukimi/update.json').read_text())['state'], 'activated')
+            logs = list((self.root / 'var/lib/yukimi/operations').glob('*/progress.log'))
+            self.assertTrue(any('activation progress' in log.read_text() for log in logs))
+        finally:
+            if process.poll() is None: process.kill()
+            process.wait()
+
+    def session_fixture(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/sekka-update')
+        manifest = {'version': 1, 'session_id': '3', 'session_invocation': 'tatami-instance',
+                    'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                    'session': {}, 'reload': {}, 'keep_awake': 'tool:systemd'}
+        runtime = self.root / 'run/user/1000'
+        (runtime / 'tatami').mkdir(parents=True)
+        (runtime / 'uwsm').mkdir()
+        (runtime / 'tatami/update-session.json').write_text(json.dumps(manifest))
+        (runtime / 'uwsm/env_session.conf').write_text('XDG_SESSION_ID=3\n')
+        target = self.root / 'system-new/etc/xdg/tatami'
+        target.mkdir(parents=True)
+        (target / 'update.json').write_text(json.dumps(manifest))
+        self.base += ['--setenv', 'XDG_RUNTIME_DIR', '/run/user/1000', '--setenv', 'XDG_CURRENT_DESKTOP', 'Tatami']
+        return runtime
+
+    def test_uwsm_launched_application_without_session_id_is_verified(self):
+        self.session_fixture()
+        result = self.run_cmd('/bin/sekka-update', '--status', '--json')
+        self.assertEqual(json.loads(result.stdout)['action'], 'none')
+
+    def test_different_session_and_stale_invocation_are_not_accepted(self):
+        runtime = self.session_fixture()
+        result = self.run_cmd('--setenv', 'XDG_SESSION_ID', '99', '/bin/sekka-update', '--status', '--json')
+        self.assertEqual(json.loads(result.stdout)['action'], 'unknown')
+        file = runtime / 'tatami/update-session.json'
+        manifest = json.loads(file.read_text())
+        manifest['session_invocation'] = 'earlier-session'
+        file.write_text(json.dumps(manifest))
+        result = self.run_cmd('/bin/sekka-update', '--status', '--json')
+        self.assertEqual(json.loads(result.stdout)['action'], 'unknown')
 
     def test_cancel_and_concurrent_operation(self):
         (self.root / 'state/wait').touch()

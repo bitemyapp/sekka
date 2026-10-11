@@ -12,6 +12,8 @@ struct Manifest {
     boot_id: String,
     #[serde(default)]
     session_id: String,
+    #[serde(default)]
+    session_invocation: String,
     session: BTreeMap<String, String>,
     reload: BTreeMap<String, String>,
     keep_awake: String,
@@ -49,7 +51,9 @@ fn save(manifest: &Manifest) -> Result<(), String> {
     std::fs::rename(temporary, path).map_err(|e| e.to_string())
 }
 pub fn remember() -> Result<(), String> {
-    save(&desired()?)
+    let mut manifest = desired()?;
+    manifest.session_invocation = std::env::var("INVOCATION_ID").unwrap_or_default();
+    save(&manifest)
 }
 
 pub fn awake_stopped() {

@@ -4,7 +4,7 @@
 //! arguments it checks itself, on the configuration it finds itself (see
 //! `yukimi_system::setup`):
 //!
-//! - `change [options] --mode switch|boot` changes what the system installs
+//! - `change [options] --mode auto|switch|boot` changes what the system installs
 //!   and where it comes from, builds the new system and switches to it. If
 //!   anything before the switch fails, every file it touched is put back as
 //!   it was. The options:
@@ -39,7 +39,9 @@
 //! standard input is a pipe and Yukimi closes it, the helper stops what it
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
-use std::io::Read;
+use std::io::{Read, Write};
+
+mod transaction;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -454,7 +456,7 @@ fn build(setup: &Setup) -> Result<String> {
 
 /// Make a built system the current generation and start it (`switch`) or
 /// make it the one the next start uses (`boot`), as nixos-rebuild does:
-/// through systemd-run, so restarting services cannot stop it halfway.
+/// inside the independent system operation, with persistent output files.
 fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--set", system]);
@@ -467,23 +469,23 @@ fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
 }
 
 fn switch(program: &str, mode: &str) -> Result<()> {
-    let mut c = command("systemd-run");
-    c.args([
-        "-E",
-        "LOCALE_ARCHIVE",
-        "-E",
-        "NIXOS_INSTALL_BOOTLOADER",
-        "--collect",
-        "--no-ask-password",
-        "--pipe",
-        "--quiet",
-        "--service-type=exec",
-        "--unit=yukimi-switch-to-configuration",
-        "--wait",
-        program,
-        mode,
-    ]);
+    // The entire helper already runs in a system service with persistent logs.
+    // Never reconnect this process to the GUI's file descriptors.
+    let mut c = command(program);
+    c.arg(mode);
     run(c, "Switching to the new system")
+}
+
+fn activation_mode(requested: &str, reasons: &[String]) -> Result<&'static str> {
+    match requested {
+        "boot" => Ok("boot"),
+        "switch" if !reasons.is_empty() => Err(Failure(format!(
+            "Live activation was refused: {} Prepare the update with --boot or use automatic mode.",
+            reasons.join(" ")
+        ))),
+        "auto" if !reasons.is_empty() => Ok("boot"),
+        _ => Ok("switch"),
+    }
 }
 
 /// What `change` was asked to do.
@@ -506,7 +508,7 @@ struct Change {
 
 impl Change {
     fn parse(args: &[String]) -> Result<Change> {
-        let mut change = Change { mode: "switch".into(), ..Change::default() };
+        let mut change = Change { mode: "auto".into(), ..Change::default() };
         let mut it = args.iter();
         while let Some(flag) = it.next() {
             if flag == "--sekka" {
@@ -733,20 +735,20 @@ fn change(args: &[String]) -> Result<String> {
         stage_done(3);
         Ok(system)
     };
-    let system = match attempt().and_then(|system| commit().map(|_| system)) {
-        Ok(system) => system,
+    let (system, reasons, mode) = match attempt().and_then(|system| {
+        let active = std::fs::canonicalize("/run/current-system")?;
+        let booted =
+            std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
+        let reasons = completion::plan(&booted, &active, Path::new(&system));
+        let mode = activation_mode(&change.mode, &reasons)?;
+        commit()?;
+        Ok((system, reasons, mode))
+    }) {
+        Ok(prepared) => prepared,
         Err(e) => {
             backup.restore();
             return Err(e);
         }
-    };
-    let active = std::fs::canonicalize("/run/current-system")?;
-    let booted = std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
-    let reasons = completion::plan(&booted, &active, Path::new(&system));
-    let mode = match change.mode.as_str() {
-        "auto" if reasons.is_empty() => "switch",
-        "auto" => "boot",
-        explicit => explicit,
     };
     let mut receipt =
         Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
@@ -772,6 +774,7 @@ fn save_update(receipt: &Receipt) -> Result<()> {
     file.write_all(&serde_json::to_vec(receipt)?)?;
     file.sync_all()?;
     std::fs::rename(temporary, path)?;
+    std::fs::File::open(path.parent().unwrap())?.sync_all()?;
     Ok(())
 }
 
@@ -784,6 +787,11 @@ fn rollback(args: &[String]) -> Result<String> {
         return Err(Failure(format!("There is no generation {generation}")));
     }
     let setup = Setup::detect();
+    let target = std::fs::canonicalize(format!("{PROFILE}-{generation}-link"))?;
+    let active = std::fs::canonicalize("/run/current-system")?;
+    let booted = std::fs::canonicalize("/run/booted-system")?;
+    let reasons = completion::plan(&booted, &active, &target);
+    let mode = activation_mode("auto", &reasons)?;
     let running = current_generation();
     if let Some(current) = running {
         let _ = save_configuration(&setup, current, false);
@@ -797,7 +805,7 @@ fn rollback(args: &[String]) -> Result<String> {
         system: std::fs::canonicalize(PROFILE)?,
         boot_id: completion::boot_id(),
         state: "activating".into(),
-        reasons: vec![],
+        reasons,
     };
     save_update(&receipt)?;
     // The configuration follows the system, so the next change builds on
@@ -811,16 +819,16 @@ fn rollback(args: &[String]) -> Result<String> {
             report(1, &format!("{} was changed by hand since, so it was left as it is", file.display()));
         }
     }
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "switch")?;
-    if std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
+    switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
+    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
-    receipt.state = "activated".into();
+    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
     save_update(&receipt)?;
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
     Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,
-        "system": receipt.system, "mode": "switch", "completion": completion::read_system()})
+        "system": receipt.system, "mode": mode, "completion": completion::read_system()})
     .to_string())
 }
 
@@ -871,18 +879,85 @@ fn clean(args: &[String]) -> Result<String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (command, rest) = match args.split_first() {
-        Some((c, rest)) => (c.as_str(), rest),
-        None => ("", &[][..]),
-    };
+    // A target-side pre-switch check is read-only and also protects legacy
+    // clients which still explicitly request a live switch.
+    if args.first().is_some_and(|s| s == "check-activation") {
+        return match check_activation(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(Failure(message)) => {
+                let _ = writeln!(std::io::stderr(), "{message}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
         report(0, "yukimi-helper must be started through pkexec");
         return ExitCode::from(2);
     }
+    if args.first().is_some_and(|s| s == "__worker") {
+        let Some((directory, args)) = args.get(1..).and_then(|args| args.split_first()) else {
+            return ExitCode::FAILURE;
+        };
+        let Ok(directory) = transaction::worker_directory(directory) else {
+            return ExitCode::FAILURE;
+        };
+        let result = worker(args);
+        let (json, success) = match result {
+            Ok(json) => (json, true),
+            Err(Failure(message)) => {
+                let message = if state().0 == Phase::Committed {
+                    format!(
+                        "System changes had already begun; the configuration was not restored. {message}. Review the log before restarting or retrying."
+                    )
+                } else {
+                    message
+                };
+                report(0, &message);
+                (serde_json::json!({"ok": false, "error": message}).to_string(), false)
+            }
+        };
+        if transaction::save_result(&directory, &json).is_err() {
+            return ExitCode::FAILURE;
+        }
+        return if success { ExitCode::SUCCESS } else { ExitCode::FAILURE };
+    }
+    let result = if args.first().is_some_and(|s| matches!(s.as_str(), "change" | "rollback" | "clean")) {
+        transaction::client(&args)
+    } else {
+        Err(Failure("Usage: yukimi-helper change|rollback|clean …".into()))
+    };
+    let json = match result {
+        Ok(json) => json,
+        Err(Failure(message)) => {
+            let _ = writeln!(std::io::stderr(), "{message}");
+            serde_json::json!({"ok": false, "error": message}).to_string()
+        }
+    };
+    let success = serde_json::from_str::<serde_json::Value>(&json).is_ok_and(|v| v["ok"] == true);
+    let _ = writeln!(std::io::stdout(), "{json}");
+    if success { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+fn check_activation(args: &[String]) -> Result<()> {
+    let [target, action] = args else {
+        return Err(Failure("Invalid activation check".into()));
+    };
+    if !matches!(action.as_str(), "switch" | "test") {
+        return Ok(());
+    }
+    let target = std::fs::canonicalize(target)?;
+    let active = std::fs::canonicalize("/run/current-system")?;
+    let booted = std::fs::canonicalize("/run/booted-system")?;
+    activation_mode("switch", &completion::plan(&booted, &active, &target))?;
+    Ok(())
+}
+
+fn worker(args: &[String]) -> Result<String> {
+    let (command, rest) = args.split_first().ok_or_else(|| Failure("Missing operation".into()))?;
     // CLI and GUI must not edit the configuration or activate generations
     // concurrently. The kernel releases this lock even after a crash.
-    let _guard = match std::fs::OpenOptions::new()
+    let _guard = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
@@ -890,37 +965,14 @@ fn main() -> ExitCode {
         .and_then(|file| {
             file.try_lock()?;
             Ok(file)
-        }) {
-        Ok(file) => file,
-        Err(e) => {
-            report(0, &format!("Another Yukimi operation is running, or its lock is unavailable: {e}"));
-            return ExitCode::FAILURE;
-        }
-    };
+        })
+        .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
     watch_for_stop();
-    let result = match command {
+    match command.as_str() {
         "change" => change(rest),
         "rollback" => rollback(rest),
         "clean" => clean(rest),
         _ => Err(Failure("Usage: yukimi-helper change|rollback|clean …".into())),
-    };
-    match result {
-        Ok(json) => {
-            println!("{json}");
-            ExitCode::SUCCESS
-        }
-        Err(Failure(message)) => {
-            let message = if state().0 == Phase::Committed {
-                format!(
-                    "System changes had already begun; the configuration was not restored. {message}. Review the log before restarting or retrying."
-                )
-            } else {
-                message
-            };
-            report(0, &message);
-            println!("{}", serde_json::json!({"ok": false, "error": message}));
-            ExitCode::FAILURE
-        }
     }
 }
 

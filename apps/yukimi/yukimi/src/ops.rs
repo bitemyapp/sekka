@@ -105,11 +105,20 @@ impl Operation {
     /// What to say when it worked, given what the helper reported.
     pub fn outcome(&self, out: &str) -> String {
         let report: serde_json::Value = serde_json::from_str(out.trim()).unwrap_or_default();
-        if self.is_update()
+        if self.is_system()
             && let Ok(completion) =
                 serde_json::from_value::<yukimi_system::completion::Completion>(report["completion"].clone())
         {
-            return completion.title().into();
+            let title = completion.title();
+            return match self {
+                Operation::Rollback { .. } if report["configuration"] == false => format!(
+                    "{title}. This generation's configuration wasn't kept, so your next change builds on the newer one"
+                ),
+                Operation::Rollback { .. } if report["left"].as_array().is_some_and(|l| !l.is_empty()) => {
+                    format!("{title}. Files you changed by hand since were left as they are")
+                }
+                _ => title.into(),
+            };
         }
         match self {
             Operation::Rollback { generation } if report["configuration"] == false => format!(
@@ -171,7 +180,7 @@ impl Operation {
                 if let Some((user, attrs)) = &change.unlist_user {
                     c.arg("--unlist-user").arg(format!("{user}:{}", attrs.join(",")));
                 }
-                c.args(["--mode", "switch"]);
+                c.args(["--mode", "auto"]);
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::UpdateFlake { inputs } => update_steps(model, inputs),
@@ -190,7 +199,7 @@ impl Operation {
             }
             Operation::FollowBranch { input, branch } => {
                 let mut c = helper();
-                c.args(["change", "--follow", &format!("{input}={branch}"), "--mode", "switch"]);
+                c.args(["change", "--follow", &format!("{input}={branch}"), "--mode", "auto"]);
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::Rollback { generation } => {
@@ -325,6 +334,15 @@ mod tests {
     }
 
     #[test]
+    fn prepared_rollback_does_not_claim_it_is_running_or_hide_configuration_warning() {
+        let op = Operation::Rollback { generation: 3 };
+        let text = op.outcome(r#"{"configuration":false,"completion":{"action":"reboot","reasons":[]}}"#);
+        assert!(text.starts_with("Restart to finish updating"));
+        assert!(text.contains("configuration wasn't kept"));
+        assert!(!text.contains("is running"));
+    }
+
+    #[test]
     fn commands_for_each_operation() {
         let model =
             Model { nixpkgs: Some("/nix/store/0123456789abcdfghijklmnpqrsvwxyz-source".into()), ..Model::default() };
@@ -345,7 +363,7 @@ mod tests {
         assert!(run.as_root);
         assert_eq!(
             &args(run)[1..],
-            ["change", "--packages", "htop,ripgrep", "--unlist-user", "alice:thunderbird", "--mode", "switch"]
+            ["change", "--packages", "htop,ripgrep", "--unlist-user", "alice:thunderbird", "--mode", "auto"]
         );
         assert_eq!(change.title(), "Installing htop for everyone");
         assert!(Operation::Rollback { generation: 3 }.is_system());

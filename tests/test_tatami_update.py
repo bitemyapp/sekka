@@ -48,7 +48,9 @@ class SessionUpdate(unittest.TestCase):
                      '--ro-bind', '/nix/store', '/nix/store', '--ro-bind', str(BIN), '/bin/tatami',
                      '--proc', '/proc', '--dev', '/dev', '--clearenv',
                      '--setenv', 'PATH', '/fake', '--setenv', 'HOME', '/home/alice',
-                     '--setenv', 'XDG_RUNTIME_DIR', '/run/user/1000', '--chdir', '/']
+                     '--setenv', 'XDG_RUNTIME_DIR', '/run/user/1000',
+                     '--setenv', 'XDG_SESSION_ID', '3', '--setenv', 'INVOCATION_ID', 'compositor-instance',
+                     '--chdir', '/']
         self.run_tatami('session')
         self.original = self.receipt()
         (self.root / 'state/calls').write_text('')
@@ -70,6 +72,8 @@ class SessionUpdate(unittest.TestCase):
         return [json.loads(line) for line in (self.root / 'state/calls').read_text().splitlines()]
 
     def test_unchanged_desktop_does_not_reload_or_ask_for_new_login(self):
+        self.assertEqual(self.receipt()['session_id'], '3')
+        self.assertEqual(self.receipt()['session_invocation'], 'compositor-instance')
         self.run_tatami('update-session')
         self.assertEqual(self.receipt(), self.original)
         self.assertFalse(any('try-restart' in call or call[0] == 'hyprctl' for call in self.calls()))

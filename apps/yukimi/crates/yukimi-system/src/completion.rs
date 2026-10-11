@@ -63,6 +63,8 @@ pub struct SessionManifest {
     pub boot_id: String,
     #[serde(default)]
     pub session_id: String,
+    #[serde(default)]
+    pub session_invocation: String,
     pub session: BTreeMap<String, String>,
     pub reload: BTreeMap<String, String>,
     pub keep_awake: String,
@@ -126,6 +128,40 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
             }),
         }
     }
+    // A display manager can be supplied by a package under an alias rather
+    // than config.systemd.services.display-manager. Inspect the effective
+    // units and their drop-ins as well as the declarative manifest.
+    for (scope, units) in [
+        (
+            "system",
+            &[
+                "display-manager.service",
+                "plasmalogin.service",
+                "greetd.service",
+                "systemd-logind.service",
+                "dbus.service",
+                "dbus-broker.service",
+            ][..],
+        ),
+        (
+            "user",
+            &[
+                "wayland-wm@.service",
+                "wayland-wm@tatami.service",
+                "wayland-session@.target",
+                "wayland-session-envelope@.target",
+                "graphical-session.target",
+            ][..],
+        ),
+    ] {
+        for unit in units {
+            let relative = format!("etc/systemd/{scope}/{unit}");
+            match (unit_definition(&active.join(&relative)), unit_definition(&target.join(&relative))) {
+                (Ok(old), Ok(new)) if old == new => (),
+                _ => reasons.push(format!("A session-critical service changed ({unit}).")),
+            }
+        }
+    }
     let restrictions = |system: &Path| -> Result<BTreeMap<String, String>, String> {
         let path = system.join("switch-inhibitors");
         if !path.exists() {
@@ -144,6 +180,88 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
         _ => reasons.push("Live activation restrictions could not be verified.".into()),
     }
     reasons
+}
+
+fn unit_definition(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, std::io::Error> {
+    let mut result = BTreeMap::new();
+    match std::fs::read(path) {
+        Ok(contents) => {
+            result.insert("unit".into(), contents);
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(path).is_err() => (),
+        Err(e) => return Err(e),
+    }
+    let dropins = path.with_file_name(format!("{}.d", path.file_name().unwrap().to_string_lossy()));
+    match std::fs::read_dir(dropins) {
+        Ok(files) => {
+            for file in files {
+                let file = file?;
+                if file.path().extension().is_some_and(|ext| ext == "conf") {
+                    result.insert(file.file_name().to_string_lossy().into_owned(), std::fs::read(file.path())?);
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+        Err(e) => return Err(e),
+    }
+    Ok(result)
+}
+
+/// UWSM intentionally does not put XDG_SESSION_ID in the shared application
+/// activation environment. Verify its running compositor and login context
+/// instead of interpreting an absent variable as a different session.
+pub fn tatami_session_id(record: &SessionManifest) -> Result<String, String> {
+    if record.boot_id != boot_id() || record.session_id.is_empty() {
+        return Err("The desktop record does not identify a session in this boot.".into());
+    }
+    let output = std::process::Command::new("systemctl")
+        .args([
+            "--user",
+            "show",
+            "wayland-wm@tatami.service",
+            "--property=ActiveState",
+            "--property=InvocationID",
+            "--property=EnvironmentFiles",
+        ])
+        .output()
+        .map_err(|_| "Could not verify the running Tatami session.")?;
+    if !output.status.success() {
+        return Err("Could not verify the running Tatami session.".into());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let values: BTreeMap<_, _> = text.lines().filter_map(|line| line.split_once('=')).collect();
+    if values.get("ActiveState") != Some(&"active") {
+        return Err("Tatami's compositor session is not active.".into());
+    }
+    if !record.session_invocation.is_empty()
+        && values.get("InvocationID").copied() != Some(record.session_invocation.as_str())
+    {
+        return Err("The recorded desktop belongs to an earlier compositor session.".into());
+    }
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").ok_or("The session runtime directory is unavailable.")?;
+    let context = PathBuf::from(runtime).join("uwsm/env_session.conf");
+    // Only read the known file if the active unit actually consumes it.
+    if !values
+        .get("EnvironmentFiles")
+        .is_some_and(|files| files.split_whitespace().any(|part| part == context.to_string_lossy()))
+    {
+        return Err("Tatami's login context could not be verified.".into());
+    }
+    let context = std::fs::read_to_string(context).map_err(|_| "Tatami's login context could not be read.")?;
+    let id = context
+        .lines()
+        .find_map(|line| line.strip_prefix("XDG_SESSION_ID="))
+        .map(|id| id.trim_matches(['\'', '"']))
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .ok_or("Tatami's login context has no valid session ID.")?;
+    let supplied = std::env::var("XDG_SESSION_ID").unwrap_or_default();
+    if id != record.session_id || (!supplied.is_empty() && supplied != id) {
+        return Err(
+            "The recorded desktop belongs to another session. This session's applied version could not be verified."
+                .into(),
+        );
+    }
+    Ok(id.into())
 }
 
 pub fn system_state(
@@ -298,11 +416,8 @@ fn read_with_session(include_session: bool) -> Completion {
         read_json::<SessionManifest>(&active.join(SESSION_MANIFEST)),
     ) {
         (Some(mut old), Ok(new)) => {
-            if old.session_id != std::env::var("XDG_SESSION_ID").unwrap_or_default() {
-                return Completion::new(
-                    Action::Unknown,
-                    "The recorded desktop belongs to another session. This session's applied version could not be verified.",
-                );
+            if let Err(reason) = tatami_session_id(&old) {
+                return Completion::new(Action::Unknown, reason);
             }
             let (awake, current) = match awake_state(&new.keep_awake, &old.keep_awake) {
                 Ok(state) => state,
@@ -327,7 +442,15 @@ fn read_with_session(include_session: bool) -> Completion {
 /// It cannot reboot, sign out, or replace the compositor.
 pub fn apply_desktop() {
     if in_tatami() {
-        let _ = std::process::Command::new("/run/current-system/sw/bin/tatami").args(["update-session"]).status();
+        let record = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .and_then(|dir| read_json::<SessionManifest>(&dir.join(SESSION_RECEIPT)).ok());
+        if let Some(id) = record.and_then(|record| tatami_session_id(&record).ok()) {
+            let _ = std::process::Command::new("/run/current-system/sw/bin/tatami")
+                .env("XDG_SESSION_ID", id)
+                .args(["update-session"])
+                .status();
+        }
     }
 }
 
@@ -394,6 +517,7 @@ mod tests {
             version: 1,
             boot_id: "boot".into(),
             session_id: String::new(),
+            session_invocation: String::new(),
             session: BTreeMap::from([("compositor".into(), "same".into())]),
             reload: BTreeMap::from([("hyprland".into(), "same".into())]),
             keep_awake: "same".into(),
@@ -428,6 +552,26 @@ mod tests {
         let f = Fixture::new();
         std::fs::write(f.new.join("switch-inhibitors"), "{\"dbus\":\"daemon\"}").unwrap();
         assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("dbus")));
+    }
+    #[test]
+    fn display_manager_alias_and_dropins_are_checked_without_rebooting_for_unrelated_services() {
+        let f = Fixture::new();
+        for system in [&f.old, &f.new] {
+            let units = system.join("etc/systemd/system");
+            std::fs::create_dir_all(&units).unwrap();
+            std::fs::write(units.join("plasmalogin.service"), "[Service]\nExecStart=/same/login\n").unwrap();
+            std::os::unix::fs::symlink("plasmalogin.service", units.join("display-manager.service")).unwrap();
+        }
+        std::fs::write(f.new.join("etc/systemd/system/unrelated.service"), "[Service]\nExecStart=/new/app\n").unwrap();
+        assert!(plan(&f.old, &f.old, &f.new).is_empty());
+        let dropins = f.new.join("etc/systemd/system/display-manager.service.d");
+        std::fs::create_dir_all(&dropins).unwrap();
+        std::fs::write(dropins.join("override.conf"), "[Service]\nEnvironment=CHANGED=1\n").unwrap();
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("display-manager.service")));
+        std::fs::remove_dir_all(dropins).unwrap();
+        std::fs::write(f.new.join("etc/systemd/system/plasmalogin.service"), "[Service]\nExecStart=/new/login\n")
+            .unwrap();
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("display-manager.service")));
     }
     #[test]
     fn missing_evidence_and_failed_activation_never_claim_success() {
