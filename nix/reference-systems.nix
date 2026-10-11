@@ -20,7 +20,7 @@ let
       modules = [
         inputs.determinate.nixosModules.default
         # The same locked modules installed systems import.
-        (import "${inputs.calamares}/rust/reference.nix" { desktops = [ desktop ]; })
+        (import ../installer/genkan/rust/reference.nix { desktops = [ desktop ]; })
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
       ];

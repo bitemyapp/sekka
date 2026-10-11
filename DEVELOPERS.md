@@ -65,6 +65,23 @@ Before publishing an installable image, exercise the exact image through a dispo
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
+Sekka backports Aquamarine's upstream null-connector teardown fix
+[`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
+onto Nixpkgs' 0.15.1 through `nix/overlays/aquamarine.nix`. Both Tatami and
+vanilla Hyprland import the shared module, including Genkan's prebuilt installed
+systems. The overlay also rebuilds Hyprland against the patched library; updating
+an unrelated application package set alone would not change that runtime dependency.
+`nix build .#checks.x86_64-linux.aquamarine` exercises the real library with null
+connectors, confirms the original library crashes on the same test, and verifies
+Hyprland's runtime linkage. It needs no GPU or running graphical session.
+`nix build .#checks.x86_64-linux.hyprland-packages` checks package selection
+through the installed-system, ISO reference and standalone desktop modules.
+The backport keeps the 0.15.1 version string; its distinct Nix store path
+identifies the patched build.
+When Nixpkgs includes the fix, remove the backport and its negative control after
+verifying the regression test passes with the new upstream package. A patch
+failure during an input update requires that review; do not just skip the patch.
+
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.

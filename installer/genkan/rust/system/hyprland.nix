@@ -10,6 +10,8 @@ let
   cfg = config.calamares;
 in
 {
+  imports = [ ../../../../modules/hyprland-fixes.nix ];
+
   options.calamares.hyprland.enable = lib.mkEnableOption "Hyprland with its upstream default configuration";
   config = lib.mkMerge [
     (lib.mkIf cfg.hyprland.enable {

@@ -23,6 +23,7 @@
       installedLock = import ./nix/installed-lock.nix { inherit self; };
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      hyprlandPkgs = pkgs.extend (import ./nix/overlays/aquamarine.nix);
       tools = import ./nix/tools.nix { inherit pkgs; };
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
@@ -56,6 +57,7 @@
         + c.isoImage.appendToMenuLabel;
     in
     {
+      overlays.default = import ./nix/overlays/aquamarine.nix;
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
         desktops = inputs.calamares.nixosModules.desktops;
@@ -92,6 +94,7 @@
         default = self.packages.${system}.iso;
         iso = installer.config.system.build.isoImage;
         inherit tools calamares;
+        inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
         screenshots = import ./nix/screenshots.nix {
@@ -117,6 +120,15 @@
         };
       };
       checks.${system} = {
+        hyprland-packages = import ./nix/hyprland-packages-test.nix {
+          inherit pkgs inputs applicationCatalog;
+          inherit (hyprlandPkgs) aquamarine hyprland;
+        };
+        aquamarine = import ./nix/aquamarine-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) aquamarine hyprland;
+          unpatchedAquamarine = pkgs.aquamarine;
+        };
         native-installer = calamares;
         storage = calamares.storageTest;
         applications = applicationCatalog.check;
@@ -210,7 +222,7 @@
                 inherit (applicationCatalog) specialArgs;
                 modules = [
                   determinate.nixosModules.default
-                  (import "${inputs.calamares}/rust/reference.nix" {
+                  (import ./installer/genkan/rust/reference.nix {
                     desktops = [ "plasma" ];
                     inherit kernel;
                   })
