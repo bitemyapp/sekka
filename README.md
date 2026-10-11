@@ -45,6 +45,22 @@ screen locking, and lid-close sleep until you turn it off, and remembers your
 choice at your next login. You can still lock the screen yourself. A red coffee
 cup means protection could not be verified and needs attention.
 
+Laptop displays behave the way a Mac's do. Close the lid with an external
+display connected and the built-in display turns off, its windows move to the
+other screen, and the laptop keeps running; open the lid and the built-in display
+comes back where you arranged it. Unplug the last external display and the
+built-in display turns on. A display you turn off in **Displays**
+(**Super + Ctrl + D**) stays off whenever you reconnect the same displays, until
+you turn it on again or log in again. If a display change leaves a window off
+screen, Tatami brings it back, and **Super + Ctrl + D** always brings the Displays
+window to the screen you are using.
+
+Some differences remain. Unlike a Mac, the laptop also stays awake with its lid
+closed while docked on battery power. It goes to sleep when you close the lid with no
+other display connected, unless Keep Awake is on (then the built-in screen turns
+off). Lid handling and docking have been tested with simulated displays and a
+simulated lid, not yet across physical docks, cables and panels.
+
 Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
 firmware; try a key or mouse button if mouse movement does not wake it.

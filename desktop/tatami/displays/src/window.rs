@@ -56,6 +56,11 @@ struct State {
     default_vrr: i64,
     selected: String,
     show_all: bool,
+    /// The built-in display stays off while the lid is closed and another
+    /// display is connected (closed-display mode).
+    lid_closed: bool,
+    /// Night Shift: the tint in use, if any, and the night temperature.
+    night: (Option<u32>, u32),
 }
 
 struct Ui {
@@ -136,6 +141,8 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
             default_vrr: 0,
             selected: String::new(),
             show_all: false,
+            lid_closed: false,
+            night: (None, 4000),
         }),
     });
     let weak = Rc::downgrade(&ui);
@@ -188,8 +195,15 @@ fn refresh(ui: &Rc<Ui>) {
     let (sender, receiver) = async_channel::bounded(1);
     let revision = ui.revision.get();
     std::thread::spawn(move || {
-        let result =
-            system::displays().map(|displays| (displays, system::kept(), system::default_vrr()));
+        let result = system::displays().map(|displays| {
+            (
+                displays,
+                system::kept(),
+                system::default_vrr(),
+                system::lid_closed(),
+                system::night_shift(),
+            )
+        });
         let _ = sender.send_blocking(result);
     });
     let ui = ui.clone();
@@ -203,10 +217,12 @@ fn refresh(ui: &Rc<Ui>) {
             return;
         }
         match result {
-            Ok((displays, kept, default_vrr)) => {
+            Ok((displays, kept, default_vrr, lid_closed, night)) => {
                 let mut state = ui.state.borrow_mut();
                 state.kept = kept;
                 state.default_vrr = default_vrr;
+                state.lid_closed = lid_closed;
+                state.night = night;
                 if !displays
                     .iter()
                     .any(|display| display.name == state.selected)
@@ -510,6 +526,8 @@ fn render(ui: &Rc<Ui>) {
         for display in &state.displays {
             let label = if display.enabled {
                 display.title()
+            } else if behind_closed_lid(&state, display) {
+                format!("{} (Lid Closed)", display.title())
             } else {
                 format!("{} (Off)", display.title())
             };
@@ -544,7 +562,16 @@ fn render(ui: &Rc<Ui>) {
             ui.content.append(&group);
         }
     }
-    ui.content.append(&night_shift_group());
+    ui.content.append(&night_shift_group(ui, state.night));
+}
+
+/// The built-in display, off because its lid is closed while another
+/// display is connected: the helper keeps it off until the lid opens.
+fn behind_closed_lid(state: &State, display: &Display) -> bool {
+    state.lid_closed
+        && display.is_builtin()
+        && !display.enabled
+        && state.displays.iter().any(|other| !other.is_builtin())
 }
 
 fn describe(display: &Display) -> String {
@@ -590,6 +617,18 @@ fn display_groups(
     let header = adw::PreferencesGroup::new();
     header.set_title(&display.title());
     header.set_description(Some(&describe(display)));
+    if behind_closed_lid(state, display) {
+        // As in macOS's closed-display mode: nothing to choose until the
+        // lid opens, which turns it back on.
+        let row = adw::ActionRow::builder()
+            .title("Lid closed")
+            .subtitle("The built-in display turns on again when you open the lid")
+            .build();
+        row.add_prefix(&gtk::Image::from_icon_name("computer-symbolic"));
+        header.add(&row);
+        groups.push(header.upcast());
+        return groups;
+    }
     let mut uses = vec![("Main display".to_owned(), Use::Main)];
     if state.displays.len() > 1 {
         uses.push(("Extended display".to_owned(), Use::Extended));
@@ -627,7 +666,7 @@ fn display_groups(
         uses.iter().position(|(_, used)| *used == now).unwrap_or(0),
     );
     row.set_subtitle(match now {
-        Use::Off => "Off until you turn it on or log in again",
+        Use::Off => "Stays off with these displays until you turn it on or log in again",
         _ => "The main display is where the pointer starts and workspace 1 opens",
     });
     let weak = Rc::downgrade(ui);
@@ -1048,9 +1087,9 @@ fn debounce(
 }
 
 /// Night Shift, as in macOS: warmer colors, at a chosen temperature
-/// (hyprsunset, through `tatami nightlight`).
-fn night_shift_group() -> adw::PreferencesGroup {
-    let (tinted, night) = system::night_shift();
+/// (hyprsunset, through `tatami nightlight`), as last read off the main
+/// loop and changed here since.
+fn night_shift_group(ui: &Rc<Ui>, (tinted, night): (Option<u32>, u32)) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::builder()
         .title("Night Shift")
         .description("Shifts the colors of the screens to the warmer end of the spectrum")
@@ -1079,16 +1118,25 @@ fn night_shift_group() -> adw::PreferencesGroup {
         range.append(&label);
     }
     let pending = Rc::new(RefCell::new(None));
+    let weak = Rc::downgrade(ui);
     slider.connect_value_changed(move |slider| {
         let kelvin = ((slider.value() / 100.0).round() * 100.0) as u32;
+        if let Some(ui) = weak.upgrade() {
+            ui.state.borrow_mut().night = (Some(kelvin), kelvin);
+        }
         debounce(&pending, 300, move || {
             system::set_night_shift(&kelvin.to_string())
         });
     });
     let tracked = range.clone();
+    let weak = Rc::downgrade(ui);
     switch.connect_active_notify(move |switch| {
         let on = switch.is_active();
         tracked.set_sensitive(on);
+        if let Some(ui) = weak.upgrade() {
+            let night = &mut ui.state.borrow_mut().night;
+            night.0 = on.then_some(night.1);
+        }
         system::set_night_shift(if on { "on" } else { "off" });
     });
     row.add_suffix(&range);

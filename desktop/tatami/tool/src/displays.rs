@@ -422,6 +422,34 @@ pub fn apply_command(dry_run: bool) -> Result<(), String> {
     let value: Value = serde_json::from_str(&input).map_err(|error| error.to_string())?;
     let change = parse_change(&value)?;
     let _guard = (!dry_run).then(crate::display_recovery::lock).transpose()?;
+    // The connected displays: none of them is turned on behind a closed lid
+    // (the watcher would turn it off again at once), and the displays the
+    // user turns on or off are remembered for this set of displays.
+    let all = if dry_run {
+        None
+    } else {
+        Some(crate::display_recovery::monitors()?)
+    };
+    // Read before this change rewrites the session's switched-off list, which
+    // a session from before the record is started from.
+    let mut session = all.as_ref().map(crate::display_policy::load);
+    if let Some(all) = &all {
+        let lid_closed = crate::lid::closed() == Some(true);
+        for display in change
+            .displays
+            .iter()
+            .filter(|d| d.enabled && change.apply.contains(&d.name))
+        {
+            let off_now = all
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|m| m["name"] == display.name.as_str() && m["disabled"] == true);
+            if off_now && crate::display_policy::behind_closed_lid(all, lid_closed, &display.name) {
+                return Err("The lid is closed. Open it to use the built-in display".into());
+            }
+        }
+    }
     let store = load_store();
     let updated = updated_store(&store, &change);
     let main_changed = updated["main"] != store["main"];
@@ -452,6 +480,22 @@ pub fn apply_command(dry_run: bool) -> Result<(), String> {
         .collect();
     if !window::switch_off(&off, &on) {
         return Err("cannot save the displays' enabled state".into());
+    }
+    if let (Some(all), Some(session)) = (&all, &mut session) {
+        // Only the displays this change turns on or off: another display
+        // shown off (behind the closed lid) was not chosen off.
+        let chosen = |enabled: bool| -> Vec<String> {
+            change
+                .displays
+                .iter()
+                .filter(|d| d.enabled == enabled && change.apply.contains(&d.name))
+                .map(|d| d.name.clone())
+                .collect()
+        };
+        crate::display_policy::choose(session, all, &chosen(true), &chosen(false));
+        if !crate::display_policy::save(session) {
+            return Err("cannot save the displays' enabled state".into());
+        }
     }
     if !lua.is_empty() {
         crate::display_recovery::evaluate(&lua)?;

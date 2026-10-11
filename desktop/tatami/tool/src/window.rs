@@ -269,7 +269,7 @@ const MONITORS_OFF: &str = "monitors-off";
 /// The monitors switched off in this session: by Tatami when it turns one
 /// off, and as they are just before every reload. Never read back from
 /// Hyprland just after a change, which it may not show yet.
-fn switched_off() -> Vec<String> {
+pub(crate) fn switched_off() -> Vec<String> {
     session_dir()
         .and_then(|dir| fs::read_to_string(dir.join(MONITORS_OFF)).ok())
         .unwrap_or_default()
@@ -347,6 +347,7 @@ pub fn forget_monitors() {
         let _ = fs::remove_file(dir.join(MONITORS_LUA));
         let _ = fs::remove_file(dir.join(MONITORS_OFF));
     }
+    crate::display_policy::forget();
 }
 
 /// Super+/ and Super+Alt+/: step the focused monitor's scale, kept with its
@@ -396,11 +397,23 @@ pub fn laptop_display() {
     };
     let mut off = switched_off();
     off.retain(|other| other != name);
+    let mut session = crate::display_policy::load(&all);
     if internal["disabled"] == true {
+        if crate::display_policy::behind_closed_lid(&all, crate::lid::closed() == Some(true), name)
+        {
+            util::notify(
+                "\u{f0379}",
+                "The lid is closed",
+                "Open it to use the laptop display",
+            );
+            return;
+        }
         // Its display settings, or the configuration's rule for every
         // monitor, given by name: Hyprland compares rules by their settings,
         // so a later reload leaves it on.
         remember_monitors(&off);
+        crate::display_policy::choose(&mut session, &all, &[name.to_owned()], &[]);
+        crate::display_policy::save(&session);
         if let Some(rule) = crate::displays::rule_for(internal, &all) {
             hypr::eval(&rule);
         }
@@ -420,8 +433,166 @@ pub fn laptop_display() {
     }
     off.push(name.to_owned());
     remember_monitors(&off);
+    // Off whenever these displays are connected again, this session.
+    crate::display_policy::choose(&mut session, &all, &[], &[name.to_owned()]);
+    crate::display_policy::save(&session);
     disable_monitor(name);
     util::notify("\u{f0379}", "Laptop display disabled", "");
+}
+
+const DISPLAYS_APP: &str = "org.tatami.Displays";
+
+/// The Displays window's process, from the bus name it owns.
+fn displays_owner() -> Option<i32> {
+    util::output(
+        "busctl",
+        &[
+            "--user",
+            "--timeout=2",
+            "call",
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID",
+            "s",
+            DISPLAYS_APP,
+        ],
+    )
+    .ok()?
+    .trim()
+    .strip_prefix("u ")?
+    .parse()
+    .ok()
+    .filter(|pid| *pid > 0)
+}
+
+/// Whether the Displays window's main loop answers: a GApplication
+/// lists its actions from it, not from the bus thread.
+fn displays_responsive() -> bool {
+    util::run(
+        "busctl",
+        &[
+            "--user",
+            "--timeout=2",
+            "call",
+            DISPLAYS_APP,
+            "/org/tatami/Displays",
+            "org.gtk.Actions",
+            "List",
+        ],
+    )
+}
+
+fn displays_window() -> Option<Value> {
+    hypr::request_json("j/clients")
+        .ok()?
+        .as_array()?
+        .iter()
+        .find(|c| c["class"] == DISPLAYS_APP)
+        .cloned()
+}
+
+fn stop_process(pid: i32) {
+    // SAFETY: plain signals to a process this session started.
+    unsafe { libc::kill(pid, libc::SIGTERM) };
+    for _ in 0..20 {
+        if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    // SAFETY: as above, once it has had two seconds to close.
+    unsafe { libc::kill(pid, libc::SIGKILL) };
+}
+
+/// Seconds since a process started.
+fn process_age(pid: i32) -> Option<f64> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let started: f64 = stat
+        .rsplit_once(") ")?
+        .1
+        .split_whitespace()
+        .nth(19)?
+        .parse()
+        .ok()?;
+    let uptime: f64 = fs::read_to_string("/proc/uptime")
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    // SAFETY: sysconf has no preconditions.
+    let ticks = unsafe { libc::sysconf(libc::_SC_CLK_TCK) } as f64;
+    (ticks > 0.0).then(|| uptime - started / ticks)
+}
+
+/// Super+Ctrl+D, the bar's display icon, Setup › Monitors and the launcher
+/// entry: the Displays window in front of the user, wherever it was. An open
+/// window comes to the focused screen's workspace, centered (it may have
+/// been left on another screen, or outside every screen when a monitor
+/// went); one that stopped answering, or a process without its window, is
+/// replaced.
+pub fn present_displays() {
+    if let Some(window) = displays_window()
+        && let Some(address) = hypr::address(&window)
+    {
+        if displays_responsive() {
+            bring_here(address);
+            return;
+        }
+        if let Some(pid) = hypr::active_window_pid(&window) {
+            stop_process(pid);
+        }
+    } else if let Some(pid) = displays_owner()
+        && process_age(pid).is_none_or(|age| age > 5.0)
+    {
+        // A window-less instance would take the launch and show nothing.
+        stop_process(pid);
+    }
+    util::launch("tatami-displays", &[]);
+    for attempt in 0..2 {
+        for _ in 0..80 {
+            if let Some(window) = displays_window()
+                && let Some(address) = hypr::address(&window)
+            {
+                bring_here(address);
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        if attempt == 0 {
+            if let Some(pid) = displays_owner() {
+                stop_process(pid);
+            }
+            util::launch("tatami-displays", &[]);
+        }
+    }
+    util::notify("\u{f0379}", "Displays did not open", "Try again");
+}
+
+/// Move a window to the focused screen's workspace, center and focus it.
+fn bring_here(address: &str) {
+    let workspace = hypr::request_json("j/monitors")
+        .ok()
+        .and_then(|monitors| {
+            monitors.as_array()?.iter().find(|m| m["focused"] == true)?["activeWorkspace"]["id"]
+                .as_i64()
+        })
+        .filter(|id| *id > 0);
+    let target = format!("window = \"address:{address}\"");
+    let mut lua = String::new();
+    if let Some(workspace) = workspace {
+        lua.push_str(&format!(
+            "hl.dispatch(hl.dsp.window.move({{ {target}, workspace = \"{workspace}\", follow = false }}))\n"
+        ));
+    }
+    lua.push_str(&format!(
+        "hl.dispatch(hl.dsp.window.float({{ {target}, action = \"enable\" }}))\n\
+         hl.dispatch(hl.dsp.window.center({{ {target} }}))\n\
+         hl.dispatch(hl.dsp.focus({{ {target} }}))\n\
+         hl.dispatch(hl.dsp.window.alter_zorder({{ {target}, mode = \"top\" }}))\n"
+    ));
+    let _ = hypr::request(&format!("/eval {lua}"));
 }
 
 /// Turn a monitor off until the next configuration reload.

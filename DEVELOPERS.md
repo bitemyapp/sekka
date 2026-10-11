@@ -84,26 +84,81 @@ failure during an input update requires that review; do not just skip the patch.
 
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted
-fields with the previous rule. Mirror IDs from `hyprctl` are resolved to connector
-names before the settings window submits another change. The helper checks the
-resulting enabled/mirror state rather than trusting an IPC acknowledgement alone.
-Monitor reads and changes run off the GTK thread, with concurrent changes disabled
-until the result arrives and stale reads discarded.
-`tatami-display-recovery.service` runs with the desktop, independently of Displays.
-It watches monitor events and reconciles periodically. If no connected physical
-screen is enabled, it restores the built-in panel (or another available physical
-screen), clearing stale mirror/disable settings. It retries with the preferred
-mode if saved settings fail, and persists recovery through configuration reloads.
-Normal DPMS blanking does not trigger recovery. Display changes share a bounded
-lock; recovery IPC is also bounded, and systemd reconnects a failed watcher.
+fields with an earlier rule of the same literal `output`, and of several rules
+matching a monitor the last one added wins outright. Mirror IDs from `hyprctl`
+are resolved to connector names before the settings window submits another
+change. The helper checks the resulting enabled/mirror state rather than
+trusting an IPC acknowledgement alone. Monitor, lid and Night Shift reads and
+all changes run off the GTK thread, with concurrent changes disabled until the
+result arrives and stale reads discarded.
+
+`tatami-display-recovery.service` (`tatami displays watch`) runs with the
+desktop, independently of Displays, and carries out `display_policy.rs`:
+
+- **Closed-display mode.** With the lid closed and another physical screen
+  connected, built-in panels are turned off, after another screen is confirmed
+  on. Opening the lid turns back on what the lid turned off (recorded by
+  connector), with its kept settings. Undocked, closing the lid blanks the
+  panel with DPMS once (logind normally suspends; Keep Awake can hold that
+  off), and opening it wakes the screens. A panel turned on behind a closed
+  lid because nothing else is connected is blanked the same way. Tatami does
+  not change logind: suspending, or not, on lid close is still
+  `HandleLidSwitch*`. The default `HandleLidSwitchDocked=ignore` keeps a docked
+  laptop running, unlike macOS on battery power.
+- **Remembered choices.** A display turned off in Displays or with
+  Super+Ctrl+Delete is recorded against the set of connected displays (their
+  `desc:` selectors), and turned off again whenever that set is connected again.
+  The record lives in `$XDG_RUNTIME_DIR/tatami/displays-session.json` and ends
+  with the session, so a new login starts with every connected display on. A
+  session from before the record is started from `monitors-off`, read before
+  any change rewrites it.
+- **A screen always on.** If no connected physical screen would be on, the built-in
+  panel (an external one while the lid is closed, then the main display) is
+  restored with its kept settings, then its preferred mode, then each connected
+  screen's preferred mode. Its stale mirror is cleared in the store; its
+  arranged position is kept.
+- **Mirrors.** A display mirroring one that is about to go is switched to its
+  own picture first, and that is confirmed before the source is turned off:
+  Hyprland 0.56 ends mirrors while iterating them in `onDisconnect`.
+
+The lid reaches the watcher as `custom>>tatami-lid-closed`/`-open` socket events
+from Tatami's `switch:on/off:Lid Switch` bindings (locked, universal across
+submaps, not inhibitable). It also polls logind's `LidClosed` every two seconds
+for switches named otherwise, with ACPI's report as the fallback. A poll
+changes the lid only when logind's answer changes, so hardware whose lid only
+libinput reports keeps the bindings' state. `tatami session` applies
+closed-display mode before Hyprland starts, from logind and the connected DRM
+connectors, so a docked login with the lid closed never lights the panel.
+
+Hyprland 0.56 moves floating windows by the change in monitor origin when
+their workspace changes monitor, and places orphaned workspaces modulo the
+new monitor's size without its position (`WorkspacePlacementController.cpp`).
+Unplugging the only lit display, or replugging one whose position is still
+unset, can leave windows off every screen. For three seconds after each change
+in the screen layout, the watcher centers floating windows that no longer
+overlap their own monitor; at other times applications may place windows
+where they like. `tatami display` (also the launcher entry) brings an open Displays
+window to the focused screen's workspace, centered. It replaces an instance
+whose main loop does not answer D-Bus, or one without a window.
+
+The watcher and display changes use Hyprland's command socket directly, with
+a three-second deadline, rather than spawning `hyprctl`. They reconcile on
+monitor and lid events and every second; normal DPMS blanking does not trigger
+changes. Display changes share a bounded lock, and systemd reconnects a failed
+watcher.
 
 `nix build .#checks.x86_64-linux.display-recovery` exercises the packaged helper
-in isolated namespaces, including lost events, stuck IPC, duplicate monitors and
-acknowledged changes which never take effect.
+in isolated namespaces against a fake Hyprland socket and a fake logind lid,
+including lost events, stuck IPC, duplicate monitors, acknowledged changes
+which never take effect, closed-display mode, remembered choices, mirrors,
+window rescue and login preparation.
 `nix build .#checks.x86_64-linux.display-recovery-vm` runs actual Hyprland in a
-disposable VM and checks enabling, mirroring, extending, reloads and repeated
-removal of a simulated external output. These tests do not replace physical
-dock, cable, panel and GPU validation.
+disposable VM and checks enabling, mirroring, extending, reloads, repeated
+removal of a simulated external output, and a uinput lid switch seen by both
+logind and Hyprland. That includes closed-display mode through a reload,
+undocking with the lid closed, a Displays window stranded by an unplug, and
+`tatami display` from another workspace. These tests do not replace physical
+dock, cable, panel, lid sensor and GPU validation.
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
 

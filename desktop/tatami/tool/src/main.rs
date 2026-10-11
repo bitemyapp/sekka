@@ -7,10 +7,12 @@ mod background;
 mod browser;
 mod capture;
 mod clip;
+mod display_policy;
 mod display_recovery;
 mod displays;
 mod hypr;
 mod info;
+mod lid;
 mod media;
 mod menu;
 mod network;
@@ -37,8 +39,9 @@ const USAGE: &str = "usage: tatami <command>
   network | bluetooth | audio             the bar's panels
   display                         the Displays window
   displays apply [--dry-run]      keep and apply display settings (JSON on stdin)
-  displays watch                 keep a connected physical screen available
-  displays recover               check for and recover a lost display
+  displays watch                  closed-display mode, remembered displays, a screen always on
+  displays recover                apply that once
+  displays lid                    the lid: open, closed or unknown
   nightlight [on|off|status|KELVIN] Night Shift for the Displays window
   dns <dhcp|cloudflare|google|custom>     DNS for the connection in use
   background                      wallpaper picker
@@ -97,6 +100,7 @@ fn session() -> ExitCode {
     }
     // The runtime directory outlives a session that ends while another is open.
     window::forget_monitors();
+    display_recovery::prepare_session();
     let user = format!("{}/.config/tatami/hyprland.lua", util::home());
     let session = window::session_dir().map(|dir| dir.join("hyprland.lua"));
     let config = if Path::new(&user).is_file() {
@@ -341,14 +345,18 @@ fn main() -> ExitCode {
             }
             _ => false,
         },
-        // The bar's display icon, Super+Ctrl+D and Setup › Monitors. A second
-        // launch brings the open window forward (GtkApplication).
+        // The bar's display icon, Super+Ctrl+D, Setup › Monitors and the Displays
+        // launcher entry: an open window comes to the focused screen.
         Some("display") => {
             menu::after_menu();
-            util::launch("tatami-displays", &[]);
+            window::present_displays();
             true
         }
         Some("nightlight") => toggle::nightlight_command(first("status")),
+        Some("displays") if first("") == "lid" => {
+            println!("{}", lid::describe(lid::closed()));
+            true
+        }
         Some("displays") if matches!(first(""), "watch" | "recover") => {
             let result = if first("") == "watch" {
                 display_recovery::watch()

@@ -619,6 +619,17 @@ hl.bind("SUPER + CTRL + I", hl.dsp.exec_cmd("tatami toggle idle"), { description
 hl.bind("SUPER + CTRL + N", hl.dsp.exec_cmd("tatami toggle nightlight"), { description = "Toggle nightlight" })
 hl.bind("SUPER + CTRL + Delete", hl.dsp.exec_cmd("tatami laptop-display"), { description = "Toggle laptop display" })
 
+-- The lid, for closed-display mode as in macOS: with another display
+-- connected, closing it turns the built-in display off and opening it turns
+-- the display back on (`tatami displays watch`, which also polls logind for
+-- lid switches named otherwise). Socket events rather than commands, so the
+-- watcher hears them at once. They work on the lock screen, in submaps and
+-- under shortcut inhibitors; without a description they stay out of the
+-- keybindings list.
+local lid = { locked = true, dont_inhibit = true, submap_universal = true, allow_input_capture = true }
+hl.bind("switch:on:Lid Switch", hl.dsp.event("tatami-lid-closed"), lid)
+hl.bind("switch:off:Lid Switch", hl.dsp.event("tatami-lid-open"), lid)
+
 -- Captures
 hl.bind("PRINT", hl.dsp.exec_cmd("tatami screenshot"), { description = "Screenshot" })
 hl.bind("ALT + PRINT", hl.dsp.exec_cmd("tatami screenrecord --menu"), { description = "Screenrecording" })

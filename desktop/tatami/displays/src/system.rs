@@ -159,8 +159,15 @@ pub fn set_brightness(device: &str, percent: f64) {
         .status();
 }
 
+/// Whether the lid is closed (`tatami displays lid`): the built-in display
+/// stays off then while another display is connected.
+pub fn lid_closed() -> bool {
+    output("tatami", &["displays", "lid"]).is_ok_and(|lid| lid.trim() == "closed")
+}
+
 /// Night Shift: Some(temperature) when the screen is tinted, and the night
-/// temperature that turning it on uses.
+/// temperature that turning it on uses. Slow (it asks hyprsunset): off the
+/// main loop.
 pub fn night_shift() -> (Option<u32>, u32) {
     let status = output("tatami", &["nightlight", "status"]).unwrap_or_default();
     let mut words = status.split_whitespace();
@@ -195,8 +202,9 @@ pub fn set_night_shift(request: &str) {
     });
 }
 
-/// Call `changed` whenever Hyprland reports displays coming, going or its
-/// configuration reloaded, from its event socket.
+/// Call `changed` whenever Hyprland reports displays coming, going, the lid
+/// (the lid bindings' events) or its configuration reloaded, from its event
+/// socket.
 pub fn watch(changed: async_channel::Sender<()>) {
     let (Ok(runtime), Ok(signature)) = (
         std::env::var("XDG_RUNTIME_DIR"),
@@ -210,15 +218,16 @@ pub fn watch(changed: async_channel::Sender<()>) {
             return;
         };
         for line in BufReader::new(stream).lines().map_while(Result::ok) {
-            let event = line.split(">>").next().unwrap_or("");
-            if matches!(
+            let (event, data) = line.split_once(">>").unwrap_or((&line, ""));
+            if (matches!(
                 event,
                 "monitoradded"
                     | "monitoraddedv2"
                     | "monitorremoved"
                     | "monitorremovedv2"
                     | "configreloaded"
-            ) && changed.send_blocking(()).is_err()
+            ) || event == "custom" && data.starts_with("tatami-lid-"))
+                && changed.send_blocking(()).is_err()
             {
                 return;
             }

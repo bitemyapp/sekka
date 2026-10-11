@@ -3,6 +3,71 @@
 //! `hyprctl dispatch` arguments as Lua dispatcher expressions.
 use crate::util::{Result, output, run};
 use serde_json::Value;
+use std::{
+    io::{Read, Write},
+    net::Shutdown,
+    os::unix::net::UnixStream,
+    time::{Duration, Instant},
+};
+
+/// One request on Hyprland's command socket, as hyprctl writes it ("j/monitors
+/// all", "/eval CODE"), without starting a process. Hyprland reads until a
+/// short read or end of input and answers by closing the connection
+/// (debug/HyprCtl.cpp). Bounded: an unresponsive compositor must not wedge
+/// display changes or the watcher.
+pub fn request(command: &str) -> Result<String> {
+    let runtime = std::env::var("XDG_RUNTIME_DIR").map_err(|_| "No desktop runtime directory")?;
+    let signature = std::env::var("HYPRLAND_INSTANCE_SIGNATURE")
+        .ok()
+        .filter(|signature| !signature.is_empty() && !signature.contains('/'))
+        .ok_or("No Hyprland session")?;
+    // A NUL would end the request early on Hyprland's side.
+    if command.contains('\0') {
+        return Err("Invalid Hyprland request".into());
+    }
+    let mut stream = UnixStream::connect(format!("{runtime}/hypr/{signature}/.socket.sock"))
+        .map_err(|e| format!("Hyprland: {e}"))?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let timeout = |stream: &UnixStream| {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let left = left.max(Duration::from_millis(1));
+        stream.set_read_timeout(Some(left))?;
+        stream.set_write_timeout(Some(left))
+    };
+    timeout(&stream).map_err(|e| e.to_string())?;
+    stream
+        .write_all(command.as_bytes())
+        .and_then(|_| stream.shutdown(Shutdown::Write))
+        .map_err(|e| format!("Hyprland: {e}"))?;
+    let mut reply = vec![];
+    let mut chunk = [0u8; 8192];
+    loop {
+        if Instant::now() >= deadline {
+            return Err("Hyprland did not answer (timeout)".into());
+        }
+        timeout(&stream).map_err(|e| e.to_string())?;
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(read) => reply.extend_from_slice(&chunk[..read]),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                return Err("Hyprland did not answer (timeout)".into());
+            }
+            Err(e) => return Err(format!("Hyprland: {e}")),
+        }
+    }
+    Ok(String::from_utf8_lossy(&reply).into_owned())
+}
+
+/// `request` for JSON ("j/clients").
+pub fn request_json(command: &str) -> Result<Value> {
+    serde_json::from_str(&request(command)?).map_err(|e| format!("Hyprland {command}: {e}"))
+}
 
 pub fn json(what: &str) -> Result<Value> {
     json_args(&[what])
