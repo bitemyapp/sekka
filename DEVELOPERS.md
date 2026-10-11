@@ -252,6 +252,62 @@ flake to check actual module and dependency compatibility before deployment.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
 
+## Binary cache
+
+`https://cache.sekka.computer` serves Sekka's own packages and the patched
+Aquamarine and Hyprland, so installations and updates download them instead of
+compiling them. It is the Cloudflare R2 bucket `sekka-cache` behind a custom
+domain in the maintainer's Cloudflare account; `sekka.computer` is registered
+at Porkbun with Cloudflare DNS. Paths are signed with `cache.sekka.computer-1`.
+
+Installed systems and the live media use it through
+`installer/genkan/rust/system/binary-cache.nix`
+(`calamares.binaryCache.enable`, default on). The flake's `nixConfig`
+advertises the same cache to people building this flake elsewhere: Nix asks
+before accepting it (and ignores it non-interactively) unless
+`accept-flake-config` is set, and only trusted users can add a substituter
+that `trusted-substituters` does not already list.
+`nix build .#checks.x86_64-linux.binary-cache` checks that the flake, the live
+media and an installed system name the same cache and key.
+
+Publishing is manual; the disabled release workflow does not touch the cache.
+From a clean checkout of reviewed `main`:
+
+```sh
+nix run .#push-cache
+```
+
+It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `aquamarine`,
+`hyprland` and `tools`, and signs their complete runtime closures into a
+temporary local cache: Nix only adds a path to a binary cache that already
+holds its references. It then uploads just the paths cache.nixos.org does not
+serve (about 145 MiB at first), archives before the narinfos that point to
+them, and skips objects already in the bucket. Clients substitute each
+reference separately, so the shared libraries come from cache.nixos.org; the
+Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
+All of these packages are evaluated with Nixpkgs' default configuration, which
+refuses unfree packages, so NVIDIA's driver and other unfree packages are never
+published. Installed systems at the same lock use the identical store paths.
+The command also writes `nix-cache-info` with priority 50, so Nix asks
+cache.nixos.org (40) first.
+
+The push needs two credentials, neither of which belongs in the repository:
+
+- The signing key, `~/.config/sekka-cache/cache.sekka.computer-1.sec`
+  (`SEKKA_CACHE_CONFIG` overrides the directory). Keep a backup: replacing it
+  means a new key name in `binary-cache.nix` and `nixConfig`, with the old
+  public key kept until installed systems have updated.
+- An R2 API token with Object Read & Write on `sekka-cache` only, stored as the
+  AWS profile `sekka-cache` (region `auto`):
+
+  ```sh
+  nix run nixpkgs#awscli2 -- configure --profile sekka-cache
+  ```
+
+Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
+that: unchanged paths keep their first upload date while still in use. R2
+bills storage beyond its free 10 GB a month; downloads are free.
+
 ## Keep Awake and USB wake
 
 `tatami awake on|off|toggle|status` controls a session-owned user service with

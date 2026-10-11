@@ -31,6 +31,8 @@ let
     };
 in
 {
+  # Deferred installations build the system from the live session's store.
+  imports = [ ../installer/genkan/rust/system/binary-cache.nix ];
   options.respin = {
     referenceDesktops = lib.mkOption {
       type = lib.types.listOf lib.types.str;

@@ -10,6 +10,15 @@
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
 
+  # Sekka's own packages, also configured on Sekka systems by
+  # installer/genkan/rust/system/binary-cache.nix (checks.binary-cache).
+  nixConfig = {
+    extra-substituters = [ "https://cache.sekka.computer" ];
+    extra-trusted-public-keys = [
+      "cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y="
+    ];
+  };
+
   outputs =
     externalInputs@{
       self,
@@ -25,6 +34,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       hyprlandPkgs = pkgs.extend (import ./nix/overlays/aquamarine.nix);
       tools = import ./nix/tools.nix { inherit pkgs; };
+      pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
@@ -85,10 +95,17 @@
         ];
       };
       nixosConfigurations.installer = installer;
-      apps.${system}.update = {
-        type = "app";
-        program = "${inputs.yukimi.packages.${system}.yukimi}/bin/sekka-update";
-        meta.description = "Update an installed Sekka system, migrating predecessor installations automatically";
+      apps.${system} = {
+        update = {
+          type = "app";
+          program = "${inputs.yukimi.packages.${system}.yukimi}/bin/sekka-update";
+          meta.description = "Update an installed Sekka system, migrating predecessor installations automatically";
+        };
+        push-cache = {
+          type = "app";
+          program = "${pushCache}/bin/sekka-push-cache";
+          inherit (pushCache) meta;
+        };
       };
       packages.${system} = {
         default = self.packages.${system}.iso;
@@ -248,6 +265,26 @@
           assert latest.hardware.nvidia.open && latest.hardware.nvidia.prime.offload.enable;
           assert latest.hardware.nvidia.powerManagement.finegrained;
           pkgs.writeText "nvidia-on-media" latest.hardware.nvidia.package.version;
+        # The live media and installed systems use the cache this flake
+        # advertises, with the same key.
+        binary-cache =
+          let
+            advertised = (import ./flake.nix).nixConfig;
+            installed =
+              (import ./nix/reference-systems.nix {
+                inherit inputs applicationCatalog;
+                desktops = [ "tatami" ];
+              }).systems.tatami.config;
+            uses =
+              c:
+              builtins.all (name: builtins.all (v: builtins.elem v c.nix.settings.${name}) advertised.${name}) [
+                "extra-substituters"
+                "extra-trusted-public-keys"
+              ];
+          in
+          assert uses installer.config;
+          assert uses installed;
+          pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
         tatami = self.packages.${system}.tatami;
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;

@@ -9,6 +9,7 @@
 {
   environment.systemPackages = [ pkgs.file ];
   imports = [
+    ./binary-cache.nix
     ./desktops.nix
     ./nvidia.nix
     ./tuning.nix

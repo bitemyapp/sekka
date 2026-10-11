@@ -1,0 +1,60 @@
+# `nix run .#push-cache [FLAKE]`: uploads Sekka's own packages to the public
+# binary cache at https://cache.sekka.computer (Cloudflare R2 bucket
+# sekka-cache), leaving the rest of their closures to cache.nixos.org.
+# DEVELOPERS.md describes the key and credentials it expects.
+{ pkgs }:
+pkgs.writeShellApplication {
+  name = "sekka-push-cache";
+  # Building and signing use the caller's own Nix and daemon.
+  runtimeInputs = [ pkgs.awscli2 ];
+  text = ''
+    flake=''${1:-.}
+    config=''${SEKKA_CACHE_CONFIG:-''${XDG_CONFIG_HOME:-$HOME/.config}/sekka-cache}
+    key=$config/cache.sekka.computer-1.sec
+    endpoint=''${SEKKA_CACHE_ENDPOINT:-https://c408b91e58b3aa56c4f71046fcd416b6.r2.cloudflarestorage.com}
+    bucket=sekka-cache
+    profile=''${SEKKA_CACHE_PROFILE:-sekka-cache}
+    if [[ ! -r $key ]]; then
+      echo "sekka-push-cache: signing key $key is missing" >&2
+      exit 1
+    fi
+    s3() { aws --profile "$profile" --region auto --endpoint-url "$endpoint" s3 "$@"; }
+
+    # Each of these is evaluated with Nixpkgs' default configuration, which
+    # refuses unfree packages, so nothing unfree is published.
+    packages=(genkan tatami displays wallpapers yukimi aquamarine hyprland tools)
+    mapfile -t outputs < <(nix build --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+
+    # Nix only adds a path to a binary cache that already holds its
+    # references, so sign and compress the complete closure locally first.
+    stage=$(mktemp -d)
+    trap 'rm -rf "$stage"' EXIT
+    nix copy --to "file://$stage/all?compression=zstd&secret-key=$key" "''${outputs[@]}"
+
+    # Publish only what cache.nixos.org does not serve. Clients substitute
+    # each reference separately, from whichever cache has it.
+    mapfile -t closure < <(nix path-info --recursive "''${outputs[@]}")
+    mapfile -t own < <(nix-store --store https://cache.nixos.org --check-validity --print-invalid "''${closure[@]}")
+    mkdir -p "$stage/upload/nar"
+    for path in "''${own[@]}"; do
+      name=''${path#/nix/store/}
+      narinfo=''${name%%-*}.narinfo
+      nar=$(sed -n 's/^URL: //p' "$stage/all/$narinfo")
+      ln -f "$stage/all/$narinfo" "$stage/upload/$narinfo"
+      ln -f "$stage/all/$nar" "$stage/upload/$nar"
+    done
+
+    # Archives before the narinfos that point to them. Store paths never
+    # change, so objects already in the bucket are skipped.
+    s3 sync --size-only --no-progress --content-type application/x-nix-nar \
+      "$stage/upload/nar" "s3://$bucket/nar"
+    s3 sync --size-only --no-progress --content-type text/x-nix-narinfo \
+      --exclude '*' --include '*.narinfo' "$stage/upload" "s3://$bucket"
+    # Nix writes only StoreDir when it creates a cache; without a priority the
+    # cache would be asked before cache.nixos.org (40).
+    printf 'StoreDir: /nix/store\nWantMassQuery: 1\nPriority: 50\n' |
+      s3 cp - "s3://$bucket/nix-cache-info" --content-type text/x-nix-cache-info
+    echo "Published ''${#own[@]} of ''${#closure[@]} paths; cache.nixos.org serves the rest"
+  '';
+  meta.description = "Upload Sekka's own packages to https://cache.sekka.computer";
+}
