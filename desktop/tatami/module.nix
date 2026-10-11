@@ -223,6 +223,8 @@ let
   };
 in
 {
+  imports = [ ../../modules/hyprland-fixes.nix ];
+
   options.programs.tatami = {
     enable = lib.mkEnableOption "the Tatami desktop session";
     wallpapers = lib.mkOption {
