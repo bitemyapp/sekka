@@ -212,10 +212,14 @@ impl Settings {
             format!("position = \"{}\"", self.position),
             format!("scale = {}", lua_number(self.scale)),
             format!("transform = {}", self.transform),
+            // hl.monitor merges with the existing rule. Omitting either
+            // field preserves an earlier disable or mirror operation.
+            "disabled = false".to_owned(),
+            format!(
+                "mirror = {}",
+                window::lua_string(self.mirror.as_deref().unwrap_or(""))
+            ),
         ];
-        if let Some(mirror) = &self.mirror {
-            fields.push(format!("mirror = \"{mirror}\""));
-        }
         if let Some(vrr) = self.vrr {
             fields.push(format!("vrr = {vrr}"));
         }
@@ -306,7 +310,7 @@ fn write_atomically(path: &PathBuf, contents: &str) -> bool {
         && fs::rename(&partial, path).is_ok()
 }
 
-fn save_store(store: &Value) -> bool {
+pub(crate) fn save_store(store: &Value) -> bool {
     let json = serde_json::to_string_pretty(store).unwrap_or_default();
     write_atomically(&state_file("displays.json"), &(json + "\n"))
         && write_atomically(&state_file("displays.lua"), &store_lua(store))
@@ -417,6 +421,7 @@ pub fn apply_command(dry_run: bool) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let value: Value = serde_json::from_str(&input).map_err(|error| error.to_string())?;
     let change = parse_change(&value)?;
+    let _guard = (!dry_run).then(crate::display_recovery::lock).transpose()?;
     let store = load_store();
     let updated = updated_store(&store, &change);
     let main_changed = updated["main"] != store["main"];
@@ -445,17 +450,18 @@ pub fn apply_command(dry_run: bool) -> Result<(), String> {
         .filter(|display| display.enabled)
         .map(|display| display.name.clone())
         .collect();
-    window::switch_off(&off, &on);
-    if lua.is_empty() || hypr::eval(&lua) {
-        Ok(())
-    } else {
-        Err("Hyprland did not take the display settings".into())
+    if !window::switch_off(&off, &on) {
+        return Err("cannot save the displays' enabled state".into());
     }
+    if !lua.is_empty() {
+        crate::display_recovery::evaluate(&lua)?;
+    }
+    crate::display_recovery::verify(&change)
 }
 
 /// The kept settings for a monitor Hyprland lists, with the selector it is
 /// kept under.
-fn kept_for(store: &Value, monitor: &Value, all: &Value) -> Option<(String, Settings)> {
+pub(crate) fn kept_for(store: &Value, monitor: &Value, all: &Value) -> Option<(String, Settings)> {
     let live: Vec<Settings> = all
         .as_array()
         .into_iter()
@@ -481,7 +487,7 @@ pub fn rule_for(monitor: &Value, all: &Value) -> Option<String> {
     Some(match kept_for(&load_store(), monitor, all) {
         Some((_, kept)) => kept.rule(name),
         None => format!(
-            "hl.monitor({{ output = \"{name}\", mode = \"preferred\", position = \"auto\", scale = \"auto\" }})"
+            "hl.monitor({{ output = \"{name}\", mode = \"preferred\", position = \"auto\", scale = \"auto\", disabled = false, mirror = \"\" }})"
         ),
     })
 }
@@ -489,6 +495,9 @@ pub fn rule_for(monitor: &Value, all: &Value) -> Option<String> {
 /// Super+/: keep a new scale for a monitor, with its other settings as kept
 /// or as they are, and apply it.
 pub fn set_scale(monitor: &Value, all: &Value, scale: f64) -> bool {
+    let Ok(_guard) = crate::display_recovery::lock() else {
+        return false;
+    };
     let Some(display) = Settings::from_monitor(monitor) else {
         return false;
     };
@@ -575,7 +584,7 @@ mod tests {
         assert_eq!(
             settings.rule("desc:ASUS \"PG\""),
             "hl.monitor({ output = \"desc:ASUS \\034PG\\034\", mode = \"3840x2160@240.00\", \
-             position = \"-1920x0\", scale = 2, transform = 1, mirror = \"eDP-1\", vrr = 2, \
+             position = \"-1920x0\", scale = 2, transform = 1, disabled = false, mirror = \"eDP-1\", vrr = 2, \
              bitdepth = 10, cm = \"hdr\", sdrbrightness = 1.2 })"
         );
         assert_eq!(
@@ -653,7 +662,7 @@ mod tests {
         assert_eq!(store["displays"]["desc:Samsung"]["scale"], 2);
         assert_eq!(store["main"], "DP-1");
         let lua = store_lua(&store);
-        assert!(lua.contains("hl.monitor({ output = \"desc:ASUS\", mode = \"3840x2160@240\", position = \"0x0\", scale = 2, transform = 0 })"));
+        assert!(lua.contains("hl.monitor({ output = \"desc:ASUS\", mode = \"3840x2160@240\", position = \"0x0\", scale = 2, transform = 0, disabled = false, mirror = \"\" })"));
         assert!(lua.contains("default_monitor = \"DP-1\""));
         assert!(lua.contains(
             "hl.workspace_rule({ workspace = \"1\", monitor = \"DP-1\", default = true })"

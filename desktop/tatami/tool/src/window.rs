@@ -321,6 +321,9 @@ pub enum Reload {
 /// then apply the remembered toggles it resets: the state written first has
 /// the monitors that are off now off, and the others on.
 pub fn reload_hyprland() -> Reload {
+    let Ok(_guard) = crate::display_recovery::lock() else {
+        return Reload::Failed;
+    };
     // Scales kept before the display settings join them first, so the
     // configuration loads them rather than its automatic scale: now, or at
     // the next login when this session's configuration is pinned.
@@ -379,6 +382,10 @@ pub fn internal_monitor(monitors: &Value) -> Option<&Value> {
 /// Super+Ctrl+Delete: turn the laptop display off while another display is
 /// active, or back on.
 pub fn laptop_display() {
+    let Ok(_guard) = crate::display_recovery::lock() else {
+        util::notify("\u{f0379}", "Could not lock display settings", "Try again");
+        return;
+    };
     let all = crate::hypr::json_args(&["monitors", "all"]).unwrap_or_default();
     let Some(internal) = internal_monitor(&all) else {
         util::notify("\u{f0379}", "No laptop display found", "");

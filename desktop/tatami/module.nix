@@ -293,6 +293,13 @@ in
         )
       );
     systemd.user.services = {
+      tatami-display-recovery =
+        lib.recursiveUpdate (unit "Tatami display recovery" "${lib.getExe tool} displays watch")
+          {
+            # A delayed/recreated compositor socket must not exhaust retries.
+            unitConfig.StartLimitIntervalSec = 0;
+            serviceConfig.TimeoutStopSec = "5s";
+          };
       tatami-keep-awake = import ./keep-awake.nix { inherit lib pkgs tool; };
       tatami-waybar =
         lib.recursiveUpdate

@@ -27,24 +27,35 @@ fn output(program: &str, args: &[&str]) -> Result<String, String> {
 }
 
 pub fn displays() -> Result<Vec<Display>, String> {
-    let text = output("hyprctl", &["-j", "monitors", "all"])?;
+    let text = output(
+        "timeout",
+        &["--kill-after=1s", "2s", "hyprctl", "-j", "monitors", "all"],
+    )?;
     let value: Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
-    Ok(value
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Display::from_json)
-        .collect())
+    if !value.is_array() {
+        return Err("Hyprland returned an invalid monitor list".into());
+    }
+    Ok(crate::model::parse_displays(&value))
 }
 
 /// Hyprland's variable refresh rate for displays without a setting of their
 /// own (`misc:vrr`).
 pub fn default_vrr() -> i64 {
-    output("hyprctl", &["-j", "getoption", "misc:vrr"])
-        .ok()
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .and_then(|value| value["int"].as_i64())
-        .unwrap_or(0)
+    output(
+        "timeout",
+        &[
+            "--kill-after=1s",
+            "2s",
+            "hyprctl",
+            "-j",
+            "getoption",
+            "misc:vrr",
+        ],
+    )
+    .ok()
+    .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+    .and_then(|value| value["int"].as_i64())
+    .unwrap_or(0)
 }
 
 fn state_dir() -> PathBuf {

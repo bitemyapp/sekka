@@ -270,6 +270,24 @@
               touch $out
             '';
         displays = self.packages.${system}.displays;
+        display-recovery-vm = import ./nix/display-recovery-vm-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) hyprland;
+          inherit (self.packages.${system}) tatami displays;
+        };
+        display-recovery =
+          pkgs.runCommand "tatami-display-recovery-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.bubblewrap
+                pkgs.coreutils
+              ];
+            }
+            ''
+              python3 ${./tests/test_display_recovery.py} ${self.packages.${system}.tatami}/bin/tatami -v
+              touch $out
+            '';
         wallpapers =
           pkgs.runCommand "wallpaper-originals-check"
             {

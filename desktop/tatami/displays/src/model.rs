@@ -180,6 +180,31 @@ impl Display {
     }
 }
 
+/// Hyprland reports mirrorOf as a numeric monitor ID; our settings protocol
+/// and hl.monitor require connector names. Resolve it against the same snapshot.
+pub fn parse_displays(value: &Value) -> Vec<Display> {
+    let Some(rows) = value.as_array() else {
+        return vec![];
+    };
+    rows.iter()
+        .filter_map(|row| {
+            let mut display = Display::from_json(row)?;
+            display.mirror_of = display.mirror_of.as_ref().and_then(|reference| {
+                rows.iter()
+                    .find(|other| {
+                        other["name"].as_str() == Some(reference.as_str())
+                            || other["id"]
+                                .as_i64()
+                                .is_some_and(|id| id.to_string() == *reference)
+                    })
+                    .and_then(|other| other["name"].as_str())
+                    .map(str::to_owned)
+            });
+            Some(display)
+        })
+        .collect()
+}
+
 pub fn logical_size(mode: &Mode, scale: f64, transform: i32) -> (i32, i32) {
     let width = (mode.width as f64 / scale).round() as i32;
     let height = (mode.height as f64 / scale).round() as i32;
@@ -644,6 +669,19 @@ pub fn change_json(settings: &[Settings], main: Option<&str>, apply: &[String]) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mirror_ids_become_connector_names_before_another_change() {
+        let all = parse_displays(&json!([
+            {"id":0,"name":"eDP-1","width":1920,"height":1080,"refreshRate":60.0,"mirrorOf":"2"},
+            {"id":2,"name":"DP-1","width":1920,"height":1080,"refreshRate":60.0,"mirrorOf":"none"}
+        ]));
+        assert_eq!(all[0].mirror_of.as_deref(), Some("DP-1"));
+        assert_eq!(Settings::of(&all[0], 0).to_json()["mirror"], "DP-1");
+        let unplugged = parse_displays(&json!([
+            {"id":0,"name":"eDP-1","width":1920,"height":1080,"refreshRate":60.0,"mirrorOf":"2"}
+        ]));
+        assert!(unplugged[0].mirror_of.is_none());
+    }
     /// From `hyprctl -j monitors all` on a laptop with a 4K 240 Hz display.
     fn monitors() -> Vec<Display> {
         let json = json!([

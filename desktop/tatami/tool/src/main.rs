@@ -7,6 +7,7 @@ mod background;
 mod browser;
 mod capture;
 mod clip;
+mod display_recovery;
 mod displays;
 mod hypr;
 mod info;
@@ -36,6 +37,8 @@ const USAGE: &str = "usage: tatami <command>
   network | bluetooth | audio             the bar's panels
   display                         the Displays window
   displays apply [--dry-run]      keep and apply display settings (JSON on stdin)
+  displays watch                 keep a connected physical screen available
+  displays recover               check for and recover a lost display
   nightlight [on|off|status|KELVIN] Night Shift for the Displays window
   dns <dhcp|cloudflare|google|custom>     DNS for the connection in use
   background                      wallpaper picker
@@ -346,6 +349,20 @@ fn main() -> ExitCode {
             true
         }
         Some("nightlight") => toggle::nightlight_command(first("status")),
+        Some("displays") if matches!(first(""), "watch" | "recover") => {
+            let result = if first("") == "watch" {
+                display_recovery::watch()
+            } else {
+                display_recovery::recover().map(|_| ())
+            };
+            match result {
+                Ok(()) => true,
+                Err(error) => {
+                    eprintln!("tatami: {error}");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
         Some("displays") if first("") == "apply" => {
             match displays::apply_command(rest.iter().any(|arg| arg == "--dry-run")) {
                 Ok(()) => true,
