@@ -82,6 +82,29 @@ When Nixpkgs includes the fix, remove the backport and its negative control afte
 verifying the regression test passes with the new upstream package. A patch
 failure during an input update requires that review; do not just skip the patch.
 
+Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
+when enabling an independent screen: Hyprland's Lua monitor API merges omitted
+fields with the previous rule. Mirror IDs from `hyprctl` are resolved to connector
+names before the settings window submits another change. The helper checks the
+resulting enabled/mirror state rather than trusting an IPC acknowledgement alone.
+Monitor reads and changes run off the GTK thread, with concurrent changes disabled
+until the result arrives and stale reads discarded.
+`tatami-display-recovery.service` runs with the desktop, independently of Displays.
+It watches monitor events and reconciles periodically. If no connected physical
+screen is enabled, it restores the built-in panel (or another available physical
+screen), clearing stale mirror/disable settings. It retries with the preferred
+mode if saved settings fail, and persists recovery through configuration reloads.
+Normal DPMS blanking does not trigger recovery. Display changes share a bounded
+lock; recovery IPC is also bounded, and systemd reconnects a failed watcher.
+
+`nix build .#checks.x86_64-linux.display-recovery` exercises the packaged helper
+in isolated namespaces, including lost events, stuck IPC, duplicate monitors and
+acknowledged changes which never take effect.
+`nix build .#checks.x86_64-linux.display-recovery-vm` runs actual Hyprland in a
+disposable VM and checks enabling, mirroring, extending, reloads and repeated
+removal of a simulated external output. These tests do not replace physical
+dock, cable, panel and GPU validation.
+
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.

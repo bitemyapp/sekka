@@ -65,6 +65,9 @@ struct Ui {
     chooser: gtk::Box,
     content: gtk::Box,
     state: RefCell<State>,
+    applying: Cell<bool>,
+    refreshing: Cell<bool>,
+    revision: Cell<u64>,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -124,6 +127,9 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         arrangement: arrangement.clone(),
         chooser,
         content,
+        applying: Cell::new(false),
+        refreshing: Cell::new(false),
+        revision: Cell::new(0),
         state: RefCell::new(State {
             displays: vec![],
             kept: Value::Null,
@@ -176,24 +182,77 @@ fn toast(ui: &Ui, text: &str) {
 
 /// Read the displays again from Hyprland.
 fn refresh(ui: &Rc<Ui>) {
-    match system::displays() {
-        Ok(displays) => {
-            let mut state = ui.state.borrow_mut();
-            state.kept = system::kept();
-            state.default_vrr = system::default_vrr();
-            if !displays
-                .iter()
-                .any(|display| display.name == state.selected)
-            {
-                state.selected = model::main_display(&displays, &state.kept)
-                    .or_else(|| displays.first().map(|display| display.name.clone()))
-                    .unwrap_or_default();
-            }
-            state.displays = displays;
-        }
-        Err(error) => toast(ui, &error),
+    if ui.applying.get() || ui.refreshing.replace(true) {
+        return;
     }
-    render(ui);
+    let (sender, receiver) = async_channel::bounded(1);
+    let revision = ui.revision.get();
+    std::thread::spawn(move || {
+        let result =
+            system::displays().map(|displays| (displays, system::kept(), system::default_vrr()));
+        let _ = sender.send_blocking(result);
+    });
+    let ui = ui.clone();
+    glib::spawn_future_local(async move {
+        let result = receiver
+            .recv()
+            .await
+            .unwrap_or_else(|_| Err("Could not read the display settings".into()));
+        ui.refreshing.set(false);
+        if ui.applying.get() || ui.revision.get() != revision {
+            return;
+        }
+        match result {
+            Ok((displays, kept, default_vrr)) => {
+                let mut state = ui.state.borrow_mut();
+                state.kept = kept;
+                state.default_vrr = default_vrr;
+                if !displays
+                    .iter()
+                    .any(|display| display.name == state.selected)
+                {
+                    state.selected = model::main_display(&displays, &state.kept)
+                        .or_else(|| displays.first().map(|display| display.name.clone()))
+                        .unwrap_or_default();
+                }
+                state.displays = displays;
+            }
+            Err(error) => toast(&ui, &error),
+        }
+        render(&ui);
+    });
+}
+
+/// Waiting for a monitor to turn on must never block GTK or a revert timer.
+fn apply_async(
+    ui: &Rc<Ui>,
+    change: Value,
+    done: impl FnOnce(&Rc<Ui>, Result<(), String>) + 'static,
+) {
+    if ui.applying.replace(true) {
+        toast(ui, "A display change is still in progress");
+        return;
+    }
+    ui.revision.set(ui.revision.get().wrapping_add(1));
+    ui.content.set_sensitive(false);
+    ui.chooser.set_sensitive(false);
+    ui.arrangement.widget().set_sensitive(false);
+    let (sender, receiver) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        let _ = sender.send_blocking(system::apply(&change));
+    });
+    let ui = ui.clone();
+    glib::spawn_future_local(async move {
+        let result = receiver
+            .recv()
+            .await
+            .unwrap_or_else(|_| Err("Could not apply the display settings".into()));
+        ui.applying.set(false);
+        ui.content.set_sensitive(true);
+        ui.chooser.set_sensitive(true);
+        ui.arrangement.widget().set_sensitive(true);
+        done(&ui, result);
+    });
 }
 
 fn settings(state: &State) -> Vec<Settings> {
@@ -261,17 +320,19 @@ fn commit(
     after: &[Settings],
     main: &Option<String>,
     confirm: bool,
-) -> bool {
+) {
     let names = model::changed(before, after);
     if names.is_empty() && main == before_main {
         render(ui);
-        return true;
+        return;
     }
-    match system::apply(&model::change_json(after, main.as_deref(), &names)) {
+    let change = model::change_json(after, main.as_deref(), &names);
+    let (before, before_main, after) = (before.to_vec(), before_main.clone(), after.to_vec());
+    apply_async(ui, change, move |ui, result| match result {
         Ok(()) => {
             {
                 let mut state = ui.state.borrow_mut();
-                for settings in after {
+                for settings in &after {
                     if let Some(display) = state
                         .displays
                         .iter_mut()
@@ -289,16 +350,14 @@ fn commit(
                 later(ui, 800, refresh);
             }
             if confirm {
-                ask_to_keep(ui, before.to_vec(), before_main.clone(), names);
+                ask_to_keep(ui, before, before_main, names);
             }
-            true
         }
         Err(error) => {
             toast(ui, &error);
             refresh(ui);
-            false
         }
-    }
+    });
 }
 
 fn countdown(seconds: u32) -> String {
@@ -952,17 +1011,23 @@ fn quietly(ui: &Rc<Ui>, name: &str, edit: impl FnOnce(&mut Settings)) {
     if names.is_empty() {
         return;
     }
-    match system::apply(&model::change_json(&after, main.as_deref(), &names)) {
-        Ok(()) => {
-            let mut state = ui.state.borrow_mut();
-            for settings in &after {
-                if let Some(display) = state.displays.iter_mut().find(|d| d.name == settings.name) {
-                    assume(display, settings);
+    apply_async(
+        ui,
+        model::change_json(&after, main.as_deref(), &names),
+        move |ui, result| match result {
+            Ok(()) => {
+                let mut state = ui.state.borrow_mut();
+                for settings in &after {
+                    if let Some(display) =
+                        state.displays.iter_mut().find(|d| d.name == settings.name)
+                    {
+                        assume(display, settings);
+                    }
                 }
             }
-        }
-        Err(error) => toast(ui, &error),
-    }
+            Err(error) => toast(ui, &error),
+        },
+    );
 }
 
 /// Run `then` once the value has stopped changing for `milliseconds`.
