@@ -72,6 +72,12 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
+    systemd.tmpfiles.rules = [ "d /var/lib/yukimi/operations 0700 root root 30d" ];
+    # The built target also protects users arriving through an old updater or
+    # another rebuild frontend. Nix runs this before stopping any services.
+    system.preSwitchChecks.yukimiSessionSafety = ''
+      ${cfg.package}/bin/yukimi-helper check-activation "$1" "$2"
+    '';
     # Changes which could tear down a live graphical session are prepared
     # for boot. Unrelated package/source changes leave this identity alone.
     environment.etc."yukimi/activation.json".text = builtins.toJSON {

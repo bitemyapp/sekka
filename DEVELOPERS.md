@@ -73,10 +73,18 @@ back up the configuration, update the selected inputs, and build the host once.
 The ordinary GUI action includes Sekka and sources with available newer revisions;
 the CLI updates only Sekka. Individual source rows retain their controls.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
-compatibility, the declared display/graphics/sleep-manager identity, and NixOS
-switch inhibitors before choosing `switch` or `boot`. A missing compatibility
-manifest stages the transition for boot. `sekka-update --boot` and `--switch`
-remain explicit terminal overrides. Do not copy the root lock verbatim
+compatibility, the declared display/graphics/sleep-manager identity, effective
+session-critical systemd units (including aliases and drop-ins), and NixOS
+switch inhibitors before choosing `switch` or `boot`. Configuration changes,
+branch changes, and rollbacks use the same planner. A missing compatibility
+manifest stages the transition for boot. D-Bus catalog trigger changes remain
+live when both unit definitions specify reload-on-change and every other unit
+setting matches; changes to its executable or reload policy still stage for boot.
+`sekka-update --boot` explicitly
+stages the update; `--switch` requests live activation but refuses an unsafe
+transition before committing configuration edits. A target-side NixOS
+pre-switch check also rejects unsafe activation from older updaters and other
+rebuild frontends, before they can stop the desktop. Do not copy the root lock verbatim
 into an installed machine: it lacks the Sekka input until the installed lock
 is generated.
 
@@ -96,6 +104,14 @@ configuration snapshots under `/var/lib/yukimi/configurations` accompany
 generations, including `flake.nix` for rollback across migration. Activation
 is allowed to finish once started; it never initiates a reboot.
 
+The authenticated helper launches the entire operation in an independent systemd
+service. The client follows progress from regular files, rather than connecting
+activation's output to a GUI-owned pipe. Closing Yukimi requests cancellation
+before commit; after commit the worker finishes even if the client is killed.
+Root-only logs and atomic results live under `/var/lib/yukimi/operations`, with
+30-day tmpfiles retention. The worker holds the transaction lock until it has
+finished; losing its client does not release the lock.
+
 `/var/lib/yukimi/update.json` records the built target and activation outcome,
 written atomically before and after activation. A failure cannot be mistaken
 for a ready boot just because the system profile moved. Completion is recomputed
@@ -113,20 +129,29 @@ changes wait for login, and failed reloads remain explicitly unverified.
 Unchanged pinned Hyprland configuration does not request sign-out. Active Keep
 Awake holders survive both NixOS live activation and appearance reloads; their
 implementation advances at a fresh session without dropping protection mid-update.
+Session verification checks the boot, the active UWSM compositor service and its
+session environment file, and (for new receipts) the service invocation ID.
+UWSM deliberately omits `XDG_SESSION_ID` from the shared application environment;
+its absence in Yukimi is not evidence of a different login session.
 
 ```sh
 nix build .#checks.x86_64-linux.update-completion
 python3 tests/test_tatami_update.py /nix/store/…-tatami/bin/tatami -v
 ```
 
-The completion VM exercises real live activation and a UEFI boot into a prepared
-generation, verifies that the restart request disappears, and captures the GUI.
+The completion VM exercises the helper under real systemd, kills its client during
+live activation, verifies persistent results and a surviving graphical session,
+rejects a display-manager transition before service shutdown, and stages a rollback
+with changed boot parameters. It boots that prepared generation through UEFI,
+verifies that the restart request disappears, and captures the GUI. Its desktop
+is IceWM; it does not reproduce physical GPU teardown or claim Hyprland hardware coverage.
 Namespace fixtures test helper transactions and Tatami reload failures without
 changing the host desktop.
 
 `python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
-failed builds, cancellation, concurrent operations, and rollback. Nix and
+failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
 
