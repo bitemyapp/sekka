@@ -51,12 +51,12 @@ jobs:
           set -euo pipefail
           nix --version
           # NixOS tests in the flake check run in VMs: a build that asks for
-          # KVM must get a usable /dev/kvm from the daemon (see DEVELOPERS.md).
+          # KVM must be able to open /dev/kvm, as QEMU will (see DEVELOPERS.md).
           # The ${...} in single quotes are Nix's own.
           # shellcheck disable=SC2016
           nix build --no-link --impure --print-build-logs --expr '
             let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
-            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "test -w /dev/kvm && touch $out"
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
           ' || {
             echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
             exit 1

@@ -436,11 +436,13 @@ Once, as root on the builder, from a checkout:
 sudo bash scripts/runner-host-setup.sh
 ```
 
-It reserves uid and gid 30500 as `sekka-runner`, lets the Nix build users open
-`/dev/kvm` (the daemon gives it to the sandbox of builds that require `kvm`,
-such as the flake check's NixOS tests, but without the `kvm` group they cannot
-open it), adds Sekka's binary cache, and restarts the daemon. The workflow's
-first Nix step fails with a pointer here if a build cannot use KVM.
+It reserves uid and gid 30500 as `sekka-runner`, lets Nix's builds open
+`/dev/kvm`, adds Sekka's binary cache, and restarts the daemon. The daemon puts
+`/dev/kvm` in the sandbox of builds that require `kvm`, such as the flake
+check's NixOS tests, but the sandbox drops the build users' supplementary
+groups, so membership of `kvm` does not help. A udev rule instead gives the
+`nixbld` group read and write on the device with an ACL. The workflow's first
+Nix step fails with a pointer here if a build cannot use KVM.
 
 Then, as the maintainer, build the runner, load its images and start the
 supervisor:

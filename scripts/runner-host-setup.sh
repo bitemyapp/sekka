@@ -23,14 +23,26 @@ if ! getent passwd sekka-runner >/dev/null; then
 fi
 
 # The release's flake check runs NixOS tests in VMs: builds that ask for
-# KVM get /dev/kvm in their sandbox, and the build users may open it.
+# KVM get /dev/kvm in their sandbox. There a build has no group but
+# nixbld (the sandbox drops the build users' other groups), so that group
+# may open it, now and whenever the device appears.
 conf=/etc/nix/nix.custom.conf
 touch "$conf"
 if ! grep -qx 'extra-system-features = kvm' "$conf"; then
   echo 'extra-system-features = kvm' >>"$conf"
 fi
-for user in $(getent group nixbld | cut -d: -f4 | tr , ' '); do
-  usermod --append --groups kvm "$user"
+cat >/etc/udev/rules.d/90-nix-build-kvm.rules <<'EOF'
+# Nix's sandboxed builds (group nixbld) may use KVM (scripts/runner-host-setup.sh).
+KERNEL=="kvm", RUN+="/usr/bin/setfacl -m g:nixbld:rw /dev/kvm"
+EOF
+udevadm control --reload
+setfacl -m g:nixbld:rw /dev/kvm
+# The kvm group, which the first version of this script gave the build
+# users, never reaches the sandbox.
+for user in $(getent group kvm | cut -d: -f4 | tr , ' '); do
+  case $user in
+    nixbld*) gpasswd --delete "$user" kvm >/dev/null ;;
+  esac
 done
 
 # Sekka's own binary cache, so the builder downloads what Sekka has built
