@@ -114,13 +114,19 @@ impl Site {
             .get(file)
             .with_context(|| format!("{file} is not a listed screenshot"))?;
         let (w, h) = png_size(&self.repo.join(source))?;
+        // The first screenshot on a page is in view at once: fetch it first.
+        let loading = if class.contains("hero-shot") || class.contains("wide-shot") {
+            r#"loading="eager" fetchpriority="high""#
+        } else {
+            r#"loading="lazy""#
+        };
         let class = if class.is_empty() {
             String::from("shot")
         } else {
             format!("shot {class}")
         };
         Ok(format!(
-            r#"<figure class="{class}"><a href="/images/{file}" aria-label="{label}"><img src="/images/{file}" width="{w}" height="{h}" alt="{alt}" loading="lazy" decoding="async"></a><figcaption>{caption} <span class="dims">{w} × {h}, not upscaled</span></figcaption></figure>"#,
+            r#"<figure class="{class}"><a href="/images/{file}" aria-label="{label}"><img src="/images/{file}" width="{w}" height="{h}" alt="{alt}" {loading} decoding="async"></a><figcaption>{caption} <span class="dims">{w} × {h}, not upscaled</span></figcaption></figure>"#,
             label = html::esc(&format!("{alt} Open the full-resolution original.")),
             alt = html::esc(alt),
             caption = html::esc(caption),

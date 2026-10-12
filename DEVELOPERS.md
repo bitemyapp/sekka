@@ -374,13 +374,17 @@ nix build .#site --out-link result-site
 nix run --inputs-from . nixpkgs#static-web-server -- --port 8787 --root result-site --page404 result-site/404.html
 ```
 
-Nothing publishes it. `sekka.computer` is already a Cloudflare zone; to host
-the site there, upload `result-site` to a Cloudflare Pages project (direct
-upload, or `wrangler pages deploy result-site`) and add the apex as its custom
-domain. Pages applies `_headers` (the content security policy) and serves
-`404.html`. The pages promise no cookies, scripts or analytics, so leave off
-the Cloudflare features that add them: Web Analytics, Rocket Loader, Email
-Address Obfuscation and Bot Fight Mode.
+The site is the Cloudflare Pages project `sekka` (`sekka-esx.pages.dev`), with
+the `sekka.computer` apex as its custom domain. Nothing deploys it
+automatically. To publish a new version, build from a clean commit that is on
+GitHub's `main` (the pages link the revision they were built from), then
+upload `result-site` as a new deployment: in the dashboard, Workers & Pages ›
+sekka › Create deployment (a zip of the directory works), or
+`wrangler pages deploy result-site --project-name sekka`. Pages applies
+`_headers` (the content security policy) and serves `404.html`. The pages
+promise no cookies, scripts or analytics, so leave off the Cloudflare features
+that add them: Web Analytics, Rocket Loader, Email Address Obfuscation and Bot
+Fight Mode.
 
 Everything the site claims comes from this repository's READMEs and docs.
 When a limitation, test or feature changes, change `site/src/pages.rs` with
