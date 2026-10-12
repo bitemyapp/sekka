@@ -63,9 +63,9 @@ pub fn shell(site: &Site, page: &Page) -> Result<String> {
 <title>{title}</title>
 <meta name="description" content="{description}">
 <link rel="canonical" href="{ORIGIN}{path}">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="/fonts/JetBrainsMono.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="/site.css">
+<link rel="icon" href="{icon}" type="image/svg+xml">
+<link rel="preload" href="{mono}" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="{css}">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{ORIGIN}{path}">
@@ -98,6 +98,9 @@ pub fn shell(site: &Site, page: &Page) -> Result<String> {
         description = esc(page.description),
         path = page.path,
         rev = site.revision_html(),
+        mono = site.asset("fonts/JetBrainsMono.ttf")?,
+        icon = site.asset("brand/sekka-app-icon.svg")?,
+        css = site.asset("site.css")?,
         date = esc(&site.date),
         body = page.body,
     ))

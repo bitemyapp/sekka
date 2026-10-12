@@ -165,7 +165,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
     write!(
         b,
         r#"<section class="win focus page-head">
-  <img class="page-icon" src="/brand/tatami.svg" width="96" height="96" alt="">
+  <img class="page-icon" src="{icon}" width="96" height="96" alt="">
   <div>
     <p class="eyebrow">Tatami {kanji}</p>
     <h1>A keyboard-driven desktop, square and quiet.</h1>
@@ -175,6 +175,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
 {shot}
 "#,
         kanji = site.ja("畳")?,
+        icon = site.asset("brand/tatami.svg")?,
         shot = site.shot(
             "tatami-menu.png",
             "Tatami's menu open over two terminals: fastfetch and btop.",
@@ -444,18 +445,23 @@ pub fn design(site: &Site) -> Result<Page> {
     <h2 id="lockups">Lockups and sizes</h2>
     <p>The wordmark is JetBrains Mono ExtraBold, Tatami's own face, outlined so it never depends on installed fonts. Beside it, {seal} stands vertically like a seal. On this page they take their colours from the theme.</p>
     <p>Below 24px the crest loses its branches: the symbolic glyph thickens the cuts so they survive the pixel grid. The app icon sits on a square tile, because every Tatami surface is square.</p>
-    <p class="downloads">SVG: <a href="/brand/sekka-lockup-night.svg">lockup, Night</a> · <a href="/brand/sekka-lockup-day.svg">lockup, Day</a> · <a href="/brand/sekka-crest-blue.svg">crest</a> · <a href="/brand/sekka-symbolic.svg">symbolic</a> · <a href="/brand/sekka-app-icon.svg">app icon</a></p>
+    <p class="downloads">SVG: <a href="{night}" download="sekka-lockup-night.svg">lockup, Night</a> · <a href="{day}" download="sekka-lockup-day.svg">lockup, Day</a> · <a href="{crest}" download="sekka-crest-blue.svg">crest</a> · <a href="{symbolic}" download="sekka-symbolic.svg">symbolic</a> · <a href="{app_icon}" download="sekka-app-icon.svg">app icon</a></p>
   </div>
   <div class="win step-figure lockups">
     {lockup}
     <div class="sizes">
       {stacked}
       <div class="glyphs" aria-label="The symbolic glyph at 16, 24 and 32 pixels">{g16}{g24}{g32}</div>
-      <img src="/brand/sekka-app-icon.svg" width="96" height="96" alt="The Sekka app icon: the blue crest on a square Night tile.">
+      <img src="{app_icon}" width="96" height="96" alt="The Sekka app icon: the blue crest on a square Night tile.">
     </div>
   </div>
 </section>
 "#,
+        night = site.asset("brand/sekka-lockup-night.svg")?,
+        day = site.asset("brand/sekka-lockup-day.svg")?,
+        crest = site.asset("brand/sekka-crest-blue.svg")?,
+        symbolic = site.asset("brand/sekka-symbolic.svg")?,
+        app_icon = site.asset("brand/sekka-app-icon.svg")?,
         lockup = site
             .brand
             .inline("sekka-lockup-night.svg", "demo-lockup", "Sekka 雪花")?,
@@ -548,7 +554,8 @@ pub fn design(site: &Site) -> Result<Page> {
         plain = plain_tokens(site),
     )?;
 
-    b.push_str(
+    write!(
+        b,
         r#"<section class="tour-step" aria-labelledby="family">
   <div class="win step-text">
     <p class="step-n">6</p>
@@ -557,9 +564,9 @@ pub fn design(site: &Site) -> Result<Page> {
     <p>Yukimi's icon is the one it ships today: a round window onto a snowy night. It still uses NixOS blues and a cream frame, so it doesn't belong to this family yet.</p>
   </div>
   <div class="win step-figure family">
-    <figure><img src="/brand/genkan.svg" width="128" height="128" alt="Genkan: an indigo noren with the crest across its slits."><figcaption>Genkan, proposed</figcaption></figure>
-    <figure><img src="/brand/tatami.svg" width="128" height="128" alt="Tatami: four mats around a lit half mat."><figcaption>Tatami, proposed</figcaption></figure>
-    <figure><img src="/brand/yukimi.svg" width="128" height="128" alt="Yukimi: a round window onto falling snow."><figcaption>Yukimi, as shipped</figcaption></figure>
+    <figure><img src="{genkan}" width="128" height="128" alt="Genkan: an indigo noren with the crest across its slits."><figcaption>Genkan, proposed</figcaption></figure>
+    <figure><img src="{tatami}" width="128" height="128" alt="Tatami: four mats around a lit half mat."><figcaption>Tatami, proposed</figcaption></figure>
+    <figure><img src="{yukimi}" width="128" height="128" alt="Yukimi: a round window onto falling snow."><figcaption>Yukimi, as shipped</figcaption></figure>
   </div>
 </section>
 
@@ -575,7 +582,10 @@ pub fn design(site: &Site) -> Result<Page> {
   </ul>
 </section>
 "#,
-    );
+        genkan = site.asset("brand/genkan.svg")?,
+        tatami = site.asset("brand/tatami.svg")?,
+        yukimi = site.asset("brand/yukimi.svg")?,
+    )?;
     Ok(Page {
         path: "/design/",
         title: "The Sekka design: crest, colour, type and space".into(),
@@ -589,7 +599,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
     write!(
         b,
         r#"<section class="win focus page-head">
-  <img class="page-icon" src="/brand/yukimi.svg" width="96" height="96" alt="">
+  <img class="page-icon" src="{icon}" width="96" height="96" alt="">
   <div>
     <p class="eyebrow">Yukimi {kanji}</p>
     <h1>Your system, seen from somewhere warm.</h1>
@@ -599,6 +609,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
 {shot}
 "#,
         kanji = site.ja("雪見")?,
+        icon = site.asset("brand/yukimi.svg")?,
         shot = site.shot(
             "yukimi.png",
             "Yukimi's overview in Tatami's dark theme: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
@@ -805,25 +816,27 @@ pub fn status(site: &Site) -> Result<Page> {
     })
 }
 
-pub fn fonts() -> Page {
-    Page {
+pub fn fonts(site: &Site) -> Result<Page> {
+    Ok(Page {
         path: "/fonts/",
         title: "Fonts on sekka.computer".into(),
         description: "The fonts this site serves, and their licenses.",
-        body: String::from(
+        body: format!(
             r#"<section class="win focus page-head"><div>
   <p class="eyebrow">Fonts</p>
   <h1>The fonts this site serves.</h1>
   <p class="lead">Both are served from this site, never from a font service, and both are under the SIL Open Font License 1.1.</p>
 </div></section>
 <section class="tiles">
-  <article class="win"><h2 class="type-display">JetBrains Mono</h2><p>Tatami's face, by JetBrains. <a href="/fonts/JetBrainsMono-OFL.txt">License</a></p></article>
-  <article class="win"><h2>Atkinson Hyperlegible Next</h2><p>By the Braille Institute. <a href="/fonts/AtkinsonHyperlegibleNext-OFL.txt">License</a></p></article>
+  <article class="win"><h2 class="type-display">JetBrains Mono</h2><p>Tatami's face, by JetBrains. <a href="{mono}">License</a></p></article>
+  <article class="win"><h2>Atkinson Hyperlegible Next</h2><p>By the Braille Institute. <a href="{sans}">License</a></p></article>
 </section>
 <section class="win"><p>The kanji are outlines drawn from Noto Serif CJK JP, also under the SIL Open Font License.</p></section>
 "#,
+            mono = site.asset("fonts/JetBrainsMono-OFL.txt")?,
+            sans = site.asset("fonts/AtkinsonHyperlegibleNext-OFL.txt")?,
         ),
-    }
+    })
 }
 
 pub fn not_found(site: &Site) -> Result<Page> {

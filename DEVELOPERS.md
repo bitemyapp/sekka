@@ -395,6 +395,13 @@ Hyperlegible Next are served from the site with their OFL texts. Pages follow
 the visitor's colour-scheme and contrast preferences, and every page states
 the revision it was built from (a dirty tree says so).
 
+The stylesheet, images, logos, fonts and licence texts are published under
+names that include a hash of their bytes (`images/yukimi.<hash>.png`), and
+`_headers` lets browsers and Cloudflare keep exactly those files for a year.
+Pages keep Pages' default and are revalidated on every visit, so a changed
+file arrives under a new URL and a deployment needs no cache purge. The build
+fails if a page or the stylesheet links to a file it didn't write.
+
 ```sh
 nix build .#site --out-link result-site
 nix run --inputs-from . nixpkgs#static-web-server -- --port 8787 --root result-site --page404 result-site/404.html

@@ -9,7 +9,7 @@ mod pages;
 mod tokens;
 
 use anyhow::{Context, Result, bail};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,6 +25,8 @@ pub struct Site {
     pub date: String,
     repo: PathBuf,
     images: HashMap<&'static str, &'static str>,
+    /// Published path ("images/yukimi.png") to the URL it is served at.
+    assets: BTreeMap<String, String>,
 }
 
 /// Screenshots shown on the site, copied byte for byte. Their provenance is
@@ -72,6 +74,14 @@ fn png_size(path: &Path) -> Result<(u32, u32)> {
 }
 
 impl Site {
+    /// The URL a file is served at, with a hash of its bytes in the name.
+    pub fn asset(&self, path: &str) -> Result<&str> {
+        self.assets
+            .get(path)
+            .map(String::as_str)
+            .with_context(|| format!("{path} is not a published file"))
+    }
+
     /// Kanji outlined, with the text kept for screen readers and copying.
     pub fn ja(&self, text: &str) -> Result<String> {
         Ok(format!(
@@ -102,6 +112,7 @@ impl Site {
             .get(file)
             .with_context(|| format!("{file} is not a listed screenshot"))?;
         let (w, h) = png_size(&self.repo.join(source))?;
+        let url = self.asset(&format!("images/{file}"))?;
         // The first screenshot on a page is in view at once: fetch it first.
         let loading = if class.contains("hero-shot") || class.contains("wide-shot") {
             r#"loading="eager" fetchpriority="high""#
@@ -114,7 +125,7 @@ impl Site {
             format!("shot {class}")
         };
         Ok(format!(
-            r#"<figure class="{class}"><a href="/images/{file}" aria-label="{label}"><img src="/images/{file}" width="{w}" height="{h}" alt="{alt}" {loading} decoding="async"></a><figcaption>{caption} <span class="dims">{w} × {h}, not upscaled</span></figcaption></figure>"#,
+            r#"<figure class="{class}"><a href="{url}" aria-label="{label}"><img src="{url}" width="{w}" height="{h}" alt="{alt}" {loading} decoding="async"></a><figcaption>{caption} <span class="dims">{w} × {h}, not upscaled</span></figcaption></figure>"#,
             label = html::esc(&format!("{alt} Open the full-resolution original.")),
             alt = html::esc(alt),
             caption = html::esc(caption),
@@ -166,12 +177,87 @@ fn args() -> Result<Args> {
     })
 }
 
-fn write(out: &Path, rel: &str, text: &str) -> Result<()> {
+fn write(out: &Path, rel: &str, data: impl AsRef<[u8]>) -> Result<()> {
     let path = out.join(rel);
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    fs::write(&path, data).with_context(|| format!("writing {}", path.display()))
+}
+
+/// 64-bit FNV-1a. Each step is a bijection of the state, so any one changed
+/// run of bytes always changes the result.
+fn content_hash(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// "images/yukimi.png" becomes "images/yukimi.<hash>.png".
+fn hashed_name(path: &str, bytes: &[u8]) -> Result<String> {
+    let (stem, ext) = path
+        .rsplit_once('.')
+        .with_context(|| format!("{path} has no extension"))?;
+    Ok(format!("{stem}.{:016x}.{ext}", content_hash(bytes)))
+}
+
+/// Writes a file under its hashed name. A changed file gets a new URL, so
+/// these can be cached for a year while pages still revalidate: a deployment
+/// never serves an old image beside a new page, and needs no cache purge.
+fn publish(
+    out: &Path,
+    path: &str,
+    bytes: &[u8],
+    assets: &mut BTreeMap<String, String>,
+) -> Result<String> {
+    let name = hashed_name(path, bytes)?;
+    write(out, &name, bytes)?;
+    assets.insert(path.to_owned(), format!("/{name}"));
+    Ok(name)
+}
+
+fn publish_file(
+    from: &Path,
+    out: &Path,
+    path: &str,
+    assets: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    let bytes = fs::read(from).with_context(|| format!("reading {}", from.display()))?;
+    publish(out, path, &bytes, assets).map(drop)
+}
+
+/// Every local link, image and font URL in the pages and stylesheet must be a
+/// file this run wrote, so a renamed file can't leave a reference dangling.
+fn check_links(out: &Path, written: &[(String, String)]) -> Result<()> {
+    let mut missing = Vec::new();
+    for (file, text) in written {
+        for opener in ["href=\"", "src=\"", "url(\""] {
+            for part in text.split(opener).skip(1) {
+                let Some(url) = part.split('"').next() else {
+                    continue;
+                };
+                if !url.starts_with('/') || url.starts_with("//") {
+                    continue;
+                }
+                let path = url.split(['#', '?']).next().unwrap_or(url);
+                let target = if path.ends_with('/') {
+                    out.join(&path[1..]).join("index.html")
+                } else {
+                    out.join(&path[1..])
+                };
+                if !target.is_file() {
+                    missing.push(format!("{file}: {url}"));
+                }
+            }
+        }
+    }
+    if !missing.is_empty() {
+        bail!(
+            "links to files that were not written:\n{}",
+            missing.join("\n")
+        );
+    }
+    Ok(())
 }
 
 fn copy(from: &Path, out: &Path, rel: &str) -> Result<()> {
@@ -207,34 +293,68 @@ const HEADERS: &str = "/*
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Cross-Origin-Opener-Policy: same-origin
   Strict-Transport-Security: max-age=31536000
-/fonts/*
-  Cache-Control: public, max-age=604800
-/images/*
-  Cache-Control: public, max-age=604800
-/brand/*
-  Cache-Control: public, max-age=86400
 ";
+
+/// Cloudflare Pages reads at most this many rules from _headers.
+const HEADER_RULES: usize = 100;
 
 fn main() -> Result<()> {
     let a = args()?;
+    let out = &a.out;
+    fs::create_dir_all(out)?;
+
+    let mut assets = BTreeMap::new();
+    for (name, source) in IMAGES {
+        publish_file(
+            &a.repo.join(source),
+            out,
+            &format!("images/{name}"),
+            &mut assets,
+        )?;
+    }
+    for (name, source) in BRAND_FILES {
+        publish_file(
+            &a.repo.join(source),
+            out,
+            &format!("brand/{name}"),
+            &mut assets,
+        )?;
+    }
+    for (from, path) in [
+        (&a.mono, "fonts/JetBrainsMono.ttf"),
+        (&a.mono_license, "fonts/JetBrainsMono-OFL.txt"),
+        (&a.sans, "fonts/AtkinsonHyperlegibleNext.ttf"),
+        (&a.sans_italic, "fonts/AtkinsonHyperlegibleNext-Italic.ttf"),
+        (&a.sans_license, "fonts/AtkinsonHyperlegibleNext-OFL.txt"),
+    ] {
+        publish_file(from, out, path, &mut assets)?;
+    }
+
     let tokens = tokens::Tokens::load(&a.repo.join("docs/brand/tokens.json"))?;
-    let site = Site {
+    let mut site = Site {
         brand: brand::Brand::new(&a.repo),
         kanji: glyphs::Kanji::load(&a.cjk, 600.0)?,
         revision: a.revision.clone(),
         date: a.date.clone(),
         images: IMAGES.into_iter().collect(),
         repo: a.repo.clone(),
+        assets,
         tokens,
     };
-    let out = &a.out;
-    fs::create_dir_all(out)?;
+    let mut written = Vec::new();
 
     let mut css = include_str!("../style.css").to_owned();
+    // The stylesheet names the fonts by their plain paths.
+    for (path, url) in &site.assets {
+        css = css.replace(&format!("\"/{path}\""), &format!("\"{url}\""));
+    }
     css.push('\n');
     css.push_str(&site.tokens.css()?);
     css.push_str(&swatch_css(&site.tokens)?);
-    write(out, "site.css", &css)?;
+    // Hashed too: Cloudflare otherwise lets browsers keep a stylesheet for
+    // hours, which could pair new pages with old styles.
+    let name = publish(out, "site.css", css.as_bytes(), &mut site.assets)?;
+    written.push((name, css));
 
     let pages = [
         pages::home(&site)?,
@@ -242,17 +362,16 @@ fn main() -> Result<()> {
         pages::yukimi(&site)?,
         pages::design(&site)?,
         pages::status(&site)?,
-        pages::fonts(),
+        pages::fonts(&site)?,
     ];
     let mut sitemap = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
     );
     for page in &pages {
-        write(
-            out,
-            &format!("{}index.html", &page.path[1..]),
-            &html::shell(&site, page)?,
-        )?;
+        let file = format!("{}index.html", &page.path[1..]);
+        let html = html::shell(&site, page)?;
+        write(out, &file, &html)?;
+        written.push((file, html));
         writeln!(
             sitemap,
             "  <url><loc>{}{}</loc></url>",
@@ -262,41 +381,86 @@ fn main() -> Result<()> {
     }
     sitemap.push_str("</urlset>\n");
     let lost = pages::not_found(&site)?;
-    write(out, "404.html", &html::shell(&site, &lost)?)?;
+    let html = html::shell(&site, &lost)?;
+    write(out, "404.html", &html)?;
+    written.push(("404.html".to_owned(), html));
     write(out, "sitemap.xml", &sitemap)?;
     write(
         out,
         "robots.txt",
-        &format!(
+        format!(
             "User-agent: *\nAllow: /\nSitemap: {}/sitemap.xml\n",
             html::ORIGIN
         ),
     )?;
-    write(out, "_headers", HEADERS)?;
 
-    for (name, source) in IMAGES {
-        copy(&a.repo.join(source), out, &format!("images/{name}"))?;
+    // Hashed files never change under their names. Everything else, pages
+    // included, keeps Pages' default and is revalidated on every visit.
+    let mut headers = String::from(HEADERS);
+    for url in site.assets.values() {
+        writeln!(
+            headers,
+            "{url}\n  Cache-Control: public, max-age=31536000, immutable"
+        )?;
     }
-    for (name, source) in BRAND_FILES {
-        copy(&a.repo.join(source), out, &format!("brand/{name}"))?;
+    if site.assets.len() + 1 > HEADER_RULES {
+        bail!("_headers would have more than {HEADER_RULES} rules");
     }
+    write(out, "_headers", headers)?;
+
+    // Pages link the hashed app icon; this keeps the usual address working.
     copy(
         &a.repo.join("docs/brand/logos/sekka-app-icon.svg"),
         out,
         "favicon.svg",
     )?;
-    copy(&a.mono, out, "fonts/JetBrainsMono.ttf")?;
-    copy(&a.mono_license, out, "fonts/JetBrainsMono-OFL.txt")?;
-    copy(&a.sans, out, "fonts/AtkinsonHyperlegibleNext.ttf")?;
-    copy(
-        &a.sans_italic,
-        out,
-        "fonts/AtkinsonHyperlegibleNext-Italic.ttf",
-    )?;
-    copy(
-        &a.sans_license,
-        out,
-        "fonts/AtkinsonHyperlegibleNext-OFL.txt",
-    )?;
-    Ok(())
+    check_links(out, &written)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hashed_names_keep_the_directory_and_extension() {
+        let name = hashed_name("images/yukimi.png", b"snow").unwrap();
+        assert!(name.starts_with("images/yukimi."), "{name}");
+        assert!(name.ends_with(".png"), "{name}");
+        assert_eq!(name.len(), "images/yukimi..png".len() + 16);
+        assert_eq!(name, hashed_name("images/yukimi.png", b"snow").unwrap());
+    }
+
+    #[test]
+    fn dangling_links_are_caught() {
+        let out = std::env::temp_dir().join(format!("sekka-site-links-{}", std::process::id()));
+        fs::create_dir_all(out.join("tatami")).unwrap();
+        fs::write(out.join("tatami/index.html"), "").unwrap();
+        fs::write(out.join("site.css"), "").unwrap();
+        let page = |html: &str| vec![("index.html".to_owned(), html.to_owned())];
+        let good = check_links(
+            &out,
+            &page(
+                r##"<a href="/tatami/#keys">t</a><link href="/site.css"><a href="https://example.com/">e</a><a href="#main">m</a>"##,
+            ),
+        );
+        let bad = check_links(&out, &page(r#"<img src="/images/yukimi.png">"#));
+        fs::remove_dir_all(&out).unwrap();
+        good.unwrap();
+        assert!(
+            bad.unwrap_err()
+                .to_string()
+                .contains("index.html: /images/yukimi.png")
+        );
+    }
+
+    #[test]
+    fn any_changed_byte_changes_the_name() {
+        let base = vec![0u8; 64];
+        let first = hashed_name("a.png", &base).unwrap();
+        for i in 0..base.len() {
+            let mut changed = base.clone();
+            changed[i] = 1;
+            assert_ne!(hashed_name("a.png", &changed).unwrap(), first, "byte {i}");
+        }
+    }
 }
