@@ -221,6 +221,104 @@ let
       RestartSec = 1;
     };
   };
+  # Tatami's session units. tatami reload restarts the running ones from this
+  # same set (xdg/tatami/units.json below), never a unit that only shares the
+  # tatami- prefix, such as one started by hand.
+  sessionServices = {
+    tatami-display-recovery =
+      lib.recursiveUpdate (unit "Tatami display recovery" "${lib.getExe tool} displays watch")
+        {
+          # A delayed/recreated compositor socket must not exhaust retries.
+          unitConfig.StartLimitIntervalSec = 0;
+          serviceConfig.TimeoutStopSec = "5s";
+        };
+    tatami-keep-awake = import ./keep-awake.nix { inherit lib pkgs tool; };
+    tatami-waybar =
+      lib.recursiveUpdate
+        (unit "Tatami top bar" "${lib.getExe pkgs.waybar} -c ${configDir}/waybar/config.jsonc -s ${configDir}/waybar/style.css")
+        {
+          # The volume module does not appear if the audio graph is not
+          # ready when it connects.
+          after = [
+            "wayland-wm@tatami.service"
+            "wayland-session-waitenv.service"
+            "wireplumber.service"
+            "pipewire-pulse.service"
+          ];
+          wants = [ "wireplumber.service" ];
+        };
+    # A plain service: with Type=dbus and BusName, systemd refused to load it
+    # once another desktop's notification service had claimed the name.
+    tatami-mako = unit "Tatami notifications" "${pkgs.mako}/bin/mako -c ${configDir}/mako/config";
+    # The power key opens the System menu, as in Omarchy, which has logind
+    # ignore it; here only while this session runs, so the login screen and
+    # the other desktops keep their own handling.
+    tatami-power-key = unit "Tatami power key" (
+      lib.escapeShellArgs [
+        "${config.systemd.package}/bin/systemd-inhibit"
+        "--what=handle-power-key"
+        "--who=Tatami"
+        "--why=The power key opens the System menu"
+        "--mode=block"
+        "${pkgs.coreutils}/bin/sleep"
+        "infinity"
+      ]
+    );
+    # The background the user chose (Style › Background), a symlink in the
+    # state directory that the helper makes point at the default until then.
+    # The helper reads the user's saved modes, colors and output overrides.
+    # Its default, fill, preserves aspect ratio and crops for each display.
+    tatami-swaybg =
+      lib.recursiveUpdate
+        (unit "Tatami background" "${lib.getExe tool} background run ${lib.getExe pkgs.swaybg}")
+        {
+          serviceConfig.ExecStartPre = "${lib.getExe tool} background ensure";
+        };
+    tatami-swayosd = unit "Tatami on-screen display" "${pkgs.swayosd}/bin/swayosd-server";
+    tatami-hypridle = unit "Tatami idle locking" "${lib.getExe pkgs.hypridle} -c ${configDir}/hypr/hypridle.conf";
+    # Dark, in Tokyo Night: Qt's built-in KDE platform theme reads the
+    # agent's palette from config/polkit/kdeglobals. Set on this unit only,
+    # so neither the session nor the user's own KDE colors are involved.
+    tatami-polkit =
+      lib.recursiveUpdate
+        (unit "Tatami authentication agent" "${pkgs.hyprpolkitagent}/libexec/hyprpolkitagent")
+        {
+          environment = {
+            QT_QPA_PLATFORMTHEME = "kde";
+            KDE_SESSION_VERSION = "6";
+            QT_QUICK_CONTROLS_STYLE = "org.hyprland.style";
+            XDG_CONFIG_HOME = "${configDir}/polkit";
+          };
+        };
+    tatami-elephant = unit "Tatami launcher backend" "${lib.getExe elephant}";
+    tatami-walker =
+      lib.recursiveUpdate (unit "Tatami launcher" "${lib.getExe pkgs.walker} --gapplication-service")
+        {
+          after = [
+            "wayland-wm@tatami.service"
+            "wayland-session-waitenv.service"
+            "tatami-elephant.service"
+          ];
+          wants = [ "tatami-elephant.service" ];
+          environment.GSK_RENDERER = "cairo";
+        };
+    # Removable drives mount automatically, as in Omarchy 4.
+    tatami-udiskie = unit "Tatami automounting" "${lib.getExe' pkgs.udiskie "udiskie"} --automount --no-notify --no-tray";
+    # Window gaps, aspect ratio, workspace layouts, monitor scales and a
+    # disabled touchpad, as the user last toggled them.
+    tatami-restore =
+      lib.recursiveUpdate (unit "Tatami remembered toggles" "${lib.getExe tool} restore")
+        {
+          serviceConfig = {
+            Type = "oneshot";
+            Restart = "no";
+          };
+        };
+    # Started on demand by the nightlight toggle.
+    tatami-hyprsunset = (unit "Tatami nightlight" "${lib.getExe pkgs.hyprsunset}") // {
+      wantedBy = [ ];
+    };
+  };
 in
 {
   imports = [ ../../modules/hyprland-fixes.nix ];
@@ -273,6 +371,9 @@ in
           keep_awake = "${tool}:${pkgs.systemd}";
         };
         "xdg/tatami/hypr/hyprland.lua".source = hyprland;
+        "xdg/tatami/units.json".text = builtins.toJSON (
+          map (name: "${name}.service") (lib.attrNames sessionServices)
+        );
         "xdg/tatami/elephant/menus/tatami-system.toml".source = systemMenu;
         "xdg/tatami/elephant/menus/tatami-backgrounds.toml".source = backgroundsMenu;
         "xdg/tatami/background".source = wallpaper;
@@ -292,101 +393,7 @@ in
           hiddenInTatami "print-applet" pkgs.system-config-printer "KDE;GNOME;Cinnamon;"
         )
       );
-    systemd.user.services = {
-      tatami-display-recovery =
-        lib.recursiveUpdate (unit "Tatami display recovery" "${lib.getExe tool} displays watch")
-          {
-            # A delayed/recreated compositor socket must not exhaust retries.
-            unitConfig.StartLimitIntervalSec = 0;
-            serviceConfig.TimeoutStopSec = "5s";
-          };
-      tatami-keep-awake = import ./keep-awake.nix { inherit lib pkgs tool; };
-      tatami-waybar =
-        lib.recursiveUpdate
-          (unit "Tatami top bar" "${lib.getExe pkgs.waybar} -c ${configDir}/waybar/config.jsonc -s ${configDir}/waybar/style.css")
-          {
-            # The volume module does not appear if the audio graph is not
-            # ready when it connects.
-            after = [
-              "wayland-wm@tatami.service"
-              "wayland-session-waitenv.service"
-              "wireplumber.service"
-              "pipewire-pulse.service"
-            ];
-            wants = [ "wireplumber.service" ];
-          };
-      # A plain service: with Type=dbus and BusName, systemd refused to load it
-      # once another desktop's notification service had claimed the name.
-      tatami-mako = unit "Tatami notifications" "${pkgs.mako}/bin/mako -c ${configDir}/mako/config";
-      # The power key opens the System menu, as in Omarchy, which has logind
-      # ignore it; here only while this session runs, so the login screen and
-      # the other desktops keep their own handling.
-      tatami-power-key = unit "Tatami power key" (
-        lib.escapeShellArgs [
-          "${config.systemd.package}/bin/systemd-inhibit"
-          "--what=handle-power-key"
-          "--who=Tatami"
-          "--why=The power key opens the System menu"
-          "--mode=block"
-          "${pkgs.coreutils}/bin/sleep"
-          "infinity"
-        ]
-      );
-      # The background the user chose (Style › Background), a symlink in the
-      # state directory that the helper makes point at the default until then.
-      # The helper reads the user's saved modes, colors and output overrides.
-      # Its default, fill, preserves aspect ratio and crops for each display.
-      tatami-swaybg =
-        lib.recursiveUpdate
-          (unit "Tatami background" "${lib.getExe tool} background run ${lib.getExe pkgs.swaybg}")
-          {
-            serviceConfig.ExecStartPre = "${lib.getExe tool} background ensure";
-          };
-      tatami-swayosd = unit "Tatami on-screen display" "${pkgs.swayosd}/bin/swayosd-server";
-      tatami-hypridle = unit "Tatami idle locking" "${lib.getExe pkgs.hypridle} -c ${configDir}/hypr/hypridle.conf";
-      # Dark, in Tokyo Night: Qt's built-in KDE platform theme reads the
-      # agent's palette from config/polkit/kdeglobals. Set on this unit only,
-      # so neither the session nor the user's own KDE colors are involved.
-      tatami-polkit =
-        lib.recursiveUpdate
-          (unit "Tatami authentication agent" "${pkgs.hyprpolkitagent}/libexec/hyprpolkitagent")
-          {
-            environment = {
-              QT_QPA_PLATFORMTHEME = "kde";
-              KDE_SESSION_VERSION = "6";
-              QT_QUICK_CONTROLS_STYLE = "org.hyprland.style";
-              XDG_CONFIG_HOME = "${configDir}/polkit";
-            };
-          };
-      tatami-elephant = unit "Tatami launcher backend" "${lib.getExe elephant}";
-      tatami-walker =
-        lib.recursiveUpdate (unit "Tatami launcher" "${lib.getExe pkgs.walker} --gapplication-service")
-          {
-            after = [
-              "wayland-wm@tatami.service"
-              "wayland-session-waitenv.service"
-              "tatami-elephant.service"
-            ];
-            wants = [ "tatami-elephant.service" ];
-            environment.GSK_RENDERER = "cairo";
-          };
-      # Removable drives mount automatically, as in Omarchy 4.
-      tatami-udiskie = unit "Tatami automounting" "${lib.getExe' pkgs.udiskie "udiskie"} --automount --no-notify --no-tray";
-      # Window gaps, aspect ratio, workspace layouts, monitor scales and a
-      # disabled touchpad, as the user last toggled them.
-      tatami-restore =
-        lib.recursiveUpdate (unit "Tatami remembered toggles" "${lib.getExe tool} restore")
-          {
-            serviceConfig = {
-              Type = "oneshot";
-              Restart = "no";
-            };
-          };
-      # Started on demand by the nightlight toggle.
-      tatami-hyprsunset = (unit "Tatami nightlight" "${lib.getExe pkgs.hyprsunset}") // {
-        wantedBy = [ ];
-      };
-    };
+    systemd.user.services = sessionServices;
     security.pam.services.hyprlock = { };
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;

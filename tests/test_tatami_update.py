@@ -11,17 +11,21 @@ import unittest
 BIN = Path(sys.argv.pop(1)).resolve()
 PYTHON = Path(sys.executable).resolve()
 FAKE = r'''
-import json, pathlib, sys
+import fnmatch, json, pathlib, sys
 p = pathlib.Path
 name, args = p(sys.argv[0]).name, sys.argv[1:]
 with open('/state/calls', 'a') as out: out.write(json.dumps([name] + args) + '\n')
 if name == 'systemctl':
     if 'is-active' in args: sys.exit(0 if p('/state/awake').exists() else 3)
     if 'list-units' in args:
-        for unit in ['tatami-swaybg', 'tatami-keep-awake', 'tatami-keep-awake-temporary']:
-            print(unit + '.service loaded active running test')
+        # Running: two of Tatami's units and one started by hand.
+        patterns = [arg for arg in args if not arg.startswith('-') and arg != 'list-units']
+        for unit in ['tatami-swaybg.service', 'tatami-keep-awake.service', 'tatami-waybar-test.service']:
+            if any(fnmatch.fnmatch(unit, pattern) for pattern in patterns):
+                print(unit + ' loaded active running test')
     if 'try-restart' in args:
         assert not any('keep-awake' in arg for arg in args), args
+        assert 'tatami-waybar-test.service' not in args, args
         if p('/state/fail-reload').exists(): sys.exit(1)
 elif name == 'hyprctl':
     if 'instances' in args: print('[]') # Pinned/unknown; must not force logout when unchanged.
@@ -40,6 +44,9 @@ class SessionUpdate(unittest.TestCase):
         self.desired = {'version': 1, 'session': {'compositor': 'old'},
                         'reload': {'hyprland': 'same', 'background': 'old'}, 'keep_awake': 'old'}
         self.write_manifest()
+        # The session units the module defines; the hand-started one is not.
+        (self.root / 'etc/xdg/tatami/units.json').write_text(json.dumps(
+            ['tatami-swaybg.service', 'tatami-keep-awake.service', 'tatami-hyprsunset.service']))
         for name in ['systemctl', 'hyprctl', 'busctl', 'start-hyprland']:
             file = self.root / 'fake' / name
             file.write_text(f'#!{PYTHON}\n' + FAKE)
@@ -86,6 +93,22 @@ class SessionUpdate(unittest.TestCase):
         self.assertEqual(self.receipt()['reload'], self.desired['reload'])
         self.assertFalse(any(call[0] == 'hyprctl' for call in self.calls()))
         self.assertTrue(any('try-restart' in call for call in self.calls()))
+
+    def test_reload_restarts_only_tatamis_own_running_units(self):
+        self.desired['reload']['background'] = 'new'
+        self.write_manifest()
+        self.run_tatami('update-session')
+        restarts = [call for call in self.calls() if 'try-restart' in call]
+        self.assertEqual(restarts, [['systemctl', '--user', 'try-restart', 'tatami-swaybg.service']])
+
+    def test_reload_without_the_unit_list_fails_visibly(self):
+        (self.root / 'etc/xdg/tatami/units.json').unlink()
+        self.desired['reload']['background'] = 'new'
+        self.write_manifest()
+        self.run_tatami('update-session', ok=False)
+        self.assertEqual(self.receipt()['reload'], self.original['reload'])
+        self.assertIn('session units', self.receipt()['error'])
+        self.assertFalse(any('try-restart' in call for call in self.calls()))
 
     def test_changed_pinned_configuration_stays_pending(self):
         self.desired['reload']['hyprland'] = 'new'

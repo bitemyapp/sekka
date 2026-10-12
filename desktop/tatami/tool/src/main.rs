@@ -176,32 +176,26 @@ fn reload_parts(hypr_changed: bool) -> Result<bool, String> {
         }
         window::Reload::Pinned => true,
     };
-    // Only the units that are running: the on-demand nightlight stays off.
-    // An appearance reload must not briefly drop an active sleep inhibitor.
-    let units = util::output(
-        "systemctl",
-        &[
-            "--user",
-            "list-units",
-            "--plain",
-            "--no-legend",
-            "tatami-*.service",
-        ],
-    )
-    .unwrap_or_default();
-    let services: Vec<&str> = units
-        .lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .filter(|name| {
-            *name != awake::UNIT
-                && *name != "tatami-keep-awake-temporary.service"
-                && name.ends_with(".service")
-        })
-        .collect();
-    let mut restart = vec!["--user", "try-restart"];
-    restart.extend(services);
-    if restart.len() > 2 && !util::run("systemctl", &restart) {
-        failed.push("session units");
+    // Tatami's own units as the module lists them, not every unit named
+    // tatami-*: a unit someone started by hand stays theirs to stop.
+    match session_units() {
+        Ok(own) => {
+            // Only the units that are running: the on-demand nightlight stays
+            // off. An appearance reload must not briefly drop an active sleep
+            // inhibitor.
+            let mut list = vec!["--user", "list-units", "--plain", "--no-legend"];
+            list.extend(own.iter().map(String::as_str));
+            let running = util::output("systemctl", &list).unwrap_or_default();
+            let mut restart = vec!["--user", "try-restart"];
+            restart.extend(running_to_restart(&own, &running));
+            if restart.len() > 2 && !util::run("systemctl", &restart) {
+                failed.push("session units");
+            }
+        }
+        Err(error) => {
+            eprintln!("tatami: {error}");
+            failed.push("session units");
+        }
     }
     // Mako is among the restarted units: a notification sent before it is
     // back on the bus has D-Bus start another notification daemon.
@@ -216,6 +210,23 @@ fn reload_parts(hypr_changed: bool) -> Result<bool, String> {
     } else {
         Err(failed.join(", "))
     }
+}
+
+/// The session units Tatami's module defines, as it lists them in /etc.
+fn session_units() -> Result<Vec<String>, String> {
+    let path = "/etc/xdg/tatami/units.json";
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Which of Tatami's units to restart, from `systemctl list-units` output:
+/// those running, except Keep Awake.
+fn running_to_restart<'a>(own: &[String], running: &'a str) -> Vec<&'a str> {
+    running
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| *name != awake::UNIT && own.iter().any(|unit| unit == name))
+        .collect()
 }
 
 /// Whether a notification daemon has its bus name, asked without starting one.
@@ -632,6 +643,16 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reload_restarts_only_tatamis_own_running_units() {
+        let own: Vec<String> = ["tatami-waybar.service", "tatami-keep-awake.service"]
+            .map(String::from)
+            .into();
+        let running = "tatami-waybar.service loaded active running Tatami top bar\n\
+                       tatami-waybar-test.service loaded active running Started by hand\n\
+                       tatami-keep-awake.service loaded active running Keep Awake\n";
+        assert_eq!(running_to_restart(&own, running), ["tatami-waybar.service"]);
+    }
     #[test]
     fn tatami_configuration_is_searched_first_once() {
         assert_eq!(config_dirs(None), "/etc/xdg/tatami:/etc/xdg");

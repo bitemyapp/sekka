@@ -246,7 +246,9 @@ new ones), and the system's `flake.lock` keeps its revision, so the next
 ordinary rebuild goes back to it. `tatami reload` (System › Reload in the
 menu) reloads Hyprland's configuration without turning any monitor on or
 off, re-applies the remembered toggles, and restarts the session's running
-units (bar, launcher, notifications…) from the new configuration. A session
+units (bar, launcher, notifications…) from the new configuration. Those are
+the units the module lists in `/etc/xdg/tatami/units.json`; a unit started by
+hand is left alone, even one named `tatami-…`. A session
 started by an older Tatami, whose Hyprland can only re-read the store copy
 it began with, keeps its Hyprland configuration until the next login, and
 `tatami reload` restarts the units only. Changes to the session's
