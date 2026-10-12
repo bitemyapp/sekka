@@ -204,10 +204,15 @@
     "on-scroll-up": "tatami brightness +5%",
     "on-scroll-down": "tatami brightness 5%-"
   },
+  // The time left is Waybar's estimate from the battery's energy and what the
+  // machine draws now, so it moves with the load. Hover for it, or right-click
+  // to keep it in the bar with the percentage.
   "battery": {
     "format": "{icon}",
-    "format-alt": "{capacity}% {icon}",
+    "format-alt": "{capacity}% {time}{icon}",
     "format-alt-click": "click-right",
+    // Empty when there is no estimate yet, taking its space with it.
+    "format-time": "{H}h {M}m ",
     "format-full": "󰂅",
     "format-icons": {
       "charging": [
@@ -235,8 +240,10 @@
         "󰁹"
       ]
     },
-    "tooltip-format-discharging": "{power:>1.0f}W↓ {capacity}%",
-    "tooltip-format-charging": "{power:>1.0f}W↑ {capacity}%",
+    // {timeTo} reads "Empty in 3h 4m" or "Full in 0h 57m", or the status
+    // alone while there is no estimate.
+    "tooltip-format-discharging": "{power:>1.0f}W↓ {capacity}% · {timeTo}",
+    "tooltip-format-charging": "{power:>1.0f}W↑ {capacity}% · {timeTo}",
     "interval": 5,
     "on-click": "tatami power-profile",
     "states": {
