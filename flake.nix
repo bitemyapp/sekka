@@ -35,6 +35,15 @@
       hyprlandPkgs = pkgs.extend (import ./nix/overlays/aquamarine.nix);
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
+      site = import ./nix/site.nix {
+        inherit pkgs;
+        revision = self.shortRev or self.dirtyShortRev or "unknown";
+        date =
+          let
+            d = self.lastModifiedDate or "19700101000000";
+          in
+          "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
+      };
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
@@ -124,6 +133,8 @@
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         application-cache = applicationCatalog.cache;
+        # sekka.computer, ready to upload; nothing publishes it.
+        inherit site;
         # Exported separately for isolated Wi-Fi regression tests, not shipped
         # in the public ISO or installed as a live access-point service.
         wifi-test-tools = pkgs.symlinkJoin {
@@ -343,6 +354,7 @@
           yukimiModule = inputs.yukimi.nixosModules.default;
         };
         tools = tools;
+        site = site;
         template-lock = pkgs.runCommand "template-lock-tests" { } ''
           ${tools}/bin/respin-tools check-config template ${./templates/flake.nix.in} ${
             self.packages.${system}.installed-lock

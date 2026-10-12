@@ -13,8 +13,9 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, and Yuki
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
+| `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand |
 
 The initial import preserves component layouts and separate Cargo workspaces. There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -356,7 +357,42 @@ It checks and builds the tagged source without updating the lock, creates checks
 
 GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
 
+## Website
+
+`site/` is a separate Cargo workspace whose program writes sekka.computer:
+static HTML and CSS with no JavaScript, built from `docs/brand/tokens.json`,
+the brand SVGs, and screenshots copied byte for byte. Each caption repeats the
+provenance recorded in `docs/screenshots.md`. The design page's contrast
+ratios are computed from the tokens when the site is built. Kanji are outlined
+from Noto Serif CJK JP, so no CJK webfont ships; JetBrains Mono and Atkinson
+Hyperlegible Next are served from the site with their OFL texts. Pages follow
+the visitor's colour-scheme and contrast preferences, and every page states
+the revision it was built from (a dirty tree says so).
+
+```sh
+nix build .#site --out-link result-site
+nix run --inputs-from . nixpkgs#static-web-server -- --port 8787 --root result-site --page404 result-site/404.html
+```
+
+Nothing publishes it. `sekka.computer` is already a Cloudflare zone; to host
+the site there, upload `result-site` to a Cloudflare Pages project (direct
+upload, or `wrangler pages deploy result-site`) and add the apex as its custom
+domain. Pages applies `_headers` (the content security policy) and serves
+`404.html`. The pages promise no cookies, scripts or analytics, so leave off
+the Cloudflare features that add them: Web Analytics, Rocket Loader, Email
+Address Obfuscation and Bot Fight Mode.
+
+Everything the site claims comes from this repository's READMEs and docs.
+When a limitation, test or feature changes, change `site/src/pages.rs` with
+it.
+
 ## Screenshots and attribution
+
+The crest, lockups, family icons and colour tokens are in `docs/brand`, with
+their usage rules in its README. `docs/brand/generate.py` draws every SVG, with
+text outlined from JetBrains Mono and Noto Serif CJK taken from the root
+flake's Nixpkgs; change the script and regenerate rather than editing the SVGs.
+Nothing in the desktop, installer or image uses them yet.
 
 Wallpapers retain their original published resolution and aspect ratio; desktop
 fill/zoom modes handle cropping for each display. Preserve the downloaded bytes
