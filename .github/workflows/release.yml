@@ -1,4 +1,4 @@
-name: Build and publish Sekka ISO (disabled)
+name: Build and publish Sekka ISO
 
 on:
   workflow_dispatch:
@@ -17,9 +17,11 @@ concurrency:
 
 jobs:
   release:
-    # Intentionally inhibited. Enabling requires a reviewed change to this line.
-    # There are no push, tag, schedule, or pull_request triggers.
-    if: ${{ false }}
+    # Started by hand only, from main: no push, tag, schedule or pull_request
+    # triggers. It runs on the sandboxed builder (nix/runner.nix and
+    # DEVELOPERS.md), one fresh container per job, with Nix through the
+    # host's daemon.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     permissions:
@@ -43,7 +45,22 @@ jobs:
           git merge-base --is-ancestor "$revision" origin/main
           git checkout --detach "$revision"
           test -z "$(git status --porcelain)"
-      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # NixOS tests in the flake check run in VMs: a build that asks for
+          # KVM must get a usable /dev/kvm from the daemon (see DEVELOPERS.md).
+          # The ${...} in single quotes are Nix's own.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "test -w /dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
+            exit 1
+          }
       - name: Check components and build ISO
         shell: bash
         run: |

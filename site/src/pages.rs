@@ -121,7 +121,7 @@ pub fn home(site: &Site) -> Result<Page> {
     <li><strong>Disk encryption is not implemented.</strong> Neither are RAID or LVM setup, or offline installation. An internet connection is required.</li>
     <li><strong>Hardware coverage is limited.</strong> Virtual machines cannot show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
-    <li><strong>There is no release or support promise.</strong> Publishing images is deliberately switched off while the release process is checked.</li>
+    <li><strong>There is no release or support promise.</strong> Published images will be prereleases: previews, not a release you can rely on.</li>
   </ul>
 </section>
 
@@ -762,7 +762,7 @@ pub fn status(site: &Site) -> Result<Page> {
         r#"<section class="tiles">
   <article class="win warn">
     <h2>No release to download</h2>
-    <p>Publishing images is deliberately switched off while the monorepo and release process are checked. There is nothing to download here, and GitHub's “Source code” archives are not bootable images. When previews are published they will be on the <a href="{REPO}/releases">Releases page</a>, with checksums and instructions.</p>
+    <p>No preview has been published yet. There is nothing to download here, and GitHub's “Source code” archives are not bootable images. Previews will be prereleases on the <a href="{REPO}/releases">Releases page</a>, with checksums and instructions.</p>
   </article>
   <article class="win">
     <h2>Trying it anyway</h2>

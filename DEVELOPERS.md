@@ -272,7 +272,7 @@ that `trusted-substituters` does not already list.
 `nix build .#checks.x86_64-linux.binary-cache` checks that the flake, the live
 media and an installed system name the same cache and key.
 
-Publishing is manual; the disabled release workflow does not touch the cache.
+Publishing is manual; the release workflow does not touch the cache.
 From a clean checkout of reviewed `main`:
 
 ```sh
@@ -374,13 +374,103 @@ a non-zero `DISC-GRAN` in `lsblk --discard` for the opened mapping and a
 successful `fstrim -v /`; check that the virtual target disk itself advertises
 discard first, or the result proves nothing.
 
-## Release workflow: deliberately disabled
+## Releases
 
-`.github/workflows/release.yml` has only a manual trigger and an unconditional `if: ${{ false }}` on its sole job. No dispatch, push, tag, or schedule can currently build or publish an image through it. **Do not enable it as part of ordinary maintenance.**
+`.github/workflows/release.yml` builds and publishes an ISO. Its only trigger
+is a manual dispatch from `main`, naming an existing `v`-prefixed tag whose
+commit is reachable from `main`:
 
-When release readiness is established, a maintainer must review a change removing that inhibition. Provision a clean dedicated Linux x86_64 runner labeled `sekka-builder`, with enough storage, Python 3, Git, and GitHub CLI. The workflow installs Nix. Run the workflow from `main`, specifying an existing `v`-prefixed tag whose commit is reachable from `main`.
+```sh
+git tag v0.1.0-preview.1 <commit on main>
+git push origin v0.1.0-preview.1
+gh workflow run release.yml --ref main -f tag=v0.1.0-preview.1
+```
 
-It checks and builds the tagged source without updating the lock, creates checksums and a source manifest, uploads assets into a draft release, then publishes it as a prerelease. The workflow uses its repository-scoped `GITHUB_TOKEN`; no personal token is required. It does not trigger on pull requests or create release tags automatically.
+It checks out the tag, runs `nix flake check` and builds `.#iso` without
+updating the lock, creates checksums and a source manifest, uploads assets into
+a draft release, then publishes it as a prerelease. It uses the repository's
+`GITHUB_TOKEN` with `contents: write`. Nothing creates tags, and no push, pull
+request or schedule starts it. It does not push to the binary cache.
+
+### The builder
+
+Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
+`nix/runner.nix`, the `runner` package:
+
+- A supervisor container, which Docker restarts, asks GitHub for each job's
+  just-in-time registration: a runner labelled `self-hosted`, `linux`, `x64`,
+  `sekka-builder` that takes one job and is then removed. Only the supervisor
+  reads the token that allows this; jobs never see it. Through Docker's socket
+  the supervisor is as powerful as root on the builder, so it runs nothing but
+  its own script.
+- Each job gets a fresh container, as uid 30500, with every capability
+  dropped, `no-new-privileges`, a read-only root, and a tmpfs `/tmp` and
+  throwaway volume for its home and workspace, both gone with the job. It sees
+  the host's Nix store read-only and the daemon's socket, and nothing else of
+  the host: no Docker socket, `/dev/kvm` or home directories. Its builds run
+  in the daemon's own sandbox as an untrusted user, which cannot add
+  substituters or change trusted settings.
+- Before the first step, the runner's job-started hook admits only
+  `workflow_dispatch` on `refs/heads/main` of `bitemyapp/sekka`, which only
+  maintainers can start. For anything else, such as a pull request's workflow,
+  it kills every process of the job but the runner, so even `if: always()`
+  steps never run, and the job fails.
+- The repository requires approval before any workflow from an outside
+  contributor's pull request runs (Settings, Actions, General: "Require
+  approval for all external contributors"). The workflow token defaults to
+  read-only and cannot approve pull requests.
+
+Know its limits. Builds happen in the host's daemon, so the job container's
+memory and CPU limits do not cap them; the daemon's `max-jobs` and `cores` do.
+A job's container is on Docker's default network: it reaches the internet, the
+LAN and services on the host. The admission hook and pull request approval keep
+untrusted code from getting that far. Each release leaves its closure in the
+host's store, about 6 GiB for the ISO alone, until Nix collects garbage; the
+workflow keeps no GC roots, and the builder's root filesystem is nearly full.
+
+### Setting up the builder
+
+Once, as root on the builder, from a checkout:
+
+```sh
+sudo bash scripts/runner-host-setup.sh
+```
+
+It reserves uid and gid 30500 as `sekka-runner`, lets the Nix build users open
+`/dev/kvm` (the daemon gives it to the sandbox of builds that require `kvm`,
+such as the flake check's NixOS tests, but without the `kvm` group they cannot
+open it), adds Sekka's binary cache, and restarts the daemon. The workflow's
+first Nix step fails with a pointer here if a build cannot use KVM.
+
+Then, as the maintainer, build the runner, load its images and start the
+supervisor:
+
+```sh
+nix build .#runner --out-link ~/sekka-runner/current
+docker load -i ~/sekka-runner/current/job-image.tar.gz
+docker load -i ~/sekka-runner/current/supervisor-image.tar.gz
+docker run -d --name sekka-runner-supervisor --restart unless-stopped \
+  --user "$(id -u):$(id -g)" --group-add "$(getent group docker | cut -d: -f3)" \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /nix/store:/nix/store:ro \
+  -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
+  sekka-runner-supervisor:latest
+```
+
+The images refer to store paths without holding them; the out-link is the GC
+root that keeps them. The supervisor waits for its token: a fine-grained
+personal access token for `bitemyapp/sekka` alone, with Administration: Read
+and write (which registering runners needs) and no other permission, saved as
+`~/.config/sekka-runner/token` with mode 600. Replace the file when the token
+expires; the supervisor reads it before each registration.
+
+To update the runner, build and load again, then, while no job is running,
+`docker stop sekka-runner-job` (the waiting runner, which would take the next
+job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
+supervisor lets a running job finish first. To stop taking jobs,
+`docker stop sekka-runner-supervisor sekka-runner-job`. The supervisor logs to
+`docker logs sekka-runner-supervisor`.
 
 GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
 

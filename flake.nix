@@ -123,6 +123,11 @@
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
+        # The release workflow's sandboxed runner (nix/runner.nix).
+        runner = import ./nix/runner.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+        };
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
           genkan = calamares;

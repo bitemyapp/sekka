@@ -12,7 +12,7 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 - **Disk encryption is not implemented.** Neither are RAID/LVM setup or offline installation. An internet connection is required.
 - **Hardware coverage is limited.** VM tests cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
-- **There is no production release or support promise.** Automated ISO publication is deliberately disabled while the monorepo and release process are validated. Older screenshots and test reports are not proof of a tested Sekka release.
+- **There is no production release or support promise.** Published images are prereleases: previews, not a release you can rely on. Older screenshots and test reports are not proof of a tested Sekka release.
 
 If you need a system you can rely on today, wait before installing Sekka.
 
@@ -87,7 +87,7 @@ Plasma is the default live desktop and the installer's preselected choice. GNOME
 
 ## Trying Sekka
 
-**Downloads are not available from an enabled Sekka release pipeline yet.** When previews are published, they will appear on the [Releases page](https://github.com/bitemyapp/sekka/releases), with checksums and instructions. Do not mistake GitHub's “Source code” archives for bootable images.
+**No preview has been published yet.** Previews will appear on the [Releases page](https://github.com/bitemyapp/sekka/releases) as prereleases, with checksums and instructions. Do not mistake GitHub's “Source code” archives for bootable images.
 
 For now, building an image is a developer workflow; see [DEVELOPERS.md](DEVELOPERS.md). A built image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
 
