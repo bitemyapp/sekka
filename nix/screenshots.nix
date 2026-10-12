@@ -14,6 +14,26 @@ let
   inherit (pkgs) lib;
   width = 2560;
   height = 1600;
+  # Made-up networks for the Network window, served by simulated Wi-Fi: none
+  # is a real network anywhere.
+  wifi = import ./simulated-wifi.nix {
+    inherit lib pkgs;
+    networks = [
+      {
+        ssid = "Home";
+        password = "correct horse";
+      }
+      {
+        ssid = "Café Corner";
+        password = "espresso-please";
+      }
+      { ssid = "Riverside Library"; }
+      {
+        ssid = "Studio 5G";
+        password = "loud-guitars";
+      }
+    ];
+  };
   # Genkan's welcome page with sample data; preview mode exists only in
   # debug builds.
   preview = genkan.overrideAttrs {
@@ -71,7 +91,18 @@ pkgs.testers.runNixOSTest {
   # on installed systems.
   node.pkgsReadOnly = false;
   nodes = {
-    tatami = sekka "tatami";
+    tatami =
+      { ... }:
+      {
+        imports = [
+          (sekka "tatami")
+          wifi.module
+        ];
+        # Only Wi-Fi in the Network window: the VM's own wired links are not
+        # NetworkManager's.
+        networking.networkmanager.unmanaged = [ "interface-name:eth*" ];
+        users.users.demo.extraGroups = [ "networkmanager" ];
+      };
     plasma =
       { ... }:
       {
@@ -82,6 +113,8 @@ pkgs.testers.runNixOSTest {
   };
   testScript = ''
     import json, shlex, struct, time
+
+    ${wifi.script}
 
     SIZE = (${toString width}, ${toString height})
 
@@ -107,8 +140,10 @@ pkgs.testers.runNixOSTest {
         size = struct.unpack(">II", header[16:24])
         assert size == SIZE, f"{name} is {size}, not {SIZE}"
 
-    # Tatami: terminals, the menu, and Yukimi in the session's GTK theme.
+    # Tatami: terminals, the menu, Yukimi in the session's GTK theme, and the
+    # Network window.
     tatami.start()
+    start_access_points(tatami)
     tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
     signature = tatami.succeed("basename /run/user/1000/hypr/*").strip()
     def hypr(command):
@@ -160,6 +195,28 @@ pkgs.testers.runNixOSTest {
             raise Exception("no Yukimi window: " + hypr("hyprctl -j clients"))
         time.sleep(1)
     capture(tatami, "yukimi", settle=30)
+    user(tatami, "pkill -u demo -f '[y]ukimi' || true")
+    # The Network window: joined to Home, with Café Corner and a cabin's
+    # network saved and a WireGuard VPN set up (switched off).
+    tatami.wait_until_succeeds(
+        "nmcli -t -f SSID device wifi list --rescan yes | grep -qx 'Studio 5G'", timeout=120)
+    tatami.succeed(
+        "nmcli connection add type wifi con-name 'Café Corner' ssid 'Café Corner' "
+        "wifi-sec.key-mgmt wpa-psk wifi-sec.psk espresso-please",
+        "nmcli connection add type wifi con-name 'Mountain Cabin' ssid 'Mountain Cabin' "
+        "wifi-sec.key-mgmt wpa-psk wifi-sec.psk snowed-in-again",
+        "nmcli connection add type wireguard ifname wg0 con-name 'Work VPN' autoconnect no "
+        "wireguard.private-key yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+        "nmcli --wait 90 device wifi connect Home password 'correct horse' ifname wlan1",
+    )
+    # As the panel, the menu and the launcher start it (`tatami launch`).
+    user(tatami, "XDG_CONFIG_DIRS=/etc/xdg/tatami:/etc/xdg tatami launch tatami-network")
+    until = time.monotonic() + 60
+    while not any("org.tatami.Network" in c["class"] for c in json.loads(hypr("hyprctl -j clients"))):
+        if time.monotonic() > until:
+            raise Exception("no Network window: " + hypr("hyprctl -j clients"))
+        time.sleep(1)
+    capture(tatami, "network", settle=10)
     tatami.shutdown()
 
     # Plasma: the live session's desktop, with Genkan's welcome page.

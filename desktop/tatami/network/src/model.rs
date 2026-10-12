@@ -131,6 +131,11 @@ impl Device {
     pub fn connecting(&self) -> bool {
         self.state.starts_with("connecting")
     }
+
+    /// Left to something other than NetworkManager, so not set up here.
+    pub fn unmanaged(&self) -> bool {
+        self.state == "unmanaged"
+    }
 }
 
 pub fn devices(text: &str) -> Vec<Device> {
@@ -361,13 +366,15 @@ pub struct Snapshot {
 
 impl Snapshot {
     pub fn wifi_device(&self) -> Option<&Device> {
-        self.devices.iter().find(|device| device.kind == Kind::Wifi)
+        self.devices
+            .iter()
+            .find(|device| device.kind == Kind::Wifi && !device.unmanaged())
     }
 
     pub fn ethernet(&self) -> impl Iterator<Item = &Device> {
         self.devices
             .iter()
-            .filter(|device| device.kind == Kind::Ethernet)
+            .filter(|device| device.kind == Kind::Ethernet && !device.unmanaged())
     }
 
     pub fn connection(&self, uuid: &str) -> Option<&Saved> {
@@ -669,6 +676,22 @@ mod tests {
         assert!(devices[1].connected());
         assert_eq!(devices[3].kind, Kind::Ethernet);
         assert_eq!(devices[3].connection, None);
+    }
+
+    #[test]
+    fn devices_left_to_others_are_not_shown() {
+        let snapshot = Snapshot {
+            devices: devices(
+                "eth0:ethernet:unmanaged::\nwlan0:wifi:unmanaged::\nenp1s0:ethernet:unavailable::\nwlan1:wifi:disconnected::\n",
+            ),
+            ..Snapshot::default()
+        };
+        let ethernet: Vec<&str> = snapshot.ethernet().map(|d| d.name.as_str()).collect();
+        assert_eq!(ethernet, ["enp1s0"]);
+        assert_eq!(
+            snapshot.wifi_device().map(|d| d.name.as_str()),
+            Some("wlan1")
+        );
     }
 
     #[test]

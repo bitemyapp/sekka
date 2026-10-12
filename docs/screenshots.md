@@ -11,6 +11,7 @@ files. They are not upscaled, composited, or generated illustrations.
 | [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Current application in Tatami, reading the test VM `sekka-demo` |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
 | [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Sekka's GNOME session with Files over Yukimi |
+| [Network](images/sekka/network.png) | 2560 × 1600 | Tatami's Network window, joined to a simulated network, with made-up network names |
 
 They come from [nix/screenshots.nix](../nix/screenshots.nix):
 
@@ -29,7 +30,11 @@ dismissed with Escape. Captures are the virtual display at its native
 resolution. No installation, update, or garbage collection is invoked.
 Genkan's preview uses fixed sample data and is excluded from production builds.
 Yukimi shows the real test VM's limited configuration and store, including
-unavailable freshness information. None of these is a screenshot of an
+unavailable freshness information. The Network window reads the VM's real
+NetworkManager, but its Wi-Fi is simulated (mac80211_hwsim, with hostapd and
+a DHCP server): Home, Café Corner, Riverside Library and Studio 5G are
+made-up names, and the saved networks and WireGuard VPN were set up by the
+test. None of these is a screenshot of an
 installed Sekka release, and automatic login is set only in the test.
 
 Older captures under [images/tour](images/tour) were imported byte-for-byte from

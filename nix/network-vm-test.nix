@@ -9,6 +9,28 @@
   pkgs,
   desktopsModule,
 }:
+let
+  wifi = import ./simulated-wifi.nix {
+    inherit (pkgs) lib;
+    inherit pkgs;
+    networks = [
+      {
+        ssid = "Home";
+        password = "correct horse";
+      }
+      {
+        ssid = "Back Room";
+        password = "backroom-pass";
+        hidden = true;
+      }
+      {
+        ssid = "Office";
+        password = "office-pass";
+      }
+      { ssid = "Cafe"; }
+    ];
+  };
+in
 pkgs.testers.runNixOSTest {
   name = "tatami-network";
   globalTimeout = 1500;
@@ -16,7 +38,10 @@ pkgs.testers.runNixOSTest {
   nodes.machine =
     { lib, ... }:
     {
-      imports = [ desktopsModule ];
+      imports = [
+        desktopsModule
+        wifi.module
+      ];
       calamares.desktops = [ "tatami" ];
       calamares.defaultDesktop = "tatami";
       users.users.demo = {
@@ -42,58 +67,11 @@ pkgs.testers.runNixOSTest {
       };
       hardware.graphics.enable = true;
       environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
-      # Two radios: the access points on wlan0, the computer's Wi-Fi on wlan1.
-      boot.kernelModules = [ "mac80211_hwsim" ];
-      # NetworkManager's Wi-Fi backend, which test VMs otherwise turn off
-      # (mkVMOverride).
-      networking.wireless.enable = lib.mkOverride 9 true;
-      networking.networkmanager = {
-        enable = true;
-        unmanaged = [ "interface-name:wlan0*" ];
-      };
-      # The access points: the first radio, moved into a network namespace of
-      # its own with hostapd and a DHCP server, so the computer's Wi-Fi on
-      # wlan1 reaches them over the simulated air as it would a router.
-      environment.etc."access-points/hostapd.conf".text = ''
-        interface=wlan0
-        driver=nl80211
-        hw_mode=g
-        channel=6
-        ssid=Home
-        wpa=2
-        wpa_key_mgmt=WPA-PSK
-        rsn_pairwise=CCMP
-        wpa_passphrase=correct horse
-
-        bss=wlan0-1
-        bssid=02:00:00:00:00:01
-        ssid=Back Room
-        ignore_broadcast_ssid=1
-        wpa=2
-        wpa_key_mgmt=WPA-PSK
-        rsn_pairwise=CCMP
-        wpa_passphrase=backroom-pass
-
-        bss=wlan0-2
-        bssid=02:00:00:00:00:02
-        ssid=Office
-        wpa=2
-        wpa_key_mgmt=WPA-PSK
-        rsn_pairwise=CCMP
-        wpa_passphrase=office-pass
-
-        bss=wlan0-3
-        bssid=02:00:00:00:00:03
-        ssid=Cafe
-      '';
-      environment.systemPackages = [
-        pkgs.hostapd
-        pkgs.dnsmasq
-        pkgs.iw
-      ];
     };
   testScript = ''
     import shlex, time
+
+    ${wifi.script}
 
     def user(command):
         status, output = machine.execute(
@@ -122,21 +100,7 @@ pkgs.testers.runNixOSTest {
             + shlex.quote(name + ":activated"), timeout=timeout)
 
     machine.start()
-    machine.wait_until_succeeds("test -e /sys/class/net/wlan0/phy80211")
-    phy = machine.succeed("cat /sys/class/net/wlan0/phy80211/name").strip()
-    machine.succeed(
-        "ip netns add ap",
-        f"iw phy {phy} set netns name ap",
-        "ip netns exec ap hostapd -B -f /tmp/hostapd.log /etc/access-points/hostapd.conf",
-    )
-    machine.wait_until_succeeds("ip netns exec ap ip link show wlan0-3", timeout=30)
-    ranges = []
-    for i, device in enumerate(["wlan0", "wlan0-1", "wlan0-2", "wlan0-3"]):
-        machine.succeed(f"ip netns exec ap ip addr add 192.168.1{i}.1/24 dev {device}")
-        ranges += [f"--interface={device}", f"--dhcp-range=192.168.1{i}.10,192.168.1{i}.50,12h"]
-    machine.succeed(
-        "ip netns exec ap dnsmasq --port=0 --bind-interfaces --log-dhcp "
-        "--log-facility=/tmp/dnsmasq.log --pid-file=/tmp/dnsmasq.pid " + " ".join(ranges))
+    start_access_points(machine)
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
     signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
     machine.wait_until_succeeds(

@@ -238,6 +238,29 @@ pub fn tatami(site: &Site) -> Result<Page> {
   </article>
 </section>
 
+"#,
+    );
+    write!(
+        b,
+        r#"<section class="tour-step" aria-labelledby="network">
+  <div class="win step-text">
+    <h2 id="network">Network</h2>
+    <p>The network icon opens its panel at once, with the networks already seen; a fresh scan arrives for the next look. Network settings… opens the Network window, built as Displays is and laid out after macOS's Network settings.</p>
+    <p>Join a network with its password, an organisation's username and password, or a hidden one by its name. Wired connections and VPNs sit beside Wi-Fi, each VPN with its switch, and a WireGuard VPN is added from the file your provider gives you. Every connection has a page of its own for joining, metering, a private hardware address, IPv4, DNS and IPv6, and changes apply at once.</p>
+    <p class="caveat"><span class="tag tag-warning">Not covered</span> WEP networks and enterprise networks that sign in with a certificate. VPNs other than WireGuard need NetworkManager plugins Sekka does not install.</p>
+  </div>
+  {shot}
+</section>
+"#,
+        shot = site.shot(
+            "network.png",
+            "Tatami's Network window: Wi-Fi on and joined to Home, a known network and two others in range, a WireGuard VPN switched off, and the saved networks.",
+            "The Network window in a disposable test VM. Its Wi-Fi is simulated: Home, Café Corner, Riverside Library and Studio 5G are made-up names, not networks anywhere.",
+            "win",
+        )?,
+    )?;
+    b.push_str(
+        r#"
 <section class="win" aria-labelledby="anywhere">
   <h2 id="anywhere">On any NixOS system</h2>
   <p>Tatami works without the rest of Sekka. Add Sekka's flake, import the module and enable it; a Tatami session appears on the login screen beside your other desktops, which it leaves alone.</p>
