@@ -1,78 +1,203 @@
-# Real GTK captures in a disposable VM; no host desktop or disks are used.
+# Real captures in disposable VMs; no host desktop or disks are used.
+#
+# Each VM is a Sekka system built from the same desktop module installed
+# systems import, logged in automatically. The virtual display is 2560 × 1600
+# at scale 2: a 1280 × 800 layout drawn at twice the density, so pages can
+# show the captures sharply on high-density screens. Scaling is set the way a
+# person would: Tatami's Displays settings, KDE's and GNOME's own tools.
 {
   pkgs,
   genkan,
-  yukimi,
-  yukimiModule,
+  desktopsModule,
 }:
 let
+  inherit (pkgs) lib;
+  width = 2560;
+  height = 1600;
+  # Genkan's welcome page with sample data; preview mode exists only in
+  # debug builds.
   preview = genkan.overrideAttrs {
     cargoBuildType = "debug";
     doCheck = false;
   };
+  sekka =
+    desktop:
+    { ... }:
+    {
+      imports = [ desktopsModule ];
+      calamares.desktops = [ desktop ];
+      calamares.defaultDesktop = desktop;
+      networking.hostName = "sekka-demo";
+      users.users.demo = {
+        isNormalUser = true;
+        uid = 1000;
+        description = "Demo";
+        password = "demo";
+        extraGroups = [ "wheel" ];
+      };
+      services.displayManager.autoLogin = {
+        enable = true;
+        user = "demo";
+      };
+      virtualisation = {
+        memorySize = 6144;
+        cores = 4;
+        # virtio-gpu offers the size as its preferred mode; there is no GPU,
+        # so Mesa renders in software.
+        qemu.options = [
+          "-vga none"
+          "-device virtio-gpu-pci,xres=${toString width},yres=${toString height}"
+        ];
+      };
+      hardware.graphics.enable = true;
+      environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
+      # What Yukimi reads: a small channel-style configuration.
+      environment.etc."nixos/configuration.nix".text = ''
+        { pkgs, ... }: {
+          networking.hostName = "sekka-demo";
+          environment.systemPackages = [ pkgs.file pkgs.firefox ];
+        }
+      '';
+      environment.systemPackages = [
+        pkgs.fastfetch
+        pkgs.btop
+      ];
+    };
 in
 pkgs.testers.runNixOSTest {
-  name = "sekka-app-screenshots";
-  nodes.machine = { ... }: {
-    imports = [
-      (pkgs.path + "/nixos/tests/common/x11.nix")
-      yukimiModule
-    ];
-    networking.hostName = "sekka-demo";
-    virtualisation.memorySize = 4096;
-    virtualisation.resolution = {
-      x = 1920;
-      y = 1080;
-    };
-    test-support.displayManager.auto.user = "demo";
-    users.users.demo = {
-      isNormalUser = true;
-      uid = 1000;
-    };
-    programs.yukimi = {
-      enable = true;
-      package = yukimi;
-    };
-    environment.systemPackages = [
-      preview
-      pkgs.file
-      pkgs.firefox
-    ];
-    environment.etc."icewm/winoptions".text = ".startMaximized: 1\n";
-    environment.etc."nixos/configuration.nix".text = ''
-      { pkgs, ... }: {
-        networking.hostName = "sekka-demo";
-        environment.systemPackages = [ pkgs.file pkgs.firefox ];
-        programs.yukimi.enable = true;
-      }
-    '';
-    fonts.packages = [ pkgs.noto-fonts ];
+  name = "sekka-screenshots";
+  globalTimeout = 2400;
+  # Sekka's desktop module adds its Aquamarine fix as a Nixpkgs overlay, as
+  # on installed systems.
+  node.pkgsReadOnly = false;
+  nodes = {
+    tatami = sekka "tatami";
+    plasma =
+      { ... }:
+      {
+        imports = [ (sekka "plasma") ];
+        environment.systemPackages = [ preview ];
+      };
+    gnome = sekka "gnome";
   };
   testScript = ''
-    import time
-    machine.start()
-    try:
-        machine.wait_for_x(timeout=60)
-    except Exception:
-        print(machine.succeed("journalctl -b --no-pager -n 120"))
-        raise
-    machine.succeed("su - demo -c 'DISPLAY=:0 CALAMARES_UI_PREVIEW=welcome CALAMARES_UI_SIZE=1600x960 GSK_RENDERER=cairo calamares-nixos > /tmp/genkan.log 2>&1 &' ")
-    try:
-        machine.wait_until_succeeds("pgrep -u demo -f calamares-nixos", timeout=20)
-    except Exception:
-        print(machine.succeed("cat /tmp/genkan.log"))
-        raise
+    import json, shlex, struct, time
+
+    SIZE = (${toString width}, ${toString height})
+
+    def user(node, command):
+        status, output = node.execute(
+            "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus sh -c "
+            + shlex.quote("{ " + command + "; } 2>&1"))
+        if status != 0:
+            raise Exception(f"{command!r} failed with {status}:\n{output}")
+        return output
+
+    def launch(node, command):
+        # A user service, with the environment the session gave the user
+        # manager: how Tatami's menu starts applications too.
+        user(node, "systemd-run --user --collect --quiet " + command)
+
+    def capture(node, name, settle=6):
+        time.sleep(settle)
+        node.screenshot(name)
+        with open(node.out_dir / (name + ".png"), "rb") as f:
+            header = f.read(24)
+        size = struct.unpack(">II", header[16:24])
+        assert size == SIZE, f"{name} is {size}, not {SIZE}"
+
+    # Tatami: terminals, the menu, and Yukimi in the session's GTK theme.
+    tatami.start()
+    tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
+    signature = tatami.succeed("basename /run/user/1000/hypr/*").strip()
+    def hypr(command):
+        return user(tatami, "export HYPRLAND_INSTANCE_SIGNATURE=" + signature + "; " + command)
+    tatami.wait_until_succeeds(
+        "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "
+        "systemctl --user is-active tatami-waybar.service", timeout=120)
+    # Scale 2, through Displays' own apply path.
+    def monitors():
+        return json.loads(hypr("hyprctl -j monitors"))
+    print(json.dumps(monitors(), indent=1))
+    print(hypr("printf %s '{\"displays\":[{\"name\":\"Virtual-1\",\"enabled\":true,\"scale\":2}],"
+               "\"main\":\"Virtual-1\",\"apply\":[\"Virtual-1\"]}' | tatami displays apply"))
+    until = time.monotonic() + 30
+    while not all(m["scale"] == 2 for m in monitors()):
+        if time.monotonic() > until:
+            raise Exception("not scaled: " + json.dumps(monitors(), indent=1))
+        time.sleep(1)
+    # From here on, the keys a person would press.
+    def windows():
+        return json.loads(hypr("hyprctl -j clients"))
+    def wait_windows(count):
+        until = time.monotonic() + 60
+        while len(windows()) < count:
+            if time.monotonic() > until:
+                raise Exception(f"expected {count} windows: " + hypr("hyprctl -j clients"))
+            time.sleep(1)
+    tatami.send_key("meta_l-ret")  # Tatami's terminal
+    wait_windows(1)
+    time.sleep(3)
+    tatami.send_chars("fastfetch\n")
+    time.sleep(4)
+    tatami.send_key("meta_l-ret")
+    wait_windows(2)
+    time.sleep(3)
+    tatami.send_chars("btop\n")  # tiled beside fastfetch, as Tatami lays them out
+    capture(tatami, "tatami", settle=12)
+    tatami.send_key("meta_l-spc")  # the Tatami menu
+    capture(tatami, "tatami-menu", settle=8)
+    tatami.send_key("esc")
+    time.sleep(2)
+    user(tatami, "pkill -x foot || true")
+    # No GPU in the VM: Cairo, rather than GTK trying Vulkan first.
+    launch(tatami, "env GSK_RENDERER=cairo yukimi")
+    until = time.monotonic() + 60
+    while not any("yukimi" in c["class"].lower() for c in json.loads(hypr("hyprctl -j clients"))):
+        if time.monotonic() > until:
+            raise Exception("no Yukimi window: " + hypr("hyprctl -j clients"))
+        time.sleep(1)
+    capture(tatami, "yukimi", settle=30)
+    tatami.shutdown()
+
+    # Plasma: the live session's desktop, with Genkan's welcome page.
+    plasma.start()
+    plasma.wait_until_succeeds("pgrep -u demo -f bin/.?plasmashell", timeout=240)
+    time.sleep(10)
+    user(plasma, "pkill -u demo -f '[p]lasma-welcome' || true")
+    # KScreen's own tool, on the session's Wayland display.
+    user(plasma, "unset DISPLAY; export QT_QPA_PLATFORM=wayland "
+         "WAYLAND_DISPLAY=$(basename $(ls -d /run/user/1000/wayland-? | head -1)); "
+         "kscreen-doctor output.Virtual-1.scale.2")
+    # Dolphin, then Konsole running fastfetch over it, as KWin places them.
+    launch(plasma, "dolphin")
     time.sleep(8)
-    machine.screenshot("genkan")
-    machine.succeed("pkill -u demo -f calamares-nixos")
-    machine.succeed("su - demo -c 'DISPLAY=:0 GSK_RENDERER=cairo yukimi > /tmp/yukimi.log 2>&1 &' ")
-    try:
-        machine.wait_until_succeeds("pgrep -u demo -f yukimi", timeout=20)
-    except Exception:
-        print(machine.succeed("cat /tmp/yukimi.log"))
-        raise
-    time.sleep(25)
-    machine.screenshot("yukimi")
-    print(machine.succeed("cat /tmp/genkan.log /tmp/yukimi.log"))
+    launch(plasma, "konsole --hold -e fastfetch")
+    plasma.wait_until_succeeds("pgrep -u demo -f '[k]onsole'", timeout=30)
+    capture(plasma, "plasma", settle=15)
+    user(plasma, "pkill -u demo -f '[k]onsole' || true; pkill -u demo -f '[d]olphin' || true")
+    launch(plasma, "env CALAMARES_UI_PREVIEW=welcome calamares-nixos")
+    plasma.wait_until_succeeds("pgrep -u demo -f calamares-nixos", timeout=30)
+    capture(plasma, "genkan", settle=12)
+    plasma.shutdown()
+
+    # GNOME, after closing its first-login tour.
+    gnome.start()
+    gnome.wait_until_succeeds("pgrep -u demo -f bin/.?gnome-shell", timeout=240)
+    # GNOME Shell's welcome dialog opens on first login: Escape, as a new
+    # user would skip it.
+    time.sleep(15)
+    gnome.send_key("esc")
+    time.sleep(3)
+    user(gnome, "${pkgs.mutter}/bin/gdctl set --logical-monitor --primary --monitor Virtual-1 --scale 2")
+    # Yukimi, then Files over it, as GNOME places them.
+    launch(gnome, "env GSK_RENDERER=cairo yukimi")
+    gnome.wait_until_succeeds("pgrep -u demo -f '[y]ukimi'", timeout=30)
+    time.sleep(20)
+    launch(gnome, "nautilus --new-window")
+    capture(gnome, "gnome", settle=15)
+    gnome.shutdown()
   '';
 }

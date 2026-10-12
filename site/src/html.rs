@@ -27,9 +27,10 @@ pub struct Page {
 }
 
 /// The workspaces in the bar are the site's pages, as Tatami's are 1 to 5.
-pub const NAV: [(&str, &str); 4] = [
+pub const NAV: [(&str, &str); 5] = [
     ("/", "sekka"),
     ("/tatami/", "tatami"),
+    ("/yukimi/", "yukimi"),
     ("/design/", "design"),
     ("/status/", "status"),
 ];

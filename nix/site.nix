@@ -30,12 +30,7 @@ let
       ../docs/brand/tokens.json
       ../docs/brand/logos
       ../docs/brand/family
-      ../docs/images/sekka/genkan.png
-      ../docs/images/sekka/yukimi.png
-      ../docs/images/tour/installed-tatami.png
-      ../docs/images/tour/installed-tatami-menu.png
-      ../docs/images/tour/installed-plasma.png
-      ../docs/images/tour/installed-gnome.png
+      ../docs/images/sekka
       ../apps/yukimi/yukimi/data/io.github.bitemyapp.Yukimi.svg
     ];
   };

@@ -1,31 +1,38 @@
 # Screenshot provenance
 
-README images are original PNG captures with links to the full files. They
-are not upscaled, composited, or generated illustrations.
+README and website images are original PNG captures with links to the full
+files. They are not upscaled, composited, or generated illustrations.
 
 | Image | Original resolution | What it shows |
 | --- | --- | --- |
-| [Genkan](images/sekka/genkan.png) | 1920 × 1080 | Current GTK interface in its debug-only welcome preview, with synthetic installation/cache data |
-| [Yukimi](images/sekka/yukimi.png) | 1920 × 1080 | Current application reading a disposable NixOS test VM named `sekka-demo` |
-| [Tatami menu](images/tour/installed-tatami-menu.png) | 1280 × 800 | Installed desktop captured from the predecessor image |
-| [Plasma](images/tour/installed-plasma.png) | 1280 × 800 | Installed desktop captured from the predecessor image |
-| [GNOME](images/tour/installed-gnome.png) | 1280 × 800 | Installed desktop captured from the predecessor image |
+| [Genkan](images/sekka/genkan.png) | 2560 × 1600 | Current GTK interface in its debug-only welcome preview, with synthetic installation/cache data, on Sekka's Plasma session |
+| [Tatami](images/sekka/tatami.png) | 2560 × 1600 | Tatami with two terminals opened with Super+Return: Tatami's fastfetch, and btop |
+| [Tatami menu](images/sekka/tatami-menu.png) | 2560 × 1600 | The Tatami menu, opened with Super+Space over the same terminals |
+| [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Current application in Tatami, reading the test VM `sekka-demo` |
+| [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
+| [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Sekka's GNOME session with Files over Yukimi |
 
-The current app captures come from [nix/screenshots.nix](../nix/screenshots.nix):
+They come from [nix/screenshots.nix](../nix/screenshots.nix):
 
 ```sh
 nix build .#screenshots --out-link result-screenshots
 ```
 
-The test boots a disposable NixOS VM, renders the actual GTK applications under
-IceWM with Cairo software rendering, and saves the virtual display at its
-native resolution. The test window manager maximizes the apps so the entire
-capture is readable. No installation, update, or garbage collection is invoked.
+The test boots three disposable NixOS VMs in turn. Each is a Sekka system built
+from the same desktop module installed systems import, with Tatami, Plasma or
+GNOME selected, and logs in automatically. The virtual display is 2560 × 1600,
+set to scale 2 with the desktop's own tool (Tatami's Displays apply, KDE's
+`kscreen-doctor`, GNOME's `gdctl`), so a 1280 × 800 layout is drawn at twice
+the density; there is no GPU, so Mesa renders in software. Tatami is driven
+with the keys a person would press. GNOME Shell's first-login welcome dialog is
+dismissed with Escape. Captures are the virtual display at its native
+resolution. No installation, update, or garbage collection is invoked.
 Genkan's preview uses fixed sample data and is excluded from production builds.
 Yukimi shows the real test VM's limited configuration and store, including
-unavailable freshness information; it is not a screenshot of an installed
-Sekka release.
+unavailable freshness information. None of these is a screenshot of an
+installed Sekka release, and automatic login is set only in the test.
 
-The desktop images were imported byte-for-byte from
-[determinate-nixos-graphical at e483b80](https://github.com/bitemyapp/determinate-nixos-graphical/tree/e483b80b3279c2baeece5fa1fe4dbf00a1932bcb/docs/images/tour).
-They illustrate the desktop experience and do not certify the monorepo's image.
+Older captures under [images/tour](images/tour) were imported byte-for-byte from
+[determinate-nixos-graphical at e483b80](https://github.com/bitemyapp/determinate-nixos-graphical/tree/e483b80b3279c2baeece5fa1fe4dbf00a1932bcb/docs/images/tour)
+at 1280 × 800. They illustrate the predecessor image, remain for the archived
+documentation that links them, and do not certify the monorepo's image.

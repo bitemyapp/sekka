@@ -25,9 +25,9 @@ pub fn home(site: &Site) -> Result<Page> {
             .brand
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
-            "installed-tatami.png",
-            "Tatami with btop open over a terminal running fastfetch, in Tokyo Night colours.",
-            "Tatami, captured from Sekka's predecessor image.",
+            "tatami.png",
+            "Tatami with two terminals tiled side by side: fastfetch and btop, in Tokyo Night colours.",
+            "Tatami in a disposable test VM built from Sekka's own modules.",
             "win hero-shot",
         )?,
     )?;
@@ -61,6 +61,7 @@ pub fn home(site: &Site) -> Result<Page> {
     <div class="mat-body">
       {yukimi_shot}
       <p>See what's installed and why, find software, update, go back to an earlier generation and free up space, without editing Nix by hand. Yukimi explains what Nix is doing as it goes, and works on any NixOS system, flake or channels.</p>
+      <p><a href="/yukimi/">More about Yukimi</a></p>
     </div>
   </article>
   <article class="win mat mat-wide-bottom">
@@ -82,31 +83,31 @@ pub fn home(site: &Site) -> Result<Page> {
         genkan_shot = site.shot(
             "genkan.png",
             "Genkan's welcome page: nine steps down the side, from Welcome to Install, and a warning that the installer erases one whole disk.",
-            "Genkan's current interface in its debug preview, with sample data. It still wears libadwaita's light theme and the NixOS snowflake.",
+            "Genkan's debug preview with sample data, on Sekka's Plasma session. It still wears libadwaita's light theme and the NixOS snowflake.",
             "",
         )?,
         tatami_shot = site.shot(
-            "installed-tatami-menu.png",
-            "Tatami's menu open over a terminal: Apps, Learn, Trigger, Style, Setup, About and System.",
-            "Captured from the predecessor image, before the crest replaced the NixOS logo in the bar.",
+            "tatami-menu.png",
+            "Tatami's menu open over two terminals: Apps, Learn, Trigger, Style, Setup, About and System.",
+            "The menu, opened with Super + Space. The bar still shows the NixOS logo.",
             "",
         )?,
         yukimi_shot = site.shot(
             "yukimi.png",
-            "Yukimi's overview of a test machine named sekka-demo: package count, freshness and store size.",
-            "Yukimi reading a disposable NixOS test VM named sekka-demo, not an installed Sekka release.",
+            "Yukimi's overview of a test machine named sekka-demo in Tatami's dark theme: package count, freshness and store size.",
+            "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release.",
             "",
         )?,
         plasma = site.shot(
-            "installed-plasma.png",
-            "The Plasma desktop as installed by Sekka.",
-            "Plasma, from the predecessor image.",
+            "plasma.png",
+            "Sekka's Plasma session with Konsole running fastfetch over Dolphin.",
+            "Plasma, in a test VM.",
             "",
         )?,
         gnome = site.shot(
-            "installed-gnome.png",
-            "The GNOME desktop as installed by Sekka.",
-            "GNOME, from the predecessor image.",
+            "gnome.png",
+            "Sekka's GNOME session with Files open over Yukimi.",
+            "GNOME, in a test VM.",
             "",
         )?,
     )?;
@@ -175,9 +176,9 @@ pub fn tatami(site: &Site) -> Result<Page> {
 "#,
         kanji = site.ja("畳")?,
         shot = site.shot(
-            "installed-tatami-menu.png",
-            "Tatami's menu open over a terminal showing fastfetch.",
-            "Tatami's menu (Super + Space), captured from Sekka's predecessor image. The bar still shows the NixOS logo there.",
+            "tatami-menu.png",
+            "Tatami's menu open over two terminals: fastfetch and btop.",
+            "Tatami's menu (Super + Space) in a disposable test VM. The bar still shows the NixOS logo.",
             "win wide-shot",
         )?,
     )?;
@@ -218,6 +219,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Space</kbd></th><td>Change the background</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>D</kbd></th><td>Displays</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>I</kbd></th><td>Keep Awake</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>R</kbd></th><td>Reload Tatami after an update, without logging out</td></tr>
     </tbody>
   </table>
 </section>
@@ -578,6 +580,131 @@ pub fn design(site: &Site) -> Result<Page> {
         path: "/design/",
         title: "The Sekka design: crest, colour, type and space".into(),
         description: "A tour of Sekka's brand: the yukiwa crest, Tatami's Tokyo Night palette with measured contrast, the type, the shapes, a High contrast theme, and what isn't finished.",
+        body: b,
+    })
+}
+
+pub fn yukimi(site: &Site) -> Result<Page> {
+    let mut b = String::new();
+    write!(
+        b,
+        r#"<section class="win focus page-head">
+  <img class="page-icon" src="/brand/yukimi.svg" width="96" height="96" alt="">
+  <div>
+    <p class="eyebrow">Yukimi {kanji}</p>
+    <h1>Your system, seen from somewhere warm.</h1>
+    <p class="lead">A yukimi-shōji is a paper screen with a pane of glass set low in it, so you can sit in a warm room and watch the snow fall in the garden. Yukimi is that window onto a NixOS system: see what is installed and why, find what is available, and change it without opening a text editor.</p>
+  </div>
+</section>
+{shot}
+"#,
+        kanji = site.ja("雪見")?,
+        shot = site.shot(
+            "yukimi.png",
+            "Yukimi's overview in Tatami's dark theme: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
+            "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release. The dash and the badge come from the test VM too: Yukimi can't date its Nixpkgs or verify its last update there, and says so rather than guessing.",
+            "win wide-shot",
+        )?,
+    )?;
+    b.push_str(
+        r#"<section class="tiles">
+  <article class="win">
+    <h2>Overview</h2>
+    <p>The system at a glance: its NixOS version and kernel, how many packages it has, how fresh its Nixpkgs is, how much room the store takes, and what changed most recently.</p>
+  </article>
+  <article class="win">
+    <h2>Installed</h2>
+    <p>Everything installed, grouped by why: added with Yukimi, listed in your configuration by hand, chosen from a catalog such as the installer's, installed just for you, and everything your desktops and settings bring. Anything in the first four groups can be removed from here, entries you wrote yourself included.</p>
+  </article>
+  <article class="win">
+    <h2>Discover</h2>
+    <p>A catalog of well-known applications, and a search of every top-level package in Nixpkgs. Try a package without installing it, install it just for you without a password, or for everyone. Broken and unfree packages are labelled before you pick them.</p>
+  </article>
+  <article class="win">
+    <h2>Updates</h2>
+    <p>Where the system comes from: each input of its flake, or each channel, the exact revision it is at, and how old that is. Checking asks every source for its newest version without changing anything, and marks each as up to date, newer, or <em>would go back</em>. Yukimi updates only what moves forward.</p>
+    <p>Each source from GitHub, GitLab, SourceHut or Git shows the branch it follows, and can follow another. Working on a project your system is built from comes down to: push, open Updates, press Update.</p>
+  </article>
+  <article class="win">
+    <h2>History</h2>
+    <p>Every generation you can go back to. Open one to see what changed from the one before: upgrades, downgrades, additions and removals, with sizes. Going back also brings back the choices it was built from, so your next change starts from there.</p>
+  </article>
+  <article class="win">
+    <h2>Storage</h2>
+    <p>The Nix store split into what the running system needs, older generations, user profiles, projects and dev shells, and garbage, with the heaviest packages and every garbage-collector root. Cleaning up is one button.</p>
+  </article>
+</section>
+
+<section class="tiles">
+  <article class="win">
+    <h2>Every change is built first</h2>
+    <p>A change is built before anything switches to it, so a failed build leaves the running system as it was and the files Yukimi touched are put back. Press Stop and the same happens. Once the new system starts switching, it finishes, so a switch is never cut off halfway.</p>
+    <p>A copy of the configuration behind each generation is kept, which is how going back restores your choices too. A file you have changed by hand since then is left as it is.</p>
+  </article>
+  <article class="win">
+    <h2>Updates, quickly</h2>
+    <p>Checking asks GitHub, FlakeHub and the NixOS channels for their newest versions directly: a second or two, and nothing is downloaded. Updating gets the new sources ready as you before it asks for a password. Without that, root would download each one again: in a test, six minutes for one copy of Nixpkgs.</p>
+    <p>On Sekka, Updates › Update Sekka fetches the newest Sekka and builds it for your next restart in one action. In a terminal, the same operation is <code>sekka-update</code>.</p>
+  </article>
+</section>
+
+<section class="tour-step" aria-labelledby="waits">
+  <div class="win step-text">
+    <h2 id="waits">A window that never waits</h2>
+    <p>Nothing slow happens on the interface thread. The configuration, generations and sources are read in a few milliseconds; the store, which can take seconds, fills in when it arrives. Search answers only the newest query, long lists are built a batch at a time between frames, and the package index is made only once Discover is opened.</p>
+    <p>The falling snow pauses when the window is in the background. Start Yukimi with <code>YUKIMI_STALLS=50</code> and it reports, on standard error, any moment the interface thread was busy for longer than 50 milliseconds, and what it was doing.</p>
+  </div>
+  <div class="win step-text">
+    <h2>Only one part runs as root</h2>
+    <p>Yukimi is Rust throughout, including the parts that read Nix's own store database and edit Nix files without disturbing them. The window runs as you. The helper that changes the configuration, builds, switches, rolls back and collects garbage is the only part that runs as root. It is started through <code>pkexec</code>, checks its own arguments, and works on the configuration it finds itself, not one it is handed.</p>
+    <p>What Yukimi installs for everyone goes in a file of its own, <code>yukimi.nix</code>, next to your main configuration, which imports it once. Your own files stay yours.</p>
+  </div>
+</section>
+
+<section class="win" aria-labelledby="anynixos">
+  <h2 id="anynixos">On any NixOS system</h2>
+  <p>Yukimi finds the configuration the way <code>nixos-rebuild</code> does: a flake when <code>/etc/nixos/flake.nix</code> exists, following it if it links elsewhere, and channels otherwise. It works without the rest of Sekka:</p>
+  <pre class="code"><code>{
+  inputs.sekka.url = "github:bitemyapp/sekka/main";
+  inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
+  outputs = { nixpkgs, sekka, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        sekka.nixosModules.yukimi
+        { programs.yukimi.enable = true; }
+      ];
+    };
+  };
+}</code></pre>
+  <p>The module installs the app with its polkit policy, so the password prompt says what Yukimi is asking for. A distribution can give Discover its own catalog of applications with <code>programs.yukimi.catalogs</code>.</p>
+</section>
+"#,
+    );
+    write!(
+        b,
+        r#"<section class="tiles">
+  {gnome}
+  <article class="win">
+    <h2>What it doesn't do</h2>
+    <ul class="facts gaps">
+      <li><strong>It covers the everyday, not all of Nix.</strong> Installing and removing software, updating, going back and freeing space. Nix can do far more than any window can show, and Yukimi doesn't try to.</li>
+      <li><strong>It asks for your password every time.</strong> NixOS restarts polkit whenever the installed packages change, so each change asks again.</li>
+      <li><strong>It doesn't look like Sekka yet.</strong> It is libadwaita with NixOS blues, not Tokyo Night: dark in Tatami, light on GNOME. Its icon is outside the Sekka family.</li>
+    </ul>
+  </article>
+</section>
+"#,
+        gnome = site.shot(
+            "gnome.png",
+            "Files open over Yukimi on GNOME, both in libadwaita's light theme.",
+            "Yukimi on Sekka's GNOME session, behind Files, in a disposable test VM.",
+            "win",
+        )?,
+    )?;
+    Ok(Page {
+        path: "/yukimi/",
+        title: "Yukimi: see and change your NixOS system".into(),
+        description: "Yukimi shows what is installed on a NixOS system and why, finds software, updates, goes back to earlier generations and frees space, without editing Nix by hand.",
         body: b,
     })
 }

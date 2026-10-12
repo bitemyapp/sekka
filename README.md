@@ -18,7 +18,7 @@ If you need a system you can rely on today, wait before installing Sekka.
 
 ## A look around
 
-Images below link to their original, full-resolution PNGs. Nothing is upscaled. The desktop screenshots were captured from the predecessor image; see [screenshot provenance](docs/screenshots.md) for their source and the current app captures.
+Images below link to their original, full-resolution PNGs, captured at 2560 × 1600 with a scale of 2. Nothing is upscaled. They come from disposable test VMs built from Sekka's own modules, not from an installed release; see [screenshot provenance](docs/screenshots.md).
 
 ### Genkan: welcome home
 
@@ -26,7 +26,7 @@ Choose your disk, account, desktop, applications, and location. Review everythin
 
 [![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
 
-*Current interface in preview mode, with sample data.*
+*Current interface in preview mode, with sample data, on Sekka's Plasma session.*
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
@@ -65,7 +65,9 @@ Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
 firmware; try a key or mouse button if mouse movement does not wake it.
 
-[![Tatami desktop and application menu](docs/images/tour/installed-tatami-menu.png)](docs/images/tour/installed-tatami-menu.png)
+[![Tatami with two terminals: fastfetch and btop](docs/images/sekka/tatami.png)](docs/images/sekka/tatami.png)
+
+[![The Tatami menu over the terminals](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 
 ### Yukimi: see and change your system
 
@@ -73,15 +75,15 @@ See what's installed and why, find software, check for updates, return to an ear
 
 [![Yukimi system manager](docs/images/sekka/yukimi.png)](docs/images/sekka/yukimi.png)
 
-*Current application running in a disposable NixOS test VM.*
+*Current application in Tatami, in a disposable NixOS test VM.*
 
 ### Prefer a familiar desktop?
 
 Plasma is the default live desktop and the installer's preselected choice. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen.
 
-[![Plasma desktop](docs/images/tour/installed-plasma.png)](docs/images/tour/installed-plasma.png)
+[![Plasma with Konsole and Dolphin](docs/images/sekka/plasma.png)](docs/images/sekka/plasma.png)
 
-[![GNOME desktop](docs/images/tour/installed-gnome.png)](docs/images/tour/installed-gnome.png)
+[![GNOME with Files and Yukimi](docs/images/sekka/gnome.png)](docs/images/sekka/gnome.png)
 
 ## Trying Sekka
 

@@ -126,8 +126,7 @@
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
           genkan = calamares;
-          inherit (inputs.yukimi.packages.${system}) yukimi;
-          yukimiModule = inputs.yukimi.nixosModules.default;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         inherit (inputs.tatami.packages.${system}) tatami displays wallpapers;
         inherit (inputs.yukimi.packages.${system}) yukimi;

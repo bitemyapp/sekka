@@ -347,6 +347,32 @@ unrelated-device isolation, repeated application, and reconnect-like resets.
 Physical USB wake must still be checked on each machine with Keep Awake off;
 record keyboard/mouse, hub, dock, firmware, and sleep mode when diagnosing it.
 
+## Disk encryption must pass TRIM through
+
+Genkan does not create encrypted disks yet. When it does, the configuration it
+writes must set `boot.initrd.luks.devices.<name>.allowDiscards = true`.
+dm-crypt drops discard requests unless the mapping allows them, so the weekly
+`fstrim` and Btrfs's default `discard=async` never reach the SSD, and the drive
+keeps treating freed blocks as live data. `nixos-generate-config` emits only
+the LUKS `device`, so relying on the generated hardware configuration repeats
+the mistake. Omarchy shipped LUKS installs that way and had to retrofit them
+([omacom/omarchy#5332](https://github.com/omacom/omarchy/pull/5332)); one
+reporter's sync writes on a nearly full DRAM-less NVMe drive ran more than
+twice as fast after the first trim.
+
+Keep the Nix option as the only source of truth. That pull request's migration
+also ran `cryptsetup --persistent refresh`, which writes the flag into the
+LUKS2 header, where it outlives the configuration and takes another
+interactive refresh to remove. Refreshing a passphrase-only mapping also needs
+the passphrase, so it fails without a terminal. If installed systems ever need
+this change, ship it as a configuration update that applies at the next boot.
+
+Discards reveal which blocks are unused to anyone holding the raw disk. Say so
+in the README's account of encryption. The encrypted-install VM check must show
+a non-zero `DISC-GRAN` in `lsblk --discard` for the opened mapping and a
+successful `fstrim -v /`; check that the virtual target disk itself advertises
+discard first, or the result proves nothing.
+
 ## Release workflow: deliberately disabled
 
 `.github/workflows/release.yml` has only a manual trigger and an unconditional `if: ${{ false }}` on its sole job. No dispatch, push, tag, or schedule can currently build or publish an image through it. **Do not enable it as part of ordinary maintenance.**

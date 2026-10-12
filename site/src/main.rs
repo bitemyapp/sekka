@@ -32,22 +32,10 @@ pub struct Site {
 const IMAGES: [(&str, &str); 6] = [
     ("genkan.png", "docs/images/sekka/genkan.png"),
     ("yukimi.png", "docs/images/sekka/yukimi.png"),
-    (
-        "installed-tatami.png",
-        "docs/images/tour/installed-tatami.png",
-    ),
-    (
-        "installed-tatami-menu.png",
-        "docs/images/tour/installed-tatami-menu.png",
-    ),
-    (
-        "installed-plasma.png",
-        "docs/images/tour/installed-plasma.png",
-    ),
-    (
-        "installed-gnome.png",
-        "docs/images/tour/installed-gnome.png",
-    ),
+    ("tatami.png", "docs/images/sekka/tatami.png"),
+    ("tatami-menu.png", "docs/images/sekka/tatami-menu.png"),
+    ("plasma.png", "docs/images/sekka/plasma.png"),
+    ("gnome.png", "docs/images/sekka/gnome.png"),
 ];
 
 const BRAND_FILES: [(&str, &str); 8] = [
@@ -251,6 +239,7 @@ fn main() -> Result<()> {
     let pages = [
         pages::home(&site)?,
         pages::tatami(&site)?,
+        pages::yukimi(&site)?,
         pages::design(&site)?,
         pages::status(&site)?,
         pages::fonts(),

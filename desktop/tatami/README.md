@@ -75,7 +75,7 @@ layouts follow `us`, switched with both Alt keys.
 
 The `tatami` helper (`tool/`) provides:
 
-- the session launcher, and `tatami reload` (System › Reload), which applies
+- the session launcher, and `tatami reload` (System › Reload, or Super+R), which applies
   a rebuilt Tatami to the running session
 - the menu: system (lock, suspend, hibernate when swap exists, reload,
   logout, restart, shutdown), capture, toggles, hardware, audio, Wi-Fi,

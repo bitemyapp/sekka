@@ -595,6 +595,8 @@ hl.bind("SUPER + CTRL + O", hl.dsp.exec_cmd("tatami menu toggle"), { description
 hl.bind("SUPER + CTRL + H", hl.dsp.exec_cmd("tatami menu hardware"), { description = "Hardware menu" })
 hl.bind("SUPER + SHIFT + code:201", hl.dsp.exec_cmd("tatami menu"), { description = "Tatami menu" })
 hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd("tatami menu system"), { description = "System menu" })
+-- System › Reload: a rebuilt Tatami in this session, without logging out.
+hl.bind("SUPER + R", hl.dsp.exec_cmd("tatami reload"), { description = "Reload Tatami" })
 hl.bind("XF86PowerOff", hl.dsp.exec_cmd("tatami menu system"), { locked = true, description = "Power menu" })
 hl.bind("SUPER + K", hl.dsp.exec_cmd("tatami keybindings"), { description = "Keybindings" })
 hl.bind("SUPER + CTRL + SPACE", hl.dsp.exec_cmd("tatami background"), { description = "Background switcher" })
