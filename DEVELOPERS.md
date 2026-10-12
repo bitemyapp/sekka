@@ -28,7 +28,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -52,6 +52,7 @@ For focused Rust work, run Cargo inside the development shell:
 cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path rust/Cargo.toml
 ```

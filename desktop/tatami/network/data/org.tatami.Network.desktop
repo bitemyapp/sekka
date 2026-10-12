@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Network
+Comment=Join Wi-Fi networks and set up wired connections, VPNs, DNS and addresses
+Exec=tatami-network
+Icon=preferences-system-network
+Categories=Settings;HardwareSettings;
+Keywords=wifi;wi-fi;wireless;ethernet;wired;vpn;wireguard;dns;ip;address;hidden;enterprise;eduroam;
+StartupNotify=true

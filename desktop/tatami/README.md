@@ -53,7 +53,7 @@ happens on topic branches merged into `main`; releases use version tags.
 | Notifications and OSD | Mako as v4's 380px accent-bordered cards; SwayOSD as v4's bottom card |
 | Lock and idle | hyprlock with PAM in v4's style; hypridle locks and turns off displays |
 | Authentication | hyprpolkitagent in Tokyo Night, centered with the screen dimmed around it |
-| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings… (`nm-connection-editor`) for VPN, enterprise and hidden networks. Power profile. The display icon opens the Displays window (below). Audio is wiremix and Bluetooth is bluetui (it pairs devices that ask for a passkey), in the same place; a second click closes them |
+| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Audio is wiremix and Bluetooth is bluetui (it pairs devices that ask for a passkey), in the same place; a second click closes them |
 | Terminal and tools | foot with v4's configuration, btop with the Tokyo Night theme, fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
@@ -208,12 +208,55 @@ prints what it would apply instead.
 
 It has Tatami's look, Tokyo Night in JetBrainsMono Nerd Font with square
 corners, from `config/tatami-displays/style-dark.css`
-(`/etc/xdg/tatami/tatami-displays/`): libadwaita's stylesheet with Tatami's
-colors, so the layout is libadwaita's. The window takes the first
+(`/etc/xdg/tatami/tatami-displays/`), which imports the colors, font and
+corners Tatami's windows share from `config/tatami-gtk/style-dark.css`:
+libadwaita's stylesheet with Tatami's colors, so the layout is
+libadwaita's. The window takes the first
 `tatami-displays/style-dark.css` or `style.css` in `~/.config` and then
 `XDG_CONFIG_DIRS`, so one of your own comes first; a `-dark` one makes it
 dark whatever the light or dark preference. Outside Tatami, without one, it
 is plain libadwaita.
+
+## Network
+
+The Network window (`network/`, `tatami-network`, GTK 4 and libadwaita) is
+Network settings… in the network panel and in Setup › Network, and
+"Network" in the launcher, after macOS's Network settings:
+
+- Wi-Fi: the switch, the network in use, the known and other networks in
+  range by signal, and joining one by name (a hidden network). Joining asks
+  for what the network needs: a password, or an organization's username and
+  password and how to check its server (PEAP or TTLS, with the system's
+  certificate authorities and the server's domain). A saved password the
+  network refuses is asked for again
+- wired connections; VPNs, each with its switch; adding a WireGuard VPN from
+  its configuration file
+- the saved Wi-Fi networks, in range or not
+- for each connection: its addresses while in use; joining automatically;
+  metered; on Wi-Fi, a private hardware address and its password; IPv4
+  automatically or a manual address and router; DNS (automatic, Cloudflare,
+  Google or your own servers); IPv6 on or off; forgetting it
+
+Changes apply at once: to the connection in use without reconnecting where
+NetworkManager can (IPv4, DNS, IPv6), otherwise the next time it connects.
+A change NetworkManager refuses is undone on the page too. NetworkManager
+does the work, through `nmcli`: the window reads it on a worker thread when
+NetworkManager reports a change and every few seconds while open, asks for a
+scan now and then, and never waits for one. Passwords reach `nmcli` in a
+file only you can read, never on a command line. `tatami-network --join
+NAME` opens it to join that network, as the panel does for enterprise
+networks. With `TATAMI_NETWORK_DRY_RUN=1` it prints the changes it would
+make instead.
+
+It looks as Displays does, from `config/tatami-network/style-dark.css`,
+found the same way under `tatami-network/`.
+
+It does not offer WEP networks, which anyone nearby can break, or
+enterprise networks that sign in with a certificate (EAP-TLS) rather than a
+password. VPNs other than WireGuard need NetworkManager's plugin for them,
+which Sekka does not install; a VPN set up elsewhere still shows, with its
+switch. Proxies, bridges, bonds, VLANs and mobile broadband are left to
+`nmcli` and `nmtui`.
 
 ## Wallpapers
 
@@ -227,10 +270,11 @@ Tatami's own picker. Other desktops' modules can install it to offer them.
 
 ## Development
 
-`nix flake check` builds the helper and the Displays window (with their
-tests) and evaluates an example system with the module. They are Cargo
-crates in `tool/` and `displays/`; `nix develop` has Cargo and the libraries
-they build with, and `cargo test` in either runs its tests on Linux.
+`nix flake check` builds the helper and the Displays and Network windows
+(with their tests) and evaluates an example system with the module. They
+are Cargo crates in `tool/`, `displays/` and `network/`; `nix develop` has
+Cargo and the libraries they build with, and `cargo test` in any of them
+runs its tests on Linux.
 
 To try a checkout in a running Tatami session, switch the system to it from
 the repository and reload the session, without logging out:

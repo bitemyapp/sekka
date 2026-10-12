@@ -326,13 +326,15 @@ hl.window_rule({ match = { tag = "floating-window" }, float = true })
 hl.window_rule({ match = { tag = "floating-window" }, center = true })
 hl.window_rule({ match = { tag = "floating-window" }, size = { 875, 600 } })
 hl.window_rule({
-  match = { class = "(org.tatami.btop|org.tatami.terminal|org.tatami.bash|nm-connection-editor|org.codeberg.dnkl.foot|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|Omarchy|About|TUI.float|imv|mpv)" },
+  match = { class = "(org.tatami.btop|org.tatami.terminal|org.tatami.bash|org.codeberg.dnkl.foot|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|Omarchy|About|TUI.float|imv|mpv)" },
   tag = "+floating-window",
 })
 hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-window" })
 -- The Displays window (tatami-displays), floating with room for the
 -- arrangement: its own size, as the floating-window tag's would win over it.
 hl.window_rule({ match = { class = "org.tatami.Displays" }, float = true, center = true, size = { 880, 800 } })
+-- The Network window (tatami-network), likewise.
+hl.window_rule({ match = { class = "org.tatami.Network" }, float = true, center = true, size = { 720, 760 } })
 hl.window_rule({
   match = {
     class = "(sublime_text|DesktopEditors|org.gnome.Nautilus)",

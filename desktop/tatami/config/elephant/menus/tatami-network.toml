@@ -1,5 +1,5 @@
 # Setup › Network › in the Tatami menu (see tatami.toml), after Omarchy 4's,
-# with the Wi-Fi list and NetworkManager's settings.
+# with the Wi-Fi list and the Network window.
 name = "tatami-network"
 name_pretty = "Network"
 parent = "tatami-setup"
@@ -22,5 +22,5 @@ state = ["submenu"]
 [[entries]]
 text = "Network settings…"
 icon = "\U000F0493"
-value = "tatami launch nm-connection-editor"
-keywords = ["vpn", "proxy"]
+value = "tatami launch tatami-network"
+keywords = ["vpn", "wireguard", "hidden", "enterprise", "ip", "address"]

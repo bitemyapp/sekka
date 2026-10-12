@@ -126,11 +126,13 @@ pub fn glyph(network: &Network) -> char {
 
 const WIFI_ON: &str = "\u{f05a9}  Turn Wi-Fi on";
 const WIFI_OFF: &str = "\u{f05aa}  Turn Wi-Fi off";
+const SEARCHING: &str = "\u{f0453}  Looking for networks…";
 const SETTINGS: &str = "\u{f0493}  Network settings…";
 
 enum Row {
-    /// The wired connection: shown, nothing to do.
-    Wired,
+    /// Shown, nothing to do: the wired connection, or that no network has
+    /// been found yet.
+    Note,
     Network(Network),
     Disconnect(String),
     Radio(bool),
@@ -143,6 +145,14 @@ enum Row {
 fn wifi_rows(enabled: bool, networks: Vec<Network>) -> Vec<(String, Row)> {
     if !enabled {
         return vec![(WIFI_ON.to_owned(), Row::Radio(true))];
+    }
+    if networks.is_empty() {
+        // Wi-Fi was just turned on, or nothing is in range: the scan the
+        // panel asked for fills the list for its next opening.
+        return vec![
+            (SEARCHING.to_owned(), Row::Note),
+            (WIFI_OFF.to_owned(), Row::Radio(false)),
+        ];
     }
     let active = networks
         .iter()
@@ -180,7 +190,7 @@ fn rows(
             let label = format!("\u{f0200}  {name}  {address}")
                 .trim_end()
                 .to_owned();
-            (label, Row::Wired)
+            (label, Row::Note)
         })
         .collect();
     if let Some((enabled, networks)) = wifi {
@@ -443,15 +453,6 @@ fn set_provider(active: &Active, chosen: Dns) {
     }
 }
 
-fn wifi_device() -> Option<String> {
-    util::output("nmcli", &["-t", "-f", "DEVICE,TYPE", "device"])
-        .ok()?
-        .lines()
-        .map(fields)
-        .find(|fields| fields.get(1).map(String::as_str) == Some("wifi"))
-        .map(|fields| fields[0].clone())
-}
-
 /// A saved Wi-Fi connection for this network name, by UUID.
 fn saved(ssid: &str) -> Option<String> {
     let list = util::output("nmcli", &["-t", "-f", "UUID,TYPE", "connection", "show"]).ok()?;
@@ -623,13 +624,9 @@ fn join(device: &str, network: &Network) {
     }
     let existing = saved(&network.ssid);
     match network.join() {
+        // The Network window asks for what an enterprise network needs.
         Join::Settings if existing.is_none() => {
-            util::notify(
-                ICON,
-                &format!("{} needs Network settings", network.ssid),
-                "Enterprise and WEP networks are set up there",
-            );
-            settings();
+            util::launch("tatami-network", &["--join", &network.ssid])
         }
         Join::Password(key_mgmt) if existing.is_none() => {
             join_with_password(device, network, key_mgmt, None)
@@ -662,57 +659,102 @@ fn join(device: &str, network: &Network) {
     }
 }
 
+/// The Network window (tatami-network).
 fn settings() {
-    util::launch("nm-connection-editor", &[]);
+    util::launch("tatami-network", &[]);
 }
 
-pub fn show() {
-    crate::menu::after_menu();
-    let active = util::output(
-        "nmcli",
-        &[
+/// The first Wi-Fi device in `nmcli -t -f DEVICE,TYPE device`.
+fn wifi_device_in(devices: &str) -> Option<String> {
+    devices
+        .lines()
+        .map(fields)
+        .find(|fields| fields.get(1).map(String::as_str) == Some("wifi"))
+        .map(|fields| fields[0].clone())
+}
+
+/// What the panel shows, asked of NetworkManager all at once. Each answer
+/// comes from what it already knows: a scan, which can take seconds, is
+/// requested alongside and never waited for, so the next opening and
+/// joining see its results.
+struct Snapshot {
+    active: Vec<Active>,
+    device: Option<String>,
+    enabled: bool,
+    networks: Vec<Network>,
+}
+
+fn snapshot() -> Snapshot {
+    let nmcli =
+        |args: &'static [&'static str]| move || util::output("nmcli", args).unwrap_or_default();
+    std::thread::scope(|scope| {
+        let active = scope.spawn(nmcli(&[
             "-t",
             "-f",
             "NAME,UUID,TYPE,DEVICE",
             "connection",
             "show",
             "--active",
-        ],
-    )
-    .map(|list| active_connections(&list))
-    .unwrap_or_default();
-    let wired: Vec<(String, String)> = active
-        .iter()
-        .filter(|connection| connection.wired)
-        .map(|connection| (connection.name.clone(), address(&connection.device)))
-        .collect();
-    let device = wifi_device();
-    let wifi = device.as_ref().map(|device| {
-        let enabled =
-            util::output("nmcli", &["radio", "wifi"]).is_ok_and(|state| state.trim() == "enabled");
-        let networks = if enabled {
-            let list = util::output(
-                "nmcli",
-                &[
-                    "-t",
-                    "-f",
-                    "IN-USE,SSID,SECURITY,SIGNAL",
-                    "device",
-                    "wifi",
-                    "list",
-                    "ifname",
-                    device,
-                ],
-            )
-            .unwrap_or_default();
-            networks(&list)
-        } else {
-            Vec::new()
-        };
-        (enabled, networks)
-    });
+        ]));
+        let devices = scope.spawn(nmcli(&["-t", "-f", "DEVICE,TYPE", "device"]));
+        let radio = scope.spawn(nmcli(&["radio", "wifi"]));
+        let list = scope.spawn(nmcli(&[
+            "-t",
+            "-f",
+            "IN-USE,SSID,SECURITY,SIGNAL",
+            "device",
+            "wifi",
+            "list",
+            "--rescan",
+            "no",
+        ]));
+        scope.spawn(nmcli(&["device", "wifi", "rescan"]));
+        let answer =
+            |thread: std::thread::ScopedJoinHandle<String>| thread.join().unwrap_or_default();
+        let device = wifi_device_in(&answer(devices));
+        let enabled = answer(radio).trim() == "enabled";
+        Snapshot {
+            active: active_connections(&answer(active)),
+            networks: if enabled {
+                networks(&answer(list))
+            } else {
+                Vec::new()
+            },
+            device,
+            enabled,
+        }
+    })
+}
+
+pub fn show() {
+    crate::menu::after_menu();
+    let Snapshot {
+        active,
+        device,
+        enabled,
+        networks,
+    } = snapshot();
     let primary = active.first();
-    let rows = rows(&wired, wifi, primary.map(dns_current));
+    // The wired addresses and the DNS provider, also at once.
+    let (wired, provider) = std::thread::scope(|scope| {
+        let wired: Vec<_> = active
+            .iter()
+            .filter(|connection| connection.wired)
+            .map(|connection| {
+                scope.spawn(|| (connection.name.clone(), address(&connection.device)))
+            })
+            .collect();
+        let provider = primary.map(|primary| scope.spawn(|| dns_current(primary)));
+        (
+            wired
+                .into_iter()
+                .filter_map(|thread| thread.join().ok())
+                .collect::<Vec<_>>(),
+            provider.and_then(|thread| thread.join().ok()),
+        )
+    });
+    let wifi = device.as_ref().map(|_| (enabled, networks));
+    let rows = rows(&wired, wifi, provider);
     let labels: Vec<String> = rows.iter().map(|(label, _)| label.clone()).collect();
     let current = rows
         .iter()
@@ -722,7 +764,7 @@ pub fn show() {
         return;
     };
     match &rows[index].1 {
-        Row::Wired => {}
+        Row::Note => {}
         Row::Radio(on) => {
             let state = if *on { "on" } else { "off" };
             if nmcli(&["radio", "wifi", state]).is_ok() {
@@ -834,6 +876,23 @@ mod tests {
                 .collect::<Vec<_>>(),
             [WIFI_ON]
         );
+    }
+
+    #[test]
+    fn no_networks_yet_says_so_and_keeps_the_switch() {
+        let rows = wifi_rows(true, vec![]);
+        let labels: Vec<&str> = rows.iter().map(|(label, _)| label.as_str()).collect();
+        assert_eq!(labels, [SEARCHING, WIFI_OFF]);
+        assert!(matches!(rows[0].1, Row::Note));
+    }
+
+    #[test]
+    fn the_wifi_device_comes_from_the_device_list() {
+        assert_eq!(
+            wifi_device_in("lo:loopback\nenp0s2:ethernet\nwlan0:wifi\n").as_deref(),
+            Some("wlan0")
+        );
+        assert_eq!(wifi_device_in("lo:loopback\n"), None);
     }
 
     #[test]

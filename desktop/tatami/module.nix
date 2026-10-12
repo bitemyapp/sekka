@@ -18,6 +18,9 @@ let
   tool = pkgs.callPackage ./tool/package.nix { };
   # The Displays window (displays/), which the helper opens and applies for.
   displays = pkgs.callPackage ./displays/package.nix { };
+  # The Network window (network/): joining networks, VPNs, DNS and
+  # addresses, from the network panel's Network settings…
+  network = pkgs.callPackage ./network/package.nix { };
   wallpapers = pkgs.callPackage ./wallpapers/package.nix { };
   # Only the providers the launcher and menu use (config/walker): not
   # Arch package search, password managers or other compositors' windows.
@@ -444,6 +447,7 @@ in
     environment.systemPackages = [
       tool
       displays
+      network
       wallpapers
       # The weather beside the clock.
       pkgs.curl
@@ -471,9 +475,6 @@ in
       pkgs.wireplumber
       pkgs.wiremix
       pkgs.bluetui
-      # Network settings… in the Wi-Fi list: VPN, enterprise and hidden
-      # networks, static addresses.
-      pkgs.networkmanagerapplet
       pkgs.btop
       pkgs.fastfetch
       pkgs.nautilus

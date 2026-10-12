@@ -1,0 +1,4 @@
+/* The Network window (tatami-network) in Tatami's look: the windows'
+ * shared colors, font and corners. */
+
+@import url("../tatami-gtk/style-dark.css");

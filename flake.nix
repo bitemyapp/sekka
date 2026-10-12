@@ -128,7 +128,12 @@
           genkan = calamares;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
-        inherit (inputs.tatami.packages.${system}) tatami displays wallpapers;
+        inherit (inputs.tatami.packages.${system})
+          tatami
+          displays
+          network
+          wallpapers
+          ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         application-cache = applicationCatalog.cache;
@@ -317,6 +322,11 @@
               touch $out
             '';
         displays = self.packages.${system}.displays;
+        network = self.packages.${system}.network;
+        network-vm = import ./nix/network-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         display-recovery-vm = import ./nix/display-recovery-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;

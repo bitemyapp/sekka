@@ -11,6 +11,7 @@ rec {
     packages.${system} = {
       tatami = pkgs.callPackage ../desktop/tatami/tool/package.nix { };
       displays = pkgs.callPackage ../desktop/tatami/displays/package.nix { };
+      network = pkgs.callPackage ../desktop/tatami/network/package.nix { };
       wallpapers = pkgs.callPackage ../desktop/tatami/wallpapers/package.nix { };
     };
   };
