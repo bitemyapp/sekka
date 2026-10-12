@@ -78,6 +78,12 @@
   min-width: 21px;
   padding: 0;
   font-size: 13px;
+  transition: opacity 150ms ease-out;
+}
+
+/* A click's fetch: the icon dims until the new report is in. */
+#custom-weather.refreshing {
+  opacity: 0.4;
 }
 
 #clock {

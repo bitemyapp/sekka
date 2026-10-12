@@ -345,6 +345,18 @@
               python3 ${./tests/test_display_recovery.py} ${self.packages.${system}.tatami}/bin/tatami -v
               touch $out
             '';
+        tatami-weather =
+          pkgs.runCommand "tatami-weather-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.bubblewrap
+              ];
+            }
+            ''
+              python3 ${./tests/test_tatami_weather.py} ${self.packages.${system}.tatami}/bin/tatami -v
+              touch $out
+            '';
         wallpapers =
           pkgs.runCommand "wallpaper-originals-check"
             {

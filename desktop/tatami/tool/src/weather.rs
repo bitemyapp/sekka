@@ -5,8 +5,14 @@
 //! place, feels-like temperature, wind, humidity and the next three days.
 //! As in Omarchy, wttr.in finds the place from the IP address unless one is
 //! set (Setup › Weather, or a right click), and Open-Meteo has the conditions
-//! and forecast. Units follow the place's country, then the locale. Reports
-//! are cached for 15 minutes; Waybar asks every minute.
+//! and forecast. Units follow the place's country, then the locale.
+//!
+//! The bar never waits for the network: Waybar asks every minute, and
+//! `tatami weather` answers at once from the last report. When that is 15
+//! minutes old, it starts `tatami weather fetch` on its own and Waybar is
+//! told when the new one is in. A click fetches at once, the icon dimmed
+//! meanwhile. The place found from the IP address is kept for an hour, so
+//! most fetches are one request to Open-Meteo.
 use crate::util;
 use serde_json::{Value, json};
 use std::{
@@ -20,6 +26,13 @@ pub const SIGNAL: i32 = 7;
 const FRESH: u64 = 15 * 60;
 /// Stop showing a report this old (offline for hours).
 const STALE: u64 = 6 * 60 * 60;
+/// Find the place from the IP address again after this long.
+const LOCATED: u64 = 60 * 60;
+/// A click's dimmed icon lasts at most this long, should its fetch die.
+const REFRESHING: u64 = 60;
+/// Background fetches try again after these pauses (seconds), for a
+/// network that is still coming up.
+const RETRIES: [u64; 2] = [3, 10];
 
 const DIM: &str = "#565f89";
 const RULE: &str = "#3b4261";
@@ -46,6 +59,44 @@ fn place_file() -> PathBuf {
     util::state_dir().join("weather-place.json")
 }
 
+/// Per session and in memory: the fetch lock and the click's marker.
+fn runtime_dir() -> PathBuf {
+    std::env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|dir| dir.starts_with('/'))
+        .map(|dir| PathBuf::from(dir).join("tatami"))
+        .unwrap_or_else(util::state_dir)
+}
+
+fn refreshing_file() -> PathBuf {
+    runtime_dir().join("weather-refreshing")
+}
+
+/// Whether a click's fetch is under way.
+fn refreshing(now: u64) -> bool {
+    fs::read_to_string(refreshing_file())
+        .ok()
+        .and_then(|since| since.trim().parse::<u64>().ok())
+        .is_some_and(|since| now.saturating_sub(since) < REFRESHING)
+}
+
+/// One fetch at a time: held until dropped, or until the process ends.
+struct Lock(#[allow(dead_code)] fs::File);
+
+fn try_lock() -> Option<Lock> {
+    use std::os::fd::AsRawFd;
+    let path = runtime_dir().join("weather.lock");
+    fs::create_dir_all(path.parent()?).ok()?;
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .ok()?;
+    let locked = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0;
+    locked.then_some(Lock(file))
+}
+
 fn write(path: &PathBuf, value: &Value) {
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);
@@ -58,7 +109,11 @@ fn read(path: &PathBuf) -> Option<Value> {
 }
 
 fn get(url: &str) -> Option<Value> {
-    let body = util::output("curl", &["-fsS", "--max-time", "5", url]).ok()?;
+    let body = util::output(
+        "curl",
+        &["-fsS", "--connect-timeout", "3", "--max-time", "5", url],
+    )
+    .ok()?;
     serde_json::from_str(&body).ok()
 }
 
@@ -248,10 +303,27 @@ pub fn from_wttr(report: &Value) -> Option<(Value, Vec<Value>)> {
     Some((now, days))
 }
 
-/// A new report for the saved place, or for wherever the IP address is.
-fn fetch() -> Option<Value> {
+/// Where the place found from the IP address was kept, if it is recent
+/// enough to use again.
+pub fn located(report: Option<&Value>, now: u64) -> Option<&Value> {
+    report.map(|report| &report["located"]).filter(|place| {
+        number(&place["at"]).is_some_and(|at| now.saturating_sub(at as u64) < LOCATED)
+            && number(&place["latitude"]).is_some()
+            && number(&place["longitude"]).is_some()
+    })
+}
+
+/// A new report for the saved place, or for wherever the IP address is:
+/// found again when `locate` or after an hour, otherwise as last found.
+fn fetch(locate: bool) -> Option<Value> {
     let saved = read(&place_file());
-    let (wttr, name, country, latitude, longitude) = match &saved {
+    let cached = read(&cache_file());
+    let known = if locate {
+        None
+    } else {
+        located(cached.as_ref(), now()).cloned()
+    };
+    let (wttr, name, country, latitude, longitude) = match saved.as_ref().or(known.as_ref()) {
         Some(place) => (
             None,
             place["name"].as_str().unwrap_or_default().to_owned(),
@@ -286,12 +358,24 @@ fn fetch() -> Option<Value> {
         .as_ref()
         .and_then(from_open_meteo)
         .or_else(|| wttr.as_ref().and_then(from_wttr))?;
+    // Kept with the report, unless the place is a saved one.
+    let found = saved.is_none().then(|| match &known {
+        Some(known) => known.clone(),
+        None => json!({
+            "at": now(),
+            "name": name,
+            "country": country,
+            "latitude": latitude,
+            "longitude": longitude,
+        }),
+    });
     Some(json!({
         "fetched": now(),
         "place": name,
         "imperial": country_imperial(&country).unwrap_or_else(|| locale_imperial(&locale())),
         "current": current,
         "days": days,
+        "located": found,
     }))
 }
 
@@ -398,46 +482,79 @@ pub fn card(report: &Value) -> Option<String> {
 }
 
 /// What Waybar shows: the icon, or an empty slot (which keeps the clock
-/// centered) while there is no report.
-pub fn bar_json(report: Option<&Value>, now: u64) -> String {
+/// centered) while there is no report; dimmed, and saying so, while a click's
+/// fetch is under way.
+pub fn bar_json(report: Option<&Value>, now: u64, refreshing: bool) -> String {
     let usable = report.filter(|r| {
         number(&r["fetched"]).is_some_and(|fetched| now.saturating_sub(fetched as u64) < STALE)
     });
+    let updating = format!("<span color='{DIM}'>Updating\u{2026}</span>");
     match usable.and_then(|r| Some((r, card(r)?))) {
         Some((report, card)) => json!({
             "text": report["current"]["glyph"].as_str().unwrap_or("\u{e33d}"),
-            "tooltip": card,
-            "class": "weather",
+            "tooltip": if refreshing { format!("{updating}\n{card}") } else { card },
+            "class": if refreshing { "refreshing" } else { "weather" },
         }),
+        None if refreshing => json!({ "text": " ", "tooltip": updating, "class": "refreshing" }),
         None => json!({ "text": " ", "tooltip": "Weather unavailable", "class": "empty" }),
     }
     .to_string()
 }
 
-/// `tatami weather`: refresh when the report is old, then print it.
-pub fn bar() -> String {
-    let cached = read(&cache_file());
-    let fresh = cached
-        .as_ref()
+/// Whether a report is due: none yet, or 15 minutes old.
+pub fn due(report: Option<&Value>, now: u64) -> bool {
+    report
         .and_then(|r| number(&r["fetched"]))
-        .is_some_and(|fetched| now().saturating_sub(fetched as u64) < FRESH);
-    let report = if fresh {
-        cached
-    } else {
-        match fetch() {
-            Some(report) => {
-                write(&cache_file(), &report);
-                Some(report)
-            }
-            None => cached,
-        }
-    };
-    bar_json(report.as_ref(), now())
+        .is_none_or(|fetched| now.saturating_sub(fetched as u64) >= FRESH)
 }
 
-/// A click on the icon: fetch now.
+/// `tatami weather`: the last report, at once. When a new one is due, it is
+/// fetched apart from Waybar (`tatami weather fetch`), which is told when it
+/// is in.
+pub fn bar() -> String {
+    let cached = read(&cache_file());
+    if due(cached.as_ref(), now()) {
+        let me = std::env::current_exe()
+            .ok()
+            .and_then(|path| path.to_str().map(str::to_owned))
+            .unwrap_or_else(|| "tatami".into());
+        util::spawn(&me, &["weather", "fetch"]);
+    }
+    bar_json(cached.as_ref(), now(), refreshing(now()))
+}
+
+/// `tatami weather fetch`: a new report, unless another fetch is under way,
+/// trying again a few times while the network comes up; then Waybar is told.
+pub fn fetch_in_background() {
+    let Some(_lock) = try_lock() else {
+        return;
+    };
+    let mut report = fetch(false);
+    for pause in RETRIES {
+        if report.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(pause));
+        report = fetch(false);
+    }
+    if let Some(report) = report {
+        write(&cache_file(), &report);
+    }
+    let _ = fs::remove_file(refreshing_file());
+    util::signal_waybar(SIGNAL);
+}
+
+/// A click on the icon: fetch now, finding the place again, with the icon
+/// dimmed until the report is in. A fetch already under way finishes the
+/// job.
 pub fn refresh() {
-    match fetch() {
+    let _ = fs::create_dir_all(runtime_dir());
+    let _ = fs::write(refreshing_file(), now().to_string());
+    util::signal_waybar(SIGNAL);
+    let Some(_lock) = try_lock() else {
+        return;
+    };
+    match fetch(true) {
         Some(report) => write(&cache_file(), &report),
         None => util::notify(
             "\u{e33d}",
@@ -445,6 +562,7 @@ pub fn refresh() {
             "Check the network connection",
         ),
     }
+    let _ = fs::remove_file(refreshing_file());
     util::signal_waybar(SIGNAL);
 }
 
@@ -515,7 +633,7 @@ pub fn choose_place() {
         );
         util::notify("\u{e33d}", "Weather place", &label(&place));
     }
-    let _ = fs::remove_file(cache_file());
+    // The last report stays, dimmed, until the new place's is in.
     refresh();
 }
 
@@ -596,10 +714,49 @@ mod tests {
         assert!(card.contains("AUSTIN &amp; CO"));
         assert!(card.contains("82°F") && card.contains("8 mph") && card.contains("28%"));
         assert!(card.contains("WEDNESDAY") && card.contains("90°") && card.contains("65°"));
-        let bar: Value = serde_json::from_str(&bar_json(Some(&report), 1000 + 60)).unwrap();
+        let bar: Value = serde_json::from_str(&bar_json(Some(&report), 1000 + 60, false)).unwrap();
         assert_eq!(bar["text"], "\u{e32b}");
-        let old: Value = serde_json::from_str(&bar_json(Some(&report), 1000 + STALE)).unwrap();
+        assert_eq!(bar["class"], "weather");
+        let old: Value =
+            serde_json::from_str(&bar_json(Some(&report), 1000 + STALE, false)).unwrap();
         assert_eq!(old["class"], "empty");
         assert_eq!(old["text"], " ");
+    }
+
+    #[test]
+    fn a_clicked_fetch_dims_the_icon_and_says_so() {
+        let report = json!({
+            "fetched": 1000, "place": "Austin", "imperial": false,
+            "current": {"temp": 20, "feels": 20, "humidity": 50, "wind": 5, "glyph": "\u{e30d}"},
+            "days": []
+        });
+        let bar: Value = serde_json::from_str(&bar_json(Some(&report), 1060, true)).unwrap();
+        assert_eq!(bar["class"], "refreshing");
+        assert_eq!(bar["text"], "\u{e30d}");
+        assert!(bar["tooltip"].as_str().unwrap().contains("Updating"));
+        let none: Value = serde_json::from_str(&bar_json(None, 1060, true)).unwrap();
+        assert_eq!(
+            (none["text"].as_str(), none["class"].as_str()),
+            (Some(" "), Some("refreshing"))
+        );
+    }
+
+    #[test]
+    fn reports_are_due_after_fifteen_minutes() {
+        let report = json!({ "fetched": 1000 });
+        assert!(due(None, 5000));
+        assert!(!due(Some(&report), 1000 + FRESH - 1));
+        assert!(due(Some(&report), 1000 + FRESH));
+    }
+
+    #[test]
+    fn the_found_place_is_used_for_an_hour() {
+        let report = json!({ "located": {
+            "at": 1000, "name": "Austin", "country": "United States of America",
+            "latitude": 30.27, "longitude": -97.74 } });
+        assert!(located(Some(&report), 1000 + LOCATED - 1).is_some());
+        assert!(located(Some(&report), 1000 + LOCATED).is_none());
+        assert!(located(Some(&json!({ "located": null })), 1000).is_none());
+        assert!(located(None, 1000).is_none());
     }
 }

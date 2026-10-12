@@ -350,6 +350,11 @@ fn main() -> ExitCode {
                 weather::refresh();
                 true
             }
+            // Started by `tatami weather` when a new report is due.
+            "fetch" => {
+                weather::fetch_in_background();
+                true
+            }
             "place" => {
                 weather::choose_place();
                 true

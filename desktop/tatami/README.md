@@ -99,7 +99,11 @@ The `tatami` helper (`tool/`) provides:
 - the weather beside the clock: the conditions' icon, and on hover the
   temperature, place, feels-like temperature, wind, humidity and the next
   three days, from wttr.in (which finds the place from the IP address unless
-  Setup › Weather sets one) and Open-Meteo, as in Omarchy
+  Setup › Weather sets one) and Open-Meteo, as in Omarchy. The bar shows the
+  last report at once and fetches a new one apart from it every 15 minutes,
+  trying again while the network comes up; a click fetches at once, the icon
+  dimmed until it is in. The place found from the IP address is kept for an
+  hour
 - screenshots (freeze, region or window, copy, notify, Satty editing)
 - screen recordings of a region or monitor, with desktop audio and the
   microphone, by gpu-screen-recorder, or wf-recorder where it cannot run
