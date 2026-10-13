@@ -187,7 +187,15 @@ Sekka. Sources that don't follow Sekka keep their own rows.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
-switch inhibitors before choosing `switch` or `boot`. Configuration changes,
+switch inhibitors before choosing `switch` or `boot`. After a live switch
+(an update or a rollback) that adds, removes or changes a `.desktop` entry,
+for everyone or in a user's own profile, the helper restarts
+`tatami-elephant.service` in each signed-in user's session
+(`systemctl --user --machine=<user>@.host try-restart`). Elephant watches the
+application folders it found at sign-in through `/run/current-system` and
+`/etc/profiles/per-user`, so it would otherwise miss the change until the next
+sign-in; Walker reconnects to it by itself. Sessions without Tatami have no
+such unit, and the restart never fails the update. Configuration changes,
 branch changes, and rollbacks use the same planner. A missing compatibility
 manifest stages the transition for boot. D-Bus catalog trigger changes remain
 live when both unit definitions specify reload-on-change and every other unit

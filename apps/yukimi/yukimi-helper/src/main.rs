@@ -567,6 +567,62 @@ fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
     switch(&format!("{system}/bin/switch-to-configuration"), mode)
 }
 
+type Entries = std::collections::BTreeMap<String, Option<PathBuf>>;
+
+/// What a system gives its users to launch: the entries in the application
+/// folder of everyone's packages ("") and of each user's own, each with the
+/// store file it is.
+fn launchable(system: &Path) -> std::collections::BTreeMap<String, Entries> {
+    let entries = |folder: PathBuf| -> Entries {
+        std::fs::read_dir(folder)
+            .into_iter()
+            .flatten()
+            .flatten()
+            // Generated files such as mimeinfo.cache differ in every new
+            // folder; the launcher reads only the entries.
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".desktop"))
+            .map(|e| (e.file_name().to_string_lossy().into_owned(), std::fs::canonicalize(e.path()).ok()))
+            .collect()
+    };
+    let mut folders = std::collections::BTreeMap::new();
+    folders.insert(String::new(), entries(system.join("sw/share/applications")));
+    if let Ok(users) = std::fs::read_dir(system.join("etc/profiles/per-user")) {
+        for user in users.flatten() {
+            let name = user.file_name().to_string_lossy().into_owned();
+            folders.insert(name, entries(user.path().join("share/applications")));
+        }
+    }
+    folders
+}
+
+/// After a live switch that added, removed or changed an application entry,
+/// for everyone or for one user, restart Tatami's
+/// launcher backend, Elephant, in each signed-in user's session. Elephant
+/// watches the application folders it found when the session started. On
+/// NixOS it reaches them through /run/current-system and each user's profile,
+/// which a switch points at new store paths, so the folders it watches never
+/// change and it would not see what was installed or removed until the next
+/// sign-in. Walker reconnects to it by itself. A session without Tatami has
+/// no such unit, and `try-restart` leaves a stopped one stopped.
+fn refresh_launchers(before: &Path, after: &Path) {
+    if launchable(before) == launchable(after) {
+        return;
+    }
+    let mut list = command("loginctl");
+    list.args(["list-users", "--no-legend"]);
+    let Ok(users) = output(list, "Listing signed-in users") else {
+        return;
+    };
+    // UID USER LINGER STATE
+    for user in users.lines().filter_map(|line| line.split_whitespace().nth(1)).filter(|u| valid_user(u)) {
+        let mut restart = command("systemctl");
+        restart.args(["--user", &format!("--machine={user}@.host"), "try-restart", "tatami-elephant.service"]);
+        if output(restart, "Refreshing the application launcher").is_err() {
+            report(1, &format!("{user}'s application launcher shows the change after their next sign-in"));
+        }
+    }
+}
+
 fn switch(program: &str, mode: &str) -> Result<()> {
     // The entire helper already runs in a system service with persistent logs.
     // Never reconnect this process to the GUI's file descriptors.
@@ -856,12 +912,17 @@ fn change(args: &[String]) -> Result<String> {
         Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
     save_update(&receipt)?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
+    // Only for refreshing the launcher afterwards, which never fails an update.
+    let before = std::fs::canonicalize("/run/current-system").ok();
     activate(&setup, &system, mode)?;
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
         return Err(Failure("Activation returned without making the built system current".into()));
     }
     receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
     save_update(&receipt)?;
+    if let (Some(before), "switch") = (&before, mode) {
+        refresh_launchers(before, Path::new(&system));
+    }
     stage_done(4);
     Ok(serde_json::json!({"ok": true, "system": system, "mode": mode, "completion": completion::read_system()})
         .to_string())
@@ -927,6 +988,9 @@ fn rollback(args: &[String]) -> Result<String> {
     }
     receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
     save_update(&receipt)?;
+    if mode == "switch" {
+        refresh_launchers(&active, &receipt.system);
+    }
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
     Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,

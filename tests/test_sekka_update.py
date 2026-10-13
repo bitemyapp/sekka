@@ -92,6 +92,9 @@ elif name == 'systemctl':
             print('inactive' if state == 'Z' else 'active')
         except (OSError, ValueError): print('inactive')
     else: sys.exit(2)
+elif name == 'loginctl':
+    assert a == ['list-users', '--no-legend'], a
+    if p('/state/users').exists(): print(p('/state/users').read_text(), end='')
 elif name == 'switch-to-configuration':
     assert a[-1] in ['boot', 'switch'], a
     p('/state/activating').touch()
@@ -124,7 +127,7 @@ class Update(unittest.TestCase):
         (self.root / 'state/caches.json').write_text(json.dumps(CACHES))
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
-        for name in ['nix', 'nix-env', 'systemd-run', 'systemctl']:
+        for name in ['nix', 'nix-env', 'systemd-run', 'systemctl', 'loginctl']:
             path = self.root / 'system-old/sw/bin' / name
             path.write_text(f'#!{PYTHON}\n' + FAKE)
             path.chmod(0o755)
@@ -272,6 +275,48 @@ class Update(unittest.TestCase):
         self.assertIn('updating needs 10.0 GB', result.stdout + result.stderr)
         self.unchanged()
         self.assertFalse((self.root / 'state/building').exists())
+
+    def launcher_restarts(self):
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        return [command for command in commands if 'tatami-elephant.service' in command]
+
+    def applications(self, old, new):
+        # Each system's application folder holds links to entry files, as
+        # NixOS builds it; `old` and `new` name the entries each has.
+        (self.root / 'state/users').write_text('1000 alice no active\n1001 bob yes active\n')
+        (self.root / 'entries').mkdir(exist_ok=True)
+        for system, names in [('system-old', old), ('system-new', new)]:
+            folder = self.root / system / 'sw/share/applications'
+            folder.mkdir(parents=True)
+            for name in names:
+                (self.root / 'entries' / name).write_text('[Desktop Entry]\n')
+                (folder / name).symlink_to('/entries/' + name)
+            # Generated in every new folder, so never the same file.
+            (folder / 'mimeinfo.cache').write_text(system)
+
+    def test_new_applications_refresh_each_users_launcher(self):
+        self.compatible_live_system()
+        self.applications(['firefox.desktop'], ['firefox.desktop', 'discord.desktop'])
+        self.run_cmd('/bin/sekka-update')
+        self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'switch')
+        self.assertEqual(self.launcher_restarts(), [
+            ['systemctl', '--user', f'--machine={user}@.host', 'try-restart', 'tatami-elephant.service']
+            for user in ['alice', 'bob']])
+
+    def test_same_applications_leave_the_launcher_alone(self):
+        # Another package changed, so the folder is a new one, but every
+        # entry in it is the same file.
+        self.compatible_live_system()
+        self.applications(['firefox.desktop'], ['firefox.desktop'])
+        self.run_cmd('/bin/sekka-update')
+        self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'switch')
+        self.assertEqual(self.launcher_restarts(), [])
+
+    def test_an_update_for_the_next_start_leaves_the_launcher_alone(self):
+        self.applications(['firefox.desktop'], ['firefox.desktop', 'discord.desktop'])
+        self.run_cmd('/bin/sekka-update')
+        self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'boot')
+        self.assertEqual(self.launcher_restarts(), [])
 
     def test_kernel_update_prepares_once_then_reboot_clears_request(self):
         self.compatible_live_system()
