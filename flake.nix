@@ -35,6 +35,7 @@
       hyprlandPkgs = pkgs.extend (import ./nix/overlays/aquamarine.nix);
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
+      publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
       site = import ./nix/site.nix {
         inherit pkgs;
         revision = self.shortRev or self.dirtyShortRev or "unknown";
@@ -114,6 +115,11 @@
           type = "app";
           program = "${pushCache}/bin/sekka-push-cache";
           inherit (pushCache) meta;
+        };
+        publish-nightly = {
+          type = "app";
+          program = "${publishNightly}/bin/sekka-publish-nightly";
+          inherit (publishNightly) meta;
         };
       };
       packages.${system} = {

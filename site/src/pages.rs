@@ -2,7 +2,7 @@
 //! DEVELOPERS.md, component READMEs or docs/screenshots.md; keep it so.
 
 use crate::Site;
-use crate::html::{Page, REPO, esc};
+use crate::html::{NIGHTLY, Page, REPO, esc};
 use crate::tokens::GROUNDS;
 use anyhow::Result;
 use std::fmt::Write;
@@ -16,7 +16,7 @@ pub fn home(site: &Site) -> Result<Page> {
     {lockup}
     <h1>NixOS you can look after without a text editor.</h1>
     <p class="lead">Sekka is a NixOS desktop with a graphical installer, a keyboard-driven desktop and an app for software and updates. Underneath is what NixOS does best: every change builds a new generation, and the ones before it stay in the boot menu.</p>
-    <p class="notice"><span class="tag tag-warning">Experimental</span> There is no release to download yet. <a href="/status/">What works today, and what doesn't</a></p>
+    <p class="notice"><span class="tag tag-warning">Experimental</span> No release yet, only a <a href="/download/">nightly ISO</a> to try in a virtual machine or on a spare computer. <a href="/status/">What works today, and what doesn't</a></p>
   </div>
   {shot}
 </section>
@@ -121,7 +121,7 @@ pub fn home(site: &Site) -> Result<Page> {
     <li><strong>Disk encryption is not implemented.</strong> Neither are RAID or LVM setup, or offline installation. An internet connection is required.</li>
     <li><strong>Hardware coverage is limited.</strong> Virtual machines cannot show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
-    <li><strong>There is no release or support promise.</strong> Published images will be prereleases: previews, not a release you can rely on.</li>
+    <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
   </ul>
 </section>
 
@@ -144,7 +144,7 @@ pub fn home(site: &Site) -> Result<Page> {
       <li><strong>No offline installation.</strong></li>
       <li><strong>Little real-hardware evidence.</strong> Docking, lids and wake have been tested with simulated displays and switches, not across physical docks, cables and panels.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
-      <li><strong>No release.</strong> Building an image is a developer workflow for now.</li>
+      <li><strong>No release.</strong> Only <a href="/download/">nightly builds</a>, which nothing tests on real hardware.</li>
       <li><strong>Not all of it looks like Sekka yet.</strong> Genkan and Yukimi still use libadwaita's light theme and NixOS blues.</li>
     </ul>
     <p><a href="/status/">The full status, and how each part is tested</a></p>
@@ -761,12 +761,12 @@ pub fn status(site: &Site) -> Result<Page> {
         b,
         r#"<section class="tiles">
   <article class="win warn">
-    <h2>No release to download</h2>
-    <p>No preview has been published yet. There is nothing to download here, and GitHub's “Source code” archives are not bootable images. Previews will be prereleases on the <a href="{REPO}/releases">Releases page</a>, with checksums and instructions.</p>
+    <h2>Nightly builds, no release</h2>
+    <p>There is no versioned release yet. A <a href="/download/">nightly ISO</a> is built from <code>main</code> when it has changed, once Sekka's automated checks pass. Nothing tests it on real hardware. GitHub's “Source code” archives are not bootable images.</p>
   </article>
   <article class="win">
     <h2>Trying it anyway</h2>
-    <p>Building an image is a developer workflow, described in <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>. The image starts a live Plasma session with Genkan; the boot menu also offers an older kernel and an Xfce recovery session. Use a virtual machine, or a spare computer with nothing you need on it, and try the live session on your hardware before you install.</p>
+    <p>The image starts a live Plasma session with Genkan; the boot menu also offers an older kernel and an Xfce recovery session. Use a virtual machine, or a spare computer with nothing you need on it, and try the live session on your hardware before you install. To build an image yourself, see <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>:</p>
     <pre class="code"><code>nix build .#iso --out-link result-iso</code></pre>
   </article>
 </section>
@@ -834,8 +834,55 @@ pub fn status(site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/status/",
         title: "Sekka's status: what works, what's tested, what's missing".into(),
-        description: "What has been tested in Sekka and how, what hasn't been, and what isn't implemented yet. There is no release to download yet.",
+        description: "What has been tested in Sekka and how, what hasn't been, and what isn't implemented yet. There is no release yet, only nightly builds.",
         body: b,
+    })
+}
+
+pub fn download(_site: &Site) -> Result<Page> {
+    Ok(Page {
+        path: "/download/",
+        title: "Download Sekka's nightly ISO".into(),
+        description: "Sekka's nightly ISO for x86_64 PCs, built from main when it has changed and Sekka's automated checks pass. It is not a release, and nothing tests it on real hardware.",
+        body: format!(
+            r#"<section class="win focus page-head">
+  <div>
+    <p class="eyebrow">Download</p>
+    <h1>Sekka's nightly ISO.</h1>
+    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO replaces the last one here. It starts a live Plasma session with Genkan, the installer.</p>
+    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release, and nothing tests it on real hardware. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
+  </div>
+</section>
+<section class="tiles">
+  <article class="win">
+    <h2>Download</h2>
+    <p><a href="{NIGHTLY}/sekka-nightly-x86_64-linux.iso">sekka-nightly-x86_64-linux.iso</a>, for x86_64 PCs with UEFI or legacy BIOS boot.</p>
+    <ul class="facts">
+      <li><a href="{NIGHTLY}/SHA256SUMS">SHA256SUMS</a>, its checksum</li>
+      <li><a href="{NIGHTLY}/manifest.json">manifest.json</a>, the source revision, its size and when it was built</li>
+      <li><a href="{NIGHTLY}/flake.lock">flake.lock</a>, the exact inputs it was built from</li>
+    </ul>
+    <p>The files come from Cloudflare R2, at downloads.sekka.computer.</p>
+  </article>
+  <article class="win">
+    <h2>Check the download</h2>
+    <p>With SHA256SUMS next to the ISO, on Linux:</p>
+    <pre class="code"><code>sha256sum -c SHA256SUMS</code></pre>
+    <p>On macOS, <code>shasum -a 256 -c SHA256SUMS</code>. In Windows PowerShell, compare <code>Get-FileHash sekka-nightly-x86_64-linux.iso</code> with the checksum in the file. If they differ, a new nightly may have arrived between the two downloads: fetch both again.</p>
+  </article>
+</section>
+<section class="tiles">
+  <article class="win">
+    <h2>Before you install</h2>
+    <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no disk encryption, dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
+  </article>
+  <article class="win">
+    <h2>Releases</h2>
+    <p>There is no versioned release yet. Releases will be prereleases on GitHub's <a href="{REPO}/releases">Releases page</a>, with checksums and instructions. GitHub's “Source code” archives are not bootable images.</p>
+  </article>
+</section>
+"#
+        ),
     })
 }
 

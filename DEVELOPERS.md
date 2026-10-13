@@ -392,6 +392,52 @@ a draft release, then publishes it as a prerelease. It uses the repository's
 `GITHUB_TOKEN` with `contents: write`. Nothing creates tags, and no push, pull
 request or schedule starts it. It does not push to the binary cache.
 
+GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
+
+### Nightly builds
+
+`.github/workflows/nightly.yml` runs at 4 AM `America/Chicago` and from its
+**Run workflow** button (Actions, "Build nightly Sekka ISO"), on `main` only:
+
+```sh
+gh workflow run nightly.yml --ref main
+```
+
+A job on a GitHub-hosted runner first compares `main`'s commit with the
+`revision` in <https://downloads.sekka.computer/nightly/manifest.json>. If they
+match, nothing else runs and the builder is not touched. Otherwise the builder
+runs `nix flake check`, builds `.#iso`, and `nix run .#publish-nightly`
+uploads it to the R2 bucket `sekka-downloads`, replacing the last nightly:
+
+- `nightly/sekka-nightly-x86_64-linux.iso`
+- `nightly/SHA256SUMS`
+- `nightly/flake.lock`
+- `nightly/manifest.json`: revision, commit and build times, size and
+  SHA-256, uploaded last. A failed check, build or upload publishes no manifest
+  for the new revision, so the next night tries again.
+
+Only the latest nightly is kept, so storage stays near R2's free 10 GB.
+`downloads.sekka.computer` is the bucket's custom domain, served through
+Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so the
+ISO always comes from R2, whose egress is free. The small files are marked
+`no-cache`, and the ISO may be held for five minutes. A download that straddles
+an upload can pair the new ISO with the old checksum; the download page says to
+fetch both again. sekka.computer/download/ links to these fixed names, so it
+needs no new deployment for each nightly.
+
+The upload uses an R2 API token with Object Read & Write on `sekka-downloads`
+alone, kept as the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` of the
+GitHub environment `nightly`, which only `main` may use. Only the publish step
+receives them; they are never on the builder's disk. To set or replace them,
+create the token in Cloudflare (R2, Manage API tokens), then:
+
+```sh
+gh secret set R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
+gh secret set R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
+```
+
+`gh` asks for each value without echoing it.
+
 ### The builder
 
 Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
@@ -411,10 +457,11 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
 - Before the first step, the runner's job-started hook admits only
-  `workflow_dispatch` on `refs/heads/main` of `bitemyapp/sekka`, which only
-  maintainers can start. For anything else, such as a pull request's workflow,
-  it kills every process of the job but the runner, so even `if: always()`
-  steps never run, and the job fails.
+  `workflow_dispatch` and `schedule` on `refs/heads/main` of
+  `bitemyapp/sekka`: workflows only maintainers can start or change. For
+  anything else, such as a pull request's workflow, it kills every process of
+  the job but the runner, so even `if: always()` steps never run, and the job
+  fails.
 - The repository requires approval before any workflow from an outside
   contributor's pull request runs (Settings, Actions, General: "Require
   approval for all external contributors"). The workflow token defaults to
@@ -424,9 +471,9 @@ Know its limits. Builds happen in the host's daemon, so the job container's
 memory and CPU limits do not cap them; the daemon's `max-jobs` and `cores` do.
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
-untrusted code from getting that far. Each release leaves its closure in the
-host's store, about 6 GiB for the ISO alone, until Nix collects garbage; the
-workflow keeps no GC roots, and the builder's root filesystem is nearly full.
+untrusted code from getting that far. Each build leaves its closure in the
+host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
+and the daemon collects garbage when free space runs low.
 
 ### Setting up the builder
 
@@ -437,7 +484,9 @@ sudo bash scripts/runner-host-setup.sh
 ```
 
 It reserves uid and gid 30500 as `sekka-runner`, lets Nix's builds open
-`/dev/kvm`, adds Sekka's binary cache, and restarts the daemon. The daemon puts
+`/dev/kvm`, has the daemon collect garbage when free space falls under 100 GiB
+during a build (until 200 GiB are free), adds Sekka's binary cache, and
+restarts the daemon. The daemon puts
 `/dev/kvm` in the sandbox of builds that require `kvm`, such as the flake
 check's NixOS tests, but the sandbox drops the build users' supplementary
 groups, so membership of `kvm` does not help. A udev rule instead gives the
@@ -473,8 +522,6 @@ job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
 supervisor lets a running job finish first. To stop taking jobs,
 `docker stop sekka-runner-supervisor sekka-runner-job`. The supervisor logs to
 `docker logs sekka-runner-supervisor`.
-
-GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
 
 ## Website
 

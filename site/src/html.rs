@@ -26,17 +26,20 @@ pub struct Page {
     pub body: String,
 }
 
-/// The workspaces in the bar are the site's pages, as Tatami's are 1 to 5.
-pub const NAV: [(&str, &str); 5] = [
+/// The workspaces in the bar are the site's pages, numbered as Tatami's are.
+pub const NAV: [(&str, &str); 6] = [
     ("/", "sekka"),
     ("/tatami/", "tatami"),
     ("/yukimi/", "yukimi"),
     ("/design/", "design"),
     ("/status/", "status"),
+    ("/download/", "download"),
 ];
 
 pub const ORIGIN: &str = "https://sekka.computer";
 pub const REPO: &str = "https://github.com/bitemyapp/sekka";
+/// Nightly ISOs: the Cloudflare R2 bucket sekka-downloads (DEVELOPERS.md).
+pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
 
 pub fn shell(site: &Site, page: &Page) -> Result<String> {
     let mut nav = String::new();

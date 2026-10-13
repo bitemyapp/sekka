@@ -22,8 +22,8 @@ if ! getent passwd sekka-runner >/dev/null; then
     --home-dir /nonexistent --shell /usr/sbin/nologin sekka-runner
 fi
 
-# The release's flake check runs NixOS tests in VMs: builds that ask for
-# KVM get /dev/kvm in their sandbox. There a build has no group but
+# The flake check of releases and nightlies runs NixOS tests in VMs: builds
+# that ask for KVM get /dev/kvm in their sandbox. There a build has no group but
 # nixbld (the sandbox drops the build users' other groups), so that group
 # may open it, now and whenever the device appears.
 conf=/etc/nix/nix.custom.conf
@@ -45,6 +45,13 @@ for user in $(getent group kvm | cut -d: -f4 | tr , ' '); do
   esac
 done
 
+# Nightly builds leave their ISOs in the store with nothing keeping them:
+# when free space falls under 100 GiB during a build, the daemon collects
+# garbage until 200 GiB are free.
+if ! grep -q '^min-free' "$conf"; then
+  printf 'min-free = %d\nmax-free = %d\n' $((100 * 1024 ** 3)) $((200 * 1024 ** 3)) >>"$conf"
+fi
+
 # Sekka's own binary cache, so the builder downloads what Sekka has built
 # instead of building it again.
 if ! grep -q 'cache.sekka.computer' "$conf"; then
@@ -55,4 +62,4 @@ EOF
 fi
 
 systemctl restart nix-daemon.service
-echo "Done: sekka-runner ($id), KVM for builds, and Sekka's binary cache."
+echo "Done: sekka-runner ($id), KVM for builds, garbage collection when space runs low, and Sekka's binary cache."

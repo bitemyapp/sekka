@@ -363,6 +363,7 @@ fn main() -> Result<()> {
         pages::yukimi(&site)?,
         pages::design(&site)?,
         pages::status(&site)?,
+        pages::download(&site)?,
         pages::fonts(&site)?,
     ];
     let mut sitemap = String::from(

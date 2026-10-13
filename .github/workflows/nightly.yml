@@ -1,0 +1,83 @@
+name: Build nightly Sekka ISO
+
+on:
+  schedule:
+    # 4 AM in Chicago, through daylight saving changes.
+    - cron: '0 4 * * *'
+      timezone: America/Chicago
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sekka-nightly
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    # Scheduled, or started by hand, from main only.
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.compare.outputs.build }}
+    steps:
+      - name: Compare main with the published nightly
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          published=$(curl -fsS https://downloads.sekka.computer/nightly/manifest.json | jq -r .revision) || published=none
+          if [[ "$published" == "$GITHUB_SHA" ]]; then
+            echo "The nightly ISO of $GITHUB_SHA is already published."
+            echo build=false >> "$GITHUB_OUTPUT"
+          else
+            echo "Published: $published; main: $GITHUB_SHA."
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+
+  nightly:
+    # Only when main has changed since the published ISO. It runs on the
+    # sandboxed builder (nix/runner.nix and DEVELOPERS.md), one fresh
+    # container per job, with Nix through the host's daemon. The environment
+    # holds the token that writes the downloads bucket, for main alone.
+    needs: changes
+    if: ${{ needs.changes.outputs.build == 'true' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    environment: nightly
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # NixOS tests in the flake check run in VMs: a build that asks for
+          # KVM must be able to open /dev/kvm, as QEMU will (see DEVELOPERS.md).
+          # The ${...} in single quotes are Nix's own.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
+            exit 1
+          }
+      - name: Check components and build ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake check --no-update-lock-file --print-build-logs
+          nix build .#iso --no-update-lock-file --print-build-logs --out-link result-iso
+          git diff --exit-code -- flake.lock
+      - name: Publish the nightly ISO
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          nix run --no-update-lock-file .#publish-nightly -- result-iso/iso

@@ -361,13 +361,20 @@ kbd {
   .split { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .bar { height: 44px; line-height: 44px; }
+  /* The workspaces take the bar's width, and scroll within it rather than
+     widen the page; the source link is in the footer too. */
+  .bar { height: 44px; line-height: 44px; grid-template-columns: auto minmax(0, 1fr); }
+  .bar-ws { overflow-x: auto; scrollbar-width: none; }
+  .bar-source { display: none; }
   .bar-menu { height: 44px; }
   .bar-clock { display: none; }
   .ws { padding: 0 0.55em; }
   .ws-n { display: none; }
   .page-head { flex-direction: column; align-items: flex-start; }
   .pair { grid-template-columns: 1fr; }
+}
+@media (max-width: 360px) {
+  .ws { padding: 0 0.4em; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto; }
