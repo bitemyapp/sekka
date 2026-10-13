@@ -116,7 +116,9 @@ jobs:
           config=$(mktemp -d)
           trap 'rm -rf "$config"' EXIT
           (umask 077 && printf '%s' "$CACHE_SIGNING_KEY" > "$config/cache.sekka.computer-1.sec")
-          SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
+          # The key stays on the container's /tmp, in memory; the signed
+          # closures (many gigabytes) are staged on the runner's work volume.
+          TMPDIR=$RUNNER_TEMP SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
       - name: Check that updating to it only downloads
         if: steps.inputs.outputs.build == 'true'
         shell: bash
