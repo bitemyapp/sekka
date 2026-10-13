@@ -103,9 +103,12 @@ let
     "LANG=C.UTF-8"
     "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
     "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-    # Builds go to the host's daemon, as an untrusted user.
+    # Builds go to the host's daemon, as an untrusted user. The daemon takes
+    # max-jobs and cores from its client, and Nix's default of one job at a
+    # time made a nightly build its thousands of derivations in sequence:
+    # up to 32 at once here, 16 cores each, on the 128-core builder.
     "NIX_REMOTE=daemon"
-    "NIX_CONFIG=experimental-features = nix-command flakes"
+    "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 32\ncores = 16"
     "ACTIONS_RUNNER_HOOK_JOB_STARTED=${admit}"
   ];
 

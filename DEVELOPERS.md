@@ -475,7 +475,11 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   read-only and cannot approve pull requests.
 
 Know its limits. Builds happen in the host's daemon, so the job container's
-memory and CPU limits do not cap them; the daemon's `max-jobs` and `cores` do.
+memory and CPU limits do not cap them. The daemon takes `max-jobs` and `cores`
+from its client: the job image sets 32 builds at a time with 16 cores each.
+Nix's default, one at a time, made the first nightly build its 3,400
+derivations in sequence, an hour and a half where most of them could run
+together.
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
@@ -492,8 +496,13 @@ sudo bash scripts/runner-host-setup.sh
 
 It reserves uid and gid 30500 as `sekka-runner`, lets Nix's builds open
 `/dev/kvm`, has the daemon collect garbage when free space falls under 100 GiB
-during a build (until 200 GiB are free), adds Sekka's binary cache, and
-restarts the daemon. The daemon puts
+during a build (until 200 GiB are free), adds Sekka's binary cache and
+`cache.numtide.com`, and restarts the daemon. numtide's cache serves the AI
+applications from `numtide/llm-agents.nix`, which cache.nixos.org does not
+have; without it the builder compiles Codex and the rest from source. Untrusted
+clients can use only the daemon's caches, so these belong in its
+configuration. Restarting the daemon stops builds in progress, so run the
+script while no job is running. The daemon puts
 `/dev/kvm` in the sandbox of builds that require `kvm`, such as the flake
 check's NixOS tests, but the sandbox drops the build users' supplementary
 groups, so membership of `kvm` does not help. A udev rule instead gives the

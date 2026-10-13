@@ -61,5 +61,15 @@ extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kM
 EOF
 fi
 
+# The AI applications come from numtide/llm-agents.nix, newer than Nixpkgs'
+# and not on cache.nixos.org; its own cache has them, so the builder need
+# not compile Codex and the rest from source.
+if ! grep -q 'cache.numtide.com' "$conf"; then
+  cat >>"$conf" <<'EOF'
+extra-substituters = https://cache.numtide.com
+extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+EOF
+fi
+
 systemctl restart nix-daemon.service
-echo "Done: sekka-runner ($id), KVM for builds, garbage collection when space runs low, and Sekka's binary cache."
+echo "Done: sekka-runner ($id), KVM for builds, garbage collection when space runs low, and the Sekka and numtide binary caches."
