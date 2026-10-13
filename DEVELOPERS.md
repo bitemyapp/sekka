@@ -272,7 +272,17 @@ before accepting it (and ignores it non-interactively) unless
 `accept-flake-config` is set, and only trusted users can add a substituter
 that `trusted-substituters` does not already list.
 `nix build .#checks.x86_64-linux.binary-cache` checks that the flake, the live
-media and an installed system name the same cache and key.
+media and an installed system name the same caches and keys.
+
+The same module adds numtide's `https://cache.numtide.com`
+(`calamares.binaryCache.numtide.enable`, default on), signed with
+`niks3.numtide.com-1`, as `numtide/llm-agents.nix` documents. It serves the
+catalog's AI applications as built from that flake's own lock, which installed
+systems keep, so an update that moves `ai-apps` downloads them instead of
+compiling them. Its `nix-cache-info` asks for priority 30; the URL's `?priority=55` makes Nix ask
+it last, only for paths neither cache.nixos.org nor Sekka's cache has. A
+system takes a new substituter only once activated, so the first update to
+this module still builds anything new itself.
 
 Publishing is manual; the release workflow does not touch the cache.
 From a clean checkout of reviewed `main`:

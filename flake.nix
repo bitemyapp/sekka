@@ -10,12 +10,17 @@
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
 
-  # Sekka's own packages, also configured on Sekka systems by
-  # installer/genkan/rust/system/binary-cache.nix (checks.binary-cache).
+  # Sekka's own packages, and numtide's for the AI applications, also
+  # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
+  # (checks.binary-cache).
   nixConfig = {
-    extra-substituters = [ "https://cache.sekka.computer" ];
+    extra-substituters = [
+      "https://cache.sekka.computer"
+      "https://cache.numtide.com?priority=55"
+    ];
     extra-trusted-public-keys = [
       "cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y="
+      "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
     ];
   };
 
@@ -297,8 +302,8 @@
           assert latest.hardware.nvidia.open && latest.hardware.nvidia.prime.offload.enable;
           assert latest.hardware.nvidia.powerManagement.finegrained;
           pkgs.writeText "nvidia-on-media" latest.hardware.nvidia.package.version;
-        # The live media and installed systems use the cache this flake
-        # advertises, with the same key.
+        # The live media and installed systems use the caches this flake
+        # advertises, with the same keys.
         binary-cache =
           let
             advertised = (import ./flake.nix).nixConfig;
