@@ -303,16 +303,22 @@ nix run .#push-cache
 ```
 
 It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
-`aquamarine`, `hyprland` and `tools`, and signs their complete runtime closures into a
-temporary local cache: Nix only adds a path to a binary cache that already
-holds its references. It then uploads just the paths cache.nixos.org does not
-serve (about 145 MiB at first), archives before the narinfos that point to
-them, and skips objects already in the bucket. Clients substitute each
+`aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
+complete runtime closures into a temporary local cache: Nix only adds a path to
+a binary cache that already holds its references. `installed-systems` is an
+installed system for each desktop the media offers (`respin.referenceDesktops`),
+so everything Sekka's modules change is covered without a list to keep up:
+Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
+Elephant, the wallpapers. It then uploads just the paths that none of
+cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
+archives before the narinfos that point to them, and skips objects already in
+the bucket. Determinate Nixd is left to Determinate. Clients substitute each
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
-All of these packages are evaluated with Nixpkgs' default configuration, which
-refuses unfree packages, so NVIDIA's driver and other unfree packages are never
-published. Installed systems at the same lock use the identical store paths.
+All of these are evaluated refusing unfree packages (`installed-systems`
+forces it), so NVIDIA's driver and other unfree packages are never published,
+and one added to a desktop makes the push fail rather than publish it.
+Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
 cache.nixos.org (40) first.
 

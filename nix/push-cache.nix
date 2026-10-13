@@ -29,7 +29,9 @@ pkgs.writeShellApplication {
 
     # Each of these is evaluated with Nixpkgs' default configuration, which
     # refuses unfree packages, so nothing unfree is published.
-    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools)
+    # installed-systems is an installed system for every desktop, refusing
+    # unfree packages too: everything they need that cache.nixos.org lacks.
+    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools installed-systems)
     mapfile -t outputs < <(nix build --no-link --print-out-paths "''${packages[@]/#/$flake#}")
 
     # Nix only adds a path to a binary cache that already holds its
@@ -38,10 +40,17 @@ pkgs.writeShellApplication {
     trap 'rm -rf "$stage"' EXIT
     nix copy --to "file://$stage/all?compression=zstd&secret-key=$key" "''${outputs[@]}"
 
-    # Publish only what cache.nixos.org does not serve. Clients substitute
-    # each reference separately, from whichever cache has it.
+    # Publish only what no cache Sekka systems use already serves:
+    # cache.nixos.org, Determinate's (its Nix) and numtide's (the AI
+    # applications). Clients substitute each reference separately, from
+    # whichever cache has it. Determinate Nixd comes from Determinate alone
+    # (FlakeHub's cache, or the installation media); it is theirs to publish.
     mapfile -t closure < <(nix path-info --recursive "''${outputs[@]}")
-    mapfile -t own < <(nix-store --store https://cache.nixos.org --check-validity --print-invalid "''${closure[@]}")
+    own=("''${closure[@]}")
+    for upstream in https://cache.nixos.org https://install.determinate.systems https://cache.numtide.com; do
+      mapfile -t own < <(nix-store --store "$upstream" --check-validity --print-invalid "''${own[@]}")
+    done
+    mapfile -t own < <(printf '%s\n' "''${own[@]}" | grep -v -e '-determinate-nixd-' -e '^$' || true)
     mkdir -p "$stage/upload/nar"
     for path in "''${own[@]}"; do
       name=''${path#/nix/store/}
@@ -61,7 +70,7 @@ pkgs.writeShellApplication {
     # cache would be asked before cache.nixos.org (40).
     printf 'StoreDir: /nix/store\nWantMassQuery: 1\nPriority: 50\n' |
       s3 cp - "s3://$bucket/nix-cache-info" --content-type text/x-nix-cache-info
-    echo "Published ''${#own[@]} of ''${#closure[@]} paths; cache.nixos.org serves the rest"
+    echo "Published ''${#own[@]} of ''${#closure[@]} paths; the other caches serve the rest"
   '';
   meta.description = "Upload Sekka's own packages to https://cache.sekka.computer";
 }

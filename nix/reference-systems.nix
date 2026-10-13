@@ -7,6 +7,8 @@
   inputs,
   applicationCatalog,
   desktops,
+  # Refuse unfree packages, as the binary cache must (nix/push-cache.nix).
+  free ? false,
 }:
 let
   system = "x86_64-linux";
@@ -23,7 +25,8 @@ let
         (import ../installer/genkan/rust/reference.nix { desktops = [ desktop ]; })
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
-      ];
+      ]
+      ++ lib.optional free { nixpkgs.config.allowUnfree = lib.mkForce false; };
     };
   systems = lib.genAttrs desktops evaluate;
   paths = roots: "${pkgs.closureInfo { rootPaths = roots; }}/store-paths";
