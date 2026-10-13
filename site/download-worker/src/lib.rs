@@ -37,7 +37,8 @@ mod handler {
             .map(|v| v.to_string())
             .unwrap_or_else(|_| shared::NIGHTLY.to_owned());
         let mut body = page.text().await?;
-        if let Some(list) = list(&base).await {
+        let (list, cache) = list(&base).await;
+        if let Some(list) = list {
             if let Some(filled) = render::fill(&body, &list) {
                 body = filled;
             }
@@ -49,20 +50,35 @@ mod handler {
             headers.set(name, value)?;
         }
         headers.set("cache-control", "no-cache")?;
+        // Cloudflare's cache status for the list (MISS, HIT, EXPIRED...),
+        // which shows whether R2 was asked for it.
+        if let Some(cache) = cache {
+            headers.set("x-builds-cache", &cache)?;
+        }
         ResponseBuilder::new().with_headers(headers).from_html(body)
     }
 
-    /// The builds as HTML, a note that there are none yet, or None when the
-    /// list cannot be had and the page's fallback should stay.
-    async fn list(base: &str) -> Option<String> {
+    /// The builds as HTML (a note that there are none yet, or None when the
+    /// list cannot be had and the page's fallback should stay), and
+    /// Cloudflare's cache status for the fetch.
+    async fn list(base: &str) -> (Option<String>, Option<String>) {
         let mut init = RequestInit::new();
         init.with_cf_properties(CfProperties {
             cache_everything: Some(true),
             cache_ttl: Some(shared::BUILDS_TTL as i32),
             ..CfProperties::default()
         });
-        let request = Request::new_with_init(&format!("{base}/builds.json"), &init).ok()?;
-        let mut response = Fetch::Request(request).send().await.ok()?;
+        let Ok(request) = Request::new_with_init(&format!("{base}/builds.json"), &init) else {
+            return (None, None);
+        };
+        let Ok(mut response) = Fetch::Request(request).send().await else {
+            return (None, None);
+        };
+        let cache = response.headers().get("cf-cache-status").ok().flatten();
+        (render_list(&mut response, base).await, cache)
+    }
+
+    async fn render_list(response: &mut Response, base: &str) -> Option<String> {
         match response.status_code() {
             404 => Some(render::NONE_YET.to_owned()),
             200 => {

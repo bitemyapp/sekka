@@ -556,7 +556,9 @@ file. It fetches the static page, puts the list of nightly builds in its place
 for them, and gives the response the headers `_headers` gives static files,
 which Pages leaves off a worker's responses. The list comes from
 `builds.json` through Cloudflare's cache, kept for `BUILDS_TTL` seconds
-(`site/src/shared.rs`, which the generator and the worker share). Before the
+(`site/src/shared.rs`, which the generator and the worker share). The page's
+`x-builds-cache` header is that fetch's cache status: `MISS` or `EXPIRED` when
+R2 was asked, `HIT` when Cloudflare's cache answered. Before the
 first nightly the page says there is none; if the list cannot be had, it
 keeps its fallback, a link to `builds.json`. The rendering is plain Rust,
 tested natively when the site is built; only the request handler is built for
