@@ -10,9 +10,9 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 
 - **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
 - **Disk encryption is not implemented.** Neither are RAID/LVM setup or offline installation. An internet connection is required.
-- **Hardware coverage is limited.** VM tests cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
+- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka is tested by hand on two laptops: a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, and an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
-- **There is no production release or support promise.** Nightly images are previews, not a release you can rely on, and nothing tests them on real hardware. Older screenshots and test reports are not proof of a tested Sekka release.
+- **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
 
 If you need a system you can rely on today, wait before installing Sekka.
 
@@ -59,7 +59,7 @@ Some differences remain. Unlike a Mac, the laptop also stays awake with its lid
 closed while docked on battery power. It goes to sleep when you close the lid with no
 other display connected, unless Keep Awake is on (then the built-in screen turns
 off). Lid handling and docking have been tested with simulated displays and a
-simulated lid, not yet across physical docks, cables and panels.
+simulated lid, not yet across a range of physical docks, cables and panels.
 
 Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
@@ -87,7 +87,7 @@ Plasma is the default live desktop and the installer's preselected choice. GNOME
 
 ## Trying Sekka
 
-**There is no release yet, only a nightly ISO.** Each night, if `main` has changed and Sekka's automated checks pass, virtual-machine tests included, a new ISO for x86_64 PCs replaces the last one on [sekka.computer/download](https://sekka.computer/download/), with its checksum and the source revision it came from. Nothing tests nightly images on real hardware. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
+**There is no release yet, only a nightly ISO.** Each night, if `main` has changed and Sekka's automated checks pass, virtual-machine tests included, a new ISO for x86_64 PCs replaces the last one on [sekka.computer/download](https://sekka.computer/download/), with its checksum and the source revision it came from. A nightly may not have been tried on hardware before it is published. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
 
 To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
 

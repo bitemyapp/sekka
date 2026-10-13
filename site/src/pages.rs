@@ -119,7 +119,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <ul class="facts">
     <li><strong>Installation erases a whole disk.</strong> There is no dual-boot setup, manual partitioning, or option to keep an existing operating system. Keep backups elsewhere.</li>
     <li><strong>Disk encryption is not implemented.</strong> Neither are RAID or LVM setup, or offline installation. An internet connection is required.</li>
-    <li><strong>Hardware coverage is limited.</strong> Virtual machines cannot show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
+    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka is tested by hand on two laptops, a ThinkPad X1 Carbon Gen 14 and an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
     <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
   </ul>
@@ -142,9 +142,9 @@ pub fn home(site: &Site) -> Result<Page> {
     <ul class="facts gaps">
       <li><strong>No encryption, manual partitioning or dual boot.</strong></li>
       <li><strong>No offline installation.</strong></li>
-      <li><strong>Little real-hardware evidence.</strong> Docking, lids and wake have been tested with simulated displays and switches, not across physical docks, cables and panels.</li>
+      <li><strong>Little hardware beyond two laptops.</strong> Sekka is tested by hand on a ThinkPad X1 Carbon Gen 14 and an Acer Predator Helios Neo 14. Otherwise docking, lids and wake are tested with simulated displays and switches, not across a range of docks, cables and panels.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
-      <li><strong>No release.</strong> Only <a href="/download/">nightly builds</a>, which nothing tests on real hardware.</li>
+      <li><strong>No release.</strong> Only <a href="/download/">nightly builds</a>, checked automatically in virtual machines.</li>
       <li><strong>Not all of it looks like Sekka yet.</strong> Genkan and Yukimi still use libadwaita's light theme and NixOS blues.</li>
     </ul>
     <p><a href="/status/">The full status, and how each part is tested</a></p>
@@ -229,7 +229,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Laptops and docks</h2>
     <p>Close the lid with an external display connected and the built-in display turns off, its windows move to the other screen, and the laptop keeps running. Open the lid and it comes back where you arranged it. A display you turn off stays off whenever the same displays are connected again, until you turn it on or log in again. If a display change leaves a window off screen, Tatami brings it back.</p>
-    <p class="caveat"><span class="tag tag-warning">Not yet proven</span> Lid handling and docking have been tested with simulated displays and a simulated lid, not across physical docks, cables and panels. Unlike a Mac, a docked laptop also stays awake with its lid closed on battery power.</p>
+    <p class="caveat"><span class="tag tag-warning">Not yet proven</span> Lid handling and docking have been tested with simulated displays and a simulated lid, not across a range of physical docks, cables and panels. Unlike a Mac, a docked laptop also stays awake with its lid closed on battery power.</p>
   </article>
   <article class="win">
     <h2>Keep Awake</h2>
@@ -762,7 +762,7 @@ pub fn status(site: &Site) -> Result<Page> {
         r#"<section class="tiles">
   <article class="win warn">
     <h2>Nightly builds, no release</h2>
-    <p>There is no versioned release yet. A <a href="/download/">nightly ISO</a> is built from <code>main</code> when it has changed, once Sekka's automated checks pass. Nothing tests it on real hardware. GitHub's “Source code” archives are not bootable images.</p>
+    <p>There is no versioned release yet. A <a href="/download/">nightly ISO</a> is built from <code>main</code> when it has changed, once Sekka's automated checks pass in virtual machines. A nightly may not have been tried on hardware yet. GitHub's “Source code” archives are not bootable images.</p>
   </article>
   <article class="win">
     <h2>Trying it anyway</h2>
@@ -783,6 +783,7 @@ pub fn status(site: &Site) -> Result<Page> {
       <tr><th scope="row">Displays and lid</th><td>The display helper runs against a fake Hyprland and a fake lid. Real Hyprland runs in a virtual machine with simulated screens and a simulated lid switch.</td><td>Physical docks, cables, panels, lid sensors and GPUs.</td></tr>
       <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence. It never suspends the host.</td><td>Power loss, firmware and thermal shutdowns.</td></tr>
       <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td><td>Waking your machine: check it with Keep Awake off.</td></tr>
+      <tr><th scope="row">Hardware</th><td>By hand, on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, and an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME.</td><td>Other machines, and any given nightly.</td></tr>
       <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td><td>Hardware hot-plug.</td></tr>
     </tbody>
   </table></div>
@@ -803,7 +804,7 @@ pub fn status(site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Hardware</h2>
-    <p>Virtual machines cannot show whether your Wi-Fi, graphics, sleep or external displays work. The NVIDIA driver Sekka configures targets Turing and newer GPUs. Genkan offers ext4, Btrfs or XFS, with UEFI or legacy BIOS boot.</p>
+    <p>Sekka is tested by hand on two laptops: a ThinkPad X1 Carbon Gen 14 with Intel graphics, and an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. Neither they nor virtual machines can show whether your Wi-Fi, graphics, sleep or external displays work. The NVIDIA driver Sekka configures targets Turing and newer GPUs. Genkan offers ext4, Btrfs or XFS, with UEFI or legacy BIOS boot.</p>
     <p>Proprietary software is allowed by default, with an opt-out; redistributable firmware may still be proprietary.</p>
   </article>
 </section>
@@ -843,14 +844,14 @@ pub fn download(_site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/download/",
         title: "Download Sekka's nightly ISO".into(),
-        description: "Sekka's nightly ISO for x86_64 PCs, built from main when it has changed and Sekka's automated checks pass. It is not a release, and nothing tests it on real hardware.",
+        description: "Sekka's nightly ISO for x86_64 PCs, built from main when it has changed and Sekka's automated checks pass. It is not a release, and its automated checks run in virtual machines.",
         body: format!(
             r#"<section class="win focus page-head">
   <div>
     <p class="eyebrow">Download</p>
     <h1>Sekka's nightly ISO.</h1>
     <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO replaces the last one here. It starts a live Plasma session with Genkan, the installer.</p>
-    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release, and nothing tests it on real hardware. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
+    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Its automated checks run in virtual machines, and it may not have been tried on hardware yet. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
   </div>
 </section>
 <section class="tiles">
