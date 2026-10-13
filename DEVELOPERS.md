@@ -427,10 +427,10 @@ always come from R2, whose egress is free. A build's files are marked
 immutable, and `builds.json` is marked `no-cache`.
 
 sekka.computer/download/ lists the builds through the download worker (see
-Website): it reads `builds.json` through Cloudflare's cache, which keeps it for
+Website): it keeps `builds.json` in each Cloudflare data centre's cache for
 five minutes, so a new build appears within five minutes of its upload without
-a new deployment, and R2 sees at most one request for the list per Cloudflare
-data centre in that time.
+a new deployment, and R2 sees at most one request for the list per data centre
+in that time.
 
 The upload uses an R2 API token with Object Read & Write on `sekka-downloads`
 alone, kept as the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` of the
@@ -555,10 +555,12 @@ for `/download/` alone (`_routes.json`); every other page is a plain static
 file. It fetches the static page, puts the list of nightly builds in its place
 for them, and gives the response the headers `_headers` gives static files,
 which Pages leaves off a worker's responses. The list comes from
-`builds.json` through Cloudflare's cache, kept for `BUILDS_TTL` seconds
-(`site/src/shared.rs`, which the generator and the worker share). The page's
-`x-builds-cache` header is that fetch's cache status: `MISS` or `EXPIRED` when
-R2 was asked, `HIT` when Cloudflare's cache answered. Before the
+`builds.json`, which the worker keeps in the data centre's cache (the Cache
+API) for `BUILDS_TTL` seconds (`site/src/shared.rs`, which the generator and
+the worker share), the news that there is no list yet included. The page's
+`x-builds-cache` header is `HIT` when the cache answered and `MISS` when R2 was
+asked. A `fetch` with Cloudflare's `cacheTtl` and `cacheEverything` options
+did not cache the list: its `cf-cache-status` was `DYNAMIC` on every request. Before the
 first nightly the page says there is none; if the list cannot be had, it
 keeps its fallback, a link to `builds.json`. The rendering is plain Rust,
 tested natively when the site is built; only the request handler is built for

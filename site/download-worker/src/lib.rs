@@ -2,10 +2,10 @@
 //! for /download/ alone (_routes.json), where it lists the nightly builds in
 //! the static page's place for them. Browsers get no script.
 //!
-//! The list comes from downloads.sekka.computer/nightly/builds.json through
-//! Cloudflare's cache, which keeps it for shared::BUILDS_TTL seconds: R2
-//! sees at most one request per data centre in that time. If it cannot be
-//! had, the page keeps its fallback.
+//! The list comes from downloads.sekka.computer/nightly/builds.json, kept
+//! in each Cloudflare data centre's cache (the Cache API) for
+//! shared::BUILDS_TTL seconds: R2 sees at most one request per data centre
+//! in that time. If it cannot be had, the page keeps its fallback.
 
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod render;
@@ -17,7 +17,7 @@ mod shared;
 mod handler {
     use crate::{render, shared};
     use worker::{
-        CfProperties, Context, Date, Env, Fetch, Request, RequestInit, Response, ResponseBuilder,
+        Cache, Context, Date, Env, Fetch, Headers, Method, Request, Response, ResponseBuilder,
         Result, event,
     };
 
@@ -50,39 +50,57 @@ mod handler {
             headers.set(name, value)?;
         }
         headers.set("cache-control", "no-cache")?;
-        // Cloudflare's cache status for the list (MISS, HIT, EXPIRED...),
-        // which shows whether R2 was asked for it.
+        // Whether the list came from the cache or R2, to see from outside.
         if let Some(cache) = cache {
-            headers.set("x-builds-cache", &cache)?;
+            headers.set("x-builds-cache", cache)?;
         }
         ResponseBuilder::new().with_headers(headers).from_html(body)
     }
 
     /// The builds as HTML (a note that there are none yet, or None when the
-    /// list cannot be had and the page's fallback should stay), and
-    /// Cloudflare's cache status for the fetch.
-    async fn list(base: &str) -> (Option<String>, Option<String>) {
-        let mut init = RequestInit::new();
-        init.with_cf_properties(CfProperties {
-            cache_everything: Some(true),
-            cache_ttl: Some(shared::BUILDS_TTL as i32),
-            ..CfProperties::default()
-        });
-        let Ok(request) = Request::new_with_init(&format!("{base}/builds.json"), &init) else {
+    /// list cannot be had and the page's fallback should stay), and where the
+    /// list came from: HIT for this data centre's cache, MISS for R2.
+    async fn list(base: &str) -> (Option<String>, Option<&'static str>) {
+        let url = format!("{base}/builds.json");
+        let cache = Cache::default();
+        if let Ok(Some(mut cached)) = cache.get(&url, true).await {
+            let status = cached.status_code();
+            if let Ok(body) = cached.text().await {
+                return (render_list(status, &body, base), Some("HIT"));
+            }
+        }
+        let Ok(request) = Request::new(&url, Method::Get) else {
             return (None, None);
         };
         let Ok(mut response) = Fetch::Request(request).send().await else {
             return (None, None);
         };
-        let cache = response.headers().get("cf-cache-status").ok().flatten();
-        (render_list(&mut response, base).await, cache)
+        let status = response.status_code();
+        let Ok(body) = response.text().await else {
+            return (None, None);
+        };
+        // A list, or the news that there is none yet, is kept for
+        // BUILDS_TTL seconds; anything else is asked for again.
+        if status == 200 || status == 404 {
+            let headers = Headers::new();
+            let ttl = format!("public, max-age={}", shared::BUILDS_TTL);
+            if headers.set("content-type", "application/json").is_ok()
+                && headers.set("cache-control", &ttl).is_ok()
+            {
+                if let Ok(copy) = Response::ok(body.clone()) {
+                    let copy = copy.with_status(status).with_headers(headers);
+                    let _ = cache.put(&url, copy).await;
+                }
+            }
+        }
+        (render_list(status, &body, base), Some("MISS"))
     }
 
-    async fn render_list(response: &mut Response, base: &str) -> Option<String> {
-        match response.status_code() {
+    fn render_list(status: u16, body: &str, base: &str) -> Option<String> {
+        match status {
             404 => Some(render::NONE_YET.to_owned()),
             200 => {
-                let builds: render::Builds = response.json().await.ok()?;
+                let builds: render::Builds = serde_json::from_str(body).ok()?;
                 if builds.builds.is_empty() {
                     return None;
                 }
