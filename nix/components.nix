@@ -20,6 +20,10 @@ rec {
     nixosModules.default = import ../apps/yukimi/nix/module.nix yukimi;
     packages.${system}.yukimi = pkgs.callPackage ../apps/yukimi/nix/package.nix { };
   };
+  kakehashi = {
+    outPath = ../apps/kakehashi;
+    packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
+  };
   calamares = {
     outPath = ../installer/genkan;
     nixosModules = {
@@ -32,7 +36,14 @@ rec {
         tatami.nixosModules.default
         yukimi.nixosModules.default
       ];
-      applications = ../installer/genkan/rust/src/applications.nix;
+      # The catalog's applications from this flake (source "sekka"), built
+      # with its Nixpkgs, which installed systems make their own: the same
+      # store paths as `nix run .#push-cache` publishes.
+      applications = {
+        key = "sekka#applications";
+        imports = [ ../installer/genkan/rust/src/applications.nix ];
+        _module.args.sekkaPackages = kakehashi.packages.${system};
+      };
     };
   };
 }

@@ -11,6 +11,12 @@ let
     aiPackages = inputs.ai-apps.packages.${system};
     ompPackage = inputs.omp.packages.${system}.omp;
   };
+  # As installer/genkan/rust/src/applications.nix resolves them; the module
+  # gets Sekka's own packages from nix/components.nix.
+  sources = {
+    ai = specialArgs.aiPackages;
+    sekka = inputs.kakehashi.packages.${system};
+  };
   evaluate =
     ids:
     inputs.nixpkgs.lib.nixosSystem {
@@ -38,9 +44,7 @@ let
       [ specialArgs.ompPackage ]
     else
       map (
-        name:
-        (if (app.source or "nixpkgs") == "ai" then specialArgs.aiPackages else specialArgs.applicationPkgs)
-        .${name}
+        name: (sources.${app.source or "nixpkgs"} or specialArgs.applicationPkgs).${name}
       ) app.packages;
 in
 {

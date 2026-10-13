@@ -39,8 +39,9 @@ back, and ejects it.
 - Kakehashi is new. Writing has been tested in a disposable Linux virtual
   machine with a virtual USB stick. It has not yet written a real drive on
   macOS or Windows.
-- There are no signed builds or installers yet. Builds for each system are
-  kept for a while by GitHub after each change, as artifacts of the
+- There are no signed builds or installers for macOS or Windows yet. Their
+  builds, and Linux's, are kept for a while by GitHub after each change, as
+  artifacts of the
   [Kakehashi workflow](https://github.com/bitemyapp/sekka/actions/workflows/kakehashi.yml),
   and need a GitHub account to download. The first time it is opened, macOS
   refuses until you allow it under **System Settings → Privacy & Security**,
@@ -51,6 +52,17 @@ back, and ejects it.
   elsewhere set `security.polkit.enablePkexecWrapper = true`.
 - Images are written as they are. Kakehashi doesn't make Windows installer
   drives or add persistent storage.
+
+## Installing
+
+On Sekka, open **Yukimi → Discover** and install Kakehashi from
+**Utilities**, or choose it among the applications when installing Sekka.
+
+On another Linux system with Nix:
+
+```sh
+nix profile add github:bitemyapp/sekka#kakehashi
+```
 
 ## Building
 

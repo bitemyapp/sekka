@@ -10,6 +10,7 @@
   applicationPkgs ? pkgs,
   aiPackages ? { },
   ompPackage ? null,
+  sekkaPackages,
   ...
 }:
 let
@@ -17,14 +18,17 @@ let
   ids = config.calamares.applications;
   has = id: builtins.elem id ids;
   selected = builtins.filter (app: has app.id) catalog;
+  # Where each source's packages come from; Nixpkgs' otherwise.
+  sources = {
+    ai = aiPackages;
+    sekka = sekkaPackages;
+  };
   packagesFor =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ ompPackage ]
     else
-      map (
-        name: (if (app.source or "nixpkgs") == "ai" then aiPackages else applicationPkgs).${name}
-      ) app.packages;
+      map (name: (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
   packages = lib.unique (lib.concatMap packagesFor selected);
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
   # workflows invoke it as `zed`. Expose the expected command whenever the

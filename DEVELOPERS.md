@@ -281,8 +281,8 @@ From a clean checkout of reviewed `main`:
 nix run .#push-cache
 ```
 
-It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `aquamarine`,
-`hyprland` and `tools`, and signs their complete runtime closures into a
+It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
+`aquamarine`, `hyprland` and `tools`, and signs their complete runtime closures into a
 temporary local cache: Nix only adds a path to a binary cache that already
 holds its references. It then uploads just the paths cache.nixos.org does not
 serve (about 145 MiB at first), archives before the narinfos that point to
@@ -551,7 +551,9 @@ is `kakehashi-helper`, the only part that runs with administrator rights.
 feature (gpui-component's widgets, re-exported as `gpui_kit::component`), in
 Sekka's Night and Day colours from `docs/brand/tokens.json`. It replaces
 `scripts/flash_usb.rs`, whose drive rules it carries over; the script still
-works.
+works. On Sekka, Genkan and Yukimi's Discover offer it from the application
+catalog (`"source": "sekka"`), as the same store path as `packages.kakehashi`,
+which `push-cache` publishes.
 
 The window runs as the user. To write, it makes a private temporary directory
 holding `plan.json` (the image, its SHA-256 and the drive as the window saw

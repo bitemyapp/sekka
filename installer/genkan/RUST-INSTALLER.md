@@ -426,7 +426,9 @@ it does not grant membership in the privileged `docker` group. OrbStack itself
 is macOS-only.
 
 The target flake supplies independently pinned application Nixpkgs, Numtide's
-`llm-agents.nix`, and upstream oh-my-pi. Its full lock is preserved. Both app
+`llm-agents.nix`, and upstream oh-my-pi. Its full lock is preserved. Kakehashi
+(`"source": "sekka"`) comes from Sekka itself, built with the system's Nixpkgs:
+`nix/components.nix` gives the module `sekkaPackages`. Both app
 catalog and module come from the flake's `calamares` input (see "Updating
 installed systems"), with the selected IDs in `configuration.nix`; installed
 versions and store paths are recorded in

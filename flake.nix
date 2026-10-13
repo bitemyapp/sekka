@@ -133,7 +133,8 @@
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
-        kakehashi = kakehashi.package;
+        # The catalog installs this same package (nix/components.nix).
+        inherit (inputs.kakehashi.packages.${system}) kakehashi;
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
