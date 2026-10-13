@@ -62,6 +62,12 @@ const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
 /// Files bigger than this aren't configuration, and aren't kept with it.
 const LARGEST_KEPT: u64 = 1 << 20;
+/// Where Nix keeps the store and builds; the one with least room counts.
+const BUILD_PLACES: [&str; 2] = ["/nix", "/tmp"];
+/// A new system isn't built with less room than this.
+const SPACE_NEEDED: u64 = 10_000_000_000;
+/// Building stops when room falls below this, rather than fill the disk.
+const SPACE_FLOOR: u64 = 4_000_000_000;
 
 /// Where the work is, which decides whether it can still be stopped.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -401,7 +407,69 @@ fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure
         build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
     }
     build.arg(format!("{system}.config.system.build.toplevel"));
-    Ok(output(build, "Building the new system")?.trim().to_owned())
+    Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned())
+}
+
+/// The free space, in bytes, of the filesystem holding `path`.
+fn free_space(path: &str) -> Option<u64> {
+    let path = std::ffi::CString::new(path).ok()?;
+    // SAFETY: statvfs writes only into the struct it is given.
+    unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bavail as u64 * stat.f_frsize as u64)
+    }
+}
+
+fn least_room() -> Option<u64> {
+    BUILD_PLACES.iter().filter_map(|p| free_space(p)).min()
+}
+
+fn gigabytes(bytes: u64) -> String {
+    format!("{:.1} GB", bytes as f64 / 1e9)
+}
+
+/// Run `work` (building, or downloading for it) only with room to spare,
+/// and stop it before the disk fills up: whatever it would download or
+/// compile, an update never leaves the computer without space. The files it
+/// changed are then put back, as for any failure.
+fn with_room<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
+    if let Some(free) = least_room()
+        && free < SPACE_NEEDED
+    {
+        return Err(Failure(format!(
+            "Only {} is free, and updating needs {}. Free some space in Yukimi's Storage page, then try again.",
+            gigabytes(free),
+            gigabytes(SPACE_NEEDED)
+        )));
+    }
+    let (done, low) = (std::sync::Arc::new(AtomicBool::new(false)), std::sync::Arc::new(AtomicBool::new(false)));
+    let watcher = {
+        let (done, low) = (done.clone(), low.clone());
+        std::thread::spawn(move || {
+            // Every two seconds, waking often enough to end with the work.
+            for tick in 0u64.. {
+                if done.load(Ordering::Relaxed) {
+                    return;
+                }
+                if tick % 20 == 0 && least_room().is_some_and(|free| free < SPACE_FLOOR) {
+                    low.store(true, Ordering::Relaxed);
+                    stop();
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        })
+    };
+    let result = work();
+    done.store(true, Ordering::Relaxed);
+    let _ = watcher.join();
+    if low.load(Ordering::Relaxed) {
+        return Err(Failure(format!(
+            "Stopped before the disk filled up: less than {} was left. Nothing was changed.",
+            gigabytes(SPACE_FLOOR)
+        )));
+    }
+    result
 }
 
 /// The binary caches and their keys a system's configuration names, if it
@@ -426,57 +494,6 @@ fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
     };
     let (substituters, keys) = (words("substituters"), words("keys"));
     (!substituters.is_empty() && !keys.is_empty()).then_some((substituters, keys))
-}
-
-/// A string as a Nix string literal.
-fn nix_string(text: &str) -> String {
-    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\"").replace("${", "\\${"))
-}
-
-/// The lock file of the Sekka a system's lock file names: the inputs its
-/// packages were built, checked and cached with.
-fn sekka_lock(lock_text: &str) -> Result<String> {
-    let lock: serde_json::Value = serde_json::from_str(lock_text)?;
-    let root = lock["root"].as_str().unwrap_or("root");
-    let node = lock["nodes"][root]["inputs"]["sekka"]
-        .as_str()
-        .ok_or_else(|| Failure("flake.lock has no sekka input".into()))?;
-    let locked = serde_json::to_string(&lock["nodes"][node]["locked"])?;
-    let mut eval = nix();
-    eval.args(["eval", "--raw", "--expr"]);
-    eval.arg(format!(
-        "builtins.readFile ((builtins.fetchTree (builtins.fromJSON {})).outPath + \"/flake.lock\")",
-        nix_string(&locked)
-    ));
-    output(eval, "Reading Sekka's own lock file")
-}
-
-/// Lock Nixpkgs where the Sekka this system now has locks it, so that
-/// Sekka's packages are the ones in its binary cache. A system whose
-/// Nixpkgs comes from somewhere else keeps it, updated if `asked`.
-fn align_nixpkgs(setup: &Setup, lock_file: &Path, asked: bool) -> Result<()> {
-    let current = std::fs::read_to_string(lock_file)?;
-    match lock::align_input(&current, &sekka_lock(&current)?, "nixpkgs")? {
-        lock::Aligned::Moved(aligned) => write_file(setup, lock_file, &aligned),
-        lock::Aligned::Already => Ok(()),
-        lock::Aligned::Elsewhere if asked => {
-            let mut c = nix();
-            let flake = setup.flake();
-            c.args([
-                "flake",
-                "update",
-                "--refresh",
-                "--log-format",
-                "internal-json",
-                "-v",
-                "--flake",
-                &flake,
-                "nixpkgs",
-            ]);
-            run(c, "Updating Nixpkgs")
-        }
-        lock::Aligned::Elsewhere => Ok(()),
-    }
 }
 
 /// Build the new system: a flake's configuration for this computer (or its
@@ -508,7 +525,7 @@ fn build(setup: &Setup) -> Result<String> {
                 ),
             );
         }
-        return Ok(output(build, "Building the new system")?.trim().to_owned());
+        return Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned());
     }
     if !valid_host(&setup.host) {
         return Err(Failure(format!("Not a configuration name: {:?}", setup.host)));
@@ -796,24 +813,14 @@ fn change(args: &[String]) -> Result<String> {
                     std::fs::write(&lock_file, proposed)?;
                 }
                 None => {
-                    // With Sekka, Nixpkgs comes from the Sekka it updates to
-                    // (align_nixpkgs), not from Nixpkgs' own newest release.
-                    let with_sekka = change.sekka && change.update.iter().any(|i| i == "sekka");
-                    let before = std::fs::read_to_string(&lock_file)?;
-                    let fetched: Vec<&String> =
-                        change.update.iter().filter(|i| !(with_sekka && i.as_str() == "nixpkgs")).collect();
+                    // Inputs that follow Sekka's move with it, to what its
+                    // nightly build checked; on their own they can't move.
+                    let following = sekka_flake.as_deref().map(sekka::following).unwrap_or_default();
                     let mut c = nix();
                     let flake = setup.flake();
                     c.args(["flake", "update", "--refresh", "--log-format", "internal-json", "-v", "--flake", &flake]);
-                    c.args(fetched);
+                    c.args(change.update.iter().filter(|i| !following.contains(&i.as_str())));
                     run(c, "Updating the flake inputs")?;
-                    if with_sekka {
-                        let after = std::fs::read_to_string(&lock_file)?;
-                        if let Some(held) = lock::hold_back(&before, &after, "sekka")? {
-                            write_file(&setup, &lock_file, &held)?;
-                        }
-                        align_nixpkgs(&setup, &lock_file, change.update.iter().any(|i| i == "nixpkgs"))?;
-                    }
                 }
             }
             stage_done(2);
@@ -1087,12 +1094,6 @@ mod tests {
         assert!(valid_user("alice") && !valid_user("a:b") && !valid_user(""));
         assert_eq!(generation_number("system-12-link"), Some(12));
         assert_eq!(generation_number("system"), None);
-    }
-
-    #[test]
-    fn nix_strings_are_escaped() {
-        assert_eq!(nix_string(r#"{"rev":"a\\b"}"#), r#""{\"rev\":\"a\\\\b\"}""#);
-        assert_eq!(nix_string("${x} $y"), r#""\${x} $y""#);
     }
 
     #[test]

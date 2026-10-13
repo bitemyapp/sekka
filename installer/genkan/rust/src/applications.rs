@@ -104,7 +104,10 @@ mod tests {
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
             );
             assert!(app.requires.iter().all(|id| ids.contains(id.as_str())));
-            assert!(matches!(app.source.as_deref(), None | Some("ai" | "omp" | "sekka")));
+            assert!(matches!(
+                app.source.as_deref(),
+                None | Some("ai" | "omp" | "sekka")
+            ));
         }
         for removed in ["thunderbird", "keepassxc", "gemini-cli", "orbstack"] {
             assert!(!ids.contains(removed));

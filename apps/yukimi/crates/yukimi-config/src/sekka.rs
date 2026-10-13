@@ -29,18 +29,108 @@ pub const NIGHTLY: &str = "github:bitemyapp/sekka/nightly";
 
 /// Return the flake to update. A system following `main` (or the default
 /// branch) follows `nightly` instead; other Sekka branches and pins stay as
-/// chosen.
+/// chosen. Inputs at the addresses Sekka's installations have always used
+/// then follow Sekka's own ([`follow_sekka`]).
 pub fn prepare(text: &str) -> Result<String, String> {
-    if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
+    let text = if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
         if !official(&url, "sekka") {
             return Err(UNSUPPORTED.into());
         }
         if url == "github:bitemyapp/sekka" || url == "github:bitemyapp/sekka/main" {
-            return edit::set_string_value(text, &["inputs", "sekka", "url"], NIGHTLY).map_err(|e| e.to_string());
+            edit::set_string_value(text, &["inputs", "sekka", "url"], NIGHTLY).map_err(|e| e.to_string())?
+        } else {
+            text.to_owned()
         }
-        return Ok(text.to_owned());
+    } else {
+        migrate(text).ok_or_else(|| UNSUPPORTED.to_owned())?
+    };
+    Ok(follow_sekka(&text).unwrap_or(text))
+}
+
+/// Whether `url` is the address Sekka's installations have used for `name`.
+fn sekka_default(name: &str, url: &str) -> bool {
+    match name {
+        "nixpkgs" => url == "https://flakehub.com/f/NixOS/nixpkgs/0.1",
+        "determinate" => url == "https://flakehub.com/f/DeterminateSystems/determinate/*",
+        "fh" => url == "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz",
+        "applications" => url == "github:NixOS/nixpkgs/nixos-unstable",
+        "ai-apps" => url == "github:numtide/llm-agents.nix",
+        "omp" => url == "github:can1357/oh-my-pi" || url.starts_with("github:can1357/oh-my-pi/v"),
+        _ => false,
     }
-    migrate(text).ok_or_else(|| UNSUPPORTED.into())
+}
+
+/// The flake with each of Sekka's other inputs that is still at Sekka's
+/// address following Sekka's own instead (`inputs.nixpkgs.follows =
+/// "sekka/nixpkgs"`): updating Sekka then moves them together, only to the
+/// revisions its nightly build checked and cached, so nothing upstream
+/// publishes reaches the system untested. An input given an address of
+/// one's own keeps it, and Sekka keeps following it. `None` when nothing
+/// changes, or the flake isn't written as flat `inputs.<name>` settings.
+pub fn follow_sekka(text: &str) -> Option<String> {
+    let parsed = ast::Root::parse(text);
+    if !parsed.errors().is_empty() {
+        return None;
+    }
+    let ast::Expr::AttrSet(set) = parsed.tree().expr()? else { return None };
+    let mut converted = Vec::new();
+    let mut edits = Vec::new();
+    for entry in set.attrpath_values() {
+        let path = entry.attrpath()?.to_string();
+        let parts: Vec<_> = path.split('.').map(str::trim).collect();
+        if let ["inputs", name, "url"] = parts.as_slice()
+            && EXTERNAL.contains(name)
+            && edit::string_value(text, &parts).ok()?.is_some_and(|url| sekka_default(name, &url))
+        {
+            converted.push(name.to_string());
+            edits.push((entry.syntax().text_range(), format!("inputs.{name}.follows = \"sekka/{name}\";")));
+        }
+    }
+    for entry in set.attrpath_values() {
+        let path = entry.attrpath()?.to_string();
+        let parts: Vec<_> = path.split('.').map(str::trim).collect();
+        if let ["inputs", "sekka", "inputs", name, "follows"] = parts.as_slice()
+            && converted.iter().any(|c| c == name)
+        {
+            edits.push((whole_line(text, entry.syntax().text_range()), String::new()));
+        }
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start()));
+    let mut result = text.to_owned();
+    for (range, replacement) in edits {
+        result.replace_range(usize::from(range.start())..usize::from(range.end()), &replacement);
+    }
+    ast::Root::parse(&result).errors().is_empty().then_some(result)
+}
+
+/// A setting's range widened to its whole line, when nothing else is on it.
+fn whole_line(text: &str, range: rowan::TextRange) -> rowan::TextRange {
+    let (start, end) = (usize::from(range.start()), usize::from(range.end()));
+    let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
+    let line_end = text[end..].find('\n').map_or(text.len(), |i| end + i + 1);
+    if text[line_start..start].trim().is_empty() && text[end..line_end].trim().is_empty() {
+        rowan::TextRange::new((line_start as u32).into(), (line_end as u32).into())
+    } else {
+        range
+    }
+}
+
+/// Sekka's other inputs that follow Sekka's own in this flake: updating
+/// Sekka moves them, and they can't be updated by themselves.
+pub fn following(text: &str) -> Vec<&'static str> {
+    EXTERNAL
+        .iter()
+        .copied()
+        .filter(|name| {
+            edit::string_value(text, &["inputs", name, "follows"])
+                .ok()
+                .flatten()
+                .is_some_and(|f| f == format!("sekka/{name}"))
+        })
+        .collect()
 }
 
 fn official(url: &str, repo: &str) -> bool {
@@ -157,16 +247,64 @@ mod tests {
         assert!(!new.contains("inputs.tatami"));
         assert!(!new.contains("inputs.calamares"));
         for name in EXTERNAL {
-            assert_eq!(
-                edit::string_value(&new, &["inputs", name, "url"]).unwrap(),
-                edit::string_value(&text, &["inputs", name, "url"]).unwrap()
-            );
-            assert_eq!(
-                edit::string_value(&new, &["inputs", "sekka", "inputs", name, "follows"]).unwrap().as_deref(),
-                Some(*name)
-            );
+            assert_eq!(edit::string_value(&new, &["inputs", name, "url"]).unwrap(), None);
+            assert_eq!(edit::string_value(&new, &["inputs", name, "follows"]).unwrap(), Some(format!("sekka/{name}")));
         }
+        assert!(!new.contains("inputs.sekka.inputs."), "{new}");
+        assert_eq!(following(&new), EXTERNAL);
         assert_eq!(prepare(&new).unwrap(), new);
+    }
+
+    /// The template as installations before following Sekka had it.
+    const INSTALLED: &str = r#"{
+  inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+  inputs.determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
+  inputs.fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
+  inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.ai-apps.url = "github:numtide/llm-agents.nix";
+  inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
+  inputs.sekka.url = "github:bitemyapp/sekka/main";
+  inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.sekka.inputs.determinate.follows = "determinate";
+  inputs.sekka.inputs.fh.follows = "fh";
+  inputs.sekka.inputs.applications.follows = "applications";
+  inputs.sekka.inputs.ai-apps.follows = "ai-apps";
+  inputs.sekka.inputs.omp.follows = "omp";
+
+  outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }: { };
+}
+"#;
+
+    #[test]
+    fn installed_inputs_follow_sekka() {
+        let new = prepare(INSTALLED).unwrap();
+        assert_eq!(
+            new,
+            r#"{
+  inputs.nixpkgs.follows = "sekka/nixpkgs";
+  inputs.determinate.follows = "sekka/determinate";
+  inputs.fh.follows = "sekka/fh";
+  inputs.applications.follows = "sekka/applications";
+  inputs.ai-apps.follows = "sekka/ai-apps";
+  inputs.omp.follows = "sekka/omp";
+  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
+
+  outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }: { };
+}
+"#
+        );
+        assert_eq!(prepare(&new).unwrap(), new);
+    }
+
+    #[test]
+    fn an_input_of_ones_own_stays() {
+        let own = INSTALLED.replace("https://flakehub.com/f/NixOS/nixpkgs/0.1", "github:NixOS/nixpkgs/nixos-25.05");
+        let new = prepare(&own).unwrap();
+        assert!(new.contains(r#"inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";"#), "{new}");
+        assert!(new.contains(r#"inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";"#), "{new}");
+        assert!(new.contains(r#"inputs.applications.follows = "sekka/applications";"#), "{new}");
+        assert!(!new.contains("inputs.sekka.inputs.applications"), "{new}");
+        assert_eq!(following(&new), ["determinate", "fh", "applications", "ai-apps", "omp"]);
     }
 
     #[test]

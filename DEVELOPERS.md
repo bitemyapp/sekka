@@ -164,22 +164,25 @@ undocking with the lid closed, a Displays window stranded by an unplug, and
 `tatami display` from another workspace. These tests do not replace physical
 dock, cable, panel, lid sensor and GPU validation.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs. The nightly workflow moves the `nightly` branch only after a revision has passed its checks and Sekka's packages for it are in the binary cache, so installed systems never follow a `main` the cache hasn't caught up with.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
 A flake following Sekka's `main` (or its default branch) is moved to
-`nightly`. Updating Sekka also locks Nixpkgs where that Sekka's own lock
-does: Sekka's packages follow the system's Nixpkgs, and only that revision's
-builds are in the cache. A system whose Nixpkgs comes from a source of its
-own keeps it. Sekka never moves to an older revision than the system has.
-The build passes the binary caches the new configuration names (as root, so
-the daemon accepts them), so a cache an update adds already serves that
-update. The other sources (applications, the AI applications) move to their
-own newest revisions, which cache.nixos.org and numtide's cache serve.
-The ordinary GUI action includes Sekka and sources with available newer revisions;
-the CLI updates only Sekka. Individual source rows retain their controls.
+`nightly`, and each of the other inputs still at the address Sekka's
+installations have used is made to follow Sekka's (`yukimi_config::sekka`).
+One given an address of one's own keeps it, and Sekka follows it; that
+system may then build Sekka's packages itself. The build passes the binary
+caches the new configuration names (as root, so the daemon accepts them), so
+a cache an update adds already serves that update. While it builds or
+downloads, the helper stops it if less than 4 GB stays free where Nix keeps
+the store or builds (`/nix`, `/tmp`), and it doesn't start below 10 GB; the
+configuration is put back either way. Installed systems also have Nix
+collect garbage below 5 GB free (`installer/genkan/rust/system/store-space.nix`).
+The ordinary GUI action updates Sekka, and with it everything that follows
+it, along with any other source with a newer revision; the CLI updates only
+Sekka. Sources that don't follow Sekka keep their own rows.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
@@ -258,8 +261,8 @@ changing the host desktop.
 
 `python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
-Sekka's Nixpkgs and the new system's caches, never moving Sekka back, a
-Nixpkgs of the system's own, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+following Sekka and the new system's caches, a Nixpkgs of the system's own,
+refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
@@ -306,8 +309,10 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
-installed system for each desktop the media offers (`respin.referenceDesktops`),
-so everything Sekka's modules change is covered without a list to keep up:
+installed system for each desktop the media offers (`respin.referenceDesktops`)
+and one with every free catalog application, so everything Sekka's modules
+change and every application one can choose is covered without a list to
+keep up:
 Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
 Elephant, the wallpapers. It then uploads just the paths that none of
 cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
@@ -444,12 +449,17 @@ order and only if each step succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
-2. It pushes the revision to `main` (a fast-forward; if `main` moved during
+2. `scripts/check_cache_coverage.py .#installed-systems` follows, from each
+   desktop's installed system and the free catalog applications, everything
+   none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
+   as a system with an empty store would. It fails if any of it would be
+   compiled rather than written locally (configuration) or fetched.
+3. It pushes the revision to `main` (a fast-forward; if `main` moved during
    the build, the input update waits for the next night) and to `nightly`.
    Installed systems update to `nightly`, so they only ever reach a revision
    that passed and is cached. `nightly` is force-pushed when `main` moved
    past an earlier input update.
-3. `nix run .#publish-nightly` uploads the ISO to the R2 bucket
+4. `nix run .#publish-nightly` uploads the ISO to the R2 bucket
    `sekka-downloads` as a new build, in a folder of its own that never
    changes, `nightly/builds/DATE-REVISION/`:
 

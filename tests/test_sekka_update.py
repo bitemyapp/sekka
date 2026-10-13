@@ -40,10 +40,6 @@ UPDATED = json.dumps({'nodes': {'nixpkgs': {'locked': pinned('1' * 40, 1), 'orig
                                           'original': {'owner': 'bitemyapp', 'ref': 'nightly', 'repo': 'sekka', 'type': 'github'}},
                                 'root': {'inputs': {'nixpkgs': 'nixpkgs', 'sekka': 'sekka'}}},
                       'root': 'root', 'version': 7}, indent=2) + '\n'
-# That Sekka's own lock: the Nixpkgs its packages were built and cached with.
-SEKKA = json.dumps({'nodes': {'nixpkgs': {'locked': pinned('c' * 40, 2), 'original': FLAKEHUB},
-                              'root': {'inputs': {'nixpkgs': 'nixpkgs'}}},
-                    'root': 'root', 'version': 7})
 CACHES = {'substituters': ['https://cache.nixos.org/', 'https://cache.numtide.com?priority=55'],
           'keys': ['cache.nixos.org-1:x=', 'niks3.numtide.com-1:y=']}
 
@@ -56,11 +52,10 @@ with open('/state/commands', 'a') as out: out.write(json.dumps([name] + a) + '\n
 if name == 'nix':
     if 'update' in a:
         assert 'sekka' in a, a
-        # Nixpkgs comes from Sekka's own lock, not its newest release.
-        assert 'nixpkgs' not in a, a
+        # The other inputs follow Sekka's own and move with it.
+        assert not {'nixpkgs', 'applications', 'ai-apps', 'omp'} & set(a), a
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
         p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
-    elif 'eval' in a and '--expr' in a and 'fetchTree' in a[-1]: print(p('/state/sekka.lock').read_text(), end='')
     elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
@@ -126,7 +121,6 @@ class Update(unittest.TestCase):
         (self.config / 'flake.nix').write_text(self.old)
         (self.config / 'flake.lock').write_text(ORIGINAL)
         (self.root / 'state/updated.lock').write_text(UPDATED)
-        (self.root / 'state/sekka.lock').write_text(SEKKA)
         (self.root / 'state/caches.json').write_text(json.dumps(CACHES))
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
@@ -245,40 +239,39 @@ class Update(unittest.TestCase):
         self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
         self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
 
-    def test_sekka_brings_its_nixpkgs_and_the_new_systems_caches(self):
+    def test_sekka_brings_what_it_pins_and_the_new_systems_caches(self):
         self.compatible_live_system()
-        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications', '--mode', 'auto')
-        self.assertIn('"github:bitemyapp/sekka/nightly"', (self.config / 'flake.nix').read_text())
-        lock = json.loads((self.config / 'flake.lock').read_text())
-        self.assertEqual(lock['nodes']['nixpkgs']['locked'], json.loads(SEKKA)['nodes']['nixpkgs']['locked'])
-        self.assertEqual(lock['nodes']['nixpkgs']['original'], FLAKEHUB)
-        self.assertEqual(lock['nodes']['sekka'], json.loads(UPDATED)['nodes']['sekka'])
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications,ai-apps', '--mode', 'auto')
+        flake = (self.config / 'flake.nix').read_text()
+        self.assertIn('"github:bitemyapp/sekka/nightly"', flake)
+        for name in ['nixpkgs', 'determinate', 'fh', 'applications', 'ai-apps', 'omp']:
+            self.assertIn(f'inputs.{name}.follows = "sekka/{name}";', flake)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        update = next(command for command in commands if command[0] == 'nix' and 'update' in command)
+        self.assertEqual(update[-1], 'sekka')
         build = next(command for command in commands if command[0] == 'nix' and 'build' in command)
         option = lambda name: build[build.index(name) + 1]
         self.assertEqual(option('extra-substituters').split(), CACHES['substituters'])
         self.assertEqual(option('extra-trusted-public-keys').split(), CACHES['keys'])
 
-    def test_a_newer_sekka_is_not_replaced_by_an_older_nightly(self):
-        self.compatible_live_system()
-        newer = json.loads(UPDATED)
-        newer['nodes']['sekka']['locked'].update(lastModified=1799999999, rev='b' * 40)
-        newer['nodes']['sekka']['original']['ref'] = 'main'
-        (self.config / 'flake.lock').write_text(json.dumps(newer, indent=2) + '\n')
-        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--mode', 'auto')
-        lock = json.loads((self.config / 'flake.lock').read_text())
-        self.assertEqual(lock['nodes']['sekka']['locked'], newer['nodes']['sekka']['locked'])
-
     def test_a_nixpkgs_of_ones_own_is_kept(self):
         self.compatible_live_system()
-        own = {'type': 'github', 'owner': 'NixOS', 'repo': 'nixpkgs', 'ref': 'nixos-25.05'}
-        for name in ['updated.lock']:
-            text = json.loads((self.root / 'state' / name).read_text())
-            text['nodes']['nixpkgs']['original'] = own
-            (self.root / 'state' / name).write_text(json.dumps(text, indent=2) + '\n')
+        own = self.old.replace('https://flakehub.com/f/NixOS/nixpkgs/0.1', 'github:NixOS/nixpkgs/nixos-25.05')
+        (self.config / 'flake.nix').write_text(own)
         self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--mode', 'auto')
-        lock = json.loads((self.config / 'flake.lock').read_text())
-        self.assertEqual(lock['nodes']['nixpkgs']['locked'], pinned('1' * 40, 1))
+        flake = (self.config / 'flake.nix').read_text()
+        self.assertIn('inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";', flake)
+        self.assertIn('inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";', flake)
+        self.assertIn('inputs.applications.follows = "sekka/applications";', flake)
+
+    def test_no_update_without_room_for_it(self):
+        self.compatible_live_system()
+        tiny = self.base[:self.base.index('--proc')] + ['--size', '1048576', '--tmpfs', '/tmp'] + self.base[self.base.index('--proc'):]
+        result = subprocess.run(tiny + ['/bin/sekka-update'], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('updating needs 10.0 GB', result.stdout + result.stderr)
+        self.unchanged()
+        self.assertFalse((self.root / 'state/building').exists())
 
     def test_kernel_update_prepares_once_then_reboot_clears_request(self):
         self.compatible_live_system()

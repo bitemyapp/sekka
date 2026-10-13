@@ -97,11 +97,12 @@ Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Opti
 
 ## Updating an existing installation
 
-Open **Yukimi → Updates → Update** to get Sekka and the available source updates
-together. Sekka updates come from its nightly builds: a revision reaches you
-only after its checks have passed and its packages are in Sekka's binary cache,
-along with the Nixpkgs they were built with, so updates download rather than
-compile. To update Sekka itself from a terminal, run:
+Open **Yukimi → Updates → Update** to get Sekka's newest nightly. It brings
+NixOS, the applications and the AI tools at the versions that nightly built and
+tested, and a nightly reaches you only once everything it needs is ready to
+download, so an update never compiles software on your computer. If space runs
+short while it downloads, Yukimi stops before the disk fills up and changes
+nothing. To update Sekka from a terminal, run:
 
 ```sh
 sekka-update
@@ -130,11 +131,10 @@ Tatami, and Yukimi repositories to Sekka. After restarting, the command and
 button above are available. If the build fails or you cancel before activation,
 the updater restores the configuration files it changed.
 
-The terminal command updates Sekka itself, preserving independent dependency
-pins. Yukimi's Update button includes available NixOS and application source
-updates in the same operation. Individual sources can still be updated from
-their rows. Run `sekka-update --status` to check whether anything remains to
-be applied.
+The terminal command and Yukimi's Update button do the same. Sources you have
+pointed somewhere of your own keep their own rows and update separately, and
+may need building. Run `sekka-update --status` to check whether anything
+remains to be applied.
 
 ## Questions, bugs, and contributions
 

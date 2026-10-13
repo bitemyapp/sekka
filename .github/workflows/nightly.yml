@@ -117,6 +117,15 @@ jobs:
           trap 'rm -rf "$config"' EXIT
           (umask 077 && printf '%s' "$CACHE_SIGNING_KEY" > "$config/cache.sekka.computer-1.sec")
           SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
+      - name: Check that updating to it only downloads
+        if: steps.inputs.outputs.build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A fresh installed system, with any desktop and any free catalog
+          # application, must find everything it needs in a cache: nothing
+          # upstream publishes may make users compile.
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#installed-systems
       - name: Move main and nightly to this revision
         if: steps.inputs.outputs.build == 'true'
         shell: bash

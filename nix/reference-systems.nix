@@ -7,6 +7,8 @@
   inputs,
   applicationCatalog,
   desktops,
+  # The catalog's applications each system has.
+  applications ? [ "firefox" ],
   # Refuse unfree packages, as the binary cache must (nix/push-cache.nix).
   free ? false,
 }:
@@ -22,9 +24,14 @@ let
       modules = [
         inputs.determinate.nixosModules.default
         # The same locked modules installed systems import.
-        (import ../installer/genkan/rust/reference.nix { desktops = [ desktop ]; })
+        (import ../installer/genkan/rust/reference.nix {
+          desktops = [ desktop ];
+          inherit applications;
+        })
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
+        # As nix/components.nix gives the catalog module Sekka's packages.
+        { _module.args.sekkaPackages = inputs.kakehashi.packages.${system}; }
       ]
       ++ lib.optional free { nixpkgs.config.allowUnfree = lib.mkForce false; };
     };

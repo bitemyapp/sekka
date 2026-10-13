@@ -12,6 +12,7 @@
     ./binary-cache.nix
     ./desktops.nix
     ./nvidia.nix
+    ./store-space.nix
     ./tuning.nix
     ./usb-wake.nix
   ];

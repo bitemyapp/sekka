@@ -158,23 +158,40 @@
           ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
-        # An installed system for every desktop the media offers, with unfree
-        # packages refused. push-cache publishes their closures, so whatever
-        # Sekka's modules change (Hyprland and all that uses its patched
-        # Aquamarine) downloads rather than compiles.
+        # An installed system for every desktop the media offers, and one with
+        # every free application in the catalog, with unfree packages refused.
+        # push-cache publishes their closures, so whatever Sekka's modules
+        # change (Hyprland and all that uses its patched Aquamarine) and
+        # whatever a catalog application needs downloads rather than compiles.
         installed-systems =
           let
-            reference = import ./nix/reference-systems.nix {
-              inherit inputs applicationCatalog;
-              desktops = installer.config.respin.referenceDesktops;
-              free = true;
-            };
+            reference =
+              desktops: applications:
+              import ./nix/reference-systems.nix {
+                inherit
+                  inputs
+                  applicationCatalog
+                  desktops
+                  applications
+                  ;
+                free = true;
+              };
+            desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
+            applications = reference [ "plasma" ] (
+              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
+            );
           in
           pkgs.linkFarm "sekka-installed-systems" (
             map (desktop: {
               name = desktop;
-              path = reference.systems.${desktop}.config.system.build.toplevel;
-            }) reference.desktops
+              path = desktops.systems.${desktop}.config.system.build.toplevel;
+            }) desktops.desktops
+            ++ [
+              {
+                name = "applications";
+                path = applications.systems.plasma.config.system.build.toplevel;
+              }
+            ]
           );
         application-cache = applicationCatalog.cache;
         # sekka.computer, ready to upload; nothing publishes it.

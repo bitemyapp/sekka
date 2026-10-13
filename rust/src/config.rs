@@ -26,15 +26,15 @@ fn settings(text: &str, kernel: &str) -> Result<()> {
     Ok(())
 }
 
-/// Inputs of the installed flake, which extends the external dependency lock with Sekka.
-const TARGET_INPUTS: [&str; 7] = [
+/// Inputs of the installed flake besides Sekka, which each follow Sekka's own:
+/// updating Sekka moves them only to what its nightly build checked.
+const FOLLOWED_INPUTS: [&str; 6] = [
     "nixpkgs",
     "determinate",
     "fh",
     "applications",
     "ai-apps",
     "omp",
-    "sekka",
 ];
 
 fn template(source: &str, lock: &str) -> Result<()> {
@@ -50,20 +50,30 @@ fn template(source: &str, lock: &str) -> Result<()> {
     let inputs = value["nodes"][root]["inputs"]
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("Missing inputs"))?;
+    let mut expected = BTreeSet::from(FOLLOWED_INPUTS);
+    expected.insert("sekka");
     ensure!(
-        inputs.keys().map(String::as_str).collect::<BTreeSet<_>>() == BTreeSet::from(TARGET_INPUTS),
+        inputs.keys().map(String::as_str).collect::<BTreeSet<_>>() == expected,
         "Unexpected target inputs"
     );
-    for name in TARGET_INPUTS {
-        let node = inputs[name]
+    let locked = |node: &str| {
+        value["nodes"][node]["locked"]["narHash"]
             .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Expected direct locked input"))?;
+            .is_some_and(|s| s.starts_with("sha256-"))
+    };
+    let sekka = inputs["sekka"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Expected Sekka to be locked directly"))?;
+    ensure!(locked(sekka), "Unlocked input: sekka");
+    for name in FOLLOWED_INPUTS {
         ensure!(
-            value["nodes"][node]["locked"]["narHash"]
-                .as_str()
-                .is_some_and(|s| s.starts_with("sha256-")),
-            "Unlocked input: {name}"
+            inputs[name] == serde_json::json!(["sekka", name]),
+            "{name} must follow Sekka's"
         );
+        let node = value["nodes"][sekka]["inputs"][name]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Sekka's {name} is not locked directly"))?;
+        ensure!(locked(node), "Unlocked input: sekka/{name}");
     }
     Ok(())
 }
@@ -113,5 +123,19 @@ mod tests {
             )
             .is_err()
         );
+        let following = r#"{"version":7,"root":"root","nodes":{
+            "root":{"inputs":{"sekka":"sekka","nixpkgs":["sekka","nixpkgs"],"determinate":["sekka","determinate"],
+              "fh":["sekka","fh"],"applications":["sekka","applications"],"ai-apps":["sekka","ai-apps"],"omp":["sekka","omp"]}},
+            "sekka":{"locked":{"narHash":"sha256-s"},"inputs":{"nixpkgs":"n","determinate":"d","fh":"f",
+              "applications":"a","ai-apps":"i","omp":"o"}},
+            "n":{"locked":{"narHash":"sha256-n"}},"d":{"locked":{"narHash":"sha256-d"}},
+            "f":{"locked":{"narHash":"sha256-f"}},"a":{"locked":{"narHash":"sha256-a"}},
+            "i":{"locked":{"narHash":"sha256-i"}},"o":{"locked":{"narHash":"sha256-o"}}}}"#;
+        assert!(template("@HOSTNAME@", following).is_ok());
+        // Each input besides Sekka follows Sekka's, locked.
+        let own = following.replace(r#""nixpkgs":["sekka","nixpkgs"]"#, r#""nixpkgs":"n""#);
+        assert!(template("@HOSTNAME@", &own).is_err());
+        let unlocked = following.replace(r#""sha256-i""#, "null");
+        assert!(template("@HOSTNAME@", &unlocked).is_err());
     }
 }
