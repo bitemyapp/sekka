@@ -45,7 +45,9 @@ pub enum Operation {
     /// Update the distro, including migration from its predecessor repositories.
     /// `hold`, when given, is every package to keep at the version the
     /// system has; the rest are updated. Without it, earlier choices stay.
-    UpdateSekka { inputs: Vec<String>, hold: Option<Vec<String>> },
+    /// `lock` is the lock file the packages were compared with, so that the
+    /// update builds what was shown.
+    UpdateSekka { inputs: Vec<String>, hold: Option<Vec<String>>, lock: Option<PathBuf> },
     /// Update root's channels.
     UpdateChannels,
     /// Make a flake input follow another branch of its repository, and
@@ -186,7 +188,7 @@ impl Operation {
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::UpdateFlake { inputs } => update_steps(model, inputs),
-            Operation::UpdateSekka { inputs, hold } => {
+            Operation::UpdateSekka { inputs, hold, lock } => {
                 let mut c = helper();
                 c.args(["change", "--sekka", "--mode", "auto"]);
                 if !inputs.is_empty() {
@@ -194,6 +196,9 @@ impl Operation {
                 }
                 if let Some(hold) = hold {
                     c.args(["--hold", &hold.join(",")]);
+                }
+                if let Some(lock) = lock {
+                    c.arg("--lock").arg(lock);
                 }
                 vec![step(Run { command: c, as_root: true })]
             }
@@ -372,18 +377,36 @@ mod tests {
         );
         assert_eq!(change.title(), "Installing htop for everyone");
         assert!(Operation::Rollback { generation: 3 }.is_system());
-        let update = Operation::UpdateSekka { inputs: vec![], hold: None }.steps(&model).remove(0)().unwrap().unwrap();
+        let update = Operation::UpdateSekka { inputs: vec![], hold: None, lock: None }.steps(&model).remove(0)()
+            .unwrap()
+            .unwrap();
         assert!(update.as_root);
         assert_eq!(&args(update)[1..], ["change", "--sekka", "--mode", "auto"]);
-        let keep =
-            Operation::UpdateSekka { inputs: vec!["sekka".into()], hold: Some(vec!["codex".into(), "zed".into()]) };
+        let keep = Operation::UpdateSekka {
+            inputs: vec!["sekka".into()],
+            hold: Some(vec!["codex".into(), "zed".into()]),
+            lock: Some("/tmp/s.lock".into()),
+        };
         let keep = keep.steps(&model).remove(0)().unwrap().unwrap();
         assert_eq!(
             &args(keep)[1..],
-            ["change", "--sekka", "--mode", "auto", "--update", "sekka", "--hold", "codex,zed"]
+            [
+                "change",
+                "--sekka",
+                "--mode",
+                "auto",
+                "--update",
+                "sekka",
+                "--hold",
+                "codex,zed",
+                "--lock",
+                "/tmp/s.lock"
+            ]
         );
         let release =
-            Operation::UpdateSekka { inputs: vec![], hold: Some(vec![]) }.steps(&model).remove(0)().unwrap().unwrap();
+            Operation::UpdateSekka { inputs: vec![], hold: Some(vec![]), lock: None }.steps(&model).remove(0)()
+                .unwrap()
+                .unwrap();
         assert_eq!(&args(release)[1..], ["change", "--sekka", "--mode", "auto", "--hold", ""]);
         let try_it = try_command("nixpkgs", "cowsay", "cowsay", false);
         assert_eq!(try_it, ["env", "nix", "shell", "nixpkgs#cowsay", "--command", "cowsay"]);

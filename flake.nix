@@ -367,7 +367,7 @@
                 inherit inputs applicationCatalog;
                 desktops = [ "tatami" ];
               }).systems.tatami;
-            key = p: p.pname or (builtins.parseDrvName p.name).name;
+            key = p: (builtins.parseDrvName p.name).name;
             firefox = builtins.filter (p: key p == "firefox") base.config.environment.systemPackages;
             hold =
               packages:

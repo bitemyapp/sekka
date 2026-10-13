@@ -734,8 +734,8 @@ impl Change {
             return Err(Failure("--lock goes with --update".into()));
         }
         if change.sekka {
-            if change.channels || change.follow.is_some() || change.lock.is_some() || change.edits_main() {
-                return Err(Failure("--sekka only goes with --mode, --update and --hold".into()));
+            if change.channels || change.follow.is_some() || change.edits_main() {
+                return Err(Failure("--sekka only goes with --mode, --update, --hold and --lock".into()));
             }
             if !change.update.iter().any(|i| i == "sekka") {
                 change.update.push("sekka".into());
@@ -857,7 +857,13 @@ fn change(args: &[String]) -> Result<String> {
         if setup.kind != Kind::Flake {
             return Err(Failure("This installation has no Sekka flake to update".into()));
         }
-        Some(sekka::prepare(&std::fs::read_to_string(setup.dir.join("flake.nix"))?)?)
+        let text = std::fs::read_to_string(setup.dir.join("flake.nix"))?;
+        let prepared = sekka::prepare(&text)?;
+        // A lock file prepared beforehand is for the flake as it is.
+        if change.lock.is_some() && prepared != text {
+            return Err(Failure("The prepared update was for a flake.nix this update changes".into()));
+        }
+        Some(prepared)
     } else {
         None
     };
@@ -1273,7 +1279,6 @@ mod tests {
             "--sekka --channels",
             "--sekka --follow sekka=main",
             "--sekka --packages htop",
-            "--sekka --update sekka --lock /tmp/x",
             "--hold codex",
             "--sekka --hold codex;rm",
         ] {

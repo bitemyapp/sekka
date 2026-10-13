@@ -292,6 +292,27 @@ class Update(unittest.TestCase):
         self.assertFalse((self.config / 'yukimi.nix').exists())
         self.assertNotIn('yukimi.nix', (self.config / 'configuration.nix').read_text())
 
+    def test_an_update_builds_the_lock_it_was_compared_with(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--mode', 'auto')
+        prepared = json.loads(UPDATED)
+        prepared['nodes']['sekka']['locked'].update(lastModified=1792999999, rev='b' * 40)
+        (self.root / 'tmp/prepared.lock').write_text(json.dumps(prepared, indent=2) + '\n')
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka', '--lock', '/tmp/prepared.lock',
+                     '--mode', 'auto')
+        self.assertEqual(json.loads((self.config / 'flake.lock').read_text()), prepared)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        # Only the first update locked anything itself.
+        self.assertEqual(sum(c[0] == 'nix' and 'update' in c for c in commands), 1)
+
+    def test_a_prepared_lock_is_only_for_the_flake_as_it_is(self):
+        self.compatible_live_system()
+        (self.root / 'tmp/prepared.lock').write_text(UPDATED)
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka', '--lock',
+                              '/tmp/prepared.lock', '--mode', 'auto', ok=False)
+        self.assertIn('was for a flake.nix this update changes', result.stdout + result.stderr)
+        self.unchanged()
+
     def test_a_nixpkgs_of_ones_own_is_kept(self):
         self.compatible_live_system()
         own = self.old.replace('https://flakehub.com/f/NixOS/nixpkgs/0.1', 'github:NixOS/nixpkgs/nixos-25.05')

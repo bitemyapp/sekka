@@ -187,12 +187,20 @@ Sekka. Sources that don't follow Sekka keep their own rows.
 
 **Choose packages** (prototype, branch `selective-updates`) lists what an update
 changes package by package and keeps any unticked package at the version the
-system has. `yukimi_system::selection::preview` evaluates the system's
-`environment.systemPackages` as it is and in a copy of the configuration
-updated as the helper would (holds removed), compares them by name (`pname`,
-else the name without its version), and builds nothing; with warm caches it
-takes about 20 s, and the first comparison after an update fetches the new
-sources again as the user (Nix keeps its downloads per user). The helper's
+system has. It is offered only when the last check found a newer Sekka, and
+`yukimi_system::selection` starts working it out as soon as the Updates page
+shows that check. The running system's packages are read from its profile's
+derivation (`buildEnv`'s `chosenOutputs`, each package's linked outputs); the
+updated system's profile is evaluated, not built, in a copy of the
+configuration updated as the helper would (holds removed); packages are
+compared by name, as `builtins.parseDrvName` splits it. A fresh comparison
+takes about 12 s with warm caches (the first after an update fetches the new
+sources again as the user, since Nix keeps its downloads per user); the result
+is kept in Yukimi's cache directory, keyed by the running profile, the
+configuration's files and the Sekka revision the check found, so the dialog
+then opens at once. Updating from the dialog passes the comparison's lock file
+(`--sekka --lock`), so the update builds the revisions that were shown; the
+helper refuses one for a flake the update would convert. The helper's
 `--hold a,b` is the full set to keep. A newly kept name comes from the
 configuration the running generation was built from, copied to
 `/var/lib/yukimi/held/generation-N` and pinned by its NAR hash
@@ -205,8 +213,8 @@ else is rebuilt; `checks.held-packages` holds that copy of the profile to
 NixOS's. Limits: only `environment.systemPackages` entries can be kept (not
 per-user packages); something else that uses a package (a service, a
 `programs.<name>` module) still gets the new one; held configurations are not
-yet removed when no hold needs them; and the update the helper builds can
-differ from the preview if the nightly moves in between.
+yet removed when no hold needs them; and an update that also converts the
+flake locks again, so it can differ from what was shown if the nightly moved.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS

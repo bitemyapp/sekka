@@ -11,8 +11,9 @@ self:
 }:
 let
   cfg = config.programs.yukimi;
-  # A package's name without its version, as held packages are named.
-  key = p: p.pname or (builtins.parseDrvName p.name).name;
+  # A package's name without its version, as held packages are named
+  # (and as Yukimi reads them from store paths).
+  key = p: (builtins.parseDrvName p.name).name;
   # The packages of that name a saved configuration installed: exactly the
   # builds this system had, so keeping them builds nothing.
   heldFrom =

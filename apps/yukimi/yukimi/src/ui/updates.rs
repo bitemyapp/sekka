@@ -58,6 +58,7 @@ fn update(ctx: &Ctx, inputs: Vec<String>, _what: &str) {
                 .filter(|i| !migrating || !["calamares", "tatami", "yukimi"].contains(&i.as_str()))
                 .collect(),
             hold: None,
+            lock: None,
         }
     } else {
         Operation::UpdateFlake { inputs }
@@ -99,18 +100,18 @@ fn actions(ctx: &Ctx, movements: Option<&BTreeMap<String, Movement>>) -> gtk::Bo
         let all = gtk::Button::with_label("Update");
         all.add_css_class("pill");
         all.add_css_class("suggested-action");
-        let sekka = !channels && newer.iter().any(|input| input == "sekka");
         {
             let (ctx, newer) = (ctx.clone(), newer.clone());
             all.connect_clicked(move |_| update(&ctx, newer.clone(), &what));
         }
         buttons.append(&all);
-        if sekka {
+        // Only when the check found a newer Sekka: otherwise no package changes.
+        if let Some(request) = selection_request(ctx) {
             let choose = gtk::Button::with_label("Choose packages…");
             choose.add_css_class("pill");
             choose.set_tooltip_text(Some("See what the update changes, and keep some packages as they are"));
             let ctx = ctx.clone();
-            choose.connect_clicked(move |_| choose_packages(&ctx, newer.clone()));
+            choose.connect_clicked(move |_| choose_packages(&ctx, request.clone()));
             buttons.append(&choose);
         }
     }
@@ -142,10 +143,54 @@ fn change_text(change: &yukimi_system::selection::PackageChange) -> String {
     }
 }
 
-/// Work out what updating changes, package by package (evaluating the
-/// system before and after; nothing is built), and update with the
+/// What comparing packages for the update the last check found would be
+/// about: on a Sekka flake, when the check found a newer Sekka.
+fn selection_request(ctx: &Ctx) -> Option<yukimi_system::selection::Request> {
+    let (model, check) = (ctx.model(), ctx.update_check()?);
+    if model.setup.kind != Kind::Flake
+        || !std::fs::read_to_string(model.setup.dir.join("flake.nix"))
+            .is_ok_and(|text| yukimi_config::sekka::supported(&text))
+    {
+        return None;
+    }
+    let moves = movements(&model, &check);
+    if !matches!(moves.get("sekka"), Some(Movement::Newer(_))) {
+        return None;
+    }
+    let target = check.newest.get("sekka")?.rev.clone()?;
+    let update = moves.iter().filter(|(_, m)| matches!(m, Movement::Newer(_))).map(|(name, _)| name.clone()).collect();
+    Some(yukimi_system::selection::Request {
+        dir: model.setup.dir.clone(),
+        flake: model.setup.flake(),
+        host: model.setup.host.clone(),
+        packages_file: model.setup.packages_file(),
+        update,
+        target,
+        cache: crate::cache_dir()?,
+    })
+}
+
+thread_local! {
+    /// The Sekka revision whose comparison was last started in the background.
+    static STARTED: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Start working out the comparison as soon as a check finds a newer Sekka,
+/// so that choosing packages finds it ready.
+fn prepare_in_background(ctx: &Ctx) {
+    let Some(request) = selection_request(ctx) else { return };
+    if STARTED.with(|started| started.replace(Some(request.target.clone()))).as_ref() == Some(&request.target) {
+        return;
+    }
+    gtk::gio::spawn_blocking(move || {
+        let _ = yukimi_system::selection::prepared(&request);
+    });
+}
+
+/// Show what updating changes, package by package (worked out by
+/// evaluating the updated system; nothing is built), and update with the
 /// packages left unticked kept as they are.
-fn choose_packages(ctx: &Ctx, inputs: Vec<String>) {
+fn choose_packages(ctx: &Ctx, request: yukimi_system::selection::Request) {
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -161,7 +206,13 @@ fn choose_packages(ctx: &Ctx, inputs: Vec<String>) {
         &["dim-label"],
     ));
     let listed = adw::PreferencesGroup::new();
-    let waiting = super::widgets::pending_row("Working out what the update changes…");
+    let ready = yukimi_system::selection::cached(&request).is_some();
+    let waiting = super::widgets::pending_row(if ready {
+        "Reading what the update changes…"
+    } else {
+        "Working out what the update changes: Yukimi evaluates the updated system without building it, and the \
+         first time after an update Nix also downloads its sources…"
+    });
     listed.add(&waiting);
     content.append(&listed);
     let footer = super::widgets::wrapping("", &["dim-label", "caption"]);
@@ -185,26 +236,27 @@ fn choose_packages(ctx: &Ctx, inputs: Vec<String>) {
     view.set_content(Some(&scroll));
     let dialog = adw::Dialog::builder().title("Choose what to update").content_width(560).child(&view).build();
 
-    let model = ctx.model();
-    let (dir, flake, host, file) =
-        (model.setup.dir.clone(), model.setup.flake(), model.setup.host.clone(), model.setup.packages_file());
-    let scratch = crate::cache_dir().map(|dir| dir.join("preview"));
-    let wanted = inputs.clone();
     let checks: Rc<RefCell<Vec<(String, gtk::CheckButton)>>> = Rc::default();
     let kept_quietly: Rc<RefCell<Vec<String>>> = Rc::default();
+    let lock: Rc<RefCell<Option<std::path::PathBuf>>> = Rc::default();
     {
-        let (listed, go, footer, checks, kept_quietly) =
-            (listed.clone(), go.clone(), footer.clone(), checks.clone(), kept_quietly.clone());
+        let (listed, go, footer, checks, kept_quietly, lock) =
+            (listed.clone(), go.clone(), footer.clone(), checks.clone(), kept_quietly.clone(), lock.clone());
+        let request = request.clone();
         gtk::glib::spawn_future_local(async move {
-            let found = gtk::gio::spawn_blocking(move || {
-                let scratch = scratch.ok_or("There is no cache directory to work in")?;
-                yukimi_system::selection::preview(&dir, &flake, &host, file.as_deref(), &wanted, &scratch)
-            })
-            .await
-            .unwrap_or_else(|_| Err("the comparison stopped unexpectedly".to_owned()));
+            let found = gtk::gio::spawn_blocking(move || yukimi_system::selection::prepared(&request))
+                .await
+                .unwrap_or_else(|_| Err("the comparison stopped unexpectedly".to_owned()));
             listed.remove(&waiting);
             let preview = match found {
-                Ok(preview) => preview,
+                Ok(prepared) => {
+                    listed.set_description(Some(&format!(
+                        "Compared with Sekka {}",
+                        prepared.rev.get(..7).unwrap_or(&prepared.rev)
+                    )));
+                    *lock.borrow_mut() = prepared.lock;
+                    prepared.preview
+                }
                 Err(e) => {
                     let row = adw::ActionRow::new();
                     row.set_title("Yukimi couldn't work out what the update changes");
@@ -277,7 +329,11 @@ fn choose_packages(ctx: &Ctx, inputs: Vec<String>) {
                 checks.borrow().iter().filter(|(_, check)| !check.is_active()).map(|(name, _)| name.clone()).collect();
             hold.extend(kept_quietly.borrow().iter().cloned());
             dialog.close();
-            ctx.run(Operation::UpdateSekka { inputs: inputs.clone(), hold: Some(hold) });
+            ctx.run(Operation::UpdateSekka {
+                inputs: request.update.clone(),
+                hold: Some(hold),
+                lock: lock.borrow().clone(),
+            });
         });
     }
     dialog.present(Some(ctx.window()));
@@ -554,6 +610,7 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
     let scroll = page(&content);
     ctx.on_refresh("updates", move |ctx| {
         clear(&content);
+        prepare_in_background(ctx);
         let model = ctx.model();
         let check = ctx.update_check();
         let movements = check.as_ref().map(|check| movements(&model, check));
