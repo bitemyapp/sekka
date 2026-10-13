@@ -138,6 +138,16 @@ pointed somewhere of your own keep their own rows and update separately, and
 may need building. Run `sekka-update --status` to check whether anything
 remains to be applied.
 
+When a check finds a newer Sekka, Yukimi also works out what it changes for
+each of your packages, and **Choose packages…** lists them: new versions
+first, then packages that keep their version but were built differently.
+Untick one to keep running the build you have now; it stays exactly as it is
+through later updates until you tick it again. Keeping a package keeps the
+copy your system runs from its package list. If another part of the system,
+such as a service or another application, needs the new version, the update
+installs that too, and Yukimi says so when the update is done. Only packages
+installed for everyone can be kept.
+
 ## Questions, bugs, and contributions
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.

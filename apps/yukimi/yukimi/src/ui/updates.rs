@@ -200,9 +200,10 @@ fn choose_packages(ctx: &Ctx, request: yukimi_system::selection::Request) {
     content.set_margin_start(24);
     content.set_margin_end(24);
     content.append(&super::widgets::wrapping(
-        "These are the packages the update changes. Untick one to keep the version you have now, exactly as it \
-         is: nothing is downloaded or built for it, and it stays until you tick it in a later update. Libraries \
-         and the rest of the system move with the update either way.",
+        "These are the packages the update changes. Untick one to keep running the build you have now: it stays \
+         exactly as it is until you tick it in a later update. If another part of the system needs the new \
+         version, the update installs that too, and Yukimi says so when it is done. Libraries and the rest of the \
+         system move with the update either way.",
         &["dim-label"],
     ));
     let listed = adw::PreferencesGroup::new();

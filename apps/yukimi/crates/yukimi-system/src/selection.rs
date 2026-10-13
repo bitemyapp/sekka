@@ -102,6 +102,16 @@ pub fn parse_drv_name(name: &str) -> (&str, &str) {
 /// after the version (`git-2.50-doc`).
 const OUTPUTS: &[&str] = &["bin", "man", "dev", "lib", "doc", "info", "data", "debug", "devdoc", "terminfo"];
 
+/// The package name and version of a store path (`/nix/store/…-git-2.50-doc`
+/// is `git`, `2.50`), as packages are named here and held by.
+pub fn package_of(path: &str) -> (String, String) {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let name = name.get(33..).filter(|_| name.as_bytes().get(32) == Some(&b'-')).unwrap_or(name);
+    let (key, version) = parse_drv_name(name);
+    let version = OUTPUTS.iter().find_map(|o| version.strip_suffix(&format!("-{o}"))).unwrap_or(version);
+    (key.to_owned(), version.to_owned())
+}
+
 /// The packages a system profile's derivation links: NixOS's `buildEnv`
 /// lists each package's chosen outputs (`chosenOutputs`, or `pkgs` before
 /// it was called that).
@@ -122,10 +132,7 @@ pub fn profile_packages(derivation: &serde_json::Value) -> Result<Vec<Installed>
         let mut paths: Vec<String> =
             entry["paths"].as_array().into_iter().flatten().filter_map(|p| p.as_str().map(str::to_owned)).collect();
         let Some(first) = paths.first() else { continue };
-        let name = first.rsplit('/').next().unwrap_or(first).get(33..).unwrap_or_default();
-        let (key, version) = parse_drv_name(name);
-        let version = OUTPUTS.iter().find_map(|o| version.strip_suffix(&format!("-{o}"))).unwrap_or(version);
-        let (key, version) = (key.to_owned(), version.to_owned());
+        let (key, version) = package_of(first);
         paths.sort();
         packages.push(Installed { key, version, paths });
     }
@@ -350,6 +357,9 @@ mod tests {
         assert_eq!(parse_drv_name("python3.13-requests-2.32"), ("python3.13-requests", "2.32"));
         assert_eq!(parse_drv_name("hwdb.bin"), ("hwdb.bin", ""));
         assert_eq!(parse_drv_name("x-"), ("x-", ""));
+        let hash = "a".repeat(32);
+        assert_eq!(package_of(&format!("/nix/store/{hash}-git-2.50-doc")), ("git".to_owned(), "2.50".to_owned()));
+        assert_eq!(package_of(&format!("{hash}-firefox-158.0")), ("firefox".to_owned(), "158.0".to_owned()));
     }
 
     #[test]

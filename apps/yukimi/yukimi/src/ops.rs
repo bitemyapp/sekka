@@ -59,6 +59,28 @@ pub enum Operation {
     Clean { older_than_days: Option<u32> },
 }
 
+/// What became of kept packages, from the helper's report: a version of one
+/// the system still has because something else needs it.
+fn kept_note(kept: &serde_json::Value) -> String {
+    let mut notes = Vec::new();
+    for package in kept.as_array().into_iter().flatten() {
+        let (name, version) =
+            (package["name"].as_str().unwrap_or_default(), package["version"].as_str().unwrap_or_default());
+        for also in package["also"].as_array().into_iter().flatten() {
+            let other = also["version"].as_str().unwrap_or_default();
+            let needed_by: Vec<&str> =
+                also["neededBy"].as_array().into_iter().flatten().filter_map(|n| n.as_str()).collect();
+            let why = if needed_by.is_empty() {
+                "other parts of the system need it".to_owned()
+            } else {
+                format!("{} {} it", needed_by.join(", "), if needed_by.len() == 1 { "needs" } else { "need" })
+            };
+            notes.push(format!("{name} {version} is kept; {name} {other} is installed too, because {why}"));
+        }
+    }
+    if notes.is_empty() { String::new() } else { format!(". {}", notes.join(". ")) }
+}
+
 /// A command a job runs, and whether it runs as root (through pkexec).
 pub struct Run {
     pub command: Command,
@@ -114,6 +136,9 @@ impl Operation {
                 serde_json::from_value::<yukimi_system::completion::Completion>(report["completion"].clone())
         {
             let title = completion.title();
+            if let Operation::UpdateSekka { .. } = self {
+                return format!("{title}{}", kept_note(&report["kept"]));
+            }
             return match self {
                 Operation::Rollback { .. } if report["configuration"] == false => format!(
                     "{title}. This generation's configuration wasn't kept, so your next change builds on the newer one"
@@ -410,6 +435,20 @@ mod tests {
         assert_eq!(&args(release)[1..], ["change", "--sekka", "--mode", "auto", "--hold", ""]);
         let try_it = try_command("nixpkgs", "cowsay", "cowsay", false);
         assert_eq!(try_it, ["env", "nix", "shell", "nixpkgs#cowsay", "--command", "cowsay"]);
+    }
+
+    #[test]
+    fn kept_packages_are_reported_as_they_are() {
+        let kept = serde_json::json!([
+            {"name": "codex", "version": "0.160.0", "also": []},
+            {"name": "firefox", "version": "157.0.1", "also": [{"version": "158.0", "neededBy": ["firefox-policies.json"]}]},
+        ]);
+        assert_eq!(
+            kept_note(&kept),
+            ". firefox 157.0.1 is kept; firefox 158.0 is installed too, because firefox-policies.json needs it"
+        );
+        assert_eq!(kept_note(&serde_json::json!([])), "");
+        assert_eq!(kept_note(&serde_json::Value::Null), "");
     }
 
     #[test]

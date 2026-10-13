@@ -210,9 +210,13 @@ helper checks every kept build is on this computer. Yukimi's module puts the
 kept packages in place of the current ones in NixOS's own system profile
 (`system.path`), each where it stood, so only the profile changes and nothing
 else is rebuilt; `checks.held-packages` holds that copy of the profile to
-NixOS's. Limits: only `environment.systemPackages` entries can be kept (not
-per-user packages); something else that uses a package (a service, a
-`programs.<name>` module) still gets the new one; held configurations are not
+NixOS's. After building, and before switching, the helper reads the new
+system's runtime closure: another version of a kept package that is still in it
+(a service or another application refers to it) is reported with what refers
+to it, and Yukimi's completion message says so. Limits: only
+`environment.systemPackages` entries can be kept (not per-user packages);
+something else that uses a package (a service, a `programs.<name>` module)
+still gets the new one; held configurations are not
 yet removed when no hold needs them; and an update that also converts the
 flake locks again, so it can differ from what was shown if the nightly moved.
 The default `auto` mode compares boot artifacts, kernel parameters, startup

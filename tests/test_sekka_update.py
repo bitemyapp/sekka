@@ -69,6 +69,15 @@ if name == 'nix':
         if p('/state/wait').exists(): time.sleep(60)
         print('/system-new')
     else: sys.exit(2)
+elif name == 'nix-store':
+    # The built system's closure: the kept build, and another version of it
+    # that a service refers to.
+    here = str(p(sys.executable).resolve().parents[1])
+    other, unit = '/nix/store/' + 'c' * 32 + '-codex-0.162.1', '/nix/store/' + 'd' * 32 + '-unit-codex.service'
+    if '--requisites' in a: print('\n'.join([here, other, unit, '/system-new']))
+    elif '--referrers' in a and a[-1] == other: print('\n'.join([unit, '/nix/store/' + 'e' * 32 + '-elsewhere']))
+    elif '--referrers' in a: pass
+    else: sys.exit(2)
 elif name == 'nix-env':
     if p('/state/fail-profile').exists(): sys.exit(1)
     profile = p('/nix/var/nix/profiles/system')
@@ -132,7 +141,7 @@ class Update(unittest.TestCase):
         (self.root / 'state/caches.json').write_text(json.dumps(CACHES))
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
-        for name in ['nix', 'nix-env', 'systemd-run', 'systemctl', 'loginctl']:
+        for name in ['nix', 'nix-env', 'nix-store', 'systemd-run', 'systemctl', 'loginctl']:
             path = self.root / 'system-old/sw/bin' / name
             path.write_text(f'#!{PYTHON}\n' + FAKE)
             path.chmod(0o755)
@@ -264,7 +273,10 @@ class Update(unittest.TestCase):
 
     def test_held_packages_come_from_the_running_configuration(self):
         self.compatible_live_system()
-        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--hold', 'codex', '--mode', 'auto')
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--hold', 'codex', '--mode', 'auto')
+        # Read from the built system: another version came along with a service.
+        self.assertEqual(json.loads(result.stdout)['kept'][0]['also'],
+                         [{'version': '0.162.1', 'neededBy': ['unit-codex.service']}])
         packages = (self.config / 'yukimi.nix').read_text()
         self.assertIn('"codex" = {', packages)
         self.assertIn('flake = "path:/var/lib/yukimi/held/generation-1?narHash=sha256-AB%2B%2Fcd%3D";', packages)

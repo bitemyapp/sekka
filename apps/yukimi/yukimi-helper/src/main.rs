@@ -831,21 +831,61 @@ fn held_source(setup: &Setup) -> Result<packages::Hold> {
 
 /// Every held package must be the build this computer has, so that keeping
 /// it builds nothing.
-fn check_held(setup: &Setup) -> Result<()> {
+fn check_held(setup: &Setup) -> Result<std::collections::BTreeMap<String, Vec<String>>> {
     let host = flake_host(setup)?;
     let mut eval = nix();
     eval.args(["eval", "--json", "--apply", "hs: builtins.mapAttrs (n: ps: map (p: p.outPath) ps) hs"]);
     eval.arg(format!("{}#nixosConfigurations.\"{host}\".config.programs.yukimi.heldPackages", setup.flake()));
     let held: std::collections::BTreeMap<String, Vec<String>> =
         serde_json::from_str(&output(eval, "Finding the packages you keep")?)?;
-    for (name, paths) in held {
+    for (name, paths) in &held {
         if let Some(missing) = paths.iter().find(|path| !Path::new(path).exists()) {
             return Err(Failure(format!(
                 "{name} can't be kept as it is: the build this system had ({missing}) isn't on this computer any more"
             )));
         }
     }
-    Ok(())
+    Ok(held)
+}
+
+/// What became of each kept package in the built system: the version kept,
+/// and any other version of it the system still has because something else
+/// in it refers to that one (a service, another application), with what
+/// does. Read from the built system's runtime closure, so it is exact.
+fn kept_report(system: &str, held: &std::collections::BTreeMap<String, Vec<String>>) -> serde_json::Value {
+    use yukimi_system::selection::package_of;
+    let query = |args: &[&str]| -> Vec<String> {
+        let mut c = command("nix-store");
+        c.args(args);
+        output(c, "Reading the new system's packages")
+            .map(|o| o.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    };
+    let closure: Vec<String> = query(&["--query", "--requisites", system]);
+    let members: std::collections::BTreeSet<&str> = closure.iter().map(String::as_str).collect();
+    let mut report = Vec::new();
+    for (name, paths) in held {
+        let kept: std::collections::BTreeSet<String> = paths.iter().map(|p| package_of(p).1).collect();
+        let mut also = Vec::new();
+        for path in closure.iter().filter(|p| {
+            let (key, version) = package_of(p);
+            &key == name && !kept.contains(&version)
+        }) {
+            let mut needed_by: Vec<String> = query(&["--query", "--referrers", path])
+                .into_iter()
+                .filter(|r| members.contains(r.as_str()) && &package_of(r).0 != name)
+                .map(|r| r.rsplit('/').next().unwrap_or(&r).get(33..).unwrap_or_default().to_owned())
+                .collect();
+            needed_by.sort();
+            needed_by.truncate(3);
+            also.push(serde_json::json!({"version": package_of(path).1, "neededBy": needed_by}));
+        }
+        also.dedup_by(|a, b| a["version"] == b["version"]);
+        report.push(
+            serde_json::json!({"name": name, "version": kept.into_iter().collect::<Vec<_>>().join(", "), "also": also}),
+        );
+    }
+    serde_json::Value::Array(report)
 }
 
 fn change(args: &[String]) -> Result<String> {
@@ -901,7 +941,7 @@ fn change(args: &[String]) -> Result<String> {
     touched.extend(main.clone());
     touched.extend(packages_file.clone());
     let backup = Backup::take(&touched);
-    let attempt = || -> Result<String> {
+    let attempt = || -> Result<(String, std::collections::BTreeMap<String, Vec<String>>)> {
         if let Some(names) = &change.hold {
             stage(1, "Keeping the packages you chose as they are");
             hold(&setup, main.as_deref(), packages_file.as_deref(), names)?;
@@ -991,17 +1031,22 @@ fn change(args: &[String]) -> Result<String> {
             run(c, "Updating the channels")?;
             stage_done(2);
         }
+        let mut held = std::collections::BTreeMap::new();
         if change.hold.as_ref().is_some_and(|names| !names.is_empty()) {
             stage(3, "Checking the packages you keep are on this computer");
-            check_held(&setup)?;
+            held = check_held(&setup)?;
             stage_done(3);
         }
         stage(3, "Evaluating your configuration");
         let system = build(&setup)?;
         stage_done(3);
-        Ok(system)
+        Ok((system, held))
     };
-    let (system, reasons, mode) = match attempt().and_then(|system| {
+    let mut kept = serde_json::Value::Array(Vec::new());
+    let (system, reasons, mode) = match attempt().and_then(|(system, held)| {
+        if !held.is_empty() {
+            kept = kept_report(&system, &held);
+        }
         let active = std::fs::canonicalize("/run/current-system")?;
         let booted =
             std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
@@ -1032,8 +1077,10 @@ fn change(args: &[String]) -> Result<String> {
         refresh_launchers(before, Path::new(&system));
     }
     stage_done(4);
-    Ok(serde_json::json!({"ok": true, "system": system, "mode": mode, "completion": completion::read_system()})
-        .to_string())
+    Ok(serde_json::json!({
+        "ok": true, "system": system, "mode": mode, "completion": completion::read_system(), "kept": kept
+    })
+    .to_string())
 }
 
 fn save_update(receipt: &Receipt) -> Result<()> {
