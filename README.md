@@ -89,6 +89,8 @@ Plasma is the default live desktop and the installer's preselected choice. GNOME
 
 **There is no release yet, only a nightly ISO.** Each night, if `main` has changed and Sekka's automated checks pass, virtual-machine tests included, a new ISO for x86_64 PCs joins the last seven on [sekka.computer/download](https://sekka.computer/download/), each with its checksum and the source revision it came from. A nightly may not have been tried on hardware before it is published. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
 
+To put a nightly on a USB drive, [Kakehashi](apps/kakehashi/README.md) lists them, downloads and checks the one you pick, writes it, and reads every byte back, on Linux, macOS or Windows. Kakehashi is new: so far it has written only virtual drives, and its builds are GitHub workflow artifacts. Any tool that writes a raw disk image also works.
+
 To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
 
 Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.

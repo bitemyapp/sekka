@@ -36,6 +36,7 @@
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
+      kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
       site = import ./nix/site.nix {
         inherit pkgs;
         revision = self.shortRev or self.dirtyShortRev or "unknown";
@@ -89,20 +90,23 @@
         inherit installedLock;
         components = import ./nix/components.nix { inherit nixpkgs; };
       };
-      devShells.${system}.default = pkgs.mkShell {
-        inputsFrom = [
-          calamares
-          inputs.yukimi.packages.${system}.yukimi
-        ];
-        packages = [
-          pkgs.cargo
-          pkgs.rustc
-          pkgs.clippy
-          pkgs.rustfmt
-          pkgs.nixfmt
-          pkgs.python3
-          pkgs.pkg-config
-        ];
+      devShells.${system} = {
+        kakehashi = kakehashi.shell;
+        default = pkgs.mkShell {
+          inputsFrom = [
+            calamares
+            inputs.yukimi.packages.${system}.yukimi
+          ];
+          packages = [
+            pkgs.cargo
+            pkgs.rustc
+            pkgs.clippy
+            pkgs.rustfmt
+            pkgs.nixfmt
+            pkgs.python3
+            pkgs.pkg-config
+          ];
+        };
       };
       nixosConfigurations.installer = installer;
       apps.${system} = {
@@ -129,6 +133,7 @@
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
+        kakehashi = kakehashi.package;
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
@@ -334,6 +339,11 @@
             '';
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
+        kakehashi = self.packages.${system}.kakehashi;
+        kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
+          inherit pkgs;
+          kakehashi = self.packages.${system}.kakehashi;
+        };
         network-vm = import ./nix/network-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

@@ -1,0 +1,96 @@
+name: Kakehashi
+
+# Builds and tests Kakehashi (apps/kakehashi) on GitHub's own Linux, macOS
+# and Windows runners, never the self-hosted builder, and keeps each build
+# as an artifact: an app bundle for macOS, a zip for Windows, a tarball for
+# Linux. Nothing is published.
+on:
+  push:
+    paths:
+      - apps/kakehashi/**
+      - .github/workflows/kakehashi.yml
+  pull_request:
+    paths:
+      - apps/kakehashi/**
+      - .github/workflows/kakehashi.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kakehashi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-x86_64
+          - os: macos-15
+            name: macos-arm64
+          - os: windows-2025
+            name: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/kakehashi
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxcb1-dev libx11-xcb-dev libx11-dev libfontconfig1-dev libfreetype-dev libvulkan-dev
+      - name: Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --workspace --release --locked
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          case "$RUNNER_OS" in
+            macOS)
+              app=dist/Kakehashi.app/Contents
+              mkdir -p "$app/MacOS"
+              cp macos/Info.plist "$app/"
+              cp target/release/kakehashi target/release/kakehashi-helper "$app/MacOS/"
+              # An ad-hoc signature over the whole bundle: without one, a
+              # downloaded copy is reported as damaged rather than unverified.
+              codesign --force --sign - "$app/MacOS/kakehashi-helper"
+              codesign --force --sign - dist/Kakehashi.app
+              codesign --verify --strict --verbose=2 dist/Kakehashi.app
+              (cd dist && ditto -c -k --keepParent Kakehashi.app kakehashi-${{ matrix.name }}.zip && rm -rf Kakehashi.app)
+              ;;
+            Windows)
+              cp target/release/kakehashi.exe target/release/kakehashi-helper.exe dist/
+              (cd dist && 7z a -tzip kakehashi-${{ matrix.name }}.zip kakehashi.exe kakehashi-helper.exe >/dev/null && rm -- ./*.exe)
+              ;;
+            Linux)
+              mkdir -p dist/kakehashi
+              cp target/release/kakehashi target/release/kakehashi-helper linux/computer.sekka.Kakehashi.desktop dist/kakehashi/
+              cp ../../docs/brand/logos/sekka-app-icon.svg dist/kakehashi/computer.sekka.Kakehashi.svg
+              tar -C dist -czf dist/kakehashi-${{ matrix.name }}.tar.gz kakehashi
+              rm -rf dist/kakehashi
+              ;;
+          esac
+          ls -la dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kakehashi-${{ matrix.name }}
+          path: apps/kakehashi/dist/*
+          if-no-files-found: error

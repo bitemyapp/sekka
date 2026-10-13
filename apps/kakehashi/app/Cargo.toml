@@ -1,0 +1,26 @@
+[package]
+name = "kakehashi"
+description = "Writes Sekka, or any disk image, to a USB drive and reads it back"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kakehashi-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+gpui-kit = { version = "0.7.3", features = ["gpui-fast"] }
+dirs = "6"
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+]

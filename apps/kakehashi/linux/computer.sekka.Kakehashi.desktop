@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kakehashi
+GenericName=USB Image Writer
+Comment=Write Sekka, or any disk image, to a USB drive and read it back
+Exec=kakehashi
+Icon=computer.sekka.Kakehashi
+Terminal=false
+Categories=System;Utility;
+Keywords=usb;iso;image;flash;write;sekka;
+StartupWMClass=computer.sekka.Kakehashi

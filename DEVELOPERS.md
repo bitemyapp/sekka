@@ -1,6 +1,6 @@
 # Developing Sekka
 
-Sekka is the source home for the ISO, Genkan installer, Tatami desktop, and Yukimi system manager. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag.
+Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag.
 
 ## Repository map
 
@@ -10,6 +10,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, and Yuki
 | `installer/genkan/` | Rust installer, privileged helper, system modules, application catalog, storage tests |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
 | `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
+| `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
@@ -54,10 +55,11 @@ cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
+cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
 cargo test --locked --manifest-path rust/Cargo.toml
 ```
 
-Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan and Yukimi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
+Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan, Yukimi and Kakehashi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
 
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
@@ -538,6 +540,70 @@ job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
 supervisor lets a running job finish first. To stop taking jobs,
 `docker stop sekka-runner-supervisor sekka-runner-job`. The supervisor logs to
 `docker logs sekka-runner-supervisor`.
+
+## Kakehashi
+
+`apps/kakehashi/` is its own Cargo workspace of three crates. `core` holds the
+drive rules, image checksums, the nightly list and downloads, and the write
+itself, with one platform module each for Linux, macOS and Windows. `helper`
+is `kakehashi-helper`, the only part that runs with administrator rights.
+`app` is the window, built on GPUI through `gpui-kit` with its `gpui-fast`
+feature (gpui-component's widgets, re-exported as `gpui_kit::component`), in
+Sekka's Night and Day colours from `docs/brand/tokens.json`. It replaces
+`scripts/flash_usb.rs`, whose drive rules it carries over; the script still
+works.
+
+The window runs as the user. To write, it makes a private temporary directory
+holding `plan.json` (the image, its SHA-256 and the drive as the window saw
+it) and an empty progress file, then starts the helper beside its own
+executable through the system's prompt: `pkexec` on Linux (the setuid wrapper
+in `/run/wrappers/bin` first), `do shell script ... with administrator
+privileges` through `osascript` on macOS, and `ShellExecuteExW` with the
+`runas` verb on Windows. The helper appends one JSON object per line to the
+progress file, which it opens without following links and only while it has a
+single name; the window stops it by creating `PROGRESS.cancel`, which the
+helper checks between 8 MiB chunks.
+
+`kakehashi_core::write::execute` compares the plan's drive with the drive as
+it is now (name, size, vendor, model, serial and bus) and rejects one the
+rules now exclude, unmounts it, opens it exclusively, checks again, writes in
+sector-padded chunks, zeroes the last MiB, syncs, drops the page cache where
+it can, reads everything back against the image, checks the zeroed tail and
+ejects. Windows locks and dismounts each volume on the disk, deletes the drive
+layout, and writes with unbuffered, write-through I/O from sector-aligned
+buffers. On Linux the helper finds `lsblk`, `umount` and `udisksctl` through
+`KAKEHASHI_TOOL_PATH`, set when the Nix package is built, because `pkexec`
+resets `PATH`.
+
+Nightly downloads read `builds.json` from `downloads.sekka.computer/nightly`,
+resume a `.part` file with a range request, hash while downloading, and leave
+a `.sha256` file beside the ISO so a later choice of the same file is checked
+too. TLS is rustls on Linux and the system's own (`native-tls`) on macOS and
+Windows.
+
+```sh
+nix build .#kakehashi
+nix develop .#kakehashi -c cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
+nix build .#checks.x86_64-linux.kakehashi-vm
+```
+
+`checks.kakehashi-vm` hot-plugs a 256 MiB virtual USB stick into a disposable
+NixOS VM. It checks the helper refuses the VM's own disk and a stick whose
+serial number differs from the plan's. Then an ordinary user starts the helper
+through `pkexec` as the window does, with a polkit rule in place of a
+password: once with the cancel file already present, which must leave the
+stick unchanged, and once to write a random image, after which the stick's
+bytes are compared from outside the VM and its last MiB must be clear. It
+doesn't drive the window itself. NixOS 26.11 installs the setuid `pkexec`
+wrapper only when `security.polkit.enablePkexecWrapper` is set, as Sekka's
+modules do. Never point the helper at a host drive to test it.
+
+`.github/workflows/kakehashi.yml` tests and builds on GitHub's hosted Linux,
+macOS (Apple silicon) and Windows runners when `apps/kakehashi` changes, and
+keeps a tarball, an ad-hoc-signed `Kakehashi.app` zip and a zip of the two
+executables as artifacts. Nothing is signed with a developer identity or
+published yet. The macOS and Windows platform code has been built there but
+has not yet written a physical drive.
 
 ## Website
 
