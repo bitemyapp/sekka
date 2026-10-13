@@ -161,8 +161,9 @@ disposable VM and checks enabling, mirroring, extending, reloads, repeated
 removal of a simulated external output, and a uinput lid switch seen by both
 logind and Hyprland. That includes closed-display mode through a reload,
 undocking with the lid closed, a Displays window stranded by an unplug, and
-`tatami display` from another workspace. These tests do not replace physical
-dock, cable, panel, lid sensor and GPU validation.
+`tatami display` from another workspace. Physical docking and the lid are in
+daily use on the ThinkPad X1 Carbon Gen 14; these tests guard that behaviour
+between changes. Don't describe it as untested on hardware.
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles.
 

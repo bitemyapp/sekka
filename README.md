@@ -10,7 +10,7 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 
 - **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
 - **Disk encryption is not implemented.** Neither are RAID/LVM setup or offline installation. An internet connection is required.
-- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka is tested by hand on two laptops: a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, and an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
+- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
 - **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
 
@@ -58,8 +58,9 @@ window to the screen you are using.
 Some differences remain. Unlike a Mac, the laptop also stays awake with its lid
 closed while docked on battery power. It goes to sleep when you close the lid with no
 other display connected, unless Keep Awake is on (then the built-in screen turns
-off). Lid handling and docking have been tested with simulated displays and a
-simulated lid, not yet across a range of physical docks, cables and panels.
+off). Lid handling and docking are in daily use on the ThinkPad X1 Carbon Gen
+14 with external displays, and virtual-machine tests with simulated displays and
+a simulated lid guard them between changes.
 
 Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
