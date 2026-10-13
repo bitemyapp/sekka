@@ -100,9 +100,10 @@ Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Opti
 Open **Yukimi → Updates → Update** to get Sekka's newest nightly. It brings
 NixOS, the applications and the AI tools at the versions that nightly built and
 tested, and a nightly reaches you only once everything it needs is ready to
-download, so an update never compiles software on your computer. If space runs
-short while it downloads, Yukimi stops before the disk fills up and changes
-nothing. To update Sekka from a terminal, run:
+download. An update never compiles software on your computer, except NVIDIA's
+driver, which is built for your kernel in a few minutes whenever either
+changes. If space runs short, Yukimi stops before the disk fills up and
+changes nothing. To update Sekka from a terminal, run:
 
 ```sh
 sekka-update

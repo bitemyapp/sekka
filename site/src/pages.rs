@@ -812,7 +812,7 @@ pub fn status(site: &Site) -> Result<Page> {
 <section class="tiles">
   <article class="win">
     <h2>Updating an installation</h2>
-    <p>Open Yukimi › Updates › Update, or run <code>sekka-update</code>. Sekka downloads the update, builds your system, and applies it now or at the next restart, whichever is safe. It never restarts or signs you out on its own. Your account, applications, hardware configuration and desktop choices stay in place, and earlier generations stay in Yukimi's History and the boot menu.</p>
+    <p>Open Yukimi › Updates › Update, or run <code>sekka-update</code>. You get Sekka's newest nightly, with NixOS, the applications and the AI tools at the versions it built and tested, and only once all of it is ready to download: nothing is compiled on your computer except NVIDIA's driver, built for your kernel in a few minutes. If space runs short, the update stops before the disk fills up and changes nothing. Sekka applies the update now or at the next restart, whichever is safe. It never restarts or signs you out on its own. Your account, applications, hardware configuration and desktop choices stay in place, and earlier generations stay in Yukimi's History and the boot menu.</p>
     <p>Installations older than this command run it once with <code>nix run github:bitemyapp/sekka/nightly#update</code>.</p>
   </article>
   <article class="win">

@@ -11,6 +11,9 @@ inputs. The derivations that would be built are listed in three kinds:
 - local: meant to be built where they are used (preferLocalBuild, or
   allowSubstitutes off), such as configuration files: quick by design;
 - downloads: fixed-output derivations, which fetch their sources;
+- copies: built without a C compiler (stdenvNoCC) or any other compiler or
+  build tool among their inputs, such as Determinate Nixd put in place from
+  its download;
 - compiles: everything else.
 
 It exits with 1 when anything would be compiled, other than derivations
@@ -78,13 +81,24 @@ def settings(info):
     return env
 
 
+# Inputs that mean a derivation compiles (by name, without the hash).
+COMPILERS = ('rustc-', 'cargo-', 'go-', 'gcc-', 'clang-', 'llvm-', 'cmake-', 'meson-', 'ninja-', 'ghc-',
+             'zig-', 'openjdk-', 'jdk-', 'nodejs-', 'stdenv-linux.drv')
+
+
 def kind(info):
     env = settings(info)
     if any('hash' in out for out in info['outputs'].values()):
         return 'downloads'
     local = env.get('preferLocalBuild') in ('1', True)
     no_substitutes = 'allowSubstitutes' in env and env['allowSubstitutes'] in ('', '0', False)
-    return 'local' if local or no_substitutes else 'compiles'
+    if local or no_substitutes:
+        return 'local'
+    inputs = [name.removeprefix(STORE)[33:] for name in info['inputs']['drvs']]
+    if any(name.startswith('stdenv-linux-no-cc') for name in inputs) and not any(
+            name.startswith(COMPILERS) for name in inputs):
+        return 'copies'
+    return 'compiles'
 
 
 def main(argv):
@@ -121,7 +135,7 @@ def main(argv):
                     continue
                 wanted[dep] = (wanted.get(dep) or set()) | outs
                 pending.append(dep)
-    kinds = {'local': [], 'downloads': [], 'compiles': []}
+    kinds = {'local': [], 'downloads': [], 'copies': [], 'compiles': []}
     for drv, info in built.items():
         kinds[kind(info)].append(info['name'])
     for name, items in kinds.items():

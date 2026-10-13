@@ -453,7 +453,12 @@ order and only if each step succeeded:
    desktop's installed system and the free catalog applications, everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
-   compiled rather than written locally (configuration) or fetched.
+   compiled rather than written locally (configuration), copied into place
+   without a compiler (as Determinate Nixd is from its download) or fetched.
+   NVIDIA's driver and the unfree applications aren't covered: they can't be
+   published, so systems that have them build them (the driver for each
+   kernel, in minutes; the applications by repackaging their vendors'
+   downloads).
 3. It pushes the revision to `main` (a fast-forward; if `main` moved during
    the build, the input update waits for the next night) and to `nightly`.
    Installed systems update to `nightly`, so they only ever reach a revision
