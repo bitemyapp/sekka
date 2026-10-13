@@ -1,6 +1,6 @@
 # Developing Sekka
 
-Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag.
+Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag. The `nightly` branch, which installed systems follow, belongs to the nightly workflow alone; never push to it.
 
 ## Repository map
 
@@ -164,11 +164,20 @@ undocking with the lid closed, a Displays window stranded by an unplug, and
 `tatami display` from another workspace. These tests do not replace physical
 dock, cable, panel, lid sensor and GPU validation.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/main` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, with all external inputs explicitly following the installed system's top-level inputs. The nightly workflow moves the `nightly` branch only after a revision has passed its checks and Sekka's packages for it are in the binary cache, so installed systems never follow a `main` the cache hasn't caught up with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
+A flake following Sekka's `main` (or its default branch) is moved to
+`nightly`. Updating Sekka also locks Nixpkgs where that Sekka's own lock
+does: Sekka's packages follow the system's Nixpkgs, and only that revision's
+builds are in the cache. A system whose Nixpkgs comes from a source of its
+own keeps it. Sekka never moves to an older revision than the system has.
+The build passes the binary caches the new configuration names (as root, so
+the daemon accepts them), so a cache an update adds already serves that
+update. The other sources (applications, the AI applications) move to their
+own newest revisions, which cache.nixos.org and numtide's cache serve.
 The ordinary GUI action includes Sekka and sources with available newer revisions;
 the CLI updates only Sekka. Individual source rows retain their controls.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
@@ -187,7 +196,7 @@ rebuild frontends, before they can stop the desktop. Do not copy the root lock v
 into an installed machine: it lacks the Sekka input until the installed lock
 is generated.
 
-For installations without the new updater, `nix run github:bitemyapp/sekka/main#update`
+For installations without the new updater, `nix run github:bitemyapp/sekka/nightly#update`
 bootstraps it without installing a user profile package. The CLI uses the
 helper beside its own executable, including when run from the Nix store;
 polkit asks for administrator authentication. `--print-flake` prints the
@@ -249,7 +258,8 @@ changing the host desktop.
 
 `python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
-failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+Sekka's Nixpkgs and the new system's caches, never moving Sekka back, a
+Nixpkgs of the system's own, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
@@ -284,8 +294,9 @@ it last, only for paths neither cache.nixos.org nor Sekka's cache has. A
 system takes a new substituter only once activated, so the first update to
 this module still builds anything new itself.
 
-Publishing is manual; the release workflow does not touch the cache.
-From a clean checkout of reviewed `main`:
+The nightly workflow publishes every revision it moves `nightly` to (see
+Nightly builds); the release workflow does not touch the cache. To publish by
+hand, from a clean checkout of reviewed `main`:
 
 ```sh
 nix run .#push-cache
@@ -317,6 +328,9 @@ The push needs two credentials, neither of which belongs in the repository:
   ```sh
   nix run nixpkgs#awscli2 -- configure --profile sekka-cache
   ```
+
+  `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the environment take its
+  place, as in the nightly workflow.
 
 Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
@@ -415,12 +429,23 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 gh workflow run nightly.yml --ref main
 ```
 
-A job on a GitHub-hosted runner first compares `main`'s commit with the newest
-build's `revision` in <https://downloads.sekka.computer/nightly/builds.json>. If
-they match, nothing else runs and the builder is not touched. Otherwise the
-builder runs `nix flake check`, builds `.#iso`, and `nix run .#publish-nightly`
-uploads it to the R2 bucket `sekka-downloads` as a new build, in a folder of
-its own that never changes, `nightly/builds/DATE-REVISION/`:
+The job runs on the builder. It first brings every input in `flake.lock` up
+to date (`nix flake update`) and commits that, if anything moved, on top of
+`main`. If the result is the newest build's `revision` in
+<https://downloads.sekka.computer/nightly/builds.json>, nothing has changed and
+it stops. Otherwise it runs `nix flake check` and builds `.#iso`, then, in this
+order and only if each step succeeded:
+
+1. `nix run .#push-cache` publishes Sekka's packages for that revision to
+   cache.sekka.computer.
+2. It pushes the revision to `main` (a fast-forward; if `main` moved during
+   the build, the input update waits for the next night) and to `nightly`.
+   Installed systems update to `nightly`, so they only ever reach a revision
+   that passed and is cached. `nightly` is force-pushed when `main` moved
+   past an earlier input update.
+3. `nix run .#publish-nightly` uploads the ISO to the R2 bucket
+   `sekka-downloads` as a new build, in a folder of its own that never
+   changes, `nightly/builds/DATE-REVISION/`:
 
 - `sekka-nightly-DATE-REVISION-x86_64-linux.iso`
 - `SHA256SUMS`
@@ -430,8 +455,8 @@ its own that never changes, `nightly/builds/DATE-REVISION/`:
 Then it writes `nightly/builds.json`, which lists the last seven builds, newest
 first, and removes everything else under `nightly/`, older builds and anything
 a failed run left. A failed check, build or upload leaves the list as it was,
-so the next night tries the same revision again. Seven builds of about 6 GB
-cost a few dollars a year in R2 storage beyond its free 10 GB.
+so the next night tries the same revision again. Seven builds of about 12 GB
+cost about a dollar a month in R2 storage beyond its free 10 GB.
 
 `downloads.sekka.computer` is the bucket's custom domain, served through
 Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
@@ -456,6 +481,18 @@ gh secret set R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
 ```
 
 `gh` asks for each value without echoing it.
+
+The cache push needs the cache's signing key and a second R2 token, with
+Object Read & Write on `sekka-cache` alone, as the `nightly` environment's
+`CACHE_SIGNING_KEY`, `CACHE_R2_ACCESS_KEY_ID` and `CACHE_R2_SECRET_ACCESS_KEY`.
+The job writes the key to a private temporary file for `push-cache` and
+removes it; without these secrets the nightly fails before moving anything.
+
+```sh
+gh secret set CACHE_SIGNING_KEY --env nightly --repo bitemyapp/sekka < ~/.config/sekka-cache/cache.sekka.computer-1.sec
+gh secret set CACHE_R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
+gh secret set CACHE_R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
+```
 
 ### The builder
 

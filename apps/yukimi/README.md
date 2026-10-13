@@ -137,7 +137,7 @@ Yukimi lives in [Sekka](../../README.md). With a flake, import Sekka's Yukimi mo
 
 ```nix
 {
-  inputs.sekka.url = "github:bitemyapp/sekka/main";
+  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
   inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.host = nixpkgs.lib.nixosSystem {

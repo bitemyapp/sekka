@@ -98,7 +98,10 @@ Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Opti
 ## Updating an existing installation
 
 Open **Yukimi → Updates → Update** to get Sekka and the available source updates
-together. To update Sekka itself from a terminal, run:
+together. Sekka updates come from its nightly builds: a revision reaches you
+only after its checks have passed and its packages are in Sekka's binary cache,
+along with the Nixpkgs they were built with, so updates download rather than
+compile. To update Sekka itself from a terminal, run:
 
 ```sh
 sekka-update
@@ -119,7 +122,7 @@ If your installation predates this command (including the original graphical
 installer builds), run this once:
 
 ```sh
-nix run github:bitemyapp/sekka/main#update
+nix run github:bitemyapp/sekka/nightly#update
 ```
 
 This also moves supported older installations from the separate Calamares,

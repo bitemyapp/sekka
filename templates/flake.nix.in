@@ -7,7 +7,7 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
-  inputs.sekka.url = "github:bitemyapp/sekka/main";
+  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
   inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   inputs.sekka.inputs.determinate.follows = "determinate";
   inputs.sekka.inputs.fh.follows = "fh";

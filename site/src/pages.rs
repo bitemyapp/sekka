@@ -267,7 +267,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
   <pre class="code"><code>{
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   inputs.sekka = {
-    url = "github:bitemyapp/sekka/main";
+    url = "github:bitemyapp/sekka/nightly";
     inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = { nixpkgs, sekka, ... }: {
@@ -699,7 +699,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
   <h2 id="anynixos">On any NixOS system</h2>
   <p>Yukimi finds the configuration the way <code>nixos-rebuild</code> does: a flake when <code>/etc/nixos/flake.nix</code> exists, following it if it links elsewhere, and channels otherwise. It works without the rest of Sekka:</p>
   <pre class="code"><code>{
-  inputs.sekka.url = "github:bitemyapp/sekka/main";
+  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
   inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.host = nixpkgs.lib.nixosSystem {
@@ -813,7 +813,7 @@ pub fn status(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Updating an installation</h2>
     <p>Open Yukimi › Updates › Update, or run <code>sekka-update</code>. Sekka downloads the update, builds your system, and applies it now or at the next restart, whichever is safe. It never restarts or signs you out on its own. Your account, applications, hardware configuration and desktop choices stay in place, and earlier generations stay in Yukimi's History and the boot menu.</p>
-    <p>Installations older than this command run it once with <code>nix run github:bitemyapp/sekka/main#update</code>.</p>
+    <p>Installations older than this command run it once with <code>nix run github:bitemyapp/sekka/nightly#update</code>.</p>
   </article>
   <article class="win">
     <h2>Privacy</h2>

@@ -35,7 +35,7 @@ base
         type = "github";
         owner = "bitemyapp";
         repo = "sekka";
-        ref = "main";
+        ref = "nightly";
       };
       inputs = builtins.mapAttrs (name: _: [ name ]) external;
     };

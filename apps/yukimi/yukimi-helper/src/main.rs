@@ -389,12 +389,94 @@ fn valid_user(name: &str) -> bool {
     !name.is_empty() && name.len() <= 32 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
 
-/// Build a flake's system for `host`.
+/// Build a flake's system for `host`, with the binary caches it configures
+/// as well as the running system's: a cache the new system adds is used for
+/// the build that adds it. The daemon takes them from root.
 fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure> {
+    let system = format!("{}#nixosConfigurations.\"{host}\"", setup.flake());
     let mut build = nix();
     build.args(["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
-    build.arg(format!("{}#nixosConfigurations.\"{host}\".config.system.build.toplevel", setup.flake()));
+    if let Some((substituters, keys)) = caches(&system) {
+        build.args(["--option", "extra-substituters", &substituters.join(" ")]);
+        build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
+    }
+    build.arg(format!("{system}.config.system.build.toplevel"));
     Ok(output(build, "Building the new system")?.trim().to_owned())
+}
+
+/// The binary caches and their keys a system's configuration names, if it
+/// names any. A configuration that doesn't evaluate is reported by the build.
+fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
+    let mut eval = nix();
+    eval.args(["eval", "--json", &format!("{system}.config.nix.settings"), "--apply"]);
+    eval.arg(
+        "s: { substituters = (s.substituters or [ ]) ++ (s.extra-substituters or [ ]); \
+         keys = (s.trusted-public-keys or [ ]) ++ (s.extra-trusted-public-keys or [ ]); }",
+    );
+    let value: serde_json::Value = serde_json::from_str(&output(eval, "Reading the binary caches").ok()?).ok()?;
+    let words = |key: &str| -> Vec<String> {
+        value[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str())
+            .filter(|w| !w.is_empty() && !w.chars().any(char::is_whitespace))
+            .map(str::to_owned)
+            .collect()
+    };
+    let (substituters, keys) = (words("substituters"), words("keys"));
+    (!substituters.is_empty() && !keys.is_empty()).then_some((substituters, keys))
+}
+
+/// A string as a Nix string literal.
+fn nix_string(text: &str) -> String {
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\"").replace("${", "\\${"))
+}
+
+/// The lock file of the Sekka a system's lock file names: the inputs its
+/// packages were built, checked and cached with.
+fn sekka_lock(lock_text: &str) -> Result<String> {
+    let lock: serde_json::Value = serde_json::from_str(lock_text)?;
+    let root = lock["root"].as_str().unwrap_or("root");
+    let node = lock["nodes"][root]["inputs"]["sekka"]
+        .as_str()
+        .ok_or_else(|| Failure("flake.lock has no sekka input".into()))?;
+    let locked = serde_json::to_string(&lock["nodes"][node]["locked"])?;
+    let mut eval = nix();
+    eval.args(["eval", "--raw", "--expr"]);
+    eval.arg(format!(
+        "builtins.readFile ((builtins.fetchTree (builtins.fromJSON {})).outPath + \"/flake.lock\")",
+        nix_string(&locked)
+    ));
+    output(eval, "Reading Sekka's own lock file")
+}
+
+/// Lock Nixpkgs where the Sekka this system now has locks it, so that
+/// Sekka's packages are the ones in its binary cache. A system whose
+/// Nixpkgs comes from somewhere else keeps it, updated if `asked`.
+fn align_nixpkgs(setup: &Setup, lock_file: &Path, asked: bool) -> Result<()> {
+    let current = std::fs::read_to_string(lock_file)?;
+    match lock::align_input(&current, &sekka_lock(&current)?, "nixpkgs")? {
+        lock::Aligned::Moved(aligned) => write_file(setup, lock_file, &aligned),
+        lock::Aligned::Already => Ok(()),
+        lock::Aligned::Elsewhere if asked => {
+            let mut c = nix();
+            let flake = setup.flake();
+            c.args([
+                "flake",
+                "update",
+                "--refresh",
+                "--log-format",
+                "internal-json",
+                "-v",
+                "--flake",
+                &flake,
+                "nixpkgs",
+            ]);
+            run(c, "Updating Nixpkgs")
+        }
+        lock::Aligned::Elsewhere => Ok(()),
+    }
 }
 
 /// Build the new system: a flake's configuration for this computer (or its
@@ -714,11 +796,24 @@ fn change(args: &[String]) -> Result<String> {
                     std::fs::write(&lock_file, proposed)?;
                 }
                 None => {
+                    // With Sekka, Nixpkgs comes from the Sekka it updates to
+                    // (align_nixpkgs), not from Nixpkgs' own newest release.
+                    let with_sekka = change.sekka && change.update.iter().any(|i| i == "sekka");
+                    let before = std::fs::read_to_string(&lock_file)?;
+                    let fetched: Vec<&String> =
+                        change.update.iter().filter(|i| !(with_sekka && i.as_str() == "nixpkgs")).collect();
                     let mut c = nix();
                     let flake = setup.flake();
                     c.args(["flake", "update", "--refresh", "--log-format", "internal-json", "-v", "--flake", &flake]);
-                    c.args(&change.update);
+                    c.args(fetched);
                     run(c, "Updating the flake inputs")?;
+                    if with_sekka {
+                        let after = std::fs::read_to_string(&lock_file)?;
+                        if let Some(held) = lock::hold_back(&before, &after, "sekka")? {
+                            write_file(&setup, &lock_file, &held)?;
+                        }
+                        align_nixpkgs(&setup, &lock_file, change.update.iter().any(|i| i == "nixpkgs"))?;
+                    }
                 }
             }
             stage_done(2);
@@ -992,6 +1087,12 @@ mod tests {
         assert!(valid_user("alice") && !valid_user("a:b") && !valid_user(""));
         assert_eq!(generation_number("system-12-link"), Some(12));
         assert_eq!(generation_number("system"), None);
+    }
+
+    #[test]
+    fn nix_strings_are_escaped() {
+        assert_eq!(nix_string(r#"{"rev":"a\\b"}"#), r#""{\"rev\":\"a\\\\b\"}""#);
+        assert_eq!(nix_string("${x} $y"), r#""\${x} $y""#);
     }
 
     #[test]

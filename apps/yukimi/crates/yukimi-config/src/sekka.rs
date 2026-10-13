@@ -22,10 +22,23 @@ pub fn supported(text: &str) -> bool {
     prepare(text).is_ok()
 }
 
-/// Return the flake to update. Existing Sekka branches/pins stay as chosen.
+/// What Sekka systems follow: the branch the nightly workflow moves only
+/// after its checks have passed and Sekka's packages are in its binary cache.
+/// `main` moves first, so a system following it could compile them itself.
+pub const NIGHTLY: &str = "github:bitemyapp/sekka/nightly";
+
+/// Return the flake to update. A system following `main` (or the default
+/// branch) follows `nightly` instead; other Sekka branches and pins stay as
+/// chosen.
 pub fn prepare(text: &str) -> Result<String, String> {
     if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
-        return if official(&url, "sekka") { Ok(text.to_owned()) } else { Err(UNSUPPORTED.into()) };
+        if !official(&url, "sekka") {
+            return Err(UNSUPPORTED.into());
+        }
+        if url == "github:bitemyapp/sekka" || url == "github:bitemyapp/sekka/main" {
+            return edit::set_string_value(text, &["inputs", "sekka", "url"], NIGHTLY).map_err(|e| e.to_string());
+        }
+        return Ok(text.to_owned());
     }
     migrate(text).ok_or_else(|| UNSUPPORTED.into())
 }
@@ -108,7 +121,7 @@ fn migrate(text: &str) -> Option<String> {
     if !parameter || !module {
         return None;
     }
-    let mut inputs = "inputs.sekka.url = \"github:bitemyapp/sekka/main\";".to_owned();
+    let mut inputs = format!("inputs.sekka.url = \"{NIGHTLY}\";");
     for name in EXTERNAL {
         inputs.push_str(&format!("\n  inputs.sekka.inputs.{name}.follows = \"{name}\";"));
     }
@@ -158,8 +171,19 @@ mod tests {
 
     #[test]
     fn leaves_existing_sekka_branch_alone() {
-        let new = prepare(OLD).unwrap().replace("sekka/main", "sekka/topic");
+        let new = prepare(OLD).unwrap().replace("sekka/nightly", "sekka/topic");
+        assert!(new.contains("github:bitemyapp/sekka/topic"));
         assert_eq!(prepare(&new).unwrap(), new);
+    }
+
+    #[test]
+    fn follows_nightly_instead_of_main() {
+        let nightly = prepare(OLD).unwrap();
+        assert_eq!(edit::string_value(&nightly, &["inputs", "sekka", "url"]).unwrap().as_deref(), Some(NIGHTLY));
+        for main in ["github:bitemyapp/sekka/main", "github:bitemyapp/sekka"] {
+            let text = nightly.replace(NIGHTLY, main);
+            assert_eq!(prepare(&text).unwrap(), nightly, "{main}");
+        }
     }
 
     #[test]

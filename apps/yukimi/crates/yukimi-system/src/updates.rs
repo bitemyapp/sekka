@@ -234,6 +234,46 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
     })
 }
 
+/// On a Sekka system, what updating does with Sekka and Nixpkgs, in place
+/// of their own newest versions: Sekka moves to the newest commit of its
+/// `nightly` branch, which the update follows instead of `main`, and Nixpkgs
+/// to where that Sekka locks it, when the system asks for the same Nixpkgs.
+/// Sekka on another branch or pinned, and a Nixpkgs of the system's own,
+/// keep their answers.
+pub fn sekka_targets(inputs: &[Input], newest: &mut BTreeMap<String, Result<Release, String>>) {
+    let Some(original) = inputs.iter().find(|i| i.name == "sekka").and_then(|i| i.original.as_ref()) else {
+        return;
+    };
+    if original.kind != "github"
+        || original.owner.as_deref() != Some("bitemyapp")
+        || original.repo.as_deref() != Some("sekka")
+        || original.rev.is_some()
+        || !matches!(original.reference.as_deref(), None | Some("main" | "nightly"))
+    {
+        return;
+    }
+    let release = github("bitemyapp", "sekka", "nightly");
+    let rev = release.as_ref().ok().and_then(|r| r.rev.clone());
+    newest.insert("sekka".to_owned(), release);
+    let (Some(rev), Some(mine)) = (rev, inputs.iter().find(|i| i.name == "nixpkgs")) else {
+        return;
+    };
+    let theirs = get(&format!("https://raw.githubusercontent.com/bitemyapp/sekka/{rev}/flake.lock"), "text/plain")
+        .and_then(|text| FlakeLock::parse(&text).map_err(|e| e.to_string()))
+        .and_then(|lock| lock.input("nixpkgs").ok_or_else(|| "Sekka's lock file has no nixpkgs".to_owned()));
+    match theirs {
+        Ok(theirs) if theirs.original == mine.original => {
+            if let Some(locked) = theirs.locked {
+                newest.insert("nixpkgs".to_owned(), Ok(Release::of(&locked)));
+            }
+        }
+        Ok(_) => {}
+        Err(e) => {
+            newest.insert("nixpkgs".to_owned(), Err(e));
+        }
+    }
+}
+
 /// The commit a NixOS channel is at now.
 fn channel(channel: &Channel) -> Result<Release, String> {
     let at = channel.published_at().ok_or("it isn't one of the NixOS channels, so Yukimi can't ask it")?;
@@ -374,5 +414,29 @@ mod tests {
         // Pinned to a commit, or from a plain Git server: not asked.
         assert!(ask(&lock.input("a").unwrap()).is_none());
         assert!(ask(&lock.input("b").unwrap()).is_none());
+    }
+
+    /// Asks GitHub; run with `cargo test -- --ignored` when online.
+    #[test]
+    #[ignore]
+    fn sekka_targets_its_nightly_and_that_nixpkgs() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "nixpkgs": "nixpkgs", "sekka": "sekka" } },
+              "nixpkgs": { "locked": { "type": "tarball", "narHash": "sha256-x", "lastModified": 1,
+                             "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1%2Brev-1/1/source.tar.gz" },
+                           "original": { "type": "tarball", "url": "https://flakehub.com/f/NixOS/nixpkgs/0.1" } },
+              "sekka": { "inputs": { "nixpkgs": ["nixpkgs"] },
+                         "locked": { "type": "github", "owner": "bitemyapp", "repo": "sekka", "rev": "1", "narHash": "sha256-y", "lastModified": 1 },
+                         "original": { "type": "github", "owner": "bitemyapp", "repo": "sekka", "ref": "main" } } } }"#,
+        )
+        .unwrap();
+        let inputs = lock.inputs();
+        let mut newest = BTreeMap::new();
+        sekka_targets(&inputs, &mut newest);
+        let sekka = newest["sekka"].as_ref().unwrap();
+        assert_eq!(sekka.rev.as_deref().map(str::len), Some(40));
+        let nixpkgs = newest["nixpkgs"].as_ref().unwrap();
+        assert!(nixpkgs.nar_hash.is_some(), "{nixpkgs:?}");
     }
 }

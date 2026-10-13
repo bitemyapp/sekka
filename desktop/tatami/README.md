@@ -19,7 +19,7 @@ It also works independently in any NixOS flake through Sekka's Tatami module.
 {
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   inputs.sekka = {
-    url = "github:bitemyapp/sekka/main";
+    url = "github:bitemyapp/sekka/nightly";
     inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = { nixpkgs, sekka, ... }: {

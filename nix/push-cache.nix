@@ -1,7 +1,8 @@
 # `nix run .#push-cache [FLAKE]`: uploads Sekka's own packages to the public
 # binary cache at https://cache.sekka.computer (Cloudflare R2 bucket
 # sekka-cache), leaving the rest of their closures to cache.nixos.org.
-# DEVELOPERS.md describes the key and credentials it expects.
+# DEVELOPERS.md describes the key and credentials it expects. The nightly
+# workflow runs it for every revision it publishes.
 { pkgs }:
 pkgs.writeShellApplication {
   name = "sekka-push-cache";
@@ -18,7 +19,13 @@ pkgs.writeShellApplication {
       echo "sekka-push-cache: signing key $key is missing" >&2
       exit 1
     fi
-    s3() { aws --profile "$profile" --region auto --endpoint-url "$endpoint" s3 "$@"; }
+    # The nightly workflow gives its token in the environment; by hand, it
+    # is the AWS profile.
+    if [[ -n ''${AWS_ACCESS_KEY_ID:-} ]]; then
+      s3() { aws --region auto --endpoint-url "$endpoint" s3 "$@"; }
+    else
+      s3() { aws --profile "$profile" --region auto --endpoint-url "$endpoint" s3 "$@"; }
+    fi
 
     # Each of these is evaluated with Nixpkgs' default configuration, which
     # refuses unfree packages, so nothing unfree is published.

@@ -20,6 +20,33 @@ BIN = Path(sys.argv.pop(1)).resolve()
 REPO = Path(__file__).resolve().parents[1]
 PYTHON = Path(sys.executable).resolve()
 
+FLAKEHUB = {'type': 'tarball', 'url': 'https://flakehub.com/f/NixOS/nixpkgs/0.1'}
+
+
+def pinned(rev, count):
+    return {'lastModified': 1790000000 + count, 'narHash': 'sha256-' + rev[:8], 'rev': rev, 'type': 'tarball',
+            'url': f'https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.{count}%2Brev-{rev}/0199/source.tar.gz'}
+
+
+# The system's lock before updating, a legacy installation's.
+ORIGINAL = json.dumps({'nodes': {'nixpkgs': {'locked': pinned('1' * 40, 1), 'original': FLAKEHUB},
+                                 'root': {'inputs': {'nixpkgs': 'nixpkgs'}}},
+                       'root': 'root', 'version': 7}, indent=2) + '\n'
+# What `nix flake update sekka` makes of it: the newest nightly Sekka.
+UPDATED = json.dumps({'nodes': {'nixpkgs': {'locked': pinned('1' * 40, 1), 'original': FLAKEHUB},
+                                'sekka': {'inputs': {'nixpkgs': ['nixpkgs']},
+                                          'locked': {'lastModified': 1791999999, 'narHash': 'sha256-s', 'owner': 'bitemyapp',
+                                                     'repo': 'sekka', 'rev': 'a' * 40, 'type': 'github'},
+                                          'original': {'owner': 'bitemyapp', 'ref': 'nightly', 'repo': 'sekka', 'type': 'github'}},
+                                'root': {'inputs': {'nixpkgs': 'nixpkgs', 'sekka': 'sekka'}}},
+                      'root': 'root', 'version': 7}, indent=2) + '\n'
+# That Sekka's own lock: the Nixpkgs its packages were built and cached with.
+SEKKA = json.dumps({'nodes': {'nixpkgs': {'locked': pinned('c' * 40, 2), 'original': FLAKEHUB},
+                              'root': {'inputs': {'nixpkgs': 'nixpkgs'}}},
+                    'root': 'root', 'version': 7})
+CACHES = {'substituters': ['https://cache.nixos.org/', 'https://cache.numtide.com?priority=55'],
+          'keys': ['cache.nixos.org-1:x=', 'niks3.numtide.com-1:y=']}
+
 FAKE = r'''
 import json, os, pathlib, signal, subprocess, sys, time
 p = pathlib.Path
@@ -29,8 +56,12 @@ with open('/state/commands', 'a') as out: out.write(json.dumps([name] + a) + '\n
 if name == 'nix':
     if 'update' in a:
         assert 'sekka' in a, a
+        # Nixpkgs comes from Sekka's own lock, not its newest release.
+        assert 'nixpkgs' not in a, a
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
-        p('/etc/nixos/flake.lock').write_text('updated lock\n')
+        p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
+    elif 'eval' in a and '--expr' in a and 'fetchTree' in a[-1]: print(p('/state/sekka.lock').read_text(), end='')
+    elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
         p('/state/building').touch()
@@ -93,7 +124,10 @@ class Update(unittest.TestCase):
         self.config = self.root / 'etc/nixos'
         self.old = (REPO / 'apps/yukimi/crates/yukimi-config/tests/legacy-flake.nix').read_text()
         (self.config / 'flake.nix').write_text(self.old)
-        (self.config / 'flake.lock').write_text('original lock\n')
+        (self.config / 'flake.lock').write_text(ORIGINAL)
+        (self.root / 'state/updated.lock').write_text(UPDATED)
+        (self.root / 'state/sekka.lock').write_text(SEKKA)
+        (self.root / 'state/caches.json').write_text(json.dumps(CACHES))
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
         for name in ['nix', 'nix-env', 'systemd-run', 'systemctl']:
@@ -137,7 +171,7 @@ class Update(unittest.TestCase):
 
     def unchanged(self):
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
-        self.assertEqual((self.config / 'flake.lock').read_text(), 'original lock\n')
+        self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
         self.assertFalse((self.root / 'state/activation').exists())
 
     def test_preview_and_invalid_args_do_not_mutate(self):
@@ -190,7 +224,7 @@ class Update(unittest.TestCase):
         self.assertEqual(json.loads((self.root / 'state/activation').read_text())[-1], 'switch')
         self.run_cmd('/bin/yukimi-helper', 'rollback', '1')
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
-        self.assertEqual((self.config / 'flake.lock').read_text(), 'original lock\n')
+        self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
 
 
     def compatible_live_system(self):
@@ -210,6 +244,41 @@ class Update(unittest.TestCase):
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
         self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
         self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
+
+    def test_sekka_brings_its_nixpkgs_and_the_new_systems_caches(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications', '--mode', 'auto')
+        self.assertIn('"github:bitemyapp/sekka/nightly"', (self.config / 'flake.nix').read_text())
+        lock = json.loads((self.config / 'flake.lock').read_text())
+        self.assertEqual(lock['nodes']['nixpkgs']['locked'], json.loads(SEKKA)['nodes']['nixpkgs']['locked'])
+        self.assertEqual(lock['nodes']['nixpkgs']['original'], FLAKEHUB)
+        self.assertEqual(lock['nodes']['sekka'], json.loads(UPDATED)['nodes']['sekka'])
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        build = next(command for command in commands if command[0] == 'nix' and 'build' in command)
+        option = lambda name: build[build.index(name) + 1]
+        self.assertEqual(option('extra-substituters').split(), CACHES['substituters'])
+        self.assertEqual(option('extra-trusted-public-keys').split(), CACHES['keys'])
+
+    def test_a_newer_sekka_is_not_replaced_by_an_older_nightly(self):
+        self.compatible_live_system()
+        newer = json.loads(UPDATED)
+        newer['nodes']['sekka']['locked'].update(lastModified=1799999999, rev='b' * 40)
+        newer['nodes']['sekka']['original']['ref'] = 'main'
+        (self.config / 'flake.lock').write_text(json.dumps(newer, indent=2) + '\n')
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--mode', 'auto')
+        lock = json.loads((self.config / 'flake.lock').read_text())
+        self.assertEqual(lock['nodes']['sekka']['locked'], newer['nodes']['sekka']['locked'])
+
+    def test_a_nixpkgs_of_ones_own_is_kept(self):
+        self.compatible_live_system()
+        own = {'type': 'github', 'owner': 'NixOS', 'repo': 'nixpkgs', 'ref': 'nixos-25.05'}
+        for name in ['updated.lock']:
+            text = json.loads((self.root / 'state' / name).read_text())
+            text['nodes']['nixpkgs']['original'] = own
+            (self.root / 'state' / name).write_text(json.dumps(text, indent=2) + '\n')
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--mode', 'auto')
+        lock = json.loads((self.config / 'flake.lock').read_text())
+        self.assertEqual(lock['nodes']['nixpkgs']['locked'], pinned('1' * 40, 1))
 
     def test_kernel_update_prepares_once_then_reboot_clears_request(self):
         self.compatible_live_system()
