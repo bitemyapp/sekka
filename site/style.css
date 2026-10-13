@@ -147,6 +147,18 @@ kbd {
 .tag-warning { color: var(--warning); }
 .notice { color: var(--text); margin-top: 0.5em; }
 
+/* Nightly builds, listed by the download page's worker: the newest is
+   focused, as the active window is. */
+.tag-accent { color: var(--accent); }
+.builds { list-style: none; margin: 1em 0 0; padding: 0; display: grid; gap: 0.75rem; }
+.build { border: var(--border-width) solid var(--border-inactive); padding: 0.75rem 1rem; min-width: 0; }
+.build p { margin: 0.25em 0; max-width: none; overflow-wrap: anywhere; }
+.build-age, .build-what, .build-extra { color: var(--text-secondary); }
+.build-extra { font-size: 0.9em; margin-left: 0.5em; }
+.build.newest { border: 2px solid var(--accent); background: var(--surface-raised); padding: 1rem 1.25rem; }
+.build.newest .build-when strong { color: var(--text-strong); font-size: 1.15em; }
+.build.newest .build-iso { font-weight: 800; font-size: 1.05em; }
+
 /* Screenshots: never upscaled, always linked to the original. */
 .shot { margin: 0; min-width: 0; }
 .shot a { display: block; }

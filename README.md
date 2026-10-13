@@ -87,7 +87,7 @@ Plasma is the default live desktop and the installer's preselected choice. GNOME
 
 ## Trying Sekka
 
-**There is no release yet, only a nightly ISO.** Each night, if `main` has changed and Sekka's automated checks pass, virtual-machine tests included, a new ISO for x86_64 PCs replaces the last one on [sekka.computer/download](https://sekka.computer/download/), with its checksum and the source revision it came from. A nightly may not have been tried on hardware before it is published. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
+**There is no release yet, only a nightly ISO.** Each night, if `main` has changed and Sekka's automated checks pass, virtual-machine tests included, a new ISO for x86_64 PCs joins the last seven on [sekka.computer/download](https://sekka.computer/download/), each with its checksum and the source revision it came from. A nightly may not have been tried on hardware before it is published. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
 
 To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
 

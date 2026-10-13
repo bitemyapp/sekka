@@ -37,9 +37,7 @@ pub const NAV: [(&str, &str); 6] = [
 ];
 
 pub const ORIGIN: &str = "https://sekka.computer";
-pub const REPO: &str = "https://github.com/bitemyapp/sekka";
-/// Nightly ISOs: the Cloudflare R2 bucket sekka-downloads (DEVELOPERS.md).
-pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
+pub use crate::shared::{NIGHTLY, REPO};
 
 pub fn shell(site: &Site, page: &Page) -> Result<String> {
     let mut nav = String::new();

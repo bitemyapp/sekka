@@ -1,11 +1,14 @@
 //! Builds sekka.computer: static HTML and CSS from the brand tokens, logos
-//! and screenshots in this repository. No JavaScript is emitted.
+//! and screenshots in this repository. Browsers get no JavaScript. The one
+//! piece of server-side code, the download worker (site/download-worker),
+//! is built apart and runs for /download/ alone (_routes.json).
 
 mod brand;
 mod color;
 mod glyphs;
 mod html;
 mod pages;
+mod shared;
 mod tokens;
 
 use anyhow::{Context, Result, bail};
@@ -287,15 +290,6 @@ fn swatch_css(t: &tokens::Tokens) -> Result<String> {
     Ok(s)
 }
 
-const HEADERS: &str = "/*
-  Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
-  Referrer-Policy: no-referrer
-  X-Content-Type-Options: nosniff
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
-  Cross-Origin-Opener-Policy: same-origin
-  Strict-Transport-Security: max-age=31536000
-";
-
 /// Cloudflare Pages reads at most this many rules from _headers.
 const HEADER_RULES: usize = 100;
 
@@ -398,7 +392,10 @@ fn main() -> Result<()> {
 
     // Hashed files never change under their names. Everything else, pages
     // included, keeps Pages' default and is revalidated on every visit.
-    let mut headers = String::from(HEADERS);
+    let mut headers = String::from("/*\n");
+    for (name, value) in shared::HEADERS {
+        writeln!(headers, "  {name}: {value}")?;
+    }
     for url in site.assets.values() {
         writeln!(
             headers,
@@ -409,6 +406,12 @@ fn main() -> Result<()> {
         bail!("_headers would have more than {HEADER_RULES} rules");
     }
     write(out, "_headers", headers)?;
+    write(
+        out,
+        "_routes.json",
+        r#"{"version": 1, "include": ["/download", "/download/*"], "exclude": []}
+"#,
+    )?;
 
     // Pages link the hashed app icon; this keeps the usual address working.
     copy(

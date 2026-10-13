@@ -403,27 +403,34 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 gh workflow run nightly.yml --ref main
 ```
 
-A job on a GitHub-hosted runner first compares `main`'s commit with the
-`revision` in <https://downloads.sekka.computer/nightly/manifest.json>. If they
-match, nothing else runs and the builder is not touched. Otherwise the builder
-runs `nix flake check`, builds `.#iso`, and `nix run .#publish-nightly`
-uploads it to the R2 bucket `sekka-downloads`, replacing the last nightly:
+A job on a GitHub-hosted runner first compares `main`'s commit with the newest
+build's `revision` in <https://downloads.sekka.computer/nightly/builds.json>. If
+they match, nothing else runs and the builder is not touched. Otherwise the
+builder runs `nix flake check`, builds `.#iso`, and `nix run .#publish-nightly`
+uploads it to the R2 bucket `sekka-downloads` as a new build, in a folder of
+its own that never changes, `nightly/builds/DATE-REVISION/`:
 
-- `nightly/sekka-nightly-x86_64-linux.iso`
-- `nightly/SHA256SUMS`
-- `nightly/flake.lock`
-- `nightly/manifest.json`: revision, commit and build times, size and
-  SHA-256, uploaded last. A failed check, build or upload publishes no manifest
-  for the new revision, so the next night tries again.
+- `sekka-nightly-DATE-REVISION-x86_64-linux.iso`
+- `SHA256SUMS`
+- `flake.lock`
+- `manifest.json`: revision, commit and upload times, size and SHA-256
 
-Only the latest nightly is kept, so storage stays near R2's free 10 GB.
+Then it writes `nightly/builds.json`, which lists the last seven builds, newest
+first, and removes everything else under `nightly/`, older builds and anything
+a failed run left. A failed check, build or upload leaves the list as it was,
+so the next night tries the same revision again. Seven builds of about 6 GB
+cost a few dollars a year in R2 storage beyond its free 10 GB.
+
 `downloads.sekka.computer` is the bucket's custom domain, served through
-Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so the
-ISO always comes from R2, whose egress is free. The small files are marked
-`no-cache`, and the ISO may be held for five minutes. A download that straddles
-an upload can pair the new ISO with the old checksum; the download page says to
-fetch both again. sekka.computer/download/ links to these fixed names, so it
-needs no new deployment for each nightly.
+Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
+always come from R2, whose egress is free. A build's files are marked
+immutable, and `builds.json` is marked `no-cache`.
+
+sekka.computer/download/ lists the builds through the download worker (see
+Website): it reads `builds.json` through Cloudflare's cache, which keeps it for
+five minutes, so a new build appears within five minutes of its upload without
+a new deployment, and R2 sees at most one request for the list per Cloudflare
+data centre in that time.
 
 The upload uses an R2 API token with Object Read & Write on `sekka-downloads`
 alone, kept as the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` of the
@@ -526,7 +533,7 @@ supervisor lets a running job finish first. To stop taking jobs,
 ## Website
 
 `site/` is a separate Cargo workspace whose program writes sekka.computer:
-static HTML and CSS with no JavaScript, built from `docs/brand/tokens.json`,
+static HTML and CSS, with no JavaScript for browsers, built from `docs/brand/tokens.json`,
 the brand SVGs, and screenshots copied byte for byte. Each caption repeats the
 provenance recorded in `docs/screenshots.md`. The design page's contrast
 ratios are computed from the tokens when the site is built. Kanji are outlined
@@ -542,22 +549,60 @@ Pages keep Pages' default and are revalidated on every visit, so a changed
 file arrives under a new URL and a deployment needs no cache purge. The build
 fails if a page or the stylesheet links to a file it didn't write.
 
+The one piece of server-side code is the download worker,
+`site/download-worker`, a Cargo workspace of its own in Rust. Pages runs it
+for `/download/` alone (`_routes.json`); every other page is a plain static
+file. It fetches the static page, puts the list of nightly builds in its place
+for them, and gives the response the headers `_headers` gives static files,
+which Pages leaves off a worker's responses. The list comes from
+`builds.json` through Cloudflare's cache, kept for `BUILDS_TTL` seconds
+(`site/src/shared.rs`, which the generator and the worker share). Before the
+first nightly the page says there is none; if the list cannot be had, it
+keeps its fallback, a link to `builds.json`. The rendering is plain Rust,
+tested natively when the site is built; only the request handler is built for
+Wasm.
+
+`nix/site.nix` builds the worker with workers-rs' `worker-build` 0.8.5, the
+version that pairs with the `worker` crate, and gives it Nixpkgs' wasm-bindgen
+(exactly the version in the worker's `Cargo.lock`, 0.2.127) and esbuild rather
+than letting it download its own. Two settings matter. `wasm-opt` is off:
+`worker-build` runs it with `--all-features`, and Binaryen then uses Wasm
+features Cloudflare's runtime refuses. And `pages-shim.js` replaces
+`worker-build`'s loader: Pages' advanced mode calls `fetch` on a plain object,
+where `worker-build` exports an entrypoint class. The result is
+`_worker.js/index.js` and `_worker.js/index.wasm` in the site.
+
 ```sh
 nix build .#site --out-link result-site
 nix run --inputs-from . nixpkgs#static-web-server -- --port 8787 --root result-site --page404 result-site/404.html
+```
+
+A static server shows the download page's fallback. To run the worker as
+Pages does, in Cloudflare's runtime, with any local server standing in for
+downloads.sekka.computer (it needs no Cloudflare account):
+
+```sh
+cp -rL result-site /tmp/site && chmod -R u+w /tmp/site
+nix run --inputs-from . nixpkgs#wrangler -- pages dev /tmp/site --port 8788 \
+  --binding NIGHTLY_URL=http://127.0.0.1:8799/nightly
 ```
 
 The site is the Cloudflare Pages project `sekka` (`sekka-esx.pages.dev`), with
 the `sekka.computer` apex as its custom domain. Nothing deploys it
 automatically. To publish a new version, build from a clean commit that is on
 GitHub's `main` (the pages link the revision they were built from), then
-upload `result-site` as a new deployment: in the dashboard, Workers & Pages ›
-sekka › Create deployment (a zip of the directory works), or
-`wrangler pages deploy result-site --project-name sekka`. Pages applies
-`_headers` (the content security policy) and serves `404.html`. The pages
-promise no cookies, scripts or analytics, so leave off the Cloudflare features
-that add them: Web Analytics, Rocket Loader, Email Address Obfuscation and Bot
-Fight Mode.
+deploy with Wrangler, logged in once with `wrangler login`:
+
+```sh
+nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-site --project-name sekka --branch main
+```
+
+Only Wrangler uploads the worker's Wasm as a module. The dashboard's upload
+publishes `_worker.js/` as plain files, and the download page then shows its
+fallback. Pages applies `_headers` (the content security policy) to static
+files and serves `404.html`. The pages promise no cookies, and no scripts or
+analytics in the browser, so leave off the Cloudflare features that add them:
+Web Analytics, Rocket Loader, Email Address Obfuscation and Bot Fight Mode.
 
 Everything the site claims comes from this repository's READMEs and docs.
 When a limitation, test or feature changes, change `site/src/pages.rs` with

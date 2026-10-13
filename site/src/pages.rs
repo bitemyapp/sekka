@@ -818,7 +818,7 @@ pub fn status(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Privacy</h2>
     <ul class="facts">
-      <li>This site sets no cookies and runs no scripts or analytics. Cloudflare serves it and sees requests, as any host would.</li>
+      <li>This site sets no cookies and sends no scripts or analytics to your browser. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
       <li>Tatami's weather asks wttr.in and Open-Meteo; wttr.in locates you by IP address unless you set a place in Setup › Weather.</li>
       <li>Genkan's GitHub step is optional. It reads your public SSH keys and sets your Git identity.</li>
       <li>Sekka's own packages download from cache.sekka.computer, on Cloudflare R2. Only free software is published there.</li>
@@ -850,37 +850,30 @@ pub fn download(_site: &Site) -> Result<Page> {
   <div>
     <p class="eyebrow">Download</p>
     <h1>Sekka's nightly ISO.</h1>
-    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO replaces the last one here. It starts a live Plasma session with Genkan, the installer.</p>
+    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO joins the builds below, and the last seven are kept. Each starts a live Plasma session with Genkan, the installer.</p>
     <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Its automated checks run in virtual machines, and it may not have been tried on hardware yet. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
   </div>
 </section>
-<section class="tiles">
-  <article class="win">
-    <h2>Download</h2>
-    <p><a href="{NIGHTLY}/sekka-nightly-x86_64-linux.iso">sekka-nightly-x86_64-linux.iso</a>, for x86_64 PCs with UEFI or legacy BIOS boot.</p>
-    <ul class="facts">
-      <li><a href="{NIGHTLY}/SHA256SUMS">SHA256SUMS</a>, its checksum</li>
-      <li><a href="{NIGHTLY}/manifest.json">manifest.json</a>, the source revision, its size and when it was built</li>
-      <li><a href="{NIGHTLY}/flake.lock">flake.lock</a>, the exact inputs it was built from</li>
-    </ul>
-    <p>The files come from Cloudflare R2, at downloads.sekka.computer.</p>
-  </article>
-  <article class="win">
-    <h2>Check the download</h2>
-    <p>With SHA256SUMS next to the ISO, on Linux:</p>
-    <pre class="code"><code>sha256sum -c SHA256SUMS</code></pre>
-    <p>On macOS, <code>shasum -a 256 -c SHA256SUMS</code>. In Windows PowerShell, compare <code>Get-FileHash sekka-nightly-x86_64-linux.iso</code> with the checksum in the file. If they differ, a new nightly may have arrived between the two downloads: fetch both again.</p>
-  </article>
+<section class="win" aria-labelledby="builds">
+  <h2 id="builds">Builds</h2>
+  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size and upload time) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer.</p>
+  <!--builds--><p>The list of builds can't be shown just now. Every kept build is in <a href="{NIGHTLY}/builds.json">builds.json</a>, with paths under {NIGHTLY}/.</p><!--/builds-->
 </section>
 <section class="tiles">
+  <article class="win">
+    <h2>Check the download</h2>
+    <p>With the build's SHA256SUMS next to its ISO, on Linux:</p>
+    <pre class="code"><code>sha256sum -c SHA256SUMS</code></pre>
+    <p>On macOS, <code>shasum -a 256 -c SHA256SUMS</code>. In Windows PowerShell, compare the output of <code>Get-FileHash</code> on the ISO with the checksum in the file.</p>
+  </article>
   <article class="win">
     <h2>Before you install</h2>
     <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no disk encryption, dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
   </article>
-  <article class="win">
-    <h2>Releases</h2>
-    <p>There is no versioned release yet. Releases will be prereleases on GitHub's <a href="{REPO}/releases">Releases page</a>, with checksums and instructions. GitHub's “Source code” archives are not bootable images.</p>
-  </article>
+</section>
+<section class="win" aria-labelledby="releases">
+  <h2 id="releases">Releases</h2>
+  <p>There is no versioned release yet. Releases will be prereleases on GitHub's <a href="{REPO}/releases">Releases page</a>, with checksums and instructions. GitHub's “Source code” archives are not bootable images.</p>
 </section>
 "#
         ),

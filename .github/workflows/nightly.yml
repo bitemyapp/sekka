@@ -22,12 +22,12 @@ jobs:
     outputs:
       build: ${{ steps.compare.outputs.build }}
     steps:
-      - name: Compare main with the published nightly
+      - name: Compare main with the newest published nightly
         id: compare
         shell: bash
         run: |
           set -euo pipefail
-          published=$(curl -fsS https://downloads.sekka.computer/nightly/manifest.json | jq -r .revision) || published=none
+          published=$(curl -fsS https://downloads.sekka.computer/nightly/builds.json | jq -r ".builds[0].revision // \"none\"") || published=none
           if [[ "$published" == "$GITHUB_SHA" ]]; then
             echo "The nightly ISO of $GITHUB_SHA is already published."
             echo build=false >> "$GITHUB_OUTPUT"
