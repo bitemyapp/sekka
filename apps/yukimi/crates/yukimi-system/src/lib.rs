@@ -27,6 +27,7 @@ pub mod info;
 pub mod log;
 pub mod nix;
 pub mod profile;
+pub mod selection;
 pub mod setup;
 pub mod updates;
 

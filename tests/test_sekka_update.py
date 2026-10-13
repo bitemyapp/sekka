@@ -57,6 +57,11 @@ if name == 'nix':
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
         p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
     elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
+    elif 'eval' in a and any(x.endswith('.config.programs.yukimi.heldPackages') for x in a):
+        here = str(p(sys.executable).resolve().parents[1])
+        gone = '/nix/store/00000000000000000000000000000000-codex-0.160.0'
+        print(json.dumps({'codex': [gone if p('/state/held-missing').exists() else here]}))
+    elif 'hash' in a and 'path' in a: print('sha256-AB+/cd=')
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
         p('/state/building').touch()
@@ -256,6 +261,36 @@ class Update(unittest.TestCase):
         option = lambda name: build[build.index(name) + 1]
         self.assertEqual(option('extra-substituters').split(), CACHES['substituters'])
         self.assertEqual(option('extra-trusted-public-keys').split(), CACHES['keys'])
+
+    def test_held_packages_come_from_the_running_configuration(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--hold', 'codex', '--mode', 'auto')
+        packages = (self.config / 'yukimi.nix').read_text()
+        self.assertIn('"codex" = {', packages)
+        self.assertIn('flake = "path:/var/lib/yukimi/held/generation-1?narHash=sha256-AB%2B%2Fcd%3D";', packages)
+        self.assertIn('host = "legacy-host";', packages)
+        self.assertIn('imports = [ { programs.yukimi.held = held; } ];', packages)
+        self.assertIn('./yukimi.nix', (self.config / 'configuration.nix').read_text())
+        # The configuration the running generation was built from, as it was.
+        held = self.root / 'var/lib/yukimi/held/generation-1'
+        self.assertEqual((held / 'flake.nix').read_text(), self.old)
+        self.assertEqual((held / 'flake.lock').read_text(), ORIGINAL)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        checked = next(i for i, c in enumerate(commands) if any(x.endswith('heldPackages') for x in c))
+        built = next(i for i, c in enumerate(commands) if c[0] == 'nix' and 'build' in c)
+        self.assertLess(checked, built)
+        # Releasing them all writes no holds.
+        self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--hold', '', '--mode', 'auto')
+        self.assertNotIn('held', (self.config / 'yukimi.nix').read_text())
+
+    def test_a_kept_package_must_still_be_on_this_computer(self):
+        self.compatible_live_system()
+        (self.root / 'state/held-missing').touch()
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--hold', 'codex', '--mode', 'auto', ok=False)
+        self.assertIn("codex can't be kept as it is", result.stdout + result.stderr)
+        self.unchanged()
+        self.assertFalse((self.config / 'yukimi.nix').exists())
+        self.assertNotIn('yukimi.nix', (self.config / 'configuration.nix').read_text())
 
     def test_a_nixpkgs_of_ones_own_is_kept(self):
         self.compatible_live_system()

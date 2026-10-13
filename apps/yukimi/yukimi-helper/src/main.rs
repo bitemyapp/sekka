@@ -527,11 +527,15 @@ fn build(setup: &Setup) -> Result<String> {
         }
         return Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned());
     }
+    build_flake(setup, &flake_host(setup)?)
+}
+
+/// The name of this computer's configuration among the flake's: usually
+/// the computer's own; only when it isn't, the flake's only one.
+fn flake_host(setup: &Setup) -> Result<String> {
     if !valid_host(&setup.host) {
         return Err(Failure(format!("Not a configuration name: {:?}", setup.host)));
     }
-    // Usually the configuration is named after the computer; only when it
-    // isn't, ask the flake what it has.
     let mut names = nix();
     names.args(["eval", "--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
     let listed: Vec<String> = serde_json::from_str(&output(names, "Reading the configurations")?)?;
@@ -550,7 +554,7 @@ fn build(setup: &Setup) -> Result<String> {
             }
         }
     };
-    build_flake(setup, &host)
+    Ok(host)
 }
 
 /// Make a built system the current generation and start it (`switch`) or
@@ -658,6 +662,9 @@ struct Change {
     follow: Option<(String, String)>,
     channels: bool,
     sekka: bool,
+    /// Packages to keep at the version the system has, in full: those not
+    /// named are updated. `None` leaves earlier choices as they are.
+    hold: Option<Vec<String>>,
     mode: String,
 }
 
@@ -687,6 +694,7 @@ impl Change {
                     change.unlist_user.push((user.to_owned(), split_list(attrs)));
                 }
                 "--update" => change.update = split_list(value),
+                "--hold" => change.hold = Some(split_list(value)),
                 "--lock" => change.lock = Some(PathBuf::from(value)),
                 "--follow" => {
                     let (input, branch) =
@@ -716,12 +724,18 @@ impl Change {
         if change.applications.is_some() != change.setting.is_some() {
             return Err(Failure("--applications goes with --setting".into()));
         }
+        if let Some(bad) = change.hold.iter().flatten().find(|name| !packages::valid_held_name(name)) {
+            return Err(Failure(format!("Not a package name: {bad:?}")));
+        }
+        if change.hold.is_some() && !change.sekka {
+            return Err(Failure("--hold goes with --sekka".into()));
+        }
         if change.lock.is_some() && change.update.is_empty() {
             return Err(Failure("--lock goes with --update".into()));
         }
         if change.sekka {
             if change.channels || change.follow.is_some() || change.lock.is_some() || change.edits_main() {
-                return Err(Failure("--sekka only goes with --mode and --update".into()));
+                return Err(Failure("--sekka only goes with --mode, --update and --hold".into()));
             }
             if !change.update.iter().any(|i| i == "sekka") {
                 change.update.push("sekka".into());
@@ -754,6 +768,84 @@ impl Change {
 fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
     edit::remove_package(text, path, attr)?
         .ok_or_else(|| Failure(format!("{attr} isn't in {} in the configuration", path.join("."))))
+}
+
+/// Keep exactly `names` at the version the system has: a name held already
+/// keeps its saved configuration; a new one is taken from the running
+/// generation's. The rest are released, and so updated.
+fn hold(setup: &Setup, main: Option<&Path>, file: Option<&Path>, names: &[String]) -> Result<()> {
+    let file = file.ok_or_else(|| Failure("No place for yukimi.nix".into()))?;
+    let mut choices =
+        std::fs::read_to_string(file).ok().map(|text| packages::read(&text)).transpose()?.unwrap_or_default();
+    let source =
+        if names.iter().all(|name| choices.held.contains_key(name)) { None } else { Some(held_source(setup)?) };
+    choices.held = names
+        .iter()
+        .map(|name| {
+            let hold = choices.held.get(name).cloned().or_else(|| source.clone()).expect("a source for new holds");
+            (name.clone(), hold)
+        })
+        .collect();
+    write_file(setup, file, &packages::render(&choices)?)?;
+    if !choices.held.is_empty() {
+        let main = main.ok_or_else(|| {
+            Failure(format!(
+                "Yukimi couldn't tell which file in {} is this computer's configuration",
+                setup.dir.display()
+            ))
+        })?;
+        let configuration = std::fs::read_to_string(main)?;
+        let imported = packages::import_into(&configuration)?;
+        if imported != configuration {
+            write_file(setup, main, &imported)?;
+        }
+    }
+    Ok(())
+}
+
+/// Where packages held now come from: the configuration the running
+/// generation was built from, kept apart from History's copies (which go
+/// with their generations) and pinned by its hash.
+fn held_source(setup: &Setup) -> Result<packages::Hold> {
+    let generation =
+        current_generation().ok_or_else(|| Failure("Yukimi couldn't tell which generation is running".into()))?;
+    let saved = saved(generation);
+    if !saved.is_dir() {
+        return Err(Failure(
+            "The running generation's configuration wasn't kept, so its packages can't be kept either".into(),
+        ));
+    }
+    let dir = Path::new(packages::HELD_DIR).join(format!("generation-{generation}"));
+    if !dir.is_dir() {
+        let partial = dir.with_extension("new");
+        let _ = std::fs::remove_dir_all(&partial);
+        copy_configuration(&saved, &partial)?;
+        std::fs::rename(&partial, &dir)?;
+    }
+    let mut hash = nix();
+    hash.args(["hash", "path", "--sri"]).arg(&dir);
+    let hash = output(hash, "Pinning the configuration packages are kept from")?;
+    let encoded = hash.trim().replace('+', "%2B").replace('/', "%2F").replace('=', "%3D");
+    Ok(packages::Hold { flake: format!("path:{}?narHash={encoded}", dir.display()), host: flake_host(setup)? })
+}
+
+/// Every held package must be the build this computer has, so that keeping
+/// it builds nothing.
+fn check_held(setup: &Setup) -> Result<()> {
+    let host = flake_host(setup)?;
+    let mut eval = nix();
+    eval.args(["eval", "--json", "--apply", "hs: builtins.mapAttrs (n: ps: map (p: p.outPath) ps) hs"]);
+    eval.arg(format!("{}#nixosConfigurations.\"{host}\".config.programs.yukimi.heldPackages", setup.flake()));
+    let held: std::collections::BTreeMap<String, Vec<String>> =
+        serde_json::from_str(&output(eval, "Finding the packages you keep")?)?;
+    for (name, paths) in held {
+        if let Some(missing) = paths.iter().find(|path| !Path::new(path).exists()) {
+            return Err(Failure(format!(
+                "{name} can't be kept as it is: the build this system had ({missing}) isn't on this computer any more"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn change(args: &[String]) -> Result<String> {
@@ -804,6 +896,11 @@ fn change(args: &[String]) -> Result<String> {
     touched.extend(packages_file.clone());
     let backup = Backup::take(&touched);
     let attempt = || -> Result<String> {
+        if let Some(names) = &change.hold {
+            stage(1, "Keeping the packages you chose as they are");
+            hold(&setup, main.as_deref(), packages_file.as_deref(), names)?;
+            stage_done(1);
+        }
         if let Some(text) = &sekka_flake {
             stage(1, "Preparing your Sekka configuration");
             write_file(&setup, &flake_file, text)?;
@@ -887,6 +984,11 @@ fn change(args: &[String]) -> Result<String> {
             c.arg("--update");
             run(c, "Updating the channels")?;
             stage_done(2);
+        }
+        if change.hold.as_ref().is_some_and(|names| !names.is_empty()) {
+            stage(3, "Checking the packages you keep are on this computer");
+            check_held(&setup)?;
+            stage_done(3);
         }
         stage(3, "Evaluating your configuration");
         let system = build(&setup)?;
@@ -1172,9 +1274,14 @@ mod tests {
             "--sekka --follow sekka=main",
             "--sekka --packages htop",
             "--sekka --update sekka --lock /tmp/x",
+            "--hold codex",
+            "--sekka --hold codex;rm",
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
+        let held = Change::parse(&args("--sekka --hold codex,python3.13-requests --mode auto")).unwrap();
+        assert_eq!(held.hold, Some(vec!["codex".to_owned(), "python3.13-requests".to_owned()]));
+        assert_eq!(Change::parse(&args("--sekka --mode auto")).unwrap().hold, None);
         let change = Change::parse(&args(
             "--packages htop,git --programs steam --unlist-system vim --unlist-user alice:thunderbird,kdePackages.kate \
              --update nixpkgs --lock /tmp/x.lock --mode boot",

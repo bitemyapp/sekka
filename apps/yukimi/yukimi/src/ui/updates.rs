@@ -57,6 +57,7 @@ fn update(ctx: &Ctx, inputs: Vec<String>, _what: &str) {
                 .into_iter()
                 .filter(|i| !migrating || !["calamares", "tatami", "yukimi"].contains(&i.as_str()))
                 .collect(),
+            hold: None,
         }
     } else {
         Operation::UpdateFlake { inputs }
@@ -98,9 +99,20 @@ fn actions(ctx: &Ctx, movements: Option<&BTreeMap<String, Movement>>) -> gtk::Bo
         let all = gtk::Button::with_label("Update");
         all.add_css_class("pill");
         all.add_css_class("suggested-action");
-        let ctx = ctx.clone();
-        all.connect_clicked(move |_| update(&ctx, newer.clone(), &what));
+        let sekka = !channels && newer.iter().any(|input| input == "sekka");
+        {
+            let (ctx, newer) = (ctx.clone(), newer.clone());
+            all.connect_clicked(move |_| update(&ctx, newer.clone(), &what));
+        }
         buttons.append(&all);
+        if sekka {
+            let choose = gtk::Button::with_label("Choose packages…");
+            choose.add_css_class("pill");
+            choose.set_tooltip_text(Some("See what the update changes, and keep some packages as they are"));
+            let ctx = ctx.clone();
+            choose.connect_clicked(move |_| choose_packages(&ctx, newer.clone()));
+            buttons.append(&choose);
+        }
     }
     let check = gtk::Button::with_label(if movements.is_some() { "Check again" } else { "Check for updates" });
     check.add_css_class("pill");
@@ -116,6 +128,159 @@ fn actions(ctx: &Ctx, movements: Option<&BTreeMap<String, Movement>>) -> gtk::Bo
         buttons.append(&when);
     }
     buttons
+}
+
+/// What a package change looks like in the list.
+fn change_text(change: &yukimi_system::selection::PackageChange) -> String {
+    let (before, after) = (change.before.as_str(), change.after.as_str());
+    match (change.held, before == after) {
+        (true, true) => format!("Kept at {before}; the update builds the same version differently"),
+        (true, false) => format!("Kept at {before}; the update has {after}"),
+        (false, true) if before.is_empty() => "Built differently".to_owned(),
+        (false, true) => format!("{before}, built differently"),
+        (false, false) => format!("{before} → {after}"),
+    }
+}
+
+/// Work out what updating changes, package by package (evaluating the
+/// system before and after; nothing is built), and update with the
+/// packages left unticked kept as they are.
+fn choose_packages(ctx: &Ctx, inputs: Vec<String>) {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 18);
+    content.set_margin_top(6);
+    content.set_margin_bottom(24);
+    content.set_margin_start(24);
+    content.set_margin_end(24);
+    content.append(&super::widgets::wrapping(
+        "These are the packages the update changes. Untick one to keep the version you have now, exactly as it \
+         is: nothing is downloaded or built for it, and it stays until you tick it in a later update. Libraries \
+         and the rest of the system move with the update either way.",
+        &["dim-label"],
+    ));
+    let listed = adw::PreferencesGroup::new();
+    let waiting = super::widgets::pending_row("Working out what the update changes…");
+    listed.add(&waiting);
+    content.append(&listed);
+    let footer = super::widgets::wrapping("", &["dim-label", "caption"]);
+    footer.set_visible(false);
+    content.append(&footer);
+    let go = gtk::Button::with_label("Update");
+    go.add_css_class("pill");
+    go.add_css_class("suggested-action");
+    go.set_halign(gtk::Align::Center);
+    go.set_sensitive(false);
+    content.append(&go);
+
+    let view = adw::ToolbarView::new();
+    view.add_top_bar(&adw::HeaderBar::new());
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .max_content_height(640)
+        .child(&content)
+        .build();
+    view.set_content(Some(&scroll));
+    let dialog = adw::Dialog::builder().title("Choose what to update").content_width(560).child(&view).build();
+
+    let model = ctx.model();
+    let (dir, flake, host, file) =
+        (model.setup.dir.clone(), model.setup.flake(), model.setup.host.clone(), model.setup.packages_file());
+    let scratch = crate::cache_dir().map(|dir| dir.join("preview"));
+    let wanted = inputs.clone();
+    let checks: Rc<RefCell<Vec<(String, gtk::CheckButton)>>> = Rc::default();
+    let kept_quietly: Rc<RefCell<Vec<String>>> = Rc::default();
+    {
+        let (listed, go, footer, checks, kept_quietly) =
+            (listed.clone(), go.clone(), footer.clone(), checks.clone(), kept_quietly.clone());
+        gtk::glib::spawn_future_local(async move {
+            let found = gtk::gio::spawn_blocking(move || {
+                let scratch = scratch.ok_or("There is no cache directory to work in")?;
+                yukimi_system::selection::preview(&dir, &flake, &host, file.as_deref(), &wanted, &scratch)
+            })
+            .await
+            .unwrap_or_else(|_| Err("the comparison stopped unexpectedly".to_owned()));
+            listed.remove(&waiting);
+            let preview = match found {
+                Ok(preview) => preview,
+                Err(e) => {
+                    let row = adw::ActionRow::new();
+                    row.set_title("Yukimi couldn't work out what the update changes");
+                    row.set_subtitle(&gtk::glib::markup_escape_text(&e));
+                    listed.add(&row);
+                    return;
+                }
+            };
+            if preview.changes.is_empty() {
+                let row = adw::ActionRow::new();
+                row.set_title("None of your packages change");
+                row.set_subtitle("The update changes only parts of the system that move with it.");
+                listed.add(&row);
+            }
+            // New versions first; builds of the same version that changed
+            // only because what they are built with did, folded away.
+            let (rebuilt, newer): (Vec<_>, Vec<_>) = preview.changes.iter().partition(|c| c.before == c.after);
+            let row_for = |change: &yukimi_system::selection::PackageChange| {
+                let row = adw::ActionRow::new();
+                row.set_title(&gtk::glib::markup_escape_text(&change.name));
+                row.set_subtitle(&gtk::glib::markup_escape_text(&change_text(change)));
+                let check = gtk::CheckButton::new();
+                check.set_active(!change.held);
+                check.set_valign(gtk::Align::Center);
+                row.add_prefix(&check);
+                row.set_activatable_widget(Some(&check));
+                if change.held {
+                    row.add_suffix(&badge("kept", "category"));
+                }
+                checks.borrow_mut().push((change.name.clone(), check));
+                row
+            };
+            for change in newer {
+                listed.add(&row_for(change));
+            }
+            if !rebuilt.is_empty() {
+                let more = adw::ExpanderRow::new();
+                more.set_title(&format!("{} more with the same version, built differently", rebuilt.len()));
+                more.set_subtitle("What they are built with changed in this update");
+                for change in rebuilt {
+                    more.add_row(&row_for(change));
+                }
+                listed.add(&more);
+            }
+            // Packages kept before that this update doesn't change stay kept.
+            let shown: std::collections::BTreeSet<&str> = preview.changes.iter().map(|c| c.name.as_str()).collect();
+            *kept_quietly.borrow_mut() =
+                preview.held.iter().filter(|name| !shown.contains(name.as_str())).cloned().collect();
+            let mut notes = Vec::new();
+            if !preview.added.is_empty() {
+                notes.push(format!("adds {}", preview.added.join(", ")));
+            }
+            if !preview.removed.is_empty() {
+                notes.push(format!("removes {}", preview.removed.join(", ")));
+            }
+            if !kept_quietly.borrow().is_empty() {
+                notes.push(format!("keeps {} as you chose before", kept_quietly.borrow().join(", ")));
+            }
+            if !notes.is_empty() {
+                footer.set_label(&format!("The update also {}.", notes.join("; ")));
+                footer.set_visible(true);
+            }
+            go.set_sensitive(true);
+        });
+    }
+    {
+        let (ctx, dialog) = (ctx.clone(), dialog.clone());
+        go.connect_clicked(move |_| {
+            let mut hold: Vec<String> =
+                checks.borrow().iter().filter(|(_, check)| !check.is_active()).map(|(name, _)| name.clone()).collect();
+            hold.extend(kept_quietly.borrow().iter().cloned());
+            dialog.close();
+            ctx.run(Operation::UpdateSekka { inputs: inputs.clone(), hold: Some(hold) });
+        });
+    }
+    dialog.present(Some(ctx.window()));
 }
 
 /// The time, badge and tooltip for one source, given how updating would

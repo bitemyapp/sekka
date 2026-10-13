@@ -357,6 +357,33 @@
           assert uses installer.config;
           assert uses installed;
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
+        # Yukimi's held packages replace entries of NixOS's own system profile:
+        # holding a package at the build it is at must give NixOS's profile,
+        # and holding it at another must change only that.
+        held-packages =
+          let
+            base =
+              (import ./nix/reference-systems.nix {
+                inherit inputs applicationCatalog;
+                desktops = [ "tatami" ];
+              }).systems.tatami;
+            key = p: p.pname or (builtins.parseDrvName p.name).name;
+            firefox = builtins.filter (p: key p == "firefox") base.config.environment.systemPackages;
+            hold =
+              packages:
+              base.extendModules { modules = [ { programs.yukimi.heldPackages.firefox = packages; } ]; };
+            profile = s: builtins.unsafeDiscardStringContext s.config.system.path.drvPath;
+            other = hold [ pkgs.hello ];
+          in
+          assert firefox != [ ];
+          assert profile (hold firefox) == profile base;
+          assert profile other != profile base;
+          pkgs.writeText "held-packages.json" (
+            builtins.toJSON {
+              nixos = profile base;
+              held = profile other;
+            }
+          );
         tatami = self.packages.${system}.tatami;
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;

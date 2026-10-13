@@ -184,6 +184,29 @@ collect garbage below 5 GB free (`installer/genkan/rust/system/store-space.nix`)
 The ordinary GUI action updates Sekka, and with it everything that follows
 it, along with any other source with a newer revision; the CLI updates only
 Sekka. Sources that don't follow Sekka keep their own rows.
+
+**Choose packages** (prototype, branch `selective-updates`) lists what an update
+changes package by package and keeps any unticked package at the version the
+system has. `yukimi_system::selection::preview` evaluates the system's
+`environment.systemPackages` as it is and in a copy of the configuration
+updated as the helper would (holds removed), compares them by name (`pname`,
+else the name without its version), and builds nothing; with warm caches it
+takes about 20 s, and the first comparison after an update fetches the new
+sources again as the user (Nix keeps its downloads per user). The helper's
+`--hold a,b` is the full set to keep. A newly kept name comes from the
+configuration the running generation was built from, copied to
+`/var/lib/yukimi/held/generation-N` and pinned by its NAR hash
+(`path:…?narHash=…`, which `builtins.getFlake` accepts in pure evaluation);
+`yukimi.nix` records it under `programs.yukimi.held`, and before building the
+helper checks every kept build is on this computer. Yukimi's module puts the
+kept packages in place of the current ones in NixOS's own system profile
+(`system.path`), each where it stood, so only the profile changes and nothing
+else is rebuilt; `checks.held-packages` holds that copy of the profile to
+NixOS's. Limits: only `environment.systemPackages` entries can be kept (not
+per-user packages); something else that uses a package (a service, a
+`programs.<name>` module) still gets the new one; held configurations are not
+yet removed when no hold needs them; and the update the helper builds can
+differ from the preview if the nightly moves in between.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS

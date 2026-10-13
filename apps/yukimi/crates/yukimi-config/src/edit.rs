@@ -7,6 +7,8 @@
 //! through `let … in` or `with …;`. Changes are made by replacing the text of
 //! one expression, so everything else in the file is untouched, and the
 //! result must parse cleanly or the change is refused.
+use std::collections::BTreeMap;
+
 use rnix::ast::{self, HasEntry};
 use rnix::{SyntaxKind, TextRange};
 use rowan::ast::AstNode;
@@ -296,6 +298,39 @@ pub fn let_string_list(text: &str, name: &str) -> Result<Option<Vec<String>>> {
         })
         .collect::<Result<Vec<_>>>()
         .map(Some)
+}
+
+/// A `let` binding that is a set of sets of plain strings, such as
+/// `held = { firefox = { flake = "…"; host = "…"; }; };`, or `None` when
+/// there is none.
+pub fn let_string_sets(text: &str, name: &str) -> Result<Option<BTreeMap<String, BTreeMap<String, String>>>> {
+    let root = parse(text)?;
+    let Some(ast::Expr::AttrSet(set)) = module_lets(&root).iter().find_map(|let_in| find_in(let_in, &[name])) else {
+        return Ok(None);
+    };
+    let one_name = |entry: &ast::AttrpathValue| -> Option<String> {
+        let names: Option<Vec<String>> = entry.attrpath()?.attrs().map(|a| attr_name(&a)).collect();
+        match names?.as_slice() {
+            [one] => Some(one.clone()),
+            _ => None,
+        }
+    };
+    let mut sets = BTreeMap::new();
+    for entry in set.attrpath_values() {
+        let (Some(key), Some(ast::Expr::AttrSet(inner))) = (one_name(&entry), entry.value()) else {
+            return Err(Error::NotAString(name.to_owned()));
+        };
+        let mut fields = BTreeMap::new();
+        for field in inner.attrpath_values() {
+            let (Some(field_name), Some(ast::Expr::Str(value))) = (one_name(&field), field.value()) else {
+                return Err(Error::NotAString(format!("{name}.{key}")));
+            };
+            let value = plain_string(&value).ok_or_else(|| Error::NotAString(format!("{name}.{key}.{field_name}")))?;
+            fields.insert(field_name, value);
+        }
+        sets.insert(key, fields);
+    }
+    Ok(Some(sets))
 }
 
 /// One entry of a package list such as `environment.systemPackages`.

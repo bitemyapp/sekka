@@ -43,7 +43,9 @@ pub enum Operation {
     /// Update some of a flake's inputs.
     UpdateFlake { inputs: Vec<String> },
     /// Update the distro, including migration from its predecessor repositories.
-    UpdateSekka { inputs: Vec<String> },
+    /// `hold`, when given, is every package to keep at the version the
+    /// system has; the rest are updated. Without it, earlier choices stay.
+    UpdateSekka { inputs: Vec<String>, hold: Option<Vec<String>> },
     /// Update root's channels.
     UpdateChannels,
     /// Make a flake input follow another branch of its repository, and
@@ -184,11 +186,14 @@ impl Operation {
                 vec![step(Run { command: c, as_root: true })]
             }
             Operation::UpdateFlake { inputs } => update_steps(model, inputs),
-            Operation::UpdateSekka { inputs } => {
+            Operation::UpdateSekka { inputs, hold } => {
                 let mut c = helper();
                 c.args(["change", "--sekka", "--mode", "auto"]);
                 if !inputs.is_empty() {
                     c.args(["--update", &inputs.join(",")]);
+                }
+                if let Some(hold) = hold {
+                    c.args(["--hold", &hold.join(",")]);
                 }
                 vec![step(Run { command: c, as_root: true })]
             }
@@ -367,9 +372,19 @@ mod tests {
         );
         assert_eq!(change.title(), "Installing htop for everyone");
         assert!(Operation::Rollback { generation: 3 }.is_system());
-        let update = Operation::UpdateSekka { inputs: vec![] }.steps(&model).remove(0)().unwrap().unwrap();
+        let update = Operation::UpdateSekka { inputs: vec![], hold: None }.steps(&model).remove(0)().unwrap().unwrap();
         assert!(update.as_root);
         assert_eq!(&args(update)[1..], ["change", "--sekka", "--mode", "auto"]);
+        let keep =
+            Operation::UpdateSekka { inputs: vec!["sekka".into()], hold: Some(vec!["codex".into(), "zed".into()]) };
+        let keep = keep.steps(&model).remove(0)().unwrap().unwrap();
+        assert_eq!(
+            &args(keep)[1..],
+            ["change", "--sekka", "--mode", "auto", "--update", "sekka", "--hold", "codex,zed"]
+        );
+        let release =
+            Operation::UpdateSekka { inputs: vec![], hold: Some(vec![]) }.steps(&model).remove(0)().unwrap().unwrap();
+        assert_eq!(&args(release)[1..], ["change", "--sekka", "--mode", "auto", "--hold", ""]);
         let try_it = try_command("nixpkgs", "cowsay", "cowsay", false);
         assert_eq!(try_it, ["env", "nix", "shell", "nixpkgs#cowsay", "--command", "cowsay"]);
     }
