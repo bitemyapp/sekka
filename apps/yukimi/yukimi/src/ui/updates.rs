@@ -435,13 +435,18 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
                 banner.set_revealed(true);
                 content.append(&banner);
             } else if failures.is_empty() && movements.values().all(|m| *m == Movement::Current) {
-                let done = adw::StatusPage::builder()
-                    .icon_name("emblem-ok-symbolic")
+                // A row like the update status above it: a StatusPage scrolls
+                // inside itself, which hides its text at this size.
+                let done = adw::ActionRow::builder()
                     .title("No new updates available")
-                    .description("Your sources are current. The update status above shows whether anything still needs to be applied.")
+                    .subtitle("Your sources are current. The update status above shows whether anything still needs to be applied.")
                     .build();
-                done.add_css_class("compact");
-                content.append(&done);
+                let tick = gtk::Image::from_icon_name("emblem-ok-symbolic");
+                tick.add_css_class("success");
+                done.add_prefix(&tick);
+                let group = adw::PreferencesGroup::new();
+                group.add(&done);
+                content.append(&group);
             }
         }
 
