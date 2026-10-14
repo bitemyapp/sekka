@@ -420,6 +420,29 @@ a non-zero `DISC-GRAN` in `lsblk --discard` for the opened mapping and a
 successful `fstrim -v /`; check that the virtual target disk itself advertises
 discard first, or the result proves nothing.
 
+## System tuning and responsiveness
+
+`calamares.tuning.enable` (on by default) applies
+`installer/genkan/rust/system/tuning.nix`. That covers CachyOS-inspired kernel,
+memory, I/O and ananicy settings, plus Ubuntu's lowlatency boot options and
+mq-deadline for NVMe. Sekka also has its own ananicy rules: shells run at
+nice 0 and compilers at nice 3. [docs/tuning.md](docs/tuning.md) lists each
+setting and why.
+
+```sh
+nix build .#checks.x86_64-linux.tuning --no-update-lock-file
+tests/responsiveness/run.sh measure LABEL
+tests/responsiveness/run.sh compare BEFORE AFTER
+```
+
+The VM check boots the installed kernel with an emulated NVMe disk. It checks
+the boot options, the preemption mode, both disk schedulers, and the priorities
+of a terminal, its shell, and a compiler. The responsiveness harness measures a
+real machine's live session under build load for about 15 minutes.
+[docs/responsiveness.md](docs/responsiveness.md) describes it and records
+ganymede's results. Per-application time slices and sched-ext schedulers are
+held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
+
 ## Releases
 
 `.github/workflows/release.yml` builds and publishes an ISO. Its only trigger

@@ -358,6 +358,7 @@
           assert uses installed;
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
         tatami = self.packages.${system}.tatami;
+        tuning = import ./nix/tuning-test.nix { inherit pkgs; };
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;

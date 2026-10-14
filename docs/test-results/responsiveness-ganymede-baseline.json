@@ -1,0 +1,495 @@
+{
+  "label": "baseline",
+  "meta": "label: baseline\ndate: 2026-10-13T18:39:35-05:00\nrevision: c90e9a2260ebb69e20eaa7c871bab2590a16cff9\nkernel: 7.2.9\ncmdline: initrd=\\EFI\\nixos\\bgsg8ag6kxf39cqkzwd7lxvrazd8mvpy-initrd-linux-7.2.9-initrd.efi init=/nix/store/3fdz641q7yqisgfgvjpadmacp15y0sjy-nixos-system-ganymede-26.11.20261011.7fd4004/init zswap.enabled=1 zswap.compressor=zstd zswap.max_pool_percent=25 zswap.shrinker_enabled=1 nowatchdog root=fstab resume=/dev/disk/by-uuid/b33df2ba-52e6-40ed-8dec-709f9a3471bb loglevel=3 lsm=landlock,yama,bpf\nscheduler nvme0n1: none mq-deadline [kyber] \nac online: 1\nplatform profile: performance\nenergy preference: performance\nuptime s: 25730.99\nframe work iterations: 1537279\nshell nice: -4\nnix-daemon class, nice: IDL   - \n               total        used        free      shared  buff/cache   available\nMem:           31595       11348       15291         199        5695       20247\nSwap:          31743        8518       23225\n",
+  "scenarios": {
+    "idle": {
+      "load_s": 60.004656076431274,
+      "load_failed": false,
+      "stall_s": {
+        "cpu_some": 0.473419,
+        "cpu_full": 0,
+        "io_some": 0.323123,
+        "io_full": 0.289424,
+        "memory_some": 0.00019,
+        "memory_full": 0.000183
+      },
+      "wake": {
+        "samples": 58221,
+        "mean_us": 65.4,
+        "p50_us": 65,
+        "p90_us": 76,
+        "p99_us": 105,
+        "p999_us": 454,
+        "max_us": 9795
+      },
+      "frame": {
+        "frames": 7452,
+        "missed": 2,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 7452,
+          "mean_us": 82.4,
+          "p50_us": 71,
+          "p90_us": 122,
+          "p99_us": 213,
+          "p999_us": 1062,
+          "max_us": 2375
+        },
+        "frame_time": {
+          "samples": 7452,
+          "mean_us": 2480.0,
+          "p50_us": 2632,
+          "p90_us": 2693,
+          "p99_us": 2761,
+          "p999_us": 5981,
+          "max_us": 10766
+        }
+      },
+      "frame_short_slice": {
+        "frames": 7447,
+        "missed": 3,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 7447,
+          "mean_us": 71.4,
+          "p50_us": 62,
+          "p90_us": 95,
+          "p99_us": 182,
+          "p999_us": 281,
+          "max_us": 2268
+        },
+        "frame_time": {
+          "samples": 7447,
+          "mean_us": 2407.8,
+          "p50_us": 2299,
+          "p90_us": 2676,
+          "p99_us": 3746,
+          "p999_us": 7005,
+          "max_us": 15857
+        }
+      },
+      "terminal_frame": null,
+      "exec": {
+        "samples": 248,
+        "mean_us": 2833.9,
+        "p50_us": 2698,
+        "p90_us": 3763,
+        "p99_us": 4112,
+        "p999_us": 6980,
+        "max_us": 6980
+      },
+      "read_4k": {
+        "p50_us": 84.48,
+        "p99_us": 193.536,
+        "p999_us": 659.456,
+        "max_us": 6557.003
+      },
+      "fsync": {
+        "p50_us": 1302.528,
+        "p99_us": 2023.424,
+        "p999_us": 5144.576,
+        "max_us": 5223.947
+      }
+    },
+    "nix-1": {
+      "load_s": 88.89550971984863,
+      "load_failed": false,
+      "stall_s": {
+        "cpu_some": 29.241968,
+        "cpu_full": 0,
+        "io_some": 2.191538,
+        "io_full": 0.863618,
+        "memory_some": 0.000002,
+        "memory_full": 0.000002
+      },
+      "wake": {
+        "samples": 83640,
+        "mean_us": 86.1,
+        "p50_us": 60,
+        "p90_us": 78,
+        "p99_us": 821,
+        "p999_us": 2260,
+        "max_us": 4462
+      },
+      "frame": {
+        "frames": 10912,
+        "missed": 4,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 10912,
+          "mean_us": 108.1,
+          "p50_us": 64,
+          "p90_us": 113,
+          "p99_us": 995,
+          "p999_us": 2356,
+          "max_us": 3923
+        },
+        "frame_time": {
+          "samples": 10912,
+          "mean_us": 2584.1,
+          "p50_us": 2635,
+          "p90_us": 2692,
+          "p99_us": 4243,
+          "p999_us": 6522,
+          "max_us": 10635
+        }
+      },
+      "frame_short_slice": {
+        "frames": 10920,
+        "missed": 2,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 10920,
+          "mean_us": 83.1,
+          "p50_us": 68,
+          "p90_us": 91,
+          "p99_us": 592,
+          "p999_us": 1021,
+          "max_us": 3638
+        },
+        "frame_time": {
+          "samples": 10920,
+          "mean_us": 2673.6,
+          "p50_us": 2656,
+          "p90_us": 2818,
+          "p99_us": 4680,
+          "p999_us": 6711,
+          "max_us": 8507
+        }
+      },
+      "terminal_frame": null,
+      "exec": {
+        "samples": 364,
+        "mean_us": 3233.7,
+        "p50_us": 2677,
+        "p90_us": 5192,
+        "p99_us": 7467,
+        "p999_us": 13825,
+        "max_us": 13825
+      },
+      "read_4k": {
+        "p50_us": 112.128,
+        "p99_us": 2637.824,
+        "p999_us": 11075.584,
+        "max_us": 166961.868
+      },
+      "fsync": {
+        "p50_us": 2670.592,
+        "p99_us": 67633.152,
+        "p999_us": 471859.2,
+        "max_us": 630391.051
+      }
+    },
+    "nix-2": {
+      "load_s": 89.3037691116333,
+      "load_failed": false,
+      "stall_s": {
+        "cpu_some": 27.021962,
+        "cpu_full": 0,
+        "io_some": 5.195797,
+        "io_full": 1.164075,
+        "memory_some": 0.000004,
+        "memory_full": 0.000004
+      },
+      "wake": {
+        "samples": 83976,
+        "mean_us": 87.4,
+        "p50_us": 61,
+        "p90_us": 80,
+        "p99_us": 828,
+        "p999_us": 2375,
+        "max_us": 5131
+      },
+      "frame": {
+        "frames": 10958,
+        "missed": 2,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 10958,
+          "mean_us": 110.3,
+          "p50_us": 64,
+          "p90_us": 119,
+          "p99_us": 1033,
+          "p999_us": 2665,
+          "max_us": 8612
+        },
+        "frame_time": {
+          "samples": 10958,
+          "mean_us": 2502.0,
+          "p50_us": 2629,
+          "p90_us": 2689,
+          "p99_us": 4431,
+          "p999_us": 6372,
+          "max_us": 11576
+        }
+      },
+      "frame_short_slice": {
+        "frames": 10965,
+        "missed": 5,
+        "missed_twice": 0,
+        "wake_late": {
+          "samples": 10965,
+          "mean_us": 82.5,
+          "p50_us": 68,
+          "p90_us": 93,
+          "p99_us": 600,
+          "p999_us": 1039,
+          "max_us": 1555
+        },
+        "frame_time": {
+          "samples": 10965,
+          "mean_us": 2633.3,
+          "p50_us": 2651,
+          "p90_us": 2830,
+          "p99_us": 4685,
+          "p999_us": 6430,
+          "max_us": 10506
+        }
+      },
+      "terminal_frame": null,
+      "exec": {
+        "samples": 366,
+        "mean_us": 3116.2,
+        "p50_us": 2538,
+        "p90_us": 4823,
+        "p99_us": 8023,
+        "p999_us": 9660,
+        "max_us": 9660
+      },
+      "read_4k": {
+        "p50_us": 100.864,
+        "p99_us": 5079.04,
+        "p999_us": 25034.752,
+        "max_us": 131588.379
+      },
+      "fsync": {
+        "p50_us": 2146.304,
+        "p99_us": 270532.608,
+        "p999_us": 734003.2,
+        "max_us": 749227.232
+      }
+    },
+    "terminal-1": {
+      "load_s": 137.29231357574463,
+      "load_failed": false,
+      "stall_s": {
+        "cpu_some": 17.155285,
+        "cpu_full": 0,
+        "io_some": 1.363891,
+        "io_full": 0.713868,
+        "memory_some": 0.000005,
+        "memory_full": 0.000005
+      },
+      "wake": {
+        "samples": 123208,
+        "mean_us": 130.3,
+        "p50_us": 60,
+        "p90_us": 92,
+        "p99_us": 2162,
+        "p999_us": 5284,
+        "max_us": 25401
+      },
+      "frame": {
+        "frames": 16019,
+        "missed": 672,
+        "missed_twice": 31,
+        "wake_late": {
+          "samples": 16019,
+          "mean_us": 304.6,
+          "p50_us": 74,
+          "p90_us": 734,
+          "p99_us": 3826,
+          "p999_us": 7380,
+          "max_us": 25174
+        },
+        "frame_time": {
+          "samples": 16019,
+          "mean_us": 3328.1,
+          "p50_us": 2656,
+          "p90_us": 5584,
+          "p99_us": 12020,
+          "p999_us": 19132,
+          "max_us": 27889
+        }
+      },
+      "frame_short_slice": {
+        "frames": 15607,
+        "missed": 1082,
+        "missed_twice": 31,
+        "wake_late": {
+          "samples": 15607,
+          "mean_us": 209.4,
+          "p50_us": 65,
+          "p90_us": 521,
+          "p99_us": 2526,
+          "p999_us": 4583,
+          "max_us": 7673
+        },
+        "frame_time": {
+          "samples": 15607,
+          "mean_us": 3736.5,
+          "p50_us": 2642,
+          "p90_us": 7457,
+          "p99_us": 13059,
+          "p999_us": 17939,
+          "max_us": 24940
+        }
+      },
+      "terminal_frame": {
+        "frames": 16354,
+        "missed": 107,
+        "missed_twice": 1,
+        "wake_late": {
+          "samples": 16354,
+          "mean_us": 282.8,
+          "p50_us": 70,
+          "p90_us": 846,
+          "p99_us": 2644,
+          "p999_us": 5056,
+          "max_us": 8190
+        },
+        "frame_time": {
+          "samples": 16354,
+          "mean_us": 3021.1,
+          "p50_us": 2640,
+          "p90_us": 4387,
+          "p99_us": 7715,
+          "p999_us": 10630,
+          "max_us": 27536
+        }
+      },
+      "exec": {
+        "samples": 557,
+        "mean_us": 4371.8,
+        "p50_us": 2449,
+        "p90_us": 9997,
+        "p99_us": 15947,
+        "p999_us": 24082,
+        "max_us": 41116
+      },
+      "read_4k": {
+        "p50_us": 100.864,
+        "p99_us": 1843.2,
+        "p999_us": 5865.472,
+        "max_us": 64533.678
+      },
+      "fsync": {
+        "p50_us": 1466.368,
+        "p99_us": 9633.792,
+        "p999_us": 217055.232,
+        "max_us": 483287.41
+      }
+    },
+    "terminal-2": {
+      "load_s": 136.73254799842834,
+      "load_failed": false,
+      "stall_s": {
+        "cpu_some": 16.475946,
+        "cpu_full": 0,
+        "io_some": 2.011528,
+        "io_full": 1.027542,
+        "memory_some": 0.000003,
+        "memory_full": 0.000003
+      },
+      "wake": {
+        "samples": 123060,
+        "mean_us": 126.8,
+        "p50_us": 59,
+        "p90_us": 94,
+        "p99_us": 2132,
+        "p999_us": 5004,
+        "max_us": 16252
+      },
+      "frame": {
+        "frames": 15991,
+        "missed": 648,
+        "missed_twice": 17,
+        "wake_late": {
+          "samples": 15991,
+          "mean_us": 391.2,
+          "p50_us": 75,
+          "p90_us": 1043,
+          "p99_us": 4319,
+          "p999_us": 7707,
+          "max_us": 10817
+        },
+        "frame_time": {
+          "samples": 15991,
+          "mean_us": 3358.2,
+          "p50_us": 2644,
+          "p90_us": 5729,
+          "p99_us": 11787,
+          "p999_us": 16674,
+          "max_us": 24619
+        }
+      },
+      "frame_short_slice": {
+        "frames": 15531,
+        "missed": 1097,
+        "missed_twice": 22,
+        "wake_late": {
+          "samples": 15531,
+          "mean_us": 209.0,
+          "p50_us": 65,
+          "p90_us": 519,
+          "p99_us": 2280,
+          "p999_us": 4244,
+          "max_us": 6597
+        },
+        "frame_time": {
+          "samples": 15531,
+          "mean_us": 3578.2,
+          "p50_us": 2640,
+          "p90_us": 7350,
+          "p99_us": 12079,
+          "p999_us": 17526,
+          "max_us": 26372
+        }
+      },
+      "terminal_frame": {
+        "frames": 16319,
+        "missed": 75,
+        "missed_twice": 1,
+        "wake_late": {
+          "samples": 16319,
+          "mean_us": 247.1,
+          "p50_us": 73,
+          "p90_us": 669,
+          "p99_us": 2518,
+          "p999_us": 4984,
+          "max_us": 8388
+        },
+        "frame_time": {
+          "samples": 16319,
+          "mean_us": 2999.4,
+          "p50_us": 2657,
+          "p90_us": 4544,
+          "p99_us": 7439,
+          "p999_us": 9855,
+          "max_us": 22669
+        }
+      },
+      "exec": {
+        "samples": 555,
+        "mean_us": 4173.2,
+        "p50_us": 2411,
+        "p90_us": 9789,
+        "p99_us": 13461,
+        "p999_us": 16190,
+        "max_us": 16517
+      },
+      "read_4k": {
+        "p50_us": 112.128,
+        "p99_us": 2146.304,
+        "p999_us": 6717.44,
+        "max_us": 67855.051
+      },
+      "fsync": {
+        "p50_us": 2244.608,
+        "p99_us": 15007.744,
+        "p999_us": 304087.04,
+        "max_us": 613973.336
+      }
+    }
+  }
+}
