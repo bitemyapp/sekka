@@ -737,6 +737,16 @@ buffers. On Linux the helper finds `lsblk`, `umount` and `udisksctl` through
 `KAKEHASHI_TOOL_PATH`, set when the Nix package is built, because `pkexec`
 resets `PATH`.
 
+macOS flushes the raw drive with `DKIOCSYNCHRONIZECACHE` before read-back
+verification. Rust's `File::sync_all` uses `F_FULLFSYNC`, a filesystem operation
+that raw disks reject with `ENOTTY` even after all image bytes were written.
+Device flush failures remain fatal and include the failed stage; they are not
+ignored or replaced with a plain `fsync`. Linux and Windows retain their
+existing `File::sync_all` behavior. The opt-in
+`flush_authorized_usb_without_writing` test uses `KAKEHASHI_CHECK_USB` like the
+handle check above: it reproduces `ENOTTY` and flushes the existing device cache
+through the production code, without writing bytes, unmounting or ejecting.
+
 Nightly downloads read `builds.json` from `downloads.sekka.computer/nightly`,
 resume a `.part` file, hash while downloading, and leave a `.sha256` file
 beside the ISO so a later choice of the same file is checked

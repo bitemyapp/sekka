@@ -210,7 +210,7 @@ pub fn execute(
     let mut tail = Aligned::new(TAIL as usize);
     device.file.write_all(tail.slice(TAIL as usize))?;
     device.file.flush()?;
-    device.file.sync_all()?;
+    platform::sync(&device)?;
     platform::drop_cache(&device);
 
     image.seek(SeekFrom::Start(0))?;

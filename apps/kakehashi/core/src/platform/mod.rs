@@ -59,6 +59,18 @@ pub(crate) fn open(drive: &Drive, _cancelled: &dyn Fn() -> bool) -> Result<Devic
     return imp::open(drive);
 }
 
+/// Finish device writes before read-back verification. On macOS a raw disk
+/// needs a storage ioctl, not the filesystem fcntl used by File::sync_all.
+pub(crate) fn sync(device: &Device) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    return imp::sync(&device.file);
+    #[cfg(not(target_os = "macos"))]
+    {
+        use anyhow::Context;
+        device.file.sync_all().context("could not flush the drive before verification")
+    }
+}
+
 /// Forget cached blocks, so reading back reads the drive.
 pub(crate) fn drop_cache(device: &Device) {
     imp::drop_cache(device)
