@@ -670,7 +670,9 @@ supervisor lets a running job finish first. To stop taking jobs,
 `apps/kakehashi/` is its own Cargo workspace of three crates. `core` holds the
 drive rules, image checksums, the nightly list and downloads, and the write
 itself, with one platform module each for Linux, macOS and Windows. `helper`
-is `kakehashi-helper`, the only part that runs with administrator rights.
+is `kakehashi-helper`, the only part that writes a drive. It runs with
+administrator rights on Linux and Windows; on macOS it receives an authorized
+device handle from Apple’s `authopen` while remaining an ordinary user process.
 `app` is the window, built on GPUI through `gpui-kit` with its `gpui-fast`
 feature (gpui-component's widgets, re-exported as `gpui_kit::component`), in
 Sekka's Night and Day colours from `docs/brand/tokens.json`. It replaces
@@ -683,23 +685,46 @@ The window runs as the user. To write, it makes a private temporary directory
 holding `plan.json` (the image, its SHA-256 and the drive as the window saw
 it) and an empty progress file, then starts the helper beside its own
 executable through the system's prompt: `pkexec` on Linux (the setuid wrapper
-in `/run/wrappers/bin` first), `do shell script ... with administrator
-privileges` through `osascript` on macOS, and `ShellExecuteExW` with the
-`runas` verb on Windows. The helper appends one JSON object per line to the
-progress file, which it opens without following links and only while it has a
-single name; the window stops it by creating `PROGRESS.cancel`, which the
-helper checks between 8 MiB chunks.
+in `/run/wrappers/bin` first) and `ShellExecuteExW` with the `runas` verb on
+Windows. On macOS the GUI launches the helper directly; after validating and
+unmounting the selected drive, the helper runs `/usr/libexec/authopen
+-stdoutpipe -o FLAGS /dev/rdiskN`. Apple’s broker requests authorization and
+passes the open descriptor over a private Unix socket. It uses read/write,
+exclusive and nonblocking flags, with no creation or truncation. `authopen`
+rejects `O_NOFOLLOW` with `EINVAL`, so the helper rejects symlinks with
+`symlink_metadata` first and checks the returned raw device identity and size
+before writing. Errors preserve the broker’s diagnostic without assuming
+that every failure means missing privacy permission.
+Cancelling while authorization is pending kills and reaps the broker. The
+helper appends one JSON object per line to the progress file, which it opens
+without following links and only while it has a single name; the window stops
+it by creating `PROGRESS.cancel`, which the helper checks between 8 MiB chunks.
 
 On macOS the GUI first stages the selected image in that private temporary
-directory, on a worker thread. Administrator authorization does not give the
-helper the GUI's file-privacy access to Downloads, Documents or removable
-volumes. Staging uses an independent APFS clone when possible, or a cancellable
-copy across filesystems, and checks its SHA-256 before requesting elevation.
+directory, on a worker thread. Administrator authorization alone does not
+grant macOS file-privacy access. The former AppleScript elevation path lost
+the GUI’s removable-volume consent: the root helper could fail to open the
+raw device with `EPERM` even after both prompts were approved. `authopen`
+has Apple’s entitlement to check removable-volume consent on the responsible
+application. Keeping the helper in the GUI’s process ancestry lets it use
+that consent; `NSRemovableVolumesUsageDescription` explains the request.
+The GUI stays unprivileged and never receives a writable device handle.
+Staging uses an independent APFS clone when possible, or a cancellable copy
+across filesystems, and checks its SHA-256 before requesting device access.
 The plan names the staged image; the original stays where the user put it.
 The worker retains the directory until the helper exits and removes it on
 completion or failure. A copy across filesystems requires space for the image
-on the startup volume. Tests exercise preparation using temporary files only;
-they do not validate macOS privacy prompts or physical USB writing.
+on the startup volume. Tests exercise preparation and descriptor transfer
+using temporary files and private sockets, including rejected/missing
+descriptors, broker failure and cancellation. macOS tests also run the real
+`authopen` against `/dev/null`: they reproduce the rejected flag and verify
+that the production flags return a writable descriptor. No tests write to
+host devices. The opt-in macOS check
+`KAKEHASHI_CHECK_USB=diskN cargo test --release --locked -p kakehashi-core
+inspect_authorized_usb_handle_without_writing -- --ignored --nocapture`
+checks the production device-open function on an explicitly selected USB disk
+and closes the handle without unmounting, writing or ejecting. It requires
+macOS authorization. These checks do not validate physical USB writing.
 
 `kakehashi_core::write::execute` compares the plan's drive with the drive as
 it is now (name, size, vendor, model, serial and bus) and rejects one the
@@ -713,10 +738,29 @@ buffers. On Linux the helper finds `lsblk`, `umount` and `udisksctl` through
 resets `PATH`.
 
 Nightly downloads read `builds.json` from `downloads.sekka.computer/nightly`,
-resume a `.part` file with a range request, hash while downloading, and leave
-a `.sha256` file beside the ISO so a later choice of the same file is checked
+resume a `.part` file, hash while downloading, and leave a `.sha256` file
+beside the ISO so a later choice of the same file is checked
 too. TLS is rustls on Linux and the system's own (`native-tls`) on macOS and
 Windows.
+
+Nightly downloads probe byte-range support, then start two concurrent requests.
+They measure aggregate throughput over three-second windows, with one second
+of settling after each increase, trying 4 and 8 connections before accepting a
+plateau. They continue doubling up to 32 while throughput improves by at least
+10%; two flat windows return to the best measured connection count. Completed
+16 MiB ranges are appended and hashed in order. The outstanding window bounds
+image buffers to 512 MiB, and only a contiguous prefix ever reaches `.part`,
+including after cancellation or a worker failure. Existing partial downloads
+remain compatible. Every range must match the requested offset, length and
+complete object size; the final SHA-256 still gates the rename to `.iso`.
+A server without range support uses a sequential download. Failed or invalid
+ranges are retried twice with cancellable backoff, without committing their
+bytes or making progress jump backwards.
+Range requests have a 30-second deadline, which also bounds waiting for a
+stalled connection when stopping. `KAKEHASHI_DOWNLOAD_TRACE=1` logs concurrency
+changes for profiling; it does not change download behavior. The local HTTP
+fixtures test out-of-order arrivals, cancellation/resume, corrupt and malformed
+responses, sequential fallback and the controller's growth/backoff limits.
 
 ```sh
 nix build .#kakehashi

@@ -52,8 +52,11 @@ pub(crate) fn unmount(drive: &Drive) -> Result<()> {
     imp::unmount(drive)
 }
 
-pub(crate) fn open(drive: &Drive) -> Result<Device> {
-    imp::open(drive)
+pub(crate) fn open(drive: &Drive, _cancelled: &dyn Fn() -> bool) -> Result<Device> {
+    #[cfg(target_os = "macos")]
+    return imp::open(drive, _cancelled);
+    #[cfg(not(target_os = "macos"))]
+    return imp::open(drive);
 }
 
 /// Forget cached blocks, so reading back reads the drive.

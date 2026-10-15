@@ -180,7 +180,7 @@ pub fn execute(
     let len = image.metadata()?.len();
     ensure!(len > 0, "the image is empty");
     platform::unmount(&drive)?;
-    let mut device = platform::open(&drive)?;
+    let mut device = platform::open(&drive, cancelled)?;
     ensure!(device.bytes == drive.bytes, "{} reports {} bytes, not {}", drive.name, device.bytes, drive.bytes);
     // Opened: check once more that it is still the drive that was picked.
     still_there(plan)?;

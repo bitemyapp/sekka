@@ -1,6 +1,7 @@
 //! kakehashi-helper: writes one drive for Kakehashi's window, with the
 //! administrator rights the system's own prompt gave it (pkexec on Linux,
-//! the administrator prompt on macOS, UAC on Windows).
+//! authopen device authorization on macOS, UAC on Windows). On macOS the
+//! helper runs as the user; only Apple’s authopen broker elevates.
 //!
 //! Usage: `kakehashi-helper --plan PLAN.json --progress PROGRESS`, or
 //! `kakehashi-helper --drives` to print the drives as the window sees them

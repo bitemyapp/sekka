@@ -6,8 +6,10 @@ use crate::drive::Drive;
 use anyhow::{Context, Result, ensure};
 use plist::Value;
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::path::Path;
+
+mod authopen;
 
 pub(crate) type Held = ();
 
@@ -150,19 +152,15 @@ pub(crate) fn unmount(drive: &Drive) -> Result<()> {
 
 /// The raw device, locked exclusively and uncached, with its size and
 /// block size.
-pub(crate) fn open(drive: &Drive) -> Result<Device> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
+pub(crate) fn open(drive: &Drive, cancelled: &dyn Fn() -> bool) -> Result<Device> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
     use std::os::unix::io::AsRawFd;
     let path = format!("/dev/r{}", drive.name);
     let before = fs::symlink_metadata(&path)?;
     ensure!(before.file_type().is_char_device(), "{path} is not a raw disk device");
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(libc::O_EXLOCK | libc::O_NOFOLLOW)
-        .open(&path)
-        .with_context(|| format!("could not open {path} exclusively"))?;
-    ensure!(file.metadata()?.rdev() == before.rdev(), "{path} changed while opening it");
+    let file = authopen::open(Path::new(&path), cancelled)?;
+    let after = file.metadata()?;
+    ensure!(after.file_type().is_char_device() && after.rdev() == before.rdev(), "{path} changed while opening it");
     let fd = file.as_raw_fd();
     let (mut block, mut count) = (0u32, 0u64);
     // DKIOCGETBLOCKSIZE and DKIOCGETBLOCKCOUNT.
@@ -182,4 +180,27 @@ pub(crate) fn drop_cache(_device: &Device) {}
 pub(crate) fn eject(drive: &Drive) -> Result<()> {
     run("/usr/sbin/diskutil", &["eject", &format!("/dev/{}", drive.name)])?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Explicit opt-in only: obtain and inspect the real production handle,
+    /// then close it. No unmount, writes, seeks, or ejects are performed.
+    #[test]
+    #[ignore = "requires KAKEHASHI_CHECK_USB naming a USB disk and macOS authorization"]
+    fn inspect_authorized_usb_handle_without_writing() {
+        let name = std::env::var("KAKEHASHI_CHECK_USB").expect("set KAKEHASHI_CHECK_USB to the selected disk name");
+        let drive = drives().unwrap().into_iter().find(|d| d.name == name).expect("selected disk not found");
+        assert_eq!(drive.bus, "USB");
+        assert!(drive.excluded(None, true).is_none(), "selected disk is excluded");
+        let device = open(&drive, &|| false).unwrap();
+        assert_eq!(device.bytes, drive.bytes);
+        assert!(matches!(device.sector, 512 | 4096));
+        eprintln!(
+            "{}: authorized {} bytes, {}-byte sectors; no bytes written",
+            drive.name, device.bytes, device.sector
+        );
+    }
 }

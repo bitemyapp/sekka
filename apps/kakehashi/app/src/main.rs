@@ -3,8 +3,8 @@
 //! downloads the one you pick, or takes an image you have.
 //!
 //! The window runs as you. Writing a drive needs administrator rights, so
-//! one step, kakehashi-helper, runs through the system's own prompt; the
-//! window watches its progress.
+//! the helper obtains access through the system’s own prompt (a device
+//! handle from authopen on macOS); the window watches its progress.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 

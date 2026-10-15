@@ -1006,12 +1006,13 @@ impl Kakehashi {
             Stage::Declined => s = s.child(div().text_sm().child("Permission wasn't given, so nothing was written.")),
             Stage::Running(progress) => match progress {
                 Progress::Preparing => {
-                    s = s.child(
-                        h_flex()
-                            .gap_2()
-                            .child(Spinner::new().small())
-                            .child(div().text_sm().child("Checking the drive and unmounting it…")),
-                    )
+                    s = s.child(h_flex().gap_2().child(Spinner::new().small()).child(div().text_sm().child(
+                        if cfg!(target_os = "macos") {
+                            "Preparing the drive. Allow access in the macOS permission prompt…"
+                        } else {
+                            "Checking the drive and unmounting it…"
+                        },
+                    )))
                 }
                 Progress::Writing { done, total } | Progress::Verifying { done, total } => {
                     let verifying = matches!(progress, Progress::Verifying { .. });

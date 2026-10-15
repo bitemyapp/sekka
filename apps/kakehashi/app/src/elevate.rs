@@ -1,6 +1,6 @@
 //! Starting the helper with the system's own administrator prompt: pkexec
-//! on Linux, the administrator prompt on macOS, UAC on Windows. The window
-//! itself never runs with those rights.
+//! on Linux and UAC on Windows. On macOS the helper runs as the user and
+//! authorizes only the device open with authopen. The window never elevates.
 
 use std::path::{Path, PathBuf};
 
@@ -11,6 +11,7 @@ pub enum Ran {
     /// the write went.
     Exited(i32),
     /// The person dismissed the prompt.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     Declined,
     /// The helper could not be started.
     Failed(String),
@@ -53,35 +54,13 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
     }
 }
 
-/// A single-quoted shell word.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn shell_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
-}
-
-/// `do shell script` running `command` as an administrator.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn applescript(command: &str) -> String {
-    let escaped = command.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("do shell script \"{escaped}\" with administrator privileges")
-}
-
 #[cfg(target_os = "macos")]
 pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
-    let command = [
-        shell_quote(&helper.to_string_lossy()),
-        "--plan".into(),
-        shell_quote(&plan.to_string_lossy()),
-        "--progress".into(),
-        shell_quote(&progress.to_string_lossy()),
-    ]
-    .join(" ");
-    match std::process::Command::new("/usr/bin/osascript").arg("-e").arg(applescript(&command)).output() {
-        Ok(out) if out.status.success() => Ran::Exited(0),
-        // -128 is AppleScript's "User canceled".
-        Ok(out) if String::from_utf8_lossy(&out.stderr).contains("-128") => Ran::Declined,
-        Ok(_) => Ran::Exited(1),
-        Err(e) => Ran::Failed(format!("could not start osascript: {e}")),
+    // Keep the helper in the GUI's process ancestry so macOS can attribute
+    // authopen's removable-volume request to the application the user allowed.
+    match std::process::Command::new(helper).arg("--plan").arg(plan).arg("--progress").arg(progress).status() {
+        Ok(status) => Ran::Exited(status.code().unwrap_or(1)),
+        Err(e) => Ran::Failed(format!("could not start the helper: {e}")),
     }
 }
 
@@ -132,18 +111,4 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 pub fn run(_helper: &Path, _plan: &Path, _progress: &Path) -> Ran {
     Ran::Failed("Kakehashi writes drives on Linux, macOS and Windows".into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn quotes_for_the_shell_and_applescript() {
-        assert_eq!(shell_quote("/tmp/it's here"), r"'/tmp/it'\''s here'");
-        assert_eq!(
-            applescript(r#"'/a "b"' --plan 'c\d'"#),
-            r#"do shell script "'/a \"b\"' --plan 'c\\d'" with administrator privileges"#
-        );
-    }
 }
