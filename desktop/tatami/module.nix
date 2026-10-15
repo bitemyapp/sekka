@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Tatami: the look, behavior and key bindings of Omarchy 4
-# "Quattro" (v4.0.4, https://github.com/basecamp/omarchy, MIT, see ./config/LICENSE)
+# "Quattro" (v4.0.4, https://github.com/omacom/omarchy, MIT, see ./config/LICENSE)
 # for NixOS, as a NixOS module (this flake's nixosModules.default). Omarchy 4's Quickshell desktop shell is replaced by Waybar,
 # Walker/Elephant, Mako, SwayOSD and hyprlock styled after it, and its Bash
 # commands by the Rust `tatami` helper. The configuration lives in
