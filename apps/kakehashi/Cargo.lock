@@ -3651,6 +3651,7 @@ dependencies = [
  "dirs 6.0.0",
  "gpui-kit",
  "kakehashi-core",
+ "libc",
  "serde_json",
  "tempfile",
  "windows 0.62.2",

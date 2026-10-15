@@ -690,6 +690,17 @@ progress file, which it opens without following links and only while it has a
 single name; the window stops it by creating `PROGRESS.cancel`, which the
 helper checks between 8 MiB chunks.
 
+On macOS the GUI first stages the selected image in that private temporary
+directory, on a worker thread. Administrator authorization does not give the
+helper the GUI's file-privacy access to Downloads, Documents or removable
+volumes. Staging uses an independent APFS clone when possible, or a cancellable
+copy across filesystems, and checks its SHA-256 before requesting elevation.
+The plan names the staged image; the original stays where the user put it.
+The worker retains the directory until the helper exits and removes it on
+completion or failure. A copy across filesystems requires space for the image
+on the startup volume. Tests exercise preparation using temporary files only;
+they do not validate macOS privacy prompts or physical USB writing.
+
 `kakehashi_core::write::execute` compares the plan's drive with the drive as
 it is now (name, size, vendor, model, serial and bus) and rejects one the
 rules now exclude, unmounts it, opens it exclusively, checks again, writes in

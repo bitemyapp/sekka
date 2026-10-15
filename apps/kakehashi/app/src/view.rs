@@ -41,6 +41,7 @@ enum Msg {
     Holds { path: PathBuf, drive: Option<String> },
     Fetch { id: String, fetch: Fetch },
     Fetched { id: String, result: Result<PathBuf, String> },
+    Authorizing,
     Job(Progress),
     JobEnded(Ran),
 }
@@ -90,6 +91,7 @@ struct Download {
 }
 
 enum Stage {
+    PreparingImage,
     Authorizing,
     Running(Progress),
     Declined,
@@ -104,7 +106,6 @@ struct Job {
     cancel: PathBuf,
     cancelling: bool,
     ended: bool,
-    _dir: tempfile::TempDir,
 }
 
 pub struct Kakehashi {
@@ -288,6 +289,11 @@ impl Kakehashi {
                     }
                 }
             }
+            Msg::Authorizing => {
+                if let Some(job) = self.job.as_mut() {
+                    job.stage = Stage::Authorizing;
+                }
+            }
             Msg::Job(progress) => {
                 if let Some(job) = self.job.as_mut() {
                     match &progress {
@@ -313,7 +319,7 @@ impl Kakehashi {
                             Ran::Failed(message) => Stage::Running(Progress::Failed { message, touched: false }),
                             Ran::Exited(code) => Stage::Running(Progress::Failed {
                                 message: format!("The helper stopped (code {code}) without saying why."),
-                                touched: !matches!(job.stage, Stage::Authorizing),
+                                touched: !matches!(job.stage, Stage::PreparingImage | Stage::Authorizing),
                             }),
                         };
                     }
@@ -504,12 +510,11 @@ impl Kakehashi {
     fn start_write(&mut self) {
         let (Some(image), Some(drive)) = (&self.image, self.chosen_drive().cloned()) else { return };
         let Some(sha) = image.sha.clone() else { return };
+        let plan = Plan { image: image.path.clone(), sha256: sha, drive: drive.clone() };
         let started = (|| -> anyhow::Result<(tempfile::TempDir, PathBuf, PathBuf)> {
             let dir = tempfile::Builder::new().prefix("kakehashi-").tempdir()?;
             let plan_path = dir.path().join("plan.json");
             let progress = dir.path().join("progress");
-            let plan = Plan { image: image.path.clone(), sha256: sha, drive: drive.clone() };
-            fs::write(&plan_path, serde_json::to_string(&plan)?)?;
             File::create(&progress)?;
             Ok((dir, plan_path, progress))
         })();
@@ -524,15 +529,38 @@ impl Kakehashi {
         self.job = Some(Job {
             drive,
             image: image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
-            stage: Stage::Authorizing,
+            stage: Stage::PreparingImage,
             phase: None,
-            cancel,
+            cancel: cancel.clone(),
             cancelling: false,
             ended: false,
-            _dir: dir,
         });
         let tx = self.tx.clone();
         std::thread::spawn(move || {
+            // The worker owns the staged image until the helper exits, then
+            // removes it on success, cancellation and failure alike.
+            let dir = dir;
+            let prepared = (|| -> anyhow::Result<()> {
+                #[cfg(target_os = "macos")]
+                let plan = Plan {
+                    image: crate::staged_image::prepare(&plan.image, &plan.sha256, dir.path(), &|| cancel.exists())?,
+                    ..plan
+                };
+                if cancel.exists() {
+                    anyhow::bail!(Cancelled);
+                }
+                fs::write(&plan_path, serde_json::to_string(&plan)?)?;
+                Ok(())
+            })();
+            if let Err(e) = prepared {
+                let message = if e.is::<Cancelled>() {
+                    "Stopped before writing; nothing was written.".to_owned()
+                } else {
+                    format!("{e:#}")
+                };
+                let _ = tx.send(Msg::JobEnded(Ran::Failed(message)));
+                return;
+            }
             let helper = match elevate::helper_path() {
                 Ok(helper) => helper,
                 Err(e) => {
@@ -540,6 +568,7 @@ impl Kakehashi {
                     return;
                 }
             };
+            let _ = tx.send(Msg::Authorizing);
             let (p, q) = (plan_path.clone(), progress.clone());
             let runner = std::thread::spawn(move || elevate::run(&helper, &p, &q));
             let mut offset = 0u64;
@@ -553,6 +582,7 @@ impl Kakehashi {
                 std::thread::sleep(REPORT);
             }
             let ran = runner.join().unwrap_or(Ran::Failed("the helper's thread failed".into()));
+            drop(dir);
             let _ = tx.send(Msg::JobEnded(ran));
         });
     }
@@ -957,6 +987,14 @@ impl Kakehashi {
         let mut s = section(&format!("Writing {} to {}", job.image, job.drive.label()), cx);
         let running = !job.ended;
         match &job.stage {
+            Stage::PreparingImage => {
+                s = s.child(
+                    h_flex()
+                        .gap_2()
+                        .child(Spinner::new().small())
+                        .child(div().text_sm().child("Preparing and checking the image…")),
+                )
+            }
             Stage::Authorizing => {
                 s = s.child(
                     h_flex()
@@ -1012,7 +1050,7 @@ impl Kakehashi {
                                 h_flex()
                                     .gap_2()
                                     .child(Tag::danger().child("Not written"))
-                                    .child(div().text_sm().child(message.clone())),
+                                    .child(div().flex_1().min_w_0().text_sm().child(message.clone())),
                             )
                             .when(*touched, |c| {
                                 c.child(div().text_sm().text_color(theme.muted_foreground).child(
