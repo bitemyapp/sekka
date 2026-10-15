@@ -14,18 +14,15 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 // Never create or truncate: opening the drive must not change any bytes.
-const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_EXLOCK | libc::O_NOFOLLOW | libc::O_NONBLOCK;
+// authopen rejects O_NOFOLLOW with EINVAL (even though open(2) accepts it).
+// The caller instead rejects symlinks before opening and verifies that the
+// returned descriptor is the same raw device. /dev is system-controlled.
+const OPEN_FLAGS: i32 = libc::O_RDWR | libc::O_EXLOCK | libc::O_NONBLOCK;
 
 pub(super) fn open(path: &Path, cancelled: &dyn Fn() -> bool) -> Result<File> {
     let mut command = Command::new("/usr/libexec/authopen");
     command.arg("-stdoutpipe").arg("-o").arg(OPEN_FLAGS.to_string()).arg(path);
-    authorized_file(command, cancelled).with_context(|| {
-        format!(
-            "Could not authorize access to {}. Allow Kakehashi access to Removable Volumes in \
-             System Settings → Privacy & Security → Files and Folders, and approve the administrator prompt",
-            path.display()
-        )
-    })
+    authorized_file(command, cancelled).with_context(|| format!("Could not open {}", path.display()))
 }
 
 fn authorized_file(mut command: Command, cancelled: &dyn Fn() -> bool) -> Result<File> {
@@ -63,7 +60,7 @@ fn authorized_file(mut command: Command, cancelled: &dyn Fn() -> bool) -> Result
     }
     ensure!(
         output.status.success(),
-        "macOS authopen did not authorize the device ({}): {}",
+        "macOS authopen failed ({}): {}",
         output.status,
         String::from_utf8_lossy(&output.stderr).trim()
     );
@@ -117,6 +114,28 @@ fn receive_file(socket: &UnixStream) -> Result<File> {
 mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom, Write};
+
+    #[test]
+    fn real_authopen_accepts_device_flags_and_returns_a_writable_handle() {
+        // Exercise the actual macOS broker and the full production receive
+        // path. /dev/null needs no authorization or writes to any storage.
+        let file = open(Path::new("/dev/null"), &|| false).unwrap();
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(file.metadata().unwrap().rdev(), std::fs::metadata("/dev/null").unwrap().rdev());
+        // SAFETY: the file owns a live descriptor.
+        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        assert_eq!(flags & libc::O_ACCMODE, libc::O_RDWR);
+    }
+
+    #[test]
+    fn real_authopen_reproduces_rejected_nofollow_without_permission_advice() {
+        let mut command = Command::new("/usr/libexec/authopen");
+        command.args(["-stdoutpipe", "-o", &(OPEN_FLAGS | libc::O_NOFOLLOW).to_string(), "/dev/null"]);
+        let error = authorized_file(command, &|| false).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("Invalid argument"), "{message}");
+        assert!(!message.contains("authorize"), "{message}");
+    }
 
     fn send_files(socket: &UnixStream, files: &[File]) {
         let mut byte = 0u8;

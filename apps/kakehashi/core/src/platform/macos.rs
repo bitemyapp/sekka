@@ -181,3 +181,26 @@ pub(crate) fn eject(drive: &Drive) -> Result<()> {
     run("/usr/sbin/diskutil", &["eject", &format!("/dev/{}", drive.name)])?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Explicit opt-in only: obtain and inspect the real production handle,
+    /// then close it. No unmount, writes, seeks, or ejects are performed.
+    #[test]
+    #[ignore = "requires KAKEHASHI_CHECK_USB naming a USB disk and macOS authorization"]
+    fn inspect_authorized_usb_handle_without_writing() {
+        let name = std::env::var("KAKEHASHI_CHECK_USB").expect("set KAKEHASHI_CHECK_USB to the selected disk name");
+        let drive = drives().unwrap().into_iter().find(|d| d.name == name).expect("selected disk not found");
+        assert_eq!(drive.bus, "USB");
+        assert!(drive.excluded(None, true).is_none(), "selected disk is excluded");
+        let device = open(&drive, &|| false).unwrap();
+        assert_eq!(device.bytes, drive.bytes);
+        assert!(matches!(device.sector, 512 | 4096));
+        eprintln!(
+            "{}: authorized {} bytes, {}-byte sectors; no bytes written",
+            drive.name, device.bytes, device.sector
+        );
+    }
+}

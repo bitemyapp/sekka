@@ -690,12 +690,15 @@ Windows. On macOS the GUI launches the helper directly; after validating and
 unmounting the selected drive, the helper runs `/usr/libexec/authopen
 -stdoutpipe -o FLAGS /dev/rdiskN`. Apple’s broker requests authorization and
 passes the open descriptor over a private Unix socket. It uses read/write,
-exclusive, no-follow and nonblocking flags, with no creation or truncation.
-The helper checks the returned device identity and size before writing.
+exclusive and nonblocking flags, with no creation or truncation. `authopen`
+rejects `O_NOFOLLOW` with `EINVAL`, so the helper rejects symlinks with
+`symlink_metadata` first and checks the returned raw device identity and size
+before writing. Errors preserve the broker’s diagnostic without assuming
+that every failure means missing privacy permission.
 Cancelling while authorization is pending kills and reaps the broker. The
-helper appends one JSON object per line to the progress file, which it opens without following links and only while it has a
-single name; the window stops it by creating `PROGRESS.cancel`, which the
-helper checks between 8 MiB chunks.
+helper appends one JSON object per line to the progress file, which it opens
+without following links and only while it has a single name; the window stops
+it by creating `PROGRESS.cancel`, which the helper checks between 8 MiB chunks.
 
 On macOS the GUI first stages the selected image in that private temporary
 directory, on a worker thread. Administrator authorization alone does not
@@ -713,8 +716,15 @@ The worker retains the directory until the helper exits and removes it on
 completion or failure. A copy across filesystems requires space for the image
 on the startup volume. Tests exercise preparation and descriptor transfer
 using temporary files and private sockets, including rejected/missing
-descriptors, broker failure and cancellation. They do not validate macOS
-privacy prompts or physical USB writing.
+descriptors, broker failure and cancellation. macOS tests also run the real
+`authopen` against `/dev/null`: they reproduce the rejected flag and verify
+that the production flags return a writable descriptor. No tests write to
+host devices. The opt-in macOS check
+`KAKEHASHI_CHECK_USB=diskN cargo test --release --locked -p kakehashi-core
+inspect_authorized_usb_handle_without_writing -- --ignored --nocapture`
+checks the production device-open function on an explicitly selected USB disk
+and closes the handle without unmounting, writing or ejecting. It requires
+macOS authorization. These checks do not validate physical USB writing.
 
 `kakehashi_core::write::execute` compares the plan's drive with the drive as
 it is now (name, size, vendor, model, serial and bus) and rejects one the
