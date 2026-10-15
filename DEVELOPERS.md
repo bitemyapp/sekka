@@ -86,6 +86,30 @@ When Nixpkgs includes the fix, remove the backport and its negative control afte
 verifying the regression test passes with the new upstream package. A patch
 failure during an input update requires that review; do not just skip the patch.
 
+Hyprland itself carries `nix/patches/hyprland-screenshare-sessions.patch`
+(`nix/overlays/hyprland.nix`), which is proposed upstream as the same commit.
+wlr-screencopy and hyprland-toplevel-export clients, xdg-desktop-portal-hyprland
+among them, ask for one frame at a time, so Hyprland keeps a "managed" session
+per client and target. In 0.56.2 those sessions ended only when their monitor
+disconnected or their window closed, and at any monitor scale other than 1 a
+region share missed the lookup and made a new session for every frame: the
+region was stored in pixels and compared with the client's logical box. Each
+session is walked on every draw call, so an hour of a browser's region share
+left about 144,000 sessions and Hyprland's main thread at 100% until the next
+login. With the patch the requested box identifies a region session; a managed
+session ends when its client disconnects, or after five seconds without a frame
+request and with no frame pending; and a client holds at most 32, losing its
+least recently used. `nix/overlays/default.nix` lists both overlays for the
+flake's package set, `overlays.default` and `modules/hyprland-fixes.nix`.
+`nix build .#checks.x86_64-linux.screenshare-sessions` runs the patched and
+the unpatched Nixpkgs Hyprland in two disposable VMs, each with a headless
+output at scale 2. It counts Hyprland's own session trace lines while a
+screencopy client shares a region, the whole output and a window, holds many
+regions at once, and connects repeatedly. The unpatched compositor must show
+both leaks: that is the negative control. Remove the patch when a Hyprland
+release includes the fix, after this check passes with the new upstream
+package; review any patch failure rather than skipping it.
+
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted
 fields with an earlier rule of the same literal `output`, and of several rules
