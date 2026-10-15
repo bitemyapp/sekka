@@ -228,6 +228,8 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
                 (ChangeKind::Added, "added"),
                 (ChangeKind::Removed, "removed"),
                 (ChangeKind::Downgraded, "downgraded"),
+                (ChangeKind::Changed, "changed"),
+                (ChangeKind::Rebuilt, "rebuilt"),
             ] {
                 let count = d.count(kind);
                 if count > 0 {
@@ -235,9 +237,12 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
                 }
             }
             row.set_title(&if parts.is_empty() { "Only settings changed".to_owned() } else { parts.join(", ") });
-            let names: Vec<String> = d.changes.iter().take(6).map(|c| c.name.clone()).collect();
+            // Name what changed version first; rebuilds only when nothing did.
+            let (installed, rebuilt) = d.split();
+            let named = if installed.is_empty() { rebuilt } else { installed };
+            let names: Vec<&str> = named.iter().take(6).map(|c| c.name.as_str()).collect();
             if !names.is_empty() {
-                row.set_subtitle(&format!("{}{}", names.join(", "), if d.changes.len() > 6 { "…" } else { "" }));
+                row.set_subtitle(&format!("{}{}", names.join(", "), if named.len() > 6 { "…" } else { "" }));
             }
             row.add_prefix(&gtk::Image::from_icon_name("document-open-recent-symbolic"));
             let go = gtk::Button::from_icon_name("go-next-symbolic");

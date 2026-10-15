@@ -51,8 +51,9 @@ something you edit and hope.
   the branch your system follows, open Updates, press Update.
 - **History.** Every generation you can go back to. Open one to see what
   changed from the one before: upgrades, downgrades, additions and removals,
-  with sizes. Going back to one also brings back the choices it was built
-  from, so your next change starts from there.
+  with sizes, then the packages rebuilt without a new version, gathered in
+  one row. Going back to one also brings back the choices it was built from,
+  so your next change starts from there.
 - **Storage.** The Nix store split into what the running system needs, older
   generations, user profiles, projects and dev shells, and garbage. It lists
   the heaviest packages and every garbage-collector root, and can clean up

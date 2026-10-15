@@ -662,7 +662,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>History</h2>
-    <p>Every generation you can go back to. Open one to see what changed from the one before: upgrades, downgrades, additions and removals, with sizes. Going back also brings back the choices it was built from, so your next change starts from there.</p>
+    <p>Every generation you can go back to. Open one to see what changed from the one before: upgrades, downgrades, additions and removals, with sizes, then the packages rebuilt without a new version, gathered in one row. Going back also brings back the choices it was built from, so your next change starts from there.</p>
   </article>
   <article class="win">
     <h2>Storage</h2>

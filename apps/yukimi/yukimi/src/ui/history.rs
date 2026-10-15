@@ -2,15 +2,34 @@
 //! Every version of the system that can be returned to, newest first, each
 //! with what changed from the one before it, worked out (away from the
 //! interface thread) when it is opened.
+use std::cell::Cell;
+
 use adw::prelude::*;
 use gtk::{gio, glib};
-use yukimi_system::diff::{self, Change, ChangeKind, Diff};
+use yukimi_system::diff::{self, Change, ChangeKind};
 use yukimi_system::generations::Generation;
 use yukimi_system::{human_age, human_size, now};
 
 use super::Ctx;
 use super::widgets::{badge, clear, dim, fill_later, heading, page, pending_row};
 use crate::ops::Operation;
+
+/// Rows shown of one list of changes; the rest are left out.
+const SHOWN: usize = 200;
+
+/// How much something grew or shrank: `+132.7 KiB`.
+fn size_change(delta: i64) -> String {
+    let sign = if delta > 0 { "+" } else { "−" };
+    format!("{sign}{}", human_size(delta.unsigned_abs()))
+}
+
+/// The note above a list of changes too long to show whole.
+fn first_of(total: usize) -> adw::ActionRow {
+    let note = adw::ActionRow::new();
+    note.set_title(&format!("The first {SHOWN} of {total} changes"));
+    note.add_css_class("dim-row");
+    note
+}
 
 fn change_row(change: &Change) -> adw::ActionRow {
     let row = adw::ActionRow::new();
@@ -27,16 +46,59 @@ fn change_row(change: &Change) -> adw::ActionRow {
         ChangeKind::Changed => {
             ("view-refresh-symbolic", "changed", format!("{} → {}", change.before.join(", "), change.after.join(", ")))
         }
+        ChangeKind::Rebuilt => ("view-refresh-symbolic", "rebuilt", change.after.join(", ")),
     };
     let image = gtk::Image::from_icon_name(icon);
     image.add_css_class(class);
     row.add_prefix(&image);
     row.set_subtitle(&text);
     if change.size_delta != 0 {
-        let sign = if change.size_delta > 0 { "+" } else { "−" };
-        row.add_suffix(&dim(&format!("{sign}{}", human_size(change.size_delta.unsigned_abs()))));
+        row.add_suffix(&dim(&size_change(change.size_delta)));
     }
     row
+}
+
+/// The packages built again at the same versions, as one row that lists
+/// them when opened: an update of Nixpkgs can rebuild hundreds.
+fn rebuilt_row(rebuilt: &[Change]) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::new();
+    let n = rebuilt.len();
+    row.set_title(&format!("{n} {} rebuilt at the same version", if n == 1 { "package" } else { "packages" }));
+    let names: Vec<&str> = rebuilt.iter().take(6).map(|c| c.name.as_str()).collect();
+    row.set_subtitle(&format!("{}{}", names.join(", "), if n > 6 { "…" } else { "" }));
+    let image = gtk::Image::from_icon_name("view-refresh-symbolic");
+    image.add_css_class("rebuilt");
+    row.add_prefix(&image);
+    let delta: i64 = rebuilt.iter().map(|c| c.size_delta).sum();
+    if delta != 0 {
+        row.add_suffix(&dim(&size_change(delta)));
+    }
+    let (rebuilt, filled) = (rebuilt.to_vec(), Cell::new(false));
+    row.connect_expanded_notify(move |row| {
+        if !row.is_expanded() || filled.replace(true) {
+            return;
+        }
+        if rebuilt.len() > SHOWN {
+            row.add_row(&first_of(rebuilt.len()));
+        }
+        let list = row.clone();
+        fill_later(row, rebuilt.iter().take(SHOWN).cloned().collect(), change_row, move |r| list.add_row(r));
+    });
+    row
+}
+
+/// A row of what a generation changed.
+enum Line {
+    Change(Change),
+    /// The packages rebuilt at the same versions, after every other change.
+    Rebuilt(Vec<Change>),
+}
+
+fn line_row(line: &Line) -> gtk::Widget {
+    match line {
+        Line::Change(change) => change_row(change).upcast(),
+        Line::Rebuilt(rebuilt) => rebuilt_row(rebuilt).upcast(),
+    }
 }
 
 /// The row offering to go back to a generation.
@@ -106,7 +168,7 @@ fn fill(ctx: &Ctx, row: &adw::ExpanderRow, this: Generation, previous: Option<Ge
             row.add_row(&first);
             return;
         }
-        let Some(Diff { changes, .. }) = diff else {
+        let Some(diff) = diff else {
             let later = adw::ActionRow::new();
             later.set_title(if store_read {
                 "What changed couldn't be worked out"
@@ -116,20 +178,23 @@ fn fill(ctx: &Ctx, row: &adw::ExpanderRow, this: Generation, previous: Option<Ge
             row.add_row(&later);
             return;
         };
-        if changes.is_empty() {
+        // No package path differs, versions or builds: what changed is
+        // configuration.
+        if diff.changes.is_empty() {
             let same = adw::ActionRow::new();
             same.set_title("The same packages as the generation before; only settings changed");
             row.add_row(&same);
         }
-        if changes.len() > 200 {
-            let note = adw::ActionRow::new();
-            note.set_title(&format!("The first 200 of {} changes", changes.len()));
-            note.add_css_class("dim-row");
-            row.add_row(&note);
+        let (installed, rebuilt) = diff.split();
+        if installed.len() > SHOWN {
+            row.add_row(&first_of(installed.len()));
         }
-        let shown: Vec<Change> = changes.into_iter().take(200).collect();
+        let mut lines: Vec<Line> = installed.iter().take(SHOWN).cloned().map(Line::Change).collect();
+        if !rebuilt.is_empty() {
+            lines.push(Line::Rebuilt(rebuilt.to_vec()));
+        }
         let list = row.clone();
-        fill_later(&row, shown, change_row, move |r| list.add_row(r));
+        fill_later(&row, lines, line_row, move |r| list.add_row(r));
     });
 }
 
