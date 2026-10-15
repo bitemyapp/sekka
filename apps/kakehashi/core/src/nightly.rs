@@ -1,13 +1,15 @@
 //! Sekka's nightly builds: the list at downloads.sekka.computer, and a
 //! download that resumes, and is checked against the list's SHA-256 as it
-//! arrives.
+//! arrives. Large downloads use adaptive, concurrent byte ranges.
+
+mod parallel;
 
 use crate::image::{CHUNK, Cancelled, hex, sha256_file, valid_sha256};
 use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
@@ -43,6 +45,8 @@ fn agent() -> ureq::Agent {
     use ureq::tls::{TlsConfig, TlsProvider};
     let provider = if cfg!(target_os = "linux") { TlsProvider::Rustls } else { TlsProvider::NativeTls };
     ureq::Agent::config_builder()
+        .max_idle_connections_per_host(32)
+        .max_idle_connections(32)
         .user_agent(concat!("kakehashi/", env!("CARGO_PKG_VERSION")))
         .tls_config(TlsConfig::builder().provider(provider).build())
         .build()
@@ -131,38 +135,43 @@ pub fn download(
     }
 
     let url = build.url(base);
-    let mut request = agent().get(&url);
-    if have > 0 {
-        request = request.header("Range", &format!("bytes={have}-"));
-    }
-    let mut response = request.call().with_context(|| format!("could not download {url}"))?;
-    let resumed = response.status().as_u16() == 206;
-    if have > 0 && !resumed {
-        // The server sent the whole file: start over.
-        hasher = Sha256::new();
-        have = 0;
-    }
-    let mut out = OpenOptions::new().create(true).write(true).truncate(!resumed).append(resumed).open(&part)?;
-    let mut body = response.body_mut().as_reader();
-    let mut buffer = vec![0u8; 1 << 20];
-    let mut done = have;
-    report(Fetch::Downloading { done, total });
-    loop {
+    let mut out = OpenOptions::new().create(true).write(true).truncate(false).open(&part)?;
+    out.seek(SeekFrom::End(0))?;
+    if have < total {
         if cancelled() {
-            out.flush()?;
             bail!(Cancelled);
         }
-        let n = body.read(&mut buffer)?;
-        if n == 0 {
-            break;
+        if let Some(mut response) = parallel::probe(&url, have, total)? {
+            // No range support: the response is a complete ISO, never an
+            // appendable range. Preserve the old sequential download behavior.
+            out.set_len(0)?;
+            out.seek(SeekFrom::Start(0))?;
+            hasher = Sha256::new();
+            let mut body = response.body_mut().as_reader();
+            let mut buffer = vec![0u8; 1 << 20];
+            let mut done = 0;
+            report(Fetch::Downloading { done, total });
+            loop {
+                if cancelled() {
+                    bail!(Cancelled);
+                }
+                let n = body.read(&mut buffer)?;
+                if n == 0 {
+                    break;
+                }
+                ensure!(done + n as u64 <= total, "the server sent more than the expected image size");
+                out.write_all(&buffer[..n])?;
+                hasher.update(&buffer[..n]);
+                done += n as u64;
+                report(Fetch::Downloading { done, total });
+            }
+            ensure!(done == total, "the download ended at {done} of {total} bytes; try again to resume it");
+        } else {
+            parallel::transfer(build, &url, have, &mut out, &mut hasher, report, cancelled)?;
         }
-        out.write_all(&buffer[..n])?;
-        hasher.update(&buffer[..n]);
-        done += n as u64;
-        report(Fetch::Downloading { done, total });
     }
     out.sync_all()?;
-    ensure!(done == total, "the download ended at {done} of {total} bytes; try again to resume it");
+    drop(out);
     let sha = hex(&hasher.finalize());
     if sha != build.sha256 {
         let _ = fs::remove_file(&part);

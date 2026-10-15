@@ -713,10 +713,29 @@ buffers. On Linux the helper finds `lsblk`, `umount` and `udisksctl` through
 resets `PATH`.
 
 Nightly downloads read `builds.json` from `downloads.sekka.computer/nightly`,
-resume a `.part` file with a range request, hash while downloading, and leave
-a `.sha256` file beside the ISO so a later choice of the same file is checked
+resume a `.part` file, hash while downloading, and leave a `.sha256` file
+beside the ISO so a later choice of the same file is checked
 too. TLS is rustls on Linux and the system's own (`native-tls`) on macOS and
 Windows.
+
+Nightly downloads probe byte-range support, then start two concurrent requests.
+They measure aggregate throughput over three-second windows, with one second
+of settling after each increase, trying 4 and 8 connections before accepting a
+plateau. They continue doubling up to 32 while throughput improves by at least
+10%; two flat windows return to the best measured connection count. Completed
+16 MiB ranges are appended and hashed in order. The outstanding window bounds
+image buffers to 512 MiB, and only a contiguous prefix ever reaches `.part`,
+including after cancellation or a worker failure. Existing partial downloads
+remain compatible. Every range must match the requested offset, length and
+complete object size; the final SHA-256 still gates the rename to `.iso`.
+A server without range support uses a sequential download. Failed or invalid
+ranges are retried twice with cancellable backoff, without committing their
+bytes or making progress jump backwards.
+Range requests have a 30-second deadline, which also bounds waiting for a
+stalled connection when stopping. `KAKEHASHI_DOWNLOAD_TRACE=1` logs concurrency
+changes for profiling; it does not change download behavior. The local HTTP
+fixtures test out-of-order arrivals, cancellation/resume, corrupt and malformed
+responses, sequential fallback and the controller's growth/backoff limits.
 
 ```sh
 nix build .#kakehashi
