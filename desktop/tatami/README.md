@@ -1,7 +1,7 @@
 # Tatami
 
 Tatami is a keyboard-driven [Hyprland](https://hypr.land) desktop for NixOS,
-inspired by [Omarchy](https://github.com/basecamp/omarchy) 4.0.4 ("Quattro"):
+inspired by [Omarchy](https://github.com/omacom/omarchy) 4.0.4 ("Quattro"):
 its look, behavior and key bindings, adapted for NixOS without home-manager.
 It is not Omarchy and is not affiliated with Omarchy or Basecamp.
 

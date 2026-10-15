@@ -26,7 +26,7 @@ other layouts.
 ## Tatami (`tatami` session)
 
 Tatami is a keyboard-driven Hyprland desktop inspired by
-[Omarchy](https://github.com/basecamp/omarchy) 4.0.4 ("Quattro"). It is not
+[Omarchy](https://github.com/omacom/omarchy) 4.0.4 ("Quattro"). It is not
 Omarchy and is not affiliated with Omarchy or Basecamp. It has its own
 repository, [bitemyapp/tatami](https://github.com/bitemyapp/tatami), whose
 README describes it in full: components, the `tatami` helper, what was not

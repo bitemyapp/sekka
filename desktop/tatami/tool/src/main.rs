@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! `tatami`: session launcher and desktop commands for the Tatami session
 //! (keyboard-driven Hyprland inspired by Omarchy), replacing the Bash `omarchy-*` scripts of Omarchy 4
-//! (https://github.com/basecamp/omarchy, MIT) that it is modelled on.
+//! (https://github.com/omacom/omarchy, MIT) that it is modelled on.
 mod awake;
 mod background;
 mod browser;

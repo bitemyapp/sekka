@@ -1,5 +1,5 @@
 -- Tatami for NixOS, following Omarchy 4 "Quattro" (v4.0.4,
--- https://github.com/basecamp/omarchy, MIT; see ../LICENSE): its
+-- https://github.com/omacom/omarchy, MIT; see ../LICENSE): its
 -- default/hypr and config/hypr Lua modules, the Tokyo Night theme, and its
 -- key bindings. Configuration calls only, besides loading the monitor state
 -- the `tatami` helper writes: dynamic behavior lives in the helper, and
