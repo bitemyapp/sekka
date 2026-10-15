@@ -2,7 +2,8 @@
 //! Finding software: a catalog of well-known applications when nothing is
 //! typed, and a search of all of Nixpkgs when something is. Every package
 //! can be tried without installing it, installed just for you, or for
-//! everyone.
+//! everyone. One the system already brings says so: installing it would
+//! only keep it.
 //!
 //! Searching happens in a thread of its own: typing never waits for it,
 //! and only the answer to the newest query is shown.
@@ -64,17 +65,24 @@ impl<'a> Installed<'a> {
         self.user.contains(attr) || self.model.configured.user.iter().any(|p| p.attr.as_deref() == Some(attr))
     }
 
+    /// Whether the running system has this package though neither
+    /// `yukimi.nix` nor the main file's `environment.systemPackages` lists
+    /// it: a desktop or another setting brings it, so installing it changes
+    /// nothing until that stops.
+    fn brought(&self, package: &Package) -> bool {
+        !self.for_everyone(&package.attr) && self.on_system(package)
+    }
+
     /// Badges for what a package is and whether it is installed.
     fn badges(&self, package: &Package) -> gtk::Box {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let everyone = self.for_everyone(&package.attr);
-        if everyone {
+        if self.for_everyone(&package.attr) {
             row.append(&badge("for everyone", "installed"));
         }
         if self.for_you(&package.attr) {
             row.append(&badge("for you", "installed"));
         }
-        if !everyone && self.on_system(package) {
+        if self.brought(package) {
             row.append(&badge("on your system", "system"));
         }
         if package.unfree {
@@ -100,15 +108,52 @@ fn blocked(model: &Model, unfree: bool) -> Option<String> {
         .or_else(|| (unfree && !model.allow_unfree).then(|| "This system doesn't allow unfree software".to_owned()))
 }
 
-fn install_for_everyone(ctx: &Ctx, attr: &str) {
+/// What the details say about a package the system already brings: that it
+/// works now, and what installing it would still do. What brings it isn't
+/// named: the store knows only that the system has it, not which setting
+/// put it there.
+fn already_here(attr: &str) -> [String; 2] {
+    [
+        format!(
+            "{attr} is already installed for everyone on this computer, so you can use it now. Your desktop or \
+             another of the system's settings brings it, and it comes and goes with them."
+        ),
+        format!(
+            "Installing it yourself changes nothing today. It keeps {attr} if what brings it stops, for example if \
+             you remove a desktop."
+        ),
+    ]
+}
+
+/// Ask, then install a package for everyone. One the system already brings
+/// (`brought`) is kept rather than added, and the question says so.
+fn install_for_everyone(ctx: &Ctx, attr: &str, brought: bool) {
     let model = ctx.model();
     let mut packages = model.configured.yukimi.packages.clone();
     packages.push(attr.to_owned());
+    let (heading, body, action) = if brought {
+        (
+            format!("Keep {attr} for everyone?"),
+            format!(
+                "{attr} is already on this system and stays as it is: History won't show it as added. Yukimi lists \
+                 it in the system configuration, so that it stays if what brings it now stops. That builds a new \
+                 system, which asks for an administrator password and can take a few minutes."
+            ),
+            "Keep",
+        )
+    } else {
+        (
+            format!("Install {attr} for everyone?"),
+            "Yukimi adds it to the system configuration and builds the new system, which asks for an administrator \
+             password and can take a few minutes. The current version stays in History."
+                .to_owned(),
+            "Install",
+        )
+    };
     ctx.confirm(
-        &format!("Install {attr} for everyone?"),
-        "Yukimi adds it to the system configuration and builds the new system, which asks for an administrator \
-         password and can take a few minutes. The current version stays in History.",
-        "Install",
+        &heading,
+        &body,
+        action,
         Operation::ChangeSystem {
             change: SystemChange { packages: Some(packages), ..SystemChange::default() },
             what: attr.to_owned(),
@@ -223,23 +268,54 @@ fn details(ctx: &Ctx, package: &Package) {
     }
     content.append(&facts);
 
+    // A package the system already brings works now; installing it only
+    // keeps it, so the buttons say that and none is the obvious next step.
+    let brought = installed.brought(package);
+    if brought {
+        let note = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        note.add_css_class("card");
+        note.add_css_class("note-card");
+        let heading = gtk::Label::new(Some("Already on your system"));
+        heading.add_css_class("heading");
+        heading.set_xalign(0.0);
+        note.append(&heading);
+        for text in already_here(&package.attr) {
+            note.append(&wrapping(&text, &["body"]));
+        }
+        content.append(&note);
+    }
+
     let installable = package.available && !package.broken;
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     actions.set_halign(gtk::Align::Center);
     actions.set_margin_top(6);
     let try_it = gtk::Button::with_label("Try it");
     try_it.add_css_class("pill");
-    try_it.set_tooltip_text(Some("Run it in a terminal without installing it. Nothing is changed."));
+    try_it.set_tooltip_text(Some(if brought {
+        "Run it in a terminal. Nothing is changed."
+    } else {
+        "Run it in a terminal without installing it. Nothing is changed."
+    }));
     try_it.set_sensitive(installable);
-    let for_me = gtk::Button::with_label("Install for me");
+    let for_me = gtk::Button::with_label(if brought { "Keep for me" } else { "Install for me" });
     for_me.add_css_class("pill");
+    if brought {
+        for_me.set_tooltip_text(Some(
+            "Install it in your own profile as well, so you keep it if the system stops bringing it. No password \
+             needed.",
+        ));
+    }
     for_me.set_sensitive(installable && !installed.for_you(&package.attr));
-    let for_all = gtk::Button::with_label("Install for everyone");
+    let for_all = gtk::Button::with_label(if brought { "Keep for everyone" } else { "Install for everyone" });
     for_all.add_css_class("pill");
-    for_all.add_css_class("suggested-action");
+    if !brought {
+        for_all.add_css_class("suggested-action");
+    }
     let why_not = blocked(&model, package.unfree);
     for_all.set_sensitive(installable && why_not.is_none() && !installed.for_everyone(&package.attr));
-    for_all.set_tooltip_text(why_not.as_deref());
+    for_all.set_tooltip_text(why_not.as_deref().or(
+        brought.then_some("List it in the system configuration, so everyone keeps it if the system stops bringing it."),
+    ));
     actions.append(&try_it);
     actions.append(&for_me);
     actions.append(&for_all);
@@ -278,12 +354,12 @@ fn details(ctx: &Ctx, package: &Package) {
         let (ctx, attr, dialog) = (ctx.clone(), package.attr.clone(), dialog.clone());
         for_all.connect_clicked(move |_| {
             dialog.close();
-            install_for_everyone(&ctx, &attr);
+            install_for_everyone(&ctx, &attr, brought);
         });
     }
     dialog.present(Some(ctx.window()));
     // Start on the buttons, not inside the facts.
-    if for_all.is_sensitive() {
+    if for_all.is_sensitive() && !brought {
         for_all.grab_focus();
     } else {
         try_it.grab_focus();
@@ -569,10 +645,65 @@ fn group_digits(n: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::sync::Arc;
+
+    use yukimi_system::index::{Package, PackageIndex};
+
+    use super::Installed;
+    use crate::model::Model;
+
+    fn package(attr: &str, pname: &str, version: &str) -> Package {
+        Package { attr: attr.into(), pname: pname.into(), version: version.into(), ..Package::default() }
+    }
+
+    fn installed<'a>(model: &'a Model, index: Vec<Package>, system: &[(&'a str, &'a str)]) -> Installed<'a> {
+        Installed {
+            model,
+            index: Some(Arc::new(PackageIndex::new(index))),
+            user: BTreeSet::new(),
+            versions: BTreeMap::from_iter(system.iter().copied()),
+        }
+    }
+
     #[test]
     fn digits_are_grouped() {
         assert_eq!(super::group_digits(123), "123");
         assert_eq!(super::group_digits(1234), "1,234");
         assert_eq!(super::group_digits(1234567), "1,234,567");
+    }
+
+    #[test]
+    fn a_package_a_desktop_brings_is_already_here_until_it_is_listed() {
+        let fastfetch = package("fastfetch", "fastfetch", "2.55.0");
+        let mut model = Model::default();
+        let system = [("fastfetch", "2.55.0")];
+        assert!(installed(&model, vec![fastfetch.clone()], &system).brought(&fastfetch));
+        // Another version is another package.
+        assert!(!installed(&model, vec![fastfetch.clone()], &[("fastfetch", "2.54.0")]).brought(&fastfetch));
+        model.configured.yukimi.packages.push("fastfetch".into());
+        assert!(!installed(&model, vec![fastfetch.clone()], &system).brought(&fastfetch));
+    }
+
+    #[test]
+    fn only_the_variant_named_after_a_package_is_already_here() {
+        let (btop, cuda) = (package("btop", "btop", "1.4.5"), package("btop-cuda", "btop", "1.4.5"));
+        let model = Model::default();
+        let system = [("btop", "1.4.5")];
+        let both = installed(&model, vec![btop.clone(), cuda.clone()], &system);
+        assert!(both.brought(&btop));
+        assert!(!both.brought(&cuda));
+        // The only attribute with that name and version is the one the system has.
+        let nodejs = package("nodejs_22", "nodejs", "22.20.0");
+        assert!(installed(&model, vec![nodejs.clone()], &[("nodejs", "22.20.0")]).brought(&nodejs));
+    }
+
+    #[test]
+    fn already_here_says_it_works_now_and_what_installing_would_keep() {
+        let [now, installing] = super::already_here("fastfetch");
+        assert!(now.starts_with("fastfetch is already installed for everyone"));
+        assert!(now.contains("you can use it now"));
+        assert!(installing.starts_with("Installing it yourself changes nothing today."));
+        assert!(installing.contains("keeps fastfetch if what brings it stops"));
     }
 }

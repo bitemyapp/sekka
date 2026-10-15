@@ -36,7 +36,9 @@ something you edit and hope.
   search of every top-level package in Nixpkgs, ranked by name first, then
   by description. You can try a package without installing it, install it
   just for you (no password), or install it for everyone. Packages that are
-  broken or unfree are labelled before you pick them.
+  broken or unfree are labelled before you pick them. One your desktop or
+  settings already bring is marked *on your system*: it works now, and
+  installing it as well only keeps it if what brings it stops.
 - **Updates.** Where the system comes from: each input of its flake, or each
   of its channels, the exact revision it is at, how old that is, and a link
   to see it. *Check for updates* asks every source for its newest version
