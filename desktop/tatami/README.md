@@ -54,7 +54,7 @@ happens on topic branches merged into `main`; releases use version tags.
 | Lock and idle | hyprlock with PAM in v4's style; hypridle locks and turns off displays |
 | Authentication | hyprpolkitagent in Tokyo Night, centered with the screen dimmed around it |
 | Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Audio is wiremix and Bluetooth is bluetui (it pairs devices that ask for a passkey), in the same place; a second click closes them |
-| Terminal and tools | foot with v4's configuration, btop with the Tokyo Night theme, fastfetch, Nautilus, imv, mpv |
+| Terminal and tools | foot with v4's configuration, the bottom system monitor (Super+Ctrl+T), fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
 The configuration lives in `/etc/xdg/tatami` and is used only by this

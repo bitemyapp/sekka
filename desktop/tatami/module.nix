@@ -475,7 +475,9 @@ in
       pkgs.wireplumber
       pkgs.wiremix
       pkgs.bluetui
-      pkgs.btop
+      # Activity (Super+Ctrl+T). bottom's own desktop entry and icon list it
+      # in the launcher, which opens it in foot until it exits.
+      pkgs.bottom
       pkgs.fastfetch
       pkgs.nautilus
       pkgs.imv
