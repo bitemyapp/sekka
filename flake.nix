@@ -37,7 +37,8 @@
       installedLock = import ./nix/installed-lock.nix { inherit self; };
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-      hyprlandPkgs = pkgs.extend (import ./nix/overlays/aquamarine.nix);
+      hyprlandOverlay = nixpkgs.lib.composeManyExtensions (import ./nix/overlays);
+      hyprlandPkgs = pkgs.extend hyprlandOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -83,7 +84,7 @@
         + c.isoImage.appendToMenuLabel;
     in
     {
-      overlays.default = import ./nix/overlays/aquamarine.nix;
+      overlays.default = hyprlandOverlay;
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
         desktops = inputs.calamares.nixosModules.desktops;
@@ -394,6 +395,11 @@
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;
           inherit (self.packages.${system}) tatami displays;
+        };
+        screenshare-sessions = import ./nix/screenshare-sessions-vm-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) hyprland;
+          unpatchedHyprland = pkgs.hyprland;
         };
         display-recovery =
           pkgs.runCommand "tatami-display-recovery-tests"

@@ -3,5 +3,5 @@
 # NixOS deduplicates this module when both desktop modules are imported.
 { ... }:
 {
-  nixpkgs.overlays = [ (import ../nix/overlays/aquamarine.nix) ];
+  nixpkgs.overlays = import ../nix/overlays;
 }
