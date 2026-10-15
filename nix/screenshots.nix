@@ -80,7 +80,7 @@ let
       '';
       environment.systemPackages = [
         pkgs.fastfetch
-        pkgs.btop
+        pkgs.bottom
       ];
     };
 in
@@ -180,7 +180,7 @@ pkgs.testers.runNixOSTest {
     tatami.send_key("meta_l-ret")
     wait_windows(2)
     time.sleep(3)
-    tatami.send_chars("btop\n")  # tiled beside fastfetch, as Tatami lays them out
+    tatami.send_chars("btm\n")  # tiled beside fastfetch, as Tatami lays them out
     capture(tatami, "tatami", settle=12)
     tatami.send_key("meta_l-spc")  # the Tatami menu
     capture(tatami, "tatami-menu", settle=8)

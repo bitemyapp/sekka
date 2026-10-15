@@ -66,7 +66,7 @@ Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
 firmware; try a key or mouse button if mouse movement does not wake it.
 
-[![Tatami with two terminals: fastfetch and btop](docs/images/sekka/tatami.png)](docs/images/sekka/tatami.png)
+[![Tatami with two terminals: fastfetch and bottom](docs/images/sekka/tatami.png)](docs/images/sekka/tatami.png)
 
 [![The Tatami menu over the terminals](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 

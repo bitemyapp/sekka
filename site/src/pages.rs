@@ -26,7 +26,7 @@ pub fn home(site: &Site) -> Result<Page> {
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
             "tatami.png",
-            "Tatami with two terminals tiled side by side: fastfetch and btop, in Tokyo Night colours.",
+            "Tatami with two terminals tiled side by side: fastfetch and bottom, in Tokyo Night colours.",
             "Tatami in a disposable test VM built from Sekka's own modules.",
             "win hero-shot",
         )?,
@@ -178,7 +178,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         icon = site.asset("brand/tatami.svg")?,
         shot = site.shot(
             "tatami-menu.png",
-            "Tatami's menu open over two terminals: fastfetch and btop.",
+            "Tatami's menu open over two terminals: fastfetch and bottom.",
             "Tatami's menu (Super + Space) in a disposable test VM. The bar still shows the NixOS logo.",
             "win wide-shot",
         )?,
