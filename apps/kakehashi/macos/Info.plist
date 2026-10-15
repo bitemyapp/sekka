@@ -20,5 +20,7 @@
 	<string>11.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Kakehashi needs access to the USB drive you select to write the image and verify it.</string>
 </dict>
 </plist>

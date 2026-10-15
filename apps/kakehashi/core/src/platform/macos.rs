@@ -6,8 +6,10 @@ use crate::drive::Drive;
 use anyhow::{Context, Result, ensure};
 use plist::Value;
 use std::collections::HashMap;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::path::Path;
+
+mod authopen;
 
 pub(crate) type Held = ();
 
@@ -150,19 +152,15 @@ pub(crate) fn unmount(drive: &Drive) -> Result<()> {
 
 /// The raw device, locked exclusively and uncached, with its size and
 /// block size.
-pub(crate) fn open(drive: &Drive) -> Result<Device> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
+pub(crate) fn open(drive: &Drive, cancelled: &dyn Fn() -> bool) -> Result<Device> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
     use std::os::unix::io::AsRawFd;
     let path = format!("/dev/r{}", drive.name);
     let before = fs::symlink_metadata(&path)?;
     ensure!(before.file_type().is_char_device(), "{path} is not a raw disk device");
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(libc::O_EXLOCK | libc::O_NOFOLLOW)
-        .open(&path)
-        .with_context(|| format!("could not open {path} exclusively"))?;
-    ensure!(file.metadata()?.rdev() == before.rdev(), "{path} changed while opening it");
+    let file = authopen::open(Path::new(&path), cancelled)?;
+    let after = file.metadata()?;
+    ensure!(after.file_type().is_char_device() && after.rdev() == before.rdev(), "{path} changed while opening it");
     let fd = file.as_raw_fd();
     let (mut block, mut count) = (0u32, 0u64);
     // DKIOCGETBLOCKSIZE and DKIOCGETBLOCKCOUNT.
