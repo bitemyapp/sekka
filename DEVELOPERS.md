@@ -860,14 +860,22 @@ has not yet written a physical drive.
 ## Website
 
 `site/` is a separate Cargo workspace whose program writes sekka.computer:
-static HTML and CSS, with no JavaScript for browsers, built from `docs/brand/tokens.json`,
+static HTML and CSS, with one small script for browsers, built from `docs/brand/tokens.json`,
 the brand SVGs, and screenshots copied byte for byte. Each caption repeats the
 provenance recorded in `docs/screenshots.md`. The design page's contrast
 ratios are computed from the tokens when the site is built. Kanji are outlined
 from Noto Serif CJK JP, so no CJK webfont ships; JetBrains Mono and Atkinson
-Hyperlegible Next are served from the site with their OFL texts. Pages follow
-the visitor's colour-scheme and contrast preferences, and every page states
-the revision it was built from (a dirty tree says so).
+Hyperlegible Next are served from the site with their OFL texts. Every page
+states the revision it was built from (a dirty tree says so).
+
+Pages open in Night whatever the visitor's colour-scheme preference, and in
+High contrast when they ask for more contrast. The switch in the bar turns
+Day on. It is a checkbox, so it works without script on the page it is on;
+`site/theme.js`, loaded in each page's head so a remembered Day is drawn
+from the start, keeps the choice in `localStorage` (`sekka-theme`) and sets
+`data-theme` on the root element, which the stylesheet reads as it reads the
+checkbox. That script is the only one, and the content security policy
+allows scripts from the site alone.
 
 The stylesheet, images, logos, fonts and licence texts are published under
 names that include a hash of their bytes (`images/yukimi.<hash>.png`), and
@@ -925,14 +933,18 @@ GitHub's `main` (the pages link the revision they were built from), then
 deploy with Wrangler, logged in once with `wrangler login`:
 
 ```sh
-nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-site --project-name sekka --branch main
+nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-site --project-name sekka --branch main --no-bundle
 ```
 
+`--no-bundle` uploads `_worker.js/` as it was built, with `index.wasm` as a
+compiled Wasm module. Without it, Wrangler (4.148) bundles the worker again
+with esbuild, which has no loader for `.wasm`, and the deploy fails.
 Only Wrangler uploads the worker's Wasm as a module. The dashboard's upload
 publishes `_worker.js/` as plain files, and the download page then shows its
 fallback. Pages applies `_headers` (the content security policy) to static
-files and serves `404.html`. The pages promise no cookies, and no scripts or
-analytics in the browser, so leave off the Cloudflare features that add them:
+files and serves `404.html`. The pages promise no cookies or analytics, and
+no script but their own theme switch, so leave off the Cloudflare features
+that add them:
 Web Analytics, Rocket Loader, Email Address Obfuscation and Bot Fight Mode.
 
 Everything the site claims comes from this repository's READMEs and docs.
