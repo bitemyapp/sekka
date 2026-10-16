@@ -6,7 +6,7 @@ files. They are not upscaled, composited, or generated illustrations.
 | Image | Original resolution | What it shows |
 | --- | --- | --- |
 | [Genkan](images/sekka/genkan.png) | 2560 × 1600 | Current GTK interface in its debug-only welcome preview, with synthetic installation/cache data, on Sekka's Plasma session |
-| [Tatami](images/sekka/tatami.png) | 2560 × 1600 | Tatami with two terminals opened with Super+Return: Tatami's fastfetch, and btop |
+| [Tatami](images/sekka/tatami.png) | 2560 × 1600 | Tatami with two terminals opened with Super+Return: Tatami's fastfetch, and bottom |
 | [Tatami menu](images/sekka/tatami-menu.png) | 2560 × 1600 | The Tatami menu, opened with Super+Space over the same terminals |
 | [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Current application in Tatami, reading the test VM `sekka-demo` |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
