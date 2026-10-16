@@ -1,10 +1,5 @@
 //! Real NetworkManager scan/authentication over simulated radios, never host RF.
-use crate::{
-    gui_input,
-    live_test::Profile,
-    support::*,
-    vm::{Rpc, Vm},
-};
+use crate::{gui_input, live_test::Profile, support::*, vm::Vm};
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 use std::{
@@ -81,7 +76,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
             pause(Duration::from_millis(200))?;
         }
         pause(Duration::from_secs(2))?;
-        let mut qmp = Rpc::connect(&work.join("qmp.sock"), true, 10)?;
+        let mut qmp = vm.qmp(10)?;
         gui_input::key(&mut qmp, &["down"])?;
         gui_input::key(&mut qmp, &["home"])?;
         for _ in 0..profile.index() {

@@ -83,8 +83,41 @@ impl Rpc {
 
 pub struct Vm {
     work: PathBuf,
+    /// QEMU's monitor and guest agent sockets, outside `work`; see `sockets`.
+    sockets: Option<tempfile::TempDir>,
     process: Option<Process>,
     agent: Option<Rpc>,
+}
+
+/// Where a run's work directory links to its VM's socket directory.
+const SOCKETS: &str = "sockets";
+
+/// A private directory for one VM's Unix sockets. QEMU refuses socket paths
+/// of 108 bytes or more (sockaddr_un), which `.work/RUN` can exceed in a
+/// deep checkout, so sockets live under $XDG_RUNTIME_DIR, or the temporary
+/// directory, while disks and logs stay in `.work`.
+fn sockets() -> Result<tempfile::TempDir> {
+    let base = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.is_dir())
+        .unwrap_or_else(std::env::temp_dir);
+    let dir = tempfile::Builder::new()
+        .prefix("respin-vm-")
+        .permissions(std::os::unix::fs::PermissionsExt::from_mode(0o700))
+        .tempdir_in(&base)?;
+    ensure!(
+        dir.path().join("qga.sock").as_os_str().len() < 108,
+        "Socket directory path is too long for QEMU: {}",
+        dir.path().display()
+    );
+    Ok(dir)
+}
+
+/// A socket of the VM running for a run's work directory, for another process.
+pub fn run_socket(work: &Path, name: &str) -> Result<PathBuf> {
+    let dir = fs::read_link(work.join(SOCKETS))
+        .with_context(|| format!("No running VM in {}", work.display()))?;
+    Ok(dir.join(name))
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputDevices {
@@ -169,12 +202,12 @@ impl Vm {
     ) -> Result<Self> {
         ensure!(["bios", "uefi"].contains(&firmware), "Unknown firmware");
         fs::create_dir_all(work)?;
-        for socket in ["qga.sock", "qmp.sock"] {
-            ensure!(
-                !work.join(socket).exists(),
-                "Socket already exists; check for a running VM: {socket}"
-            );
-        }
+        ensure!(
+            fs::symlink_metadata(work.join(SOCKETS)).is_err(),
+            "Sockets already linked; check for a running VM: {}",
+            work.join(SOCKETS).display()
+        );
+        let sockets = sockets()?;
         let accelerator = acceleration()?;
         let number = |name: &str, default: &str| -> Result<String> {
             let value = std::env::var(name).unwrap_or_else(|_| default.into());
@@ -236,12 +269,12 @@ impl Vm {
             .arg("-qmp")
             .arg(format!(
                 "unix:{},server=on,wait=off",
-                qpath(&work.join("qmp.sock"))?
+                qpath(&sockets.path().join("qmp.sock"))?
             ))
             .args(["-device", "virtio-serial-pci", "-chardev"])
             .arg(format!(
                 "socket,path={},server=on,wait=off,id=qga",
-                qpath(&work.join("qga.sock"))?
+                qpath(&sockets.path().join("qga.sock"))?
             ))
             .args([
                 "-device",
@@ -321,11 +354,22 @@ impl Vm {
                 .stderr(log)
                 .spawn()?,
         );
-        Ok(Self {
+        let vm = Self {
             work: work.to_path_buf(),
+            sockets: Some(sockets),
             process: Some(process),
             agent: None,
-        })
+        };
+        // Lets qmp-input and guest-exec find this VM by its run name.
+        std::os::unix::fs::symlink(vm.socket_dir()?, work.join(SOCKETS))?;
+        Ok(vm)
+    }
+    fn socket_dir(&self) -> Result<&Path> {
+        Ok(self.sockets.as_ref().context("VM stopped")?.path())
+    }
+    /// A QEMU monitor connection. The monitor accepts one client at a time.
+    pub fn qmp(&self, seconds: u64) -> Result<Rpc> {
+        Rpc::connect(&self.socket_dir()?.join("qmp.sock"), true, seconds)
     }
     pub fn wait_agent(&mut self) -> Result<()> {
         let deadline =
@@ -342,7 +386,8 @@ impl Vm {
                 "QEMU exited: {}",
                 fs::read_to_string(self.work.join("qemu.log"))?
             );
-            match Rpc::connect(&self.work.join("qga.sock"), false, 3).and_then(|mut rpc| {
+            let qga = self.socket_dir()?.join("qga.sock");
+            match Rpc::connect(&qga, false, 3).and_then(|mut rpc| {
                 rpc.call("guest-ping", json!({}))?;
                 Ok(rpc)
             }) {
@@ -386,7 +431,7 @@ impl Vm {
         bail!("Guest command timed out: {command}")
     }
     pub fn screenshot(&self, dest: &Path) -> Result<()> {
-        Rpc::connect(&self.work.join("qmp.sock"), true, 20)?.screenshot(dest)
+        self.qmp(20)?.screenshot(dest)
     }
     pub fn poweroff(&mut self) -> Result<()> {
         self.agent
@@ -405,8 +450,12 @@ impl Vm {
     pub fn stop(&mut self) {
         self.agent = None;
         self.process.take();
-        for path in ["qga.sock", "qmp.sock"] {
-            let _ = fs::remove_file(self.work.join(path));
+        if let Some(sockets) = self.sockets.take() {
+            // The next VM for this run may already have replaced the link.
+            let link = self.work.join(SOCKETS);
+            if fs::read_link(&link).is_ok_and(|target| target == sockets.path()) {
+                let _ = fs::remove_file(link);
+            }
         }
     }
     fn diagnostics(&mut self, artifacts: &Path) {
@@ -505,10 +554,31 @@ fn timing(log: &str) -> Value {
     result
 }
 
+/// The SHA-256 of the flake lock the live media ship for installed systems.
+/// Genkan writes it unchanged to /etc/nixos/flake.lock. It is Sekka's
+/// installed lock for the image's own source, not the repository's
+/// flake.lock, so read it from the media rather than derive it here.
+fn media_lock(vm: &mut Vm) -> Result<String> {
+    let text = vm.execute("sha256sum /etc/calamares-nixos/flake.lock", SHORT)?;
+    let digest = text.split_whitespace().next().unwrap_or_default();
+    ensure!(
+        digest.len() == 64 && digest.bytes().all(|c| c.is_ascii_hexdigit()),
+        "Unreadable media lock digest: {text}"
+    );
+    Ok(digest.to_ascii_lowercase())
+}
+
+/// The installed lock's digest from the fixture's `sha256sum` line.
+fn installed_lock(output: &str) -> Option<&str> {
+    output
+        .lines()
+        .find_map(|line| line.trim_end().strip_suffix("  /etc/nixos/flake.lock"))
+}
+
 fn verify_installed(
     vm: &mut Vm,
     artifacts: &Path,
-    repo: &Path,
+    media_lock: &str,
     fixture: &str,
     graphical_login: bool,
     filesystem: &str,
@@ -534,12 +604,12 @@ fn verify_installed(
         "Installed Nix is not Determinate: {output}"
     );
     ensure!(
-        output.contains(&sha256(&repo.join("flake.lock"))?),
-        "Installed lock differs from repository"
+        installed_lock(&output).context("Fixture did not report the installed lock")? == media_lock,
+        "Installed lock differs from the lock the media shipped"
     );
     pause(Duration::from_secs(10))?;
     if graphical_login {
-        let mut qmp = Rpc::connect(&vm.work.join("qmp.sock"), true, 20)?;
+        let mut qmp = vm.qmp(20)?;
         // Fixed public disposable-VM credentials, never the host's password.
         crate::gui_input::type_text(&mut qmp, "Qemu-Only-Test-123!")?;
         crate::gui_input::key(&mut qmp, &["ret"])?;
@@ -704,6 +774,8 @@ pub fn main(args: Vec<String>) -> Result<()> {
         );
         println!("{live}");
         result["live"] = json!(live);
+        let media_lock = media_lock(&mut vm)?;
+        result["media_lock_sha256"] = json!(media_lock);
         let live_kernel = vm.execute("uname -r", SHORT)?.trim().to_owned();
         result["live_kernel"] = json!(live_kernel);
         result["media_config_permissions"] = json!(vm.execute(
@@ -779,7 +851,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
             let installed = verify_installed(
                 &mut vm,
                 &artifacts,
-                &repo,
+                &media_lock,
                 fixture,
                 gui,
                 &root_filesystem,
@@ -812,7 +884,7 @@ pub fn guest_exec(args: Vec<String>) -> Result<()> {
         "Supply a run name, not a path"
     );
     let mut agent = Rpc::connect(
-        &repo()?.join(".work").join(name).join("qga.sock"),
+        &run_socket(&repo()?.join(".work").join(name), "qga.sock")?,
         false,
         20,
     )?;
@@ -870,6 +942,10 @@ pub fn boot_installed(args: Vec<String>) -> Result<()> {
             && result["iso_sha256"].is_string(),
         "Incomplete original evidence"
     );
+    let media_lock = result["media_lock_sha256"]
+        .as_str()
+        .context("The original run predates recording the media's lock; reinstall to verify")?
+        .to_owned();
     let disk_bus = DiskBus::parse(result["disk_bus"].as_str().unwrap_or("virtio"))?;
     let root_filesystem = filesystem(result["filesystem"].as_str().unwrap_or("ext4"), false)?;
     let disk = regular(&previous_work.join("target.raw"))?;
@@ -877,7 +953,7 @@ pub fn boot_installed(args: Vec<String>) -> Result<()> {
         [40 * 1024u64.pow(3), 80 * 1024u64.pow(3)].contains(&fs::metadata(&disk)?.len()),
         "Wrong test disk size"
     );
-    // Keep AF_UNIX socket paths short; lineage is recorded in resumed_from.
+    // Lineage is recorded in resumed_from.
     let name = format!("boot-{firmware}-{}", stamp());
     let work = repo.join(".work").join(&name);
     let artifacts = repo.join("artifacts").join(&name);
@@ -923,7 +999,7 @@ pub fn boot_installed(args: Vec<String>) -> Result<()> {
     let outcome = verify_installed(
         &mut vm,
         &artifacts,
-        &repo,
+        &media_lock,
         &fixture,
         gui,
         &root_filesystem,
@@ -948,6 +1024,60 @@ mod tests {
         assert_eq!(value["prepared"]["closure_bytes"], 7);
         assert_eq!(value["click_to_complete_seconds"], 31.2);
         assert_eq!(value["prepared_seconds"], 40.0);
+    }
+    #[test]
+    fn installed_lock_is_read_from_its_own_line() {
+        let digest = "a".repeat(64);
+        let output = format!(
+            "APPLICATIONS=firefox\n{digest}  /etc/nixos/flake.lock\n\nPASS: installed system\n"
+        );
+        assert_eq!(installed_lock(&output), Some(digest.as_str()));
+        assert_eq!(
+            installed_lock(&format!("{digest}  /etc/calamares-nixos/flake.lock\n")),
+            None
+        );
+    }
+    #[test]
+    fn sockets_stay_short_private_and_linked_from_work() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let sockets = sockets().unwrap();
+        let dir = sockets.path().to_path_buf();
+        assert!(dir.join("qmp.sock").as_os_str().len() < 108);
+        assert_eq!(
+            fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        std::os::unix::fs::symlink(&dir, temp.path().join(SOCKETS)).unwrap();
+        assert_eq!(
+            run_socket(temp.path(), "qga.sock").unwrap(),
+            dir.join("qga.sock")
+        );
+        let mut vm = Vm {
+            work: temp.path().to_path_buf(),
+            sockets: Some(sockets),
+            process: None,
+            agent: None,
+        };
+        assert_eq!(vm.socket_dir().unwrap(), dir);
+        vm.stop();
+        assert!(!dir.exists());
+        assert!(fs::symlink_metadata(temp.path().join(SOCKETS)).is_err());
+        assert!(run_socket(temp.path(), "qga.sock").is_err());
+        // A stopped VM leaves a later VM's link for the same run alone.
+        let later = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(later.path(), temp.path().join(SOCKETS)).unwrap();
+        let mut stale = Vm {
+            work: temp.path().to_path_buf(),
+            sockets: Some(tempfile::tempdir_in(temp.path()).unwrap()),
+            process: None,
+            agent: None,
+        };
+        stale.stop();
+        assert_eq!(
+            fs::read_link(temp.path().join(SOCKETS)).unwrap(),
+            later.path()
+        );
     }
     #[test]
     fn storage_options_are_closed_and_nvme_sector_size_is_explicit() {
@@ -984,6 +1114,7 @@ mod tests {
             });
             let mut vm = Vm {
                 work: temp.path().to_path_buf(),
+                sockets: None,
                 process: Some(Process(
                     Command::new(if success { "true" } else { "false" })
                         .spawn()
