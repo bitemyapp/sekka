@@ -900,3 +900,12 @@ Keep original full-resolution PNGs and record how they were captured in `docs/sc
 `nix build .#screenshots --out-link result-screenshots` captures Genkan's debug
 preview and Yukimi in a disposable NixOS VM. This is a development output and
 is not included in the ISO or the normal component checks.
+
+`nix build .#yukimi-discover --out-link result-yukimi-discover` runs Yukimi's
+Discover the same way, on a Tatami VM with Genkan's application catalog and
+unfree software allowed. Yukimi makes its package list from the VM's Nixpkgs,
+searches for `steam`, opens the package's details and asks to install Steam
+for everyone; the confirmation is cancelled, and the test checks that nothing
+changed. It reads the expected text from part of each capture with Tesseract.
+The pointer positions and those parts assume Yukimi's current layout. Its
+captures are for review, not for `docs/screenshots.md`.
