@@ -80,6 +80,7 @@
     "description": "GPU-accelerated terminal with tabs, layouts and scripting." },
 
   { "id": "steam", "name": "Steam", "category": "Games", "program": "steam", "unfree": true,
+    "needs": "32-bit graphics drivers and device rules for its controllers",
     "description": "Install and play games, with Steam's compatibility tools for Windows games." },
   { "id": "lutris", "name": "Lutris", "category": "Games", "packages": ["lutris"],
     "description": "Install and play games from many stores and emulators." },
@@ -89,6 +90,7 @@
     "description": "Minecraft, with mods and several instances side by side." },
 
   { "id": "localsend", "name": "LocalSend", "category": "Utilities", "program": "localsend",
+    "needs": "an open port in the firewall for nearby devices to reach it",
     "description": "Send files to phones and computers nearby, like AirDrop." },
   { "id": "flameshot", "name": "Flameshot", "category": "Utilities", "packages": ["flameshot"],
     "description": "Take screenshots and mark them up." },

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Finding software: a catalog of well-known applications when nothing is
-//! typed, and a search of all of Nixpkgs when something is. Every package
-//! can be tried without installing it, installed just for you, or for
-//! everyone.
+//! typed, and a search of all of Nixpkgs when something is, under the
+//! catalog's applications by that name. Every package can be tried without
+//! installing it, installed just for you, or for everyone, except one the
+//! catalog installs by switching on its NixOS program (Steam): that one is
+//! installed for everyone, as the catalog installs it, however it is found.
 //!
 //! Searching happens in a thread of its own: typing never waits for it,
 //! and only the answer to the newest query is shown.
@@ -13,7 +15,7 @@ use std::sync::Arc;
 
 use adw::prelude::*;
 use gtk::glib;
-use yukimi_system::catalog::Application;
+use yukimi_system::catalog::{self, Application};
 use yukimi_system::index::{Package, PackageIndex};
 
 use super::Ctx;
@@ -28,7 +30,8 @@ struct Installed<'a> {
     model: &'a Model,
     index: Option<Arc<PackageIndex>>,
     user: BTreeSet<&'a str>,
-    /// Versions of the running system's packages, by name.
+    /// The running system's package names, and their versions.
+    system: BTreeSet<&'a str>,
     versions: std::collections::BTreeMap<&'a str, &'a str>,
 }
 
@@ -39,7 +42,7 @@ impl<'a> Installed<'a> {
             .as_ref()
             .map(|s| s.system_packages.iter().map(|p| (p.name.as_str(), p.version.as_str())).collect())
             .unwrap_or_default();
-        Installed { model, index: ctx.index(), user: model.user_attrs(), versions }
+        Installed { model, index: ctx.index(), user: model.user_attrs(), system: model.system_names(), versions }
     }
 
     /// Whether the running system has this package. The index knows names,
@@ -55,9 +58,11 @@ impl<'a> Installed<'a> {
     }
 
     fn for_everyone(&self, attr: &str) -> bool {
-        let configured = &self.model.configured;
+        let model = self.model;
+        let configured = &model.configured;
         configured.yukimi.packages.iter().any(|p| p == attr)
             || configured.system.iter().any(|p| p.attr.as_deref() == Some(attr))
+            || catalog::needing_system(&model.catalog, attr).is_some_and(|app| model.app_installed(app, &self.system))
     }
 
     fn for_you(&self, attr: &str) -> bool {
@@ -223,6 +228,22 @@ fn details(ctx: &Ctx, package: &Package) {
     }
     content.append(&facts);
 
+    // A package the catalog installs by switching on its NixOS program is
+    // installed that way here too: without the 32-bit graphics drivers its
+    // program switches on, Steam's package stops before its window opens.
+    let app = catalog::needing_system(&model.catalog, &package.attr).cloned();
+    if let Some(app) = &app {
+        let needs = app.needs.as_deref().unwrap_or("more than its package");
+        let mut text = format!(
+            "{} needs {needs}. Only the system can set that up, so it can only be installed for everyone.",
+            app.name
+        );
+        if installed.for_you(&package.attr) {
+            text.push_str(" The copy installed just for you can be removed in Installed.");
+        }
+        content.append(&wrapping(&text, &["dim-label"]));
+    }
+
     let installable = package.available && !package.broken;
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     actions.set_halign(gtk::Align::Center);
@@ -230,15 +251,24 @@ fn details(ctx: &Ctx, package: &Package) {
     let try_it = gtk::Button::with_label("Try it");
     try_it.add_css_class("pill");
     try_it.set_tooltip_text(Some("Run it in a terminal without installing it. Nothing is changed."));
-    try_it.set_sensitive(installable);
+    try_it.set_sensitive(installable && app.is_none());
     let for_me = gtk::Button::with_label("Install for me");
     for_me.add_css_class("pill");
-    for_me.set_sensitive(installable && !installed.for_you(&package.attr));
+    for_me.set_sensitive(installable && app.is_none() && !installed.for_you(&package.attr));
+    if let Some(app) = &app {
+        let only = format!("Only the system can set up what {} needs", app.name);
+        try_it.set_tooltip_text(Some(&format!("{only}, so it can't be tried without installing it")));
+        for_me.set_tooltip_text(Some(&format!("{only}, so it can't be installed just for you")));
+    }
     let for_all = gtk::Button::with_label("Install for everyone");
     for_all.add_css_class("pill");
     for_all.add_css_class("suggested-action");
-    let why_not = blocked(&model, package.unfree);
-    for_all.set_sensitive(installable && why_not.is_none() && !installed.for_everyone(&package.attr));
+    let why_not = blocked(&model, package.unfree || app.as_ref().is_some_and(|a| a.unfree));
+    let done = match &app {
+        Some(app) => model.app_installed(app, &installed.system),
+        None => installed.for_everyone(&package.attr),
+    };
+    for_all.set_sensitive(installable && why_not.is_none() && !done);
     for_all.set_tooltip_text(why_not.as_deref());
     actions.append(&try_it);
     actions.append(&for_me);
@@ -278,7 +308,10 @@ fn details(ctx: &Ctx, package: &Package) {
         let (ctx, attr, dialog) = (ctx.clone(), package.attr.clone(), dialog.clone());
         for_all.connect_clicked(move |_| {
             dialog.close();
-            install_for_everyone(&ctx, &attr);
+            match &app {
+                Some(app) => install_app(&ctx, app),
+                None => install_for_everyone(&ctx, &attr),
+            }
         });
     }
     dialog.present(Some(ctx.window()));
@@ -345,6 +378,28 @@ fn app_card(ctx: &Ctx, model: &Model, system: &BTreeSet<&str>, app: &Application
     card
 }
 
+fn heading(text: &str) -> gtk::Label {
+    let heading = gtk::Label::new(Some(text));
+    heading.add_css_class("title-4");
+    heading.set_xalign(0.0);
+    heading
+}
+
+/// Cards for some of the catalog's applications.
+fn cards(ctx: &Ctx, model: &Model, system: &BTreeSet<&str>, apps: &[&Application]) -> gtk::FlowBox {
+    let flow = gtk::FlowBox::new();
+    flow.set_selection_mode(gtk::SelectionMode::None);
+    flow.set_homogeneous(true);
+    flow.set_min_children_per_line(2);
+    flow.set_max_children_per_line(4);
+    flow.set_column_spacing(12);
+    flow.set_row_spacing(12);
+    for app in apps {
+        flow.append(&app_card(ctx, model, system, app));
+    }
+    flow
+}
+
 /// The catalog, by category, what isn't installed first in each.
 fn catalog(ctx: &Ctx, model: &Model, content: &gtk::Box) {
     let system = model.system_names();
@@ -355,23 +410,10 @@ fn catalog(ctx: &Ctx, model: &Model, content: &gtk::Box) {
         }
     }
     for category in categories {
-        let heading = gtk::Label::new(Some(category));
-        heading.add_css_class("title-4");
-        heading.set_xalign(0.0);
-        content.append(&heading);
-        let flow = gtk::FlowBox::new();
-        flow.set_selection_mode(gtk::SelectionMode::None);
-        flow.set_homogeneous(true);
-        flow.set_min_children_per_line(2);
-        flow.set_max_children_per_line(4);
-        flow.set_column_spacing(12);
-        flow.set_row_spacing(12);
+        content.append(&heading(category));
         let mut apps: Vec<&Application> = model.catalog.iter().filter(|a| a.category == category).collect();
         apps.sort_by_key(|a| model.app_installed(a, &system));
-        for app in apps {
-            flow.append(&app_card(ctx, model, &system, app));
-        }
-        content.append(&flow);
+        content.append(&cards(ctx, model, &system, &apps));
     }
 }
 
@@ -408,7 +450,7 @@ fn index_id(index: &Arc<PackageIndex>) -> usize {
 pub fn build(ctx: &Ctx) -> gtk::Box {
     let outer = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Search packages"));
+    search.set_placeholder_text(Some("Search applications and packages"));
     search.add_css_class("discover-search");
     search.set_hexpand(true);
     let status = dim("");
@@ -473,6 +515,14 @@ pub fn build(ctx: &Ctx) -> gtk::Box {
                 catalog(ctx, &model, &content);
                 return;
             }
+            // The catalog's applications by that name come first: Steam's
+            // card installs what its package alone can't.
+            let apps: Vec<&Application> = model.catalog.iter().filter(|a| a.matches(&text)).collect();
+            if !apps.is_empty() {
+                content.append(&heading("Applications"));
+                content.append(&cards(ctx, &model, &model.system_names(), &apps));
+                content.append(&heading("Packages"));
+            }
             let Some(index) = index else {
                 let waiting = if ctx.indexing() {
                     "The package list is still being made."
@@ -490,6 +540,10 @@ pub fn build(ctx: &Ctx) -> gtk::Box {
                 content.append(&spinner);
                 return;
             };
+            if results.is_empty() && !apps.is_empty() {
+                content.append(&wrapping("No other packages by that name.", &["dim-label"]));
+                return;
+            }
             if results.is_empty() {
                 let empty = adw::StatusPage::builder()
                     .icon_name("system-search-symbolic")
@@ -569,6 +623,38 @@ fn group_digits(n: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use yukimi_system::catalog::{self, Application};
+
+    use crate::model::Model;
+    use crate::ops::SystemChange;
+
+    #[test]
+    fn steam_found_by_its_package_switches_on_its_program() {
+        let model = Model { catalog: catalog::own(), ..Model::default() };
+        let steam = catalog::needing_system(&model.catalog, "steam").expect("Steam");
+        assert_eq!(
+            super::app_change(&model, steam),
+            SystemChange { programs: Some(vec!["steam".into()]), ..SystemChange::default() }
+        );
+    }
+
+    #[test]
+    fn an_installers_steam_found_by_its_package_goes_through_its_setting() {
+        let mut model = Model::default();
+        let own = catalog::own().into_iter().find(|a| a.id == "steam").unwrap();
+        let setting = "calamares.applications".to_owned();
+        model.catalog = vec![Application { packages: vec!["steam".into()], setting: Some(setting.clone()), ..own }];
+        model.configured.settings.insert(setting.clone(), vec!["firefox".into()]);
+        let steam = catalog::needing_system(&model.catalog, "steam").expect("the installer's Steam");
+        assert_eq!(
+            super::app_change(&model, steam),
+            SystemChange {
+                applications: Some((setting, vec!["firefox".into(), "steam".into()])),
+                ..SystemChange::default()
+            }
+        );
+    }
+
     #[test]
     fn digits_are_grouped() {
         assert_eq!(super::group_digits(123), "123");

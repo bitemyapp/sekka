@@ -36,7 +36,12 @@ something you edit and hope.
   search of every top-level package in Nixpkgs, ranked by name first, then
   by description. You can try a package without installing it, install it
   just for you (no password), or install it for everyone. Packages that are
-  broken or unfree are labelled before you pick them.
+  broken or unfree are labelled before you pick them. A search shows the
+  catalog's applications by that name above the packages. Applications that
+  need a NixOS program as well as their package, such as Steam, can only be
+  installed for everyone: without the 32-bit graphics drivers its program
+  switches on, Steam's package quits before its window opens, so its search
+  result installs the catalog's Steam too.
 - **Updates.** Where the system comes from: each input of its flake, or each
   of its channels, the exact revision it is at, how old that is, and a link
   to see it. *Check for updates* asks every source for its newest version
@@ -181,10 +186,14 @@ Yukimi would otherwise have to evaluate the configuration to learn.
 A distribution, or an installer that offered applications, can give Discover
 its own catalog: a JSON list in the format of
 [Yukimi's own](crates/yukimi-system/data/applications.json) (`id`, `name`,
-`description`, `category`, `packages`, and optionally `program`, `unfree` and
-`requires`). With a `setting`, a list of application ids in the main
-configuration file installs them, as the installer's own option does; its
-entries take the place of Yukimi's for the same applications.
+`description`, `category`, `packages`, and optionally `program`, `needs`,
+`unfree` and `requires`; `needs` says what an application's program sets up
+that its package can't). With a `setting`, a list of application ids in the
+main configuration file installs them, as the installer's own option does;
+its entries take the place of Yukimi's for the same applications. An entry
+that takes the place of one of Yukimi's with a `program` keeps that program,
+so Discover installs its package only through the entry, never just for one
+person.
 
 ```nix
 programs.yukimi.catalogs = [
