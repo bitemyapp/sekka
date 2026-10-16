@@ -26,10 +26,10 @@ something you edit and hope.
   many packages it has, how fresh its Nixpkgs is, how much room the store
   takes, and what changed most recently.
 - **Installed.** Everything installed, grouped by why: added with Yukimi;
-  listed in your configuration by hand (`environment.systemPackages`, and
-  your own `users.users.<you>.packages`); chosen from a catalog your system
-  brings, such as its installer's; installed just for you with `nix profile`;
-  and everything else your desktops and settings bring. Anything in the
+  installed just for you with `nix profile`; listed in your configuration by
+  hand (`environment.systemPackages`, and your own `users.users.<you>.packages`);
+  chosen from a catalog your system brings, such as its installer's; and
+  everything else your desktops and settings bring. Anything in the
   first four groups can be removed from here, including entries you wrote
   yourself: Yukimi takes just that entry out of its list.
 - **Discover.** A catalog of well-known applications to start from, and a
