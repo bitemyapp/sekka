@@ -111,6 +111,27 @@ both leaks: that is the negative control. Remove the patch when a Hyprland
 release includes the fix, after this check passes with the new upstream
 package; review any patch failure rather than skipping it.
 
+Tatami's Elephant (`desktop/tatami/elephant/`) carries `search.patch`, a Sekka
+change that is not upstream. Stock Elephant searches applications either by
+name alone (`only_search_title`, which Omarchy sets) or by fuzzy matching the
+Exec line, the Comment and the keywords joined into one string. On NixOS the
+Exec line is usually a store path, so "nix" and "store" listed most
+applications, and a query could match across several keywords. The patch
+matches the name, the generic name and each keyword on its own. It also keeps
+the generic name as Elephant's subtext, leaving it empty when it repeats the
+name; Walker shows it under each application's name
+(`item_desktopapplications.xml`). Stock Elephant replaced it with whichever
+field matched, such as the raw keyword list. Give a first-party application a
+`GenericName` that says what it is and `Keywords` for what people search for,
+including other systems' names for it ("task manager", "etcher"): a
+multi-word query matches only a multi-word keyword or generic name.
+`nix build .#checks.x86_64-linux.launcher-search` runs the patched Elephant
+with Tatami's configuration over the first-party desktop entries and
+stand-ins for third-party ones, without a graphical session; stock Elephant
+with the same configuration is the negative control. The patch applies
+without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
+check, and review any patch failure rather than skipping it.
+
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted
 fields with an earlier rule of the same literal `output`, and of several rules

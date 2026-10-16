@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Application rows, after Omarchy 4's launcher: one line, no generic name. -->
+<!-- Application rows, after Omarchy 4's launcher, with each application's generic name (Elephant's subtext, such as "Package Manager") beneath its name. Applications without one keep a single line. -->
 <interface>
   <requires lib="gtk" version="4.0"></requires>
   <object class="GtkBox" id="ItemBox">
@@ -43,6 +43,18 @@
             <property name="vexpand_set">true</property>
             <property name="vexpand">true</property>
             <property name="xalign">0</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="ItemSubtext">
+            <style>
+              <class name="item-subtext"></class>
+            </style>
+            <property name="ellipsize">end</property>
+            <property name="vexpand_set">true</property>
+            <property name="vexpand">true</property>
+            <property name="xalign">0</property>
+            <property name="yalign">0</property>
           </object>
         </child>
       </object>

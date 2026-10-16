@@ -25,20 +25,9 @@ let
   # processor, memory, energy, graphics and storage (Super+Ctrl+T).
   activity = pkgs.callPackage ./activity/package.nix { };
   wallpapers = pkgs.callPackage ./wallpapers/package.nix { };
-  # Only the providers the launcher and menu use (config/walker): not
-  # Arch package search, password managers or other compositors' windows.
-  elephant = pkgs.elephant.override {
-    enabledProviders = [
-      "desktopapplications"
-      "menus"
-      "providerlist"
-      "calc"
-      "clipboard"
-      "files"
-      "symbols"
-      "websearch"
-    ];
-  };
+  # The launcher backend (elephant/): only the providers the launcher and
+  # menu use, searching applications by name, generic name and keyword.
+  elephant = pkgs.callPackage ./elephant/package.nix { };
   # Other desktops' tray applets, kept out of this session: Tatami has its own
   # Wi-Fi list, and the bar shows no printer applet.
   hiddenInTatami =

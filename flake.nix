@@ -426,6 +426,21 @@
               python3 ${./tests/test_display_recovery.py} ${self.packages.${system}.tatami}/bin/tatami -v
               touch $out
             '';
+        # Tatami's patched Elephant and launcher configuration over the
+        # first-party desktop entries; stock Elephant is the negative control.
+        launcher-search =
+          pkgs.runCommand "tatami-launcher-search-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
+            ''
+              python3 ${./tests/test_launcher_search.py} \
+                ${inputs.tatami.packages.${system}.elephant} ${pkgs.elephant} \
+                ${./desktop/tatami/config/elephant} \
+                ${./apps/yukimi/yukimi/data/io.github.bitemyapp.Yukimi.desktop} \
+                ${./apps/kakehashi/linux/computer.sekka.Kakehashi.desktop} \
+                ${./desktop/tatami/activity/data/org.tatami.Activity.desktop} \
+                ${./desktop/tatami/network/data/org.tatami.Network.desktop} \
+                ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
+              touch $out
+            '';
         tatami-weather =
           pkgs.runCommand "tatami-weather-tests"
             {

@@ -1,0 +1,75 @@
+Search applications by name, generic name and keyword
+
+The desktop applications provider fuzzy-matched the Exec line, the Comment
+and the keywords joined into one string. On NixOS the Exec line is usually
+a /nix/store path, so "nix" or "store" listed most applications, and an
+argument such as steam://rungameid matched "set". Long comments and the
+joined keyword list matched short queries across unrelated words: "fire"
+found a contact book through "friends,address book". Match the name, an
+action's application, the generic name and each keyword on its own, with
+upstream's penalties for those fields.
+
+A match on another field also replaced the subtext, the generic name, with
+the field it matched, such as the raw keyword list. Keep the generic name
+(an action's application name) as the subtext, so that a launcher can show
+what an application is beneath its name, and leave it empty when it only
+repeats the name ("Clocks", "Clocks").
+
+--- a/internal/providers/desktopapplications/query.go
++++ b/internal/providers/desktopapplications/query.go
+@@ -66,5 +66,10 @@
+ 		var fs int32
+ 		field := "text"
++		// The generic name, which the launcher shows under the name, whichever
++		// field matched, unless it only repeats the name.
+ 		subtext := v.GenericName
++		if subtext == v.Name {
++			subtext = ""
++		}
+ 
+ 		if query != "" {
+@@ -72,5 +77,4 @@
+ 
+ 			if ok && match != v.Name {
+-				subtext = match
+ 				field = "subtext"
+ 			}
+@@ -195,4 +199,5 @@
+ 				var fs int32
+ 				field := "text"
++				// The application's name, whichever field matched.
+ 				subtext := v.Name
+ 
+@@ -201,5 +206,4 @@
+ 
+ 					if ok && match != a.Name {
+-						subtext = match
+ 						field = "subtext"
+ 					}
+@@ -305,7 +309,18 @@
+ 	var modifier int32
+ 
++	// The name, then an action's application, the generic name and each
++	// keyword on its own, with upstream's penalties for those fields. Not
++	// the Exec line, whose store paths and arguments fuzzy-match nearly any
++	// short query, the Comment, whose prose does the same, or the keywords
++	// joined into one string, where a query matches across several of them.
+ 	toSearch := []string{d.Name}
++	modifiers := []int32{0}
+ 	if !config.OnlySearchTitle {
+-		toSearch = []string{d.Name, d.Exec, d.Parent, d.GenericName, strings.Join(d.Keywords, ","), d.Comment}
++		toSearch = append(toSearch, d.Parent, d.GenericName)
++		modifiers = append(modifiers, 2, 3)
++		for _, keyword := range d.Keywords {
++			toSearch = append(toSearch, keyword)
++			modifiers = append(modifiers, 4)
++		}
+ 	}
+ 
+@@ -318,5 +333,5 @@
+ 			startRes = start
+ 			match = v
+-			modifier = int32(k)
++			modifier = modifiers[k]
+ 		}
+ 	}
