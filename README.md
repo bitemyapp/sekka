@@ -77,6 +77,8 @@ firmware; try a key or mouse button if mouse movement does not wake it.
 
 [![The Tatami menu over the terminals](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 
+[![Activity on its CPU view, with a terminal running bottom selected](docs/images/sekka/activity.png)](docs/images/sekka/activity.png)
+
 ### Yukimi: see and change your system
 
 See what's installed and why, find software, check for updates, return to an earlier generation, and free up store space. Everyday changes do not require editing Nix configuration by hand.
