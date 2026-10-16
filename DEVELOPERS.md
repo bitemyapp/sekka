@@ -259,6 +259,16 @@ branch changes, and rollbacks use the same planner. A missing compatibility
 manifest stages the transition for boot. D-Bus catalog trigger changes remain
 live when both unit definitions specify reload-on-change and every other unit
 setting matches; changes to its executable or reload policy still stage for boot.
+A display manager unit that says `X-RestartIfChanged=false` before and after,
+and differs only in `XDG_DATA_DIRS` directories holding nothing but
+`wayland-sessions` and `xsessions`, also stays live: NixOS leaves it running,
+and it lists the new sessions from its next start. GDM, LightDM and Plasma Login Manager find
+sessions that way, so most desktop package updates changed their unit; greetd's
+greeter finds them through its configuration file, whose changes still stage.
+The completion message then says the login screen catches up at the next
+restart. In Tatami, while the login screen's entry would start a session
+component (uwsm, by store path) that has since been replaced, Yukimi asks for a
+restart rather than a sign-out.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
@@ -320,7 +330,8 @@ python3 tests/test_tatami_update.py /nix/store/…-tatami/bin/tatami -v
 
 The completion VM exercises the helper under real systemd, kills its client during
 live activation, verifies persistent results and a surviving graphical session,
-rejects a display-manager transition before service shutdown, and stages a rollback
+rejects a display-manager transition before service shutdown, switches live when
+only the login screen's list of sessions changes, and stages a rollback
 with changed boot parameters. It boots that prepared generation through UEFI,
 verifies that the restart request disappears, and captures the GUI. Its desktop
 is IceWM; it does not reproduce physical GPU teardown or claim Hyprland hardware coverage.
