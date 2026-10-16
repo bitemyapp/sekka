@@ -40,6 +40,12 @@ binutils, CMake, Ninja, pkg-config, Git and patch. This covers the usual
 `build-essential` role with common additional build drivers; projects can still
 need their own libraries or a Nix development shell.
 
+Every choice that brings Git (build tools, Lazygit and the GitHub CLI) also
+brings Git LFS, through `programs.git.lfs`. Its filter is in `/etc/gitconfig`
+for every account, so LFS files clone as their contents rather than pointer
+files without anyone running `git lfs install`. Git LFS adds each repository's
+hooks itself when its filter first runs there.
+
 Selecting Rustup also selects and locks the build-tools checkbox. Deselecting
 Rustup makes that checkbox optional again. Nixpkgs provides the NixOS-compatible
 Rustup wrapper. Run `rustup default stable` after installation to download a
@@ -85,7 +91,8 @@ the ISO, the fixture compares the installed manifest and verifies package paths.
 
 `tests/applications-runtime.sh` is run as the disposable VM's regular test user
 after an all-applications installation. It compiles and runs C/C++ programs with
-Make and CMake/Ninja, downloads Rust stable using Rustup, builds Rust linked to a
+Make and CMake/Ninja, commits and clones a Git LFS file, downloads Rust stable
+using Rustup, builds Rust linked to a
 C library, runs a rootless Compose workload, and checks the terminal assistants'
 startup. It requires network access for the Rust toolchain and container image.
 Desktop launch and visual checks are recorded separately from authenticated

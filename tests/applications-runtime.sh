@@ -45,6 +45,17 @@ git add hello.c
 test "$(git diff --cached --name-only)" = hello.c
 printf '%s\n' 'PASS C, C++, Make, CMake, Ninja and Git'
 
+# Git LFS without `git lfs install`: the filter is in /etc/gitconfig.
+git lfs track '*.bin'
+head -c 4096 /dev/urandom > blob.bin
+git add .gitattributes blob.bin
+git -c user.name=Test -c user.email=test@example.invalid commit -q -m 'LFS test'
+test "$(git lfs ls-files --name-only)" = blob.bin
+test -x .git/hooks/pre-push
+git clone -q "$work" lfs-clone
+cmp blob.bin lfs-clone/blob.bin
+printf '%s\n' 'PASS Git LFS'
+
 # A real freshly installed Rust toolchain, linking a compiled C library.
 rustup default stable
 rustup show

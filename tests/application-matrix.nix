@@ -72,6 +72,13 @@ assert
   == (if has "libreoffice" then "calc.desktop" else null);
 assert !(builtins.elem "docker" c.users.users.alice.extraGroups);
 assert !has "rustup" || has "build-tools";
+# Whatever brings Git brings Git LFS, its filter set for every account.
+assert
+  c.programs.git.lfs.enable
+  == builtins.any (app: has app.id && builtins.elem "git" app.packages) library.catalog;
+assert
+  !c.programs.git.lfs.enable
+  || lib.hasInfix ''process = "git-lfs filter-process"'' c.environment.etc.gitconfig.text;
 assert c.fileSystems."/".device == "/dev/disk/by-uuid/11111111-2222-4333-8444-555555555555";
 assert c.fileSystems."/boot".device == "/dev/disk/by-uuid/A1B2-C3D4";
 # The all-inclusive case also takes the GitHub step: a key from GitHub, the

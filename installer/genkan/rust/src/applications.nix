@@ -30,6 +30,8 @@ let
     else
       map (name: (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
   packages = lib.unique (lib.concatMap packagesFor selected);
+  # Development build tools, Lazygit and the GitHub CLI each bring Git.
+  withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
   # workflows invoke it as `zed`. Expose the expected command whenever the
   # editor is selected in the installer.
@@ -159,6 +161,17 @@ in
     programs.steam = lib.mkIf (has "steam") {
       enable = true;
       package = applicationPkgs.steam;
+    };
+    # Git LFS comes with Git. Its filter in /etc/gitconfig is what
+    # `git lfs install` would set per account: without it, LFS files clone as
+    # pointer files. Git LFS adds each repository's hooks itself.
+    programs.git = lib.mkIf withGit {
+      enable = true;
+      package = lib.mkDefault applicationPkgs.git;
+      lfs = {
+        enable = true;
+        package = lib.mkDefault applicationPkgs.git-lfs;
+      };
     };
     virtualisation.docker = lib.mkIf (has "docker") {
       package = applicationPkgs.docker;
