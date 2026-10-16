@@ -155,6 +155,7 @@
           tatami
           displays
           network
+          activity
           wallpapers
           ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
@@ -382,12 +383,17 @@
             '';
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
+        activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
           inherit pkgs;
           kakehashi = self.packages.${system}.kakehashi;
         };
         network-vm = import ./nix/network-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        activity-vm = import ./nix/activity-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };

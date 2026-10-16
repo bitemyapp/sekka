@@ -326,7 +326,7 @@ hl.window_rule({ match = { tag = "floating-window" }, float = true })
 hl.window_rule({ match = { tag = "floating-window" }, center = true })
 hl.window_rule({ match = { tag = "floating-window" }, size = { 875, 600 } })
 hl.window_rule({
-  match = { class = "(org.tatami.btm|org.tatami.terminal|org.tatami.bash|org.codeberg.dnkl.foot|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|Omarchy|About|TUI.float|imv|mpv)" },
+  match = { class = "(org.tatami.terminal|org.tatami.bash|org.codeberg.dnkl.foot|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|Omarchy|About|TUI.float|imv|mpv)" },
   tag = "+floating-window",
 })
 hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-window" })
@@ -335,6 +335,9 @@ hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-
 hl.window_rule({ match = { class = "org.tatami.Displays" }, float = true, center = true, size = { 880, 800 } })
 -- The Network window (tatami-network), likewise.
 hl.window_rule({ match = { class = "org.tatami.Network" }, float = true, center = true, size = { 720, 760 } })
+-- The Activity window (tatami-activity), wide enough for the list beside
+-- its inspector.
+hl.window_rule({ match = { class = "org.tatami.Activity" }, float = true, center = true, size = { 1160, 720 } })
 hl.window_rule({
   match = {
     class = "(sublime_text|DesktopEditors|org.gnome.Nautilus)",
@@ -650,7 +653,7 @@ hl.bind("SUPER + CTRL + B", hl.dsp.exec_cmd("tatami bluetooth"), { description =
 hl.bind("SUPER + CTRL + D", hl.dsp.exec_cmd("tatami display"), { description = "Display settings" })
 hl.bind("SUPER + CTRL + W", hl.dsp.exec_cmd("tatami network"), { description = "Wi-Fi" })
 hl.bind("SUPER + CTRL + P", hl.dsp.exec_cmd("tatami power-profile"), { description = "Power" })
-hl.bind("SUPER + CTRL + T", hl.dsp.exec_cmd("tatami tui btm"), { description = "Activity" })
+hl.bind("SUPER + CTRL + T", hl.dsp.exec_cmd("tatami launch tatami-activity"), { description = "Activity" })
 
 -- Cursor zoom
 hl.bind("SUPER + CTRL + Z", hl.dsp.exec_cmd("tatami zoom in"), { description = "Zoom in" })

@@ -45,6 +45,13 @@ screen locking, and lid-close sleep until you turn it off, and remembers your
 choice at your next login. You can still lock the screen yourself. A red coffee
 cup means protection could not be verified and needs attention.
 
+To see what is using your computer, open **Activity** with **Super + Ctrl + T**.
+Each application shows with all its processes together, and you can sort them
+by processor, memory, estimated energy, graphics or disk use. Select one to
+watch everything about it change, or quit one that misbehaves. Its energy
+figures are estimates shared out from the processor's and graphics card's
+meters; the window says what it can and can't measure.
+
 Laptop displays behave the way a Mac's do. Close the lid with an external
 display connected and the built-in display turns off, its windows move to the
 other screen, and the laptop keeps running; open the lid and the built-in display

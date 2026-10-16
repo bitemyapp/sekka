@@ -54,7 +54,7 @@ happens on topic branches merged into `main`; releases use version tags.
 | Lock and idle | hyprlock with PAM in v4's style; hypridle locks and turns off displays |
 | Authentication | hyprpolkitagent in Tokyo Night, centered with the screen dimmed around it |
 | Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Audio is wiremix and Bluetooth is bluetui (it pairs devices that ask for a passkey), in the same place; a second click closes them |
-| Terminal and tools | foot with v4's configuration, the bottom system monitor (Super+Ctrl+T), fastfetch, Nautilus, imv, mpv |
+| Terminal and tools | foot with v4's configuration, the Activity window (below, Super+Ctrl+T) and bottom in the terminal, fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
 The configuration lives in `/etc/xdg/tatami` and is used only by this
@@ -262,6 +262,69 @@ which Sekka does not install; a VPN set up elsewhere still shows, with its
 switch. Proxies, bridges, bonds, VLANs and mobile broadband are left to
 `nmcli` and `nmtui`.
 
+## Activity
+
+The Activity window (`activity/`, `tatami-activity`, GTK 4 and libadwaita)
+is Super+Ctrl+T, Trigger › Activity in the menu and "Activity" in the
+launcher, after macOS's Activity Monitor:
+
+- five views in the header: CPU (share of a core, processor time, threads,
+  wake-ups), Memory (proportional set size, private, resident, shared,
+  swap), Energy (power now, its average and the energy used since the
+  window opened), GPU (the busiest drawing and video engines, video memory,
+  shared graphics memory) and Disk (reading, writing and totals)
+- applications with their processes, every process, or the process tree.
+  An application gathers every process it started however it was started:
+  a browser's dozens of helpers, a terminal and what runs in it. It is named
+  and drawn as in the launcher, and a browser's helpers say what they do
+  (Renderer, GPU process, Network service)
+- under the list, the system as a whole for each view: user and system
+  time, each core, load, speed and temperature; memory by what holds it, and
+  how hard pressed it is in words, from the kernel's pressure stall figures;
+  each power meter and how much of it the applications account for; a card
+  for each graphics processor; storage reads and writes
+- beside the list, the inspector: everything about the selected application
+  or process as it changes, with its processor and memory over the last
+  five minutes, every measure of its memory, its energy, graphics and
+  storage, and its command line, program, folder, start, parent and unit
+- Quit, Force Quit, Pause and Resume, in the inspector, the right-click menu
+  and on Delete and Shift+Delete. Quitting asks first, and warns when it
+  would end the session; pausing the compositor is refused
+
+It opens with the application you were using selected, so Super+Ctrl+T on
+a window that misbehaves shows what it is doing. Typing anywhere searches
+names, command lines, PIDs, users and units, and opens the applications
+holding matching processes. Numbers sort largest first, zeros are dimmed so
+what is busy stands out, and each view keeps its own sort. Ctrl+1 to Ctrl+5
+switch views, Ctrl+Shift+A, P and T the grouping, and Ctrl+? lists the keys.
+It reads every two seconds, or every one or five (main menu), on a thread of
+its own; rows change in place, so the selection stays, and a list at its top
+stays there with the busiest first. `tatami-activity --pid PID`, `--lens
+memory` and `--search TEXT` open it on a process, a view or a search, or
+show them in the open window.
+
+Energy is an estimate: Linux measures power per device, not per process.
+The processor's meter (RAPL, on AMD's processors and Intel's) is readable by
+root only, so Tatami's power meter service reads it for the window, at most
+once a second. Graphics cards have their own meters (NVML for NVIDIA,
+hwmon for AMD and Intel), and a laptop's battery reports what the computer
+draws. A process is held to use the part of each meter's power above the
+device's idle floor in proportion to its share of what the device did,
+plus the floor in proportion to the share of the device it used; the rest
+is shown as idle. Integrated graphics count within the processor.
+
+Graphics use comes from NVML for NVIDIA cards, and from the kernel's DRM
+usage statistics for AMD, Intel and the others that write them. Another
+user's memory maps, storage counters and graphics use can't be read without
+privileges: its memory is its resident size, and the rest shows a dash.
+
+It looks as Displays does, from `config/tatami-activity/style-dark.css`,
+found the same way under `tatami-activity/`. `tatami-activity --print` prints
+one reading as text.
+
+It does not show network use per process, which the kernel only counts per
+process with packet filters; it doesn't list threads or change priorities.
+
 ## Wallpapers
 
 `wallpapers/` has the backgrounds, with their credits and licenses in
@@ -274,9 +337,10 @@ Tatami's own picker. Other desktops' modules can install it to offer them.
 
 ## Development
 
-`nix flake check` builds the helper and the Displays and Network windows
-(with their tests) and evaluates an example system with the module. They
-are Cargo crates in `tool/`, `displays/` and `network/`; `nix develop` has
+`nix flake check` builds the helper and the Displays, Network and Activity
+windows (with their tests) and evaluates an example system with the module.
+They are Cargo crates in `tool/`, `displays/`, `network/` and `activity/`;
+`nix develop` has
 Cargo and the libraries they build with, and `cargo test` in any of them
 runs its tests on Linux.
 
