@@ -5,8 +5,9 @@
 //! screen always on. Also brings back floating windows Hyprland leaves
 //! outside every screen when a monitor goes: it moves them by the change
 //! in monitor position only (WorkspacePlacementController.cpp), which can
-//! put them beyond the remaining screens.
-use crate::{display_policy, displays, hypr, lid, util, window};
+//! put them beyond the remaining screens. And keeps the scale X11
+//! applications draw at to the main display's (xwayland.rs).
+use crate::{display_policy, displays, hypr, lid, util, window, xwayland};
 use serde_json::Value;
 use std::{
     fs::{self, File, OpenOptions},
@@ -68,7 +69,7 @@ fn find<'a>(all: &'a Value, name: &str) -> Option<&'a Value> {
     all.as_array()?.iter().find(|m| m["name"] == name)
 }
 
-fn lit(monitor: &Value) -> bool {
+pub(crate) fn lit(monitor: &Value) -> bool {
     monitor["disabled"] == false
         && monitor["width"].as_i64().is_some_and(|w| w > 0)
         && monitor["height"].as_i64().is_some_and(|h| h > 0)
@@ -565,6 +566,52 @@ impl Lid {
     }
 }
 
+/// XWayland's `Xft.dpi`, kept at the main display's scale (xwayland.rs):
+/// set when that scale or the main display changes, and tried again a few
+/// seconds after a failure, such as XWayland not running yet.
+struct XScale {
+    display: Option<String>,
+    set: Option<u32>,
+    last_error: Option<String>,
+    next_try: Instant,
+}
+
+impl XScale {
+    fn new() -> Self {
+        Self {
+            display: xwayland::display(),
+            set: None,
+            last_error: None,
+            next_try: Instant::now(),
+        }
+    }
+
+    fn keep(&mut self, all: &Value) {
+        let Some(dpi) = xwayland::wanted(all, displays::load_store()["main"].as_str()) else {
+            return;
+        };
+        if self.set == Some(dpi) || Instant::now() < self.next_try {
+            return;
+        }
+        if self.display.is_none() {
+            self.display = xwayland::display();
+        }
+        let result = match &self.display {
+            Some(display) => xwayland::set_dpi(display, dpi),
+            None => Err("no XWayland display".to_owned()),
+        };
+        let error = result.err();
+        if error != self.last_error
+            && let Some(error) = &error
+        {
+            eprintln!("tatami: XWayland scale: {error}");
+        }
+        self.set = error.is_none().then_some(dpi);
+        self.next_try = Instant::now() + Duration::from_secs(if error.is_some() { 5 } else { 0 });
+        self.last_error = error;
+    }
+}
+
 /// The lid bindings' socket events (config/hypr/hyprland.lua).
 fn lid_event(line: &str) -> Option<bool> {
     match line.trim_end().strip_prefix("custom>>")? {
@@ -590,6 +637,7 @@ pub fn watch() -> util::Result<()> {
     let mut changed = true;
     let mut screens = None;
     let mut rescue_until = Instant::now();
+    let mut scale = XScale::new();
     loop {
         if changed || last_check.elapsed() >= Duration::from_secs(1) {
             lid.poll(changed);
@@ -611,6 +659,7 @@ pub fn watch() -> util::Result<()> {
                     }
                     screens = Some(now);
                 }
+                scale.keep(&all);
             }
             if Instant::now() < rescue_until
                 && let Err(error) = rescue_windows()

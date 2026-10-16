@@ -24,6 +24,7 @@ mod update;
 mod util;
 mod weather;
 mod window;
+mod xwayland;
 
 use std::{path::Path, process::ExitCode};
 

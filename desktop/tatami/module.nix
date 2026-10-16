@@ -232,12 +232,16 @@ let
   # tatami- prefix, such as one started by hand.
   sessionServices = {
     tatami-display-recovery =
-      lib.recursiveUpdate (unit "Tatami display recovery" "${lib.getExe tool} displays watch")
-        {
-          # A delayed/recreated compositor socket must not exhaust retries.
-          unitConfig.StartLimitIntervalSec = 0;
-          serviceConfig.TimeoutStopSec = "5s";
-        };
+      let
+        base = unit "Tatami display recovery" "${lib.getExe tool} displays watch";
+      in
+      lib.recursiveUpdate base {
+        # A delayed/recreated compositor socket must not exhaust retries.
+        unitConfig.StartLimitIntervalSec = 0;
+        serviceConfig.TimeoutStopSec = "5s";
+        # xrdb keeps XWayland's Xft.dpi at the main display's scale.
+        environment.PATH = "${pkgs.xrdb}/bin:${base.environment.PATH}";
+      };
     tatami-keep-awake = import ./keep-awake.nix { inherit lib pkgs tool; };
     tatami-waybar =
       lib.recursiveUpdate

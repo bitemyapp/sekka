@@ -56,6 +56,9 @@ hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("TERMINAL", "xdg-terminal-exec")
 
 hl.config({
+  -- X11 windows at the display's own resolution, not stretched blurry: the
+  -- tatami helper sets XWayland's Xft.dpi to the main display's scale, which
+  -- most X11 toolkits use to scale themselves.
   xwayland = {
     force_zero_scaling = true,
   },
