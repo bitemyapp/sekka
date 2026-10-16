@@ -3,7 +3,7 @@
 //! finds the Tatami configuration through XDG_CONFIG_DIRS, which the
 //! session prepends with /etc/xdg/tatami; a user's own ~/.config/foot
 //! still takes precedence.
-use crate::{CONFIG, hypr, util};
+use crate::{hypr, util};
 use std::{fs, path::Path};
 
 const SHELLS: &[&str] = &[
@@ -137,14 +137,6 @@ pub fn tui(command: &[String], mode: Tui) {
     }
     args.push("--");
     args.extend(command.iter().map(String::as_str));
-    // btop reads only ~/.config/btop; until the user has their own
-    // configuration, use the Tatami one and its Tokyo Night theme.
-    let btop = format!("{CONFIG}/btop/btop.conf");
-    let themes = format!("{CONFIG}/btop/themes");
-    let own = format!("{}/.config/btop/btop.conf", util::home());
-    if name == "btop" && command.len() == 1 && !Path::new(&own).exists() {
-        args.extend(["--config", btop.as_str(), "--themes-dir", themes.as_str()]);
-    }
     util::launch("foot", &args);
 }
 
