@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! What is installed, grouped by why: added with Yukimi, listed in the
-//! configuration by hand, chosen from a catalog the system brings,
-//! installed by a user for themselves, or part of the system because a
-//! desktop or setting brings it.
+//! What is installed, grouped by why: added with Yukimi, installed by a
+//! user for themselves, listed in the configuration by hand, chosen from a
+//! catalog the system brings, or part of the system because a desktop or
+//! setting brings it.
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -319,6 +319,7 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
             content.append(&banner);
         }
         content.append(&added(ctx, &model));
+        content.append(&just_for_you(ctx, &model));
         if let Some(group) = listed(ctx, &model, &model.configured.system, None) {
             content.append(&group);
         }
@@ -328,7 +329,6 @@ pub fn build(ctx: &Ctx) -> gtk::ScrolledWindow {
         for group in chosen(ctx, &model) {
             content.append(&group);
         }
-        content.append(&just_for_you(ctx, &model));
         content.append(&the_rest(&model));
     });
     scroll
