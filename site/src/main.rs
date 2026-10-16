@@ -34,7 +34,7 @@ pub struct Site {
 
 /// Screenshots shown on the site, copied byte for byte. Their provenance is
 /// recorded in docs/screenshots.md, and every caption says it.
-const IMAGES: [(&str, &str); 7] = [
+const IMAGES: [(&str, &str); 8] = [
     ("genkan.png", "docs/images/sekka/genkan.png"),
     ("yukimi.png", "docs/images/sekka/yukimi.png"),
     ("tatami.png", "docs/images/sekka/tatami.png"),
@@ -42,6 +42,7 @@ const IMAGES: [(&str, &str); 7] = [
     ("plasma.png", "docs/images/sekka/plasma.png"),
     ("gnome.png", "docs/images/sekka/gnome.png"),
     ("network.png", "docs/images/sekka/network.png"),
+    ("activity.png", "docs/images/sekka/activity.png"),
 ];
 
 const BRAND_FILES: [(&str, &str); 8] = [

@@ -12,6 +12,7 @@ files. They are not upscaled, composited, or generated illustrations.
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
 | [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Sekka's GNOME session with Files over Yukimi |
 | [Network](images/sekka/network.png) | 2560 × 1600 | Tatami's Network window, joined to a simulated network, with made-up network names |
+| [Activity](images/sekka/activity.png) | 2560 × 1600 | Tatami's Activity window on its CPU view, opened as Super+Ctrl+T opens it over a terminal running bottom, with that terminal selected, after a minute of readings |
 
 They come from [nix/screenshots.nix](../nix/screenshots.nix):
 
@@ -34,8 +35,12 @@ unavailable freshness information. The Network window reads the VM's real
 NetworkManager, but its Wi-Fi is simulated (mac80211_hwsim, with hostapd and
 a DHCP server): Home, Café Corner, Riverside Library and Studio 5G are
 made-up names, and the saved networks and WireGuard VPN were set up by the
-test. None of these is a screenshot of an
-installed Sekka release, and automatic login is set only in the test.
+test. Activity reads the VM's real processes; it is started with
+`tatami launch tatami-activity`, the command Super+Ctrl+T runs. Hyprland's
+share of the processor is Mesa drawing in software, and the VM reports no
+processor speed or temperature, which show as dashes. None of these is a
+screenshot of an installed Sekka release, and automatic login is set only in
+the test.
 
 Older captures under [images/tour](images/tour) were imported byte-for-byte from
 [determinate-nixos-graphical at e483b80](https://github.com/bitemyapp/determinate-nixos-graphical/tree/e483b80b3279c2baeece5fa1fe4dbf00a1932bcb/docs/images/tour)

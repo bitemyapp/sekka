@@ -141,7 +141,7 @@ pkgs.testers.runNixOSTest {
         assert size == SIZE, f"{name} is {size}, not {SIZE}"
 
     # Tatami: terminals, the menu, Yukimi in the session's GTK theme, and the
-    # Network window.
+    # Network and Activity windows.
     tatami.start()
     start_access_points(tatami)
     tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -217,6 +217,23 @@ pkgs.testers.runNixOSTest {
             raise Exception("no Network window: " + hypr("hyprctl -j clients"))
         time.sleep(1)
     capture(tatami, "network", settle=10)
+    user(tatami, "pkill -u demo -f '[t]atami-network' || true")
+    # The Activity window, as Super+Ctrl+T and the menu start it, over a
+    # terminal running bottom: it opens with the application that had the
+    # focus selected. A minute of readings, every two seconds, for its graphs.
+    tatami.wait_until_fails("pgrep -u demo -f '[t]atami-network'", timeout=30)
+    tatami.send_key("meta_l-ret")
+    wait_windows(1)
+    time.sleep(3)
+    tatami.send_chars("btm\n")
+    time.sleep(3)
+    hypr("XDG_CONFIG_DIRS=/etc/xdg/tatami:/etc/xdg tatami launch tatami-activity")
+    until = time.monotonic() + 60
+    while not any(c["class"] == "org.tatami.Activity" for c in windows()):
+        if time.monotonic() > until:
+            raise Exception("no Activity window: " + hypr("hyprctl -j clients"))
+        time.sleep(1)
+    capture(tatami, "activity", settle=60)
     tatami.shutdown()
 
     # Plasma: the live session's desktop, with Genkan's welcome page.

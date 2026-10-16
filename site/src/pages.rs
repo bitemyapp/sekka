@@ -260,6 +260,25 @@ pub fn tatami(site: &Site) -> Result<Page> {
             "win",
         )?,
     )?;
+    write!(
+        b,
+        r#"<section class="tour-step" aria-labelledby="activity">
+  <div class="win step-text">
+    <h2 id="activity">Activity</h2>
+    <p><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>T</kbd> opens Activity, after macOS's Activity Monitor, with the application you were using selected. Each application shows with all its processes together, a browser's dozens of helpers or a terminal and what runs in it, sorted by processor, memory, estimated energy, graphics or disk use.</p>
+    <p>Beside the list, the inspector follows the selected application as it changes, with its processor and memory over the last five minutes; under the list, the system as a whole. Quit, Force Quit, Pause and Resume are in the inspector and the right-click menu, and quitting asks first.</p>
+    <p class="caveat"><span class="tag tag-warning">Estimates</span> Linux measures power per device, not per process, so energy is shared out from the processor's and graphics cards' meters. Network use per process is not shown.</p>
+  </div>
+  {shot}
+</section>
+"#,
+        shot = site.shot(
+            "activity.png",
+            "Tatami's Activity window on its CPU view: applications by processor use, Hyprland first, with the terminal running bottom selected in the inspector, and the processor load and cores under the list.",
+            "Activity (Super + Ctrl + T) in a disposable test VM, after a minute of readings. Hyprland's share is Mesa drawing in software; the VM reports no processor speed or temperature.",
+            "win",
+        )?,
+    )?;
     b.push_str(
         r#"
 <section class="win" aria-labelledby="anywhere">
