@@ -479,10 +479,11 @@ pub(crate) fn fixture(repo: &Path) -> Result<String> {
     if let Some(local) = std::env::var_os("RESPIN_FIXTURE") {
         let dir = repo.join(".work/native-fixture/local/bin");
         fs::create_dir_all(&dir)?;
-        fs::copy(
-            regular(Path::new(&local))?,
-            dir.join("calamares-vm-fixture"),
-        )?;
+        // A fixture from the Nix store is read-only, and so is an earlier
+        // run's copy of it: replace that copy rather than write into it.
+        let staged = dir.join(format!(".calamares-vm-fixture-{}", stamp()));
+        fs::copy(regular(Path::new(&local))?, &staged)?;
+        fs::rename(&staged, dir.join("calamares-vm-fixture"))?;
         return Ok("/workspace/.work/native-fixture/local/bin/calamares-vm-fixture".into());
     }
     let root = repo.join(".work/native-fixture/local");
