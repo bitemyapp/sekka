@@ -65,7 +65,10 @@ input update picks it up. Superluminal ships no Qt Wayland plugin and runs
 through XWayland. Capturing starts its capture service through `pkexec`, so it
 needs the setuid wrapper (Yukimi's module enables it) and a graphical polkit
 agent: Tatami starts hyprpolkitagent and the full desktop environments bring
-their own, but the plain Hyprland session starts none. Tracy's profiler runs natively on
+their own, but the plain Hyprland session starts none. Sekka's tuning sets
+`kernel.kptr_restrict` to 2, which Superluminal names as the reason captures
+lack kernel symbols; a system that needs them can set it to 1 with
+`lib.mkForce`. Tracy's profiler runs natively on
 Wayland. Its network protocol changes between releases, so a program must be
 built with the same Tracy client version as the installed profiler; Nixpkgs
 keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled
@@ -207,3 +210,36 @@ while the backend was still installing and is retained as an
 [interrupted test](test-results/application-harness-timeout.json), never a pass.
 The corrected image's unfinished tests are recorded separately in the hardware
 handoff record.
+
+## Profiler validation (2026-10-16)
+
+Component checks: Superluminal 1.0.7705.679-alpha and Tracy 0.14.1 built with
+the applications' Nixpkgs, Superluminal's install check resolving every
+library of its 37 binaries and Tracy's own client, pkg-config and capture
+round-trip tests passing. Genkan's, `rust/`'s and Yukimi's Cargo tests, the
+`applications`, `template-lock` and `binary-cache` checks, and
+`tests/check_installed_template.py` (Plasma, Tatami and GNOME/Xfce) passed, and
+`nix flake check --no-build` evaluated all 70 checks.
+The free systems `push-cache` publishes select Tracy and not Superluminal.
+
+Image build and VM installation: an ISO built from the working tree of this
+change, equal to its commit but for `nix fmt` whitespace, carried both
+applications' closure lists. `respin-tools qemu-test --install` with
+`--applications superluminal,tracy` and Tatami installed onto a disposable
+80 GiB NVMe disk in 47.4 seconds from Install, downloading nothing. The
+installed system booted without the ISO. The harness recorded a failure: its
+fixture expects `sshd -T` to print `passwordauthentication no`, and this
+OpenSSH prints `PasswordAuthentication no`; the GitHub step was otherwise
+right (authorized key, `sshd` active, Git identity). On the same disk, the
+fixture's other checks passed with that step skipped, and
+`/etc/installer-applications.json` listed both packages at the tested store
+paths, with their inputs locked beneath `sekka` in `/etc/nixos/flake.lock`.
+
+Runtime, in that installed system's Tatami session: Tracy started from its
+launcher command on Wayland and captured a live trace from a program built
+against the same Tracy client (the virtual CPU needed
+`TRACY_NO_INVARIANT_CHECK=1`). Superluminal started under XWayland and opened
+its first-run wizard; activation was not attempted, so no capture ran.
+`superluminalcmd` ran, and the setuid `pkexec` and Tatami's polkit agent were
+present. Not tested: Superluminal's capture service, other desktops' sessions,
+and physical hardware.
