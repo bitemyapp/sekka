@@ -149,6 +149,19 @@ desktop, independently of Displays, and carries out `display_policy.rs`:
 - **Mirrors.** A display mirroring one that is about to go is switched to its
   own picture first, and that is confirmed before the source is turned off:
   Hyprland 0.56 ends mirrors while iterating them in `onDisconnect`.
+- **XWayland's scale.** Tatami sets Hyprland's `xwayland:force_zero_scaling`,
+  so X11 windows are drawn at 1×, sharp but small unless the application scales
+  itself. Many read their scale from the `Xft.dpi` resource (SDL, which Steam
+  uses; Chromium and Electron; Qt; GTK's text), so the watcher keeps it at 96 ×
+  the main display's scale (`xwayland.rs`), rounded. The main display is
+  chosen as Displays does: the kept one, else the one showing workspace 1, else
+  the first one on, never a mirror. The watcher runs `xrdb -nocpp -merge`
+  whenever that value changes, keeping XWayland's other resources, and retries
+  every five seconds while XWayland is not up. It takes `DISPLAY` from its own
+  environment, or else from the user service manager's. Applications read
+  `Xft.dpi` when they start. If XWayland restarts, the value is set again only
+  when the scale or the main display next changes. Hyprland's own `GDK_SCALE=2`
+  (`hyprland.lua`) is unchanged.
 
 The lid reaches the watcher as `custom>>tatami-lid-closed`/`-open` socket events
 from Tatami's `switch:on/off:Lid Switch` bindings (locked, universal across

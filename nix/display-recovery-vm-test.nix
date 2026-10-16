@@ -51,6 +51,7 @@ pkgs.testers.runNixOSTest {
       displays
       pkgs.grim
       pkgs.jq
+      pkgs.xrdb
     ];
     environment.etc."hypr-test.lua".text = ''
       hl.monitor({ output = "", mode = "1280x720@60", position = "auto", scale = 1 })
@@ -138,8 +139,10 @@ pkgs.testers.runNixOSTest {
     wait_for(lambda: display("eDP-1")["mirrorOf"] == "none")
     # The watcher must recover without the settings app, then keep the panel
     # on after a compositor configuration reload. Repeat the undock cycle.
+    machine.wait_until_succeeds("ls /tmp/.X11-unix/X*")
+    x_display = ":" + machine.succeed("ls /tmp/.X11-unix").split()[0][1:]
     run("systemd-run --user --unit=display-recovery --setenv=XDG_RUNTIME_DIR=/run/user/1000 "
-        "--setenv=PATH=/run/current-system/sw/bin "
+        "--setenv=PATH=/run/current-system/sw/bin --setenv=DISPLAY=" + x_display + " "
         "--setenv=HYPRLAND_INSTANCE_SIGNATURE=" + signature + " tatami displays watch")
     for _ in range(2):
         apply(False, main="DP-1")
@@ -155,6 +158,35 @@ pkgs.testers.runNixOSTest {
         wait_for(lambda: display("eDP-1")["disabled"] and not display("DP-1")["disabled"])
     apply(main="DP-1")
     wait_for(lambda: not display("eDP-1")["disabled"])
+
+    # X11 applications draw at the main display's scale: XWayland's Xft.dpi
+    # follows it, 96 for each unit, and its other resources are kept.
+    def xft_dpi():
+        query = run("DISPLAY=" + x_display + " xrdb -query")
+        return next((line.split(":")[1].strip() for line in query.splitlines() if line.startswith("Xft.dpi:")), None)
+    def wait_for_dpi(dpi):
+        until = time.monotonic() + 10
+        while xft_dpi() != dpi:
+            if time.monotonic() > until:
+                raise AssertionError(f"Xft.dpi {xft_dpi()!r}, not {dpi}: " + json.dumps(monitors()))
+            time.sleep(0.2)
+    def scales(main, panel, external):
+        change = dict(displays=[dict(name="eDP-1", enabled=True, mode="1280x720@60", scale=panel),
+                                dict(name="DP-1", enabled=True, mode="1280x720@60", scale=external)],
+                      main=main, apply=["eDP-1", "DP-1"])
+        run("printf %s " + shlex.quote(json.dumps(change)) + " | tatami displays apply")
+    wait_for_dpi("96")
+    run("echo 'Tatami.kept: yes' | DISPLAY=" + x_display + " xrdb -nocpp -merge")
+    scales("DP-1", 1, 2)
+    wait_for_dpi("192")
+    scales("eDP-1", 1, 2)
+    wait_for_dpi("96")
+    # A fractional scale (Hyprland reports 1.6 as a single-precision float).
+    scales("eDP-1", 1.6, 2)
+    wait_for_dpi("154")
+    scales("DP-1", 1, 1)
+    wait_for_dpi("96")
+    assert "Tatami.kept:\tyes" in run("DISPLAY=" + x_display + " xrdb -query")
 
     # Closed-display mode, with a lid both logind and Hyprland see.
     machine.systemctl("start fake-lid.service")

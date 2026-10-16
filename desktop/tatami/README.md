@@ -202,6 +202,13 @@ and turning a display off) ask to be kept and are undone after 15 seconds
 otherwise. The displays to the right of and below one that changes size move
 with its edges, and every display a change moves moves in one step.
 
+Older X11 applications that run through XWayland, such as Steam, draw at the
+main display's scale: sharp, and the same size as everything else on it.
+They pick up a new scale or main display when they next start. X11 has a
+single scale for every screen, so with displays at different scales those
+windows look too large or too small on the others, and an application that
+reads no scale from X11 stays small.
+
 The `tatami` helper keeps the settings, as Super+/'s scales, in
 `~/.local/state/tatami/displays.json`, and writes the `hl.monitor` rules
 Hyprland loads from them to `displays.lua` next to it. A display's settings
