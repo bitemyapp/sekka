@@ -26,8 +26,8 @@ pub fn home(site: &Site) -> Result<Page> {
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
             "tatami.png",
-            "Tatami with two terminals tiled side by side: fastfetch and bottom, in Tokyo Night colours.",
-            "Tatami in a disposable test VM built from Sekka's own modules.",
+            "Tatami's Activity window over a terminal, in Tokyo Night colours: applications by processor use, with the terminal selected in the inspector, and the processor's load and cores under the list.",
+            "Activity, opened with Super + Ctrl + T over a terminal, in a disposable test VM built from Sekka's own modules.",
             "win hero-shot",
         )?,
     )?;
@@ -88,7 +88,7 @@ pub fn home(site: &Site) -> Result<Page> {
         )?,
         tatami_shot = site.shot(
             "tatami-menu.png",
-            "Tatami's menu open over two terminals: Apps, Learn, Trigger, Style, Setup, About and System.",
+            "Tatami's menu open over Activity: Apps, Learn, Trigger, Style, Setup, About and System.",
             "The menu, opened with Super + Space. The bar still shows the NixOS logo.",
             "",
         )?,
@@ -178,7 +178,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         icon = site.asset("brand/tatami.svg")?,
         shot = site.shot(
             "tatami-menu.png",
-            "Tatami's menu open over two terminals: fastfetch and bottom.",
+            "Tatami's menu open over Activity and a terminal.",
             "Tatami's menu (Super + Space) in a disposable test VM. The bar still shows the NixOS logo.",
             "win wide-shot",
         )?,
@@ -274,8 +274,8 @@ pub fn tatami(site: &Site) -> Result<Page> {
 "#,
         shot = site.shot(
             "activity.png",
-            "Tatami's Activity window on its CPU view: applications by processor use, Hyprland first, with the terminal running bottom selected in the inspector, and the processor load and cores under the list.",
-            "Activity (Super + Ctrl + T) in a disposable test VM, after a minute of readings. Hyprland's share is Mesa drawing in software; the VM reports no processor speed or temperature.",
+            "Tatami's Activity window on its Memory view: each application's proportional, private, resident and shared memory, Hyprland first, with the terminal selected in the inspector, and memory use and pressure under the list.",
+            "Activity's Memory view (Ctrl + 2) in a disposable test VM. Dashes are root's processes, whose memory maps a user can't read; Hyprland's memory includes Mesa drawing in software.",
             "win",
         )?,
     )?;

@@ -78,10 +78,7 @@ let
           environment.systemPackages = [ pkgs.file pkgs.firefox ];
         }
       '';
-      environment.systemPackages = [
-        pkgs.fastfetch
-        pkgs.bottom
-      ];
+      environment.systemPackages = [ pkgs.fastfetch ];
     };
 in
 pkgs.testers.runNixOSTest {
@@ -140,8 +137,8 @@ pkgs.testers.runNixOSTest {
         size = struct.unpack(">II", header[16:24])
         assert size == SIZE, f"{name} is {size}, not {SIZE}"
 
-    # Tatami: terminals, the menu, Yukimi in the session's GTK theme, and the
-    # Network and Activity windows.
+    # Tatami: Activity over a terminal, the menu, Yukimi in the session's GTK
+    # theme, and the Network window.
     tatami.start()
     start_access_points(tatami)
     tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -177,15 +174,25 @@ pkgs.testers.runNixOSTest {
     time.sleep(3)
     tatami.send_chars("fastfetch\n")
     time.sleep(4)
-    tatami.send_key("meta_l-ret")
-    wait_windows(2)
-    time.sleep(3)
-    tatami.send_chars("btm\n")  # tiled beside fastfetch, as Tatami lays them out
-    capture(tatami, "tatami", settle=12)
+    # Activity over it, as Super+Ctrl+T opens it: with the application that
+    # had the focus, the terminal, selected. A minute of readings, every two
+    # seconds, for its graphs.
+    tatami.send_key("meta_l-ctrl-t")
+    until = time.monotonic() + 60
+    while not any(c["class"] == "org.tatami.Activity" for c in windows()):
+        if time.monotonic() > until:
+            raise Exception("no Activity window: " + hypr("hyprctl -j clients"))
+        time.sleep(1)
+    capture(tatami, "tatami", settle=60)
     tatami.send_key("meta_l-spc")  # the Tatami menu
     capture(tatami, "tatami-menu", settle=8)
     tatami.send_key("esc")
     time.sleep(2)
+    # Its Memory view: each application's proportional, private and
+    # resident memory.
+    tatami.send_key("ctrl-2")
+    capture(tatami, "activity", settle=10)
+    user(tatami, "pkill -u demo -f '[t]atami-activity' || true")
     user(tatami, "pkill -x foot || true")
     # No GPU in the VM: Cairo, rather than GTK trying Vulkan first.
     launch(tatami, "env GSK_RENDERER=cairo yukimi")
@@ -217,23 +224,6 @@ pkgs.testers.runNixOSTest {
             raise Exception("no Network window: " + hypr("hyprctl -j clients"))
         time.sleep(1)
     capture(tatami, "network", settle=10)
-    user(tatami, "pkill -u demo -f '[t]atami-network' || true")
-    # The Activity window, as Super+Ctrl+T and the menu start it, over a
-    # terminal running bottom: it opens with the application that had the
-    # focus selected. A minute of readings, every two seconds, for its graphs.
-    tatami.wait_until_fails("pgrep -u demo -f '[t]atami-network'", timeout=30)
-    tatami.send_key("meta_l-ret")
-    wait_windows(1)
-    time.sleep(3)
-    tatami.send_chars("btm\n")
-    time.sleep(3)
-    hypr("XDG_CONFIG_DIRS=/etc/xdg/tatami:/etc/xdg tatami launch tatami-activity")
-    until = time.monotonic() + 60
-    while not any(c["class"] == "org.tatami.Activity" for c in windows()):
-        if time.monotonic() > until:
-            raise Exception("no Activity window: " + hypr("hyprctl -j clients"))
-        time.sleep(1)
-    capture(tatami, "activity", settle=60)
     tatami.shutdown()
 
     # Plasma: the live session's desktop, with Genkan's welcome page.
