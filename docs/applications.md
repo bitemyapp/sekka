@@ -1,6 +1,6 @@
 # Optional applications
 
-The installer presents 32 choices with checkboxes, categories, search and short
+The installer presents 35 choices with checkboxes, categories, search and short
 descriptions. Firefox starts selected. Empty selection is supported. The review
 screen lists the normalized selection, and the privileged helper validates it
 again. Unknown IDs, duplicate requests and proprietary selections without
@@ -22,6 +22,8 @@ pins were selected on 2026-10-04:
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | `a7868a727837f3c09cee2ce0ca671c76b1589fed` | Browsers, editors, terminals, developer tools, productivity, communication and media |
 | [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop and OpenCode |
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
+| [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
+| [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -51,6 +53,23 @@ Rustup makes that checkbox optional again. Nixpkgs provides the NixOS-compatible
 Rustup wrapper. Run `rustup default stable` after installation to download a
 toolchain. Rustup is intentionally not accompanied by a conflicting system-wide
 `rustc`/`cargo` package.
+
+Superluminal and Tracy are profilers packaged by other flakes, which Sekka
+takes as inputs and builds with the applications' Nixpkgs; the catalog lists
+them as Sekka's own packages (`"source": "sekka"`). Superluminal repackages
+the vendor's proprietary Linux alpha, so it needs unfree-software consent and
+a trial or license. A daily workflow in the
+[superluminal-nix-linux fork](https://github.com/bitemyapp/superluminal-nix-linux)
+adds each new release from superluminal.eu once it builds, and Sekka's nightly
+input update picks it up. Superluminal ships no Qt Wayland plugin and runs
+through XWayland. Capturing starts its capture service through `pkexec`, so it
+needs the setuid wrapper (Yukimi's module enables it) and a graphical polkit
+agent: Tatami starts hyprpolkitagent and the full desktop environments bring
+their own, but the plain Hyprland session starts none. Tracy's profiler runs natively on
+Wayland. Its network protocol changes between releases, so a program must be
+built with the same Tracy client version as the installed profiler; Nixpkgs
+keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled
+from source, so `push-cache` publishes it.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added

@@ -582,7 +582,9 @@
         "determinate": "determinate",
         "fh": "fh",
         "nixpkgs": "nixpkgs_5",
-        "omp": "omp"
+        "omp": "omp",
+        "superluminal": "superluminal",
+        "tracy": "tracy"
       }
     },
     "rust-analyzer-src": {
@@ -620,6 +622,26 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "superluminal": {
+      "inputs": {
+        "nixpkgs": [
+          "applications"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792174218,
+        "narHash": "sha256-pmU75ZO5sj7xPS7VuvfcnonqRAsVotv+amlJ2dWMgQA=",
+        "owner": "bitemyapp",
+        "repo": "superluminal-nix-linux",
+        "rev": "eacbc06314c5c590e2cc74d95d082911759b59f0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "superluminal-nix-linux",
         "type": "github"
       }
     },
@@ -665,6 +687,26 @@
       "original": {
         "owner": "nix-systems",
         "repo": "x86_64-darwin",
+        "type": "github"
+      }
+    },
+    "tracy": {
+      "inputs": {
+        "nixpkgs": [
+          "applications"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791150074,
+        "narHash": "sha256-frjZ8qK1OIFxxzkKSv/Toza32Iy7/rbFevXwTF3kEAo=",
+        "owner": "Quince-Pie",
+        "repo": "tracy-flake",
+        "rev": "1f0bf6eaee8e965848274caa7f4ab6d2ff877f97",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Quince-Pie",
+        "repo": "tracy-flake",
         "type": "github"
       }
     },
