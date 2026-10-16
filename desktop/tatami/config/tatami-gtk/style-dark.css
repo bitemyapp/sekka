@@ -1,11 +1,11 @@
-/* Tatami's look for its own GTK windows (Displays, Network): Tokyo Night,
- * as the menu, the bar and the notifications have it (walker, waybar and
- * mako here, and the authentication agent's polkit/kdeglobals), with
- * JetBrainsMono Nerd Font, square corners and a #7aa2f7 accent. It is
+/* Tatami's look for its own GTK windows (Displays, Network, Activity):
+ * Tokyo Night, as the menu, the bar and the notifications have it (walker,
+ * waybar and mako here, and the authentication agent's polkit/kdeglobals),
+ * with JetBrainsMono Nerd Font, square corners and a #7aa2f7 accent. It is
  * libadwaita's stylesheet with its colors replaced, so each window keeps its
- * layout. Each window's own stylesheet (tatami-displays/, tatami-network/)
- * imports this one, and is "-dark": the window is dark, whatever the
- * session's light or dark preference, as these colors are. */
+ * layout. Each window's own stylesheet (tatami-displays/, tatami-network/,
+ * tatami-activity/) imports this one, and is "-dark": the window is dark,
+ * whatever the session's light or dark preference, as these colors are. */
 
 
 :root {
@@ -50,6 +50,16 @@
   --shade-color: rgb(0 0 0 / 36%);
   --scrollbar-outline-color: rgb(0 0 0 / 50%);
   --border-color: rgb(169 177 214 / 15%);
+  --sidebar-bg-color: #1a1b26;
+  --sidebar-fg-color: #a9b1d6;
+  --sidebar-backdrop-color: #1a1b26;
+  --sidebar-border-color: rgb(169 177 214 / 15%);
+  --sidebar-shade-color: rgb(0 0 0 / 36%);
+  --secondary-sidebar-bg-color: #1a1b26;
+  --secondary-sidebar-fg-color: #a9b1d6;
+  --secondary-sidebar-backdrop-color: #1a1b26;
+  --secondary-sidebar-border-color: rgb(169 177 214 / 15%);
+  --secondary-sidebar-shade-color: rgb(0 0 0 / 36%);
 
   /* Square, as Tatami's windows, menu and panels. */
   --window-radius: 0px;

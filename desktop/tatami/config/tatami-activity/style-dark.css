@@ -1,0 +1,75 @@
+/* The Activity window (tatami-activity) in Tatami's look: the windows'
+ * shared colors, font and corners, then its graphs in Tatami's data colors
+ * (the accent, purple and teal) and memory pressure in its state colors. */
+
+@import url("../tatami-gtk/style-dark.css");
+
+.graph,
+.meter-track,
+.gpu-card,
+toggle-group,
+toggle-group > toggle,
+.pill {
+  border-radius: 0;
+}
+
+.graph {
+  background-color: rgb(169 177 214 / 4%);
+}
+
+.graph-series.cpu-user,
+.graph-series.memory-apps,
+.graph-series.power-cpu,
+.core-bars,
+.meter-part.memory-private {
+  color: #7aa2f7;
+}
+
+.graph-series.cpu-system,
+.graph-series.power-gpu,
+.graph-series.gpu-busy,
+.graph-series.disk-write,
+.meter-part.memory-swap {
+  color: #ad8ee6;
+}
+
+.graph-series.memory-cached {
+  color: rgb(68 157 171 / 60%);
+}
+
+.graph-series.gpu-video,
+.graph-series.disk-read,
+.meter-part.gpu-memory,
+.meter-part.memory-shared {
+  color: #449dab;
+}
+
+.graph-series.pressure-low,
+.summary-value.pressure-low {
+  color: #9ece6a;
+}
+
+.graph-series.pressure-moderate,
+.summary-value.pressure-moderate {
+  color: #e0af68;
+}
+
+.graph-series.pressure-high,
+.summary-value.pressure-high {
+  color: #f7768e;
+}
+
+/* The chosen view and grouping, as the menu's choices: tinted, in the
+ * accent. */
+toggle-group > toggle:checked {
+  background-color: rgb(169 177 214 / 8%);
+  color: #7aa2f7;
+}
+
+columnview.processes > listview > row:selected {
+  background-color: #292e42;
+}
+
+.summary-title {
+  color: #c0caf5;
+}

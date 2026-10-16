@@ -32,3 +32,9 @@ icon = ""
 submenu = "tatami-hardware"
 state = ["submenu"]
 keywords = ["hardware", "hw"]
+
+[[entries]]
+text = "Activity"
+icon = "\U000F0430"
+value = "tatami launch tatami-activity"
+keywords = ["activity", "monitor", "processes", "task manager", "cpu", "memory", "energy", "gpu", "quit", "kill"]

@@ -21,6 +21,9 @@ let
   # The Network window (network/): joining networks, VPNs, DNS and
   # addresses, from the network panel's Network settings…
   network = pkgs.callPackage ./network/package.nix { };
+  # The Activity window (activity/): what each application uses of the
+  # processor, memory, energy, graphics and storage (Super+Ctrl+T).
+  activity = pkgs.callPackage ./activity/package.nix { };
   wallpapers = pkgs.callPackage ./wallpapers/package.nix { };
   # Only the providers the launcher and menu use (config/walker): not
   # Arch package search, password managers or other compositors' windows.
@@ -397,6 +400,52 @@ in
         )
       );
     systemd.user.services = sessionServices;
+    # The processor's energy counters for Activity's Energy view: readable
+    # by root only, as quick samples can leak secrets (CVE-2020-8694). The
+    # helper reads them at most once a second, started by its socket when
+    # Activity asks and gone after a minute without a question. Root for
+    # the read alone: no capabilities, network or writable files.
+    systemd.sockets.tatami-power-meter = {
+      description = "Tatami's processor power meter";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "/run/tatami/power.sock";
+        SocketMode = "0666";
+        DirectoryMode = "0755";
+      };
+    };
+    systemd.services.tatami-power-meter = {
+      description = "Tatami's processor power meter";
+      serviceConfig = {
+        ExecStart = "${lib.getExe tool} power-meter";
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateNetwork = true;
+        PrivateTmp = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProtectSystem = "strict";
+        RestrictAddressFamilies = "AF_UNIX";
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged @resources"
+        ];
+        UMask = "0077";
+      };
+    };
     security.pam.services.hyprlock = { };
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;
@@ -448,6 +497,7 @@ in
       tool
       displays
       network
+      activity
       wallpapers
       # The weather beside the clock.
       pkgs.curl
@@ -475,8 +525,9 @@ in
       pkgs.wireplumber
       pkgs.wiremix
       pkgs.bluetui
-      # Activity (Super+Ctrl+T). bottom's own desktop entry and icon list it
-      # in the launcher, which opens it in foot until it exits.
+      # A system monitor in the terminal, beside Activity. bottom's own
+      # desktop entry and icon list it in the launcher, which opens it in
+      # foot until it exits.
       pkgs.bottom
       pkgs.fastfetch
       pkgs.nautilus

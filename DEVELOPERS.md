@@ -29,7 +29,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#network .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#activity .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -54,6 +54,7 @@ cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/activity/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
 cargo test --locked --manifest-path rust/Cargo.toml
@@ -379,6 +380,53 @@ The push needs two credentials, neither of which belongs in the repository:
 Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
+
+## Activity
+
+Tatami's Activity window (`desktop/tatami/activity`, `tatami-activity`) is a
+GTK 4 and libadwaita crate of its own, as Displays and Network are. A sampler
+thread (`sampler.rs`) reads `/proc` and `/sys` every interval and sends the
+window a plain `Frame`; the window updates its rows (GObjects, `entry.rs`) in
+place and re-sorts, so selection, expansion and scrolling survive a reading.
+Costly figures are rationed: `smaps_rollup` (PSS, private, shared) every
+fifth reading unless the Memory view shows or the process is selected, and
+each process's DRM file descriptors every tenth. Rows are grouped into
+applications in `apps.rs` from the process tree and systemd units, with
+process managers (init, systemd, kthreadd, the compositor) breaking the tree,
+and named from Hyprland's clients and launcher entries; the unit tests there
+cover Chromium moving itself into a scope and helpers reparented to systemd.
+
+NVIDIA figures come from NVML, opened with `dlopen` (`nvml.rs`), so the crate
+has no NVIDIA build dependency; NixOS's library is in `/run/opengl-driver/lib`.
+AMD, Intel and other DRM drivers' per-process figures come from
+`/proc/PID/fdinfo` (`gpu.rs`, the kernel's drm-usage-stats format), with a
+client shared between processes counted once.
+
+The processor's RAPL counters are root-only (CVE-2020-8694). The window stays
+unprivileged: `tatami power-meter` (`tool/src/power_meter.rs`) runs as
+`tatami-power-meter.service`, socket-activated by `/run/tatami/power.sock`,
+with no capabilities, network or writable paths. It reads the package domains
+at most once a second, answers every connection with "NAME ENERGY_UJ
+RANGE_UJ" lines, and exits after a minute without one. Per-process power in
+`power.rs` is a model, documented there and in Tatami's README; its tests pin
+the split so it never attributes more than was measured.
+
+`tatami-activity --print` prints one reading as text, useful on a machine
+without a session. To look at the window without a desktop, run it on
+GTK's Broadway backend (`gtk4-broadwayd :5`, then `GDK_BACKEND=broadway
+BROADWAY_DISPLAY=:5 tatami-activity`) and open `http://127.0.0.1:8085`; set
+`XDG_CONFIG_DIRS` to `desktop/tatami/config` for Tatami's look. For captures
+at the screenshot VM's size, a headless sway (`WLR_BACKENDS=headless
+WLR_RENDERER=pixman`, output 2560x1600 at scale 2) and `grim` work without a
+GPU; a second `tatami-activity --pid PID`, `--lens ID` or `--search TEXT`
+drives the open window, and its actions are on D-Bus at
+`/org/tatami/Activity/window/1`. Component tests cover parsing, grouping and
+the energy split. `nix build .#checks.x86_64-linux.activity-vm` boots a
+disposable Tatami VM: Super+Ctrl+T must open the window floating, the power
+meter must start from its socket as root and answer, a stand-in meter on the
+same socket (a VM has no RAPL counters) must give a busy terminal processor
+power in a reading, and Quit must end that process. Reading real RAPL
+counters as root needs physical hardware.
 
 ## Keep Awake and USB wake
 

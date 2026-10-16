@@ -17,6 +17,7 @@ mod media;
 mod menu;
 mod network;
 mod power;
+mod power_meter;
 mod terminal;
 mod toggle;
 mod update;
@@ -320,6 +321,7 @@ fn main() -> ExitCode {
             true
         }
         Some("reload") => return reload(),
+        Some("power-meter") => return power_meter::serve(),
         Some("update-session") => {
             return match update::apply() {
                 Ok(()) => ExitCode::SUCCESS,
