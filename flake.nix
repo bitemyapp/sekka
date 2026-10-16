@@ -151,6 +151,12 @@
           genkan = calamares;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        # A development check of Yukimi's Discover; not run with the others.
+        yukimi-discover = import ./nix/yukimi-discover.nix {
+          inherit pkgs nixpkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+          applicationsModule = inputs.calamares.nixosModules.applications;
+        };
         inherit (inputs.tatami.packages.${system})
           tatami
           displays
