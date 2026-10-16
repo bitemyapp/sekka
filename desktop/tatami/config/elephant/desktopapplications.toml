@@ -1,5 +1,8 @@
 show_actions = false
-only_search_title = true
+# Unlike Omarchy's launcher, find applications by their generic names and
+# keywords as well as their names ("pack" finds Yukimi). Tatami's Elephant
+# matches those fields alone, not Exec lines or comments (../../elephant).
+only_search_title = false
 history = false
 # Entries Omarchy's launcher has no counterpart for: foot's client and
 # server modes, uwsm's unit manager, and NetworkManager's connection editor,

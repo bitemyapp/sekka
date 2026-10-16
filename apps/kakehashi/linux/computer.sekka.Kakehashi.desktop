@@ -7,5 +7,5 @@ Exec=kakehashi
 Icon=computer.sekka.Kakehashi
 Terminal=false
 Categories=System;Utility;
-Keywords=usb;iso;image;flash;write;sekka;
+Keywords=usb;iso;image;flash;write;burn;bootable;drive;stick;installer;sekka;etcher;rufus;
 StartupWMClass=computer.sekka.Kakehashi

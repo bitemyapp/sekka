@@ -14,6 +14,7 @@ rec {
       network = pkgs.callPackage ../desktop/tatami/network/package.nix { };
       activity = pkgs.callPackage ../desktop/tatami/activity/package.nix { };
       wallpapers = pkgs.callPackage ../desktop/tatami/wallpapers/package.nix { };
+      elephant = pkgs.callPackage ../desktop/tatami/elephant/package.nix { };
     };
   };
   yukimi = {

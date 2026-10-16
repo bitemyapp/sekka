@@ -1,9 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Activity
+GenericName=System Monitor
 Comment=See what each application uses of the processor, memory, energy, graphics and storage, and quit what misbehaves
 Exec=tatami-activity
 Icon=utilities-system-monitor
 Categories=System;Monitor;
-Keywords=activity;monitor;process;processes;task;manager;cpu;memory;ram;pss;rss;energy;power;watts;gpu;vram;disk;quit;kill;top;
+Keywords=activity;monitor;activity monitor;task manager;process;processes;task;manager;cpu;memory;ram;pss;rss;energy;power;watts;gpu;vram;disk;quit;kill;top;htop;btop;
 StartupNotify=true
