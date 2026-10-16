@@ -42,16 +42,21 @@ pub fn wanted(all: &Value, kept: Option<&str>) -> Option<u32> {
 /// XWayland's display: this session's, or the service manager's when
 /// Hyprland exported it after this helper started.
 pub fn display() -> Option<String> {
-    let from_manager = || {
-        util::output("systemctl", &["--user", "show-environment"])
-            .ok()?
+    choose_display(std::env::var("DISPLAY").ok(), || {
+        util::output("systemctl", &["--user", "show-environment"]).ok()
+    })
+}
+
+/// `own` if it names a display, else the `DISPLAY` in the service
+/// manager's environment, asked for only then.
+fn choose_display(own: Option<String>, manager: impl FnOnce() -> Option<String>) -> Option<String> {
+    let named = |display: &String| !display.is_empty();
+    own.filter(named).or_else(|| {
+        manager()?
             .lines()
             .find_map(|line| line.strip_prefix("DISPLAY=").map(str::to_owned))
-    };
-    std::env::var("DISPLAY")
-        .ok()
-        .or_else(from_manager)
-        .filter(|display| !display.is_empty())
+            .filter(named)
+    })
 }
 
 /// Set `Xft.dpi` on XWayland's display, keeping its other resources.
@@ -105,6 +110,28 @@ mod tests {
         assert_eq!(dpi(f64::from(1.6_f32)), Some(154));
         assert_eq!(dpi(0.0), None);
         assert_eq!(dpi(f64::NAN), None);
+    }
+
+    #[test]
+    fn a_missing_or_empty_display_comes_from_the_service_manager() {
+        let manager = || Some("PATH=/run/current-system/sw/bin\nDISPLAY=:0\n".to_owned());
+        let unasked = || -> Option<String> { panic!("the service manager was asked") };
+        assert_eq!(
+            choose_display(Some(":1".into()), unasked),
+            Some(":1".into())
+        );
+        assert_eq!(choose_display(None, manager), Some(":0".into()));
+        // Set but empty, as a unit's environment can leave it.
+        assert_eq!(
+            choose_display(Some(String::new()), manager),
+            Some(":0".into())
+        );
+        assert_eq!(
+            choose_display(Some(String::new()), || Some("DISPLAY=\n".into())),
+            None
+        );
+        assert_eq!(choose_display(None, || Some("PATH=/bin\n".into())), None);
+        assert_eq!(choose_display(None, || None), None);
     }
 
     #[test]
