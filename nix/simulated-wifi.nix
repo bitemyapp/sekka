@@ -55,6 +55,12 @@ assert lib.length networks <= 9;
       networking.networkmanager = {
         enable = true;
         unmanaged = [ "interface-name:wlan0*" ];
+        # Scan with the radio's own address. To change it, NetworkManager
+        # takes wlan1 down as it leaves a network; a scan it has just asked
+        # wpa_supplicant for can be dropped then, leaving wpa_supplicant to
+        # treat its next scan's results as scan-only and join nothing (see
+        # docs/handoff/network-vm-hidden-ssid.md).
+        wifi.scanRandMacAddress = false;
       };
       environment.etc."access-points/hostapd.conf".text = lib.concatStringsSep "\n" (
         lib.imap0 bss networks
