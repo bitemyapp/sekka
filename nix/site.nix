@@ -20,6 +20,7 @@ let
         ../site/Cargo.lock
         ../site/src
         ../site/style.css
+        ../site/theme.js
       ];
     };
     cargoLock.lockFile = ../site/Cargo.lock;

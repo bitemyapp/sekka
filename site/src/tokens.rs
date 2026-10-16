@@ -245,9 +245,11 @@ impl Tokens {
         Ok(s)
     }
 
-    /// Custom properties for every token. Night is the default; Day follows
-    /// a light preference and High contrast a contrast preference, which
-    /// wins. The design page's theme picker overrides both, without script.
+    /// Custom properties for every token. Night is the default, whatever
+    /// the system's colour scheme; High contrast follows a contrast
+    /// preference. Day is the bar's switch: checked on the page, or the
+    /// choice theme.js remembered, as `data-theme`. The design page's theme
+    /// picker, last, overrides them all on its page.
     pub fn css(&self) -> Result<String> {
         let first = &self.themes[0].id;
         let mut s = String::from("/* Generated from docs/brand/tokens.json. */\n:root {\n");
@@ -261,24 +263,18 @@ impl Tokens {
             writeln!(s, "  --font-{key}: {stack};")?;
         }
         s += "}\n";
-        for t in &self.themes[1..] {
-            let query = if t.id == "contrast" {
-                "(prefers-contrast: more)"
-            } else {
-                "(prefers-color-scheme: light)"
-            };
+        if self.themes.iter().any(|t| t.id == "contrast") {
             writeln!(
                 s,
-                "@media {query} {{\n:root {{\n{}}}\n}}",
-                self.theme_block(&t.id)?
+                "@media (prefers-contrast: more) {{\n:root {{\n{}}}\n}}",
+                self.theme_block("contrast")?
             )?;
         }
-        // Contrast must outrank a light preference that appears after it.
-        if let Some(c) = self.themes.iter().find(|t| t.id == "contrast") {
+        if self.themes.iter().any(|t| t.id == "day") {
             writeln!(
                 s,
-                "@media (prefers-contrast: more) and (prefers-color-scheme: light) {{\n:root {{\n{}}}\n}}",
-                self.theme_block(&c.id)?
+                ":root[data-theme=\"day\"],\n:root:has(#site-theme:checked) {{\n{}}}",
+                self.theme_block("day")?
             )?;
         }
         for t in &self.themes {

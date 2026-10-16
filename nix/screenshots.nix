@@ -1,10 +1,16 @@
 # Real captures in disposable VMs; no host desktop or disks are used.
 #
 # Each VM is a Sekka system built from the same desktop module installed
-# systems import, logged in automatically. The virtual display is 2560 × 1600
-# at scale 2: a 1280 × 800 layout drawn at twice the density, so pages can
-# show the captures sharply on high-density screens. Scaling is set the way a
-# person would: Tatami's Displays settings, KDE's and GNOME's own tools.
+# systems import, logged in automatically. The virtual display is drawn at
+# scale 2, twice the density of its layout, so pages can show the captures
+# sharply on high-density screens: 2560 × 1600 for Plasma and GNOME, and
+# 2880 × 1800 for Tatami, whose Displays window (880 × 800) needs the room
+# under the bar. Scaling is set the way a person would: Tatami's Displays
+# settings, KDE's and GNOME's own tools.
+#
+# A desktop is captured whole. An application is captured on its own: the
+# display is captured with nothing else on it, then cropped to the window's
+# rectangle, in the display's own pixels; nothing is scaled.
 {
   pkgs,
   genkan,
@@ -12,8 +18,20 @@
 }:
 let
   inherit (pkgs) lib;
-  width = 2560;
-  height = 1600;
+  sizes = {
+    tatami = {
+      width = 2880;
+      height = 1800;
+    };
+    plasma = {
+      width = 2560;
+      height = 1600;
+    };
+    gnome = {
+      width = 2560;
+      height = 1600;
+    };
+  };
   # Made-up networks for the Network window, served by simulated Wi-Fi: none
   # is a real network anywhere.
   wifi = import ./simulated-wifi.nix {
@@ -64,7 +82,7 @@ let
         cores = 4;
         # virtio-gpu offers the size as its preferred mode; there is no GPU,
         # so Mesa renders in software.
-        qemu.options = [
+        qemu.options = with sizes.${desktop}; [
           "-vga none"
           "-device virtio-gpu-pci,xres=${toString width},yres=${toString height}"
         ];
@@ -104,16 +122,26 @@ pkgs.testers.runNixOSTest {
       { ... }:
       {
         imports = [ (sekka "plasma") ];
-        environment.systemPackages = [ preview ];
+        # kdotool asks KWin where Genkan's window is, and reads the answer
+        # from KWin's journal.
+        environment.systemPackages = [
+          preview
+          pkgs.kdotool
+        ];
+        users.users.demo.extraGroups = [ "systemd-journal" ];
       };
     gnome = sekka "gnome";
   };
   testScript = ''
-    import json, shlex, struct, time
+    import json, re, shlex, struct, subprocess, time
 
     ${wifi.script}
 
-    SIZE = (${toString width}, ${toString height})
+    SIZES = {
+        name: (size["width"], size["height"])
+        for name, size in json.loads(${lib.escapeShellArg (builtins.toJSON sizes)}).items()
+    }
+    SCALE = 2
 
     def user(node, command):
         status, output = node.execute(
@@ -129,16 +157,37 @@ pkgs.testers.runNixOSTest {
         # manager: how Tatami's menu starts applications too.
         user(node, "systemd-run --user --collect --quiet " + command)
 
-    def capture(node, name, settle=6):
+    def capture(node, name, settle=6, window=None):
+        # The whole display at its native resolution. With window, a function
+        # giving the window's rectangle in layout pixels, the capture is kept
+        # as NAME-display.png and NAME.png is that rectangle of it.
+        if node.name == "tatami":
+            # Tatami hides the pointer at a key press, until it moves; Shift
+            # alone does nothing in a window.
+            node.send_key("shift")
         time.sleep(settle)
-        node.screenshot(name)
-        with open(node.out_dir / (name + ".png"), "rb") as f:
+        whole = name + "-display" if window else name
+        node.screenshot(whole)
+        path = node.out_dir / (whole + ".png")
+        with open(path, "rb") as f:
             header = f.read(24)
         size = struct.unpack(">II", header[16:24])
-        assert size == SIZE, f"{name} is {size}, not {SIZE}"
+        assert size == SIZES[node.name], f"{whole} is {size}, not {SIZES[node.name]}"
+        if window is None:
+            return
+        x, y, w, h = (round(v * SCALE) for v in window())
+        assert 0 <= x and 0 <= y and x + w <= size[0] and y + h <= size[1], (
+            f"{name}'s window {w}×{h}+{x}+{y} is not all on the {size} display")
+        subprocess.run(
+            ["${pkgs.imagemagick}/bin/magick", str(path),
+             "-crop", f"{w}x{h}+{x}+{y}", "+repage",
+             "-strip", "-define", "png:exclude-chunks=date,time",
+             "PNG24:" + str(node.out_dir / (name + ".png"))],
+            check=True)
+        print(f"{name}.png: {w} × {h} at {x},{y} of {whole}.png")
 
-    # Tatami: Activity over a terminal, the menu, Yukimi in the session's GTK
-    # theme, and the Network window.
+    # Tatami: Activity, the menu, Displays, Yukimi in the session's GTK
+    # theme, and the Network window, each on its own.
     tatami.start()
     start_access_points(tatami)
     tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -156,7 +205,7 @@ pkgs.testers.runNixOSTest {
     print(hypr("printf %s '{\"displays\":[{\"name\":\"Virtual-1\",\"enabled\":true,\"scale\":2}],"
                "\"main\":\"Virtual-1\",\"apply\":[\"Virtual-1\"]}' | tatami displays apply"))
     until = time.monotonic() + 30
-    while not all(m["scale"] == 2 for m in monitors()):
+    while not all(m["scale"] == SCALE for m in monitors()):
         if time.monotonic() > until:
             raise Exception("not scaled: " + json.dumps(monitors(), indent=1))
         time.sleep(1)
@@ -169,40 +218,79 @@ pkgs.testers.runNixOSTest {
             if time.monotonic() > until:
                 raise Exception(f"expected {count} windows: " + hypr("hyprctl -j clients"))
             time.sleep(1)
+    def window(match):
+        found = [c for c in windows() if match.lower() in c["class"].lower()]
+        return found[0] if found else None
+    def wait_window(match, gone=False):
+        until = time.monotonic() + 60
+        while (window(match) is None) != gone:
+            if time.monotonic() > until:
+                state = "a" if gone else "no"
+                raise Exception(f"{state} {match} window: " + hypr("hyprctl -j clients"))
+            time.sleep(1)
+    def alone(match):
+        # The window's rectangle, once nothing else shares its workspace.
+        def rect():
+            client = window(match)
+            others = [c for c in windows()
+                      if c["workspace"]["id"] == client["workspace"]["id"]
+                      and c["address"] != client["address"]]
+            assert not others, f"{match} shares its workspace: {json.dumps(others, indent=1)}"
+            return (*client["at"], *client["size"])
+        return rect
+    def active_workspace():
+        return json.loads(hypr("hyprctl -j activeworkspace"))["id"]
     tatami.send_key("meta_l-ret")  # Tatami's terminal
     wait_windows(1)
     time.sleep(3)
-    tatami.send_chars("fastfetch\n")
+    # Some work for it: how small the system's software compresses, on two
+    # cores, which takes longer than the captures below. Nothing is written.
+    tatami.send_chars("tar -chC /run/current-system sw | xz -T2 | wc -c\n")
+    tatami.wait_until_succeeds("pgrep -u demo -x xz", timeout=30)
+    def working():
+        status, _ = tatami.execute("pgrep -u demo -x xz")
+        if status != 0:
+            print(tatami.execute("df -h / /home; free -m; journalctl -k -n 20 --no-pager")[1])
+            raise Exception("the terminal's compression ended before the captures")
     time.sleep(4)
-    # Activity over it, as Super+Ctrl+T opens it: with the application that
-    # had the focus, the terminal, selected. A minute of readings, every two
-    # seconds, for its graphs.
+    # Activity, as Super+Ctrl+T opens it: with the application that had the
+    # focus, the terminal, selected. Super+Shift+2 takes it to a workspace of
+    # its own, where a minute of readings, every two seconds, fill its graphs.
     tatami.send_key("meta_l-ctrl-t")
-    until = time.monotonic() + 60
-    while not any(c["class"] == "org.tatami.Activity" for c in windows()):
-        if time.monotonic() > until:
-            raise Exception("no Activity window: " + hypr("hyprctl -j clients"))
-        time.sleep(1)
-    capture(tatami, "tatami", settle=60)
-    tatami.send_key("meta_l-spc")  # the Tatami menu
-    capture(tatami, "tatami-menu", settle=8)
-    tatami.send_key("esc")
+    wait_window("org.tatami.Activity")
+    time.sleep(3)
+    tatami.send_key("meta_l-shift-2")
     time.sleep(2)
+    if active_workspace() != 2:
+        tatami.send_key("meta_l-2")
+    capture(tatami, "activity", settle=60, window=alone("org.tatami.Activity"))
+    working()
     # Its Memory view: each application's proportional, private and
     # resident memory.
     tatami.send_key("ctrl-2")
-    capture(tatami, "activity", settle=10)
+    capture(tatami, "activity-memory", settle=10, window=alone("org.tatami.Activity"))
+    working()
     user(tatami, "pkill -u demo -f '[t]atami-activity' || true")
     user(tatami, "pkill -x foot || true")
+    wait_window("org.tatami.Activity", gone=True)
+    # The Tatami menu over an empty desktop.
+    time.sleep(2)
+    tatami.send_key("meta_l-spc")
+    capture(tatami, "tatami-menu", settle=8)
+    tatami.send_key("esc")
+    time.sleep(2)
+    # Displays, from Super+Ctrl+D; Super+W closes it.
+    tatami.send_key("meta_l-ctrl-d")
+    wait_window("org.tatami.Displays")
+    capture(tatami, "displays", settle=10, window=alone("org.tatami.Displays"))
+    tatami.send_key("meta_l-w")
+    wait_window("org.tatami.Displays", gone=True)
     # No GPU in the VM: Cairo, rather than GTK trying Vulkan first.
     launch(tatami, "env GSK_RENDERER=cairo yukimi")
-    until = time.monotonic() + 60
-    while not any("yukimi" in c["class"].lower() for c in json.loads(hypr("hyprctl -j clients"))):
-        if time.monotonic() > until:
-            raise Exception("no Yukimi window: " + hypr("hyprctl -j clients"))
-        time.sleep(1)
-    capture(tatami, "yukimi", settle=30)
+    wait_window("yukimi")
+    capture(tatami, "yukimi", settle=30, window=alone("yukimi"))
     user(tatami, "pkill -u demo -f '[y]ukimi' || true")
+    wait_window("yukimi", gone=True)
     # The Network window: joined to Home, with Café Corner and a cabin's
     # network saved and a WireGuard VPN set up (switched off).
     tatami.wait_until_succeeds(
@@ -218,15 +306,12 @@ pkgs.testers.runNixOSTest {
     )
     # As the panel, the menu and the launcher start it (`tatami launch`).
     user(tatami, "XDG_CONFIG_DIRS=/etc/xdg/tatami:/etc/xdg tatami launch tatami-network")
-    until = time.monotonic() + 60
-    while not any("org.tatami.Network" in c["class"] for c in json.loads(hypr("hyprctl -j clients"))):
-        if time.monotonic() > until:
-            raise Exception("no Network window: " + hypr("hyprctl -j clients"))
-        time.sleep(1)
-    capture(tatami, "network", settle=10)
+    wait_window("org.tatami.Network")
+    capture(tatami, "network", settle=10, window=alone("org.tatami.Network"))
     tatami.shutdown()
 
-    # Plasma: the live session's desktop, with Genkan's welcome page.
+    # Plasma: the live session's desktop, and Genkan's welcome page on its
+    # own.
     plasma.start()
     plasma.wait_until_succeeds("pgrep -u demo -f bin/.?plasmashell", timeout=240)
     time.sleep(10)
@@ -242,9 +327,19 @@ pkgs.testers.runNixOSTest {
     plasma.wait_until_succeeds("pgrep -u demo -f '[k]onsole'", timeout=30)
     capture(plasma, "plasma", settle=15)
     user(plasma, "pkill -u demo -f '[k]onsole' || true; pkill -u demo -f '[d]olphin' || true")
+    plasma.wait_until_fails("pgrep -u demo -f '[k]onsole|[d]olphin'", timeout=30)
     launch(plasma, "env CALAMARES_UI_PREVIEW=welcome calamares-nixos")
     plasma.wait_until_succeeds("pgrep -u demo -f calamares-nixos", timeout=30)
-    capture(plasma, "genkan", settle=12)
+    def genkan_window():
+        # KWin's frame geometry: the window without its client-side shadow.
+        reply = user(plasma, "KDE_SESSION_VERSION=6 kdotool search --class "
+                     "'^org\\.calamares\\.NixOSRust$' getwindowgeometry")
+        position = re.search(r"Position: ([-\d.]+),([-\d.]+)", reply)
+        geometry = re.search(r"Geometry: ([\d.]+)x([\d.]+)", reply)
+        if not (position and geometry):
+            raise Exception("no Genkan window from kdotool:\n" + reply)
+        return (*map(float, position.groups()), *map(float, geometry.groups()))
+    capture(plasma, "genkan", settle=12, window=genkan_window)
     plasma.shutdown()
 
     # GNOME, after closing its first-login tour.

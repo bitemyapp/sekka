@@ -29,7 +29,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: calc(var(--bar-height) + 16px); }
 body {
   margin: 0;
   background: var(--surface);
@@ -95,7 +95,7 @@ kbd {
   top: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
+  grid-template-columns: auto auto 1fr auto auto auto;
   align-items: center;
   height: var(--bar-height);
   padding: 0 var(--bar-edge);
@@ -115,7 +115,29 @@ kbd {
 .ws[aria-current="page"] .ws-n { color: var(--accent); }
 .bar-clock { grid-column: 4; margin: 0; padding: 0 1.25em; color: var(--text); white-space: nowrap; max-width: none; }
 .bar-clock-label { color: var(--text-secondary); }
-.bar-source { grid-column: 5; padding: 0 0.25em 0 0.75em; }
+.bar-source { grid-column: 6; padding: 0 0.25em 0 0.75em; }
+/* The theme switch, a bar module as Waybar's toggles are: it shows the theme
+   in use. Night unless Day is switched on; theme.js remembers the choice. */
+.bar-theme {
+  grid-column: 5;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 0.75em;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.bar-theme:hover { color: var(--text-strong); }
+.bar-theme input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.bar-theme:has(input:focus-visible) { outline: var(--border-width) solid var(--accent); outline-offset: -2px; }
+.bar-night, .bar-day { display: inline-flex; align-items: center; gap: 0.5em; }
+.bar-day { display: none; }
+:root[data-theme="day"] .bar-night, :root:has(#site-theme:checked) .bar-night { display: none; }
+:root[data-theme="day"] .bar-day, :root:has(#site-theme:checked) .bar-day { display: inline-flex; }
+.bar-theme-icon { display: block; width: 12px; height: 12px; flex: none; }
 @media (min-width: 1100px) {
   .bar-clock { grid-column: auto; position: absolute; left: 50%; transform: translateX(-50%); padding: 0; }
 }
@@ -375,9 +397,13 @@ kbd {
 @media (max-width: 720px) {
   /* The workspaces take the bar's width, and scroll within it rather than
      widen the page; the source link is in the footer too. */
-  .bar { height: 44px; line-height: 44px; grid-template-columns: auto minmax(0, 1fr); }
+  html { scroll-padding-top: 60px; }
+  .bar { height: 44px; line-height: 44px; grid-template-columns: auto minmax(0, 1fr) auto; }
   .bar-ws { overflow-x: auto; scrollbar-width: none; }
   .bar-source { display: none; }
+  .bar-theme { grid-column: 3; padding: 0 0.25em 0 0.75em; }
+  .bar-theme-name { display: none; }
+  .bar-theme-icon { width: 16px; height: 16px; }
   .bar-menu { height: 44px; }
   .bar-clock { display: none; }
   .ws { padding: 0 0.55em; }

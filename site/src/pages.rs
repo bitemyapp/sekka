@@ -25,9 +25,9 @@ pub fn home(site: &Site) -> Result<Page> {
             .brand
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
-            "tatami.png",
-            "Tatami's Activity window over a terminal, in Tokyo Night colours: applications by processor use, with the terminal selected in the inspector, and the processor's load and cores under the list.",
-            "Activity, opened with Super + Ctrl + T over a terminal, in a disposable test VM built from Sekka's own modules.",
+            "activity.png",
+            "Tatami's Activity window in Tokyo Night colours: applications by processor use, led by a terminal compressing files, five processes together at 197 percent; the terminal selected in the inspector, its processor and memory climbing; and the processor's load and cores under the list.",
+            "Activity (Super + Ctrl + T), its window on its own, with a terminal compressing files selected, in a disposable test VM built from Sekka's own modules.",
             "win hero-shot",
         )?,
     )?;
@@ -88,7 +88,7 @@ pub fn home(site: &Site) -> Result<Page> {
         )?,
         tatami_shot = site.shot(
             "tatami-menu.png",
-            "Tatami's menu open over Activity: Apps, Learn, Trigger, Style, Setup, About and System.",
+            "Tatami's menu over an empty desktop: Apps, Learn, Trigger, Style, Setup, About and System.",
             "The menu, opened with Super + Space. The bar still shows the NixOS logo.",
             "",
         )?,
@@ -178,8 +178,8 @@ pub fn tatami(site: &Site) -> Result<Page> {
         icon = site.asset("brand/tatami.svg")?,
         shot = site.shot(
             "tatami-menu.png",
-            "Tatami's menu open over Activity and a terminal.",
-            "Tatami's menu (Super + Space) in a disposable test VM. The bar still shows the NixOS logo.",
+            "The Tatami desktop with its menu open: Apps, Learn, Trigger, Style, Setup, About and System, under the bar and over the wallpaper.",
+            "Tatami's menu (Super + Space) over an empty desktop, in a disposable test VM. The bar still shows the NixOS logo.",
             "win wide-shot",
         )?,
     )?;
@@ -243,6 +243,25 @@ pub fn tatami(site: &Site) -> Result<Page> {
     );
     write!(
         b,
+        r#"<section class="tour-step" aria-labelledby="displays">
+  <div class="win step-text">
+    <h2 id="displays">Displays</h2>
+    <p>The bar's display icon or <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>D</kbd> opens Displays, after macOS's Displays settings, on the screen you are using. The arrangement is drawn to scale: drag a display and it goes beside the others, sharing an edge and lining up with theirs. The main display, where workspace 1 opens, has the menu bar.</p>
+    <p>For each display: main, extended, a mirror of another, or off; resolution as sizes from larger text to more space, or every resolution and scale; refresh rate and variable refresh rate; rotation; HDR, colour profile and 10-bit colour; and the built-in display's brightness. Night Shift and its colour temperature are here too. Changes apply at once, and those that can leave a screen blank are undone after 15 seconds unless you keep them.</p>
+    <p class="caveat"><span class="tag tag-warning">X11 applications</span> Older applications that run through XWayland, such as Steam, draw at the main display's scale. With displays at different scales, they look too large or too small on the others.</p>
+  </div>
+  {shot}
+</section>
+"#,
+        shot = site.shot(
+            "displays.png",
+            "Tatami's Displays window: the VM's one display in the arrangement, its name, size and refresh rate, Use as main display, and resolution as five sizes from Larger Text to More Space.",
+            "The Displays window in a disposable test VM, with its one virtual display.",
+            "win",
+        )?,
+    )?;
+    write!(
+        b,
         r#"<section class="tour-step" aria-labelledby="network">
   <div class="win step-text">
     <h2 id="network">Network</h2>
@@ -273,8 +292,8 @@ pub fn tatami(site: &Site) -> Result<Page> {
 </section>
 "#,
         shot = site.shot(
-            "activity.png",
-            "Tatami's Activity window on its Memory view: each application's proportional, private, resident and shared memory, Hyprland first, with the terminal selected in the inspector, and memory use and pressure under the list.",
+            "activity-memory.png",
+            "Tatami's Activity window on its Memory view: each application's proportional, private, resident and shared memory, Hyprland first and the selected terminal second, and memory use and pressure under the list.",
             "Activity's Memory view (Ctrl + 2) in a disposable test VM. Dashes are root's processes, whose memory maps a user can't read; Hyprland's memory includes Mesa drawing in software.",
             "win",
         )?,
@@ -455,12 +474,12 @@ pub fn design(site: &Site) -> Result<Page> {
 <form class="win themes" aria-labelledby="themes-legend">
   <fieldset>
     <legend id="themes-legend">See this page in</legend>
-    <input type="radio" name="theme" id="theme-auto" checked><label for="theme-auto">your system's choice</label>
+    <input type="radio" name="theme" id="theme-auto" checked><label for="theme-auto">the bar's choice</label>
     <input type="radio" name="theme" id="theme-night"><label for="theme-night">Night</label>
     <input type="radio" name="theme" id="theme-day"><label for="theme-day">Day</label>
     <input type="radio" name="theme" id="theme-contrast"><label for="theme-contrast">High contrast</label>
   </fieldset>
-  <p>Without a choice here, the site follows your system: Night, Day when you prefer light, and High contrast when you ask for more contrast. No script runs; the choice lasts while you're on this page.</p>
+  <p>The site is Night until you switch it to Day in the bar, which your browser remembers; High contrast comes when your system asks for more contrast. A choice here is only for this page, while you're on it.</p>
 </form>
 
 <section class="tour-step" aria-labelledby="crest">
@@ -838,7 +857,7 @@ pub fn status(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Privacy</h2>
     <ul class="facts">
-      <li>This site sets no cookies and sends no scripts or analytics to your browser. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
+      <li>This site sets no cookies and sends no analytics to your browser. Its one script remembers whether you chose Night or Day, in your browser's local storage, and sends it nowhere. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
       <li>Tatami's weather asks wttr.in and Open-Meteo; wttr.in locates you by IP address unless you set a place in Setup › Weather.</li>
       <li>Genkan's GitHub step is optional. It reads your public SSH keys and sets your Git identity.</li>
       <li>Sekka's own packages download from cache.sekka.computer, on Cloudflare R2. Only free software is published there.</li>

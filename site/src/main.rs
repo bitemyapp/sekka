@@ -1,5 +1,6 @@
 //! Builds sekka.computer: static HTML and CSS from the brand tokens, logos
-//! and screenshots in this repository. Browsers get no JavaScript. The one
+//! and screenshots in this repository. The only JavaScript browsers get is
+//! theme.js, which remembers the bar's Night/Day switch. The one
 //! piece of server-side code, the download worker (site/download-worker),
 //! is built apart and runs for /download/ alone (_routes.json).
 
@@ -34,15 +35,19 @@ pub struct Site {
 
 /// Screenshots shown on the site, copied byte for byte. Their provenance is
 /// recorded in docs/screenshots.md, and every caption says it.
-const IMAGES: [(&str, &str); 8] = [
+const IMAGES: [(&str, &str); 9] = [
     ("genkan.png", "docs/images/sekka/genkan.png"),
     ("yukimi.png", "docs/images/sekka/yukimi.png"),
-    ("tatami.png", "docs/images/sekka/tatami.png"),
     ("tatami-menu.png", "docs/images/sekka/tatami-menu.png"),
+    ("displays.png", "docs/images/sekka/displays.png"),
     ("plasma.png", "docs/images/sekka/plasma.png"),
     ("gnome.png", "docs/images/sekka/gnome.png"),
     ("network.png", "docs/images/sekka/network.png"),
     ("activity.png", "docs/images/sekka/activity.png"),
+    (
+        "activity-memory.png",
+        "docs/images/sekka/activity-memory.png",
+    ),
 ];
 
 const BRAND_FILES: [(&str, &str); 8] = [
@@ -351,6 +356,11 @@ fn main() -> Result<()> {
     // hours, which could pair new pages with old styles.
     let name = publish(out, "site.css", css.as_bytes(), &mut site.assets)?;
     written.push((name, css));
+    // The bar's Night/Day switch, the one script browsers get, hashed as
+    // the stylesheet is.
+    let script = include_str!("../theme.js");
+    let name = publish(out, "theme.js", script.as_bytes(), &mut site.assets)?;
+    written.push((name, script.to_owned()));
 
     let pages = [
         pages::home(&site)?,

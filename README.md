@@ -18,7 +18,7 @@ If you need a system you can rely on today, wait before installing Sekka.
 
 ## A look around
 
-Images below link to their original, full-resolution PNGs, captured at 2560 × 1600 with a scale of 2. Nothing is upscaled. They come from disposable test VMs built from Sekka's own modules, not from an installed release; see [screenshot provenance](docs/screenshots.md).
+Images below link to their original, full-resolution PNGs, captured with a scale of 2, at twice the density of the layout. Desktops are shown whole, and each application on its own, cropped to its window. Nothing is upscaled. They come from disposable test VMs built from Sekka's own modules, not from an installed release; see [screenshot provenance](docs/screenshots.md).
 
 ### Genkan: welcome home
 
@@ -26,13 +26,15 @@ Choose your disk, account, desktop, applications, and location. Review everythin
 
 [![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
 
-*Current interface in preview mode, with sample data, on Sekka's Plasma session.*
+*Genkan's window in preview mode, with sample data, on Sekka's Plasma session.*
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
 ### Tatami: a desktop under your fingertips
 
 Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS.
+
+[![The Tatami menu over an empty desktop](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 
 Choose a wallpaper under **Style › Background**. **Style › Background settings**
 lets you fill, fit, stretch, center or tile it, or use a solid color, with separate
@@ -52,6 +54,10 @@ watch everything about it change, or quit one that misbehaves. Its energy
 figures are estimates shared out from the processor's and graphics card's
 meters; the window says what it can and can't measure.
 
+[![Activity sorting applications by processor use, with a terminal compressing files selected](docs/images/sekka/activity.png)](docs/images/sekka/activity.png)
+
+[![Activity's Memory view: each application's proportional, private, resident and shared memory](docs/images/sekka/activity-memory.png)](docs/images/sekka/activity-memory.png)
+
 Laptop displays behave the way a Mac's do. Close the lid with an external
 display connected and the built-in display turns off, its windows move to the
 other screen, and the laptop keeps running; open the lid and the built-in display
@@ -61,6 +67,8 @@ built-in display turns on. A display you turn off in **Displays**
 you turn it on again or log in again. If a display change leaves a window off
 screen, Tatami brings it back, and **Super + Ctrl + D** always brings the Displays
 window to the screen you are using.
+
+[![The Displays window](docs/images/sekka/displays.png)](docs/images/sekka/displays.png)
 
 Some differences remain. Unlike a Mac, the laptop also stays awake with its lid
 closed while docked on battery power. It goes to sleep when you close the lid with no
@@ -72,12 +80,6 @@ a simulated lid guard them between changes.
 Sekka also enables USB keyboard and mouse wake paths, including their parent
 hubs. Waking from an intentional suspend still depends on the hardware and
 firmware; try a key or mouse button if mouse movement does not wake it.
-
-[![Activity open over a terminal in Tatami, with the terminal selected](docs/images/sekka/tatami.png)](docs/images/sekka/tatami.png)
-
-[![The Tatami menu over Activity](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
-
-[![Activity on its Memory view: each application's proportional, private, resident and shared memory](docs/images/sekka/activity.png)](docs/images/sekka/activity.png)
 
 ### Yukimi: see and change your system
 
