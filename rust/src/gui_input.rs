@@ -1,5 +1,8 @@
 //! QMP input for the fixed 1280x800 disposable test display, not the host desktop.
-use crate::{support::*, vm::Rpc};
+use crate::{
+    support::*,
+    vm::{Rpc, run_socket},
+};
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::json;
 use std::{fs, path::Path, time::Duration};
@@ -100,7 +103,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
             .contains(&fs::metadata(work.join("target.raw"))?.len()),
         "Not a 40 or 80 GiB test image"
     );
-    let mut qmp = Rpc::connect(&work.join("qmp.sock"), true, 20)?;
+    let mut qmp = Rpc::connect(&run_socket(&work, "qmp.sock")?, true, 20)?;
     match args[1].as_str() {
         "screenshot" if args.len() == 2 => {
             let path = repo

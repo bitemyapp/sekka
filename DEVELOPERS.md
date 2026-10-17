@@ -246,7 +246,13 @@ Sekka. Sources that don't follow Sekka keep their own rows.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
-switch inhibitors before choosing `switch` or `boot`. After a live switch
+switch inhibitors before choosing `switch` or `boot`. Tatami's login entry
+starts `uwsm` and `tatami` from `/run/current-system/sw/bin`, as NixOS's own
+uwsm sessions start their compositors, so a Tatami build leaves the display
+manager's session list (`XDG_DATA_DIRS` in its unit) unchanged and can switch
+live; the next login starts the new Tatami.
+`nix build .#checks.x86_64-linux.tatami-session-entry` keeps store paths out
+of the entry. After a live switch
 (an update or a rollback) that adds, removes or changes a `.desktop` entry,
 for everyone or in a user's own profile, the helper restarts
 `tatami-elephant.service` in each signed-in user's session
@@ -259,6 +265,18 @@ branch changes, and rollbacks use the same planner. A missing compatibility
 manifest stages the transition for boot. D-Bus catalog trigger changes remain
 live when both unit definitions specify reload-on-change and every other unit
 setting matches; changes to its executable or reload policy still stage for boot.
+A display manager unit that says `X-RestartIfChanged=false` before and after,
+and differs only in `XDG_DATA_DIRS` directories holding nothing but
+`wayland-sessions` and `xsessions`, also stays live when every session entry it
+may have read (the booted system's, or the active one's if it has restarted)
+is unchanged in the target: sessions were only added or removed. NixOS leaves
+it running, and it lists the new sessions from its next start; the completion
+message says so. GDM, LightDM and Plasma Login Manager find sessions that way;
+greetd's greeter finds them through its configuration file, whose changes still
+stage. A changed entry still stages, and the reason names its desktop: most
+entries start their desktop by store path (`startplasma-wayland`, Hyprland, an
+X session script), so until a restart the running login screen would start the
+previous version.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
@@ -320,8 +338,10 @@ python3 tests/test_tatami_update.py /nix/store/…-tatami/bin/tatami -v
 
 The completion VM exercises the helper under real systemd, kills its client during
 live activation, verifies persistent results and a surviving graphical session,
-rejects a display-manager transition before service shutdown, and stages a rollback
-with changed boot parameters. It boots that prepared generation through UEFI,
+rejects a display-manager transition before service shutdown, switches live when
+a session is only added to the login screen's list, stages one that changes an
+entry the login screen started with, and stages a rollback with changed boot
+parameters. It boots that prepared generation through UEFI,
 verifies that the restart request disappears, and captures the GUI. Its desktop
 is IceWM; it does not reproduce physical GPU teardown or claim Hyprland hardware coverage.
 Namespace fixtures test helper transactions and Tatami reload failures without
