@@ -367,6 +367,11 @@
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
         tatami = self.packages.${system}.tatami;
         tuning = import ./nix/tuning-test.nix { inherit pkgs; };
+        fish = import ./nix/fish-vm-test.nix {
+          inherit pkgs;
+          applicationsModule = inputs.calamares.nixosModules.applications;
+          inherit (applicationCatalog.specialArgs) applicationPkgs;
+        };
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;
