@@ -365,6 +365,37 @@
           assert uses installer.config;
           assert uses installed;
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
+        # Tatami's login entry starts uwsm and tatami from the system profile.
+        # A store path in it would change display-manager.service with every
+        # Tatami build, and Yukimi would stage each such update for the next
+        # boot instead of switching to it.
+        tatami-session-entry =
+          let
+            inherit (pkgs) lib;
+            installed =
+              (import ./nix/reference-systems.nix {
+                inherit inputs applicationCatalog;
+                desktops = [ "tatami" ];
+              }).systems.tatami.config;
+            entry = lib.findFirst (
+              p: p.name == "tatami-session"
+            ) (throw "Tatami offers no login session") installed.services.displayManager.sessionPackages;
+            exec = lib.findFirst (lib.hasPrefix "Exec=") "" (lib.splitString "\n" entry.text);
+            profile = "/run/current-system/sw/bin/";
+            programs = map (lib.removePrefix profile) (
+              lib.filter (lib.hasPrefix profile) (lib.splitString " " (lib.removePrefix "Exec=" exec))
+            );
+            installs =
+              name: lib.any (p: (p.meta.mainProgram or null) == name) installed.environment.systemPackages;
+          in
+          assert !(lib.hasInfix builtins.storeDir entry.text);
+          assert
+            programs == [
+              "uwsm"
+              "tatami"
+            ];
+          assert lib.all installs programs;
+          pkgs.writeText "tatami.desktop" entry.text;
         tatami = self.packages.${system}.tatami;
         tuning = import ./nix/tuning-test.nix { inherit pkgs; };
         keep-awake = import ./nix/keep-awake-test.nix {

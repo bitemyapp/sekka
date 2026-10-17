@@ -246,7 +246,13 @@ Sekka. Sources that don't follow Sekka keep their own rows.
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
-switch inhibitors before choosing `switch` or `boot`. After a live switch
+switch inhibitors before choosing `switch` or `boot`. Tatami's login entry
+starts `uwsm` and `tatami` from `/run/current-system/sw/bin`, as NixOS's own
+uwsm sessions start their compositors, so a Tatami build leaves the display
+manager's session list (`XDG_DATA_DIRS` in its unit) unchanged and can switch
+live; the next login starts the new Tatami.
+`nix build .#checks.x86_64-linux.tatami-session-entry` keeps store paths out
+of the entry. After a live switch
 (an update or a rollback) that adds, removes or changes a `.desktop` entry,
 for everyone or in a user's own profile, the helper restarts
 `tatami-elephant.service` in each signed-in user's session
