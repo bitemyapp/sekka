@@ -1,6 +1,6 @@
 # Optional applications
 
-The installer presents 32 choices with checkboxes, categories, search and short
+The installer presents 35 choices with checkboxes, categories, search and short
 descriptions. Firefox starts selected. Empty selection is supported. The review
 screen lists the normalized selection, and the privileged helper validates it
 again. Unknown IDs, duplicate requests and proprietary selections without
@@ -10,6 +10,13 @@ The catalog lives in the pinned installer's `applications.json`, shared by its
 Rust UI/parser and generated NixOS module. Each installed system retains that
 catalog and `applications.nix` beside its flake. `/etc/installer-applications.json`
 records selected IDs and exact package versions and store paths.
+
+Every application is on the installation media except those marked
+`"media": false`, whose licences forbid redistributing them. Neither the media
+nor Sekka's binary cache carries those; preparing an installation downloads
+them from their makers (installing always needs a network connection), and the
+installer marks them Downloaded. The `applications` check fails if a package
+of such an application would reach the media through another choice.
 
 ## Sources
 
@@ -22,6 +29,8 @@ pins were selected on 2026-10-04:
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | `a7868a727837f3c09cee2ce0ca671c76b1589fed` | Browsers, editors, terminals, developer tools, productivity, communication and media |
 | [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop and OpenCode |
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
+| [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
+| [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -51,6 +60,29 @@ Rustup makes that checkbox optional again. Nixpkgs provides the NixOS-compatible
 Rustup wrapper. Run `rustup default stable` after installation to download a
 toolchain. Rustup is intentionally not accompanied by a conflicting system-wide
 `rustc`/`cargo` package.
+
+Superluminal and Tracy are profilers packaged by other flakes, which Sekka
+takes as inputs and builds with the applications' Nixpkgs; the catalog lists
+them as Sekka's own packages (`"source": "sekka"`). Superluminal repackages
+the vendor's proprietary Linux alpha, so it needs unfree-software consent and
+a trial or license. Its end-user licence (section 1.9) forbids redistributing
+it, so it is marked `"media": false`: the installer, Yukimi and every update
+download it from Superluminal's own servers and build its small wrapper on the
+machine. A daily workflow in the
+[superluminal-nix-linux fork](https://github.com/bitemyapp/superluminal-nix-linux)
+adds each new release from superluminal.eu once it builds, and Sekka's nightly
+input update picks it up. Superluminal ships no Qt Wayland plugin and runs
+through XWayland. Capturing starts its capture service through `pkexec`, so it
+needs the setuid wrapper (Yukimi's module enables it) and a graphical polkit
+agent: Tatami starts hyprpolkitagent and the full desktop environments bring
+their own, but the plain Hyprland session starts none. Sekka's tuning sets
+`kernel.kptr_restrict` to 2, which Superluminal names as the reason captures
+lack kernel symbols; a system that needs them can set it to 1 with
+`lib.mkForce`. Tracy's profiler runs natively on
+Wayland. Its network protocol changes between releases, so a program must be
+built with the same Tracy client version as the installed profiler; Nixpkgs
+keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled
+from source, so `push-cache` publishes it.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
@@ -188,3 +220,56 @@ while the backend was still installing and is retained as an
 [interrupted test](test-results/application-harness-timeout.json), never a pass.
 The corrected image's unfinished tests are recorded separately in the hardware
 handoff record.
+
+## Profiler validation (2026-10-16)
+
+Component checks: Superluminal 1.0.7705.679-alpha and Tracy 0.14.1 built with
+the applications' Nixpkgs, Superluminal's install check resolving every
+library of its 37 binaries and Tracy's own client, pkg-config and capture
+round-trip tests passing. Genkan's, `rust/`'s and Yukimi's Cargo tests, the
+`applications`, `template-lock` and `binary-cache` checks, and
+`tests/check_installed_template.py` (Plasma, Tatami and GNOME/Xfce) passed, and
+`nix flake check --no-build` evaluated all 70 checks.
+The free systems `push-cache` publishes select Tracy and not Superluminal.
+
+Image build and VM installation: an ISO built from the working tree of this
+change, equal to its commit but for `nix fmt` whitespace, carried both
+applications' closure lists. `respin-tools qemu-test --install` with
+`--applications superluminal,tracy` and Tatami installed onto a disposable
+80 GiB NVMe disk in 47.4 seconds from Install, downloading nothing. The
+installed system booted without the ISO. The harness recorded a failure: its
+fixture expects `sshd -T` to print `passwordauthentication no`, and this
+OpenSSH prints `PasswordAuthentication no`; the GitHub step was otherwise
+right (authorized key, `sshd` active, Git identity). On the same disk, the
+fixture's other checks passed with that step skipped, and
+`/etc/installer-applications.json` listed both packages at the tested store
+paths, with their inputs locked beneath `sekka` in `/etc/nixos/flake.lock`.
+
+Runtime, in that installed system's Tatami session: Tracy started from its
+launcher command on Wayland and captured a live trace from a program built
+against the same Tracy client (the virtual CPU needed
+`TRACY_NO_INVARIANT_CHECK=1`). Superluminal started under XWayland and opened
+its first-run wizard; activation was not attempted, so no capture ran.
+`superluminalcmd` ran, and the setuid `pkexec` and Tatami's polkit agent were
+present. Not tested: Superluminal's capture service, other desktops' sessions,
+and physical hardware.
+
+That installation predates keeping Superluminal off the media (2026-10-17):
+it installed Superluminal from the ISO. With `"media": false`, the media's
+application cache and closure lists hold Tracy and not Superluminal, the
+`applications` check's assertion holds (and fails if Superluminal is put back
+on the media), and Genkan's applications page, in its preview, marks
+Superluminal Downloaded.
+
+Download during installation, in a VM (2026-10-17): an ISO built from
+`c214ed1` (SHA-256 `468ab418…6f1725`), trimmed to fit a small builder: only
+Tatami's reference system, no application cache and no per-application closure
+lists. `respin-tools qemu-test --install --applications superluminal` with
+Tatami, UEFI, NVMe and ext4 on a disposable 80 GiB disk passed. Preparing the
+installation built Superluminal's tarball derivation, which fetches from
+`superluminal.blob.core.windows.net`, and then its wrapper, including the
+check that every binary's libraries resolve, after 35 MiB of other downloads;
+it is the branch's own derivation. The installed system booted without the
+ISO, listed Superluminal in `/etc/installer-applications.json` with its
+package present, and its lock matched the media's. Superluminal was not
+started there.

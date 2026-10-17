@@ -31,7 +31,7 @@ let
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
         # As nix/components.nix gives the catalog module Sekka's packages.
-        { _module.args.sekkaPackages = inputs.kakehashi.packages.${system}; }
+        { _module.args.sekkaPackages = inputs.catalog.packages.${system}; }
       ]
       ++ lib.optional free { nixpkgs.config.allowUnfree = lib.mkForce false; };
     };
@@ -43,7 +43,8 @@ in
   toplevels = map (desktop: systems.${desktop}.config.system.build.toplevel) desktops;
   # Plain files on the ISO 9660 filesystem, /iso/calamares/closures/
   # {desktop,application}-<id>.paths. Lists inside the Nix store would make
-  # every listed path a runtime reference of the live system.
+  # every listed path a runtime reference of the live system. Applications
+  # kept off the media have none: there is nothing on it to warm.
   lists =
     map (desktop: {
       source = paths [ systems.${desktop}.config.system.build.toplevel ];
@@ -52,5 +53,5 @@ in
     ++ map (app: {
       source = paths (applicationCatalog.packageList app);
       target = "/calamares/closures/application-${app.id}.paths";
-    }) applicationCatalog.catalog;
+    }) applicationCatalog.onMedia;
 }

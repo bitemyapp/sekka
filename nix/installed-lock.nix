@@ -1,11 +1,17 @@
 # The installed flake adds Sekka itself to the image's external dependency lock.
 # Dirty development images retain their exact store source; release images pin
-# the GitHub commit. Both then follow the nightly branch, and every other input
-# follows the Sekka they are at.
+# the GitHub commit. Both then follow the nightly branch, and the inputs the
+# installed flake names (templates/flake.nix.in) follow the Sekka they are at.
 { self }:
 let
   base = builtins.fromJSON (builtins.readFile ../flake.lock);
   external = base.nodes.${base.root}.inputs;
+  # Inputs only Sekka's own outputs use (nix/components.nix). The installed
+  # flake doesn't name them; they stay beneath Sekka and move with it.
+  followed = removeAttrs external [
+    "superluminal"
+    "tracy"
+  ];
   locked =
     if self ? rev then
       {
@@ -40,12 +46,12 @@ base
 // {
   nodes = rebased // {
     ${base.root} = {
-      # Every other input follows Sekka's own.
+      # Every input it names follows Sekka's own.
       inputs =
         builtins.mapAttrs (name: _: [
           "sekka"
           name
-        ]) external
+        ]) followed
         // {
           sekka = "sekka";
         };

@@ -22,6 +22,15 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// False for an application whose licence forbids redistributing it: it
+    /// is left off the installation media, and preparing the installation
+    /// downloads it from its maker.
+    #[serde(default = "on_media")]
+    pub media: bool,
+}
+
+fn on_media() -> bool {
+    true
 }
 
 pub fn catalog() -> &'static [Application] {
@@ -112,6 +121,13 @@ mod tests {
         for removed in ["thunderbird", "keepassxc", "gemini-cli", "orbstack"] {
             assert!(!ids.contains(removed));
         }
+        // Superluminal's licence forbids redistribution; the rest stay on the media.
+        let off: Vec<_> = catalog()
+            .iter()
+            .filter(|app| !app.media)
+            .map(|app| app.id.as_str())
+            .collect();
+        assert_eq!(off, ["superluminal"]);
     }
     #[test]
     fn rustup_implies_build_tools_and_roundtrips_without_duplicates() {

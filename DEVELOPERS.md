@@ -224,7 +224,7 @@ undocking with the lid closed, a Displays window stranded by an unplug, and
 daily use on the ThinkPad X1 Carbon Gen 14; these tests guard that behaviour
 between changes. Don't describe it as untested on hardware.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -398,7 +398,9 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
 installed system for each desktop the media offers (`respin.referenceDesktops`)
-and one with every free catalog application, so everything Sekka's modules
+and one with every free catalog application (never one marked
+`"media": false`, whose licence forbids redistribution; the media leave those
+out too, see `docs/applications.md`), so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
