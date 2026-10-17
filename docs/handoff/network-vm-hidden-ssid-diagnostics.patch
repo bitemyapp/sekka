@@ -1,0 +1,48 @@
+diff --git a/nix/network-vm-test.nix b/nix/network-vm-test.nix
+index ebb6fb6..4da0aba 100644
+--- a/nix/network-vm-test.nix
++++ b/nix/network-vm-test.nix
+@@ -101,6 +101,20 @@ pkgs.testers.runNixOSTest {
+ 
+     machine.start()
+     start_access_points(machine)
++    def probe(label):
++        p = machine.succeed("cat /sys/class/net/wlan1/phy80211/name").strip()
++        print(label, machine.succeed(f"iw reg get 2>&1; iw phy {p} channels 2>&1 | grep -E 'MHz|No IR|Disabled|Radar' | tr '\\n' ' ' | sed 's/\\*/\\n*/g' | grep -v Disabled | grep MHz | wc -l"))
++        print(label, machine.succeed(f"iw phy {p} channels 2>&1 | head -120"))
++        print(label, machine.wait_until_succeeds("bash -c 'TIMEFORMAT=%R; time (iw dev wlan1 scan > /tmp/scan.txt)' 2>&1", timeout=120))
++        print(label, machine.succeed("grep -c '^BSS' /tmp/scan.txt; grep -E '^BSS|SSID|freq' /tmp/scan.txt"))
++    probe("WORLD")
++    machine.succeed("iw reg set US")
++    time.sleep(2)
++    probe("US")
++    machine.succeed("iw reg set JP")
++    time.sleep(2)
++    probe("JP")
++    raise Exception("probe done")
+     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
+     signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
+     machine.wait_until_succeeds(
+@@ -120,6 +134,9 @@ pkgs.testers.runNixOSTest {
+         time.sleep(3)
+         machine.screenshot("joined")
+ 
++    machine.succeed("busctl set-property fi.w1.wpa_supplicant1 /fi/w1/wpa_supplicant1 fi.w1.wpa_supplicant1 DebugLevel s msgdump")
++    machine.succeed("busctl set-property fi.w1.wpa_supplicant1 /fi/w1/wpa_supplicant1 fi.w1.wpa_supplicant1 DebugTimestamp b true")
++    machine.succeed("nmcli general logging level TRACE domains WIFI,WIFI_SCAN,SUPPLICANT,DEVICE,CORE,PLATFORM")
+     with subtest("Joining a hidden network by name"):
+         # A second start reaches the open window, which asks for the
+         # network's security and password.
+@@ -127,7 +144,11 @@ pkgs.testers.runNixOSTest {
+         time.sleep(3)
+         machine.screenshot("hidden")
+         machine.send_chars("backroom-pass\n")
+-        wait_active("Back Room")
++        try:
++            wait_active("Back Room")
++        finally:
++            machine.execute("journalctl -b -o short-monotonic --no-pager > /tmp/journal.txt")
++            machine.copy_from_machine("/tmp/journal.txt", "")
+         assert machine.succeed(
+             "nmcli -g 802-11-wireless.hidden connection show 'Back Room'").strip() == "yes"
+ 
