@@ -2,7 +2,7 @@
 //! Update completion is a property of the running machine, not a source revision.
 //! No commands or mutations are performed while reading this state.
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 pub const RECEIPT: &str = "/var/lib/yukimi/update.json";
@@ -39,7 +39,7 @@ impl Completion {
     }
     pub fn description(&self) -> String {
         match self.action {
-            Action::None => "System changes are active. No computer restart is needed. Open applications can keep running until you close them.".into(),
+            Action::None => format!("System changes are active. No computer restart is needed. Open applications can keep running until you close them. {}", self.reasons.join(" ")).trim_end().into(),
             Action::Reboot => format!("{} Save your work, then restart when you are ready. Yukimi can be closed.", self.reasons.join(" ")),
             Action::Logout => format!("{} Save your work before signing out. No computer restart is needed.", self.reasons.join(" ")),
             _ => self.reasons.join(" "),
@@ -131,6 +131,7 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
     // A display manager can be supplied by a package under an alias rather
     // than config.systemd.services.display-manager. Inspect the effective
     // units and their drop-ins as well as the declarative manifest.
+    let mut sessions_only = false;
     for (scope, units) in [
         (
             "system",
@@ -157,10 +158,15 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
         for unit in units {
             let relative = format!("etc/systemd/{scope}/{unit}");
             match (unit_definition(&active.join(&relative)), unit_definition(&target.join(&relative))) {
-                (Ok(old), Ok(new)) if old == new || dbus_reload_only(unit, &old, &new) => (),
+                (Ok(old), Ok(new)) if old == new || dbus_reload_only(unit, &old, &new) => {}
+                (Ok(old), Ok(new)) if display_manager_sessions_only(unit, &old, &new) => sessions_only = true,
                 _ => reasons.push(format!("A session-critical service changed ({unit}).")),
             }
         }
+    }
+    // The running display manager may have read either system's entries.
+    if sessions_only && let Some(reason) = outdated_sessions(&[booted, active], target) {
+        reasons.push(reason);
     }
     let restrictions = |system: &Path| -> Result<BTreeMap<String, String>, String> {
         let path = system.join("switch-inhibitors");
@@ -218,9 +224,7 @@ fn dbus_reload_only(unit: &str, old: &BTreeMap<String, Vec<u8>>, new: &BTreeMap<
     let without_trigger = |files: &BTreeMap<String, Vec<u8>>| -> Option<BTreeMap<String, String>> {
         let mut reload = false;
         let mut result = BTreeMap::new();
-        // systemd reads the base unit first, then drop-ins in lexical order.
-        let base = files.get_key_value("unit")?;
-        for (name, bytes) in std::iter::once(base).chain(files.iter().filter(|(name, _)| *name != "unit")) {
+        for (name, bytes) in in_order(files)? {
             let mut section = "";
             let mut contents = String::new();
             for line in std::str::from_utf8(bytes).ok()?.lines() {
@@ -244,6 +248,163 @@ fn dbus_reload_only(unit: &str, old: &BTreeMap<String, Vec<u8>>, new: &BTreeMap<
         reload.then_some(result)
     };
     matches!((without_trigger(old), without_trigger(new)), (Some(a), Some(b)) if a == b)
+}
+
+const DISPLAY_MANAGERS: [&str; 3] = ["display-manager.service", "plasmalogin.service", "greetd.service"];
+
+/// NixOS never restarts a display manager whose unit says
+/// X-RestartIfChanged=false; it uses the new definition from its next start.
+/// GDM, LightDM and Plasma Login Manager find login sessions through their
+/// XDG_DATA_DIRS, so their unit changes whenever a session entry does. Only
+/// ignore directories that hold nothing but session entries: the executable,
+/// the rest of the environment, dependencies, drop-ins and the restart policy
+/// must still match. The entries themselves are compared by plan, through
+/// outdated_sessions.
+fn display_manager_sessions_only(unit: &str, old: &BTreeMap<String, Vec<u8>>, new: &BTreeMap<String, Vec<u8>>) -> bool {
+    if !DISPLAY_MANAGERS.contains(&unit) {
+        return false;
+    }
+    let without_sessions = |files: &BTreeMap<String, Vec<u8>>| -> Option<BTreeMap<String, String>> {
+        let mut restart = true;
+        let mut result = BTreeMap::new();
+        for (name, bytes) in in_order(files)? {
+            let mut section = "";
+            let mut contents = String::new();
+            for line in std::str::from_utf8(bytes).ok()?.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    section = trimmed;
+                }
+                if let Some((key, value)) = trimmed.split_once('=')
+                    && section == "[Service]"
+                {
+                    if key.trim() == "X-RestartIfChanged" {
+                        restart = !matches!(value.trim(), "false" | "no" | "off" | "0");
+                    }
+                    if key.trim() == "Environment"
+                        && let Some(dirs) = data_dirs(value)
+                    {
+                        let dirs: Vec<_> = dirs
+                            .iter()
+                            .map(|dir| if session_entries(dir) { "(sessions)" } else { dir.as_str() })
+                            .collect();
+                        contents.push_str(&format!("Environment=XDG_DATA_DIRS={}\n", dirs.join(":")));
+                        continue;
+                    }
+                }
+                contents.push_str(line);
+                contents.push('\n');
+            }
+            result.insert(name.clone(), contents);
+        }
+        (!restart).then_some(result)
+    };
+    matches!((without_sessions(old), without_sessions(new)), (Some(a), Some(b)) if a == b)
+}
+
+/// systemd reads the base unit first, then drop-ins in lexical order.
+fn in_order(files: &BTreeMap<String, Vec<u8>>) -> Option<impl Iterator<Item = (&String, &Vec<u8>)>> {
+    let base = files.get_key_value("unit")?;
+    Some(std::iter::once(base).chain(files.iter().filter(|(name, _)| *name != "unit")))
+}
+
+/// The directories of an `Environment=` assignment of XDG_DATA_DIRS alone,
+/// as NixOS writes it. Anything else is compared as written.
+fn data_dirs(value: &str) -> Option<Vec<String>> {
+    let value = value.trim();
+    let value = value.strip_prefix('"').and_then(|value| value.strip_suffix('"')).unwrap_or(value);
+    let dirs = value.strip_prefix("XDG_DATA_DIRS=")?;
+    (!dirs.contains(['"', '\'', '\\', '%']) && !dirs.contains(char::is_whitespace))
+        .then(|| dirs.split(':').map(str::to_owned).collect())
+}
+
+/// A data directory with nothing but login session entries, such as NixOS's
+/// collected `desktops` or Genkan's list of chosen sessions.
+fn session_entries(dir: &str) -> bool {
+    if !Path::new(dir).is_absolute() {
+        return false;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    let mut found = false;
+    for entry in entries {
+        let Ok(entry) = entry else {
+            return false;
+        };
+        if !matches!(entry.file_name().to_str(), Some("wayland-sessions" | "xsessions")) || !entry.path().is_dir() {
+            return false;
+        }
+        found = true;
+    }
+    found
+}
+
+/// The login sessions a display manager offers, by entry and contents. It
+/// reads them when it starts, so across live switches the running one keeps
+/// offering the booted system's, or the active one's if it has restarted.
+fn login_sessions(system: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut sessions = BTreeMap::new();
+    for unit in DISPLAY_MANAGERS {
+        let Ok(files) = unit_definition(&system.join("etc/systemd/system").join(unit)) else {
+            continue;
+        };
+        // A later assignment replaces an earlier one.
+        let mut dirs = Vec::new();
+        for (_, bytes) in in_order(&files).into_iter().flatten() {
+            for line in String::from_utf8_lossy(bytes).lines() {
+                if let Some((key, value)) = line.trim().split_once('=')
+                    && key.trim() == "Environment"
+                    && let Some(value) = data_dirs(value)
+                {
+                    dirs = value;
+                }
+            }
+        }
+        for dir in dirs.iter().filter(|dir| session_entries(dir)) {
+            for kind in ["wayland-sessions", "xsessions"] {
+                for entry in std::fs::read_dir(Path::new(dir).join(kind)).into_iter().flatten().flatten() {
+                    if let Ok(contents) = std::fs::read(entry.path()) {
+                        sessions.insert(format!("{kind}/{}", entry.file_name().to_string_lossy()), contents);
+                    }
+                }
+            }
+        }
+    }
+    sessions
+}
+
+/// Signing in runs what the login screen's entry names, often by store path
+/// (startplasma-wayland, Hyprland, an X session script). An entry the target
+/// changes, among those a running display manager read from `started`, would
+/// start the previous version of its desktop until the computer restarts.
+/// Entries only added or removed change the list, not what a login starts.
+fn outdated_sessions(started: &[&Path], target: &Path) -> Option<String> {
+    let offered = login_sessions(target);
+    let mut names = BTreeSet::new();
+    for system in started {
+        for (entry, contents) in login_sessions(system) {
+            if offered.get(&entry).is_some_and(|new| *new != contents) {
+                names.insert(session_name(&entry, &contents));
+            }
+        }
+    }
+    (!names.is_empty()).then(|| {
+        format!(
+            "Until the computer restarts, the login screen would start the previous version of {}.",
+            names.into_iter().collect::<Vec<_>>().join(", ")
+        )
+    })
+}
+
+/// An entry's Name, or its file name without the extension.
+fn session_name(entry: &str, contents: &[u8]) -> String {
+    String::from_utf8_lossy(contents)
+        .lines()
+        .find_map(|line| {
+            line.trim().strip_prefix("Name=").map(str::trim).filter(|name| !name.is_empty()).map(str::to_owned)
+        })
+        .unwrap_or_else(|| entry.rsplit('/').next().unwrap_or(entry).trim_end_matches(".desktop").to_owned())
 }
 
 /// UWSM intentionally does not put XDG_SESSION_ID in the shared application
@@ -303,6 +464,10 @@ pub fn tatami_session_id(record: &SessionManifest) -> Result<String, String> {
     Ok(id.into())
 }
 
+/// Live activation leaves the display manager running (see plan), with the
+/// list of sessions it started with.
+const LOGIN_SCREEN_LIST: &str = "The login screen updates its list of desktops at the next restart.";
+
 pub fn system_state(
     booted: &Path,
     active: &Path,
@@ -344,7 +509,14 @@ pub fn system_state(
         );
     }
     match boot_changes(booted, selected) {
-        Ok(reasons) if reasons.is_empty() => Completion::default(),
+        // Yukimi's planner stages a changed entry; a switch made otherwise can still bring one.
+        Ok(reasons) if reasons.is_empty() => match outdated_sessions(&[booted], active) {
+            Some(reason) => Completion::new(Action::Reboot, reason),
+            None if login_sessions(booted) != login_sessions(active) => {
+                Completion::new(Action::None, LOGIN_SCREEN_LIST)
+            }
+            None => Completion::default(),
+        },
         Ok(reasons) => Completion { action: Action::Reboot, reasons },
         Err(reason) => Completion::new(Action::Unknown, reason),
     }
@@ -444,13 +616,13 @@ fn read_with_session(include_session: bool) -> Completion {
             "The update record could not be read. Completion has not been verified.",
         );
     }
-    let mut result = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
+    let system = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
     // Reboot and activation failure take precedence over all session advice.
-    if result.action != Action::None || !include_session || !in_tatami() {
-        return result;
+    if system.action != Action::None || !include_session || !in_tatami() {
+        return system;
     }
     let session = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).map(|p| p.join(SESSION_RECEIPT));
-    match (
+    let result = match (
         session.and_then(|p| read_json::<SessionManifest>(&p).ok()),
         read_json::<SessionManifest>(&active.join(SESSION_MANIFEST)),
     ) {
@@ -465,16 +637,15 @@ fn read_with_session(include_session: bool) -> Completion {
             if current {
                 old.keep_awake = new.keep_awake.clone();
             }
-            result = session_state(&old, &new, &boot_id(), awake);
+            session_state(&old, &new, &boot_id(), awake)
         }
-        _ => {
-            result = Completion::new(
-                Action::Unknown,
-                "The desktop's applied version could not be verified. A new Tatami session records it automatically.",
-            )
-        }
-    }
-    result
+        _ => Completion::new(
+            Action::Unknown,
+            "The desktop's applied version could not be verified. A new Tatami session records it automatically.",
+        ),
+    };
+    // A current session keeps the system's note about the login screen.
+    if result == Completion::default() { system } else { result }
 }
 
 /// Called after a successful live switch, by the unprivileged frontend only.
@@ -641,6 +812,165 @@ mod tests {
         )
         .unwrap();
         assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("dbus-broker")));
+    }
+    /// A directory of login session entries, as NixOS collects them.
+    fn sessions(root: &Path, name: &str, entries: &[(&str, &str)]) -> String {
+        let dir = root.join(name).join("share");
+        std::fs::create_dir_all(dir.join("xsessions")).unwrap();
+        for (entry, contents) in entries {
+            std::fs::create_dir_all(dir.join(entry).parent().unwrap()).unwrap();
+            std::fs::write(dir.join(entry), contents).unwrap();
+        }
+        dir.to_string_lossy().into_owned()
+    }
+    const SERVICE: &str =
+        "Environment=\"PATH=/same/bin\"\nX-RestartIfChanged=false\nExecStart=/same/gdm\nRestart=always\n";
+    /// GDM's unit as NixOS writes it: sessions are one of its data directories.
+    fn display_manager(system: &Path, data_dirs: &str, service: &str) {
+        let units = system.join("etc/systemd/system");
+        std::fs::create_dir_all(&units).unwrap();
+        std::fs::write(
+            units.join("display-manager.service"),
+            format!("[Unit]\nAfter=systemd-user-sessions.service\n\n[Service]\nEnvironment=\"XDG_DATA_DIRS={data_dirs}\"\n{service}"),
+        )
+        .unwrap();
+    }
+    #[test]
+    fn display_manager_session_list_change_stays_live_but_its_program_and_settings_do_not() {
+        let f = Fixture::new();
+        let gdm = f.root.join("gdm/share");
+        std::fs::create_dir_all(gdm.join("gnome-session/sessions")).unwrap();
+        let gdm = gdm.to_string_lossy();
+        let tatami = ("wayland-sessions/tatami.desktop", "Exec=/run/current-system/sw/bin/tatami session\n");
+        // The same entry, and another desktop beside it.
+        let old = sessions(&f.root, "old-desktops", &[tatami]);
+        let new = sessions(&f.root, "new-desktops", &[tatami, ("xsessions/xfce.desktop", "Exec=/new/xsession\n")]);
+        display_manager(&f.old, &format!("{gdm}:{old}"), SERVICE);
+        display_manager(&f.new, &format!("{gdm}:{new}"), SERVICE);
+        assert!(plan(&f.old, &f.old, &f.new).is_empty());
+        let restarts = |data_dirs: &str, service: &str| {
+            display_manager(&f.new, data_dirs, service);
+            plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("display-manager.service"))
+        };
+        let sessions_changed = format!("{gdm}:{new}");
+        assert!(restarts(&sessions_changed, &SERVICE.replace("/same/gdm", "/new/gdm")));
+        assert!(restarts(&sessions_changed, &SERVICE.replace("/same/bin", "/new/bin")));
+        assert!(restarts(&sessions_changed, &SERVICE.replace("X-RestartIfChanged=false\n", "")));
+        assert!(restarts(&sessions_changed, &format!("{SERVICE}Environment=\"GDM_X_SESSION_WRAPPER=/new/wrapper\"\n")));
+        // Data directories with more than sessions in them, or another one.
+        assert!(restarts(&format!("{gdm}:{gdm}"), SERVICE));
+        assert!(restarts(&format!("{gdm}:{new}:{new}"), SERVICE));
+        std::fs::create_dir_all(Path::new(&new).join("applications")).unwrap();
+        assert!(restarts(&sessions_changed, SERVICE));
+        std::fs::remove_dir(Path::new(&new).join("applications")).unwrap();
+        assert!(!restarts(&sessions_changed, SERVICE));
+        let dropins = f.new.join("etc/systemd/system/display-manager.service.d");
+        std::fs::create_dir_all(&dropins).unwrap();
+        std::fs::write(dropins.join("override.conf"), "[Service]\nEnvironment=CHANGED=1\n").unwrap();
+        assert!(restarts(&sessions_changed, SERVICE));
+    }
+    #[test]
+    fn a_changed_login_entry_waits_for_a_restart_and_names_its_desktop() {
+        let f = Fixture::new();
+        let plasma = |exec: &str| format!("[Desktop Entry]\nName=Plasma (Wayland)\nExec={exec}\n");
+        let (old_plasma, new_plasma) = (plasma("/old/startplasma-wayland"), plasma("/new/startplasma-wayland"));
+        let old = sessions(
+            &f.root,
+            "old-desktops",
+            &[
+                ("wayland-sessions/plasma.desktop", &old_plasma),
+                ("wayland-sessions/hyprland.desktop", "Exec=/old/start-hyprland\n"),
+            ],
+        );
+        let new = sessions(
+            &f.root,
+            "new-desktops",
+            &[
+                ("wayland-sessions/plasma.desktop", &new_plasma),
+                ("wayland-sessions/hyprland.desktop", "Exec=/new/start-hyprland\n"),
+            ],
+        );
+        display_manager(&f.old, &old, SERVICE);
+        display_manager(&f.new, &new, SERVICE);
+        let reason = "Until the computer restarts, the login screen would start the previous version of Plasma (Wayland), hyprland.";
+        assert_eq!(plan(&f.old, &f.old, &f.new), vec![reason]);
+        // A display manager that restarted after a live switch read the active system's.
+        assert_eq!(plan(&f.new, &f.old, &f.new), vec![reason]);
+    }
+    #[test]
+    fn plasma_login_session_list_in_its_dropin_stays_live_unless_it_would_restart() {
+        let f = Fixture::new();
+        for (system, list) in [(&f.old, "old-sessions"), (&f.new, "new-sessions")] {
+            let dir = sessions(
+                &f.root,
+                list,
+                &[("wayland-sessions/tatami.desktop", "Exec=/run/current-system/sw/bin/tatami session\n")],
+            );
+            let units = system.join("etc/systemd/system");
+            std::fs::create_dir_all(units.join("plasmalogin.service.d")).unwrap();
+            std::fs::write(units.join("plasmalogin.service"), "[Service]\nExecStart=/same/plasmalogin\n").unwrap();
+            std::os::unix::fs::symlink("plasmalogin.service", units.join("display-manager.service")).unwrap();
+            std::fs::write(
+                units.join("plasmalogin.service.d/overrides.conf"),
+                format!("[Unit]\n\n[Service]\nEnvironment=\"XDG_DATA_DIRS={dir}\"\nX-RestartIfChanged=false\n"),
+            )
+            .unwrap();
+        }
+        assert!(plan(&f.old, &f.old, &f.new).is_empty());
+        // A later drop-in decides, for both systems alike.
+        for system in [&f.old, &f.new] {
+            std::fs::write(
+                system.join("etc/systemd/system/plasmalogin.service.d/zz-restart.conf"),
+                "[Service]\nX-RestartIfChanged=true\n",
+            )
+            .unwrap();
+        }
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("plasmalogin.service")));
+    }
+    #[test]
+    fn greetd_keeps_its_sessions_in_its_configuration_which_still_stages() {
+        let f = Fixture::new();
+        for (system, config) in [(&f.old, "/old/greetd.toml"), (&f.new, "/new/greetd.toml")] {
+            let units = system.join("etc/systemd/system");
+            std::fs::create_dir_all(&units).unwrap();
+            std::fs::write(
+                units.join("greetd.service"),
+                format!("[Service]\nExecStart=/same/greetd --config {config}\nX-RestartIfChanged=false\n"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink("greetd.service", units.join("display-manager.service")).unwrap();
+        }
+        assert!(plan(&f.old, &f.old, &f.new).iter().any(|r| r.contains("greetd.service")));
+    }
+    #[test]
+    fn live_session_list_change_is_explained_until_restart() {
+        let f = Fixture::new();
+        let gnome = ("wayland-sessions/gnome.desktop", "Name=GNOME\nExec=/same/gnome-session\n");
+        display_manager(&f.old, &sessions(&f.root, "old-desktops", &[gnome]), SERVICE);
+        display_manager(&f.new, &sessions(&f.root, "same-desktops", &[gnome]), SERVICE);
+        // Other store paths, the same entries.
+        assert_eq!(
+            system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before"),
+            Completion::default()
+        );
+        let xfce = ("xsessions/xfce.desktop", "Name=Xfce Session\nExec=/new/xsession\n");
+        display_manager(&f.new, &sessions(&f.root, "more-desktops", &[gnome, xfce]), SERVICE);
+        let state = system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before");
+        assert_eq!(state.action, Action::None);
+        assert!(state.description().starts_with("System changes are active."));
+        assert!(state.description().ends_with(LOGIN_SCREEN_LIST));
+        // Starting the updated system takes it up.
+        assert_eq!(system_state(&f.new, &f.new, &f.new, Some(&f.receipt("activated")), "after"), Completion::default());
+        // A switch made outside Yukimi's planner can change an entry the login screen still starts.
+        let gnome = ("wayland-sessions/gnome.desktop", "Name=GNOME\nExec=/new/gnome-session\n");
+        display_manager(&f.new, &sessions(&f.root, "new-desktops", &[gnome]), SERVICE);
+        let state = system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before");
+        assert_eq!(state.action, Action::Reboot);
+        assert!(
+            state.description().starts_with(
+                "Until the computer restarts, the login screen would start the previous version of GNOME."
+            )
+        );
     }
     #[test]
     fn missing_evidence_and_failed_activation_never_claim_success() {

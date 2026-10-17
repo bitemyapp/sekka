@@ -127,7 +127,11 @@ needed, Yukimi shows one completion message with a button to finish when you
 are ready. A restart also finishes desktop changes; you will not be asked to
 restart again for that same prepared update. Once preparation finishes,
 Yukimi can be closed: the computer starts the prepared system on its next boot.
-It never restarts or signs you out automatically.
+It never restarts or signs you out automatically. Adding or removing a desktop
+doesn't make an update wait for a restart; the login screen lists the change
+after your next one. An update that changes how the login screen starts a
+desktop still waits, since until then the login screen would start its
+previous version.
 Your account, installed applications, hardware configuration,
 and desktop choices stay in place. Previous generations remain available in
 Yukimi's History and the boot menu.
