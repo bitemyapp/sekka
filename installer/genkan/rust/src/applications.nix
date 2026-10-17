@@ -15,7 +15,10 @@
 }:
 let
   catalog = builtins.fromJSON (builtins.readFile ./applications.json);
-  ids = config.calamares.applications;
+  # Aizome makes the catalog's fish (set up as Omarchy sets it up) the shell
+  # terminals open in, whether or not it was picked in the installer.
+  aizome = builtins.elem "aizome" (config.calamares.desktops or [ ]);
+  ids = lib.unique (config.calamares.applications ++ lib.optional aizome "fish");
   has = id: builtins.elem id ids;
   selected = builtins.filter (app: has app.id) catalog;
   # Where each source's packages come from; Nixpkgs' otherwise.

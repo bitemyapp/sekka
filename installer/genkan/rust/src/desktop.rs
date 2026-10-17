@@ -49,6 +49,9 @@ impl DesktopSelection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Desktop {
+    /// Aizome: Sekka's own desktop, on Sidestep's native toolkit; the
+    /// default.
+    Aizome,
     Plasma,
     Gnome,
     Xfce,
@@ -60,7 +63,8 @@ pub enum Desktop {
     Tatami,
 }
 impl Desktop {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
+        Self::Aizome,
         Self::Plasma,
         Self::Gnome,
         Self::Xfce,
@@ -69,6 +73,7 @@ impl Desktop {
     ];
     pub fn label(self) -> &'static str {
         match self {
+            Self::Aizome => "Aizome",
             Self::Plasma => "KDE Plasma",
             Self::Gnome => "GNOME",
             Self::Xfce => "Xfce",
@@ -78,6 +83,9 @@ impl Desktop {
     }
     pub fn description(self) -> &'static str {
         match self {
+            Self::Aizome => {
+                "Sekka's own desktop: Haiku's window tabs, NeXT's menus and IRIX's Toolchest, in indigo, with a command palette for everything."
+            }
             Self::Plasma => "Full-featured and familiar, with deep customization.",
             Self::Gnome => "Focused, modern workflow built around the Activities overview.",
             Self::Xfce => "Lightweight and traditional; easy on older hardware.",
@@ -92,6 +100,7 @@ impl Desktop {
     /// Value of `calamares.desktops` in the installed configuration.
     pub fn id(self) -> &'static str {
         match self {
+            Self::Aizome => "aizome",
             Self::Plasma => "plasma",
             Self::Gnome => "gnome",
             Self::Xfce => "xfce",

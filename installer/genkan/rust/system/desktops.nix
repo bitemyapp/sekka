@@ -10,6 +10,7 @@ let
   cfg = config.calamares;
   # Login session name for each installer choice.
   sessions = {
+    aizome = "aizome";
     plasma = "plasma";
     gnome = "gnome";
     xfce = "xfce";
@@ -177,12 +178,12 @@ in
   options.calamares = {
     desktops = lib.mkOption {
       type = lib.types.listOf desktop;
-      default = [ "plasma" ];
+      default = [ "aizome" ];
       description = "Desktop sessions selected in the graphical installer.";
     };
     defaultDesktop = lib.mkOption {
       type = desktop;
-      default = "plasma";
+      default = "aizome";
       description = "Default login session selected in the graphical installer.";
     };
   };
@@ -241,6 +242,13 @@ in
     services.xserver.desktopManager.lxqt.enable = has "lxqt";
     calamares.hyprland.enable = has "hyprland";
     programs.tatami.enable = has "tatami";
+    # Aizome, Sekka's own desktop, with Tatami's wallpapers: Da Nang at
+    # night for Night and Tokyo at dusk for Day, as on its design boards.
+    programs.aizome = lib.mkIf (has "aizome") {
+      enable = true;
+      wallpapers.night = wallpaper "da-nang-at-night.jpg";
+      wallpapers.day = wallpaper "tokyo-at-dusk.jpg";
+    };
     # Several desktops set equally-prioritized defaults for these shared
     # helpers; resolve them explicitly. Portals remain per-session.
     programs.ssh.askPassword =

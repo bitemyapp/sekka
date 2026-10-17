@@ -1,5 +1,6 @@
-# First-party source is always taken from this checkout.
-{ nixpkgs }:
+# First-party source is always taken from this checkout; Aizome comes from
+# its own repository (the flake's aizome input).
+{ nixpkgs, aizome }:
 let
   system = "x86_64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
@@ -37,6 +38,7 @@ rec {
         ../installer/genkan/rust/system
         tatami.nixosModules.default
         yukimi.nixosModules.default
+        aizome.nixosModules.default
       ];
       # The catalog's applications from this flake (source "sekka"), built
       # with its Nixpkgs, which installed systems make their own: the same

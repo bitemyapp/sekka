@@ -9,6 +9,10 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
+  # Aizome, Sekka's own desktop, on Sidestep's native toolkit: its own
+  # repository, built with Sekka's Nixpkgs.
+  inputs.aizome.url = "github:bitemyapp/aizome";
+  inputs.aizome.inputs.nixpkgs.follows = "nixpkgs";
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
@@ -33,7 +37,7 @@
       ...
     }:
     let
-      inputs = externalInputs // (import ./nix/components.nix { inherit nixpkgs; });
+      inputs = externalInputs // (import ./nix/components.nix { inherit nixpkgs; inherit (externalInputs) aizome; });
       installedLock = import ./nix/installed-lock.nix { inherit self; };
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -91,10 +95,11 @@
         applications = inputs.calamares.nixosModules.applications;
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
+        aizome = inputs.aizome.nixosModules.default;
       };
       lib = {
         inherit installedLock;
-        components = import ./nix/components.nix { inherit nixpkgs; };
+        components = import ./nix/components.nix { inherit nixpkgs; inherit (externalInputs) aizome; };
       };
       devShells.${system} = {
         kakehashi = kakehashi.shell;
