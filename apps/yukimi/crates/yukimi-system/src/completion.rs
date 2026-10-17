@@ -2,7 +2,7 @@
 //! Update completion is a property of the running machine, not a source revision.
 //! No commands or mutations are performed while reading this state.
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 pub const RECEIPT: &str = "/var/lib/yukimi/update.json";
@@ -131,6 +131,7 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
     // A display manager can be supplied by a package under an alias rather
     // than config.systemd.services.display-manager. Inspect the effective
     // units and their drop-ins as well as the declarative manifest.
+    let mut sessions_only = false;
     for (scope, units) in [
         (
             "system",
@@ -157,13 +158,15 @@ pub fn plan(booted: &Path, active: &Path, target: &Path) -> Vec<String> {
         for unit in units {
             let relative = format!("etc/systemd/{scope}/{unit}");
             match (unit_definition(&active.join(&relative)), unit_definition(&target.join(&relative))) {
-                (Ok(old), Ok(new))
-                    if old == new
-                        || dbus_reload_only(unit, &old, &new)
-                        || display_manager_sessions_only(unit, &old, &new) => {}
+                (Ok(old), Ok(new)) if old == new || dbus_reload_only(unit, &old, &new) => {}
+                (Ok(old), Ok(new)) if display_manager_sessions_only(unit, &old, &new) => sessions_only = true,
                 _ => reasons.push(format!("A session-critical service changed ({unit}).")),
             }
         }
+    }
+    // The running display manager may have read either system's entries.
+    if sessions_only && let Some(reason) = outdated_sessions(&[booted, active], target) {
+        reasons.push(reason);
     }
     let restrictions = |system: &Path| -> Result<BTreeMap<String, String>, String> {
         let path = system.join("switch-inhibitors");
@@ -255,7 +258,8 @@ const DISPLAY_MANAGERS: [&str; 3] = ["display-manager.service", "plasmalogin.ser
 /// XDG_DATA_DIRS, so their unit changes whenever a session entry does. Only
 /// ignore directories that hold nothing but session entries: the executable,
 /// the rest of the environment, dependencies, drop-ins and the restart policy
-/// must still match.
+/// must still match. The entries themselves are compared by plan, through
+/// outdated_sessions.
 fn display_manager_sessions_only(unit: &str, old: &BTreeMap<String, Vec<u8>>, new: &BTreeMap<String, Vec<u8>>) -> bool {
     if !DISPLAY_MANAGERS.contains(&unit) {
         return false;
@@ -338,7 +342,7 @@ fn session_entries(dir: &str) -> bool {
 
 /// The login sessions a display manager offers, by entry and contents. It
 /// reads them when it starts, so across live switches the running one keeps
-/// offering the booted system's.
+/// offering the booted system's, or the active one's if it has restarted.
 fn login_sessions(system: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut sessions = BTreeMap::new();
     for unit in DISPLAY_MANAGERS {
@@ -370,20 +374,37 @@ fn login_sessions(system: &Path) -> BTreeMap<String, Vec<u8>> {
     sessions
 }
 
-/// A Tatami login runs the login screen's entry, which can name a session
-/// component (uwsm) by its store path. If the entry the display manager
-/// started with names one that has since been replaced, signing out would
-/// start that component again; only a restart brings the new one.
-fn tatami_login_outdated(booted: &Path, installed: &SessionManifest) -> bool {
-    let Some(entry) = login_sessions(booted).remove("wayland-sessions/tatami.desktop") else {
-        return false;
-    };
-    let entry = String::from_utf8_lossy(&entry);
-    read_json::<SessionManifest>(&booted.join(SESSION_MANIFEST)).is_ok_and(|started| {
-        started.session.iter().any(|(key, component)| {
-            !component.is_empty() && installed.session.get(key) != Some(component) && entry.contains(component.as_str())
-        })
+/// Signing in runs what the login screen's entry names, often by store path
+/// (startplasma-wayland, Hyprland, an X session script). An entry the target
+/// changes, among those a running display manager read from `started`, would
+/// start the previous version of its desktop until the computer restarts.
+/// Entries only added or removed change the list, not what a login starts.
+fn outdated_sessions(started: &[&Path], target: &Path) -> Option<String> {
+    let offered = login_sessions(target);
+    let mut names = BTreeSet::new();
+    for system in started {
+        for (entry, contents) in login_sessions(system) {
+            if offered.get(&entry).is_some_and(|new| *new != contents) {
+                names.insert(session_name(&entry, &contents));
+            }
+        }
+    }
+    (!names.is_empty()).then(|| {
+        format!(
+            "Until the computer restarts, the login screen would start the previous version of {}.",
+            names.into_iter().collect::<Vec<_>>().join(", ")
+        )
     })
+}
+
+/// An entry's Name, or its file name without the extension.
+fn session_name(entry: &str, contents: &[u8]) -> String {
+    String::from_utf8_lossy(contents)
+        .lines()
+        .find_map(|line| {
+            line.trim().strip_prefix("Name=").map(str::trim).filter(|name| !name.is_empty()).map(str::to_owned)
+        })
+        .unwrap_or_else(|| entry.rsplit('/').next().unwrap_or(entry).trim_end_matches(".desktop").to_owned())
 }
 
 /// UWSM intentionally does not put XDG_SESSION_ID in the shared application
@@ -444,10 +465,8 @@ pub fn tatami_session_id(record: &SessionManifest) -> Result<String, String> {
 }
 
 /// Live activation leaves the display manager running (see plan), with the
-/// session entries it started with.
-const LOGIN_SCREEN_OUTDATED: &str = "The login screen offers the updated desktops after the next restart.";
-const TATAMI_LOGIN_OUTDATED: &str =
-    "The login screen still starts the previous version of Tatami until the computer restarts.";
+/// list of sessions it started with.
+const LOGIN_SCREEN_LIST: &str = "The login screen updates its list of desktops at the next restart.";
 
 pub fn system_state(
     booted: &Path,
@@ -490,10 +509,14 @@ pub fn system_state(
         );
     }
     match boot_changes(booted, selected) {
-        Ok(reasons) if reasons.is_empty() && login_sessions(booted) != login_sessions(active) => {
-            Completion { action: Action::None, reasons: vec![LOGIN_SCREEN_OUTDATED.into()] }
-        }
-        Ok(reasons) if reasons.is_empty() => Completion::default(),
+        // Yukimi's planner stages a changed entry; a switch made otherwise can still bring one.
+        Ok(reasons) if reasons.is_empty() => match outdated_sessions(&[booted], active) {
+            Some(reason) => Completion::new(Action::Reboot, reason),
+            None if login_sessions(booted) != login_sessions(active) => {
+                Completion::new(Action::None, LOGIN_SCREEN_LIST)
+            }
+            None => Completion::default(),
+        },
         Ok(reasons) => Completion { action: Action::Reboot, reasons },
         Err(reason) => Completion::new(Action::Unknown, reason),
     }
@@ -593,20 +616,16 @@ fn read_with_session(include_session: bool) -> Completion {
             "The update record could not be read. Completion has not been verified.",
         );
     }
-    let mut result = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
+    let system = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
     // Reboot and activation failure take precedence over all session advice.
-    if result.action != Action::None || !include_session || !in_tatami() {
-        return result;
-    }
-    let installed = read_json::<SessionManifest>(&active.join(SESSION_MANIFEST));
-    // Whatever this session recorded, a new one would start the same again.
-    if let Ok(new) = &installed
-        && tatami_login_outdated(&booted, new)
-    {
-        return Completion::new(Action::Reboot, TATAMI_LOGIN_OUTDATED);
+    if system.action != Action::None || !include_session || !in_tatami() {
+        return system;
     }
     let session = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).map(|p| p.join(SESSION_RECEIPT));
-    match (session.and_then(|p| read_json::<SessionManifest>(&p).ok()), installed) {
+    let result = match (
+        session.and_then(|p| read_json::<SessionManifest>(&p).ok()),
+        read_json::<SessionManifest>(&active.join(SESSION_MANIFEST)),
+    ) {
         (Some(mut old), Ok(new)) => {
             if let Err(reason) = tatami_session_id(&old) {
                 return Completion::new(Action::Unknown, reason);
@@ -618,16 +637,15 @@ fn read_with_session(include_session: bool) -> Completion {
             if current {
                 old.keep_awake = new.keep_awake.clone();
             }
-            result = session_state(&old, &new, &boot_id(), awake);
+            session_state(&old, &new, &boot_id(), awake)
         }
-        _ => {
-            result = Completion::new(
-                Action::Unknown,
-                "The desktop's applied version could not be verified. A new Tatami session records it automatically.",
-            )
-        }
-    }
-    result
+        _ => Completion::new(
+            Action::Unknown,
+            "The desktop's applied version could not be verified. A new Tatami session records it automatically.",
+        ),
+    };
+    // A current session keeps the system's note about the login screen.
+    if result == Completion::default() { system } else { result }
 }
 
 /// Called after a successful live switch, by the unprivileged frontend only.
@@ -823,8 +841,10 @@ mod tests {
         let gdm = f.root.join("gdm/share");
         std::fs::create_dir_all(gdm.join("gnome-session/sessions")).unwrap();
         let gdm = gdm.to_string_lossy();
-        let old = sessions(&f.root, "old-desktops", &[("wayland-sessions/tatami.desktop", "Exec=/old/tatami")]);
-        let new = sessions(&f.root, "new-desktops", &[("wayland-sessions/tatami.desktop", "Exec=/new/tatami")]);
+        let tatami = ("wayland-sessions/tatami.desktop", "Exec=/run/current-system/sw/bin/tatami session\n");
+        // The same entry, and another desktop beside it.
+        let old = sessions(&f.root, "old-desktops", &[tatami]);
+        let new = sessions(&f.root, "new-desktops", &[tatami, ("xsessions/xfce.desktop", "Exec=/new/xsession\n")]);
         display_manager(&f.old, &format!("{gdm}:{old}"), SERVICE);
         display_manager(&f.new, &format!("{gdm}:{new}"), SERVICE);
         assert!(plan(&f.old, &f.old, &f.new).is_empty());
@@ -850,10 +870,42 @@ mod tests {
         assert!(restarts(&sessions_changed, SERVICE));
     }
     #[test]
+    fn a_changed_login_entry_waits_for_a_restart_and_names_its_desktop() {
+        let f = Fixture::new();
+        let plasma = |exec: &str| format!("[Desktop Entry]\nName=Plasma (Wayland)\nExec={exec}\n");
+        let (old_plasma, new_plasma) = (plasma("/old/startplasma-wayland"), plasma("/new/startplasma-wayland"));
+        let old = sessions(
+            &f.root,
+            "old-desktops",
+            &[
+                ("wayland-sessions/plasma.desktop", &old_plasma),
+                ("wayland-sessions/hyprland.desktop", "Exec=/old/start-hyprland\n"),
+            ],
+        );
+        let new = sessions(
+            &f.root,
+            "new-desktops",
+            &[
+                ("wayland-sessions/plasma.desktop", &new_plasma),
+                ("wayland-sessions/hyprland.desktop", "Exec=/new/start-hyprland\n"),
+            ],
+        );
+        display_manager(&f.old, &old, SERVICE);
+        display_manager(&f.new, &new, SERVICE);
+        let reason = "Until the computer restarts, the login screen would start the previous version of Plasma (Wayland), hyprland.";
+        assert_eq!(plan(&f.old, &f.old, &f.new), vec![reason]);
+        // A display manager that restarted after a live switch read the active system's.
+        assert_eq!(plan(&f.new, &f.old, &f.new), vec![reason]);
+    }
+    #[test]
     fn plasma_login_session_list_in_its_dropin_stays_live_unless_it_would_restart() {
         let f = Fixture::new();
         for (system, list) in [(&f.old, "old-sessions"), (&f.new, "new-sessions")] {
-            let dir = sessions(&f.root, list, &[("wayland-sessions/tatami.desktop", list)]);
+            let dir = sessions(
+                &f.root,
+                list,
+                &[("wayland-sessions/tatami.desktop", "Exec=/run/current-system/sw/bin/tatami session\n")],
+            );
             let units = system.join("etc/systemd/system");
             std::fs::create_dir_all(units.join("plasmalogin.service.d")).unwrap();
             std::fs::write(units.join("plasmalogin.service"), "[Service]\nExecStart=/same/plasmalogin\n").unwrap();
@@ -893,54 +945,32 @@ mod tests {
     #[test]
     fn live_session_list_change_is_explained_until_restart() {
         let f = Fixture::new();
-        let entry = [("wayland-sessions/gnome.desktop", "Exec=/old/gnome-session")];
-        display_manager(&f.old, &sessions(&f.root, "old-desktops", &entry), SERVICE);
-        display_manager(&f.new, &sessions(&f.root, "same-desktops", &entry), SERVICE);
+        let gnome = ("wayland-sessions/gnome.desktop", "Name=GNOME\nExec=/same/gnome-session\n");
+        display_manager(&f.old, &sessions(&f.root, "old-desktops", &[gnome]), SERVICE);
+        display_manager(&f.new, &sessions(&f.root, "same-desktops", &[gnome]), SERVICE);
         // Other store paths, the same entries.
         assert_eq!(
             system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before"),
             Completion::default()
         );
-        let entry = [("wayland-sessions/gnome.desktop", "Exec=/new/gnome-session")];
-        display_manager(&f.new, &sessions(&f.root, "new-desktops", &entry), SERVICE);
+        let xfce = ("xsessions/xfce.desktop", "Name=Xfce Session\nExec=/new/xsession\n");
+        display_manager(&f.new, &sessions(&f.root, "more-desktops", &[gnome, xfce]), SERVICE);
         let state = system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before");
         assert_eq!(state.action, Action::None);
         assert!(state.description().starts_with("System changes are active."));
-        assert!(state.description().ends_with(LOGIN_SCREEN_OUTDATED));
-        // Starting the updated system takes them up.
+        assert!(state.description().ends_with(LOGIN_SCREEN_LIST));
+        // Starting the updated system takes it up.
         assert_eq!(system_state(&f.new, &f.new, &f.new, Some(&f.receipt("activated")), "after"), Completion::default());
-    }
-    #[test]
-    fn tatami_login_through_an_outdated_entry_needs_a_restart_not_a_sign_out() {
-        let f = Fixture::new();
-        let tatami = "wayland-sessions/tatami.desktop";
-        let dir = sessions(
-            &f.root,
-            "desktops",
-            &[(tatami, "Exec=/store/uwsm-old/bin/uwsm start -- /store/tatami/bin/tatami session\n")],
+        // A switch made outside Yukimi's planner can change an entry the login screen still starts.
+        let gnome = ("wayland-sessions/gnome.desktop", "Name=GNOME\nExec=/new/gnome-session\n");
+        display_manager(&f.new, &sessions(&f.root, "new-desktops", &[gnome]), SERVICE);
+        let state = system_state(&f.old, &f.new, &f.new, Some(&f.receipt("activated")), "before");
+        assert_eq!(state.action, Action::Reboot);
+        assert!(
+            state.description().starts_with(
+                "Until the computer restarts, the login screen would start the previous version of GNOME."
+            )
         );
-        display_manager(&f.old, &dir, SERVICE);
-        let mut started = session();
-        started.session = BTreeMap::from([
-            ("compositor".into(), "/store/hyprland-old".into()),
-            ("sessionManager".into(), "/store/uwsm-old".into()),
-        ]);
-        std::fs::create_dir_all(f.old.join("etc/xdg/tatami")).unwrap();
-        std::fs::write(f.old.join(SESSION_MANIFEST), serde_json::to_vec(&started).unwrap()).unwrap();
-        let mut installed = started.clone();
-        assert!(!tatami_login_outdated(&f.old, &installed));
-        // Tatami finds its compositor on the system's PATH at login.
-        installed.session.insert("compositor".into(), "/store/hyprland-new".into());
-        assert!(!tatami_login_outdated(&f.old, &installed));
-        installed.session.insert("sessionManager".into(), "/store/uwsm-new".into());
-        assert!(tatami_login_outdated(&f.old, &installed));
-        // An entry that starts uwsm from the running system.
-        std::fs::write(
-            Path::new(&dir).join(tatami),
-            "Exec=/run/current-system/sw/bin/uwsm start -- /run/current-system/sw/bin/tatami session\n",
-        )
-        .unwrap();
-        assert!(!tatami_login_outdated(&f.old, &installed));
     }
     #[test]
     fn missing_evidence_and_failed_activation_never_claim_success() {
