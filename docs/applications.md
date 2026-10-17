@@ -11,6 +11,13 @@ Rust UI/parser and generated NixOS module. Each installed system retains that
 catalog and `applications.nix` beside its flake. `/etc/installer-applications.json`
 records selected IDs and exact package versions and store paths.
 
+Every application is on the installation media except those marked
+`"media": false`, whose licences forbid redistributing them. Neither the media
+nor Sekka's binary cache carries those; preparing an installation downloads
+them from their makers (installing always needs a network connection), and the
+installer marks them Downloaded. The `applications` check fails if a package
+of such an application would reach the media through another choice.
+
 ## Sources
 
 All sources are pinned in `flake.lock`. Adding the application inputs preserves
@@ -58,7 +65,10 @@ Superluminal and Tracy are profilers packaged by other flakes, which Sekka
 takes as inputs and builds with the applications' Nixpkgs; the catalog lists
 them as Sekka's own packages (`"source": "sekka"`). Superluminal repackages
 the vendor's proprietary Linux alpha, so it needs unfree-software consent and
-a trial or license. A daily workflow in the
+a trial or license. Its end-user licence (section 1.9) forbids redistributing
+it, so it is marked `"media": false`: the installer, Yukimi and every update
+download it from Superluminal's own servers and build its small wrapper on the
+machine. A daily workflow in the
 [superluminal-nix-linux fork](https://github.com/bitemyapp/superluminal-nix-linux)
 adds each new release from superluminal.eu once it builds, and Sekka's nightly
 input update picks it up. Superluminal ships no Qt Wayland plugin and runs
@@ -243,3 +253,11 @@ its first-run wizard; activation was not attempted, so no capture ran.
 `superluminalcmd` ran, and the setuid `pkexec` and Tatami's polkit agent were
 present. Not tested: Superluminal's capture service, other desktops' sessions,
 and physical hardware.
+
+That installation predates keeping Superluminal off the media (2026-10-17):
+it installed Superluminal from the ISO. With `"media": false`, the media's
+application cache and closure lists hold Tracy and not Superluminal, the
+`applications` check's assertion holds (and fails if Superluminal is put back
+on the media), and Genkan's applications page, in its preview, marks
+Superluminal Downloaded. Installing Superluminal by download while an
+installation is prepared has not yet been run in a VM.

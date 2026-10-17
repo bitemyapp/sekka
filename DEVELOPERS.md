@@ -398,7 +398,9 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
 installed system for each desktop the media offers (`respin.referenceDesktops`)
-and one with every free catalog application, so everything Sekka's modules
+and one with every free catalog application (never one marked
+`"media": false`, whose licence forbids redistribution; the media leave those
+out too, see `docs/applications.md`), so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
