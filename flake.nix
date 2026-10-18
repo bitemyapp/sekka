@@ -217,6 +217,10 @@
         };
       };
       checks.${system} = {
+        tatami-dark-mode = import ./nix/tatami-dark-mode-test.nix {
+          inherit pkgs nixpkgs;
+          tatamiModule = inputs.tatami.nixosModules.default;
+        };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
           inherit (hyprlandPkgs) aquamarine hyprland;

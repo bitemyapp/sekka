@@ -132,6 +132,17 @@ with the same configuration is the negative control. The patch applies
 without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
 check, and review any patch failure rather than skipping it.
 
+Tatami exports `DCONF_PROFILE=tatami` through its session and user manager.
+That profile locks `/org/gnome/desktop/interface/color-scheme` to
+`prefer-dark`: the GTK Settings portal then advertises dark (value 1) to
+desktop applications and websites. A default alone loses to settings saved
+in the shared user database, including light preferences written automatically
+by Plasma's GTK integration. The lock applies only to Tatami; it preserves
+the saved preference for other desktops, and leaves other GTK settings writable.
+`nix build .#checks.x86_64-linux.tatami-dark-mode` checks the generated profile
+and actual GTK portal with an isolated home, D-Bus and Xvfb. Its negative
+control reproduces the saved light preference overriding an unlocked default.
+
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted
 fields with an earlier rule of the same literal `output`, and of several rules

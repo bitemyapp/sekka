@@ -458,10 +458,13 @@ in
     # preparing the session, exports DCONF_PROFILE to the user manager (and so
     # to applications, the GTK portal and session units) and removes it at
     # logout, so other desktops keep their own defaults even when the user
-    # manager lingers. These are defaults: the user's own settings (user-db)
-    # take precedence.
+    # manager lingers. Tatami currently has a dark appearance only: lock its
+    # color preference so a saved light preference from another desktop cannot
+    # override what the GTK portal advertises to desktop apps and browsers.
+    # Other settings remain defaults; the shared user database is not changed.
     programs.dconf.profiles.tatami.databases = [
       {
+        locks = [ "/org/gnome/desktop/interface/color-scheme" ];
         settings."org/gnome/desktop/interface" = {
           color-scheme = "prefer-dark";
           gtk-theme = "Adwaita-dark";
