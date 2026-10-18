@@ -55,7 +55,10 @@ pkgs.rustPlatform.buildRustPackage {
   meta = {
     description = "NixOS-focused graphical installer implemented in Rust";
     license = pkgs.lib.licenses.gpl3Plus;
-    platforms = [ "x86_64-linux" ];
+    platforms = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
     mainProgram = "calamares-nixos";
   };
 }

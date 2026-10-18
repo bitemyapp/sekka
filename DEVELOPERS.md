@@ -12,7 +12,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
-| `nix/` | Component integration, packages, application resolution, prebuilt systems |
+| `nix/` | Component integration, packages, application resolution, prebuilt systems; Apple Silicon platform (`nix/apple-silicon/`) |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
@@ -568,6 +568,88 @@ real machine's live session under build load for about 15 minutes.
 [docs/responsiveness.md](docs/responsiveness.md) describes it and records
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
+
+## Apple Silicon
+
+`packages.aarch64-linux` (`nix/apple-silicon/`) builds Sekka for Apple
+Silicon Macs. The first target is the 14-inch MacBook Pro with an M3 Pro
+(Mac15,6, board J514S, SoC T6030). Genkan, Tatami and its applications,
+Yukimi, Kakehashi, the tools and the patched Aquamarine and Hyprland build
+from the same sources as on PCs: `nix/components.nix` gives the components a
+package for each system. This leaves every x86_64 derivation as it was, apart
+from those that record Sekka's own revision (the ISO, the installer system,
+the installed lock, the site and its template check). Those change with any
+commit.
+
+Upstream Asahi Linux drives the M3 Pro's built-in panel only through the boot
+framebuffer and has no GPU driver for it. The platform here is Omarchy's
+instead, pinned to its release `aurora-2026.10.17.20`. A J514S owner with the
+same system firmware as ours (iBoot 20457.1.29) reported that release's
+kernel, m1n1 and Mesa working:
+[omacom/linux-aurora#138](https://github.com/omacom/linux-aurora/issues/138).
+The built-in panel ran natively at 3024x1964 and 120 Hz, the GPU drew
+Hyprland, and a 4K display worked over one USB-C port (`atc0`). That report also
+lists what did not work: the second USB-C port, a backlight device, sleep with
+a display attached, and GPU clocks above 1056 MHz (no die temperature zone).
+The commits below come from the release's `mesa-matched-stack.json`.
+
+- `linux-aurora` (`kernel.nix`): the release's source archive, commit
+  `c46d7dcd`, with its sha256. Its recipe's configuration is
+  `linux-aurora.config`, byte for byte. It is built with Clang 22 and LLD
+  (`LLVM=1`), as the recipe builds it, with 16K pages and Rust. Only
+  `LOCALVERSION` changes, so the release is `7.1.12-aurora20`. Its final
+  `.config` matches the one in the release's headers package except for that
+  and what the toolchain reports: rustc 1.98.1 rather than 1.93.1, bindgen
+  0.72.1 rather than 0.73.2, and `CC_CAN_LINK` (Nixpkgs builds with the
+  unwrapped compiler).
+- `m1n1-aurora` (`m1n1.nix`): omacom/m1n1 `d05ba17d`, which is upstream
+  `3e354a24` plus Omarchy's 64 commits, built as Nixpkgs builds m1n1. Its
+  T6030 display and GPU handoff stays off unless `boot.bin` ends with the
+  three switches in `passthru.t6030Switches`. The binary differs from the
+  release's (`m1n1_bin_sha256`): the logo and toolchain are Nixpkgs'.
+- `mesa-m3-native-pro` and `mesa-m3-pro-vulkan` (`mesa.nix`):
+  iconidentify/mesa-omacom `d616d065` (native OpenGL) and `b0f56952`
+  (Honeykrisp Vulkan), both Mesa 26.1.4. They are Nixpkgs' Mesa with the
+  recipes' sources, drivers and options, Meson's automatic features left
+  automatic as the recipes leave them. Nixpkgs' LLVM is 21 where the recipes
+  use 22. Three changes adapt 26.1 to Nixpkgs:
+  - libclc is Nixpkgs' `mesa-libclc`, Mesa's own build of LLVM 22.1.8's
+    libclc, under the `libclc.pc` name 26.1 asks for;
+  - Clang's library directory is added where 26.1 looks for Clang;
+  - the 26.2 recipe's OpenCL patch and header check are dropped.
+
+  As in the recipes, Mesa's build-time compilers aren't installed, and a
+  package that needs LLVM or Clang at run time fails to build
+  (`disallowedRequisites`). Each package's closure is about 110 MiB. Neither
+  replaces the system's Mesa.
+  In Omarchy a session points at them only after checking the kernel and the
+  GPU's identity (`chip=0x6030 G15S rev=0x11`); otherwise it draws with
+  llvmpipe. macOS on our J514S reports the same GPU (`AGXG15S`, revision
+  0x11).
+
+The drivers depend on Apple's firmware interfaces. Asahi's installer gives an
+M3 the macOS 14.8.3 OS firmware, which the drivers see as 14.7, and the
+release was tested with that.
+
+Omarchy's Apple Silicon kernel and Mesa commits are largely written with AI
+assistance, and their trailers say so (`Assisted-by: LLM`, `Co-Authored-By:
+Claude …`). Asahi Linux does not accept such contributions, so Sekka's changes
+to these drivers belong in Omarchy's trees, not Asahi's.
+
+Building needs an aarch64-linux builder. On a Mac, Nixpkgs'
+`darwin.linux-builder` (a QEMU VM with Apple's hypervisor) is enough:
+
+```sh
+nix build .#packages.aarch64-linux.{linux-aurora,m1n1-aurora,mesa-m3-native-pro,mesa-m3-pro-vulkan}
+nix build .#packages.aarch64-linux.{genkan,tatami,displays,network,activity,wallpapers,yukimi,kakehashi,tools,aquamarine,hyprland}
+```
+
+These packages are built but have not been booted. What comes next:
+- a NixOS module that assembles `boot.bin` (m1n1, the kernel's device trees
+  and U-Boot), loads the vendor firmware from the ESP at boot, and chooses the
+  session's graphics as Omarchy does;
+- an image and installer;
+- aarch64 builders and cache for the nightly.
 
 ## Releases
 
