@@ -23,12 +23,19 @@ let
     ai = aiPackages;
     sekka = sekkaPackages;
   };
+  # Chromium and Electron apps use GNOME Keyring in every desktop but Plasma.
+  withKeyring = import ./keyring.nix {
+    inherit lib;
+    pkgs = applicationPkgs;
+  };
   packagesFor =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ ompPackage ]
     else
-      map (name: (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
+      map (
+        name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+      ) app.packages;
   packages = lib.unique (lib.concatMap packagesFor selected);
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
   withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
