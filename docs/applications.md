@@ -15,8 +15,9 @@ Every application is on the installation media except those marked
 `"media": false`, whose licences forbid redistributing them. Neither the media
 nor Sekka's binary cache carries those; preparing an installation downloads
 them from their makers (installing always needs a network connection), and the
-installer marks them Downloaded. The `applications` check fails if a package
-of such an application would reach the media through another choice.
+installer marks them Downloaded. The `applications` check fails if another
+choice names one of their packages. It compares the packages choices name, not
+those packages' dependencies.
 
 ## Sources
 
@@ -30,7 +31,7 @@ pins were selected on 2026-10-04:
 | [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop and OpenCode |
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
-| [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
+| [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -68,7 +69,10 @@ the vendor's proprietary Linux alpha, so it needs unfree-software consent and
 a trial or license. Its end-user licence (section 1.9) forbids redistributing
 it, so it is marked `"media": false`: the installer, Yukimi and every update
 download it from Superluminal's own servers and build its small wrapper on the
-machine. A daily workflow in the
+machine. The wrapper depends on the applications' Nixpkgs, so most updates
+rebuild it, and installing or updating a system with Superluminal fails while
+Superluminal's servers are unreachable or no longer serve the locked release.
+A daily workflow in the
 [superluminal-nix-linux fork](https://github.com/bitemyapp/superluminal-nix-linux)
 adds each new release from superluminal.eu once it builds, and Sekka's nightly
 input update picks it up. Superluminal ships no Qt Wayland plugin and runs
@@ -78,7 +82,10 @@ agent: Tatami starts hyprpolkitagent and the full desktop environments bring
 their own, but the plain Hyprland session starts none. Sekka's tuning sets
 `kernel.kptr_restrict` to 2, which Superluminal names as the reason captures
 lack kernel symbols; a system that needs them can set it to 1 with
-`lib.mkForce`. Tracy's profiler runs natively on
+`lib.mkForce`. Tracy comes from a
+[fork of Quince-Pie's tracy-flake](https://github.com/bitemyapp/tracy-flake)
+that nothing updates on its own, so upstream changes reach Sekka's nightly only
+once they are reviewed and pushed there. Tracy's profiler runs natively on
 Wayland. Its network protocol changes between releases, so a program must be
 built with the same Tracy client version as the installed profiler; Nixpkgs
 keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled

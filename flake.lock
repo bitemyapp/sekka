@@ -699,13 +699,13 @@
       "locked": {
         "lastModified": 1791150074,
         "narHash": "sha256-frjZ8qK1OIFxxzkKSv/Toza32Iy7/rbFevXwTF3kEAo=",
-        "owner": "Quince-Pie",
+        "owner": "bitemyapp",
         "repo": "tracy-flake",
         "rev": "1f0bf6eaee8e965848274caa7f4ab6d2ff877f97",
         "type": "github"
       },
       "original": {
-        "owner": "Quince-Pie",
+        "owner": "bitemyapp",
         "repo": "tracy-flake",
         "type": "github"
       }

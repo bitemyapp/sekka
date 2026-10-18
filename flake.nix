@@ -9,13 +9,14 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
-  # Catalog applications packaged by other flakes. Sekka builds them with the
+  # Catalog applications packaged by other flakes, from forks under bitemyapp:
+  # only commits there reach the nightly. Sekka builds them with the
   # applications' Nixpkgs and gives them to the catalog as its own packages
   # (nix/components.nix), so installed systems keep them beneath Sekka
   # (nix/installed-lock.nix) rather than as inputs of their own.
   inputs.superluminal.url = "github:bitemyapp/superluminal-nix-linux";
   inputs.superluminal.inputs.nixpkgs.follows = "applications";
-  inputs.tracy.url = "github:Quince-Pie/tracy-flake";
+  inputs.tracy.url = "github:bitemyapp/tracy-flake";
   inputs.tracy.inputs.nixpkgs.follows = "applications";
 
   # Sekka's own packages, and numtide's for the AI applications, also
