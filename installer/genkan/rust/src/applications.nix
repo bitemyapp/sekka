@@ -26,12 +26,19 @@ let
     ai = aiPackages;
     sekka = sekkaPackages;
   };
+  # Chromium and Electron apps use GNOME Keyring in every desktop but Plasma.
+  withKeyring = import ./keyring.nix {
+    inherit lib;
+    pkgs = applicationPkgs;
+  };
   packagesFor =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ ompPackage ]
     else
-      map (name: (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
+      map (
+        name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+      ) app.packages;
   # fish brings Omarchy's configuration for it (rust/system/fish), which
   # calls the catalog entry's other packages.
   omarchyFish = pkgs.callPackage ../system/fish/package.nix { };
