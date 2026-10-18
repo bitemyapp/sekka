@@ -4,6 +4,21 @@
   yukimi,
   yukimiModule,
 }:
+let
+  session =
+    id: name: exec:
+    pkgs.writeTextFile {
+      name = "${id}-session";
+      destination = "/share/wayland-sessions/${id}.desktop";
+      text = ''
+        [Desktop Entry]
+        Name=${name}
+        Exec=${exec}
+        Type=Application
+      '';
+      derivationArgs.passthru.providedSessions = [ id ];
+    };
+in
 pkgs.testers.runNixOSTest {
   name = "yukimi-update-completion";
   globalTimeout = 300;
@@ -11,6 +26,19 @@ pkgs.testers.runNixOSTest {
     imports = [
       yukimiModule
       (pkgs.path + "/nixos/tests/common/x11.nix")
+      # A login session whose entry the sessionChange specialisation changes.
+      (
+        { config, lib, ... }:
+        {
+          options.yukimiTest.sessionExec = lib.mkOption {
+            type = lib.types.str;
+            default = "${pkgs.coreutils}/bin/true";
+          };
+          config.services.displayManager.sessionPackages = [
+            (session "yukimi-test" "Yukimi test" config.yukimiTest.sessionExec)
+          ];
+        }
+      )
     ];
     virtualisation = {
       memorySize = 3072;
@@ -43,6 +71,15 @@ pkgs.testers.runNixOSTest {
     specialisation.live.configuration.environment.etc."update-test".text = "live";
     specialisation.restart.configuration.boot.kernelParams = [ "sekka-update-test=1" ];
     specialisation.loginChange.configuration.systemd.services.display-manager.environment.YUKIMI_TEST = "changed";
+    # Only the login screen's list of sessions differs, in the display
+    # manager's XDG_DATA_DIRS: another entry beside the same one. NixOS
+    # doesn't restart it for that.
+    specialisation.sessionList.configuration.services.displayManager.sessionPackages = [
+      (session "yukimi-extra" "Yukimi extra" "${pkgs.coreutils}/bin/true")
+    ];
+    # The entry the login screen started with now starts something else,
+    # which it would only start after a restart.
+    specialisation.sessionChange.configuration.yukimiTest.sessionExec = "${pkgs.coreutils}/bin/false";
     # Give the test a deterministic point at which activation is committed,
     # then keep writing output after its original client has been killed.
     system.activationScripts.yukimiTest = ''
@@ -61,6 +98,8 @@ pkgs.testers.runNixOSTest {
     live = machine.succeed(f"readlink -f {base}/specialisation/live").strip()
     restart = machine.succeed(f"readlink -f {base}/specialisation/restart").strip()
     login_change = machine.succeed(f"readlink -f {base}/specialisation/loginChange").strip()
+    session_list = machine.succeed(f"readlink -f {base}/specialisation/sessionList").strip()
+    session_change = machine.succeed(f"readlink -f {base}/specialisation/sessionChange").strip()
     def status():
         return json.loads(machine.succeed("sekka-update --status --json"))
     assert status()["action"] == "none", status()
@@ -84,10 +123,29 @@ pkgs.testers.runNixOSTest {
     assert machine.succeed("readlink -f /run/current-system").strip() == live
     assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
     assert status()["action"] == "none", status()
-    machine.succeed(f"ln -s {restart} /nix/var/nix/profiles/system-101-link")
+    # A change to the list of sessions alone stays live. The display manager
+    # keeps running, and offers the new list from its next start.
+    manager_pid = machine.succeed("systemctl show --value --property=MainPID display-manager").strip()
+    machine.succeed(f"ln -s {session_list} /nix/var/nix/profiles/system-101-link")
     report = json.loads(machine.succeed("yukimi-helper rollback 101"))
+    assert report["ok"] and report["mode"] == "switch", report
+    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
+    assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
+    assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+    assert status()["action"] == "none", status()
+    assert any("login screen" in reason for reason in status()["reasons"]), status()
+    # A changed entry waits for a restart, and says which desktop.
+    machine.succeed(f"ln -s {session_change} /nix/var/nix/profiles/system-102-link")
+    report = json.loads(machine.succeed("yukimi-helper rollback 102"))
     assert report["ok"] and report["mode"] == "boot", report
-    assert machine.succeed("readlink -f /run/current-system").strip() == live
+    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
+    assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
+    assert status()["action"] == "reboot", status()
+    assert any("previous version of Yukimi test" in reason for reason in status()["reasons"]), status()
+    machine.succeed(f"ln -s {restart} /nix/var/nix/profiles/system-103-link")
+    report = json.loads(machine.succeed("yukimi-helper rollback 103"))
+    assert report["ok"] and report["mode"] == "boot", report
+    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
     assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
     assert status()["action"] == "reboot", status()
     # The status survives closing and reopening Yukimi; no background GUI.

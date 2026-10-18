@@ -13,6 +13,7 @@
   {"id":"neovim","name":"Neovim","description":"Extensible text editor for the terminal.","category":"Editors","packages":["neovim"],"terminal":"nvim"},
   {"id":"ghostty","name":"Ghostty","description":"Fast terminal emulator with tabs, splits, and GPU rendering.","category":"Terminals","packages":["ghostty"]},
   {"id":"kitty","name":"kitty","description":"GPU-accelerated terminal with tabs, layouts, and scripting.","category":"Terminals","packages":["kitty"]},
+  {"id":"fish","name":"fish","description":"Your terminals open in the friendly interactive shell, set up as in Omarchy: Starship prompt, fzf search, zoxide, eza listings, and vi keys.","category":"Terminals","packages":["fish","eza","mise","zoxide","starship","fzf","fd","bat"]},
   {"id":"build-tools","name":"Development build tools","description":"C/C++ compiler and headers, Make, binutils, CMake, Ninja, pkg-config, Git with Git LFS, patch, and file.","category":"Development tools","packages":["gcc","gnumake","binutils","cmake","ninja","pkg-config","git","patch","file"]},
   {"id":"rustup","name":"Rustup","description":"Install and manage Rust toolchains. Also selects Development build tools. Run rustup default stable after installation.","category":"Development tools","packages":["rustup"],"requires":["build-tools"]},
   {"id":"lazygit","name":"Lazygit","description":"Review changes, stage files, and manage Git commits in the terminal.","category":"Development tools","packages":["lazygit","git"],"terminal":"lazygit"},

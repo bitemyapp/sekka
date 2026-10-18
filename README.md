@@ -30,6 +30,8 @@ Choose your disk, account, desktop, applications, and location. Review everythin
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
+Choose **fish** among the applications, here or later in Yukimi, and your terminals open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work.
+
 ### Tatami: a desktop under your fingertips
 
 Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS.
@@ -127,7 +129,11 @@ needed, Yukimi shows one completion message with a button to finish when you
 are ready. A restart also finishes desktop changes; you will not be asked to
 restart again for that same prepared update. Once preparation finishes,
 Yukimi can be closed: the computer starts the prepared system on its next boot.
-It never restarts or signs you out automatically.
+It never restarts or signs you out automatically. Adding or removing a desktop
+doesn't make an update wait for a restart; the login screen lists the change
+after your next one. An update that changes how the login screen starts a
+desktop still waits, since until then the login screen would start its
+previous version.
 Your account, installed applications, hardware configuration,
 and desktop choices stay in place. Previous generations remain available in
 Yukimi's History and the boot menu.
