@@ -49,6 +49,13 @@ assert lib.length networks <= 9;
     { lib, ... }:
     {
       boot.kernelModules = [ "mac80211_hwsim" ];
+      # Under the world regulatory domain wlan1 offers 89 channels, 78 of
+      # them passive, and takes 9.5 s for a scan; joining a network can take
+      # two. regtest=6 gives the first radio, the access points', a domain of
+      # hwsim's own, and the second, wlan1, one with only 32 channels (2.4 GHz
+      # 1-11 and 5.7-5.9 GHz), six of them passive: 2.3 s. Both include
+      # hostapd's channel 6.
+      boot.extraModprobeConfig = "options mac80211_hwsim regtest=6";
       # NetworkManager's Wi-Fi backend, which test VMs otherwise turn off
       # (mkVMOverride).
       networking.wireless.enable = lib.mkOverride 9 true;
@@ -58,8 +65,8 @@ assert lib.length networks <= 9;
         # Scan with the radio's own address. To change it, NetworkManager
         # takes wlan1 down as it leaves a network; a scan it has just asked
         # wpa_supplicant for can be dropped then, leaving wpa_supplicant to
-        # treat its next scan's results as scan-only and join nothing (see
-        # docs/handoff/network-vm-hidden-ssid.md).
+        # treat its next scan's results as scan-only and join nothing until
+        # NetworkManager gives up (DEVELOPERS.md, "Simulated Wi-Fi").
         wifi.scanRandMacAddress = false;
       };
       environment.etc."access-points/hostapd.conf".text = lib.concatStringsSep "\n" (
