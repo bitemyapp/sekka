@@ -7,8 +7,11 @@
   inputs,
   nixpkgs,
   hyprlandOverlay,
+  # Sekka's revision, which names the Asahi installer package.
+  revision,
 }:
 let
+  image = import ./image.nix { inherit inputs nixpkgs revision; };
   system = "aarch64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
   hyprlandPkgs = pkgs.extend hyprlandOverlay;
@@ -79,6 +82,12 @@ in
   mesa-m3-pro-vulkan = mesa.vulkan;
   mesa-m3-abi-check = graphics.abiCheck;
   m3-gpu-session-env-test = graphics.sessionEnvTest;
+
+  # The Asahi installer's OS package for the J514S, with installer_data.json
+  # and install-sekka.sh (image.nix).
+  mac-installer-j514s = image.bundle;
+  image-j514s-system = image.toplevel;
+  image-j514s-esp = image.esp;
 
   installed-j514s = j514s.config.system.build.toplevel;
   installed-j514s-boot-bin = j514s.config.system.build.appleSiliconBootBin;

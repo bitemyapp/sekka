@@ -104,6 +104,8 @@ in
         "xhci-plat-hcd"
         "usbhid"
         "hid_generic"
+        # An external Apple keyboard, for a disk password.
+        "hid_apple"
         # The native display, from the start where m1n1 hands it over.
         "appledrm"
       ];
@@ -143,6 +145,13 @@ in
         # and log stay unbound unless a tool asks for them.
         boot.blacklistedKernelModules = [ "phram" ];
         boot.initrd.availableKernelModules = cfg.initrdModules;
+        # NixOS adds a PC's storage and USB drivers to every initrd (ahci,
+        # SATA, older USB controllers), which this kernel lacks or these Macs
+        # do not have.
+        boot.initrd.includeDefaultModules = false;
+        # These Macs have no TPM, and the kernel has no TPM drivers.
+        boot.initrd.systemd.tpm2.enable = false;
+        systemd.tpm2.enable = false;
 
         # U-Boot has no EFI variables to write.
         boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
