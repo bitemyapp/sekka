@@ -14,7 +14,7 @@ let
   # As installer/genkan/rust/src/applications.nix resolves them; the module
   # gets Sekka's own packages from nix/components.nix.
   sources = {
-    ai = specialArgs.aiPackages;
+    ai = import ./ai-packages.nix specialArgs.aiPackages;
     sekka = inputs.kakehashi.packages.${system};
   };
   evaluate =

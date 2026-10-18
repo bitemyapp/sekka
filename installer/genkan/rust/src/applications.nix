@@ -20,7 +20,7 @@ let
   selected = builtins.filter (app: has app.id) catalog;
   # Where each source's packages come from; Nixpkgs' otherwise.
   sources = {
-    ai = aiPackages;
+    ai = import ../../../../nix/ai-packages.nix aiPackages;
     sekka = sekkaPackages;
   };
   packagesFor =
