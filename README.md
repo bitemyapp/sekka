@@ -2,7 +2,7 @@
 
 **A NixOS desktop you can install and look after through a graphical interface.**
 
-Sekka brings together **Genkan**, a graphical installer; **Tatami**, a keyboard-driven desktop; and **Yukimi**, an app for managing software and system updates. It uses Determinate Nix and lets you choose Plasma, GNOME, Tatami, vanilla Hyprland, or Xfce—or install several and switch at login.
+Sekka brings together **Genkan**, a graphical installer; **Aizome**, its own desktop; **Tatami**, a keyboard-driven tiling desktop; and **Yukimi**, an app for managing software and system updates. It uses Determinate Nix and lets you choose Aizome, Plasma, GNOME, Tatami, vanilla Hyprland, or Xfce—or install several and switch at login.
 
 ## Why you shouldn't use Sekka (yet)
 
@@ -31,6 +31,45 @@ Choose your disk, account, desktop, applications, and location. Review everythin
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
 Choose **fish** among the applications, here or later in Yukimi, and your terminals open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work.
+
+### Aizome: Sekka's own desktop
+
+Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
+choice. It is written from the compositor up in Rust, on
+[Sidestep](https://github.com/bitemyapp/sidestep)'s native toolkit, and takes
+its ideas from Haiku, NeXTSTEP and IRIX:
+
+- Every window wears a tab only as wide as its title. Drop one tab on another
+  and the windows stack into a group, from any apps; slide a tab along the
+  top edge with **Shift**.
+- One menu bar shows the focused app's menus. **Super + right-click**
+  anywhere opens the whole menu at the pointer, and any menu tears off into
+  a palette.
+- **Super + Space** opens the command palette: every command in the focused
+  app's menus, with its shortcut taught back to you, and windows, files,
+  apps, settings and arithmetic.
+- The Toolchest launches apps and places, the Deskbar lists each app with
+  its windows and files its notifications beneath it, and Desks keep work
+  apart (**Super + Ctrl + ↑** shows them all).
+- **Super** is the command key in every app (**Super + C**, **Super + V**),
+  and foot opens in fish.
+
+It comes with its own apps: Shitsurae (Settings), Yukimi, Hako (Files), Sumi
+(Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
+(Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
+(Activity) and Shashin (Images). Aizome is new, and so far it has run only in
+virtual machines. See [its repository](https://github.com/bitemyapp/aizome)
+for what is done and what isn't.
+
+[![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
+
+[![The whole menu at the pointer](docs/images/sekka/aizome-menu.png)](docs/images/sekka/aizome-menu.png)
+
+[![The command palette](docs/images/sekka/aizome-palette.png)](docs/images/sekka/aizome-palette.png)
+
+[![Shitsurae, Aizome's Settings](docs/images/sekka/aizome-settings.png)](docs/images/sekka/aizome-settings.png)
+
+*Aizome in a disposable NixOS test VM, rendering in software.*
 
 ### Tatami: a desktop under your fingertips
 
@@ -93,7 +132,7 @@ See what's installed and why, find software, check for updates, return to an ear
 
 ### Prefer a familiar desktop?
 
-Plasma is the default live desktop and the installer's preselected choice. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen.
+Plasma is the default live desktop. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen.
 
 [![Plasma with Konsole and Dolphin](docs/images/sekka/plasma.png)](docs/images/sekka/plasma.png)
 

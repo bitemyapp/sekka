@@ -85,7 +85,10 @@ pkgs.testers.runNixOSTest {
           environment.systemPackages = [ pkgs.file pkgs.firefox ];
         }
       '';
-      environment.systemPackages = [ pkgs.libnotify ];
+      environment.systemPackages = [
+        pkgs.libnotify
+        pkgs.fastfetch
+      ];
       systemd.tmpfiles.rules = [
         "d /home/demo/Documents 0755 demo users -"
         "C /home/demo/Documents/architecture.md 0644 demo users - ${architecture}"
@@ -167,10 +170,17 @@ pkgs.testers.runNixOSTest {
     launch("foot")
     foot = wait_window("foot")
     ctl(f"stack {hako['id']} {foot['id']}")
-    ctl(f"move {hako['id']} 760 360")
+    # Content rectangles in layout points (1440 × 900, the Deskbar at the
+    # right), so every tab and frame is on screen and no tab is covered.
+    ctl(f"resize {foot['id']} 600 500 580 340")
+    time.sleep(2)
+    ctl(f"focus {foot['id']}")
+    ctl("input type 'clear; fastfetch --logo nixos_small'")
+    ctl("input key return")
+    time.sleep(3)
     launch("aizome-sumi /home/demo/Documents/architecture.md")
     sumi = wait_window("org.aizome.Sumi")
-    ctl(f"move {sumi['id']} 210 80")
+    ctl(f"resize {sumi['id']} 150 66 620 380")
     user("notify-send -a Tenki 'Rain this evening' 'Showers from 18:00, take an umbrella.'")
     capture("aizome-desktop", settle=8)
 
