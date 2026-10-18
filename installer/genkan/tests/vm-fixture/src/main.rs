@@ -253,6 +253,14 @@ fn github_field(value: &str) -> String {
         String::new()
     }
 }
+/// A setting's value in `sshd -T` output. Keywords are case-insensitive, and
+/// OpenSSH has printed them both in lowercase and in their documented case.
+fn sshd_setting<'a>(config: &'a str, keyword: &str) -> Option<&'a str> {
+    config.lines().find_map(|line| {
+        let (name, value) = line.trim().split_once(char::is_whitespace)?;
+        name.eq_ignore_ascii_case(keyword).then(|| value.trim())
+    })
+}
 fn seed_previous_filesystem(device: &str) -> Result<()> {
     let previous =
         std::env::var("CALAMARES_TEST_PREVIOUS_FILESYSTEM").unwrap_or_else(|_| "blank".into());
@@ -742,10 +750,12 @@ fn main() -> Result<()> {
                 );
                 output("systemctl", &["is-active", "sshd.service"], 30)?;
                 let sshd = output("sshd", &["-T"], 30)?;
-                ensure!(
-                    sshd.lines().any(|l| l == "passwordauthentication no"),
-                    "The SSH server accepts passwords although keys are authorized"
-                );
+                for keyword in ["PasswordAuthentication", "KbdInteractiveAuthentication"] {
+                    ensure!(
+                        sshd_setting(&sshd, keyword) == Some("no"),
+                        "The SSH server accepts passwords although keys are authorized: {keyword}"
+                    );
+                }
                 ensure!(
                     output("git", &["config", "--system", "user.name"], 10)?.trim()
                         == "Rust ${literal} Test"
@@ -929,4 +939,32 @@ fn main() -> Result<()> {
         _ => anyhow::bail!("prepare|prepare-integrated|install|verify"),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sshd_setting;
+    #[test]
+    fn sshd_keywords_match_in_either_case() {
+        for config in [
+            "port 22\npasswordauthentication no\nkbdinteractiveauthentication no\n",
+            "Port 22\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n",
+        ] {
+            assert_eq!(sshd_setting(config, "PasswordAuthentication"), Some("no"));
+            assert_eq!(
+                sshd_setting(config, "KbdInteractiveAuthentication"),
+                Some("no")
+            );
+            assert_eq!(sshd_setting(config, "PermitRootLogin"), None);
+        }
+        assert_eq!(
+            sshd_setting("PasswordAuthentication yes\n", "passwordauthentication"),
+            Some("yes")
+        );
+        // A keyword that merely starts with another is a different setting.
+        assert_eq!(
+            sshd_setting("passwordauthenticationx no\n", "PasswordAuthentication"),
+            None
+        );
+    }
 }

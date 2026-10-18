@@ -45,6 +45,10 @@ let
     };
   # Desktop names Hyprland:Tatami: Hyprland first, so portals and the
   # terminal choice follow Hyprland's; Tatami makes uwsm load env-tatami.
+  # uwsm and tatami from the system profile (both in systemPackages), as
+  # NixOS's own uwsm sessions start their compositors: this entry, and with
+  # it display-manager.service, stays the same across Tatami builds, so a
+  # Tatami update can switch live, and the next login starts the new Tatami.
   session = pkgs.writeTextFile {
     name = "tatami-session";
     destination = "/share/wayland-sessions/tatami.desktop";
@@ -52,7 +56,7 @@ let
       [Desktop Entry]
       Name=Tatami
       Comment=Keyboard-driven Hyprland inspired by Omarchy, managed by UWSM
-      Exec=${lib.getExe config.programs.uwsm.package} start -e -D Hyprland:Tatami -N Tatami -- ${lib.getExe tool} session
+      Exec=/run/current-system/sw/bin/uwsm start -e -D Hyprland:Tatami -N Tatami -- /run/current-system/sw/bin/tatami session
       Type=Application
       DesktopNames=Hyprland;Tatami
     '';

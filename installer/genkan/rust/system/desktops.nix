@@ -222,13 +222,16 @@ in
     # each chosen desktop once: not Plasma's X11 session, Hyprland without
     # uwsm (no graphical-session.target, so no portals or session services),
     # or Cinnamon's software-rendering and Wayland variants. Those sessions
-    # stay installed.
-    systemd.services.plasmalogin.environment.XDG_DATA_DIRS = lib.mkIf plasmaLogin (
-      lib.mkForce "${loginSessions}/share"
-    );
-    systemd.user.services.plasma-login.environment.XDG_DATA_DIRS = lib.mkIf plasmaLogin (
-      lib.mkForce "${loginSessions}/share"
-    );
+    # stay installed. Under GDM there is no Plasma Login unit to change: a
+    # condition on the value alone would still define an empty one, whose
+    # PATH changes with coreutils and the like, and Yukimi would wait for a
+    # restart to apply them.
+    systemd.services.plasmalogin = lib.mkIf plasmaLogin {
+      environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
+    };
+    systemd.user.services.plasma-login = lib.mkIf plasmaLogin {
+      environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
+    };
     services.displayManager.defaultSession = sessions.${defaultDesktop};
     services.desktopManager.plasma6.enable = has "plasma";
     services.desktopManager.gnome.enable = has "gnome";

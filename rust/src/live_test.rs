@@ -2,7 +2,7 @@
 use crate::{
     gui_input,
     support::*,
-    vm::{InputDevices, Rpc, Vm},
+    vm::{InputDevices, Vm},
 };
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::json;
@@ -118,8 +118,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
     let repo = repo()?;
     let id = stamp();
     let name = format!("live-{firmware}-{profile:?}-{input:?}-{id}");
-    // Keep Unix socket paths below sockaddr_un's 108-byte limit, including
-    // the repository path. Human-readable profile names belong in artifacts.
+    // Human-readable profile names belong in artifacts.
     let work = repo.join(".work").join(format!("lv-{id}"));
     let artifacts = repo.join("artifacts").join(&name);
     fs::create_dir_all(&artifacts)?;
@@ -148,7 +147,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
             pause(Duration::from_millis(200))?;
         }
         pause(Duration::from_secs(2))?;
-        let mut qmp = Rpc::connect(&work.join("qmp.sock"), true, 10)?;
+        let mut qmp = vm.qmp(10)?;
         gui_input::key(&mut qmp, &["down"])?;
         gui_input::key(&mut qmp, &["home"])?;
         // QEMU's monitor socket accepts one client. Reuse the input connection
