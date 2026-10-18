@@ -16,7 +16,10 @@ pkgs.rustPlatform.buildRustPackage {
   meta = {
     description = "RustScript implementations for the Determinate graphical respin";
     license = pkgs.lib.licenses.asl20;
-    platforms = [ "x86_64-linux" ];
+    platforms = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
     mainProgram = "respin-tools";
   };
 }

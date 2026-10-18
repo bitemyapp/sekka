@@ -142,7 +142,7 @@ pkgs.rustPlatform.buildRustPackage (
     meta = {
       description = "Genkan, Sekka's installer, with its window on Aizome's kit";
       license = lib.licenses.gpl3Plus;
-      platforms = [ "x86_64-linux" ];
+      platforms = [ "x86_64-linux" "aarch64-linux" ];
       mainProgram = "calamares-nixos";
     };
   }
