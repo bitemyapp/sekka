@@ -642,14 +642,91 @@ Building needs an aarch64-linux builder. On a Mac, Nixpkgs'
 ```sh
 nix build .#packages.aarch64-linux.{linux-aurora,m1n1-aurora,mesa-m3-native-pro,mesa-m3-pro-vulkan}
 nix build .#packages.aarch64-linux.{genkan,tatami,displays,network,activity,wallpapers,yukimi,kakehashi,tools,aquamarine,hyprland}
+nix build .#packages.aarch64-linux.{installed-j514s,installed-j514s-boot-bin,m3-gpu-session-env-test}
 ```
 
-These packages are built but have not been booted. What comes next:
-- a NixOS module that assembles `boot.bin` (m1n1, the kernel's device trees
-  and U-Boot), loads the vendor firmware from the ESP at boot, and chooses the
-  session's graphics as Omarchy does;
-- an image and installer;
-- aarch64 builders and cache for the nightly.
+### The installed system
+
+`nix/apple-silicon/module.nix` is imported with Genkan's system modules, so
+every installed system has it, and does nothing until
+`calamares.appleSilicon.enable` is set:
+
+- **Kernel.** `boot.kernelPackages` is forced to linux-aurora, the only
+  kernel that runs these Macs here.
+  - **Initrd modules** (`initrdModules`) and boot options follow
+    nixos-apple-silicon, plus `appledrm` for the native display.
+  - **Blacklisted:** `phram`, as the kernel package's modprobe.d does.
+  - **Forced off:** settings written for PCs (CPU microcode, 32-bit ALSA).
+  - **Yukimi:** its update planner records the 32-bit graphics stack only
+    where one exists, x86.
+- **Boot.** The Asahi installer's m1n1 first stage chainloads
+  `m1n1/boot.bin` from the EFI system partition. systemd-boot copies it there
+  (`extraFiles`) on every switch. It is m1n1-aurora, every Apple device tree
+  of the kernel, U-Boot (`uboot.nix`, AsahiLinux/u-boot `asahi-v2026.07-2`,
+  configured as nixos-apple-silicon does) and, with
+  `calamares.appleSilicon.t6030Handoff`, the three `chosen.asahi,t6030-*`
+  switches. U-Boot has no EFI variables, so systemd-boot doesn't write any.
+- **Apple's firmware.** Wi-Fi, Bluetooth, keyboard, trackpad and camera
+  firmware can't be redistributed. The Asahi installer extracts it on the Mac
+  to `vendorfw/firmware.cpio` on the EFI system partition. It is loaded at boot,
+  as Asahi's interop notes ask, rather than read while the configuration is
+  evaluated as nixos-apple-silicon does, so prebuilt and cached systems work:
+  - systemd-boot's entries load the archive as a second initrd
+    (`extraInstallCommands`, only while the file exists);
+  - the initrd has it at `/vendorfw`, which `firmware_class.path` names for
+    early drivers;
+  - `sekka-vendor-firmware.service` copies it to a tmpfs at
+    `/lib/firmware/vendor` in the booted system, which linux-aurora searches
+    after NixOS's own firmware path.
+
+  `avd-fw` adds the video decoder's firmware.
+- **Sound.** As nixos-apple-silicon: asahi-audio's PipeWire and WirePlumber
+  configuration, Asahi's UCM files and speakersafetyd. The kernel keeps the
+  speakers quiet without speakersafetyd.
+- **Session graphics** (`m3ProGraphics`, on with the handoff). Every session
+  renders in software: `LIBGL_ALWAYS_SOFTWARE=1` is a session variable, and
+  only the `render` group (`graphicsUsers`, the installer's user) may open the
+  GPU's render node. The kernel refuses Nixpkgs' Mesa on the M3 GPU, and
+  Hyprland stops at start if it reaches the node with it. A uwsm session
+  (Tatami's) then sources `/etc/xdg/uwsm/env.d/50-sekka-m3-gpu`
+  (`m3-gpu/session-env.sh`), adapted from Omarchy's hooks.
+  - **Checks.** The opt-outs (`/etc/mesa-m3/disable`,
+    `~/.config/mesa-m3/disable`, `mesa_m3=off`), the T6030 GPU's own render
+    node and native display, Omarchy's runtime ABI check (`mesa-m3-abi-check`:
+    T6030 G15S, two clusters, legacy HAL), and no GPU or display fault in this
+    boot's kernel log.
+  - **No login loop.** A login on the GPU must be confirmed alive by
+    `sekka-m3-gpu-confirm.service` 15 seconds after its graphical session
+    starts. If it isn't, later logins this boot render in software.
+  - **When the checks pass,** it points the session at the M3 Pro's Mesa with
+    Omarchy's environment, and records its decision in
+    `/run/user/UID/sekka-m3-gpu.state` and the journal (tag `sekka-m3-gpu`).
+  - **What isn't ported.** Omarchy's library and user-setup checks: Nix pins
+    the libraries and the kernel together.
+  - **Performance.** `sekka-m3-gpu-performance.service` sets the batching
+    values Omarchy's release pairs with this Mesa.
+
+  Other desktops (Plasma, GNOME) render in software.
+
+  `packages.aarch64-linux.m3-gpu-session-env-test`
+  (`m3-gpu/test-session-env.sh`) sources the gate as uwsm does, against fake
+  T6030 roots: device tree, sysfs, render node, kernel log, state files and a
+  stub ABI check. It covers every decision and what each exports, including
+  the confirmed, unconfirmed and earlier-boot logins. A gate that ignores
+  firmware errors fails it. The script also runs on macOS:
+  `bash nix/apple-silicon/m3-gpu/test-session-env.sh GATE`.
+
+`packages.aarch64-linux.installed-j514s` is Genkan's reference system with
+Tatami and these options on; it uses `initrdModules` alone, because the
+reference lists a PC's storage drivers and this kernel has no `ahci`.
+`installed-j514s-boot-bin` is its `boot.bin`: m1n1-aurora byte for byte, the
+device trees (J514S among them), U-Boot, then the three switches. Both build,
+but nothing has booted them. Physical validation on the
+J514S still has to show that the Asahi installer's UEFI-only setup boots this
+`boot.bin`, the firmware arrives before Wi-Fi and the trackpad need it, the
+handoff gives a native display, a Tatami login passes the GPU checks, and the
+speakers work through speakersafetyd. Still to do after that: an image and
+installer, and aarch64 builders and cache for the nightly.
 
 ## Releases
 

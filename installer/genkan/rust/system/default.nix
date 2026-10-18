@@ -15,5 +15,6 @@
     ./store-space.nix
     ./tuning.nix
     ./usb-wake.nix
+    ../../../../nix/apple-silicon/module.nix
   ];
 }
