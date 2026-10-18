@@ -56,6 +56,27 @@ Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
 to the privileged `docker` group. Compose is installed with the engine.
 
+## Sign-ins and the keyring
+
+Chromium and Electron seal cookies, saved passwords and Electron's
+`safeStorage` with a key kept in the keyring of a desktop they recognise:
+GNOME Keyring in GNOME, Xfce or Cinnamon, KWallet in Plasma. In a desktop they
+don't recognise (Tatami, Hyprland, Aizome) they fall back to a fixed key, which
+Electron's `safeStorage` reports as no encryption. Claude and ChatGPT then keep
+no sign-in between launches.
+
+Every Sekka desktop runs GNOME Keyring, unlocked at login, so the catalog's
+Chromium, Chrome, ChatGPT, Claude, VS Code, Obsidian, Discord and Slack start with
+`--password-store=gnome-libsecret` everywhere except Plasma
+(`installer/genkan/rust/src/keyring.nix`). They keep a sign-in across launches
+and logins, and what they sealed with the fixed key still opens.
+
+- **Signal** is left out: it records the keyring it used and stops if that
+  changes.
+- **Bitwarden** reaches the keyring by itself.
+- **The ISO:** its per-application closures carry the same wrapped packages, so
+  offline installations find them on the medium.
+
 ## Preparation and regression checks
 
 The ISO includes a read-only store closure of all offered application packages.

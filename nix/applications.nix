@@ -38,13 +38,17 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
+  withKeyring = import "${inputs.calamares}/rust/src/keyring.nix" {
+    inherit (inputs.nixpkgs) lib;
+    pkgs = specialArgs.applicationPkgs;
+  };
   packageList =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ specialArgs.ompPackage ]
     else
       map (
-        name: (sources.${app.source or "nixpkgs"} or specialArgs.applicationPkgs).${name}
+        name: withKeyring app (sources.${app.source or "nixpkgs"} or specialArgs.applicationPkgs).${name}
       ) app.packages;
 in
 {
