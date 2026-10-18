@@ -60,6 +60,12 @@ let
     configfile = writeText "linux-aurora-${version}${localVersion}.config" text;
     stdenv = llvmStdenv;
     extraMakeFlags = [ "LLVM=1" ];
+    # What NixOS asks of a kernel (systemd-boot needs the EFI stub); the
+    # configuration has CONFIG_EFI_STUB and CONFIG_RUST.
+    features = {
+      efiBootStub = true;
+      rust = true;
+    };
     extraMeta = {
       description = "Omarchy's Apple Silicon kernel (linux-aurora ${release})";
       homepage = "https://github.com/omacom/linux-aurora";
