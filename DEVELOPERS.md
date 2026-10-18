@@ -721,12 +721,91 @@ Tatami and these options on; it uses `initrdModules` alone, because the
 reference lists a PC's storage drivers and this kernel has no `ahci`.
 `installed-j514s-boot-bin` is its `boot.bin`: m1n1-aurora byte for byte, the
 device trees (J514S among them), U-Boot, then the three switches. Both build,
-but nothing has booted them. Physical validation on the
-J514S still has to show that the Asahi installer's UEFI-only setup boots this
-`boot.bin`, the firmware arrives before Wi-Fi and the trackpad need it, the
-handoff gives a native display, a Tatami login passes the GPU checks, and the
-speakers work through speakersafetyd. Still to do after that: an image and
-installer, and aarch64 builders and cache for the nightly.
+but nothing has booted them on a Mac.
+
+### Installing from macOS
+
+`packages.aarch64-linux.mac-installer-j514s` (`image.nix`) is a directory the
+Asahi installer installs from, on the Mac itself, with no USB stick or server:
+
+- `installer_data.json`: one entry, offered only where the installer gives the
+  macOS 14.8.3 OS firmware (the M3 series).
+  - **ESP:** a 1 GiB FAT partition with volume ID `0x5ecca5e1`. It is filled
+    from the package's `esp/` tree, and the installer adds Apple's firmware
+    (`copy_firmware`).
+  - **Root:** a partition written from `root.img` that grows into the free space
+    (`expand`).
+- `os/sekka-j514s-REVISION.zip`: the package (stored, not compressed).
+  - **`esp/`:** holds `m1n1/boot.bin`, systemd-boot, the kernel and initrd, and
+    generation 1's entry with `/vendorfw/firmware.cpio` as its first initrd.
+    NixOS's own systemd-boot installer takes it over at the first rebuild.
+  - **`root.img`:** ext4 labelled `sekka-root`, holding the system's closure. It
+    grows at boot (`autoResize`), and `sekka-image-first-boot.service` registers
+    its store and system profile once.
+- `install-sekka.sh`: Asahi's bootstrap (MIT), adapted. It runs the unmodified
+  Asahi installer, pinned to v0.9.2 and checked by SHA-256, with
+  `INSTALLER_DATA` and `REPO_BASE` pointing at this directory.
+
+The image's system is the J514S configuration with Tatami and Firefox. It has
+a developer account, `sekka` with password `sekka`; change it with `passwd`.
+Genkan has no first-boot setup for Macs yet. Two things in `image.nix` reflect
+how far this has got:
+
+- The image carries no installed flake, so neither Yukimi updates nor
+  `nixos-rebuild` from the Mac work yet.
+- The image adds `virtio_mmio` to its initrd only so that the same image boots
+  in a test VM.
+
+Installing has to be run by the Mac's owner. The installer shrinks macOS,
+then asks them to start in recoveryOS (hold the power button) and enter their
+password. **Back up first.** On macOS 27.0.1 (26A434), the build this MacBook Pro
+runs, `diskutil apfs resizeContainer` has failed for someone else with
+`-69606` (error 49187) despite clean First Aid
+([AsahiLinux/asahi-installer#448](https://github.com/AsahiLinux/asahi-installer/issues/448)).
+That report was closed without a fix; going back to macOS 26 helped. Older
+reports of the same code traced to Time Machine local snapshots. On this Mac
+(2026-10-18, read-only checks):
+
+- the container is 494.4 GB, and can shrink to 175.8 GB at minimum
+  (186.5 GB recommended);
+- there are no local snapshots;
+- FileVault is on, which the installer handles;
+- no newer macOS was offered.
+
+If the resize fails, the installer stops. The reports above found macOS
+intact afterwards, but Apple's tool is the one changing the disk.
+
+```sh
+nix build .#packages.aarch64-linux.mac-installer-j514s --out-link result-mac
+./result-mac/install-sekka.sh
+```
+
+`nix/apple-silicon/boot-image-in-vm.sh result-mac` tests the same package on
+an Apple Silicon Mac without touching its disk.
+
+1. **Disk.** It lays out a disk image as the installer would: the ESP with the
+   package's tree, its volume ID and a stand-in firmware archive, then
+   `root.img` with 4 GiB to grow into.
+2. **Boot.** It boots that twice in QEMU with Apple's hypervisor. linux-aurora
+   has no ACPI, PCI host or serial driver for QEMU's `virt` machine, so the
+   firmware is given QEMU's device tree (`acpi=off`), and the disks and console
+   are virtio-mmio.
+3. **Checks.** After each boot it logs in on the console (`vm-console.py`) and
+   requires all of these: systemd `running` with no failed units, the graphical
+   target and display manager active, the store registered, the stand-in
+   firmware on its tmpfs, and the ESP mounted by volume ID.
+
+None of this exercises m1n1, U-Boot, the handoff or Apple's drivers. Only the
+J514S can show those:
+
+- the Asahi installer's m1n1 starting this `boot.bin`;
+- U-Boot starting systemd-boot;
+- the firmware reaching Wi-Fi and the trackpad;
+- the handoff giving a native display;
+- a Tatami login passing the GPU checks;
+- the speakers working through speakersafetyd.
+
+aarch64 builders and cache for the nightly come after that.
 
 ## Releases
 

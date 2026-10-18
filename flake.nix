@@ -217,7 +217,10 @@
         };
       };
       # Apple Silicon Macs (nix/apple-silicon).
-      packages.aarch64-linux = import ./nix/apple-silicon { inherit inputs nixpkgs hyprlandOverlay; };
+      packages.aarch64-linux = import ./nix/apple-silicon {
+        inherit inputs nixpkgs hyprlandOverlay;
+        revision = self.shortRev or self.dirtyShortRev or "unknown";
+      };
       checks.${system} = {
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
