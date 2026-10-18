@@ -31,8 +31,12 @@ let
     };
 in
 {
-  # Deferred installations build the system from the live session's store.
-  imports = [ ../installer/genkan/rust/system/binary-cache.nix ];
+  imports = [
+    # Deferred installations build the system from the live session's store.
+    ../installer/genkan/rust/system/binary-cache.nix
+    # The live session joins Wi-Fi with installed systems' wpa_supplicant.
+    ../installer/genkan/rust/system/wpa-supplicant
+  ];
   options.respin = {
     referenceDesktops = lib.mkOption {
       type = lib.types.listOf lib.types.str;

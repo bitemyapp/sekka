@@ -603,6 +603,39 @@ real machine's live session under build load for about 15 minutes.
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
 
+## Joining Wi-Fi networks
+
+Installed systems and the live session join Wi-Fi through NetworkManager and
+wpa_supplicant 2.12. Sekka patches wpa_supplicant
+(`installer/genkan/rust/system/wpa-supplicant`). Without the patch, a switch
+from one network to another can fail. As it leaves the first network,
+NetworkManager gives the interface a random address for scanning, taking it
+down and up, and asks wpa_supplicant for a scan with `AllowRoam=false`. It
+then restores the address for the new network, taking it down again. If that
+removes the scan before it starts, wpa_supplicant keeps treating the next
+scan's results as scan-only, including those of its own scan for the new
+network. It finds the network but joins nothing, and NetworkManager gives up
+after 25 s.
+
+In VMs with simulated Wi-Fi and NetworkManager's default address
+randomization, 15 of 720 switches failed this way, among hidden and visible
+networks alike. None of 288 failed with the patch, and none of 72 with
+randomization off. The failure hasn't been reproduced on physical hardware.
+The patch clears the scan-only handler when the interface goes down, as
+wpa_supplicant already does for scan results that arrive while it is down. It
+isn't in hostap yet. If hostap takes it, the patch will stop applying to
+Nixpkgs' wpa_supplicant, and the module can go.
+
+```sh
+nix build .#checks.x86_64-linux.wpa-supplicant-scan --no-update-lock-file
+```
+
+The check pauses wpa_supplicant in a disposable VM while a D-Bus scan request
+with `AllowRoam=false` and wlan1 going down both wait for it, so the scan is
+removed before it starts. It then requires `SelectNetwork` to join. It also
+checks that each of the live session's boot entries and an installed system
+start the patched wpa_supplicant over D-Bus.
+
 ## Omarchy's fish configuration
 
 The catalog's fish choice builds Omarchy's `omarchy-fish` package
