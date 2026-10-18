@@ -149,6 +149,7 @@
         default = self.packages.${system}.iso;
         iso = installer.config.system.build.isoImage;
         inherit tools calamares;
+        chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
@@ -233,6 +234,10 @@
         };
       };
       checks.${system} = {
+        chatgpt-plugins = import ./nix/chatgpt/test.nix {
+          inherit pkgs;
+          chatgpt = self.packages.${system}.chatgpt;
+        };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
           inherit (hyprlandPkgs) aquamarine hyprland;
