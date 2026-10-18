@@ -603,6 +603,42 @@ real machine's live session under build load for about 15 minutes.
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
 
+## Omarchy's fish configuration
+
+The catalog's fish choice builds Omarchy's `omarchy-fish` package
+(`installer/genkan/rust/system/fish/package.nix`) as omarchy-pkgs'
+`pkgbuilds/omarchy-fish/PKGBUILD` does: the omarchy-fish and fzf.fish releases
+it names, whose tarballs match its SHA-256 sums, in fish's vendor directories,
+with omarchy-fish's history search replacing fzf.fish's. The PKGBUILD's
+dependencies are the catalog entry's packages. `starship.toml` beside it is
+Omarchy's prompt, unchanged; fish exports `STARSHIP_CONFIG` for it unless the
+person has a `~/.config/starship.toml`.
+
+Omarchy keeps bash as the login shell, and `omarchy-setup-fish` gives
+`~/.bashrc` a test that starts fish. `applications.nix` puts the same test at
+the start of `/etc/bashrc`'s interactive part. It skips root, `bash -c`, bash
+started from fish, and shells with `SHLVL` above 1, so `nix develop` and
+`nix-shell` stay in bash. NixOS's `ls`, `ll` and `l` aliases are removed from
+fish, where Omarchy has none and its `ls` function would be hidden. NixOS's
+fish module still generates completions from each installed package's manual
+pages. These are small local builds, which Determinate Nix downloads instead
+when Sekka's cache has them; the all-applications reference system includes
+fish.
+
+```sh
+nix build .#checks.x86_64-linux.fish --no-update-lock-file
+```
+
+The check logs in on a disposable VM's console. It checks that bash handed
+over to fish, with Omarchy's settings, functions, fzf.fish bindings, zoxide,
+mise, eza and prompt, and that `cd` falls back to zoxide. `bash -c`, root's
+interactive bash, and bash started from fish stay in bash.
+
+To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
+with these files. Update the tags and hashes
+(`nix flake prefetch github:omacom-io/omarchy-fish/v<version>`), then run the
+check.
+
 ## Releases
 
 `.github/workflows/release.yml` builds and publishes an ISO. Its only trigger
