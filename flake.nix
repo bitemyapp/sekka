@@ -306,6 +306,8 @@
           ];
         };
       };
+      # Apple Silicon Macs (nix/apple-silicon).
+      packages.aarch64-linux = import ./nix/apple-silicon { inherit inputs nixpkgs hyprlandOverlay; };
       checks.${system} = {
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
