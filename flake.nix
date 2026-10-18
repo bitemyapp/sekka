@@ -156,6 +156,11 @@
           genkan = calamares;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        # Aizome's README captures (docs/screenshots.md).
+        screenshots-aizome = import ./nix/screenshots-aizome.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         # A development check of Yukimi's Discover; not run with the others.
         yukimi-discover = import ./nix/yukimi-discover.nix {
           inherit pkgs nixpkgs;
