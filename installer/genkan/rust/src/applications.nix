@@ -36,7 +36,18 @@ let
       map (
         name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
       ) app.packages;
-  packages = lib.unique (lib.concatMap packagesFor selected);
+  # fish brings Omarchy's configuration for it (rust/system/fish), which
+  # calls the catalog entry's other packages.
+  omarchyFish = pkgs.callPackage ../system/fish/package.nix { };
+  packages = lib.unique (lib.concatMap packagesFor selected ++ lib.optional (has "fish") omarchyFish);
+  # Omarchy's Starship prompt, with its license.
+  omarchyPrompt = lib.fileset.toSource {
+    root = ../system/fish;
+    fileset = lib.fileset.unions [
+      ../system/fish/starship.toml
+      ../system/fish/LICENSE
+    ];
+  };
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
   withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
@@ -180,6 +191,31 @@ in
         package = lib.mkDefault applicationPkgs.git-lfs;
       };
     };
+    programs.fish = lib.mkIf (has "fish") {
+      enable = true;
+      package = applicationPkgs.fish;
+      # Omarchy has no ls, ll or l aliases. NixOS's would hide its ls (eza)
+      # and fish's own ll.
+      shellAliases = lib.genAttrs [ "ls" "ll" "l" ] (_: lib.mkOverride 999 null);
+      # Omarchy's prompt, unless you have your own.
+      interactiveShellInit = ''
+        if not set -q STARSHIP_CONFIG; and not test -e ~/.config/starship.toml
+          set -gx STARSHIP_CONFIG ${omarchyPrompt}/starship.toml
+        end
+      '';
+    };
+    # Bash stays the login shell, and interactive bash hands over to fish as
+    # Omarchy's omarchy-setup-fish has ~/.bashrc do: not for bash -c, shells
+    # started from fish or nested shells. For people, not root, whose
+    # ~/.bashrc Omarchy leaves alone.
+    programs.bash.interactiveShellInit = lib.mkIf (has "fish") (
+      lib.mkBefore ''
+        if [[ $EUID -ne 0 && $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} && ''${SHLVL} == 1 ]]; then
+          shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
+          exec ${lib.getExe config.programs.fish.package} $LOGIN_OPTION
+        fi
+      ''
+    );
     virtualisation.docker = lib.mkIf (has "docker") {
       package = applicationPkgs.docker;
       rootless = {
