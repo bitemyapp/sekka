@@ -269,3 +269,11 @@ its first-run wizard; activation was not attempted, so no capture ran.
 `superluminalcmd` ran, and the setuid `pkexec` and Tatami's polkit agent were
 present. Not tested: Superluminal's capture service, other desktops' sessions,
 and physical hardware.
+
+With Superluminal back on the media (2026-10-19), the full ISO built from
+`8024467` (SHA-256 `5288dd32…5ea40f4`) carries Superluminal
+1.0.7705.679-alpha in its store image. `respin-tools qemu-test --install
+--applications superluminal,tracy` with UEFI, NVMe and ext4 on a disposable
+disk passed: preparing the installation downloaded nothing (both profilers
+came from the media), and the installed system booted without the ISO with
+both applications recorded. Neither profiler was started in that run.
