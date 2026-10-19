@@ -34,7 +34,7 @@ pub fn build(unfree: &adw::SwitchRow, changed: Rc<dyn Fn()>) -> ApplicationsPage
     count.set_margin_top(8);
     let page = adw::PreferencesPage::new();
     let intro = adw::PreferencesGroup::builder()
-        .description("Choose applications to have ready after installation. Any combination works, and you can sign in to your accounts later. Everything listed is already on this installation media, except applications marked Downloaded: their licences don't allow that, so they download from their makers while the installation is prepared.")
+        .description("Choose applications to have ready after installation. Any combination works, and you can sign in to your accounts later. Everything listed is already on this installation media.")
         .build();
     intro.add(&search);
     intro.add(&count);
@@ -71,13 +71,6 @@ pub fn build(unfree: &adw::SwitchRow, changed: Rc<dyn Fn()>) -> ApplicationsPage
         }
         if app.unfree {
             row.add_suffix(&badge("Proprietary", "proprietary"));
-        }
-        if !app.media {
-            let downloaded = badge("Downloaded", "downloaded");
-            downloaded.set_tooltip_text(Some(
-                "Not on this installation media, which its licence doesn't allow. Preparing the installation downloads it from its maker.",
-            ));
-            row.add_suffix(&downloaded);
         }
         if !app.requires.is_empty() {
             row.add_suffix(&badge("Adds build tools", "required"));

@@ -204,10 +204,6 @@ button.card.desktop-card:checked:hover {
   background-color: alpha(var(--success-bg-color), 0.2);
 }
 
-.badge.downloaded {
-  background-color: alpha(var(--accent-bg-color), 0.08);
-}
-
 /* Background activity in the bottom bar. */
 .activity {
   font-size: 0.88em;

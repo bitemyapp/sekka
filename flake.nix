@@ -199,11 +199,8 @@
                 free = true;
               };
             desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
-            # Never one whose licence forbids redistribution ("media": false).
             applications = reference [ "plasma" ] (
-              map (app: app.id) (
-                builtins.filter (app: !(app.unfree or false) && (app.media or true)) applicationCatalog.catalog
-              )
+              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
             );
           in
           pkgs.linkFarm "sekka-installed-systems" (

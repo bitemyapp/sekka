@@ -38,11 +38,6 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
-  # What the installation media carries: not applications marked
-  # `"media": false`, whose licences forbid redistributing them. Preparing
-  # an installation downloads those from their makers.
-  onMedia = builtins.filter (app: app.media or true) catalog;
-  offMedia = builtins.filter (app: !(app.media or true)) catalog;
   withKeyring = import "${inputs.calamares}/rust/src/keyring.nix" {
     inherit (inputs.nixpkgs) lib;
     pkgs = specialArgs.applicationPkgs;
@@ -59,21 +54,14 @@ in
 {
   inherit
     catalog
-    onMedia
     specialArgs
     evaluate
     packageList
     ;
-  cache = (evaluate (map (app: app.id) onMedia)).config.system.build.installerApplications;
+  cache = all.config.system.build.installerApplications;
   # The generated per-choice matrix runs in separate evaluator processes.
   # Retaining all those complete NixOS systems here exhausts small builders.
   check =
-    let
-      paths = apps: map (p: p.outPath) (builtins.concatMap packageList apps);
-      onMediaPaths = paths onMedia;
-    in
-    # No application on the media brings the package of one kept off it.
-    assert builtins.all (path: !(builtins.elem path onMediaPaths)) (paths offMedia);
     builtins.deepSeq
       (map (c: c.config.system.build.toplevel.drvPath) ([
         all
