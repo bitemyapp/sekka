@@ -232,6 +232,17 @@ in
     systemd.user.services.plasma-login = lib.mkIf plasmaLogin {
       environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
     };
+    # The login screen's KWin tries the cursor theme of its kcminputrc, then
+    # "default", then "breeze_cursors" (pointer_input.cpp), and draws no
+    # cursor when none is found. Plasma's module installs Breeze and makes it
+    # the "default" theme; without Plasma, neither exists. Breeze stays the
+    # last place KWin looks, after the system's themes. KWin keeps its own
+    # PATH, where it finds Xwayland and the on-screen keyboard.
+    systemd.user.services.plasma-login-kwin_wayland = lib.mkIf plasmaLogin {
+      overrideStrategy = "asDropin";
+      enableDefaultPath = false;
+      environment.XCURSOR_PATH = "/run/current-system/sw/share/icons:${pkgs.kdePackages.breeze}/share/icons";
+    };
     services.displayManager.defaultSession = sessions.${defaultDesktop};
     services.desktopManager.plasma6.enable = has "plasma";
     services.desktopManager.gnome.enable = has "gnome";
