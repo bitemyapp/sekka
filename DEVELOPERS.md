@@ -257,6 +257,9 @@ undocking with the lid closed, a Displays window stranded by an unplug, and
 `tatami display` from another workspace. Physical docking and the lid are in
 daily use on the ThinkPad X1 Carbon Gen 14; these tests guard that behaviour
 between changes. Don't describe it as untested on hardware.
+`nix build .#checks.x86_64-linux.displays-cursor-vm` opens the Displays window
+with `tatami display`, as the bar's icon does, and checks that the cursor stays
+where it was.
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles.
 

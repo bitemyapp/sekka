@@ -449,6 +449,11 @@
           inherit (hyprlandPkgs) hyprland;
           inherit (self.packages.${system}) tatami displays;
         };
+        displays-cursor-vm = import ./nix/displays-cursor-vm-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) hyprland;
+          inherit (self.packages.${system}) tatami displays;
+        };
         screenshare-sessions = import ./nix/screenshare-sessions-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;
