@@ -70,6 +70,40 @@ Before publishing an installable image, exercise the exact image through a dispo
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
+ChatGPT Desktop 26.1013.40934 copies `codex-app-tools` from the Nix store
+into `~/.config/Codex/executor-plugins` with Node's `fs.cp`, preserving
+read-only directories and files. Refreshing that copy fails with `EACCES`
+while unlinking its launcher or rewriting `.mcp.json`, and the local Work
+executor retries indefinitely. On gainzymede, after successful authentication,
+the window stayed blank; with the repair the executor connected on its first
+attempt and the welcome questionnaire rendered on the same account.
+
+`nix/ai-packages.nix` applies `nix/chatgpt/` to that package alone. Both the
+catalog module (including existing installed flakes) and the installation
+media's catalog resolution use it; `packages.chatgpt` exposes the same build.
+The helper makes the destination writable before and after copying, repairing
+copies left by the old package, preserving executable bits and leaving symlink
+targets alone. It serializes overlapping copies and leaves `.mcp.json` for the
+caller to generate, so another refresh cannot make that file read-only during
+a write. The ASAR patch preserves byte offsets and fails unless exactly
+one expected copy call matches. The upstream package already repairs the
+separate marketplace plugin copy; this covers the executor's copy. Review the
+patch when updating the app, and remove it when upstream fixes that path.
+
+```sh
+nix build .#chatgpt .#checks.x86_64-linux.chatgpt-plugins --no-update-lock-file
+```
+
+The regression check calls the packaged app's actual executor-copy function
+with read-only fixture files, including fresh, repeated, concurrent and already-broken
+copies; the original `fs.cp` is its failing control. It also checks the generated
+manifest, launcher permissions and symlink isolation. This is a component
+check; it does not sign in, build an ISO or install a VM. The successful
+authenticated launch on gainzymede is separate physical-machine evidence.
+The app's existing downloaded-runtime patcher also raced its first executable
+validation on this machine; a subsequent runtime download passed validation.
+That independent startup race is not repaired by the plugin-copy change.
+
 Sekka backports Aquamarine's upstream null-connector teardown fix
 [`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
 onto Nixpkgs' 0.15.1 through `nix/overlays/aquamarine.nix`. Both Tatami and

@@ -23,7 +23,7 @@ let
   selected = builtins.filter (app: has app.id) catalog;
   # Where each source's packages come from; Nixpkgs' otherwise.
   sources = {
-    ai = aiPackages;
+    ai = import ../../../../nix/ai-packages.nix aiPackages;
     sekka = sekkaPackages;
   };
   # Chromium and Electron apps use GNOME Keyring in every desktop but Plasma.
