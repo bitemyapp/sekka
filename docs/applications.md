@@ -118,9 +118,8 @@ and logins, and what they sealed with the fixed key still opens.
 
 ## Preparation and regression checks
 
-The ISO includes a read-only store closure of all offered application packages
-except those marked `"media": false`. They become installed applications only
-when selected. Before changing the
+The ISO includes a read-only store closure of all offered application packages.
+They become installed applications only when selected. Before changing the
 target disk, the helper resolves the selected closure against the immutable
 lock, keeps it rooted, and checks target capacity against that closure plus a
 24 GiB reserve for the base system and installation workspace. Package-resolution
