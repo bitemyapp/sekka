@@ -287,17 +287,5 @@ it installed Superluminal from the ISO. With `"media": false`, the media's
 application cache and closure lists hold Tracy and not Superluminal, the
 `applications` check's assertion holds (and fails if Superluminal is put back
 on the media), and Genkan's applications page, in its preview, marks
-Superluminal Downloaded.
-
-Download during installation, in a VM (2026-10-17): an ISO built from
-`c214ed1` (SHA-256 `468ab418…6f1725`), trimmed to fit a small builder: only
-Tatami's reference system, no application cache and no per-application closure
-lists. `respin-tools qemu-test --install --applications superluminal` with
-Tatami, UEFI, NVMe and ext4 on a disposable 80 GiB disk passed. Preparing the
-installation built Superluminal's tarball derivation, which fetches from
-`superluminal.blob.core.windows.net`, and then its wrapper, including the
-check that every binary's libraries resolve, after 35 MiB of other downloads;
-it is the branch's own derivation. The installed system booted without the
-ISO, listed Superluminal in `/etc/installer-applications.json` with its
-package present, and its lock matched the media's. Superluminal was not
-started there.
+Superluminal Downloaded. Installing Superluminal by download while an
+installation is prepared has not yet been run in a VM.
