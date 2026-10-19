@@ -30,11 +30,11 @@
         "sidestep": "sidestep"
       },
       "locked": {
-        "lastModified": 1792346407,
-        "narHash": "sha256-A1vbCWGn86dmbpCXTGtag53FA/s2gYqiT2iveR7U0Wk=",
+        "lastModified": 1792392638,
+        "narHash": "sha256-XTc9IhPkdO+mUaG5E1gstIISPAzNOuF0dif82cilCZg=",
         "owner": "bitemyapp",
         "repo": "aizome",
-        "rev": "d85f15a9dd74992bab0fae38976c8c31bffa37f5",
+        "rev": "d7d0edb804fa0c8077753ce4402385473acf12f9",
         "type": "github"
       },
       "original": {
@@ -648,11 +648,11 @@
     "sidestep": {
       "flake": false,
       "locked": {
-        "lastModified": 1792305341,
-        "narHash": "sha256-3e9jsLSVLK1q3iAVhgAa8OJbxAtL3qwWIek/vzAJQV0=",
+        "lastModified": 1792372510,
+        "narHash": "sha256-HGpKhuaSNMl8tmy39RKd/ZQbw2X27OaIcSp7S/nl8I4=",
         "owner": "bitemyapp",
         "repo": "sidestep",
-        "rev": "9f56003724c029ba2441a77f266a20a7ee14fef0",
+        "rev": "dae957e913376a26e642d6abee533eb755fb9092",
         "type": "github"
       },
       "original": {
