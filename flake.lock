@@ -9,11 +9,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1792315957,
-        "narHash": "sha256-LzC5I1T+RoNzolKqp2xYk1x/SraHlmYnJzK27PU+ewg=",
+        "lastModified": 1792412467,
+        "narHash": "sha256-+8HD0xrtrXiSMgxVSLVzxEk2EicPZBz9/bBHc2u6vb0=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "14f2728181ecf9f5da168b72799bc9f42ae51803",
+        "rev": "8fa7ff4193be923056b342d48d5bb38466791fe1",
         "type": "github"
       },
       "original": {
@@ -30,11 +30,11 @@
         "sidestep": "sidestep"
       },
       "locked": {
-        "lastModified": 1792445300,
-        "narHash": "sha256-MmE6jI/ED4sb0JhFX5LT9iuZbLET69A7EhTCvT/crEA=",
+        "lastModified": 1792446624,
+        "narHash": "sha256-uOqrOo+nHLb9DmpeSGSreZuVhp9q9/jyiEbDHHkWO+I=",
         "owner": "bitemyapp",
         "repo": "aizome",
-        "rev": "c42400f1c41554b3517d9730343ae381c6248c40",
+        "rev": "fcdb02fcd5ac7ca3af63d7c80dcc78fdaf0530b1",
         "type": "github"
       },
       "original": {
@@ -604,7 +604,9 @@
         "determinate": "determinate",
         "fh": "fh",
         "nixpkgs": "nixpkgs_5",
-        "omp": "omp"
+        "omp": "omp",
+        "superluminal": "superluminal",
+        "tracy": "tracy"
       }
     },
     "rust-analyzer-src": {
@@ -662,6 +664,26 @@
         "type": "github"
       }
     },
+    "superluminal": {
+      "inputs": {
+        "nixpkgs": [
+          "applications"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792174218,
+        "narHash": "sha256-pmU75ZO5sj7xPS7VuvfcnonqRAsVotv+amlJ2dWMgQA=",
+        "owner": "bitemyapp",
+        "repo": "superluminal-nix-linux",
+        "rev": "eacbc06314c5c590e2cc74d95d082911759b59f0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "superluminal-nix-linux",
+        "type": "github"
+      }
+    },
     "systems": {
       "locked": {
         "lastModified": 1791244623,
@@ -704,6 +726,26 @@
       "original": {
         "owner": "nix-systems",
         "repo": "x86_64-darwin",
+        "type": "github"
+      }
+    },
+    "tracy": {
+      "inputs": {
+        "nixpkgs": [
+          "applications"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791150074,
+        "narHash": "sha256-frjZ8qK1OIFxxzkKSv/Toza32Iy7/rbFevXwTF3kEAo=",
+        "owner": "bitemyapp",
+        "repo": "tracy-flake",
+        "rev": "1f0bf6eaee8e965848274caa7f4ab6d2ff877f97",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "tracy-flake",
         "type": "github"
       }
     },

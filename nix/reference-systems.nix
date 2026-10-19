@@ -31,7 +31,7 @@ let
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
         # As nix/components.nix gives the catalog module Sekka's packages.
-        { _module.args.sekkaPackages = inputs.kakehashi.packages.${system}; }
+        { _module.args.sekkaPackages = inputs.catalog.packages.${system}; }
       ]
       ++ lib.optional free { nixpkgs.config.allowUnfree = lib.mkForce false; };
     };

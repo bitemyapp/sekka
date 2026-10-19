@@ -1,6 +1,12 @@
 # First-party source is always taken from this checkout; Aizome comes from
-# its own repository (the flake's aizome input).
-{ nixpkgs, aizome }:
+# its own repository (the flake's aizome input), and the catalog's
+# applications from other flakes from Sekka's own inputs of those names.
+{
+  nixpkgs,
+  aizome,
+  superluminal,
+  tracy,
+}:
 let
   system = "x86_64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
@@ -27,6 +33,12 @@ rec {
     outPath = ../apps/kakehashi;
     packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
   };
+  # The catalog's applications from this flake (source "sekka"): its own, and
+  # those other flakes package, built with the applications' Nixpkgs.
+  catalog.packages.${system} = kakehashi.packages.${system} // {
+    superluminal = superluminal.packages.${system}.default;
+    tracy = tracy.packages.${system}.tracy;
+  };
   calamares = {
     outPath = ../installer/genkan;
     nixosModules = {
@@ -40,13 +52,12 @@ rec {
         yukimi.nixosModules.default
         aizome.nixosModules.default
       ];
-      # The catalog's applications from this flake (source "sekka"), built
-      # with its Nixpkgs, which installed systems make their own: the same
-      # store paths as `nix run .#push-cache` publishes.
+      # Installed systems make this flake's inputs their own, so these are the
+      # same store paths as `nix run .#push-cache` publishes for the free ones.
       applications = {
         key = "sekka#applications";
         imports = [ ../installer/genkan/rust/src/applications.nix ];
-        _module.args.sekkaPackages = kakehashi.packages.${system};
+        _module.args.sekkaPackages = catalog.packages.${system};
       };
     };
   };
