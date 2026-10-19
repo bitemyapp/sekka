@@ -15,7 +15,7 @@ let
   # gets Sekka's own packages from nix/components.nix.
   sources = {
     ai = import ./ai-packages.nix specialArgs.aiPackages;
-    sekka = inputs.kakehashi.packages.${system};
+    sekka = inputs.catalog.packages.${system};
   };
   evaluate =
     ids:
