@@ -4,14 +4,14 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLISHER = ROOT / "scripts/publish-nightly.sh"
 
-AWS = r'''#!/usr/bin/env python3
-import json, os, pathlib, shutil, sys
+AWS = r'''import json, os, pathlib, shutil, sys
 args = sys.argv[1:]
 root = pathlib.Path(os.environ["FAKE_S3_ROOT"])
 with (root / "operations").open("a") as log:
@@ -52,7 +52,7 @@ class NightlyPublisher(unittest.TestCase):
         self.bucket.mkdir()
         self.bin = self.root / "bin"
         self.bin.mkdir()
-        (self.bin / "aws").write_text(AWS)
+        (self.bin / "aws").write_text(f"#!{sys.executable}\n" + AWS)
         (self.bin / "aws").chmod(0o755)
         self.env = dict(os.environ, FAKE_S3_ROOT=str(self.bucket),
                         PATH=str(self.bin) + os.pathsep + os.environ["PATH"])
