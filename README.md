@@ -54,7 +54,7 @@ its ideas from Haiku, NeXTSTEP and IRIX:
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
   and foot opens in fish.
 
-It comes with its own apps: Shitsurae (Settings), Yukimi, Hako (Files), Sumi
+It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
 (Activity) and Shashin (Images). Aizome is new, and so far it has run only in
@@ -67,7 +67,7 @@ for what is done and what isn't.
 
 [![The command palette](docs/images/sekka/aizome-palette.png)](docs/images/sekka/aizome-palette.png)
 
-[![Shitsurae, Aizome's Settings](docs/images/sekka/aizome-settings.png)](docs/images/sekka/aizome-settings.png)
+[![Settei, Aizome's Settings](docs/images/sekka/aizome-settings.png)](docs/images/sekka/aizome-settings.png)
 
 *Aizome in a disposable NixOS test VM, rendering in software.*
 

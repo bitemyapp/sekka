@@ -23,7 +23,7 @@ around it are left out.
 | [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file, Files and a terminal (running fastfetch) stacked in one tab group, a notification filed under Tenki in the Deskbar |
 | [Aizome's menu at the pointer](images/sekka/aizome-menu.png) | 2880 × 1800 | The same desktop with Super + right-click's whole menu of Sumi at the pointer |
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
-| [Shitsurae](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
+| [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
 
 They come from [nix/screenshots.nix](../nix/screenshots.nix):

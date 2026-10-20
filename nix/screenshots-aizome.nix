@@ -203,9 +203,9 @@ pkgs.testers.runNixOSTest {
     # Settings and Yukimi, each on its own.
     for w in windows():
         ctl(f"minimise {w['id']}")
-    launch("aizome-shitsurae --pane appearance")
-    capture("aizome-settings", settle=8, crop=frame("org.aizome.Shitsurae"))
-    ctl(f"minimise {wait_window('org.aizome.Shitsurae')['id']}")
+    launch("aizome-settei --pane appearance")
+    capture("aizome-settings", settle=8, crop=frame("org.aizome.Settei"))
+    ctl(f"minimise {wait_window('org.aizome.Settei')['id']}")
     launch("aizome-yukimi")
     capture("aizome-yukimi", settle=20, crop=frame("org.aizome.Yukimi"))
 
