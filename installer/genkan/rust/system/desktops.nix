@@ -35,13 +35,26 @@ let
   defaultDesktop = current cfg.defaultDesktop;
   has = name: builtins.elem name selected;
   sessionEnv = pkgs.callPackage ./session-env/package.nix { };
-  # GNOME locks the screen only under GDM: its unlock dialog authenticates
-  # through GDM, and without GDM's D-Bus service gnome-shell has no lock
-  # screen at all ("Screen Locking requires the GNOME display manager"). So
-  # GDM is the login screen whenever GNOME is installed; it starts the other
-  # desktops too, X11 ones with NixOS's X server arguments.
-  gdm = has "gnome";
-  plasmaLogin = !gdm;
+  # The login screen. Aizome's own (aizome-greeter on greetd) wherever
+  # Aizome is chosen, listing every chosen desktop. But GNOME locks the
+  # screen only under GDM: its unlock dialog authenticates through GDM, and
+  # without GDM's D-Bus service gnome-shell has no lock screen at all
+  # ("Screen Locking requires the GNOME display manager"). So GDM is the
+  # login screen whenever GNOME is installed, unless calamares.loginScreen
+  # says otherwise; it starts the other desktops too, X11 ones with NixOS's
+  # X server arguments. Elsewhere, Plasma Login Manager.
+  loginScreen =
+    if cfg.loginScreen != "auto" then
+      cfg.loginScreen
+    else if has "gnome" then
+      "gdm"
+    else if has "aizome" then
+      "aizome"
+    else
+      "plasma-login";
+  gdm = loginScreen == "gdm";
+  aizomeGreeter = loginScreen == "aizome";
+  plasmaLogin = loginScreen == "plasma-login";
   # Plasma Login Manager starts X11 sessions with the bare X server (nixpkgs
   # sets only its ServerPath), which then reads neither NixOS's xorg.conf nor
   # its module path: Xfce found no input driver, so no keyboard or mouse.
@@ -186,6 +199,21 @@ in
       default = "aizome";
       description = "Default login session selected in the graphical installer.";
     };
+    loginScreen = lib.mkOption {
+      type = lib.types.enum [
+        "auto"
+        "aizome"
+        "gdm"
+        "plasma-login"
+      ];
+      default = "auto";
+      description = ''
+        The login screen. `auto`: GDM when GNOME is chosen (GNOME locks its
+        screen only under GDM), else Aizome's own when Aizome is chosen,
+        else Plasma Login Manager. `aizome` with GNOME chosen too leaves
+        GNOME sessions without a lock screen.
+      '';
+    };
   };
   config = {
     # Yukimi, for seeing and changing what is installed without editing
@@ -206,7 +234,14 @@ in
         assertion = !(has "gnome" && has "cinnamon");
         message = "GNOME and Cinnamon cannot be combined: their NixOS modules conflict on GSettings overrides.";
       }
+      {
+        assertion = !aizomeGreeter || has "aizome";
+        message = "Aizome's login screen (calamares.loginScreen = \"aizome\") needs Aizome among calamares.desktops.";
+      }
     ];
+    warnings = lib.optional (aizomeGreeter && has "gnome") ''
+      calamares.loginScreen = "aizome" with GNOME chosen: GNOME locks its screen only under GDM, so GNOME sessions have no lock screen.
+    '';
     services.xserver.enable = true;
     services.displayManager.gdm.enable = gdm;
     # Otherwise Plasma Login Manager, NixOS's default for graphical systems: a
@@ -259,6 +294,16 @@ in
       enable = true;
       wallpapers.night = wallpaper "da-nang-at-night.jpg";
       wallpapers.day = wallpaper "tokyo-at-dusk.jpg";
+      # Aizome's login screen lists each chosen desktop once, as the others
+      # do, and starts X11 ones with startx and NixOS's X server arguments.
+      greeter = lib.mkIf aizomeGreeter {
+        enable = true;
+        sessionDirs = [
+          "${loginSessions}/share/wayland-sessions"
+          "${loginSessions}/share/xsessions"
+        ];
+        defaultSession = sessions.${defaultDesktop};
+      };
     };
     # Several desktops set equally-prioritized defaults for these shared
     # helpers; resolve them explicitly. Portals remain per-session.
@@ -353,6 +398,9 @@ in
       rules.session.calamares-session-env = sessionEnvRule;
     };
     security.pam.services.gdm-password = lib.mkIf (gdm && severalDesktops) {
+      rules.session.calamares-session-env = sessionEnvRule;
+    };
+    security.pam.services.greetd = lib.mkIf (aizomeGreeter && severalDesktops) {
       rules.session.calamares-session-env = sessionEnvRule;
     };
     # Every desktop offers the same wallpapers from one copy of each: Plasma

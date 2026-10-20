@@ -132,7 +132,7 @@ See what's installed and why, find software, check for updates, return to an ear
 
 ### Prefer a familiar desktop?
 
-Plasma is the default live desktop. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen.
+Plasma is the default live desktop. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen: Aizome's own when Aizome is installed, listing every desktop you chose, and GDM when GNOME is, since GNOME locks its screen only under GDM (`calamares.loginScreen` chooses otherwise).
 
 [![Plasma with Konsole and Dolphin](docs/images/sekka/plasma.png)](docs/images/sekka/plasma.png)
 

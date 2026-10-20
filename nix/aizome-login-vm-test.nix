@@ -1,10 +1,10 @@
 # Logging in to Aizome as a fresh install does, in a disposable VM: a Sekka
-# system with Aizome its only desktop, so its login screen is Plasma Login
-# Manager (GDM comes only with GNOME), and no automatic login. The password
-# typed at the login screen starts Aizome's session and unlocks the login
-# keyring, which Chromium and Electron apps keep their sign-ins in
-# (`--password-store=gnome-libsecret`); a locked keyring would ask for the
-# password again, or sign them out.
+# system with Aizome its only desktop, so its login screen is Aizome's own
+# (aizome-greeter on greetd; GDM comes only with GNOME), and no automatic
+# login. The password typed at the login screen starts Aizome's session and
+# unlocks the login keyring, which Chromium and Electron apps keep their
+# sign-ins in (`--password-store=gnome-libsecret`); a locked keyring would
+# ask for the password again, or sign them out.
 #
 #     nix build .#checks.x86_64-linux.aizome-login -L
 {
@@ -48,19 +48,22 @@ pkgs.testers.runNixOSTest {
             + shlex.quote(command))
 
     machine.start()
-    with subtest("the login screen is Plasma Login Manager, not GDM"):
+    with subtest("the login screen is Aizome's own, on greetd"):
         machine.wait_for_unit("display-manager.service")
-        machine.succeed("systemctl cat display-manager.service | grep -i plasmalogin")
+        machine.succeed("systemctl cat display-manager.service | grep -i greetd")
         machine.fail("systemctl is-active gdm.service")
-        machine.wait_until_succeeds("pgrep -f plasma-login-greeter", timeout=180)
-        # The greeter takes a moment to draw and focus the password field.
-        machine.sleep(15)
+        machine.fail("systemctl is-active plasmalogin.service")
+        machine.wait_until_succeeds("pgrep -u greeter -x aizome-greeter", timeout=180)
+        machine.wait_until_succeeds("pgrep -u greeter -x aizome", timeout=60)
+        # One person: straight to the password.
+        machine.sleep(8)
         machine.screenshot("login-screen")
 
     with subtest("the password starts an Aizome session"):
         machine.send_chars("demo\n")
         machine.wait_until_succeeds("ls /run/user/1000/aizome.*.sock", timeout=180)
         machine.wait_until_succeeds("pgrep -u demo -x aizome-shell", timeout=60)
+        machine.wait_until_fails("pgrep -u greeter -x aizome-greeter", timeout=60)
         pid = machine.succeed("pgrep -u demo -x aizome-shell | head -1").strip()
         env = machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ")
         assert "XDG_CURRENT_DESKTOP=Aizome" in env, env
