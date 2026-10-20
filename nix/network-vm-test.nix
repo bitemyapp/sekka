@@ -139,7 +139,9 @@ pkgs.testers.runNixOSTest {
         # connection goes again.
         machine.wait_until_succeeds("nmcli -t -f NAME connection show | grep -qx Office", timeout=30)
         machine.wait_until_succeeds("! nmcli -t -f NAME connection show | grep -qx Office", timeout=90)
-        time.sleep(2)
+        # Removing Office precedes autoconnect; wait for Back Room to finish
+        # activating, rather than assuming it has reconnected after a delay.
+        wait_active("Back Room")
         machine.screenshot("refused")
         assert "Office" not in saved(), saved()
 

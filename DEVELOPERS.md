@@ -557,6 +557,38 @@ unrelated-device isolation, repeated application, and reconnect-like resets.
 Physical USB wake must still be checked on each machine with Keep Awake off;
 record keyboard/mouse, hub, dock, firmware, and sleep mode when diagnosing it.
 
+## Simulated Wi-Fi
+
+`nix/simulated-wifi.nix` gives a test VM two mac80211_hwsim radios. The first,
+in a network namespace of its own, serves the test's networks with hostapd and
+dnsmasq. The second, wlan1, is the computer's, managed by NetworkManager. The
+Network window's VM check and the screenshots use it.
+
+```sh
+nix build .#checks.x86_64-linux.network-vm --no-update-lock-file
+```
+
+NetworkManager waits 25 seconds for wpa_supplicant to associate. Joining a
+network while connected to another takes two scans: NetworkManager's, as it
+leaves the first network, then wpa_supplicant's own. Two settings keep that
+well inside the wait:
+
+- `regtest=6` gives wlan1 one of hwsim's own regulatory domains, with 32
+  channels. Under the world domain it has 89, most of them passive (S1G at
+  902–927 MHz among them), and a full scan takes 9.5 s instead of 2.3 s.
+- `networking.networkmanager.wifi.scanRandMacAddress = false`. With
+  NetworkManager 1.58 and wpa_supplicant 2.12, a join can otherwise never
+  happen. NetworkManager requests its scan with `AllowRoam=false`, which makes
+  wpa_supplicant treat that scan's results as scan-only, then takes wlan1 down
+  to give it a random scanning address. If that drops the scan before it
+  starts, wpa_supplicant keeps the scan-only mark (`wpas_trigger_scan_cb` frees
+  only the parameters of work that never started). Its own scan finds the
+  network, but the results are ignored, and nothing else scans during
+  activation, so NetworkManager fails the join after 25 s with
+  `ssid-not-found`. hostap's master branch has the same code. Installed
+  systems keep NixOS's default, randomization on; whether they hit this on
+  real hardware hasn't been checked.
+
 ## Disk encryption must pass TRIM through
 
 Genkan does not create encrypted disks yet. When it does, the configuration it
