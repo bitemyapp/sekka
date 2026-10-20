@@ -225,36 +225,11 @@
         # push-cache publishes their closures, so whatever Sekka's modules
         # change (Hyprland and all that uses its patched Aquamarine) and
         # whatever a catalog application needs downloads rather than compiles.
-        installed-systems =
-          let
-            reference =
-              desktops: applications:
-              import ./nix/reference-systems.nix {
-                inherit
-                  inputs
-                  applicationCatalog
-                  desktops
-                  applications
-                  ;
-                free = true;
-              };
-            desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
-            applications = reference [ "plasma" ] (
-              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
-            );
-          in
-          pkgs.linkFarm "sekka-installed-systems" (
-            map (desktop: {
-              name = desktop;
-              path = desktops.systems.${desktop}.config.system.build.toplevel;
-            }) desktops.desktops
-            ++ [
-              {
-                name = "applications";
-                path = applications.systems.plasma.config.system.build.toplevel;
-              }
-            ]
-          );
+        installed-systems = import ./nix/installed-systems.nix {
+          inherit inputs system;
+          applicationCatalog = applicationCatalog;
+          desktops = installer.config.respin.referenceDesktops;
+        };
         application-cache = applicationCatalog.cache;
         # sekka.computer, ready to upload; nothing publishes it.
         inherit site;
@@ -608,6 +583,41 @@
           python3 -m unittest discover -s tests -p test_release.py
           touch $out
         '';
+        nightly-assets =
+          pkgs.runCommand "nightly-asset-tests"
+            {
+              nativeBuildInputs = with pkgs; [
+                bash
+                python3
+                coreutils
+                git
+                jq
+                gnugrep
+              ];
+            }
+            ''
+              mkdir -p scripts tests
+              cp ${./scripts/publish-nightly.sh} scripts/publish-nightly.sh
+              cp ${./tests/test_nightly.py} tests/test_nightly.py
+              python3 -m unittest discover -s tests -p test_nightly.py -v
+              # The real wrapper also runs ShellCheck on the publication script.
+              : ${publishNightly}
+              touch $out
+            '';
+        nightly-workflow =
+          pkgs.runCommand "nightly-workflow-check"
+            {
+              nativeBuildInputs = [
+                pkgs.actionlint
+                pkgs.shellcheck
+              ];
+            }
+            ''
+              actionlint -config-file ${./.github/actionlint.yaml} ${./.github/workflows/nightly.yml}
+              shellcheck ${./scripts/runner-host-setup.sh}
+              touch $out
+            '';
+        arm-emulation = import ./nix/arm-emulation-vm-test.nix { inherit pkgs; };
         release-workflow =
           pkgs.runCommand "release-workflow-check"
             {

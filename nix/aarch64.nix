@@ -49,6 +49,11 @@ in
     default = installer.config.system.build.isoImage;
     iso = installer.config.system.build.isoImage;
     utm-iso = installer.config.system.build.isoImage;
+    installed-systems = import ./installed-systems.nix {
+      inherit inputs system;
+      applicationCatalog = catalog;
+      desktops = installer.config.respin.referenceDesktops;
+    };
     inherit genkan;
     vm-fixture = import ./fixture.nix { inherit pkgs; };
     inherit (inputs.tatami.packages.${system})

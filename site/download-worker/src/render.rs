@@ -15,10 +15,21 @@ pub struct Build {
     pub id: String,
     pub revision: String,
     pub uploaded: String,
-    pub iso: String,
-    pub sha256sums: String,
     pub manifest: String,
     pub flake_lock: String,
+    // Older entries and existing clients have a single x86 image at the top
+    // level. The publisher retains it while adding both images together.
+    #[serde(flatten)]
+    pub legacy: Image,
+    #[serde(default)]
+    pub images: Vec<Image>,
+}
+
+#[derive(Deserialize)]
+pub struct Image {
+    pub system: String,
+    pub iso: String,
+    pub sha256sums: String,
     pub bytes: u64,
 }
 
@@ -46,15 +57,12 @@ pub fn render(builds: &[Build], base: &str, repo: &str, now: i64) -> String {
             Some(t) => (day(t), clock(t), age(now - t)),
             None => (build.uploaded.clone(), String::new(), String::new()),
         };
-        let iso = build.iso.rsplit('/').next().unwrap_or(&build.iso);
         let short = build.revision.get(..7).unwrap_or(&build.revision);
         let _ = write!(
             html,
             r#"<li class="build{newest_class}">
   <p class="build-when">{tag}<strong>{day}</strong> <span class="build-age">{age}</span></p>
-  <p class="build-what">Uploaded {clock} UTC from <a href="{repo}/commit/{revision}"><code>{short}</code></a>, {size}</p>
-  <p class="build-files"><a class="build-iso" href="{base}/{iso_path}">{iso}</a> <span class="build-extra"><a href="{base}/{sums}">SHA256SUMS</a> · <a href="{base}/{manifest}">manifest.json</a> · <a href="{base}/{lock}">flake.lock</a></span></p>
-</li>
+  <p class="build-what">Uploaded {clock} UTC from <a href="{repo}/commit/{revision}"><code>{short}</code></a></p>
 "#,
             newest_class = if newest { " newest" } else { "" },
             tag = if newest {
@@ -67,10 +75,33 @@ pub fn render(builds: &[Build], base: &str, repo: &str, now: i64) -> String {
             clock = esc(&clock),
             revision = esc(&build.revision),
             short = esc(short),
-            size = size(build.bytes),
-            iso_path = esc(&build.iso),
-            iso = esc(iso),
-            sums = esc(&build.sha256sums),
+        );
+        let images = if build.images.is_empty() {
+            std::slice::from_ref(&build.legacy)
+        } else {
+            &build.images
+        };
+        for image in images {
+            let label = match image.system.as_str() {
+                "x86_64-linux" => "x86_64 · PCs",
+                "aarch64-linux" => "ARM64 · Experimental · tested only in UTM on Apple silicon",
+                other => other,
+            };
+            let iso = image.iso.rsplit('/').next().unwrap_or(&image.iso);
+            let _ = writeln!(
+                html,
+                r#"  <p class="build-files"><strong class="build-system">{label}</strong> <a class="build-iso" href="{base}/{iso_path}">{iso}</a> <span class="build-extra">{size} · <a href="{base}/{sums}">SHA256SUMS</a></span></p>"#,
+                label = esc(label),
+                iso_path = esc(&image.iso),
+                iso = esc(iso),
+                size = size(image.bytes),
+                sums = esc(&image.sha256sums),
+            );
+        }
+        let _ = writeln!(
+            html,
+            r#"  <p class="build-extra"><a href="{base}/{manifest}">manifest.json</a> · <a href="{base}/{lock}">flake.lock</a></p>
+</li>"#,
             manifest = esc(&build.manifest),
             lock = esc(&build.flake_lock),
         );
@@ -118,7 +149,15 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
     let mp = (5 * doy + 2) / 153;
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (if m <= 2 { yoe + era * 400 + 1 } else { yoe + era * 400 }, m, d)
+    (
+        if m <= 2 {
+            yoe + era * 400 + 1
+        } else {
+            yoe + era * 400
+        },
+        m,
+        d,
+    )
 }
 
 fn day(t: i64) -> String {
@@ -173,11 +212,15 @@ mod tests {
             id: id.into(),
             revision: revision.into(),
             uploaded: uploaded.into(),
-            iso: format!("builds/{id}/sekka-nightly-{id}-x86_64-linux.iso"),
-            sha256sums: format!("builds/{id}/SHA256SUMS"),
             manifest: format!("builds/{id}/manifest.json"),
             flake_lock: format!("builds/{id}/flake.lock"),
-            bytes: 6_123_456_789,
+            legacy: Image {
+                system: "x86_64-linux".into(),
+                iso: format!("builds/{id}/sekka-nightly-{id}-x86_64-linux.iso"),
+                sha256sums: format!("builds/{id}/SHA256SUMS"),
+                bytes: 6_123_456_789,
+            },
+            images: vec![],
         }
     }
 
@@ -188,8 +231,16 @@ mod tests {
         assert_eq!(t, 1_791_880_925); // date -u -d 2026-10-13T08:42:05Z +%s
         assert_eq!(day(t), "13 Oct 2026");
         assert_eq!(clock(t), "08:42");
-        assert_eq!(day(parse_utc("2024-02-29T23:59:59Z").unwrap()), "29 Feb 2024");
-        for bad in ["", "2026-10-13 08:42:05Z", "2026-13-01T00:00:00Z", "2026-10-13T08:42:05+01:00"] {
+        assert_eq!(
+            day(parse_utc("2024-02-29T23:59:59Z").unwrap()),
+            "29 Feb 2024"
+        );
+        for bad in [
+            "",
+            "2026-10-13 08:42:05Z",
+            "2026-13-01T00:00:00Z",
+            "2026-10-13T08:42:05+01:00",
+        ] {
             assert_eq!(parse_utc(bad), None, "{bad}");
         }
     }
@@ -221,14 +272,17 @@ mod tests {
         assert!(html.contains(&format!(
             r#"href="{BASE}/builds/20261014-aaaaaaa/sekka-nightly-20261014-aaaaaaa-x86_64-linux.iso">sekka-nightly-20261014-aaaaaaa-x86_64-linux.iso</a>"#
         )));
-        assert!(html.contains(&format!(r#"<a href="{REPO}/commit/{}"><code>aaaaaaa</code></a>"#, "a".repeat(40))));
+        assert!(html.contains(&format!(
+            r#"<a href="{REPO}/commit/{}"><code>aaaaaaa</code></a>"#,
+            "a".repeat(40)
+        )));
         assert!(html.contains("6.1 GB"));
     }
 
     #[test]
     fn escapes_what_it_shows() {
         let mut b = build("20261014-aaaaaaa", "2026-10-14T09:00:00Z", "a<b\"c'&d");
-        b.iso = "builds/x/<script>.iso".into();
+        b.legacy.iso = "builds/x/<script>.iso".into();
         let html = render(&[b], BASE, REPO, 0);
         assert!(!html.contains("<script>") && !html.contains("a<b"));
         assert!(html.contains("&lt;script&gt;.iso") && html.contains("a&lt;b&quot;c&#39;&amp;d"));
@@ -249,5 +303,52 @@ mod tests {
           "flake_lock": "builds/20261014-aaaaaaa/flake.lock", "bytes": 1, "sha256": "00"}]}"#;
         let builds: Builds = serde_json::from_str(json).unwrap();
         assert_eq!(builds.builds[0].id, "20261014-aaaaaaa");
+        assert!(builds.builds[0].images.is_empty());
+        assert!(render(&builds.builds, BASE, REPO, 0).contains("x86_64 · PCs"));
+        let mut paired: serde_json::Value = serde_json::from_str(json).unwrap();
+        let x86 = paired["builds"][0].clone();
+        paired["builds"][0]["images"] = serde_json::json!([
+            x86,
+            {"system": "aarch64-linux", "iso": "builds/new/aarch64-linux/arm.iso",
+             "sha256sums": "builds/new/aarch64-linux/SHA256SUMS", "bytes": 5_000_000_000u64}
+        ]);
+        let paired: Builds = serde_json::from_value(paired).unwrap();
+        assert_eq!(paired.builds[0].images.len(), 2);
+        assert!(render(&paired.builds, BASE, REPO, 0).contains("ARM64 · Experimental"));
+    }
+
+    #[test]
+    fn lists_both_architectures_once_and_keeps_old_builds() {
+        let mut newest = build("new", "2026-10-20T09:00:00Z", "aaaaaaa");
+        newest.images = vec![
+            Image {
+                system: "x86_64-linux".into(),
+                iso: newest.legacy.iso.clone(),
+                sha256sums: newest.legacy.sha256sums.clone(),
+                bytes: newest.legacy.bytes,
+            },
+            Image {
+                system: "aarch64-linux".into(),
+                iso: "builds/new/aarch64-linux/arm.iso".into(),
+                sha256sums: "builds/new/aarch64-linux/SHA256SUMS".into(),
+                bytes: 5_000_000_000,
+            },
+        ];
+        let html = render(
+            &[newest, build("old", "2026-10-19T09:00:00Z", "bbbbbbb")],
+            BASE,
+            REPO,
+            0,
+        );
+        assert_eq!(html.matches("class=\"build-iso\"").count(), 3);
+        assert_eq!(html.matches("class=\"build newest\"").count(), 1);
+        assert!(html.contains("ARM64 · Experimental · tested only in UTM on Apple silicon"));
+        assert!(html.contains(&format!(
+            r#"href="{BASE}/builds/new/aarch64-linux/arm.iso""#
+        )));
+        assert!(html.contains(&format!(
+            r#"href="{BASE}/builds/new/aarch64-linux/SHA256SUMS""#
+        )));
+        assert!(html.contains("5.0 GB"));
     }
 }
