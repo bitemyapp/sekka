@@ -97,6 +97,7 @@ pub fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
 
 fn monogram_text(desktop: Desktop) -> &'static str {
     match desktop {
+        Desktop::Aizome => "藍",
         Desktop::Plasma => "K",
         Desktop::Gnome => "G",
         Desktop::Xfce => "X",
