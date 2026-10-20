@@ -88,9 +88,17 @@ Use UTM's **Virtualize → Linux** flow, with the **QEMU** backend (leave
 Enable hardware OpenGL acceleration: the display must be `virtio-gpu-gl-pci`
 or `virtio-ramfb-gl`, with auto resolution enabled. Shared networking needs
 no inbound port forwards. Do not attach host disks to installer tests.
+In UTM 5's macOS **Settings → Display**, select **Apple Core OpenGL** as the
+renderer backend; this is the tested path and exposes OpenGL 4.1 through
+VirGL. Auto resolution follows the UTM window size; enlarging that window
+provides more room for the installer and desktop.
 
 The guest module `nixosModules.utm` enables VirtIO drivers, the QEMU guest
-agent and SPICE agent, and asks GTK to use GL. UTM's current documentation
+agent and a session-bound SPICE agent, and asks GTK to use GL. It disables
+the firmware framebuffer's `Unknown-1` output: with `virtio-ramfb-gl`, that
+otherwise becomes a hidden primary monitor and receives installer windows.
+The real `Virtual-1` output retains native VirtIO mode changes when the UTM
+window resizes. UTM's current documentation
 [recommends VirGL for Linux desktops](https://docs.getutm.app/guest-support/linux/#graphics-acceleration);
 its Vulkan/Venus path has desktop-rendering limitations. Check the actual
 renderer with `glxinfo -B` in the live session: it should name `virgl`,

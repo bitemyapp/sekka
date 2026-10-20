@@ -439,7 +439,7 @@ pub fn build(app: &adw::Application) {
         .application(app)
         .title("Install Sekka")
         .default_width(1100)
-        .default_height(760)
+            .default_height(720)
         .content(&toasts)
         .build();
     window.set_size_request(360, 520);

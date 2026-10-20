@@ -35,6 +35,9 @@ let
         specialisation = lib.mkForce { };
         isoImage.prependToMenuLabel = lib.mkForce "Plasma (UTM ARM) | ";
         isoImage.makeUsbBootable = lib.mkForce false;
+        # Upstream's GRUB menu otherwise offers an x86 test that the ARM EFI
+        # image does not contain.
+        boot.loader.grub.memtest86.enable = lib.mkForce false;
       })
     ];
   };
