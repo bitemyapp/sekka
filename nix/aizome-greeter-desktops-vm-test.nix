@@ -123,7 +123,7 @@ pkgs.testers.runNixOSTest {
         shows("Session: Tatami")
         choose("Xfce Session")
         machine.send_chars("demo\n")
-        machine.wait_until_succeeds("pgrep -u demo -x xfce4-session", timeout=180)
+        machine.wait_until_succeeds("pgrep -u demo -f xfce4-session", timeout=180)
         machine.wait_until_succeeds("pgrep -f 'X(org)? .*vt'", timeout=60)
         time.sleep(8)
         machine.screenshot("03-xfce")
