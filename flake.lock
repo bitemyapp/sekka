@@ -22,6 +22,27 @@
         "type": "github"
       }
     },
+    "aizome": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "sidestep": "sidestep"
+      },
+      "locked": {
+        "lastModified": 1792483040,
+        "narHash": "sha256-Mg1Bp3+5tKXr5Xt3gqCbBL38lNo+ODh1pVf3nGIjDO8=",
+        "owner": "bitemyapp",
+        "repo": "aizome",
+        "rev": "21e41724ea49bc9818e7409bb7027e2a0ac37c68",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "aizome",
+        "type": "github"
+      }
+    },
     "applications": {
       "locked": {
         "lastModified": 1792094642,
@@ -578,6 +599,7 @@
     "root": {
       "inputs": {
         "ai-apps": "ai-apps",
+        "aizome": "aizome",
         "applications": "applications",
         "determinate": "determinate",
         "fh": "fh",
@@ -622,6 +644,23 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "sidestep": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792372510,
+        "narHash": "sha256-HGpKhuaSNMl8tmy39RKd/ZQbw2X27OaIcSp7S/nl8I4=",
+        "owner": "bitemyapp",
+        "repo": "sidestep",
+        "rev": "dae957e913376a26e642d6abee533eb755fb9092",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "ref": "aizome",
+        "repo": "sidestep",
         "type": "github"
       }
     },

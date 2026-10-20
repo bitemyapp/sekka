@@ -9,6 +9,11 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
+  # Aizome, Sekka's own desktop, on Sidestep's native toolkit: its own
+  # repository, built with Sekka's Nixpkgs.
+  inputs.aizome.url = "github:bitemyapp/aizome";
+  inputs.aizome.inputs.nixpkgs.follows = "nixpkgs";
+
   # Catalog applications packaged by other flakes, from forks under bitemyapp:
   # only commits there reach the nightly. Sekka builds them with the
   # applications' Nixpkgs and gives them to the catalog as its own packages
@@ -47,7 +52,7 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) superluminal tracy;
+        inherit (externalInputs) aizome superluminal tracy;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -112,6 +117,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         utm = ./modules/utm.nix;
+        aizome = inputs.aizome.nixosModules.default;
       };
       lib = {
         inherit installedLock;
@@ -192,6 +198,11 @@
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
           genkan = calamares;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        # Aizome's README captures (docs/screenshots.md).
+        screenshots-aizome = import ./nix/screenshots-aizome.nix {
+          inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         # A development check of Yukimi's Discover; not run with the others.
@@ -372,6 +383,7 @@
                   })
                   inputs.tatami.nixosModules.default
                   inputs.yukimi.nixosModules.default
+                  inputs.aizome.nixosModules.default
                   {
                     calamares.nvidia = {
                       enable = true;
@@ -482,11 +494,35 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        wpa-supplicant-scan = import ./nix/wpa-supplicant-scan-test.nix {
+          inherit pkgs;
+          # The live session, in each of its boot entries, and an installed
+          # system.
+          systems = liveConfigs ++ [
+            (import ./nix/reference-systems.nix {
+              inherit inputs applicationCatalog;
+              desktops = [ "plasma" ];
+            }).systems.plasma.config
+          ];
+        };
         activity-vm = import ./nix/activity-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        aizome-login = import ./nix/aizome-login-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        aizome-greeter-desktops = import ./nix/aizome-greeter-desktops-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         display-recovery-vm = import ./nix/display-recovery-vm-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) hyprland;
+          inherit (self.packages.${system}) tatami displays;
+        };
+        displays-cursor-vm = import ./nix/displays-cursor-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;
           inherit (self.packages.${system}) tatami displays;

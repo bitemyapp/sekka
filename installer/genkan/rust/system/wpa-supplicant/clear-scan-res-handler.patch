@@ -1,0 +1,41 @@
+Subject: [PATCH] Clear scan_res_handler when an interface is disabled
+
+A D-Bus Scan() call with AllowRoam=false queues the scan as radio work
+and then sets wpa_s->scan_res_handler to scan_only_handler. If the
+interface is disabled before that work starts, EVENT_INTERFACE_DISABLED
+removes it with radio_remove_works(), and wpas_trigger_scan_cb() with
+deinit set only frees the parameters of work that never started. The
+handler stays set. The next scan on the interface, such as the one for
+SelectNetwork(), then ends in "Scan-only results received", and
+wpa_supplicant does not try to connect even though it found the network.
+
+NetworkManager hits this when it switches from one network to another
+with wifi.scan-rand-mac-address enabled, its default: it changes the
+interface's address for scanning (down and up), calls Scan() with
+AllowRoam=false, then restores the address for the new activation (down
+again). If wpa_supplicant is still handling the first INTERFACE_ENABLED
+when the second INTERFACE_DISABLED arrives, the queued scan is removed
+before it starts, and NetworkManager fails the activation after 25 s.
+
+Clear scan_res_handler along with the radio works on
+EVENT_INTERFACE_DISABLED, as EVENT_SCAN_RESULTS already does for results
+that arrive while the interface is disabled.
+
+Not yet in hostap; carried by Sekka (DEVELOPERS.md, "Joining Wi-Fi
+networks").
+---
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -7556,6 +7556,12 @@
+ 				       wpas_clear_disabled_interface,
+ 				       wpa_s, NULL);
+ 		radio_remove_works(wpa_s, NULL, 0);
++		/*
++		 * A scan removed here before it started never reports results.
++		 * Do not leave its handler, such as scan_only_handler for a
++		 * D-Bus Scan with AllowRoam=false, to take the next scan's.
++		 */
++		wpa_s->scan_res_handler = NULL;
+ 
+ 		wpa_supplicant_set_state(wpa_s, WPA_INTERFACE_DISABLED);
+ 		break;

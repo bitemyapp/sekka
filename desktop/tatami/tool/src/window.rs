@@ -571,7 +571,14 @@ pub fn present_displays() {
 }
 
 /// Move a window to the focused screen's workspace, center and focus it.
+/// Focusing a window warps the cursor to its middle (Actions::focus in
+/// Hyprland); the window opens from the bar's icon, so the cursor stays where
+/// it is, with warps held off while it is focused.
 fn bring_here(address: &str) {
+    let no_warps = hypr::request_json("j/getoption cursor:no_warps")
+        .ok()
+        .and_then(|option| option["bool"].as_bool())
+        .unwrap_or(false);
     let workspace = hypr::request_json("j/monitors")
         .ok()
         .and_then(|monitors| {
@@ -580,7 +587,7 @@ fn bring_here(address: &str) {
         })
         .filter(|id| *id > 0);
     let target = format!("window = \"address:{address}\"");
-    let mut lua = String::new();
+    let mut lua = String::from("hl.config({ cursor = { no_warps = true } })\n");
     if let Some(workspace) = workspace {
         lua.push_str(&format!(
             "hl.dispatch(hl.dsp.window.move({{ {target}, workspace = \"{workspace}\", follow = false }}))\n"
@@ -593,6 +600,10 @@ fn bring_here(address: &str) {
          hl.dispatch(hl.dsp.window.alter_zorder({{ {target}, mode = \"top\" }}))\n"
     ));
     let _ = hypr::request(&format!("/eval {lua}"));
+    // Apart, so that a failed dispatch above cannot leave warps off.
+    let _ = hypr::request(&format!(
+        "/eval hl.config({{ cursor = {{ no_warps = {no_warps} }} }})"
+    ));
 }
 
 /// Turn a monitor off until the next configuration reload.

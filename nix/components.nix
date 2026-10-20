@@ -1,7 +1,9 @@
-# First-party source is always taken from this checkout. The catalog's
-# applications from other flakes come from Sekka's own inputs of those names.
+# First-party source is always taken from this checkout; Aizome comes from
+# its own repository (the flake's aizome input), and the catalog's
+# applications from other flakes from Sekka's own inputs of those names.
 {
   nixpkgs,
+  aizome,
   superluminal,
   tracy,
 }:
@@ -67,6 +69,7 @@ rec {
         ../installer/genkan/rust/system
         tatami.nixosModules.default
         yukimi.nixosModules.default
+        aizome.nixosModules.default
       ];
       # Installed systems make this flake's inputs their own, so these are the
       # same store paths as `nix run .#push-cache` publishes for the free ones.

@@ -488,7 +488,7 @@ pub fn build(app: &adw::Application) {
         git_email_edited: Cell::new(false),
         filling_git: Cell::new(false),
         default_desktops: RefCell::new(Vec::new()),
-        default_choice: Cell::new(Some(Desktop::Plasma)),
+        default_choice: Cell::new(Some(Desktop::Aizome)),
         updating_default: Cell::new(false),
         zones,
         zoneinfo,
@@ -1781,7 +1781,7 @@ impl Ui {
                 .unwrap_or(&KEYBOARDS[0])
                 .to_string(),
             desktops: self.selected_desktops(),
-            default_desktop: self.default_choice.get().unwrap_or(Desktop::Plasma),
+            default_desktop: self.default_choice.get().unwrap_or(Desktop::Aizome),
             applications: self.apps.selected_ids(),
             copy_wifi: self.desktop.wifi.is_active(),
             wifi_profiles: vec![],

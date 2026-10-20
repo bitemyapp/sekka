@@ -483,7 +483,7 @@ pub(super) fn build_desktop_page() -> (adw::PreferencesPage, DesktopPage) {
         .iter()
         .map(|desktop| {
             let card = desktop_card(*desktop);
-            card.set_active(*desktop == Desktop::Plasma);
+            card.set_active(*desktop == Desktop::Aizome);
             flow.append(&card);
             card
         })

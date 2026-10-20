@@ -20,6 +20,11 @@ around it are left out.
 | [Yukimi](images/sekka/yukimi.png) | 2832 × 1700 | Yukimi's window in Tatami, reading the test VM `sekka-demo` |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
 | [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Sekka's GNOME session with Files over Yukimi |
+| [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file, Files and a terminal (running fastfetch) stacked in one tab group, a notification filed under Tenki in the Deskbar |
+| [Aizome's menu at the pointer](images/sekka/aizome-menu.png) | 2880 × 1800 | The same desktop with Super + right-click's whole menu of Sumi at the pointer |
+| [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
+| [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
+| [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
 
 They come from [nix/screenshots.nix](../nix/screenshots.nix):
 
@@ -62,3 +67,19 @@ Older captures under [images/tour](images/tour) were imported byte-for-byte from
 [determinate-nixos-graphical at e483b80](https://github.com/bitemyapp/determinate-nixos-graphical/tree/e483b80b3279c2baeece5fa1fe4dbf00a1932bcb/docs/images/tour)
 at 1280 × 800. They illustrate the predecessor image, remain for the archived
 documentation that links them, and do not certify the monorepo's image.
+
+The Aizome images come from [nix/screenshots-aizome.nix](../nix/screenshots-aizome.nix):
+
+```sh
+nix build .#screenshots-aizome --out-link result-screenshots-aizome
+```
+
+It boots one disposable NixOS VM: a Sekka system built from the same desktop
+module installed systems import, with Aizome chosen, logged in automatically
+as the demo user. The 2880 × 1800 virtual display is set to scale 2 through
+Aizome's own display settings path (`aizomectl output`), a 1440 × 900 layout.
+There is no GPU, so Aizome composites in software, its pixman fallback. It is
+driven through the compositor's own input path (`aizomectl input`, `spawn`,
+`stack`, `resize`), as keys and clicks a person would make; captures are the
+virtual display at its native resolution, and the two application images are
+crops of it to the window with its tab and shadow, unscaled.

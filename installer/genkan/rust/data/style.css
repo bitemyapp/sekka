@@ -181,6 +181,7 @@ button.card.desktop-card:checked:hover {
 .monogram-gnome { background-image: linear-gradient(135deg, #62a0ea, #1a5fb4); }
 .monogram-xfce { background-image: linear-gradient(135deg, #5294e2, #2a5c9a); }
 .monogram-hyprland { background-image: linear-gradient(135deg, #33ccff, #00b37a); }
+.monogram-aizome { background-image: linear-gradient(135deg, #4a67b3, #1a1b26); color: #e0af68; }
 .monogram-tatami { background-image: linear-gradient(135deg, #7aa2f7, #2b2f4a); }
 
 /* Small pills for application traits. */

@@ -326,6 +326,9 @@ undocking with the lid closed, a Displays window stranded by an unplug, and
 `tatami display` from another workspace. Physical docking and the lid are in
 daily use on the ThinkPad X1 Carbon Gen 14; these tests guard that behaviour
 between changes. Don't describe it as untested on hardware.
+`nix build .#checks.x86_64-linux.displays-cursor-vm` opens the Displays window
+with `tatami display`, as the bar's icon does, and checks that the cursor stays
+where it was.
 
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
 
@@ -623,6 +626,38 @@ unrelated-device isolation, repeated application, and reconnect-like resets.
 Physical USB wake must still be checked on each machine with Keep Awake off;
 record keyboard/mouse, hub, dock, firmware, and sleep mode when diagnosing it.
 
+## Simulated Wi-Fi
+
+`nix/simulated-wifi.nix` gives a test VM two mac80211_hwsim radios. The first,
+in a network namespace of its own, serves the test's networks with hostapd and
+dnsmasq. The second, wlan1, is the computer's, managed by NetworkManager. The
+Network window's VM check and the screenshots use it.
+
+```sh
+nix build .#checks.x86_64-linux.network-vm --no-update-lock-file
+```
+
+NetworkManager waits 25 seconds for wpa_supplicant to associate. Joining a
+network while connected to another takes two scans: NetworkManager's, as it
+leaves the first network, then wpa_supplicant's own. Two settings keep that
+well inside the wait:
+
+- `regtest=6` gives wlan1 one of hwsim's own regulatory domains, with 32
+  channels. Under the world domain it has 89, most of them passive (S1G at
+  902–927 MHz among them), and a full scan takes 9.5 s instead of 2.3 s.
+- `networking.networkmanager.wifi.scanRandMacAddress = false`. With
+  NetworkManager 1.58 and wpa_supplicant 2.12, a join can otherwise never
+  happen. NetworkManager requests its scan with `AllowRoam=false`, which makes
+  wpa_supplicant treat that scan's results as scan-only, then takes wlan1 down
+  to give it a random scanning address. If that drops the scan before it
+  starts, wpa_supplicant keeps the scan-only mark (`wpas_trigger_scan_cb` frees
+  only the parameters of work that never started). Its own scan finds the
+  network, but the results are ignored, and nothing else scans during
+  activation, so NetworkManager fails the join after 25 s with
+  `ssid-not-found`. hostap's master branch has the same code. Installed
+  systems keep NixOS's default, randomization on; whether they hit this on
+  real hardware hasn't been checked.
+
 ## Disk encryption must pass TRIM through
 
 Genkan does not create encrypted disks yet. When it does, the configuration it
@@ -671,6 +706,39 @@ real machine's live session under build load for about 15 minutes.
 [docs/responsiveness.md](docs/responsiveness.md) describes it and records
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
+
+## Joining Wi-Fi networks
+
+Installed systems and the live session join Wi-Fi through NetworkManager and
+wpa_supplicant 2.12. Sekka patches wpa_supplicant
+(`installer/genkan/rust/system/wpa-supplicant`). Without the patch, a switch
+from one network to another can fail. As it leaves the first network,
+NetworkManager gives the interface a random address for scanning, taking it
+down and up, and asks wpa_supplicant for a scan with `AllowRoam=false`. It
+then restores the address for the new network, taking it down again. If that
+removes the scan before it starts, wpa_supplicant keeps treating the next
+scan's results as scan-only, including those of its own scan for the new
+network. It finds the network but joins nothing, and NetworkManager gives up
+after 25 s.
+
+In VMs with simulated Wi-Fi and NetworkManager's default address
+randomization, 15 of 720 switches failed this way, among hidden and visible
+networks alike. None of 288 failed with the patch, and none of 72 with
+randomization off. The failure hasn't been reproduced on physical hardware.
+The patch clears the scan-only handler when the interface goes down, as
+wpa_supplicant already does for scan results that arrive while it is down. It
+isn't in hostap yet. If hostap takes it, the patch will stop applying to
+Nixpkgs' wpa_supplicant, and the module can go.
+
+```sh
+nix build .#checks.x86_64-linux.wpa-supplicant-scan --no-update-lock-file
+```
+
+The check pauses wpa_supplicant in a disposable VM while a D-Bus scan request
+with `AllowRoam=false` and wlan1 going down both wait for it, so the scan is
+removed before it starts. It then requires `SelectNetwork` to join. It also
+checks that each of the live session's boot entries and an installed system
+start the patched wpa_supplicant over D-Bus.
 
 ## Omarchy's fish configuration
 
