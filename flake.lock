@@ -30,11 +30,11 @@
         "sidestep": "sidestep"
       },
       "locked": {
-        "lastModified": 1792530834,
-        "narHash": "sha256-Ja1imjj7ASVyLMT7yqWD/EcOBiH4GXe6w0mIsoHYBn4=",
+        "lastModified": 1792532545,
+        "narHash": "sha256-8DYPYZKxCLXOLtMtVrnzqFxgoOwMHlvW4ejSt5BH5mA=",
         "owner": "bitemyapp",
         "repo": "aizome",
-        "rev": "dc780cf5d01d889393c7c3b2b09276a0646fc4d0",
+        "rev": "b905e28ffa501425f81b403796d1d0b46880adbd",
         "type": "github"
       },
       "original": {
