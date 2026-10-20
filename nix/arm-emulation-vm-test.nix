@@ -4,12 +4,16 @@
 let
   armPkgs = import pkgs.path { system = "aarch64-linux"; };
   probe = pkgs.writeText "arm-smoke.nix" ''
+    let
+      shell = builtins.storePath "${armPkgs.bash}";
+      coreutils = builtins.storePath "${armPkgs.coreutils}";
+    in
     derivation {
       name = "native-arm-sandbox-probe";
       system = "aarch64-linux";
-      builder = "${armPkgs.bash}/bin/bash";
+      builder = shell + "/bin/bash";
       args = [ "--noprofile" "--norc" "-c"
-        "test \"$(${armPkgs.coreutils}/bin/uname -m)\" = aarch64 && ${armPkgs.coreutils}/bin/printf native-arm > $out"
+        "test \"$(''${coreutils}/bin/uname -m)\" = aarch64 && ''${coreutils}/bin/printf native-arm > $out"
       ];
     }
   '';
