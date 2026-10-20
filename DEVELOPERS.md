@@ -68,6 +68,28 @@ Before publishing an installable image, exercise the exact image through a dispo
 
 ## Sources and installed-system updates
 
+The catalog's `installer/genkan/rust/src/keyring.nix` supplies the Chromium
+and Electron keyring launchers, both for installed packages and the ISO's
+application cache. Signal has a profile-specific policy: read only
+`safeStorageBackend` from its `config.json` and select that backend before
+Electron starts. A profile created in Plasma with `kwallet6` must keep using
+that API in Aizome; choosing libsecret instead also fails Signal's backend
+check, even when both APIs ultimately use GNOME Keyring. Fresh profiles use
+`gnome-libsecret` in every desktop. Existing `basic_text` profiles retain
+their recorded backend; the launcher never migrates keys or rewrites data.
+Explicit `--password-store` arguments win. Electron's `--user-data-dir` is
+respected; custom `NODE_CONFIG` launches (Signal's `storagePath` and
+`storageProfile`) retain their own policy. Unrecognized, unreadable or
+malformed metadata is left to Signal's recovery handling.
+
+`nix build .#checks.x86_64-linux.signal-keyring` exercises the packaged
+launcher and desktop entry with profiles from each supported backend,
+desktop changes, explicit flags, alternate paths and invalid metadata.
+It does not log into Signal or test a live keyring. The original failure was
+also reproduced on hardware: `kwallet6` became `basic_text` after switching
+to Aizome; selecting the recorded backend reopened the existing database and
+restored the interface without a profile reset.
+
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
 ChatGPT Desktop 26.1013.40934 copies `codex-app-tools` from the Nix store

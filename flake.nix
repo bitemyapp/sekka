@@ -258,6 +258,7 @@
         native-installer = calamares;
         storage = calamares.storageTest;
         applications = applicationCatalog.check;
+        signal-keyring = import ./nix/signal-keyring-test.nix { inherit pkgs; };
         application-cache = applicationCatalog.cache;
         live-profiles =
           let
