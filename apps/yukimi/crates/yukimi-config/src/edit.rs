@@ -230,6 +230,48 @@ fn insert_setting(text: &str, root: &ast::Root, binding: &str) -> Result<String>
     Ok(new)
 }
 
+/// Insert a new setting beside the last one sharing its first name
+/// (`calamares.loginScreen` after the other `calamares.*` settings), on a
+/// line of its own and indented like it; at the end of the module when
+/// there is none.
+fn insert_beside(text: &str, root: &ast::Root, path: &[&str], binding: &str) -> Result<String> {
+    let set = module_set(root)?;
+    let sibling = set.attrpath_values().filter(|entry| {
+        entry.attrpath().and_then(|p| p.attrs().next()).map(|a| a.syntax().text().to_string()).as_deref()
+            == path.first().copied()
+    });
+    let Some(last) = sibling.last() else {
+        return insert_setting(text, root, binding);
+    };
+    let range = last.syntax().text_range();
+    let end = usize::from(range.end());
+    // Only when the sibling ends its line; otherwise, at the module's end.
+    let rest = &text[end..];
+    let line_end = rest.find('\n').map(|i| end + i);
+    match line_end {
+        Some(at) if text[end..at].trim().is_empty() => {
+            let indent = indent_at(text, usize::from(range.start())).to_owned();
+            Ok(format!("{}\n{indent}{binding}{}", &text[..at], &text[at..]))
+        }
+        _ => insert_setting(text, root, binding),
+    }
+}
+
+/// Set a setting that is a plain string, adding it (beside its siblings)
+/// if it is absent: `calamares.loginScreen = "aizome";`.
+pub fn set_string(text: &str, path: &[&str], value: &str) -> Result<String> {
+    let root = parse(text)?;
+    let new = match find(&root, path)? {
+        Some(ast::Expr::Str(string)) if plain_string(&string).is_some() => {
+            replace(text, string.syntax().text_range(), &nix_string(value))
+        }
+        Some(_) => return Err(Error::NotAString(dotted(path))),
+        None => insert_beside(text, &root, path, &format!("{} = {};", dotted(path), nix_string(value)))?,
+    };
+    parse(&new)?;
+    Ok(new)
+}
+
 /// Set a list-of-strings setting, adding it if it is absent.
 pub fn set_string_list(text: &str, path: &[&str], values: &[String]) -> Result<String> {
     let root = parse(text)?;
@@ -466,6 +508,33 @@ mod tests {
         let new = set_string_list(INSTALLED, &["yukimi", "packages"], &["htop".into()]).unwrap();
         assert!(new.contains("  system.stateVersion = \"26.11\";\n  yukimi.packages = [ \"htop\" ];\n}\n"), "{new}");
         assert_eq!(string_list(&new, &["yukimi", "packages"]).unwrap(), Some(vec!["htop".into()]));
+    }
+
+    #[test]
+    fn sets_a_string_choice_beside_its_siblings() {
+        let installed = "{ ... }:\n{\n  imports = [ ./hardware-configuration.nix ];\n  calamares.desktops = [ \"aizome\" \"gnome\" ];\n  calamares.defaultDesktop = \"aizome\";\n\n  networking.hostName = \"ganymede\";\n}\n";
+        // Absent: added after the last calamares.* setting, indented like it.
+        let new = set_string(installed, &["calamares", "loginScreen"], "aizome").unwrap();
+        assert!(
+            new.contains(
+                "  calamares.defaultDesktop = \"aizome\";\n  calamares.loginScreen = \"aizome\";\n\n  networking"
+            ),
+            "{new}"
+        );
+        assert_eq!(string_value(&new, &["calamares", "loginScreen"]).unwrap().as_deref(), Some("aizome"));
+        // Present: replaced in place.
+        let again = set_string(&new, &["calamares", "loginScreen"], "gdm").unwrap();
+        assert_eq!(again, new.replace("loginScreen = \"aizome\"", "loginScreen = \"gdm\""));
+        // No sibling: at the module's end.
+        let lone =
+            set_string("{ ... }:\n{\n  boot.loader.grub.enable = true;\n}\n", &["calamares", "loginScreen"], "auto")
+                .unwrap();
+        assert_eq!(lone, "{ ... }:\n{\n  boot.loader.grub.enable = true;\n  calamares.loginScreen = \"auto\";\n}\n");
+        // Not a plain string: refused.
+        assert_eq!(
+            set_string("{ ... }: { calamares.loginScreen = x; }", &["calamares", "loginScreen"], "gdm"),
+            Err(Error::NotAString("calamares.loginScreen".into()))
+        );
     }
 
     #[test]

@@ -221,6 +221,82 @@ in
     # input (the flake's nixosModules.desktops, or the media's reference
     # systems).
     programs.yukimi.enable = lib.mkDefault (selected != [ ]);
+    # What Yukimi may change of these after installing: the desktops, the
+    # default one and the login screen, to the values the installer offers.
+    programs.yukimi.choices =
+      let
+        titles = {
+          aizome = "Aizome";
+          plasma = "Plasma";
+          gnome = "GNOME";
+          xfce = "Xfce";
+          hyprland = "Hyprland";
+          tatami = "Tatami";
+          cinnamon = "Cinnamon";
+          mate = "MATE";
+          lxqt = "LXQt";
+        };
+        offered = [
+          "aizome"
+          "tatami"
+          "plasma"
+          "gnome"
+          "xfce"
+          "hyprland"
+        ];
+        # Those no longer offered stay choosable where they are installed.
+        desktops = offered ++ lib.filter (d: !lib.elem d offered) selected;
+        option = id: {
+          inherit id;
+          title = titles.${id};
+        };
+      in
+      [
+        {
+          setting = "calamares.desktops";
+          title = "Desktops";
+          many = true;
+          value = selected;
+          options = map option desktops;
+        }
+        {
+          setting = "calamares.defaultDesktop";
+          title = "Default desktop";
+          value = defaultDesktop;
+          within = "calamares.desktops";
+          options = map option desktops;
+        }
+        {
+          setting = "calamares.loginScreen";
+          title = "Login screen";
+          value = cfg.loginScreen;
+          options = [
+            {
+              id = "auto";
+              title = "Automatic";
+              detail = "GDM when GNOME is installed (GNOME locks its screen only under GDM), else Aizome's own when Aizome is, else Plasma Login.";
+            }
+          ]
+          ++ [
+            {
+              id = "aizome";
+              title = "Aizome";
+              needs = "calamares.desktops=aizome";
+              detail = "Aizome's own, listing every desktop. GNOME sessions have no lock screen under it.";
+            }
+            {
+              id = "gdm";
+              title = "GDM";
+              detail = "GNOME's.";
+            }
+            {
+              id = "plasma-login";
+              title = "Plasma Login";
+              detail = "KDE's.";
+            }
+          ];
+        }
+      ];
     assertions = [
       {
         assertion = selected != [ ] && lib.allUnique selected;

@@ -267,6 +267,44 @@ class Update(unittest.TestCase):
         self.assertIn('inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";', flake)
         self.assertIn('inputs.applications.follows = "sekka/applications";', flake)
 
+    def declare_choices(self):
+        # What the system's Nix module declares (programs.yukimi.choices).
+        (self.root / 'etc/yukimi').mkdir(exist_ok=True)
+        (self.root / 'etc/yukimi/system.json').write_text(json.dumps({'choices': [
+            {'setting': 'calamares.loginScreen', 'title': 'Login screen', 'value': 'gdm',
+             'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'gdm', 'title': 'GNOME'}]},
+            {'setting': 'calamares.desktops', 'title': 'Desktops', 'many': True, 'value': ['tatami'],
+             'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'tatami', 'title': 'Tatami'}]}]}))
+
+    def test_early_updates_and_declared_choices_in_one_update(self):
+        self.declare_choices()
+        self.compatible_live_system()
+        self.run_cmd('/bin/sekka-update', '--early', '--choose', 'calamares.loginScreen=aizome',
+                     '--choose', 'calamares.desktops=aizome,tatami')
+        self.assertIn('inputs.sekka.url = "github:bitemyapp/sekka?ref=main";', (self.config / 'flake.nix').read_text())
+        configuration = (self.config / 'configuration.nix').read_text()
+        self.assertIn('calamares.loginScreen = "aizome";', configuration)
+        self.assertIn('"aizome"', configuration.split('calamares.desktops', 1)[1].split(';', 1)[0])
+        self.assertIn('./hardware-configuration.nix', configuration)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        # Early updates stay chosen, and --nightly goes back.
+        self.run_cmd('/bin/sekka-update')
+        self.assertIn('"github:bitemyapp/sekka?ref=main"', (self.config / 'flake.nix').read_text())
+        self.run_cmd('/bin/sekka-update', '--nightly')
+        self.assertIn('"github:bitemyapp/sekka/nightly"', (self.config / 'flake.nix').read_text())
+
+    def test_only_declared_choices_and_values_are_written(self):
+        self.declare_choices()
+        for choice in ['services.openssh.enable=true', 'calamares.loginScreen=lightdm',
+                       'calamares.loginScreen=aizome,gdm', 'calamares.desktops=aizome,aizome',
+                       'calamares.loginScreen=$(reboot)']:
+            result = self.run_cmd('/bin/sekka-update', '--choose', choice, ok=False)
+            self.assertRegex(result.stderr, 'choice|one value|chosen twice|valid')
+        self.run_cmd('/bin/sekka-update', '--early', '--nightly', ok=False)
+        self.unchanged()
+        self.assertFalse((self.root / 'state/building').exists())
+
     def test_no_update_without_room_for_it(self):
         self.compatible_live_system()
         tiny = self.base[:self.base.index('--proc')] + ['--size', '1048576', '--tmpfs', '/tmp'] + self.base[self.base.index('--proc'):]

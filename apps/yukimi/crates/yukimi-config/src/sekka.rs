@@ -27,9 +27,21 @@ pub fn supported(text: &str) -> bool {
 /// `main` moves first, so a system following it could compile them itself.
 pub const NIGHTLY: &str = "github:bitemyapp/sekka/nightly";
 
+/// Early updates: Sekka's `main`, chosen on purpose (Yukimi's Updates page,
+/// `sekka-update --early`): every change as soon as it's merged, before the
+/// nightly checks, and what isn't in the binary cache yet builds here.
+/// Written with `?ref=` so it reads as a choice, unlike `/main`, which
+/// installations once followed by default and [`prepare`] moves to nightly.
+pub const EARLY: &str = "github:bitemyapp/sekka?ref=main";
+
+/// Whether a Sekka address is the early-updates choice.
+pub fn early(url: &str) -> bool {
+    url == EARLY
+}
+
 /// Return the flake to update. A system following `main` (or the default
-/// branch) follows `nightly` instead; other Sekka branches and pins stay as
-/// chosen. Inputs at the addresses Sekka's installations have always used
+/// branch) by default follows `nightly` instead; early updates ([`EARLY`]),
+/// other Sekka branches and pins stay as chosen. Inputs at the addresses Sekka's installations have always used
 /// then follow Sekka's own ([`follow_sekka`]).
 pub fn prepare(text: &str) -> Result<String, String> {
     let text = if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
@@ -322,6 +334,15 @@ mod tests {
             let text = nightly.replace(NIGHTLY, main);
             assert_eq!(prepare(&text).unwrap(), nightly, "{main}");
         }
+    }
+
+    #[test]
+    fn early_updates_stay_chosen() {
+        let nightly = prepare(OLD).unwrap();
+        let early = nightly.replace(NIGHTLY, EARLY);
+        assert_eq!(prepare(&early).unwrap(), early);
+        assert!(super::early(EARLY) && !super::early(NIGHTLY) && !super::early("github:bitemyapp/sekka/main"));
+        assert_eq!(crate::branch::of(EARLY).as_deref(), Some("main"));
     }
 
     #[test]
