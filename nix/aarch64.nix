@@ -75,6 +75,8 @@ in
       assert !(builtins.elem "nvidia" c.services.xserver.videoDrivers);
       assert c.services.qemuGuest.enable && c.services.spice-vdagentd.enable;
       assert c.environment.sessionVariables.GSK_RENDERER == "gl";
+      assert builtins.elem "video=Unknown-1:d" c.boot.kernelParams;
+      assert builtins.elem "graphical-session.target" c.systemd.user.services.spice-vdagent.wantedBy;
       assert !c.respin.cacheApplications;
       pkgs.writeText "sekka-utm-profile.json" (
         builtins.toJSON {
