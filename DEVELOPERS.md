@@ -864,6 +864,19 @@ Retention keeps seven revisions, including every architecture within them.
 Each ISO has its own checksum file, so checking one download does not require
 also downloading the other architecture.
 
+Focused publication checks run without bucket credentials or host binfmt changes:
+
+```sh
+nix build .#checks.x86_64-linux.nightly-assets .#checks.x86_64-linux.nightly-workflow \
+  .#checks.x86_64-linux.arm-emulation .#site --no-update-lock-file
+```
+
+`arm-emulation` registers static QEMU only inside a disposable x86 VM, then
+runs native ARM binaries as an untrusted user through the guest's sandboxed
+Nix daemon. It does not configure the workstation. See the
+[2026-10-20 validation record](docs/testing-aarch64-nightly.md) for the checks
+actually run and the remaining deployment steps.
+
 `downloads.sekka.computer` is the bucket's custom domain, served through
 Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
 always come from R2, whose egress is free. A build's files are marked
