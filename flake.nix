@@ -24,10 +24,13 @@
   # (checks.binary-cache).
   nixConfig = {
     extra-substituters = [
+      # Bootstrap the pinned Determinate Nix on builders using stock Nix.
+      "https://install.determinate.systems"
       "https://cache.sekka.computer"
       "https://cache.numtide.com?priority=55"
     ];
     extra-trusted-public-keys = [
+      "cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM="
       "cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y="
       "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
     ];

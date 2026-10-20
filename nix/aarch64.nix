@@ -79,7 +79,7 @@ in
       pkgs.writeText "sekka-utm-profile.json" (
         builtins.toJSON {
           inherit system;
-          image = c.system.build.isoImage.drvPath;
+          image = builtins.unsafeDiscardStringContext c.system.build.isoImage.drvPath;
           applications = map (a: a.id) catalog.catalog;
         }
       );

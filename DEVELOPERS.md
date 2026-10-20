@@ -72,7 +72,9 @@ The experimental ARM output is `packages.aarch64-linux.utm-iso` (also `iso`
 and `default` on that architecture). Build it on native aarch64 Linux with
 Nix and flakes enabled, including a Linux VM on an Apple silicon Mac. macOS
 itself cannot build Linux derivations. The existing x86_64 outputs keep their
-names and behaviour.
+names and behaviour. Accept the root flake’s signed cache settings on a trusted
+builder (`--accept-flake-config`); its public Determinate bootstrap cache serves
+the exact pinned ARM Nix binaries, avoiding a source build of Nix and Wasmtime.
 
 ```sh
 nix build .#packages.aarch64-linux.utm-iso --no-update-lock-file --out-link result-utm
@@ -689,7 +691,9 @@ check.
 
 ## Releases
 
-`.github/workflows/release.yml` builds and publishes an ISO. Its only trigger
+`.github/workflows/release.yml` retains the release steps, but its job is
+inhibited with `if: ${{ false }}`. Do not enable it without explicit maintainer
+authorization. Its only declared trigger
 is a manual dispatch from `main`, naming an existing `v`-prefixed tag whose
 commit is reachable from `main`:
 

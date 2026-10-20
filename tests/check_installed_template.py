@@ -6,12 +6,15 @@ cargo build --locked --manifest-path installer/genkan/tests/vm-fixture/Cargo.tom
 python3 tests/check_installed_template.py
 """
 import json
+import os
+import platform
 from pathlib import Path
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / '.work/fixture-target/debug/calamares-vm-fixture'
+FIXTURE = Path(os.environ.get('GENKAN_VM_FIXTURE', ROOT / '.work/fixture-target/debug/calamares-vm-fixture'))
+SYSTEM = {'arm64': 'aarch64-linux', 'aarch64': 'aarch64-linux', 'x86_64': 'x86_64-linux'}[platform.machine()]
 
 
 def command(*args):
@@ -32,8 +35,18 @@ with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as director
     (target / 'hardware-configuration.nix').write_text('{ ... }: {}\n')
     for name in ['plasma', 'tatami', 'gnome-xfce']:
         (target / 'configuration.nix').write_text(cases[name])
-        derivation = command('nix', 'eval', '--no-update-lock-file', '--raw',
-                             f'path:{target}#nixosConfigurations.sekka-test.config.system.build.toplevel.drvPath')
+        host = json.loads(command('nix', 'eval', '--no-update-lock-file', '--json',
+            f'path:{target}#nixosConfigurations.sekka-test', '--apply',
+            'host: { system = host.pkgs.stdenv.hostPlatform.system; '
+            'derivation = host.config.system.build.toplevel.drvPath; '
+            'alsa32 = host.config.services.pipewire.alsa.support32Bit; '
+            'qemu = host.config.services.qemuGuest.enable; '
+            'spice = host.config.services.spice-vdagentd.enable; }'))
+        derivation = host['derivation']
         assert derivation.endswith('.drv'), derivation
+        assert host['system'] == SYSTEM, host
+        assert host['alsa32'] == (SYSTEM == 'x86_64-linux'), host
+        if SYSTEM == 'aarch64-linux':
+            assert host['qemu'] and host['spice'], host
         assert (target / 'flake.lock').read_text() == lock
-        print(f'PASS: installed template, backend validator, unchanged lock, {name}: {derivation}')
+        print(f'PASS: installed template, native {SYSTEM}, backend validator, unchanged lock, {name}: {derivation}')
