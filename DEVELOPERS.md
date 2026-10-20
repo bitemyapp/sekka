@@ -90,21 +90,28 @@ or `virtio-ramfb-gl`, with auto resolution enabled. Shared networking needs
 no inbound port forwards. Do not attach host disks to installer tests.
 In UTM 5's macOS **Settings → Display**, select **Apple Core OpenGL** as the
 renderer backend; this is the tested path and exposes OpenGL 4.1 through
-VirGL. Auto resolution follows the UTM window size; enlarging that window
-provides more room for the installer and desktop.
+VirGL. In Plasma, auto resolution follows the UTM window size; enlarging that
+window provides more room for the installer and desktop. Tatami signs in with
+accelerated graphics but keeps its startup resolution when that window changes
+size. Use Plasma when automatic resizing matters.
 
 The guest module `nixosModules.utm` enables VirtIO drivers, the QEMU guest
 agent and a session-bound SPICE agent, and asks GTK to use GL. It disables
 the firmware framebuffer's `Unknown-1` output: with `virtio-ramfb-gl`, that
 otherwise becomes a hidden primary monitor and receives installer windows.
-The real `Virtual-1` output retains native VirtIO mode changes when the UTM
-window resizes. UTM's current documentation
+The real `Virtual-1` output remains enabled. UTM's current documentation
 [recommends VirGL for Linux desktops](https://docs.getutm.app/guest-support/linux/#graphics-acceleration);
 its Vulkan/Venus path has desktop-rendering limitations. Check the actual
 renderer with `glxinfo -B` in the live session: it should name `virgl`,
 with accelerated rendering, rather than `llvmpipe`. A boot alone does not
 establish smooth interaction. Exercise windows, typing, scrolling, resize,
 clipboard, audio, shutdown, and host sleep/resume on the actual Mac.
+
+The pinned SPICE session agent is X11-based. Host-to-guest text paste works
+in Plasma, but native Wayland guest-to-host copy is not reliable. Do not
+bridge every native selection through `xclip`: KWin imports that owner back
+into Wayland, replacing HTML and file-copy formats with plain text. Do not
+advertise bidirectional Wayland clipboard or image/file transfer as tested.
 
 The live desktop is Plasma. Plasma and Tatami installed systems are prebuilt;
 other desktops and optional apps remain available online. Unlike the full PC
@@ -123,6 +130,10 @@ VM to that nightly can also remove the required ARM module. Keep the release
 workflow inhibited. Component builds, ISO construction, UTM installation and
 reboot, performance observations, and physical hardware tests are separate
 validation claims.
+
+The [native ARM UTM validation report](docs/testing-aarch64-utm.md) records the
+exact image, component checks, disposable-disk installation, desktop checks,
+performance observations and limits from the 2026-10-19 test run.
 
 ## Sources and installed-system updates
 
