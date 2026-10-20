@@ -32,6 +32,14 @@
   # UTM 5's Venus path cannot yet render Linux desktops correctly. GTK 4's
   # default Vulkan renderer must use GL, while Mesa chooses VirGL for VirtIO.
   environment.sessionVariables.GSK_RENDERER = lib.mkDefault "gl";
+  # The service below owns startup in every desktop, including those that do
+  # not honor X-systemd-skip in the package's autostart file.
+  environment.etc."xdg/autostart/spice-vdagent.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=SPICE desktop integration
+    Hidden=true
+  '';
   # Plasma's systemd session skips the package's XDG autostart entry. The
   # system daemon alone cannot bridge the user's clipboard to SPICE.
   systemd.user.services.spice-vdagent = {
