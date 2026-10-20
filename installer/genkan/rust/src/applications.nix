@@ -148,6 +148,30 @@ in
       }
     ];
     environment.systemPackages = packages ++ launchers ++ zedCli;
+    # Rustup's default profile omits editor support. Prepare it for each
+    # person, including GUI-only users, and retry if the first login is offline.
+    systemd.user.services.sekka-rust-tools = lib.mkIf (has "rustup") {
+      description = "Prepare Rust toolchain and editor support";
+      wantedBy = [ "default.target" ];
+      unitConfig = {
+        ConditionUser = "!@system";
+        StartLimitIntervalSec = 0;
+      };
+      serviceConfig = {
+        # Consider startup complete once the helper executes, so downloads
+        # cannot hold up the user's default.target or desktop services.
+        Type = "exec";
+        RemainAfterExit = true;
+        ExecStart = lib.getExe (
+          pkgs.callPackage ../system/rust-tools/package.nix {
+            rustup = applicationPkgs.rustup;
+          }
+        );
+        Restart = "on-failure";
+        RestartSec = "60s";
+        TimeoutStartSec = "infinity";
+      };
+    };
     environment.etc."installer-applications.json".text = builtins.toJSON {
       selected = ids;
       packages = map (package: {

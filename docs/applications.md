@@ -50,9 +50,18 @@ hooks itself when its filter first runs there.
 
 Selecting Rustup also selects and locks the build-tools checkbox. Deselecting
 Rustup makes that checkbox optional again. Nixpkgs provides the NixOS-compatible
-Rustup wrapper. Run `rustup default stable` after installation to download a
-toolchain. Rustup is intentionally not accompanied by a conflicting system-wide
-`rustc`/`cargo` package.
+Rustup wrapper. At login, Sekka downloads a stable toolchain for a new Rustup
+account, including `rust-analyzer` and `rust-src` for editor completion and
+standard-library navigation. The first setup needs an internet connection and
+retries if it fails; it does not block the desktop. Reopen an editor that was
+started before setup finished.
+
+Existing default toolchains receive the two editor components without a compiler
+update. Explicit minimal profiles, linked custom toolchains, and accounts with
+no default configured are left alone. Project-specific toolchains remain the
+project's responsibility. Rustup is intentionally not accompanied by a conflicting
+system-wide `rustc`/`cargo` package. Setup status is available with
+`systemctl --user status sekka-rust-tools`.
 
 Superluminal and Tracy are profilers packaged by other flakes, which Sekka
 takes as inputs and builds with the applications' Nixpkgs; the catalog lists

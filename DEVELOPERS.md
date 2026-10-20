@@ -68,6 +68,19 @@ Before publishing an installable image, exercise the exact image through a dispo
 
 ## Sources and installed-system updates
 
+Selecting Rustup enables `sekka-rust-tools.service` in each regular user's service
+manager. Its helper (`installer/genkan/rust/system/rust-tools/`) initializes stable
+with `rust-analyzer` and `rust-src` for new accounts and repairs existing default
+toolchains without updating them. It preserves minimal profiles, linked toolchains
+and explicitly unset defaults. A pending marker in the Rustup home keeps failed
+initial downloads retryable even after Rustup writes settings. The service retries
+failures every minute and never runs as a system account or in the installer.
+Disable it through `systemd.user.services.sekka-rust-tools.enable = false` to manage
+all toolchain components yourself. Project overrides are outside its scope.
+`nix build .#checks.x86_64-linux.rust-tools` checks selection, service policy and
+account/retry behaviour. The disk-booted VM's `tests/applications-runtime.sh` checks
+the real toolchain, analyzer executable and standard-library sources.
+
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
 ChatGPT Desktop 26.1013.40934 copies `codex-app-tools` from the Nix store

@@ -6,6 +6,8 @@ test "$(id -un)" = rusttest
 test "$(id -u)" = 1000
 test "$(findmnt -n -o FSTYPE /)" != tmpfs
 test -f /etc/installer-applications.json
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -57,8 +59,18 @@ cmp blob.bin lfs-clone/blob.bin
 printf '%s\n' 'PASS Git LFS'
 
 # A real freshly installed Rust toolchain, linking a compiled C library.
-rustup default stable
+systemctl --user start sekka-rust-tools
+# Type=exec lets login finish while setup downloads in the background.
+# Wait here before using the compiler, with a bounded failure for the VM check.
+timeout 600 bash -c '
+  until test "$(systemctl --user show sekka-rust-tools -p SubState --value)" = exited; do
+    sleep 1
+  done
+'
 rustup show
+rust-analyzer --version
+rust-analyzer --help >/dev/null
+test -f "$(rustc --print sysroot)/lib/rustlib/src/rust/library/core/src/lib.rs"
 cargo new native-link
 cd native-link
 cat > answer.c <<'EOF'
@@ -86,8 +98,6 @@ printf '%s\n' 'PASS Rustup stable, Cargo and native C linkage'
 cd "$work"
 
 # Exercise rootless networking, execution and the Compose plugin as the user.
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 test "${DOCKER_HOST:-}" = "unix://$XDG_RUNTIME_DIR/docker.sock"
 systemctl --user is-active docker
 if id -nG | tr ' ' '\n' | grep -qx docker; then
