@@ -236,9 +236,16 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
 
 /// On a Sekka system, where updating takes Sekka: the newest commit of its
 /// `nightly` branch, which the update follows instead of `main`. Sekka on
-/// another branch, or pinned, keeps its answer. Inputs that follow Sekka's
-/// own move with it, and aren't checked by themselves.
-pub fn sekka_targets(inputs: &[Input], newest: &mut BTreeMap<String, Result<Release, String>>) {
+/// another branch, or pinned, keeps its answer, and so does Sekka's `main`
+/// chosen for early updates (`flake`, the text of `flake.nix`, says
+/// [`yukimi_config::sekka::EARLY`]), which the update keeps: the lock can't
+/// tell that from the `main` it moves to the nightly. Inputs that follow
+/// Sekka's own move with it, and aren't checked by themselves.
+pub fn sekka_targets(flake: &str, inputs: &[Input], newest: &mut BTreeMap<String, Result<Release, String>>) {
+    let address = yukimi_config::edit::string_value(flake, &["inputs", "sekka", "url"]).ok().flatten();
+    if address.as_deref().is_some_and(yukimi_config::sekka::early) {
+        return;
+    }
     let Some(original) = inputs.iter().find(|i| i.name == "sekka").and_then(|i| i.original.as_ref()) else {
         return;
     };
@@ -395,6 +402,22 @@ mod tests {
         assert!(ask(&lock.input("b").unwrap()).is_none());
     }
 
+    #[test]
+    fn early_updates_keep_mains_answer() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka" } },
+              "sekka": { "locked": { "type": "github", "owner": "bitemyapp", "repo": "sekka", "rev": "1", "narHash": "sha256-y", "lastModified": 1 },
+                         "original": { "type": "github", "owner": "bitemyapp", "repo": "sekka", "ref": "main" } } } }"#,
+        )
+        .unwrap();
+        let main = Release { rev: Some("2".repeat(40)), last_modified: Some(2), ..Release::default() };
+        let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(main.clone()))]);
+        let flake = format!("{{ inputs.sekka.url = \"{}\"; outputs = _: {{ }}; }}", yukimi_config::sekka::EARLY);
+        sekka_targets(&flake, &lock.inputs(), &mut newest);
+        assert_eq!(newest["sekka"], Ok(main));
+    }
+
     /// Asks GitHub; run with `cargo test -- --ignored` when online.
     #[test]
     #[ignore]
@@ -412,7 +435,7 @@ mod tests {
         .unwrap();
         let inputs = lock.inputs();
         let mut newest = BTreeMap::new();
-        sekka_targets(&inputs, &mut newest);
+        sekka_targets("{ inputs.sekka.url = \"github:bitemyapp/sekka/main\"; }", &inputs, &mut newest);
         let sekka = newest["sekka"].as_ref().unwrap();
         assert_eq!(sekka.rev.as_deref().map(str::len), Some(40));
     }
