@@ -469,6 +469,10 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        aizome-login = import ./nix/aizome-login-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         display-recovery-vm = import ./nix/display-recovery-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;
