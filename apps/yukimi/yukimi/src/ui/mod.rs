@@ -135,10 +135,10 @@ fn run_check(model: &Model) -> Result<UpdateCheck, String> {
             std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
             let mut answers = yukimi_system::updates::check_flake(&model.setup.flake(), &model.inputs, &scratch);
             let _ = std::fs::remove_dir_all(&scratch);
-            if std::fs::read_to_string(model.setup.dir.join("flake.nix"))
-                .is_ok_and(|text| yukimi_config::sekka::supported(&text))
+            if let Ok(text) = std::fs::read_to_string(model.setup.dir.join("flake.nix"))
+                && yukimi_config::sekka::supported(&text)
             {
-                yukimi_system::updates::sekka_targets(&model.inputs, &mut answers);
+                yukimi_system::updates::sekka_targets(&text, &model.inputs, &mut answers);
             }
             answers
         }
