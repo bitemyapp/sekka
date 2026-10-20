@@ -354,6 +354,7 @@
                   })
                   inputs.tatami.nixosModules.default
                   inputs.yukimi.nixosModules.default
+                  inputs.aizome.nixosModules.default
                   {
                     calamares.nvidia = {
                       enable = true;

@@ -2,7 +2,10 @@
 { inputs }:
 let
   system = "x86_64-linux";
-  catalog = builtins.fromJSON (builtins.readFile "${inputs.calamares}/rust/src/applications.json");
+  # Genkan's source as a path: reading through it needs no store copy (see
+  # nix/calamares.nix).
+  genkan = inputs.calamares.outPath;
+  catalog = builtins.fromJSON (builtins.readFile (genkan + "/rust/src/applications.json"));
   specialArgs = {
     applicationPkgs = import inputs.applications {
       inherit system;
@@ -38,7 +41,7 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
-  withKeyring = import "${inputs.calamares}/rust/src/keyring.nix" {
+  withKeyring = import (genkan + "/rust/src/keyring.nix") {
     inherit (inputs.nixpkgs) lib;
     pkgs = specialArgs.applicationPkgs;
   };
