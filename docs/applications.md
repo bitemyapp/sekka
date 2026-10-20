@@ -98,8 +98,11 @@ Chromium, Chrome, ChatGPT, Claude, VS Code, Obsidian, Discord and Slack start wi
 (`installer/genkan/rust/src/keyring.nix`). They keep a sign-in across launches
 and logins, and what they sealed with the fixed key still opens.
 
-- **Signal** is left out: it records the keyring it used and stops if that
-  changes.
+- **Signal** records the keyring it used and won't open its messages if that
+  changes, so it starts with the keyring its profile records, in any desktop.
+  A profile made in Plasma keeps KWallet in Aizome. New profiles use GNOME
+  Keyring everywhere, Plasma included. The launcher never moves or rewrites
+  the key.
 - **Bitwarden** reaches the keyring by itself.
 - **The ISO:** its per-application closures carry the same wrapped packages, so
   offline installations find them on the medium.
