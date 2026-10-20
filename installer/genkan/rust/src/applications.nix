@@ -14,7 +14,7 @@
   ...
 }:
 let
-  catalog = builtins.fromJSON (builtins.readFile ./applications.json);
+  catalog = import ./application-catalog.nix { system = pkgs.stdenv.hostPlatform.system; };
   ids = config.calamares.applications;
   has = id: builtins.elem id ids;
   selected = builtins.filter (app: has app.id) catalog;
@@ -53,9 +53,11 @@ let
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
   # workflows invoke it as `zed`. Expose the expected command whenever the
   # editor is selected in the installer.
-  zedCli = lib.optional (has "zed") (pkgs.writeShellScriptBin "zed" ''
-    exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
-  '');
+  zedCli = lib.optional (has "zed") (
+    pkgs.writeShellScriptBin "zed" ''
+      exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
+    ''
+  );
   launchers = map (
     app:
     pkgs.makeDesktopItem {
@@ -109,7 +111,7 @@ in
       config = lib.optionalAttrs (options ? programs.yukimi.catalogs) {
         programs.yukimi.catalogs = [
           {
-            file = ./applications.json;
+            file = pkgs.writeText "installer-application-catalog.json" (builtins.toJSON catalog);
             setting = "calamares.applications";
             title = "Apps chosen when installing";
           }

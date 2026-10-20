@@ -83,6 +83,10 @@
           ./modules/installer.nix
         ];
       };
+      arm = import ./nix/aarch64.nix {
+        inherit inputs installedLock;
+        sekkaSource = self.outPath;
+      };
       etc = installer.config.environment.etc;
       liveConfigs = [
         installer.config
@@ -104,6 +108,7 @@
         applications = inputs.calamares.nixosModules.applications;
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
+        utm = ./modules/utm.nix;
       };
       lib = {
         inherit installedLock;
@@ -128,6 +133,27 @@
         };
       };
       nixosConfigurations.installer = installer;
+      nixosConfigurations.installer-aarch64 = arm.installer;
+      packages.aarch64-linux = arm.packages;
+      checks.aarch64-linux = arm.checks;
+      devShells.aarch64-linux.default = nixpkgs.legacyPackages.aarch64-linux.mkShell {
+        inputsFrom = [
+          arm.packages.genkan
+          arm.packages.yukimi
+        ];
+        packages = with nixpkgs.legacyPackages.aarch64-linux; [
+          cargo
+          rustc
+          clippy
+          rustfmt
+          nixfmt
+          python3
+        ];
+      };
+      apps.aarch64-linux.update = {
+        type = "app";
+        program = "${arm.packages.yukimi}/bin/sekka-update";
+      };
       apps.${system} = {
         update = {
           type = "app";
@@ -579,5 +605,6 @@
           '';
       };
       formatter.${system} = pkgs.nixfmt;
+      formatter.aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt;
     };
 }

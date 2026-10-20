@@ -41,6 +41,9 @@ pub struct Application {
     /// Other applications this one selects too.
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Nix systems supported by the application. Omitted for portable entries.
+    #[serde(default)]
+    pub systems: Option<Vec<String>>,
     /// For applications from a system's catalog, the setting that installs
     /// them, such as `calamares.applications`.
     #[serde(skip)]
@@ -48,6 +51,10 @@ pub struct Application {
 }
 
 impl Application {
+    fn supports(&self, system: &str) -> bool {
+        self.systems.as_ref().is_none_or(|systems| systems.iter().any(|supported| supported == system))
+    }
+
     /// The names its packages and program go by in a store path: what to
     /// look for in the running system to tell whether it is installed.
     pub fn names(&self) -> Vec<&str> {
@@ -84,11 +91,32 @@ pub fn needing_system<'a>(catalog: &'a [Application], attr: &str) -> Option<&'a 
 
 /// Yukimi's own catalog.
 pub fn own() -> Vec<Application> {
-    parse(include_str!("../data/applications.json")).unwrap_or_default()
+    own_for_system(target_system())
 }
 
 pub fn parse(text: &str) -> Option<Vec<Application>> {
-    serde_json::from_str(text).ok()
+    parse_for_system(text, target_system())
+}
+
+fn target_system() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "aarch64-linux"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64-linux"
+    } else {
+        // Entries without a platform restriction remain useful on other
+        // NixOS architectures when Yukimi is used on its own.
+        "unsupported-linux"
+    }
+}
+
+fn own_for_system(system: &str) -> Vec<Application> {
+    parse_for_system(include_str!("../data/applications.json"), system).unwrap_or_default()
+}
+
+fn parse_for_system(text: &str, system: &str) -> Option<Vec<Application>> {
+    let apps: Vec<Application> = serde_json::from_str(text).ok()?;
+    Some(apps.into_iter().filter(|app| app.supports(system)).collect())
 }
 
 /// Yukimi's catalog and the system's, with the system's entries in place of
@@ -97,13 +125,18 @@ pub fn parse(text: &str) -> Option<Vec<Application>> {
 /// keeps that program, and what it needs: the system's setting installs
 /// Steam, and Steam still can't be installed as its package alone.
 pub fn load(sources: &[CatalogSource]) -> Vec<Application> {
+    load_for_system(sources, target_system())
+}
+
+fn load_for_system(sources: &[CatalogSource], system: &str) -> Vec<Application> {
     let mut theirs: Vec<Application> = Vec::new();
     for source in sources {
         let setting = source.setting.clone();
         if setting.as_deref().is_some_and(|s| !valid_setting(s)) {
             continue;
         }
-        let Some(apps) = std::fs::read_to_string(&source.file).ok().and_then(|text| parse(&text)) else {
+        let Some(apps) = std::fs::read_to_string(&source.file).ok().and_then(|text| parse_for_system(&text, system))
+        else {
             continue;
         };
         theirs.extend(
@@ -113,7 +146,7 @@ pub fn load(sources: &[CatalogSource]) -> Vec<Application> {
     let same = |a: &Application, b: &Application| {
         a.name.eq_ignore_ascii_case(&b.name) || (!a.packages.is_empty() && a.packages.first() == b.packages.first())
     };
-    let own = own();
+    let own = own_for_system(system);
     for app in theirs.iter_mut().filter(|a| a.program.is_none()) {
         if let Some(mine) = own.iter().find(|mine| mine.program.is_some() && same(mine, app)) {
             app.program = mine.program.clone();
@@ -142,7 +175,7 @@ mod tests {
 
     #[test]
     fn own_catalog_is_sound() {
-        let apps = own();
+        let apps = own_for_system("x86_64-linux");
         assert!(apps.len() >= 40, "{}", apps.len());
         for app in &apps {
             assert!(valid_id(&app.id), "{}", app.id);
@@ -174,7 +207,7 @@ mod tests {
             setting: Some("calamares.applications".into()),
             title: None,
         }];
-        let apps = load(&sources);
+        let apps = load_for_system(&sources, "x86_64-linux");
         let _ = std::fs::remove_dir_all(&dir);
         apps
     }
@@ -198,7 +231,7 @@ mod tests {
 
     #[test]
     fn a_programs_package_belongs_to_its_application() {
-        let apps = own();
+        let apps = own_for_system("x86_64-linux");
         let steam = needing_system(&apps, "steam").expect("Steam's package needs its program");
         assert_eq!(steam.id, "steam");
         assert_eq!(steam.program.as_deref(), Some("steam"));
@@ -209,7 +242,7 @@ mod tests {
 
     #[test]
     fn ordinary_packages_install_on_their_own() {
-        let apps = own();
+        let apps = own_for_system("x86_64-linux");
         // Catalog applications without a program, Steam's relatives, and
         // packages the catalog doesn't know.
         for attr in
@@ -233,14 +266,14 @@ mod tests {
         assert_eq!(steam.setting.as_deref(), Some("calamares.applications"));
         assert_eq!(steam.category, "Gaming");
         assert_eq!(steam.program.as_deref(), Some("steam"));
-        assert_eq!(steam.needs, own().into_iter().find(|a| a.id == "steam").unwrap().needs);
+        assert_eq!(steam.needs, own_for_system("x86_64-linux").into_iter().find(|a| a.id == "steam").unwrap().needs);
         assert!(needing_system(&apps, "firefox").is_none());
         assert!(apps.iter().find(|a| a.id == "firefox").is_some_and(|a| a.program.is_none()));
     }
 
     #[test]
     fn searches_name_applications() {
-        let apps = own();
+        let apps = own_for_system("x86_64-linux");
         let found = |query: &str| apps.iter().filter(|a| a.matches(query)).map(|a| a.id.as_str()).collect::<Vec<_>>();
         assert_eq!(found("steam"), ["steam"]);
         assert_eq!(found(" STEAM "), ["steam"]);
@@ -249,5 +282,33 @@ mod tests {
         assert_eq!(found("editor"), ["zed"]);
         assert!(found("eam").is_empty(), "not at the start of a word");
         assert!(found("s").is_empty() && found("  ").is_empty());
+    }
+
+    #[test]
+    fn platform_limits_apply_to_built_in_and_system_catalogs() {
+        let arm = own_for_system("aarch64-linux");
+        let x86 = own_for_system("x86_64-linux");
+        for id in ["discord", "slack", "spotify", "steam"] {
+            assert!(x86.iter().any(|app| app.id == id));
+            assert!(!arm.iter().any(|app| app.id == id));
+        }
+        assert!(arm.iter().any(|app| app.id == "firefox"));
+        let fixture = r#"[
+            {"id":"portable","name":"Portable","description":"","category":"Tests"},
+            {"id":"restricted","name":"Restricted","description":"","category":"Tests","systems":["x86_64-linux"]}
+        ]"#;
+        assert_eq!(
+            parse_for_system(fixture, "aarch64-linux").unwrap().iter().map(|app| app.id.as_str()).collect::<Vec<_>>(),
+            ["portable"]
+        );
+        assert_eq!(parse_for_system(fixture, "x86_64-linux").unwrap().len(), 2);
+        assert_eq!(own(), own_for_system(target_system()));
+    }
+
+    #[test]
+    fn platform_filter_does_not_reintroduce_unsupported_built_in_apps() {
+        let apps = load_for_system(&[], "aarch64-linux");
+        assert!(!apps.iter().any(|app| app.id == "steam"));
+        assert!(apps.iter().any(|app| app.id == "localsend"));
     }
 }

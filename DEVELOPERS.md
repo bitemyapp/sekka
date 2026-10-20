@@ -24,7 +24,7 @@ Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outsi
 
 ## Build and check
 
-Use x86_64 Linux with Nix and flakes enabled. The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
+Use x86_64 Linux with Nix and flakes enabled for the PC image. The focused UTM image builds natively on aarch64 Linux; see [UTM on Apple silicon](#utm-on-apple-silicon). The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
 
 ```sh
 nix develop
@@ -65,6 +65,54 @@ Do not merge unrelated Cargo workspaces or broaden package source filters as par
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
+
+## UTM on Apple silicon
+
+The experimental ARM output is `packages.aarch64-linux.utm-iso` (also `iso`
+and `default` on that architecture). Build it on native aarch64 Linux with
+Nix and flakes enabled, including a Linux VM on an Apple silicon Mac. macOS
+itself cannot build Linux derivations. The existing x86_64 outputs keep their
+names and behaviour.
+
+```sh
+nix build .#packages.aarch64-linux.utm-iso --no-update-lock-file --out-link result-utm
+nix build .#checks.aarch64-linux.utm-profile .#checks.aarch64-linux.native-installer \
+  .#checks.aarch64-linux.yukimi .#checks.aarch64-linux.tatami --no-update-lock-file
+```
+
+Use UTM's **Virtualize → Linux** flow, with the **QEMU** backend (leave
+**Use Apple Virtualization** off). Choose aarch64, UEFI, six CPU cores,
+12 GiB RAM, a 64 GiB or larger disposable VirtIO disk, and the built ISO.
+Enable hardware OpenGL acceleration: the display must be `virtio-gpu-gl-pci`
+or `virtio-ramfb-gl`, with auto resolution enabled. Shared networking needs
+no inbound port forwards. Do not attach host disks to installer tests.
+
+The guest module `nixosModules.utm` enables VirtIO drivers, the QEMU guest
+agent and SPICE agent, and asks GTK to use GL. UTM's current documentation
+[recommends VirGL for Linux desktops](https://docs.getutm.app/guest-support/linux/#graphics-acceleration);
+its Vulkan/Venus path has desktop-rendering limitations. Check the actual
+renderer with `glxinfo -B` in the live session: it should name `virgl`,
+with accelerated rendering, rather than `llvmpipe`. A boot alone does not
+establish smooth interaction. Exercise windows, typing, scrolling, resize,
+clipboard, audio, shutdown, and host sleep/resume on the actual Mac.
+
+The live desktop is Plasma. Plasma and Tatami installed systems are prebuilt;
+other desktops and optional apps remain available online. Unlike the full PC
+image, this image omits the complete optional-application cache and its closure
+lists. Catalog `systems` restrictions are shared by Genkan's GUI/helper, the
+Nix module and Yukimi. Unsupported x86 applications are not offered on ARM.
+The generated installed flake takes its system from the native installer's
+compile target, and imports the UTM module for ARM. It retains the exact media
+source and dependency lock. Intel/AMD CPU microcode, NVIDIA's PC driver and
+32-bit ALSA are omitted on ARM.
+
+The public nightly and binary-cache jobs still target x86_64. ARM is a local
+source-build preview; do not claim that ARM updates download entirely from
+Sekka's cache. Until this support reaches the nightly, updating the development
+VM to that nightly can also remove the required ARM module. Keep the release
+workflow inhibited. Component builds, ISO construction, UTM installation and
+reboot, performance observations, and physical hardware tests are separate
+validation claims.
 
 ## Sources and installed-system updates
 

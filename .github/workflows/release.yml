@@ -21,7 +21,8 @@ jobs:
     # triggers. It runs on the sandboxed builder (nix/runner.nix and
     # DEVELOPERS.md), one fresh container per job, with Nix through the
     # host's daemon.
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    # Publication stays inhibited until explicitly enabled by the maintainer.
+    if: ${{ false }}
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     permissions:

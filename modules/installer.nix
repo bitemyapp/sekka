@@ -15,10 +15,15 @@ let
     source = inputs.calamares;
   };
   diagnostics = import ../nix/live-diagnostics.nix { inherit pkgs; };
-  applicationCatalog = import ../nix/applications.nix { inherit inputs; };
+  applicationCatalog = import ../nix/applications.nix {
+    inherit inputs;
+    system = pkgs.stdenv.hostPlatform.system;
+  };
   references = import ../nix/reference-systems.nix {
     inherit inputs applicationCatalog;
+    system = pkgs.stdenv.hostPlatform.system;
     desktops = config.respin.referenceDesktops;
+    cacheApplications = config.respin.cacheApplications;
   };
   settings =
     kernel:
@@ -132,19 +137,18 @@ in
     hardware.enableRedistributableFirmware = true;
     # Universal media can carry both bundles; early boot applies only the update
     # matching the CPU. Installed systems use upstream vendor detection.
-    hardware.cpu.intel.updateMicrocode = true;
-    hardware.cpu.amd.updateMicrocode = true;
+    hardware.cpu.intel.updateMicrocode = pkgs.stdenv.hostPlatform.isx86_64;
+    hardware.cpu.amd.updateMicrocode = pkgs.stdenv.hostPlatform.isx86_64;
     # NVIDIA's own driver (latest release, open kernel modules) instead of
     # nouveau, which can hang hybrid laptops when a program wakes the NVIDIA
     # GPU. Machines without one simply do not load it. The installed system's
     # calamares.nvidia module chooses the same package, so installations copy
     # it from the media: NVIDIA's packages are not in the public binary cache.
-    services.xserver.videoDrivers = [
-      "nvidia"
+    services.xserver.videoDrivers = lib.optional pkgs.stdenv.hostPlatform.isx86_64 "nvidia" ++ [
       "modesetting"
       "fbdev"
     ];
-    hardware.nvidia = {
+    hardware.nvidia = lib.mkIf pkgs.stdenv.hostPlatform.isx86_64 {
       package = config.boot.kernelPackages.nvidiaPackages.latest;
       open = true;
       modesetting.enable = true;
@@ -210,8 +214,8 @@ in
     };
 
     isoImage.edition = lib.mkForce "plasma-determinate-rust";
-    isoImage.volumeID = "nixos-determinate-x86_64";
-    image.baseName = lib.mkForce "sekka-${config.system.nixos.label}-x86_64-linux";
+    isoImage.volumeID = "nixos-determinate-${pkgs.stdenv.hostPlatform.parsed.cpu.name}";
+    image.baseName = lib.mkForce "sekka-${config.system.nixos.label}-${pkgs.stdenv.hostPlatform.system}";
     # Put the distinguishing information FIRST. The upstream menu appends the
     # distro/revision; our old long branding hid kernel versions on small screens.
     isoImage.prependToMenuLabel = "${config.boot.kernelPackages.kernel.version} Plasma (default) | ";
@@ -272,7 +276,7 @@ in
     isoImage.storeContents =
       lib.optional config.respin.cacheApplications applicationCatalog.cache ++ references.toplevels;
     boot.kernelParams = [
-      "console=ttyS0,115200n8"
+      "console=${if pkgs.stdenv.hostPlatform.isAarch64 then "ttyAMA0" else "ttyS0"},115200n8"
       "console=tty0"
     ];
 

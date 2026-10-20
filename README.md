@@ -10,7 +10,7 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 
 - **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
 - **Disk encryption is not implemented.** Neither are RAID/LVM setup or offline installation. An internet connection is required.
-- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
+- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. Public nightly images target x86_64 PCs. The experimental native ARM build targets UTM on Apple silicon; it does not establish support for ARM computers generally.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
 - **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
 
@@ -107,14 +107,16 @@ To put a nightly on a USB drive, [Kakehashi](apps/kakehashi/README.md) lists the
 
 To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
 
-Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
+The experimental ARM image runs in UTM’s QEMU backend on Apple silicon, with native CPU virtualization and accelerated VirtIO graphics. It includes the guest agents for clipboard sharing, display resizing, and orderly shutdown. It starts the same Plasma live session and offers Tatami for installation. ARM images must currently be built from source; they are not published as nightlies, and ARM updates may compile packages locally. See the [UTM build and setup instructions](DEVELOPERS.md#utm-on-apple-silicon).
+
+Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot on PCs and UEFI on ARM. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
 
 ## Updating an existing installation
 
 Open **Yukimi → Updates → Update** to get Sekka's newest nightly. It brings
 NixOS, the applications and the AI tools at the versions that nightly built and
 tested, and a nightly reaches you only once everything it needs is ready to
-download. An update never compiles software on your computer, except NVIDIA's
+download. On the published x86_64 nightly, an update never compiles software on your computer, except NVIDIA's
 driver, which is built for your kernel in a few minutes whenever either
 changes. If space runs short, Yukimi stops before the disk fills up and
 changes nothing. To update Sekka from a terminal, run:

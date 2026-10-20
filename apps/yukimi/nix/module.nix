@@ -92,8 +92,11 @@ in
       graphics = {
         package = toString config.hardware.graphics.package;
         extraPackages = map toString config.hardware.graphics.extraPackages;
-        package32 = toString config.hardware.graphics.package32;
-        extraPackages32 = map toString config.hardware.graphics.extraPackages32;
+        package32 =
+          if config.hardware.graphics.enable32Bit then toString config.hardware.graphics.package32 else "";
+        extraPackages32 = lib.optionals config.hardware.graphics.enable32Bit (
+          map toString config.hardware.graphics.extraPackages32
+        );
       };
     };
     # The package carries its desktop entry, icon and polkit action, which

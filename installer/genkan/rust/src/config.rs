@@ -75,7 +75,9 @@ impl Template {
             ensure!(locked(node), "Unlocked input: sekka/{name}");
         }
         Ok(Self {
-            flake: template.replace("@HOSTNAME@", &nix_string(hostname.as_str())),
+            flake: template
+                .replace("@HOSTNAME@", &nix_string(hostname.as_str()))
+                .replace("@SYSTEM@", &format!("{}-linux", std::env::consts::ARCH)),
             lock,
         })
     }
@@ -226,7 +228,7 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
   console.useXkbConfig = true;
   services.printing.enable = true;
   security.rtkit.enable = true;
-  services.pipewire = {{ enable = true; alsa.enable = true; alsa.support32Bit = true; pulse.enable = true; }};
+  services.pipewire = {{ enable = true; alsa.enable = true; alsa.support32Bit = pkgs.stdenv.hostPlatform.isx86_64; pulse.enable = true; }};
   users.mutableUsers = true;
   users.users.root.initialHashedPassword = "!";
   users.users.{username} = {{
@@ -309,6 +311,18 @@ mod tests {
             )
             .is_ok()
         );
+        let rendered = Template::parse(
+            "system = \"@SYSTEM@\"; host = @HOSTNAME@;".into(),
+            following.as_bytes().to_vec(),
+            &hostname,
+        )
+        .unwrap();
+        assert!(!rendered.flake.contains("@SYSTEM@"));
+        assert!(
+            rendered
+                .flake
+                .contains(&format!("{}-linux", std::env::consts::ARCH))
+        );
         let own = following.replace(r#""nixpkgs":["sekka","nixpkgs"]"#, r#""nixpkgs":"n""#);
         assert!(Template::parse("@HOSTNAME@".into(), own.into_bytes(), &hostname).is_err());
         let unlocked = following.replace(r#""sha256-i""#, "null");
@@ -390,7 +404,7 @@ mod tests {
             "console.useXkbConfig=true;",
             "services.printing.enable=true;",
             "security.rtkit.enable=true;",
-            "enable=true;alsa.enable=true;alsa.support32Bit=true;pulse.enable=true;",
+            "enable=true;alsa.enable=true;alsa.support32Bit=pkgs.stdenv.hostPlatform.isx86_64;pulse.enable=true;",
             "users.mutableUsers=true;",
             "users.users.root.initialHashedPassword=\"!\";",
             "extraGroups=[\"networkmanager\"\"wheel\"];",

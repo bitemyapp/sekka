@@ -1,11 +1,13 @@
 # Resolve the catalog against maintained, locked application sources.
-{ inputs }:
+{
+  inputs,
+  system ? "x86_64-linux",
+}:
 let
-  system = "x86_64-linux";
   # Genkan's source as a path: reading through it needs no store copy (see
   # nix/calamares.nix).
   genkan = inputs.calamares.outPath;
-  catalog = builtins.fromJSON (builtins.readFile (genkan + "/rust/src/applications.json"));
+  catalog = import (genkan + "/rust/src/application-catalog.nix") { inherit system; };
   specialArgs = {
     applicationPkgs = import inputs.applications {
       inherit system;

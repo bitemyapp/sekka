@@ -629,6 +629,17 @@ mod tests {
     use crate::ops::SystemChange;
 
     #[test]
+    fn native_program_application_switches_on_its_program() {
+        let model = Model { catalog: catalog::own(), ..Model::default() };
+        let app = catalog::needing_system(&model.catalog, "localsend").expect("LocalSend");
+        assert_eq!(
+            super::app_change(&model, app),
+            SystemChange { programs: Some(vec!["localsend".into()]), ..SystemChange::default() }
+        );
+    }
+
+    #[test]
+    #[cfg(target_arch = "x86_64")]
     fn steam_found_by_its_package_switches_on_its_program() {
         let model = Model { catalog: catalog::own(), ..Model::default() };
         let steam = catalog::needing_system(&model.catalog, "steam").expect("Steam");
@@ -639,6 +650,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_arch = "x86_64")]
     fn an_installers_steam_found_by_its_package_goes_through_its_setting() {
         let mut model = Model::default();
         let own = catalog::own().into_iter().find(|a| a.id == "steam").unwrap();
