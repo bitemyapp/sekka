@@ -7,6 +7,10 @@ use std::process::{Command, ExitCode, Stdio};
 // and keep reading its result, instead of killing this reader halfway.
 extern "C" fn wait_for_helper(_: libc::c_int) {}
 
+const USAGE: &str = "Usage: sekka-update [--boot | --switch] [--early | --nightly] [--choose SETTING=VALUE[,VALUE]]...\n       sekka-update --print-flake | --status [--json]";
+
+const HELP: &str = "Update Sekka and apply safe changes automatically: live when it can, else\nprepared for the next start (say --boot or --switch to insist). No automatic reboot.\n\n  --early        follow Sekka as soon as changes are merged (main), before the\n                 nightly checks; what isn't in the binary cache builds here\n  --nightly      follow the nightly again (the default)\n  --choose S=V   change one of the system's own choices with the update, such as\n                 --choose calamares.loginScreen=aizome or\n                 --choose calamares.desktops=aizome,tatami (Yukimi lists them)\n\nOlder installer configurations migrate to Sekka automatically.\nIndependent Nixpkgs and application pins stay unchanged; update those in Yukimi.\nUse --print-flake to review the proposed flake without changing anything.\nUse --status [--json] to read pending update completion without changing anything.";
+
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--status"] || args == ["--status", "--json"] {
@@ -18,19 +22,33 @@ fn run() -> Result<(), String> {
         }
         return Ok(());
     }
-    let mode = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
-        [] => "auto",
-        ["--boot"] => "boot",
-        ["--switch"] => "switch",
-        ["--print-flake"] => "preview",
-        ["--help"] | ["-h"] => {
-            println!(
-                "Usage: sekka-update [--boot | --switch | --print-flake | --status [--json]]\n\nUpdate Sekka and apply safe changes automatically.\nUse --boot to prepare for restart, or --switch to request live activation. No automatic reboot.\nOlder installer configurations migrate to Sekka automatically.\nIndependent Nixpkgs and application pins stay unchanged; update those in Yukimi.\nUse --print-flake to review the proposed flake without changing anything.\nUse --status [--json] to read pending update completion without changing anything."
-            );
-            return Ok(());
+    if args == ["--help"] || args == ["-h"] {
+        println!("{USAGE}\n\n{HELP}");
+        return Ok(());
+    }
+    let mut mode = "auto";
+    let mut extra: Vec<String> = Vec::new();
+    let mut it = args.iter().map(String::as_str);
+    while let Some(arg) = it.next() {
+        match arg {
+            "--boot" if mode == "auto" => mode = "boot",
+            "--switch" if mode == "auto" => mode = "switch",
+            "--print-flake" if args.len() == 1 => mode = "preview",
+            // Sekka as soon as changes are merged, or back to the nightly.
+            "--early" if !extra.iter().any(|a| a.starts_with("sekka=")) => {
+                extra.extend(["--follow".into(), "sekka=main".into()])
+            }
+            "--nightly" if !extra.iter().any(|a| a.starts_with("sekka=")) => {
+                extra.extend(["--follow".into(), "sekka=nightly".into()])
+            }
+            // One of the system's own choices (the helper checks it).
+            "--choose" => match it.next() {
+                Some(choice) => extra.extend(["--choose".into(), choice.to_owned()]),
+                None => return Err(USAGE.into()),
+            },
+            _ => return Err(USAGE.into()),
         }
-        _ => return Err("Usage: sekka-update [--boot | --switch | --print-flake | --status [--json]]".into()),
-    };
+    }
     let setup = yukimi_system::setup::Setup::detect();
     let text = std::fs::read_to_string(setup.dir.join("flake.nix")).map_err(|e| format!("Reading your flake: {e}"))?;
     let prepared = yukimi_config::sekka::prepare(&text)?;
@@ -55,6 +73,7 @@ fn run() -> Result<(), String> {
     println!("Updating Sekka. Any restart needed will be reported after preparation finishes.");
     let mut child = command
         .args(["change", "--sekka", "--mode", mode])
+        .args(&extra)
         // Keeping this pipe open lets the helper recover if the CLI exits.
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

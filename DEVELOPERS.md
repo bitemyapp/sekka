@@ -269,6 +269,12 @@ back up the configuration, update the selected inputs, and build the host once.
 A flake following Sekka's `main` (or its default branch) is moved to
 `nightly`, and each of the other inputs still at the address Sekka's
 installations have used is made to follow Sekka's (`yukimi_config::sekka`).
+Early updates are the exception: `github:bitemyapp/sekka?ref=main`, written
+only when chosen (Early updates in Aizome's Yukimi, `sekka-update --early`,
+or the helper's `--follow sekka=main`), stays, so the system gets every change
+as soon as it's merged, before the nightly checks; whatever the binary cache
+doesn't have yet builds on the machine. `--nightly` (`--follow sekka=nightly`)
+goes back.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
@@ -314,6 +320,17 @@ stage. A changed entry still stages, and the reason names its desktop: most
 entries start their desktop by store path (`startplasma-wayland`, Hyprland, an
 X session script), so until a restart the running login screen would start the
 previous version.
+The system's own choices travel with an update or go alone: the Nix module
+declares which settings of the main configuration file Yukimi may write, and
+to which values (`programs.yukimi.choices`, listed in `/etc/yukimi/system.json`;
+Sekka declares `calamares.desktops`, `calamares.defaultDesktop` and
+`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`).
+`yukimi-helper change --choose SETTING=VALUE[,VALUE]` (and `sekka-update
+--choose`) refuses any other setting or value, writes a string or a list of
+strings as declared, and builds once with the rest of the change, so choosing
+Aizome's login screen is a click and a password, with the same switch-or-boot
+planning and Restart button as an update. A changed login screen always stages
+for the next start.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
@@ -387,7 +404,8 @@ changing the host desktop.
 `python3 tests/test_sekka_update.py result/bin -v` tests the packaged CLI and
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
 following Sekka and the new system's caches, a Nixpkgs of the system's own,
-refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+early updates and the system's declared choices (and refusing undeclared
+ones), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.

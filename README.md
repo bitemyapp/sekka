@@ -194,6 +194,20 @@ pointed somewhere of your own keep their own rows and update separately, and
 may need building. Run `sekka-update --status` to check whether anything
 remains to be applied.
 
+To get changes before the nightly does, turn on **Early updates** in
+Yukimi's Updates page (in Aizome; in the other desktops, follow `main` from
+the Sekka row's branch button), or run `sekka-update --early`. Updates then
+follow Sekka's `main` branch as soon as changes are merged, before the
+nightly checks run, and anything the binary cache doesn't have yet builds on
+your computer. `sekka-update --nightly` goes back.
+
+Which desktops are installed, which one starts by default, and the login
+screen can be changed after installing too: in Aizome's **Yukimi →
+Desktops**, or with `sekka-update --choose`, such as
+`sekka-update --choose calamares.loginScreen=aizome`. Yukimi asks for your
+password, builds the new system, and offers a restart when the change needs
+one, as an update does.
+
 ## Questions, bugs, and contributions
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.

@@ -656,6 +656,9 @@ struct Change {
     lock: Option<PathBuf>,
     /// An input to follow another branch, and the branch.
     follow: Option<(String, String)>,
+    /// The system's own choices to write (`--choose setting=a,b`), each a
+    /// setting the distribution declares, to values it declares.
+    choices: Vec<(String, Vec<String>)>,
     channels: bool,
     sekka: bool,
     mode: String,
@@ -696,6 +699,18 @@ impl Change {
                     }
                     change.follow = Some((input.to_owned(), branch.to_owned()));
                 }
+                "--choose" => {
+                    let (setting, values) =
+                        value.split_once('=').ok_or_else(|| Failure("--choose needs setting=value[,value]".into()))?;
+                    if !valid_setting(setting) || change.choices.iter().any(|(s, _)| s == setting) {
+                        return Err(Failure(format!("Not a setting to choose: {setting:?}")));
+                    }
+                    let values = split_list(values);
+                    if let Some(bad) = values.iter().find(|v| !catalog::valid_id(v)) {
+                        return Err(Failure(format!("Not a choice: {bad:?}")));
+                    }
+                    change.choices.push((setting.to_owned(), values));
+                }
                 "--mode" => change.mode = value.clone(),
                 other => return Err(Failure(format!("Unknown option {other}"))),
             }
@@ -720,8 +735,15 @@ impl Change {
             return Err(Failure("--lock goes with --update".into()));
         }
         if change.sekka {
-            if change.channels || change.follow.is_some() || change.lock.is_some() || change.edits_main() {
-                return Err(Failure("--sekka only goes with --mode and --update".into()));
+            // The system's choices and Sekka's own branch may change with it.
+            let other_follow = change.follow.as_ref().is_some_and(|(input, _)| input != "sekka");
+            let other_edits = change.packages.is_some()
+                || change.programs.is_some()
+                || change.applications.is_some()
+                || !change.unlist_system.is_empty()
+                || !change.unlist_user.is_empty();
+            if change.channels || other_follow || change.lock.is_some() || other_edits {
+                return Err(Failure("--sekka only goes with --mode, --update, --choose and --follow sekka=…".into()));
             }
             if !change.update.iter().any(|i| i == "sekka") {
                 change.update.push("sekka".into());
@@ -747,7 +769,17 @@ impl Change {
             || self.applications.is_some()
             || !self.unlist_system.is_empty()
             || !self.unlist_user.is_empty()
+            || !self.choices.is_empty()
     }
+}
+
+/// A dotted setting name of plain identifiers: `calamares.loginScreen`.
+fn valid_setting(name: &str) -> bool {
+    name.len() <= 100
+        && name.split('.').all(|part| {
+            part.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
 }
 
 /// The main configuration file with an entry taken out of a package list.
@@ -779,6 +811,16 @@ fn change(args: &[String]) -> Result<String> {
         && !setup.facts.catalogs.iter().any(|c| c.setting.as_ref() == Some(setting))
     {
         return Err(Failure(format!("{setting} isn't a setting a catalog of this system installs through")));
+    }
+    // Only settings the distribution declares, to values it declares.
+    for (setting, values) in &change.choices {
+        let declared = setup
+            .facts
+            .choices
+            .iter()
+            .find(|c| &c.setting == setting)
+            .ok_or_else(|| Failure(format!("{setting} isn't a choice this system offers")))?;
+        declared.allows(values).map_err(Failure)?;
     }
     let main = setup.main.clone();
     let packages_file = setup.packages_file();
@@ -832,6 +874,15 @@ fn change(args: &[String]) -> Result<String> {
                 let path: Vec<&str> = setting.split('.').collect();
                 configuration = edit::set_string_list(&configuration, &path, list)?;
             }
+            for (setting, values) in &change.choices {
+                let path: Vec<&str> = setting.split('.').collect();
+                let many = setup.facts.choices.iter().any(|c| &c.setting == setting && c.many);
+                configuration = if many {
+                    edit::set_string_list(&configuration, &path, values)?
+                } else {
+                    edit::set_string(&configuration, &path, &values[0])?
+                };
+            }
             for attr in &change.unlist_system {
                 configuration = unlist(&configuration, &["environment", "systemPackages"], attr)?;
             }
@@ -852,8 +903,13 @@ fn change(args: &[String]) -> Result<String> {
                     "flake.nix doesn't give {input}'s address as inputs.{input}.url, so Yukimi can't change it"
                 ))
             })?;
-            let followed = branch::with(&url, branch)
-                .ok_or_else(|| Failure(format!("{input} comes from {url}, which has no branch to choose")))?;
+            // Sekka's main, chosen: early updates, which a Sekka update keeps.
+            let followed = if input == "sekka" && branch == "main" {
+                sekka::EARLY.to_owned()
+            } else {
+                branch::with(&url, branch)
+                    .ok_or_else(|| Failure(format!("{input} comes from {url}, which has no branch to choose")))?
+            };
             write_file(&setup, &flake_file, &edit::set_string_value(&text, &path, &followed)?)?;
             stage_done(5);
         }
@@ -1169,7 +1225,7 @@ mod tests {
         assert_eq!(Change::parse(&args("--sekka --mode boot")).unwrap().update, vec!["sekka"]);
         for bad in [
             "--sekka --channels",
-            "--sekka --follow sekka=main",
+            "--sekka --follow tatami=main",
             "--sekka --packages htop",
             "--sekka --update sekka --lock /tmp/x",
         ] {
@@ -1188,6 +1244,23 @@ mod tests {
         assert_eq!(change.lock.as_deref(), Some(Path::new("/tmp/x.lock")));
         assert!(change.edits_main());
         assert!(Change::parse(&args("--channels")).unwrap().channels);
+        // A Sekka update may also choose early updates and the system's choices.
+        let early = Change::parse(&args("--sekka --follow sekka=main --choose calamares.loginScreen=aizome")).unwrap();
+        assert_eq!(early.follow, Some(("sekka".to_owned(), "main".to_owned())));
+        assert_eq!(early.choices, vec![("calamares.loginScreen".to_owned(), vec!["aizome".to_owned()])]);
+        assert!(early.edits_main());
+        let desktops = Change::parse(&args("--choose calamares.desktops=aizome,tatami")).unwrap();
+        assert_eq!(desktops.choices[0].1, vec!["aizome", "tatami"]);
+        for bad in [
+            "--choose calamares.loginScreen",
+            "--choose calamares..x=a",
+            "--choose calamares.loginScreen=a;b",
+            "--choose calamares.loginScreen=Aizome",
+            "--choose calamares.loginScreen=a --choose calamares.loginScreen=b",
+            "--choose 1x.y=a",
+        ] {
+            assert!(Change::parse(&args(bad)).is_err(), "{bad}");
+        }
         let follow = Change::parse(&args("--follow tatami=main")).unwrap();
         assert_eq!(follow.follow, Some(("tatami".to_owned(), "main".to_owned())));
         assert_eq!(follow.update, vec!["tatami".to_owned()]);

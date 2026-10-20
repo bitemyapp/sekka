@@ -36,6 +36,57 @@ let
       };
     };
   };
+  choice = lib.types.submodule {
+    options = {
+      setting = lib.mkOption {
+        type = lib.types.str;
+        example = "calamares.loginScreen";
+        description = "A setting of this system's main configuration file, as a dotted name.";
+      };
+      title = lib.mkOption {
+        type = lib.types.str;
+        example = "Login screen";
+        description = "What Yukimi calls it.";
+      };
+      many = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Whether it takes several values (a list of strings) rather than one (a string).";
+      };
+      value = lib.mkOption {
+        type = lib.types.either lib.types.str (lib.types.listOf lib.types.str);
+        description = "What it is in this system.";
+      };
+      options = lib.mkOption {
+        type = lib.types.listOf (
+          lib.types.submodule {
+            options = {
+              id = lib.mkOption { type = lib.types.str; };
+              title = lib.mkOption { type = lib.types.str; };
+              detail = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "What choosing it means, when that needs saying.";
+              };
+              needs = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                example = "calamares.desktops=aizome";
+                description = "A value another choice must have for this one to work, as SETTING=VALUE; Yukimi offers it only then.";
+              };
+            };
+          }
+        );
+        description = "The values Yukimi may write, each with what to call it.";
+      };
+      within = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "calamares.desktops";
+        description = "Another choice (a list) whose values this one's must be among; Yukimi offers only those.";
+      };
+    };
+  };
 in
 {
   options.programs.yukimi = {
@@ -68,6 +119,15 @@ in
         Catalogs of applications Discover offers besides Yukimi's own, such
         as the applications an installer offered. Their entries take the
         place of Yukimi's own entries for the same applications.
+      '';
+    };
+    choices = lib.mkOption {
+      type = lib.types.listOf choice;
+      default = [ ];
+      description = ''
+        The system's own choices Yukimi offers to change, such as a
+        distribution's desktops and login screen. Yukimi writes only these
+        settings, and only to the values listed, then rebuilds.
       '';
     };
   };
@@ -127,6 +187,7 @@ in
         file = "${catalog.file}";
         inherit (catalog) setting title;
       }) cfg.catalogs;
+      inherit (cfg) choices;
     };
   };
 }

@@ -28,6 +28,89 @@ pub struct Facts {
     /// Applications to offer besides Yukimi's own.
     #[serde(default)]
     pub catalogs: Vec<CatalogSource>,
+    /// The system's own choices Yukimi may change, as the distribution
+    /// declares them: Sekka's desktops, default desktop and login screen.
+    #[serde(default)]
+    pub choices: Vec<Choice>,
+}
+
+/// A setting of the configuration Yukimi may change, and to what: the only
+/// values it writes are the declared ones.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Choice {
+    /// The setting, as a dotted name: `calamares.loginScreen`.
+    pub setting: String,
+    /// What to call it: "Login screen".
+    pub title: String,
+    /// Several values (a list of strings), or one (a string).
+    #[serde(default)]
+    pub many: bool,
+    /// What it is now, in the running system.
+    pub value: ChoiceValue,
+    pub options: Vec<ChoiceOption>,
+    /// Another choice (a list) its values must be among, as a default
+    /// desktop must be one of the desktops. Yukimi offers only those.
+    #[serde(default)]
+    pub within: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ChoiceValue {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl ChoiceValue {
+    pub fn values(&self) -> Vec<String> {
+        match self {
+            ChoiceValue::One(v) => vec![v.clone()],
+            ChoiceValue::Many(v) => v.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ChoiceOption {
+    pub id: String,
+    pub title: String,
+    /// What choosing it means, when that needs saying.
+    #[serde(default)]
+    pub detail: Option<String>,
+    /// A value another choice must have for this one to work, as
+    /// `SETTING=VALUE`: Aizome's login screen needs Aizome among the
+    /// desktops. Yukimi offers it only then.
+    #[serde(default)]
+    pub needs: Option<String>,
+}
+
+impl ChoiceOption {
+    /// The setting and value it needs, if any.
+    pub fn needs(&self) -> Option<(&str, &str)> {
+        self.needs.as_deref().and_then(|n| n.split_once('='))
+    }
+}
+
+impl Choice {
+    /// Whether `values` may be written: declared ones, one for a string,
+    /// at least one and no repeats for a list.
+    pub fn allows(&self, values: &[String]) -> Result<(), String> {
+        if let Some(bad) = values.iter().find(|v| !self.options.iter().any(|o| &o.id == *v)) {
+            return Err(format!("{bad:?} isn't one of the choices for {}", self.setting));
+        }
+        match (self.many, values.len()) {
+            (false, 1) => Ok(()),
+            (false, _) => Err(format!("{} takes one value", self.setting)),
+            (true, 0) => Err(format!("{} needs at least one value", self.setting)),
+            (true, _) => {
+                let mut seen = std::collections::BTreeSet::new();
+                match values.iter().find(|v| !seen.insert(*v)) {
+                    Some(twice) => Err(format!("{twice:?} is chosen twice for {}", self.setting)),
+                    None => Ok(()),
+                }
+            }
+        }
+    }
 }
 
 /// A catalog of applications that comes with the system, such as an
@@ -253,5 +336,34 @@ mod tests {
         assert_eq!(facts.allow_unfree, Some(true));
         assert_eq!(facts.catalogs[0].setting.as_deref(), Some("calamares.applications"));
         assert_eq!(serde_json::from_str::<Facts>("{}").unwrap(), Facts::default());
+    }
+
+    #[test]
+    fn choices_say_what_may_be_written() {
+        let facts: Facts = serde_json::from_str(
+            r#"{"choices":[
+              {"setting":"calamares.desktops","title":"Desktops","many":true,"value":["aizome","gnome"],
+               "options":[{"id":"aizome","title":"Aizome"},{"id":"gnome","title":"GNOME"},{"id":"tatami","title":"Tatami"}]},
+              {"setting":"calamares.loginScreen","title":"Login screen","value":"auto",
+               "options":[{"id":"auto","title":"Automatic"},{"id":"aizome","title":"Aizome","detail":"GNOME can't lock",
+                           "needs":"calamares.desktops=aizome"}]},
+              {"setting":"calamares.defaultDesktop","title":"Default desktop","value":"aizome","within":"calamares.desktops",
+               "options":[{"id":"aizome","title":"Aizome","detail":null,"needs":null}]}]}"#,
+        )
+        .unwrap();
+        let (desktops, login) = (&facts.choices[0], &facts.choices[1]);
+        assert_eq!(desktops.value.values(), ["aizome", "gnome"]);
+        assert_eq!(login.value, ChoiceValue::One("auto".into()));
+        assert_eq!(login.options[1].detail.as_deref(), Some("GNOME can't lock"));
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(login.allows(&v(&["aizome"])).is_ok());
+        assert!(login.allows(&v(&["gdm"])).is_err(), "not declared");
+        assert!(login.allows(&v(&["auto", "aizome"])).is_err(), "one value");
+        assert!(desktops.allows(&v(&["aizome", "tatami"])).is_ok());
+        assert!(desktops.allows(&v(&[])).is_err(), "at least one");
+        assert!(desktops.allows(&v(&["aizome", "aizome"])).is_err(), "twice");
+        assert_eq!(login.options[1].needs(), Some(("calamares.desktops", "aizome")));
+        assert_eq!((login.options[0].needs(), login.within.as_deref()), (None, None));
+        assert_eq!(facts.choices[2].within.as_deref(), Some("calamares.desktops"));
     }
 }
