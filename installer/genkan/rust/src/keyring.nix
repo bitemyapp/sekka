@@ -9,15 +9,18 @@
 # and Electron apps are pointed at it. What they sealed with the fixed key
 # still opens.
 #
-# Signal is left out: it records the keyring it used and stops when that
-# changes. Bitwarden reaches the keyring by itself.
+# Signal records its backend and refuses to open its database if it changes.
+# Keep that recorded backend across desktops; new profiles use GNOME Keyring.
+# Bitwarden reaches the keyring by itself.
 #
 # Used by applications.nix and by the ISO's per-application closures
 # (nix/applications.nix), with the same package set, so an offline
 # installation finds the wrapped packages on the medium.
 { lib, pkgs }:
+app: package:
 let
   apps = [
+    "signal"
     "chromium"
     "google-chrome"
     "chatgpt"
@@ -27,8 +30,20 @@ let
     "discord"
     "slack"
   ];
+  signalKeyring = pkgs.writeText "signal-keyring.sh" (
+    builtins.replaceStrings [ "@jq@" ] [ "${pkgs.jq}/bin/jq" ] (builtins.readFile ./signal-keyring.sh)
+  );
+  launchPolicy =
+    if app.id == "signal" then
+      ". ${signalKeyring}"
+    else
+      ''
+        case ":''${XDG_CURRENT_DESKTOP-}:" in
+          *:KDE:*) ;;
+          *) set -- --password-store=gnome-libsecret "$@" ;;
+        esac
+      '';
 in
-app: package:
 if !builtins.elem app.id apps then
   package
 else
@@ -54,11 +69,8 @@ else
       own $out/share/applications
       for program in $out/bin/*; do
         rm "$program"
-        makeWrapper ${package}/bin/"''${program##*/}" "$program" --run '
-      case ":''${XDG_CURRENT_DESKTOP-}:" in
-        *:KDE:*) ;;
-        *) set -- --password-store=gnome-libsecret "$@" ;;
-      esac'
+        makeWrapper ${package}/bin/"''${program##*/}" "$program" \
+          --run ${lib.escapeShellArg launchPolicy}
       done
       for entry in $out/share/applications/*.desktop; do
         [ -e "$entry" ] || continue
