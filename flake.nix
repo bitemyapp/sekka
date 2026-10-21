@@ -257,6 +257,7 @@
         };
         native-installer = calamares;
         storage = calamares.storageTest;
+        encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         application-cache = applicationCatalog.cache;
         live-profiles =

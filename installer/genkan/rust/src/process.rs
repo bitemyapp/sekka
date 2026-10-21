@@ -45,6 +45,33 @@ pub fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
     )
 }
 
+/// Secret input is an anonymous memory file, never argv, environment or a path.
+/// The file descriptor is closed when the child exits; callers own zeroizing buffers.
+pub(crate) fn output_secret(
+    program: &str,
+    args: &[&str],
+    secret: &[u8],
+    seconds: u64,
+) -> Result<String> {
+    use std::{
+        fs::File,
+        io::{Seek, Write},
+        os::fd::FromRawFd,
+    };
+    let fd = unsafe { libc::memfd_create(c"genkan-secret".as_ptr(), libc::MFD_CLOEXEC) };
+    ensure!(
+        fd >= 0,
+        "Could not allocate secret input: {}",
+        std::io::Error::last_os_error()
+    );
+    let mut input = unsafe { File::from_raw_fd(fd) };
+    input.write_all(secret)?;
+    input.rewind()?;
+    let mut cmd = command(program);
+    cmd.stdin(Stdio::from(input));
+    run(cmd, program, args, seconds, None, Capture::Tail)
+}
+
 /// As `output`, but returns all of stdout (up to 256 MiB) instead of its tail.
 /// For machine-readable listings such as a system's closure.
 pub fn output_full(program: &str, args: &[&str], seconds: u64) -> Result<String> {

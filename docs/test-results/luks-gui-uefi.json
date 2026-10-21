@@ -1,0 +1,194 @@
+{
+  "date": "2026-10-21",
+  "result": "Encrypted UEFI GUI installation and installed desktop validation passed using the Xfce live compatibility entry; default Plasma live installer rendering remains broken in this VM.",
+  "source": {
+    "branch": "feat/genkan-luks",
+    "base_commit": "99bda5dfaf20d4508dc9d1f321e233ff571c6d54",
+    "dirty": true,
+    "tested_patch_sha256": "c8b8832776379bdfa80e685f89b952134b5b3fba107041fbd0382a431b7f294f",
+    "local_patch": "artifacts/luks-e2e-uefi/source-final.patch",
+    "note": "Snapshot used for the tested ISO, before this report and its documentation links were added."
+  },
+  "iso": {
+    "file": "sekka-26.11.20261015.fe13242-x86_64-linux.iso",
+    "sha256": "41a9b858f0e0e85b018edfe4c249e7ed8ced462fe332d20d3850100428ec77e5",
+    "build_command": "nix build .#iso --no-update-lock-file --out-link result-luks-fixed --max-jobs 2 --cores 2",
+    "build_passed": true,
+    "installed_flake_lock_sha256": "8c28114eabf0b062362d57333d5451da15fb41a8ef22465419e7cbb56b85796b"
+  },
+  "vm": {
+    "qemu": "11.1.2",
+    "acceleration": "KVM",
+    "firmware": "UEFI (OVMF)",
+    "memory_mib": 8192,
+    "cpus": 4,
+    "disk_gib": 80,
+    "disk_type": "NVMe raw sparse file, discard=unmap",
+    "disk_serial": "RESPIN_TEST_ONLY",
+    "smbios_serial": "RESPIN_VM_ONLY",
+    "gpu": "virtio-gpu-pci, software rendering, 1280x800",
+    "network": "QEMU user networking",
+    "live_boot_entry": "Xfce/X11 software compatibility",
+    "host_devices_used": false,
+    "diagnostic_deviation": "test_diagnostics=true enabled inside the live guest only, behind the disposable-VM guard; installed QEMU guest agent and serial/tty console parameters. No fixture requests or automatic login.",
+    "installed_boots": "Disk and UEFI variables only; no ISO, shared filesystem or host Nix store.",
+    "final_state": "Cleanly powered off with systemctl poweroff; QEMU process exited. Installed disk and UEFI variables retained under .work/luks-e2e-uefi/."
+  },
+  "selection": {
+    "filesystem": "ext4",
+    "encryption": "LUKS2 root and swap, same separate disk passphrase",
+    "swap_usable_gib": 8,
+    "desktops": [
+      "aizome",
+      "plasma"
+    ],
+    "default_desktop": "aizome",
+    "applications": [
+      "firefox"
+    ],
+    "user": "lukstest",
+    "hostname": "luks-test",
+    "locale": "en_US.UTF-8",
+    "keyboard": "us",
+    "timezone": "America/Chicago",
+    "tuning": true,
+    "unfree": true,
+    "saved_wifi": false,
+    "github_or_ssh_keys": false
+  },
+  "installation": {
+    "driver": "Real Genkan GUI, keyboard/pointer through QMP; review, typed erase confirmation, acknowledgement and Install",
+    "preparation_seconds": 64,
+    "installation_seconds": 217,
+    "prepared_system_gib": 11.8,
+    "estimated_download_mib": 23,
+    "preparation_build_count": 215,
+    "helper_cleanup": "No calamares-target mounts or genkan-* mappings after completion",
+    "restart": "Clicked Restart Now in Genkan; restarted QEMU with only the installed disk."
+  },
+  "validation": {
+    "wrong_disk_passphrase": "Rejected by both systemd-cryptsetup units; system stayed locked. Correct passphrases then reached the greeter.",
+    "normal_second_boot": "One correct disk-passphrase entry unlocked both root and swap and reached the greeter.",
+    "login": "Separate login password entered at the graphical greeter; Aizome on first boot, Plasma Wayland on second boot.",
+    "root": "/ and /nix/store backed by /dev/mapper/cryptroot (ext4); /nix/store is a read-only bind mount from that filesystem.",
+    "containers": "cryptroot and cryptswap both LUKS2, aes-xts-plain64, 512-bit key, Argon2id, 16 MiB payload offset, runtime discards flag. No persistent header flag.",
+    "swap": "Active 8 GiB swap on cryptswap; observed used swap in first session and active swap after reboot.",
+    "trim": "4 KiB discard granularity through disk and both mappings; fstrim -v / succeeded on both installed boots (56.2 GiB and 56.1 GiB).",
+    "aizome_gui": [
+      "Welcome Next page",
+      "Toolchest menus",
+      "Firefox launched from menu and rendered https://example.com",
+      "Hako opened Home and displayed cryptroot",
+      "Foot terminal launched and created/read ~/luks-persistence.txt as lukstest",
+      "Settei Network, Appearance and Displays pages",
+      "Yukimi Overview, Installed and Desktops pages read the actual installed system",
+      "Session Restart confirmation and restart"
+    ],
+    "plasma_gui": [
+      "Selected Plasma (Wayland) at greeter and logged in",
+      "Dolphin opened Home",
+      "Konsole opened with Ctrl+Alt+T",
+      "Read persistence file and displayed root mount and active swap in Konsole"
+    ],
+    "persistence": {
+      "file": "/home/lukstest/luks-persistence.txt",
+      "content": "LUKS-GUI-persistence-2026-10-21\n",
+      "sha256": "15b741f40ce77d5a6c91f88b9c9c2b9e198b9acf8c77de954d12596b3edeb806",
+      "owner": "lukstest:users",
+      "mode": "0644"
+    },
+    "system_and_user_failed_units": "Zero in both installed desktop sessions.",
+    "kernel": "7.2.10",
+    "nix": "Determinate Nix 3.23.3 / Nix 2.35.3",
+    "configuration": "Installed flake.lock matches ISO; generated configuration names outer LUKS UUIDs, inner root/swap UUIDs and allowDiscards=true. Login hash is root:root 0600 under root:root 0700 /etc/nixos-secrets."
+  },
+  "issues": [
+    {
+      "status": "fixed",
+      "issue": "Aizome was absent from the default respin.referenceDesktops list, although it is the default installer selection.",
+      "evidence": "Initial 8 GiB attempt exhausted live tmpfs during preparation, before disk erasure. A 16 GiB diagnostic retry began compiling Aizome and was cancelled before disk mutation. Added aizome to the ISO reference desktops, rebuilt the ISO, then completed the full 8 GiB GUI install. The Aizome runtime was present in the final ISO closure."
+    },
+    {
+      "status": "unresolved",
+      "issue": "In the default Plasma live session, advancing Genkan from Welcome to Disk left stale Welcome graphics and translucent Disk content.",
+      "evidence": "Reproduced with standard VGA and with virtio GPU, including final ISO. Vulkan warnings were present; root cause not established. The official Xfce/X11 compatibility entry worked. Installed Plasma itself logged in and launched applications."
+    },
+    {
+      "status": "observation",
+      "issue": "Filesystem option labels compressed in the encrypted Disk-page layout; the review showed the full filesystem name."
+    },
+    {
+      "status": "test_setup_corrected",
+      "issue": "Initial disk serial failed the disposable-VM guard; changed it to RESPIN_TEST_ONLY. Early synthetic typing was too fast; slowed it and re-entered the fields. Neither was a production source fix."
+    }
+  ],
+  "limits": [
+    "Full GUI install tested only on UEFI/ext4 with swap. Earlier component coverage of BIOS/ext4/Btrfs/XFS with and without swap is separate evidence.",
+    "No physical hardware or encrypted hibernation validation.",
+    "No installed-system update or Yukimi Apply operation; read-only configuration/package views were exercised.",
+    "No Secure Boot, TPM unlock or recovery-key workflow validation."
+  ],
+  "cleanup": {
+    "nix_gc_freed_gib": 19.4,
+    "cargo_incremental_caches_freed_gib_approx": 26,
+    "superseded_test_iso_freed_gib": 11.0,
+    "note": "Removed unreachable Nix paths, inactive incremental caches and this run's obsolete ISO; retained source, current ISO, installed VM disk and evidence. Host free space was 34 GiB initially and about 43 GiB after rebuilding and retaining the VM."
+  },
+  "evidence": {
+    "local_directory": "artifacts/luks-e2e-uefi",
+    "guest_commands": "artifacts/luks-e2e-uefi/guest-commands.jsonl",
+    "qemu_commands": "artifacts/luks-e2e-uefi/qemu-commands.jsonl",
+    "vm_control": "artifacts/luks-e2e-uefi/vm-control.py",
+    "screenshots": [
+      {
+        "path": "luks-gui-uefi/42-final-disk.png",
+        "sha256": "39664b601c4e42ab11ef1e7005c320626ae5efcab379b9b0becde9de224522e9",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/48-final-review-selections.png",
+        "sha256": "71b539775f57ad7c30726d3e74a76c28bf8293841f15301ed800f20277a37f89",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/56-install-status.png",
+        "sha256": "3dffcbd5473b7c1d70d83a1a1db6bba4b8b29b8e39e24886cc0e1d4d64ddb603",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/57-disk-only-boot.png",
+        "sha256": "81cda63626f35393a35d739b401c57ca8fdc347687b1e715de4d8ff3c05fb20c",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/67-firefox-network.png",
+        "sha256": "33445b22f8ed81e15823aa7261d49414456c7a5c8831d195eccf53dea3de28cc",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/75-settings-displays.png",
+        "sha256": "cdbfc8523aa1a78a5fa7a83b75c95cee25c4dc63c89643dafd43a2b479b8d810",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/76-yukimi.png",
+        "sha256": "a02bbda24b22c4abb4e2fdf618381a8e4b3fac9ae8cefdf61a2e70ce49275bfb",
+        "width": 1280,
+        "height": 800
+      },
+      {
+        "path": "luks-gui-uefi/88-plasma-persistence.png",
+        "sha256": "f9807caa3174e1f408f0a2d2a04c661811a3f76229ab812ff81de7776c83813f",
+        "width": 1280,
+        "height": 800
+      }
+    ]
+  },
+  "publication": "No publication enabled or performed; no commit, merge or push."
+}

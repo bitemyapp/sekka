@@ -3,6 +3,7 @@ pub mod applications;
 pub mod config;
 pub mod desktop;
 pub mod disk;
+pub mod encryption;
 pub mod filesystem;
 pub mod github;
 pub mod graphics;

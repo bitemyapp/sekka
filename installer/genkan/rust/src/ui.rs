@@ -212,6 +212,7 @@ pub(crate) struct Review {
     disk: disk::Identity,
     firmware: Firmware,
     filesystem: Filesystem,
+    encrypt: bool,
     hostname: String,
     username: String,
     full_name: String,
@@ -248,6 +249,7 @@ impl Review {
             disk: plan.disk().clone(),
             firmware: plan.firmware(),
             filesystem: plan.filesystem(),
+            encrypt: plan.encrypt(),
             hostname: plan.hostname().as_str().into(),
             username: plan.username().as_str().into(),
             full_name: plan.full_name().into(),
@@ -683,6 +685,21 @@ impl Ui {
         self.disk.filesystem.connect_active_notify({
             let f = with(Ui::update_layout);
             move |_| f()
+        });
+        self.disk.encrypt.connect_active_notify({
+            let weak = Rc::downgrade(self);
+            move |row| {
+                if let Some(ui) = weak.upgrade() {
+                    ui.disk.encryption_password.set_visible(row.is_active());
+                    ui.disk.encryption_repeat.set_visible(row.is_active());
+                    ui.disk.encryption_hint.set_visible(row.is_active());
+                    if !row.is_active() {
+                        ui.disk.encryption_password.set_text("");
+                        ui.disk.encryption_repeat.set_text("");
+                    }
+                    ui.update_layout();
+                }
+            }
         });
         self.disk.swap.connect_active_notify({
             let f = with(Ui::update_layout);
@@ -1179,7 +1196,12 @@ impl Ui {
             self.disk.layout.clear("Reading installed memory…");
             return;
         }
-        match Layout::new(disk.identity.bytes, self.firmware.get(), self.swap_bytes()) {
+        match Layout::for_install(
+            disk.identity.bytes,
+            self.firmware.get(),
+            self.swap_bytes(),
+            self.disk.encrypt.is_active(),
+        ) {
             Ok(layout) => self
                 .disk
                 .layout
@@ -1189,6 +1211,13 @@ impl Ui {
     }
 
     fn check_disk(&self) -> Result<(), String> {
+        if self.disk.encrypt.is_active() {
+            calamares_nixos::encryption::validate_passphrase(&self.disk.encryption_password.text())
+                .map_err(|e| e.to_string())?;
+            if self.disk.encryption_password.text() != self.disk.encryption_repeat.text() {
+                return Err("Disk passphrases do not match.".into());
+            }
+        }
         let disks = self.disks.borrow();
         let disk = self
             .selected_disk
@@ -1201,9 +1230,14 @@ impl Ui {
         if self.disk.swap.is_active() && self.memory.get().is_none() {
             return Err("Still reading installed memory; try again in a moment.".into());
         }
-        Layout::new(disk.identity.bytes, self.firmware.get(), self.swap_bytes())
-            .map(|_| ())
-            .map_err(|e| format!("{e:#}"))
+        Layout::for_install(
+            disk.identity.bytes,
+            self.firmware.get(),
+            self.swap_bytes(),
+            self.disk.encrypt.is_active(),
+        )
+        .map(|_| ())
+        .map_err(|e| format!("{e:#}"))
     }
 
     // ---- Account ----------------------------------------------------------
@@ -1767,6 +1801,12 @@ impl Ui {
             disk: disk.identity,
             firmware: self.firmware.get(),
             filesystem: self.selected_filesystem(),
+            encrypt: self.disk.encrypt.is_active(),
+            encryption_password: if self.disk.encrypt.is_active() {
+                self.disk.encryption_password.text().into()
+            } else {
+                String::new()
+            },
             hostname: self.account.hostname.text().into(),
             username: self.account.username.text().into(),
             full_name: self.account.full_name.text().into(),
@@ -1846,31 +1886,45 @@ impl Ui {
             .swap
             .then(|| self.memory.get().map(|m| memory::swap_bytes(m.total)))
             .flatten();
-        r.partitions
-            .set_subtitle(&match Layout::new(disk.bytes, review.firmware, swap) {
-                Ok(layout) => {
-                    let mut parts = vec![
-                        if review.firmware == Firmware::Uefi {
-                            "EFI 1.0 GiB".to_string()
-                        } else {
-                            "BIOS boot 2 MiB".to_string()
-                        },
-                        format!("NixOS {}", size(layout.root_bytes())),
-                    ];
-                    if let Some(bytes) = layout.swap_bytes() {
-                        parts.push(format!("swap {} with zswap", size(bytes)));
-                    }
-                    parts.join(" · ")
+        r.partitions.set_subtitle(&match Layout::for_install(
+            disk.bytes,
+            review.firmware,
+            swap,
+            review.encrypt,
+        ) {
+            Ok(layout) => {
+                let mut parts = vec![
+                    if review.firmware == Firmware::Uefi {
+                        "EFI 1.0 GiB".to_string()
+                    } else {
+                        "BIOS boot 2 MiB".to_string()
+                    },
+                    format!("NixOS {}", size(layout.root_bytes())),
+                ];
+                if layout.bios_boot.is_some() {
+                    parts.push("Unencrypted /boot 1.0 GiB".into());
                 }
-                Err(error) => format!("{error:#}"),
-            });
+                if let Some(bytes) = layout.swap_bytes() {
+                    parts.push(format!("swap {} with zswap", size(bytes)));
+                }
+                parts.join(" · ")
+            }
+            Err(error) => format!("{error:#}"),
+        });
         r.filesystem.set_subtitle(&format!(
-            "{}{}",
+            "{}{}{}",
             review.filesystem.name(),
             if review.filesystem == Filesystem::Btrfs {
                 " with zstd compression"
             } else {
                 ""
+            },
+            if review.encrypt && review.swap {
+                " · LUKS2: root and swap encrypted"
+            } else if review.encrypt {
+                " · LUKS2: root encrypted"
+            } else {
+                " · Unencrypted"
             }
         ));
         r.boot.set_subtitle(match review.firmware {
@@ -2021,6 +2075,8 @@ impl Ui {
             }
         }
         self.account.password.set_text("");
+        self.disk.encryption_password.set_text("");
+        self.disk.encryption_repeat.set_text("");
         self.account.repeat.set_text("");
         self.installing.set(true);
         self.started.set(Some(Instant::now()));

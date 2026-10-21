@@ -226,14 +226,33 @@ impl LayoutBar {
                 }
             },
             Segment {
-                name: format!("NixOS ({})", filesystem.name()),
+                name: format!(
+                    "NixOS ({}){}",
+                    filesystem.name(),
+                    if layout.encrypted { " · LUKS2" } else { "" }
+                ),
                 bytes: layout.root_bytes(),
                 color: ROOT_COLOR,
             },
         ];
+        if let Some((start, end)) = layout.bios_boot {
+            segments.insert(
+                1,
+                Segment {
+                    name: "Unencrypted /boot (ext4)".into(),
+                    bytes: (end - start) * mib,
+                    color: EFI_COLOR,
+                },
+            );
+        }
         if let Some(bytes) = layout.swap_bytes() {
             segments.push(Segment {
-                name: "Swap + zswap".into(),
+                name: if layout.encrypted {
+                    "Swap + zswap · LUKS2"
+                } else {
+                    "Swap + zswap"
+                }
+                .into(),
                 bytes,
                 color: SWAP_COLOR,
             });

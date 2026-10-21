@@ -288,8 +288,19 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     }
     let ram = memory::read()?;
     let swap_bytes = plan.swap().then(|| memory::swap_bytes(ram.total));
-    let layout = Layout::new(plan.disk().bytes, plan.firmware(), swap_bytes)?;
-    let ids = Identities::generate(plan.firmware(), plan.swap())?;
+    if plan.encrypt() {
+        crate::encryption::preflight()?;
+        if plan.firmware() == Firmware::Bios {
+            crate::Filesystem::Ext4.preflight(Firmware::Bios)?;
+        }
+    }
+    let layout = Layout::for_install(
+        plan.disk().bytes,
+        plan.firmware(),
+        swap_bytes,
+        plan.encrypt(),
+    )?;
+    let ids = Identities::generate_for(plan.firmware(), plan.swap(), plan.encrypt())?;
     let template = Template::load(settings, plan.hostname())?;
     stage.done();
 
@@ -446,28 +457,16 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     })
 }
 
-/// Destructive installation of a prepared, confirmed plan.
-pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
-    let started = Instant::now();
-    // From before the first disk write until the system is complete.
-    let awake = crate::power::stay_awake("Installing NixOS");
-    let mut request = confirmed.into_plan();
-    // The prepared files must be exactly what this confirmed plan generates.
-    ensure!(
-        config::configuration(&request, &prepared.ids)? == prepared.configuration,
-        "The confirmed plan differs from the prepared system"
-    );
-    let params = Sha512Params::new(100_000)
-        .map_err(|e| anyhow::anyhow!("Password hashing parameters: {e:?}"))?;
-    let password = request.take_password();
-    let hash = Zeroizing::new(
-        sha512_simple(&password, &params)
-            .map_err(|_| anyhow::anyhow!("Password hashing failed"))?,
-    );
-    drop(password);
+/// Shared destructive storage phase; tests call this only on a marked VM disk.
+fn prepare_storage(
+    request: &InstallPlan,
+    ids: &Identities,
+    layout: &Layout,
+    passphrase: &str,
+    target: &Target,
+    mappings: &mut crate::encryption::Mappings,
+) -> Result<()> {
     let firmware = request.firmware();
-    let ids = &prepared.ids;
-    let layout = &prepared.layout;
     // Lock while editing the partition table. Re-probe its stable identity and
     // all mount/holder state immediately before the first write.
     let mut device = Some(
@@ -487,9 +486,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     );
     disk::revalidate(request.disk())?;
     let dev = request.disk().path.as_str();
-    let target = Target::new()?;
     let mount = target.0.to_str().context("Target path encoding")?;
-    let stage = Stage::start("storage");
     let storage = (|| -> Result<()> {
         progress(
             1,
@@ -518,7 +515,11 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
         let boot = disk::partition(dev, 1);
         let root = disk::partition(dev, 2);
         let swap = disk::partition(dev, 3);
-        request.filesystem().format(&root, &ids.root)?;
+        let root_device = match &ids.encryption {
+            Some(encryption) => mappings.format_open(&root, &encryption.root, passphrase)?,
+            None => root.clone(),
+        };
+        request.filesystem().format(&root_device, &ids.root)?;
         match &ids.efi {
             Some(serial) => filesystem::format_efi(&boot, serial)?,
             // A BIOS boot partition must not retain an old filesystem signature.
@@ -527,7 +528,24 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             }
         }
         if let Some(uuid) = &ids.swap {
-            filesystem::format_swap(&swap, uuid)?;
+            let swap_device = match &ids.encryption {
+                Some(encryption) => mappings.format_open(
+                    &swap,
+                    encryption
+                        .swap
+                        .as_deref()
+                        .context("Missing encrypted swap identity")?,
+                    passphrase,
+                )?,
+                None => swap.clone(),
+            };
+            filesystem::format_swap(&swap_device, uuid)?;
+        }
+        let bios_boot = layout
+            .bios_boot_partition()
+            .map(|index| disk::partition(dev, index));
+        if let (Some(boot), Some(uuid)) = (&bios_boot, &ids.bios_boot) {
+            crate::Filesystem::Ext4.format(boot, uuid)?;
         }
         // udev postpones events for a locked disk: release the lock before
         // triggering. A fresh explicit change event updates UUID/type
@@ -540,19 +558,65 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
         if ids.swap.is_some() {
             changed.push(&swap);
         }
+        if let Some(boot) = &bios_boot {
+            changed.push(boot);
+        }
+        let mapping_paths = mappings.paths();
+        changed.extend(mapping_paths.iter().map(String::as_str));
         output("udevadm", &changed, 70)?;
-        disk::revalidate(request.disk())?;
-        request.filesystem().mount(&root, mount)?;
+        // Recheck identity and busy state, accepting only this install's own mappings.
+        disk::revalidate_with_mappings(request.disk(), &mappings.paths())?;
+        request.filesystem().mount(&root_device, mount)?;
         target.1.set(true);
         if ids.efi.is_some() {
             fs::create_dir(target.0.join("boot"))?;
             filesystem::mount_efi(&boot, target.0.join("boot").to_str().unwrap())?;
+        } else if let Some(boot) = &bios_boot {
+            fs::create_dir(target.0.join("boot"))?;
+            crate::Filesystem::Ext4.mount(boot, target.0.join("boot").to_str().unwrap())?;
         }
         Ok(())
     })();
     // Also releases the lock if storage preparation failed while holding it.
     drop(device);
     storage.map_err(|error| filesystem::diagnose(error, dev))?;
+    Ok(())
+}
+
+/// Destructive installation of a prepared, confirmed plan.
+pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
+    let started = Instant::now();
+    // From before the first disk write until the system is complete.
+    let awake = crate::power::stay_awake("Installing NixOS");
+    let mut request = confirmed.into_plan();
+    // The prepared files must be exactly what this confirmed plan generates.
+    ensure!(
+        config::configuration(&request, &prepared.ids)? == prepared.configuration,
+        "The confirmed plan differs from the prepared system"
+    );
+    let params = Sha512Params::new(100_000)
+        .map_err(|e| anyhow::anyhow!("Password hashing parameters: {e:?}"))?;
+    let password = request.take_password();
+    let hash = Zeroizing::new(
+        sha512_simple(&password, &params)
+            .map_err(|_| anyhow::anyhow!("Password hashing failed"))?,
+    );
+    drop(password);
+    let passphrase = request.take_encryption_password();
+    // Drop order matters: unmount before closing this install's mappings.
+    let mut mappings = crate::encryption::Mappings::default();
+    let target = Target::new()?;
+    let mount = target.0.to_str().context("Target path encoding")?;
+    let stage = Stage::start("storage");
+    prepare_storage(
+        &request,
+        &prepared.ids,
+        &prepared.layout,
+        &passphrase,
+        &target,
+        &mut mappings,
+    )?;
+    drop(passphrase);
     stage.done();
 
     let stage = Stage::start("files");
@@ -695,6 +759,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     progress(6, "Flushing writes and unmounting the installed system");
     output("sync", &["--file-system", mount], 300)?;
     target.unmount()?;
+    mappings.close()?;
     stage.done();
     timing("install", started.elapsed().as_secs_f64());
     progress(
@@ -783,5 +848,175 @@ mod tests {
             serde_json::to_string(&Event::Complete).unwrap(),
             r#"{"kind":"complete"}"#
         );
+    }
+}
+
+#[cfg(test)]
+mod encryption_tests {
+    use super::*;
+    use crate::{Filesystem, encryption};
+    const PASSPHRASE: &str = "Genkan-test-only-123";
+    fn identities(firmware: Firmware, swap: bool) -> Identities {
+        Identities {
+            root: "11111111-2222-4333-8444-555555555555".into(),
+            swap: swap.then(|| "66666666-7777-4888-9999-aaaaaaaaaaaa".into()),
+            efi: (firmware == Firmware::Uefi).then(|| "A1B2-C3D4".into()),
+            bios_boot: (firmware == Firmware::Bios)
+                .then(|| "12345678-1234-4567-8901-123456789012".into()),
+            encryption: Some(encryption::Identities {
+                root: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee".into(),
+                swap: swap.then(|| "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff".into()),
+            }),
+        }
+    }
+    /// Checked-in VM modules must exactly match the production generator.
+    /// This keeps flake evaluation pure: no build is needed to read a module.
+    #[test]
+    fn encrypted_boot_fixtures_match_generated_storage() -> Result<()> {
+        for (firmware, expected) in [
+            (Firmware::Bios, include_str!("test-data/bios-ext4.nix")),
+            (Firmware::Uefi, include_str!("test-data/uefi-ext4.nix")),
+        ] {
+            let (_dir, settings, mut raw) = crate::plan_tests::fixture();
+            raw.firmware = firmware;
+            raw.encrypt = true;
+            raw.encryption_password = PASSPHRASE.into();
+            let plan = raw.parse(&settings)?;
+            let storage = config::storage_configuration(&plan, &identities(firmware, true))?;
+            assert_eq!(format!("{{ lib, ... }}: {{\n{storage}}}\n"), expected);
+        }
+        Ok(())
+    }
+    /// The entire production partition/format/mount path. Never a host disk:
+    /// requires our VM marker, fixed path, serial and capacity before any write.
+    #[test]
+    #[ignore = "destructive: marked disposable NixOS VM only"]
+    fn encrypted_storage_matrix() -> Result<()> {
+        ensure!(
+            fs::read_to_string("/etc/genkan-storage-test")? == "disposable VM\n",
+            "Not a test VM"
+        );
+        let identity = disk::discover()?
+            .into_iter()
+            .find(|disk| {
+                disk.identity.path == "/dev/vdb"
+                    && disk.identity.serial == "GENKAN_LUKS_TEST"
+                    && disk.identity.bytes == 32 * memory::GIB
+                    && disk.blocked.is_none()
+            })
+            .context("Missing disposable encrypted-storage test disk")?
+            .identity;
+        let firmware = match std::env::var("GENKAN_TEST_FIRMWARE").as_deref() {
+            Ok("bios") => Firmware::Bios,
+            Ok("uefi") => Firmware::Uefi,
+            _ => anyhow::bail!("Missing firmware choice"),
+        };
+        // Ext4 last: the VM reboots onto this root after the matrix.
+        for filesystem in [Filesystem::Btrfs, Filesystem::Xfs, Filesystem::Ext4] {
+            for swap in [false, true] {
+                let (_dir, settings, mut raw) = crate::plan_tests::fixture();
+                raw.disk = identity.clone();
+                raw.firmware = firmware;
+                raw.filesystem = filesystem;
+                raw.swap = swap;
+                raw.encrypt = true;
+                raw.encryption_password = PASSPHRASE.into();
+                let plan = raw.parse(&settings)?;
+                let ids = identities(firmware, swap);
+                let layout = Layout::for_install(
+                    identity.bytes,
+                    firmware,
+                    swap.then_some(memory::GIB),
+                    true,
+                )?;
+                let mut mappings = encryption::Mappings::default();
+                let target = Target::new()?;
+                prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
+                // The normal disk selector must still reject our open holders.
+                assert!(disk::revalidate(&identity).is_err());
+                fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;
+                let mount = target.0.to_str().unwrap();
+                output("fstrim", &["--verbose", mount], 30)?;
+                if swap {
+                    let path = format!(
+                        "/dev/mapper/genkan-{}",
+                        ids.encryption.as_ref().unwrap().swap.as_ref().unwrap()
+                    );
+                    assert_eq!(
+                        filesystem::probe_uuid(&path, "swap")?,
+                        ids.swap.clone().unwrap()
+                    );
+                }
+                let mapping_paths = mappings.paths();
+                if swap {
+                    target.unmount()?;
+                    mappings.close()?;
+                }
+                // Also exercise unwinding-style cleanup while still mounted.
+                drop(target);
+                drop(mappings);
+                assert!(mapping_paths.iter().all(|path| !Path::new(path).exists()));
+                disk::revalidate(&identity)?;
+                let target = Target::new()?;
+                let mount = target.0.to_str().unwrap();
+                let root = disk::partition(&identity.path, 2);
+                // Wrong keys fail without leaving a mapping; the correct key
+                // recovers data after all installer mappings have been closed.
+                assert!(
+                    process::output_secret(
+                        "cryptsetup",
+                        &["open", "--test-passphrase", "--key-file", "-", &root],
+                        b"incorrect-passphrase",
+                        30
+                    )
+                    .is_err()
+                );
+                process::output_secret(
+                    "cryptsetup",
+                    &[
+                        "open",
+                        "--allow-discards",
+                        "--key-file",
+                        "-",
+                        &root,
+                        "genkan-reopen",
+                    ],
+                    PASSPHRASE.as_bytes(),
+                    60,
+                )?;
+                filesystem.mount("/dev/mapper/genkan-reopen", mount)?;
+                target.1.set(true);
+                assert_eq!(
+                    fs::read(target.0.join("encrypted-sentinel"))?,
+                    b"written by Genkan"
+                );
+                // Deletion and trim on an opened mapping must reach the disk.
+                fs::write(target.0.join("trim-me"), vec![1u8; 4 << 20])?;
+                fs::remove_file(target.0.join("trim-me"))?;
+                output("fstrim", &["--verbose", mount], 30)?;
+                target.unmount()?;
+                output("cryptsetup", &["close", "genkan-reopen"], 30)?;
+                let dump: serde_json::Value = serde_json::from_str(&output(
+                    "cryptsetup",
+                    &["luksDump", "--dump-json-metadata", &root],
+                    30,
+                )?)?;
+                assert_eq!(
+                    dump["segments"]["0"]["offset"],
+                    encryption::HEADER_BYTES.to_string()
+                );
+                // Discard permission is runtime/configuration only, not a persistent header flag.
+                assert!(
+                    dump["config"]["flags"]
+                        .as_array()
+                        .is_none_or(|flags| flags.is_empty())
+                );
+                println!(
+                    "PASS {firmware:?} {} swap={swap}: LUKS2, reopen, wrong key, cleanup, trim",
+                    filesystem.name()
+                );
+            }
+        }
+        Ok(())
     }
 }

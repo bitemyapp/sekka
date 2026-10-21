@@ -41,6 +41,7 @@ in
     referenceDesktops = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
+        "aizome"
         "plasma"
         "gnome"
         "xfce"
