@@ -106,6 +106,13 @@ root and NixOS checks still apply. `nix build .#checks.x86_64-linux.genkan-live-
 exercises this guard against real ISO, tmpfs and squashfs mounts in disposable
 VMs, including unrelated media and installed-root refusals.
 
+Tatami supplies mpv with system defaults that prefer OpenGL and permit its
+software renderer, so recorded videos also play on a VM without 3D acceleration.
+User `mpv.conf` and command-line preferences override those defaults.
+`nix build .#checks.x86_64-linux.mpv-software` plays moving video to completion
+in an Aizome VM using the shipped config and checks both override routes.
+This component test does not replace playback through the exact ISO's normal UI.
+
 ## Sources and installed-system updates
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
