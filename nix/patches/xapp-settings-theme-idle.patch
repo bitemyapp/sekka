@@ -1,0 +1,43 @@
+diff --git a/src/settings.c b/src/settings.c
+--- a/src/settings.c
++++ b/src/settings.c
+@@ -322,15 +322,35 @@ on_settings_changed (GSettings             *gsettings,
+     }
+ }
+ 
+-static void
+-on_gtk3_theme_changed (GtkSettings *gtk_settings,
+-                       GParamSpec  *pspec,
+-                       gpointer     user_data)
++static guint theme_changed_source = 0;
++
++static gboolean
++emit_gtk3_theme_changed (gpointer user_data)
+ {
+     XdpImplSettings *xdg_settings = XDP_IMPL_SETTINGS (user_data);
+ 
++    theme_changed_source = 0;
+     GVariant *out = g_variant_new ("v", get_accent_color ((gpointer) &setting_defs[ACCENT_COLOR_DEF]));
+     xdp_impl_settings_emit_setting_changed (xdg_settings, "org.freedesktop.appearance", "accent-color", out);
++    return G_SOURCE_REMOVE;
++}
++
++static void
++on_gtk3_theme_changed (GtkSettings *gtk_settings,
++                       GParamSpec  *pspec,
++                       gpointer     user_data)
++{
++    /* XSettings may update the theme and font together. Constructing a style
++     * context inside notify::gtk-theme-name can lazily read that font and
++     * invalidate the context before its CSS node is initialized. Let GTK
++     * finish dispatching the settings batch before reading the new theme.
++     * Coalesce notifications, retaining the exported interface until idle.
++     */
++    if (theme_changed_source == 0)
++        theme_changed_source = g_idle_add_full (G_PRIORITY_DEFAULT_IDLE,
++                                               emit_gtk3_theme_changed,
++                                               g_object_ref (user_data),
++                                               g_object_unref);
+ }
+ 
+ static void
