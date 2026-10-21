@@ -16,6 +16,8 @@
    it as diagnostic/component evidence. Do not patch the running guest and
    certify its original ISO. Never suppress mount errors, disable the greeter,
    skip a broken app or relabel a failed feature as optional to get green.
+   Follow [component comparison provenance](component-tests.md) for original/fixed
+   builds, harness corrections and evidence carried across commit/rebase boundaries.
 5. Once the discovered fixes are in the candidate source and dependencies,
    build a clean, newly identified ISO. Pin the dependency fixes in Sekka and
    preserve source provenance. Rerun Q0–Q6 on that exact hash, including already

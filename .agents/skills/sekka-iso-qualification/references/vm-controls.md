@@ -9,6 +9,7 @@ installed configuration, assumes fixture credentials, and the graphical-login
 check lacks Aizome. It powers off automatically; `boot-installed` attaches the
 repository share. These are supplemental tests, not Q2/Q3 certification.
 For the primary journey use [direct QEMU](direct-qemu.md).
+For component drivers, use the [runtime isolation and evidence procedure](component-tests.md).
 
 Supplemental fixture entrypoints (consult `--help` for the current contract):
 
