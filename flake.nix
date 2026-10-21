@@ -242,6 +242,7 @@
         };
       };
       checks.${system} = {
+        iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;
           chatgpt = self.packages.${system}.chatgpt;

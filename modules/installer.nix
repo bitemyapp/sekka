@@ -15,6 +15,23 @@ let
     source = inputs.calamares;
   };
   diagnostics = import ../nix/live-diagnostics.nix { inherit pkgs; };
+  copytoramNotice = pkgs.writeShellApplication {
+    name = "sekka-copytoram-notice";
+    runtimeInputs = [
+      pkgs.gnugrep
+      pkgs.util-linux
+      pkgs.kdePackages.kdialog
+    ];
+    text = ''
+      if grep -Eq '(^|[[:space:]])copytoram(=[^[:space:]]*)?([[:space:]]|$)' /proc/cmdline &&
+         [[ "$(findmnt -n -o FSTYPE --mountpoint /iso)" != tmpfs ]]; then
+        exec kdialog --title "Keep installation media connected" --sorry \
+          "Copy to RAM was unavailable or failed. Sekka started from the installation media instead.
+
+      Keep your USB drive or DVD connected while this live session is running."
+      fi
+    '';
+  };
   applicationCatalog = import ../nix/applications.nix { inherit inputs; };
   references = import ../nix/reference-systems.nix {
     inherit inputs applicationCatalog;
@@ -56,6 +73,20 @@ in
     };
   };
   config = {
+    # Upstream copies after removing the original mount and has no RAM check.
+    # A large Sekka ISO can otherwise OOM the initrd or leave .ro-store without
+    # its backing image. Preserve media until a complete RAM copy is available.
+    boot.initrd.systemd.services.copytoram.script = lib.mkForce ''
+      exec ${import ../nix/iso-copytoram.nix { inherit pkgs; }}/bin/sekka-copy-iso-to-ram
+    '';
+    environment.etc."xdg/autostart/sekka-copytoram-notice.desktop".text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=Installation media notice
+      Exec=${copytoramNotice}/bin/sekka-copytoram-notice
+      NoDisplay=true
+      X-GNOME-Autostart-enabled=true
+    '';
     services.desktopManager.plasma6 = {
       enable = true;
       enableQt5Integration = false;
