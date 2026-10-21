@@ -452,6 +452,16 @@ at 1280×800, selects scale 2 through the window, checks its bounds and scrollin
 and returns to scale 1 through the visible controls. It also checks the offered
 scales and reopening the window. This component test does not qualify an ISO.
 
+Network uses the same workspace geometry. The display watcher fits it for
+three seconds at startup and after a Network window opens, covering initial
+size negotiation from direct desktop-entry and panel launches. Layout changes
+fit both settings windows; unrelated floating windows keep their policy.
+Network's pages allow horizontal scrolling on very narrow workspaces.
+`nix build .#checks.x86_64-linux.network-fit-vm` covers changing scale with an
+open window, reopening through the network panel, usable bounds, scrolling to
+the connection's bottom controls, and the header's Back and Close buttons at
+1280×800 with scales 1, 1.25, 2 and 3.2.
+
 Pop Out (Super+O) explicitly enables floating, fits its preferred 1300×900
 size to the window's own logical monitor work area, and pins it. A second
 invocation unpins and returns to tiling, including for windows that were

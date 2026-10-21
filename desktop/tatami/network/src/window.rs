@@ -157,7 +157,7 @@ pub fn page(
         .child(content)
         .build();
     let scroller = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
         .vexpand(true)
         .child(&clamp)
         .build();

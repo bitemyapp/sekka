@@ -495,7 +495,7 @@ pub fn rescue_windows() -> util::Result<usize> {
             format!("hl.dispatch(hl.dsp.window.center({{ window = \"address:{address}\" }}))\n")
         })
         .collect();
-    // Displays must still fit when an offered text scale shrinks the logical
+    // Settings must still fit when an offered text scale shrinks the logical
     // workspace, even if part of the window still overlaps its screen.
     for client in clients.as_array().into_iter().flatten() {
         if client["mapped"] == true
@@ -506,7 +506,7 @@ pub fn rescue_windows() -> util::Result<usize> {
                 .flatten()
                 .find(|m| lit(m) && m["id"] == client["monitor"])
         {
-            lua.push_str(&window::fit_displays(client, monitor));
+            lua.push_str(&window::fit_settings_window(client, monitor));
         }
     }
     if lua.is_empty() {
@@ -635,6 +635,41 @@ fn lid_event(line: &str) -> Option<bool> {
     }
 }
 
+/// Network can also open directly from its desktop entry or a second launch
+/// with --join. Fit those routes without changing other floating windows.
+fn network_opened(line: &str) -> bool {
+    line.trim_end()
+        .strip_prefix("openwindow>>")
+        .and_then(|fields| fields.split(',').nth(2))
+        == Some("org.tatami.Network")
+}
+
+fn fit_network_windows() -> util::Result<()> {
+    let monitors = monitors()?;
+    let clients = hypr::request_json("j/clients")?;
+    let mut lua = String::new();
+    for client in clients.as_array().into_iter().flatten() {
+        if client["class"] == "org.tatami.Network"
+            && client["mapped"] == true
+            && client["hidden"] != true
+            && let Some(monitor) = monitors
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|m| lit(m) && m["id"] == client["monitor"])
+        {
+            lua.push_str(&window::fit_settings_window(client, monitor));
+        }
+    }
+    if !lua.is_empty() {
+        let reply = hypr::request(&format!("/eval {lua}"))?;
+        if reply.trim_start().starts_with("error:") {
+            return Err(reply.trim().to_owned());
+        }
+    }
+    Ok(())
+}
+
 pub fn watch() -> util::Result<()> {
     let runtime = std::env::var("XDG_RUNTIME_DIR").map_err(|_| "No desktop runtime directory")?;
     let signature =
@@ -651,6 +686,10 @@ pub fn watch() -> util::Result<()> {
     let mut changed = true;
     let mut screens = None;
     let mut rescue_until = Instant::now();
+    // Cover a window mapped before the watcher started, and the compositor's
+    // initial size negotiation after each Network open. Never a permanent
+    // window-placement policy or a rescue of unrelated windows.
+    let mut network_fit_until = Instant::now() + Duration::from_secs(3);
     let mut scale = XScale::new();
     loop {
         if changed || last_check.elapsed() >= Duration::from_secs(1) {
@@ -680,6 +719,11 @@ pub fn watch() -> util::Result<()> {
             {
                 eprintln!("tatami: window rescue: {error}");
             }
+            if Instant::now() < network_fit_until
+                && let Err(error) = fit_network_windows()
+            {
+                eprintln!("tatami: Network window fit: {error}");
+            }
             last_check = Instant::now();
         }
         // Periodic reconciliation also covers events emitted before startup,
@@ -688,7 +732,10 @@ pub fn watch() -> util::Result<()> {
         changed = match reader.read_line(&mut line) {
             Ok(0) => return Err("Hyprland event connection closed".into()),
             Ok(_) => {
-                if let Some(closed) = lid_event(&line) {
+                if network_opened(&line) {
+                    network_fit_until = Instant::now() + Duration::from_secs(3);
+                    true
+                } else if let Some(closed) = lid_event(&line) {
                     lid.closed = closed;
                     true
                 } else {
@@ -721,6 +768,20 @@ pub fn watch() -> util::Result<()> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn only_network_open_events_request_initial_fitting() {
+        assert!(network_opened(
+            "openwindow>>abc,1,org.tatami.Network,Network\n"
+        ));
+        assert!(network_opened(
+            "openwindow>>abc,2,org.tatami.Network,A title, with commas"
+        ));
+        assert!(!network_opened("openwindow>>abc,1,foot,org.tatami.Network"));
+        assert!(!network_opened("openwindow>>abc,org.tatami.Network"));
+        assert!(!network_opened(
+            "windowtitle>>abc,1,org.tatami.Network,Network"
+        ));
+    }
     #[test]
     fn lid_bindings_are_read_from_the_event_socket() {
         assert_eq!(lid_event("custom>>tatami-lid-closed\n"), Some(true));

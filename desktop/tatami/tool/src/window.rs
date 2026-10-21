@@ -631,7 +631,7 @@ fn bring_here(address: &str) {
     if let Some(monitor) = monitor
         && let Some(window) = displays_window()
     {
-        lua.push_str(&fit_displays(&window, &monitor));
+        lua.push_str(&fit_settings_window(&window, &monitor));
     }
     let _ = hypr::request(&format!("/eval {lua}"));
     // Apart, so that a failed dispatch above cannot leave warps off.
@@ -640,19 +640,24 @@ fn bring_here(address: &str) {
     ));
 }
 
-/// Keep Displays inside its logical workspace, including the bar's reserved
+/// Keep Displays and Network inside their logical workspace, including the bar's reserved
 /// space and a small border margin. Used when presenting it and after a
 /// monitor layout/scale change; other floating windows retain their policy.
-pub(crate) fn fit_displays(client: &Value, monitor: &Value) -> String {
-    if client["class"] != "org.tatami.Displays" || client["floating"] != true {
+pub(crate) fn fit_settings_window(client: &Value, monitor: &Value) -> String {
+    let (width, height) = match client["class"].as_str() {
+        Some("org.tatami.Displays") => (880, 800),
+        Some("org.tatami.Network") => (720, 760),
+        _ => return String::new(),
+    };
+    if client["floating"] != true {
         return String::new();
     }
     let Some(address) = hypr::address(client) else {
         return String::new();
     };
     let Some(area) = fit_geometry(
-        client["size"][0].as_i64().unwrap_or(880),
-        client["size"][1].as_i64().unwrap_or(800),
+        client["size"][0].as_i64().unwrap_or(width),
+        client["size"][1].as_i64().unwrap_or(height),
         monitor,
     ) else {
         return String::new();
@@ -789,7 +794,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn displays_fit_scaled_rotated_workspaces_but_other_windows_are_untouched() {
+    fn settings_fit_scaled_rotated_workspaces_but_other_windows_are_untouched() {
         let mut client = serde_json::json!({
             "class": "org.tatami.Displays", "floating": true,
             "address": "0x123", "size": [880, 800]
@@ -798,14 +803,19 @@ mod tests {
             "x": 1280, "y": 0, "width": 1280, "height": 800,
             "scale": 2, "transform": 0, "reserved": [0, 26, 0, 0]
         });
-        let fitted = fit_displays(&client, &monitor);
+        let fitted = fit_settings_window(&client, &monitor);
         assert!(fitted.contains("x = 624, y = 358"), "{fitted}");
         assert!(fitted.contains("x = 1288, y = 34"), "{fitted}");
         monitor["transform"] = 1.into();
-        let fitted = fit_displays(&client, &monitor);
+        let fitted = fit_settings_window(&client, &monitor);
         assert!(fitted.contains("x = 384, y = 598"), "{fitted}");
         client["class"] = "org.tatami.Network".into();
-        assert!(fit_displays(&client, &monitor).is_empty());
+        assert_eq!(fit_settings_window(&client, &monitor), fitted);
+        client["floating"] = false.into();
+        assert!(fit_settings_window(&client, &monitor).is_empty());
+        client["floating"] = true.into();
+        client["class"] = "foot".into();
+        assert!(fit_settings_window(&client, &monitor).is_empty());
     }
 
     #[test]

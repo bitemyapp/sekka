@@ -522,6 +522,10 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        network-fit-vm = import ./nix/network-fit-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         wpa-supplicant-scan = import ./nix/wpa-supplicant-scan-test.nix {
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed
