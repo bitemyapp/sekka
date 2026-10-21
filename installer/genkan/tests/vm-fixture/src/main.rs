@@ -616,14 +616,25 @@ fn main() -> Result<()> {
             );
         }
         Some("verify") => {
+            let configuration = fs::read_to_string("/etc/nixos/configuration.nix")?;
             let manifest: serde_json::Value =
                 serde_json::from_slice(&fs::read("/etc/installer-applications.json")?)?;
             let expected = calamares_nixos::applications::ApplicationSelection::parse(
                 selected_applications(),
                 true,
             )?;
+            // Aizome's base shell is included by applications.nix even when
+            // the user selected no optional catalog applications.
+            let mut installed_ids = expected.ids();
+            let desktops = configuration
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("calamares.desktops = "))
+                .context("No desktop selection")?;
+            if desktops.contains("\"aizome\"") && !installed_ids.iter().any(|id| id == "fish") {
+                installed_ids.push("fish".into());
+            }
             ensure!(
-                manifest["selected"] == serde_json::to_value(expected.ids())?,
+                manifest["selected"] == serde_json::to_value(&installed_ids)?,
                 "Installed applications differ from the reviewed selection"
             );
             for package in manifest["packages"]
@@ -676,6 +687,16 @@ fn main() -> Result<()> {
                     "Btrfs compression did not survive reboot"
                 );
             }
+            let timezone = output(
+                "timedatectl",
+                &["show", "--property=Timezone", "--value"],
+                15,
+            )?;
+            ensure!(
+                timezone.trim() == "America/Chicago",
+                "Installed time zone differs from the reviewed selection: {timezone:?}"
+            );
+            println!("TIMEZONE={}", timezone.trim());
             ensure!(
                 output("hostname", &[], 10)?.trim() == "rust-test",
                 "Wrong hostname"
@@ -738,7 +759,6 @@ fn main() -> Result<()> {
                 !Path::new("/etc/nixos/secrets").exists(),
                 "Secret inside flake source"
             );
-            let configuration = fs::read_to_string("/etc/nixos/configuration.nix")?;
             ensure!(
                 configuration.contains("hardware.enableRedistributableFirmware = true;"),
                 "Installed firmware policy missing"

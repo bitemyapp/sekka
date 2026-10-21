@@ -632,6 +632,14 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     fs::set_permissions(&secret_dir, fs::Permissions::from_mode(0o700))?;
     config::write_secret(&secret_dir.join("user-password.hash"), &hash)?;
     request.wifi().write_to(&target.0)?;
+    // Seed the first activation with the user's selected zone. Aizome makes
+    // time.timeZone mutable and preserves /etc/localtime across rebuilds;
+    // a fresh target has no previous zone for it to preserve. Its activation
+    // converts this NixOS-style link to timedated's mutable relative link.
+    std::os::unix::fs::symlink(
+        Path::new("/etc/zoneinfo").join(request.timezone().as_str()),
+        target.0.join("etc/localtime"),
+    )?;
     stage.done();
 
     let stage = Stage::start("copy");
