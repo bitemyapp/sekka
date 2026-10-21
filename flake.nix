@@ -252,6 +252,9 @@
             ;
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+        iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
+          inherit pkgs installer;
+        };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;
           chatgpt = self.packages.${system}.chatgpt;

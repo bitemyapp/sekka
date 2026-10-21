@@ -95,7 +95,11 @@ until the copy is complete and preserves it on copy failure. A fallback boots
 from the media and warns in the live desktop to keep the USB drive or DVD
 connected. `nix build .#checks.x86_64-linux.iso-copytoram` tests insufficient
 memory, a real read error, and a successful switch to RAM in a disposable VM;
-the exact ISO still needs both low-memory and successful copy-to-RAM boot tests.
+`nix build .#checks.x86_64-linux.iso-copytoram-initrd` separately unpacks the
+actual installer initrd and runs its copy-to-RAM entrypoint and runtime tools
+inside that filesystem. Initrd generation does not follow references inside
+shell scripts, so both the helper and its runtime inputs must be included.
+The exact ISO still needs both low-memory and successful copy-to-RAM boot tests.
 
 ## Sources and installed-system updates
 
