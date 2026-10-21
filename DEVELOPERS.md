@@ -161,6 +161,21 @@ upstream fix first.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
+With several desktops installed, `calamares-session-env.service` records the
+user manager's initial environment, including custom variables. The login
+screen's PAM hook restores that baseline before another desktop starts. The
+snapshot service stays active after saving and does not restart on activation:
+otherwise a switch or rollback in Tatami overwrites the baseline with its
+`XDG_MENU_PREFIX=hyprland-`, breaking the next Xfce applications menu.
+`nix build .#checks.x86_64-linux.session-environment` exercises real GDM password
+login, activation and rollback in Tatami, Xfce's menu, and subsequent Wayland
+sessions with one lingering manager; the original unit is its failing control.
+After upgrading from the old inactive unit, start a new user manager, normally
+by rebooting. Activation can start that old inactive unit in the current
+desktop, and the fix does not repair an already contaminated snapshot. Manually
+restarting the snapshot service during a desktop still replaces it and is not
+a reset operation. Restart the user manager after ending its sessions instead.
+
 ChatGPT Desktop 26.1013.40934 copies `codex-app-tools` from the Nix store
 into `~/.config/Codex/executor-plugins` with Node's `fs.cp`, preserving
 read-only directories and files. Refreshing that copy fails with `EACCES`

@@ -466,8 +466,12 @@ in
       description = "Record the environment of the user manager before any desktop session";
       wantedBy = [ "default.target" ];
       before = [ "default.target" ];
+      # This snapshot belongs to the user manager's lifetime. Activation must
+      # not rerun an inactive oneshot or restart it with a desktop's exports.
+      restartIfChanged = false;
       serviceConfig = {
         Type = "oneshot";
+        RemainAfterExit = true;
         ExecStart = "${lib.getExe sessionEnv} save %t/calamares-session-env";
       };
     };
