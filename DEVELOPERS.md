@@ -292,9 +292,19 @@ ext-image-copy-capture and wlr-screencopy, cursor inclusion and exclusion,
 movement, scale and rotation, blank OCR, decoded software recordings,
 ordinary and detached zoom with cropped captures, and the actual mirrored
 VM display including destination rotation, zoom and DPMS sleep/wake. The
-original must reproduce the cursor leak. These are component checks; they do not qualify a release image or
-physical graphics hardware. Remove this patch once an upstream fix passes
+original must reproduce the cursor leak. These are component checks; they do
+not qualify a release image or physical graphics hardware. Remove this patch once an upstream fix passes
 the same regression, and review any patch conflict during input updates.
+
+Tatami's screenshot completion notice has a one-shot `notify-send` action
+owner, which exits when the card expires or closes. Its Mako rule therefore
+excludes it from history: restoring it would advertise an Edit action with
+no listener. The image remains saved in the user's Pictures directory;
+ordinary notification history is unchanged. The
+`screenshot-notifications` flake check runs real Mako, Tatami and Satty in a
+VM: fresh Edit opens the saved image, expiry leaves no dead screenshot card,
+and an ordinary notice still restores. Overriding just this history setting
+reproduces the old dead action as the negative control.
 
 Tatami's Elephant (`desktop/tatami/elephant/`) carries `search.patch`, a Sekka
 change that is not upstream. Stock Elephant searches applications either by

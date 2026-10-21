@@ -469,6 +469,11 @@
           inherit (self.packages.${system}) tatami;
           inherit (hyprlandPkgs) hyprland;
         };
+        screenshot-notifications = import ./nix/screenshot-notifications-vm-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tatami;
+          inherit (hyprlandPkgs) hyprland;
+        };
         tuning = import ./nix/tuning-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
