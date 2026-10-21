@@ -66,6 +66,13 @@ The retained VM tooling is available through `nix build .#tools`. Run `result/bi
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
+Use the repository's [ISO qualification skill](.agents/skills/sekka-iso-qualification/SKILL.md)
+for the complete workstation procedure. It routes agents through live-media,
+storage, greeter, Aizome, Tatami and update checks with a per-feature evidence
+ledger, plus the fix/rebuild/retest and publication gates. The retained fixture
+harness changes installer settings, so the skill also includes a direct QEMU
+path for an unmodified graphical installation and disk-only boot.
+
 ## Sources and installed-system updates
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
