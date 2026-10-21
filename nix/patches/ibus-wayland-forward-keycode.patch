@@ -1,0 +1,44 @@
+Backport the physical-keycode path from IBus upstream commit
+58b74bd76d79bfb909eb011f5f444f474a9415c1 (2026-08-11).
+https://github.com/ibus/ibus/commit/58b74bd76d79bfb909eb011f5f444f474a9415c1
+
+Adapted to 1.5.34 and retains the existing warning for keycode=0. The later
+keysym-only implementation depends on the 1.5.35 keymap refactor. Engines
+such as Hangul forward the original evdev keycode for spaces and digits;
+dropping those events loses user text even though composition succeeds.
+
+--- a/client/wayland/ibuswaylandim.c
++++ b/client/wayland/ibuswaylandim.c
+@@ -382,6 +382,7 @@
+ ibus_wayland_im_keysym (IBusWaylandIM *wlim,
+                         uint32_t       im_serial,
+                         guint          keyval,
++                        guint          keycode,
+                         uint32_t       state,
+                         guint          modifiers)
+ {
+@@ -398,7 +399,15 @@
+                                             modifiers);
+         break;
+     case INPUT_METHOD_V2:
+-        g_warning ("TODO");
++        /* IMv2 has no keysym request. Engines forwarding a physical key
++         * supply the original evdev keycode, accepted by the virtual
++         * keyboard. Preserve the v1 keysym path above.
++         */
++        if (keycode != 0) {
++            ibus_wayland_im_key (wlim, im_serial, 0, keycode, state);
++        } else {
++            g_warning ("IMv2 cannot forward a keysym without a keycode");
++        }
+         break;
+     default:
+         g_assert_not_reached ();
+@@ -435,6 +444,7 @@
+     ibus_wayland_im_keysym (wlim,
+                             priv->im_serial,
+                             keyval,
++                            keycode,
+                             state,
+                             modifiers);
+ }

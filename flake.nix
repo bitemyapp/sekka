@@ -257,6 +257,8 @@
           patched = xappPkgs.xdg-desktop-portal-xapp;
         };
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
+        aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
+        aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
           inherit

@@ -11,6 +11,7 @@
   imports = [
     ./binary-cache.nix
     ./desktops.nix
+    ./input-method.nix
     ./nvidia.nix
     ./store-space.nix
     ./tuning.nix
