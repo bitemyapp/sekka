@@ -308,6 +308,11 @@ impl Vm {
                 ))
                 .arg("-drive")
                 .arg(format!("if=pflash,format=raw,file={}", qpath(&vars)?));
+        } else {
+            // SeaBIOS 1.17 otherwise moves 64-bit BARs above 4 GiB when
+            // the guest has more than 4 GiB RAM, but its NVMe driver cannot
+            // map them there. Keep boot-device MMIO accessible to the BIOS.
+            command.args(["-fw_cfg", "name=opt/org.seabios/pci64,string=0"]);
         }
         if iso.is_some() || input == InputDevices::Usb {
             command.args(["-device", "qemu-xhci,id=xhci"]);

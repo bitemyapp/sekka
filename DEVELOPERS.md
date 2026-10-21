@@ -72,6 +72,11 @@ Do not merge unrelated Cargo workspaces or broaden package source filters as par
 
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
+BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
+`opt/org.seabios/pci64=0` setting. SeaBIOS 1.17 otherwise moves the NVMe
+controller above that limit in an 8 GiB guest and cannot read the boot disk.
+UEFI fixtures retain their normal firmware allocation.
+
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
