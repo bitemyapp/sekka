@@ -74,6 +74,14 @@ The retained VM tooling is available through `nix build .#tools`. Run `result/bi
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
+The ISO embeds a prebuilt system and precache path list for every desktop
+offered by Genkan, including default Aizome; the cache's `installed-systems`
+uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
+compares that evaluated list with the actual GUI's `Desktop::ALL` inventory
+and checks that each reference system and path list is included in the ISO
+configuration. This is a packaging check; qualification still boots and
+installs the resulting ISO.
+
 Use the repository's [ISO qualification skill](.agents/skills/sekka-iso-qualification/SKILL.md)
 for the complete workstation procedure. It routes agents through live-media,
 storage, greeter, Aizome, Tatami and update checks with a per-feature evidence

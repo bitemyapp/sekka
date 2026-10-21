@@ -1,11 +1,19 @@
 # Q2 — installation
 
 At least one complete installation for each firmware must use only normal
-Genkan mouse/keyboard UI. The primary UEFI case installs Aizome and Tatami
-plus the other advertised desktop choices, with Aizome default and password
-login. A second case keeps default choices. Do not replace the GUI flow with
-the fixture. Use fixtures to cover the remaining storage combinations, and
-record the distinction in every result.
+Genkan mouse/keyboard UI. The primary UEFI case installs Aizome, Tatami,
+Plasma, Xfce and Hyprland, with Aizome default and password login. This case
+must use Aizome's greeter. A second case keeps the default Aizome-only choices
+and must also use Aizome's greeter.
+
+A separate required case selects all six desktops, including GNOME. Current
+Sekka deliberately uses GDM whenever GNOME is selected because GNOME cannot
+lock its screen without GDM. Verify GDM, GNOME locking and all-six coexistence
+in that case. Genkan's GUI chooses the default session, not `loginScreen`;
+do not override the generated configuration to manufacture Aizome-greeter
+coverage. These cases preserve every offered desktop and the required Aizome
+greeter tests. Do not replace the GUI flow with the fixture. Use fixtures to
+cover the remaining storage combinations, recording the distinction.
 
 ## GUI journey
 

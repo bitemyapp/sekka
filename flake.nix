@@ -242,6 +242,15 @@
         };
       };
       checks.${system} = {
+        iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            fixture
+            installer
+            ;
+        };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;
