@@ -262,6 +262,9 @@ NAME` opens it to join that network, as the panel does for enterprise
 networks. With `TATAMI_NETWORK_DRY_RUN=1` it prints the changes it would
 make instead.
 
+The window fits the display's available space at larger text scales. Its
+settings scroll while the header's Back and Close controls stay visible.
+
 It looks as Displays does, from `config/tatami-network/style-dark.css`,
 found the same way under `tatami-network/`.
 
