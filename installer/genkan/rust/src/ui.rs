@@ -72,7 +72,7 @@ enum Message {
         total: u64,
         done: bool,
     },
-    Rebooted(Result<(), String>),
+    PowerRequested(&'static str, Result<(), String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -2127,38 +2127,47 @@ impl Ui {
         self.title.set_title("Installation Complete");
         self.title.set_subtitle("");
         self.install.done.set_description(Some(&format!(
-            "{time}Remove the installation media, then restart into your new system."
+            "{time}Shut down before removing the installation media, then turn on your computer. If you restart instead, remove the media when your computer's startup screen appears."
         )));
         let buttons = gtk::Box::new(Orientation::Horizontal, 12);
         buttons.set_halign(Align::Center);
         let restart = gtk::Button::with_label("Restart Now");
         restart.add_css_class("pill");
-        restart.add_css_class("suggested-action");
+        let shutdown = gtk::Button::with_label("Shut Down");
+        shutdown.add_css_class("pill");
+        shutdown.add_css_class("suggested-action");
         let close = gtk::Button::with_label("Close");
         close.add_css_class("pill");
         buttons.append(&close);
         buttons.append(&restart);
-        restart.connect_clicked({
+        buttons.append(&shutdown);
+        // The live store can still be mounted from the installation media.
+        // Finish shutdown before asking users to disconnect it.
+        for (button, command, action) in [
+            (&restart, "reboot", "restart"),
+            (&shutdown, "poweroff", "shut down"),
+        ] {
             let send = self.send.clone();
-            move |button| {
-                button.set_sensitive(false);
+            let controls = buttons.clone();
+            button.connect_clicked(move |_| {
+                controls.set_sensitive(false);
                 let send = send.clone();
                 thread::spawn(move || {
                     let result = std::process::Command::new("systemctl")
-                        .arg("reboot")
+                        .arg(command)
                         .status()
                         .map_err(|e| e.to_string())
                         .and_then(|status| {
                             if status.success() {
                                 Ok(())
                             } else {
-                                Err(format!("systemctl reboot failed ({status})"))
+                                Err(format!("systemctl {command} failed ({status})"))
                             }
                         });
-                    let _ = send.send(Message::Rebooted(result));
+                    let _ = send.send(Message::PowerRequested(action, result));
                 });
-            }
-        });
+            });
+        }
         close.connect_clicked({
             let window = self.window.clone();
             move |_| window.close()
@@ -2293,9 +2302,10 @@ impl Ui {
                     )
                 });
             }
-            Message::Rebooted(result) => {
+            Message::PowerRequested(action, result) => {
                 if let Err(error) = result {
-                    self.toast(&format!("Could not restart: {error}"));
+                    self.show_done();
+                    self.toast(&format!("Could not {action}: {error}"));
                 }
             }
         }
