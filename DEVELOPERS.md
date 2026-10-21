@@ -754,6 +754,15 @@ group, with a screenshot after each state change. Its label and action
 come from the same whole-selection state as the context menu. Reading real RAPL
 counters as root needs physical hardware.
 
+The same VM check exercises process keyboard commands with real table focus:
+Shift+F10 and Menu open the process menu, Ctrl+C copies its command, and Delete
+and Shift+Delete open cancellable confirmations. These keys run before the
+search entry's type-anywhere forwarding only while focus is in the table.
+Search-field Delete, cut, copy and its context menu keep their editing behavior;
+typing from the table still searches. The test also confirms keyboard Quit
+actually ends its disposable process. These component checks do not qualify an
+ISO's Activity window.
+
 ## Keep Awake and USB wake
 
 `tatami awake on|off|toggle|status` controls a session-owned user service with

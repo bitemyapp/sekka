@@ -51,6 +51,7 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "tatami-activity";
+  enableOCR = true;
   globalTimeout = 1500;
   node.pkgsReadOnly = false;
   nodes.machine =
@@ -83,6 +84,7 @@ pkgs.testers.runNixOSTest {
     };
   testScript = ''
     import json, re, shlex, time
+    from datetime import timedelta
 
     def user(command, check=True):
         status, output = machine.execute(
@@ -142,6 +144,33 @@ pkgs.testers.runNixOSTest {
             if time.monotonic() >= deadline:
                 raise Exception(f"Expected paused={paused} for {pids}, got {states}")
             time.sleep(0.5)
+
+    def row_focus():
+        # The single filtered row. Clicking it gives the table real keyboard
+        # focus; changing selection over D-Bus would not reproduce forwarding.
+        window = activity()
+        x, y = window["at"][0] + 110, window["at"][1] + 126
+        user("hyprctl dispatch " + shlex.quote(
+            f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
+        time.sleep(0.3)
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click 0xC0")
+
+    def keys(*sequence):
+        for key in sequence:
+            machine.send_key(key)
+            time.sleep(0.3)
+
+    def clipboard():
+        return user("WAYLAND_DISPLAY=$(systemctl --user show-environment | "
+                    "sed -n 's/^WAYLAND_DISPLAY=//p') wl-paste --no-newline").strip()
+
+    def text(expected):
+        try:
+            machine.wait_for_text(expected, timeout=timedelta(seconds=15))
+        except Exception:
+            machine.screenshot("keyboard-failure")
+            raise
 
     machine.start()
     machine.wait_for_unit("ydotoold.service")
@@ -212,12 +241,71 @@ pkgs.testers.runNixOSTest {
         time.sleep(10)
         machine.screenshot("energy")
 
-    with subtest("Quit asks, then ends the process"):
+    with subtest("Process keys precede search forwarding only when the table has focus"):
         pid = machine.succeed("pgrep -x yes").strip()
-        user(f"tatami-activity --pid {pid}")
+        user(f"tatami-activity --pid {pid} --search {pid} --lens cpu")
+        action("mode", "all")
         time.sleep(3)
-        action("quit")
-        time.sleep(2)
+        row_focus()
+        machine.screenshot("keyboard-row-focused")
+        keys("shift-f10")
+        text("Copy PID")
+        text("Delete")  # the context menu retains its shortcut hints
+        machine.screenshot("keyboard-process-menu")
+        keys("esc")
+        row_focus()
+        # XKB Menu is evdev KEY_COMPOSE (127); KEY_MENU (139) instead maps
+        # to XF86MenuKB. Deliver the advertised key through the input device.
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool key 127:1 127:0")
+        text("Copy PID")
+        machine.screenshot("keyboard-menu-key")
+        keys("esc")
+        row_focus()
+        keys("ctrl-c")
+        assert clipboard() == "yes", clipboard()
+
+        # Search retains normal text editing, cutting, copying and context
+        # menu behavior. None of these should act on the selected process.
+        keys("ctrl-f", "home", "delete", "ctrl-a", "ctrl-c")
+        assert clipboard() == pid[1:], (clipboard(), pid)
+        machine.send_chars(pid)
+        keys("ctrl-a", "shift-delete")
+        assert clipboard() == pid, (clipboard(), pid)
+        machine.succeed("test -e /proc/" + pid)
+        keys("ctrl-v", "shift-f10")
+        text("Select All")
+        machine.screenshot("keyboard-search-menu")
+        keys("esc")
+
+        # Type-to-search still works from the table after handling the reserved
+        # process shortcuts. Read the resulting search text through normal Copy.
+        row_focus()
+        machine.send_chars("x")
+        time.sleep(1)
+        machine.screenshot("keyboard-type-search")
+        # Type-anywhere updates the query without moving keyboard focus from
+        # the table. Focus Search before selecting/copying its contents.
+        keys("ctrl-f", "ctrl-a", "ctrl-c")
+        assert clipboard() == pid + "x", (clipboard(), pid)
+        machine.send_chars(pid)
+        time.sleep(1)
+        row_focus()
+        keys("delete")
+        text("asked to quit")
+        machine.screenshot("keyboard-quit-cancel")
+        keys("esc")
+        machine.succeed("test -e /proc/" + pid)
+        row_focus()
+        keys("shift-delete")
+        text("Force quitting")
+        machine.screenshot("keyboard-force-cancel")
+        keys("esc")
+        machine.succeed("test -e /proc/" + pid)
+
+    with subtest("Keyboard Quit asks, then ends the selected process"):
+        row_focus()
+        keys("delete")
+        text("asked to quit")
         machine.screenshot("quit")
         machine.send_key("ret")  # Quit, the dialog's default
         machine.wait_until_fails("pgrep -x yes", timeout=20)
