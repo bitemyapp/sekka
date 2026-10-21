@@ -580,6 +580,22 @@
           python3 -m unittest discover -s tests -p test_release.py
           touch $out
         '';
+        publish-nightly =
+          pkgs.runCommand "publish-nightly-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.git
+              ];
+            }
+            ''
+              mkdir -p scripts tests
+              cp ${./scripts/publish-nightly.py} scripts/publish-nightly.py
+              cp ${./tests/test_publish_nightly.py} tests/test_publish_nightly.py
+              cp ${./flake.lock} flake.lock
+              python3 -m unittest discover -s tests -p test_publish_nightly.py -v
+              touch $out
+            '';
         release-workflow =
           pkgs.runCommand "release-workflow-check"
             {

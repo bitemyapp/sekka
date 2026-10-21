@@ -15,10 +15,13 @@ not a publishable limitation. Preserve a machine-readable report and screenshots
 with no private credentials or personal data.
 
 Check that source is clean and corresponds to the built image and dependency
-lock. Rehash the ISO immediately before uploading. The current uploader's
-Git-clean check alone cannot prove that the ISO came from the checkout or that
-it passed VM testing. Do not use it without separately verifying that binding.
-Never rebuild after testing and assume the new bytes are equivalent.
+lock. Export the final ledger using the [report v1 contract](report.md), including
+its independent audit. The uploader verifies the exact clean Git revision's
+evaluated Nix output, candidate hash/size, dependency lock and workstation, and
+rehashes immediately before transfer. Never rebuild after testing and assume
+the new bytes are equivalent. Structural validation cannot judge what evidence
+proves or whether the source feature inventory is complete; review remains
+mandatory.
 
 Use local environment/profile credentials supplied for the downloads bucket.
 Print key names only when locating them; do not log values or pass them into
@@ -48,16 +51,24 @@ already granted. The skill alone does not authorize an unrelated publication.
 
 ## Publishing a qualified image
 
-Use the root `.#publish-nightly` tool only after review above. Read its current
-interface and retention behavior before running it. At the initial skill
-revision the uploader neither accepts qualification evidence nor rejects an
-existing date/revision path, and it prunes arbitrary unindexed prefix objects.
-Do not publish through that implementation: first add and test evidence binding,
-immutable-path collision rejection and scoped retention. This is a required
-publication gate, not a warning to waive. Upload the tested ISO,
-checksum, exact lock, source manifest and qualification evidence before exposing
-it in `builds.json`. Avoid reusing an immutable build path for different bytes;
-existing date/revision IDs need collision handling, not silent overwrite.
+Use the root tool only after review above, from the clean candidate checkout:
+
+```sh
+nix run .#publish-nightly -- validate ISO_DIRECTORY QUALIFICATION_DIRECTORY
+nix run .#publish-nightly -- publish ISO_DIRECTORY QUALIFICATION_DIRECTORY
+```
+
+Validation makes no R2 requests. Publication refuses CI, an incomplete report,
+stale audit or candidate, missing/tampered evidence, and any occupied date/revision
+prefix. It conditionally reserves `publication.json` so concurrent publishers
+cannot claim the same immutable path. An incomplete or uncertain upload remains
+unindexed and reserved for inspection; do not delete its claim merely to retry.
+The ISO, checksum, exact lock, source manifest and listed qualification evidence
+are uploaded and checked before an atomic conditional update of `builds.json`.
+An index conflict requires review of the new remote state; it is never blindly
+retried. Retention removes only exact object paths named by the dropped builds
+in that previously read index; unindexed objects are preserved for investigation.
+Do not reuse an immutable path after any object has been publicly served.
 
 Confirm remote object size/checksum metadata, then independently download the
 published bytes and check the SHA-256. Fetch the public page and each linked

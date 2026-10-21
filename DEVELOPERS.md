@@ -806,11 +806,41 @@ Nightly ISO publication is a separate workstation operation after testing the
 exact image through installation, disk-only boots and desktop interaction.
 A successful build or component test is not publication approval.
 
-`nix run .#publish-nightly -- ISO_DIRECTORY` is the workstation uploader. Each
-published image has an immutable folder, `nightly/builds/DATE-REVISION/`, with
-the ISO, `SHA256SUMS`, `flake.lock` and `manifest.json` (revision, timestamps,
-size and SHA-256). It writes `nightly/builds.json` last and retains seven
-published builds. Unpublished nightly builds still populate the binary cache.
+The workstation uploader requires an independently audited, machine-readable
+[qualification report](.agents/skills/sekka-iso-qualification/references/release/report.md)
+for the exact ISO. From the clean candidate checkout, whose commit is reachable
+from the fetched `origin/main`:
+
+```sh
+nix run .#publish-nightly -- validate ISO_DIRECTORY QUALIFICATION_DIRECTORY
+nix run .#publish-nightly -- publish ISO_DIRECTORY QUALIFICATION_DIRECTORY
+```
+
+Validation binds the ISO to that revision's evaluated immutable Nix output,
+SHA-256/size, lock and workstation, checks all Q0–Q7 results and dynamic desktop
+inventories, and rehashes referenced evidence. Keep the tested store output alive
+with its build symlink; rebuilding after testing starts a new qualification.
+Structural validation cannot decide whether the screenshots prove a result or
+the feature inventory is complete; independent evidence review is still required.
+CI is rejected. `validate` and `audit-digest` never access R2.
+
+Each published image has an immutable `nightly/builds/DATE-REVISION/` folder
+with ISO, `SHA256SUMS`, `flake.lock`, `manifest.json`, `publication.json` and
+`qualification/` report/evidence. Existing prefixes are rejected. A conditional
+claim prevents concurrent writers from reusing a path; failed/uncertain uploads
+remain reserved and unindexed for review, not automatic retry or cleanup.
+Object sizes/checksum metadata are checked before a conditional update of
+`nightly/builds.json` exposes the build. Index conflicts fail without pruning.
+Retention keeps seven builds and deletes only exact objects indexed by dropped
+builds, preserving unrelated/unindexed objects. The manifest links its report
+and lists its exact objects; existing Kakehashi/site fields remain unchanged.
+Q8 still requires independently downloading/hashing the public bytes and checking
+the actual download page and Kakehashi. Unpublished builds keep populating cache.
+
+`nix build .#checks.x86_64-linux.publish-nightly` exercises the fail-closed gate,
+source binding, transfer failures, concurrent-write conflicts and scoped retention
+with synthetic data and no network or credentials. R2's conditional writes are
+documented in its [S3 extensions](https://developers.cloudflare.com/r2/api/s3/extensions/).
 
 `downloads.sekka.computer` is the bucket's custom domain, served through
 Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
