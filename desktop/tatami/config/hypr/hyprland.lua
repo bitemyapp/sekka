@@ -335,6 +335,8 @@ hl.window_rule({
 hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-window" })
 -- The Displays window (tatami-displays), floating with room for the
 -- arrangement: its own size, as the floating-window tag's would win over it.
+-- `tatami display` and the display watcher fit it to the logical workspace
+-- when opened or when the monitor layout/scale changes.
 hl.window_rule({ match = { class = "org.tatami.Displays" }, float = true, center = true, size = { 880, 800 } })
 -- The Network window (tatami-network), likewise.
 hl.window_rule({ match = { class = "org.tatami.Network" }, float = true, center = true, size = { 720, 760 } })

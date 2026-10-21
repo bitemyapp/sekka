@@ -323,6 +323,15 @@ between changes. Don't describe it as untested on hardware.
 with `tatami display`, as the bar's icon does, and checks that the cursor stays
 where it was.
 
+Displays fits its floating window inside the logical workspace, excluding the
+bar's reserved space, when opened and after monitor layout or scale changes.
+Scale choices wrap and sliders sit below their labels; settings remain
+scrollable at the larger text scales.
+`nix build .#checks.x86_64-linux.displays-fit-vm` runs the shipped Tatami session
+at 1280×800, selects scale 2 through the window, checks its bounds and scrolling,
+and returns to scale 1 through the visible controls. It also checks the offered
+scales and reopening the window. This component test does not qualify an ISO.
+
 Tatami's software recording fallback mixes desktop and microphone audio in a
 temporary PipeWire source owned by the recording helper. It resolves the actual
 default endpoints, connects both before starting, and removes the temporary

@@ -489,15 +489,29 @@ pub fn rescue_windows() -> util::Result<usize> {
     let monitors = monitors()?;
     let clients = hypr::request_json("j/clients")?;
     let lost = lost_windows(&monitors, &clients);
-    if lost.is_empty() {
-        return Ok(0);
-    }
-    let lua: String = lost
+    let mut lua: String = lost
         .iter()
         .map(|address| {
             format!("hl.dispatch(hl.dsp.window.center({{ window = \"address:{address}\" }}))\n")
         })
         .collect();
+    // Displays must still fit when an offered text scale shrinks the logical
+    // workspace, even if part of the window still overlaps its screen.
+    for client in clients.as_array().into_iter().flatten() {
+        if client["mapped"] == true
+            && client["hidden"] != true
+            && let Some(monitor) = monitors
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|m| lit(m) && m["id"] == client["monitor"])
+        {
+            lua.push_str(&window::fit_displays(client, monitor));
+        }
+    }
+    if lua.is_empty() {
+        return Ok(0);
+    }
     // A window closed meanwhile is only a notice, not a failure.
     let reply = hypr::request(&format!("/eval {lua}"))?;
     if reply.trim_start().starts_with("error:") {

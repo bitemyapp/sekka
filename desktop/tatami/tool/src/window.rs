@@ -579,12 +579,16 @@ fn bring_here(address: &str) {
         .ok()
         .and_then(|option| option["bool"].as_bool())
         .unwrap_or(false);
-    let workspace = hypr::request_json("j/monitors")
-        .ok()
-        .and_then(|monitors| {
-            monitors.as_array()?.iter().find(|m| m["focused"] == true)?["activeWorkspace"]["id"]
-                .as_i64()
-        })
+    let monitor = hypr::request_json("j/monitors").ok().and_then(|monitors| {
+        monitors
+            .as_array()?
+            .iter()
+            .find(|m| m["focused"] == true)
+            .cloned()
+    });
+    let workspace = monitor
+        .as_ref()
+        .and_then(|m| m["activeWorkspace"]["id"].as_i64())
         .filter(|id| *id > 0);
     let target = format!("window = \"address:{address}\"");
     let mut lua = String::from("hl.config({ cursor = { no_warps = true } })\n");
@@ -599,11 +603,46 @@ fn bring_here(address: &str) {
          hl.dispatch(hl.dsp.focus({{ {target} }}))\n\
          hl.dispatch(hl.dsp.window.alter_zorder({{ {target}, mode = \"top\" }}))\n"
     ));
+    if let Some(monitor) = monitor
+        && let Some(window) = displays_window()
+    {
+        lua.push_str(&fit_displays(&window, &monitor));
+    }
     let _ = hypr::request(&format!("/eval {lua}"));
     // Apart, so that a failed dispatch above cannot leave warps off.
     let _ = hypr::request(&format!(
         "/eval hl.config({{ cursor = {{ no_warps = {no_warps} }} }})"
     ));
+}
+
+/// Keep Displays inside its logical workspace, including the bar's reserved
+/// space and a small border margin. Used when presenting it and after a
+/// monitor layout/scale change; other floating windows retain their policy.
+pub(crate) fn fit_displays(client: &Value, monitor: &Value) -> String {
+    if client["class"] != "org.tatami.Displays" || client["floating"] != true {
+        return String::new();
+    }
+    let Some(address) = hypr::address(client) else {
+        return String::new();
+    };
+    let Some(mut area) = hypr::monitor_rect(monitor) else {
+        return String::new();
+    };
+    let reserved = |i: usize| monitor["reserved"][i].as_i64().unwrap_or(0).max(0);
+    area.x += reserved(0) + 8;
+    area.y += reserved(1) + 8;
+    area.w = (area.w - reserved(0) - reserved(2) - 16).max(1);
+    area.h = (area.h - reserved(1) - reserved(3) - 16).max(1);
+    let width = client["size"][0].as_i64().unwrap_or(880).clamp(1, area.w);
+    let height = client["size"][1].as_i64().unwrap_or(800).clamp(1, area.h);
+    // Center after fitting: centering an oversized window gives negative
+    // coordinates and can hide its title bar as well as its controls.
+    let x = area.x + (area.w - width) / 2;
+    let y = area.y + (area.h - height) / 2;
+    format!(
+        "hl.dispatch(hl.dsp.window.resize({{ window = \"address:{address}\", x = {width}, y = {height} }}))\n\
+         hl.dispatch(hl.dsp.window.move({{ window = \"address:{address}\", x = {x}, y = {y} }}))\n"
+    )
 }
 
 /// Turn a monitor off until the next configuration reload.
@@ -706,6 +745,27 @@ pub fn zoom(action: &str) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn displays_fit_scaled_rotated_workspaces_but_other_windows_are_untouched() {
+        let mut client = serde_json::json!({
+            "class": "org.tatami.Displays", "floating": true,
+            "address": "0x123", "size": [880, 800]
+        });
+        let mut monitor = serde_json::json!({
+            "x": 1280, "y": 0, "width": 1280, "height": 800,
+            "scale": 2, "transform": 0, "reserved": [0, 26, 0, 0]
+        });
+        let fitted = fit_displays(&client, &monitor);
+        assert!(fitted.contains("x = 624, y = 358"), "{fitted}");
+        assert!(fitted.contains("x = 1288, y = 34"), "{fitted}");
+        monitor["transform"] = 1.into();
+        let fitted = fit_displays(&client, &monitor);
+        assert!(fitted.contains("x = 384, y = 598"), "{fitted}");
+        client["class"] = "org.tatami.Network".into();
+        assert!(fit_displays(&client, &monitor).is_empty());
+    }
+
     #[test]
     fn scales_divide_the_mode_evenly() {
         assert_eq!(clean_scale(1.0, 1920, 1080), 1.0);
