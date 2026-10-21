@@ -748,7 +748,7 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 ### Nightly builds
 
 `.github/workflows/nightly.yml` runs at 4 AM `America/Chicago` and from its
-**Run workflow** button (Actions, "Build nightly Sekka ISO"), on `main` only:
+**Run workflow** button (Actions, "Build and cache nightly Sekka ISO"), on `main` only:
 
 ```sh
 gh workflow run nightly.yml --ref main
@@ -756,9 +756,8 @@ gh workflow run nightly.yml --ref main
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
-`main`. If the result is the newest build's `revision` in
-<https://downloads.sekka.computer/nightly/builds.json>, nothing has changed and
-it stops. Otherwise it runs `nix flake check` and builds `.#iso`, then, in this
+`main`. Every run checks and builds the candidate, even when no new ISO has
+been published. It runs `nix flake check` and builds `.#iso`, then, in this
 order and only if each step succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
@@ -778,20 +777,17 @@ order and only if each step succeeded:
    Installed systems update to `nightly`, so they only ever reach a revision
    that passed and is cached. `nightly` is force-pushed when `main` moved
    past an earlier input update.
-4. `nix run .#publish-nightly` uploads the ISO to the R2 bucket
-   `sekka-downloads` as a new build, in a folder of its own that never
-   changes, `nightly/builds/DATE-REVISION/`:
+CI stops after caching and moving the checked revision. It never invokes
+`publish-nightly` and receives no credentials for `sekka-downloads`.
+Nightly ISO publication is a separate workstation operation after testing the
+exact image through installation, disk-only boots and desktop interaction.
+A successful build or component test is not publication approval.
 
-- `sekka-nightly-DATE-REVISION-x86_64-linux.iso`
-- `SHA256SUMS`
-- `flake.lock`
-- `manifest.json`: revision, commit and upload times, size and SHA-256
-
-Then it writes `nightly/builds.json`, which lists the last seven builds, newest
-first, and removes everything else under `nightly/`, older builds and anything
-a failed run left. A failed check, build or upload leaves the list as it was,
-so the next night tries the same revision again. Seven builds of about 12 GB
-cost about a dollar a month in R2 storage beyond its free 10 GB.
+`nix run .#publish-nightly -- ISO_DIRECTORY` is the workstation uploader. Each
+published image has an immutable folder, `nightly/builds/DATE-REVISION/`, with
+the ISO, `SHA256SUMS`, `flake.lock` and `manifest.json` (revision, timestamps,
+size and SHA-256). It writes `nightly/builds.json` last and retains seven
+published builds. Unpublished nightly builds still populate the binary cache.
 
 `downloads.sekka.computer` is the bucket's custom domain, served through
 Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
@@ -804,18 +800,11 @@ five minutes, so a new build appears within five minutes of its upload without
 a new deployment, and R2 sees at most one request for the list per data centre
 in that time.
 
-The upload uses an R2 API token with Object Read & Write on `sekka-downloads`
-alone, kept as the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` of the
-GitHub environment `nightly`, which only `main` may use. Only the publish step
-receives them; they are never on the builder's disk. To set or replace them,
-create the token in Cloudflare (R2, Manage API tokens), then:
-
-```sh
-gh secret set R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
-gh secret set R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
-```
-
-`gh` asks for each value without echoing it.
+The workstation upload uses an R2 API token with Object Read & Write on
+`sekka-downloads` alone, supplied locally as `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY`. Keep it outside the repository and CI. Remove the
+obsolete `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets from the GitHub
+`nightly` environment; keep all three `CACHE_*` secrets for nightly builds.
 
 The cache push needs the cache's signing key and a second R2 token, with
 Object Read & Write on `sekka-cache` alone, as the `nightly` environment's
