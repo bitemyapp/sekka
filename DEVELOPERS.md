@@ -1088,6 +1088,27 @@ untrusted code from getting that far. Each build leaves its closure in the
 host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
 and the daemon collects garbage when free space runs low.
 
+The runner's Nix client comes from Sekka's pinned Determinate input, matching
+the host daemon's implementation. The builder step prints the client version
+and only the daemon endpoint, version and trust status; it does not print
+environment variables or configuration. On October 20, an upstream Nix 2.34.8
+client hid a template-lock failure behind `Invalid BuildResult status ^P`.
+Determinate 3.15.0 encodes a cancelled build as
+[status 16](https://github.com/DeterminateSystems/nix-src/blob/v3.15.0/src/libstore/include/nix/store/build-result.hh),
+while the upstream client's
+[decoder accepts only 0–14](https://github.com/NixOS/nix/blob/2.34.8/src/libstore/common-protocol.cc).
+The template failure was fixed separately; changing the client preserves the
+original error when sibling builds are cancelled. `checks.x86_64-linux.runner-protocol`
+tests that path through a real daemon as an untrusted user, with the upstream
+client as a negative control. It does not certify an existing runner deployment.
+
+After reviewing a runner change, rebuild and deploy its images using the steps
+below while idle. For a fresh nightly attempt, dispatch `nightly.yml` on current
+main after its fixes are merged; rerunning an old job uses its old workflow,
+which may still publish ISOs. The current nightly intentionally updates inputs,
+builds and checks, uploads the binary cache, then advances main/nightly; it does
+not publish an ISO or qualify the workstation's already frozen image.
+
 ### Setting up the builder
 
 Once, as root on the builder, from a checkout:
