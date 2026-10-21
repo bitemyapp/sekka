@@ -607,7 +607,10 @@ the energy split. `nix build .#checks.x86_64-linux.activity-vm` boots a
 disposable Tatami VM: Super+Ctrl+T must open the window floating, the power
 meter must start from its socket as root and answer, a stand-in meter on the
 same socket (a VM has no RAPL counters) must give a busy terminal processor
-power in a reading, and Quit must end that process. Reading real RAPL
+power in a reading, and Quit must end that process. The inspector's actual
+Pause/Resume button must stop and resume every process in an application
+group, with a screenshot after each state change. Its label and action
+come from the same whole-selection state as the context menu. Reading real RAPL
 counters as root needs physical hardware.
 
 ## Keep Awake and USB wake

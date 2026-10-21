@@ -668,6 +668,7 @@ fn update_actions(ui: &Ui) {
     };
     let mine = target.as_ref().is_some_and(|t| t.mine);
     let paused = target.as_ref().is_some_and(|t| t.paused);
+    ui.inspector.set_paused(paused);
     set("quit", mine);
     set("force-quit", mine);
     set("pause", mine && !paused);
