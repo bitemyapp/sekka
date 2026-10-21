@@ -148,6 +148,9 @@ To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts
 
 Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
 
+Native 4 KiB sector disks require booting the installation media in UEFI mode.
+Legacy BIOS installation requires 512-byte logical sectors, including 512e disks.
+
 ## Updating an existing installation
 
 Open **Yukimi → Updates → Update** to get Sekka's newest nightly. It brings

@@ -80,6 +80,13 @@ BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
 controller above that limit in an 8 GiB guest and cannot read the boot disk.
 UEFI fixtures retain their normal firmware allocation.
 
+Genkan refuses BIOS installation to disks with logical sectors other than
+512 bytes during discovery and every pre-write revalidation. GRUB's BIOS
+bootstrap encodes its next-stage location in 512-byte units, so a native
+4 KiB BIOS read can miss the installed core image even after `grub-install`
+reports success. UEFI and 512e disks remain supported. The storage VM check
+exercises discovery and revalidation on disposable 4Kn and 512e disks.
+
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
