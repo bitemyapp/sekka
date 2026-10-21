@@ -22,12 +22,42 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Nix systems supported by the package; an absent list means every
+    /// architecture Sekka supports. The Nix module reads this same metadata.
+    #[serde(default)]
+    pub systems: Option<Vec<String>>,
+}
+
+impl Application {
+    fn supports(&self, system: &str) -> bool {
+        self.systems
+            .as_ref()
+            .is_none_or(|systems| systems.iter().any(|supported| supported == system))
+    }
+}
+
+fn target_system() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "aarch64-linux"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64-linux"
+    } else {
+        panic!("unsupported Sekka installer architecture")
+    }
+}
+
+fn for_system(system: &str) -> Vec<Application> {
+    let catalog: Vec<Application> =
+        serde_json::from_str(CATALOG_JSON).expect("packaged application catalog");
+    catalog
+        .into_iter()
+        .filter(|app| app.supports(system))
+        .collect()
 }
 
 pub fn catalog() -> &'static [Application] {
     static CATALOG: OnceLock<Vec<Application>> = OnceLock::new();
-    CATALOG
-        .get_or_init(|| serde_json::from_str(CATALOG_JSON).expect("packaged application catalog"))
+    CATALOG.get_or_init(|| for_system(target_system()))
 }
 
 pub fn default_selection() -> Vec<String> {
@@ -94,9 +124,10 @@ mod tests {
     use super::*;
     #[test]
     fn catalog_has_unique_ids_and_valid_dependencies() {
-        let ids: BTreeSet<_> = catalog().iter().map(|app| app.id.as_str()).collect();
-        assert_eq!(ids.len(), catalog().len());
-        for app in catalog() {
+        let all: Vec<Application> = serde_json::from_str(CATALOG_JSON).unwrap();
+        let ids: BTreeSet<_> = all.iter().map(|app| app.id.as_str()).collect();
+        assert_eq!(ids.len(), all.len());
+        for app in &all {
             assert!(!app.name.is_empty() && !app.description.is_empty());
             assert!(
                 app.id
@@ -108,6 +139,23 @@ mod tests {
                 app.source.as_deref(),
                 None | Some("ai" | "omp" | "sekka")
             ));
+            if let Some(systems) = &app.systems {
+                assert!(!systems.is_empty());
+                assert!(
+                    systems
+                        .iter()
+                        .all(|system| matches!(system.as_str(), "x86_64-linux" | "aarch64-linux"))
+                );
+            }
+        }
+        for system in ["x86_64-linux", "aarch64-linux"] {
+            let offered = for_system(system);
+            let offered_ids: BTreeSet<_> = offered.iter().map(|app| app.id.as_str()).collect();
+            assert!(offered.iter().all(|app| {
+                app.requires
+                    .iter()
+                    .all(|id| offered_ids.contains(id.as_str()))
+            }));
         }
         for removed in ["thunderbird", "keepassxc", "gemini-cli", "orbstack"] {
             assert!(!ids.contains(removed));
@@ -139,6 +187,27 @@ mod tests {
                 .unwrap()
                 .selected()
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn architecture_limits_apply_to_the_gui_and_privileged_parser() {
+        let arm = for_system("aarch64-linux");
+        let x86 = for_system("x86_64-linux");
+        for id in ["discord", "slack", "spotify", "steam", "superluminal"] {
+            assert!(x86.iter().any(|app| app.id == id));
+            assert!(!arm.iter().any(|app| app.id == id));
+            if target_system() == "aarch64-linux" {
+                assert!(ApplicationSelection::parse(vec![id.into()], true).is_err());
+            }
+        }
+        assert!(arm.iter().any(|app| app.id == "firefox"));
+        assert_eq!(
+            catalog().iter().map(|app| &app.id).collect::<Vec<_>>(),
+            for_system(target_system())
+                .iter()
+                .map(|app| &app.id)
+                .collect::<Vec<_>>()
         );
     }
 }

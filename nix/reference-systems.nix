@@ -5,15 +5,16 @@
 # while the user is still choosing.
 {
   inputs,
+  system ? "x86_64-linux",
   applicationCatalog,
   desktops,
   # The catalog's applications each system has.
   applications ? [ "firefox" ],
   # Refuse unfree packages, as the binary cache must (nix/push-cache.nix).
   free ? false,
+  cacheApplications ? true,
 }:
 let
-  system = "x86_64-linux";
   inherit (inputs.nixpkgs) lib;
   pkgs = inputs.nixpkgs.legacyPackages.${system};
   evaluate =
@@ -34,6 +35,7 @@ let
         # As nix/components.nix gives the catalog module Sekka's packages.
         { _module.args.sekkaPackages = inputs.catalog.packages.${system}; }
       ]
+      ++ lib.optional (system == "aarch64-linux") ../modules/utm.nix
       ++ lib.optional free { nixpkgs.config.allowUnfree = lib.mkForce false; };
     };
   systems = lib.genAttrs desktops evaluate;
@@ -50,8 +52,10 @@ in
       source = paths [ systems.${desktop}.config.system.build.toplevel ];
       target = "/calamares/closures/desktop-${desktop}.paths";
     }) desktops
-    ++ map (app: {
-      source = paths (applicationCatalog.packageList app);
-      target = "/calamares/closures/application-${app.id}.paths";
-    }) applicationCatalog.catalog;
+    ++ lib.optionals cacheApplications (
+      map (app: {
+        source = paths (applicationCatalog.packageList app);
+        target = "/calamares/closures/application-${app.id}.paths";
+      }) applicationCatalog.catalog
+    );
 }

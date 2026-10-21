@@ -119,7 +119,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <ul class="facts">
     <li><strong>Installation erases a whole disk.</strong> There is no dual-boot setup, manual partitioning, or option to keep an existing operating system. Keep backups elsewhere.</li>
     <li><strong>Disk encryption is not implemented.</strong> Neither are RAID or LVM setup, or offline installation. An internet connection is required.</li>
-    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
+    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path. Experimental ARM64 images have only been tested in UTM on Apple silicon.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
     <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
   </ul>
@@ -143,7 +143,7 @@ pub fn home(site: &Site) -> Result<Page> {
       <li><strong>No encryption, manual partitioning or dual boot.</strong></li>
       <li><strong>No offline installation.</strong></li>
       <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
-      <li><strong>No Secure Boot path and no ARM image.</strong></li>
+      <li><strong>No Secure Boot path.</strong> ARM64 is experimental, tested only in UTM on Apple silicon.</li>
       <li><strong>No release.</strong> Only <a href="/download/">nightly builds</a>, checked automatically in virtual machines.</li>
       <li><strong>Not all of it looks like Sekka yet.</strong> Genkan and Yukimi still use libadwaita's light theme and NixOS blues.</li>
     </ul>
@@ -823,6 +823,7 @@ pub fn status(site: &Site) -> Result<Page> {
       <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence. It never suspends the host.</td><td>Power loss, firmware and thermal shutdowns.</td></tr>
       <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td><td>Waking your machine: check it with Keep Awake off.</td></tr>
       <tr><th scope="row">Hardware</th><td>Daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME.</td><td>Other machines, and any given nightly.</td></tr>
+      <tr><th scope="row">ARM64</th><td>Experimental image: installed, booted and checked in UTM on Apple silicon, with accelerated Plasma graphics.</td><td>Other ARM hardware, hypervisors, and any given nightly. Tatami window resizing and native Wayland guest-to-host clipboard remain limited.</td></tr>
       <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td><td>Hardware hot-plug.</td></tr>
     </tbody>
   </table></div>
@@ -837,7 +838,6 @@ pub fn status(site: &Site) -> Result<Page> {
       <li>RAID and LVM</li>
       <li>Offline installation</li>
       <li>Secure Boot as a supported path</li>
-      <li>An ARM image</li>
       <li>Automatic Btrfs snapshots</li>
     </ul>
   </article>
@@ -883,20 +883,20 @@ pub fn status(site: &Site) -> Result<Page> {
 pub fn download(_site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/download/",
-        title: "Download Sekka's nightly ISO".into(),
-        description: "Sekka's nightly ISO for x86_64 PCs, built from main when it has changed and Sekka's automated checks pass. It is not a release, and its automated checks run in virtual machines.",
+        title: "Download Sekka's nightly ISOs".into(),
+        description: "Sekka nightly ISOs for x86_64 PCs and experimental ARM64, tested only in UTM on Apple silicon. Built from main after automated checks pass.",
         body: format!(
             r#"<section class="win focus page-head">
   <div>
     <p class="eyebrow">Download</p>
-    <h1>Sekka's nightly ISO.</h1>
-    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO joins the builds below, and the last seven are kept. Each starts a live Plasma session with Genkan, the installer.</p>
+    <h1>Sekka's nightly ISOs.</h1>
+    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new build joins the list below, with x86_64 and ARM64 ISOs. The last seven builds are kept. Both images start a live Plasma session with Genkan, the installer.</p>
     <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Its automated checks run in virtual machines, and it may not have been tried on hardware yet. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
   </div>
 </section>
 <section class="win" aria-labelledby="builds">
   <h2 id="builds">Builds</h2>
-  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size and upload time) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer.</p>
+  <p>Choose x86_64 for PCs with UEFI or legacy BIOS boot. <strong>ARM64 is experimental and has only been tested in UTM on Apple silicon.</strong> See the <a href="{REPO}/blob/main/DEVELOPERS.md#utm-on-apple-silicon">UTM setup instructions</a>. Builds are newest first, with a separate checksum for each ISO and shared source metadata.</p>
   <!--builds--><p>The list of builds can't be shown just now. Every kept build is in <a href="{NIGHTLY}/builds.json">builds.json</a>, with paths under {NIGHTLY}/.</p><!--/builds-->
 </section>
 <section class="tiles">
@@ -908,7 +908,7 @@ pub fn download(_site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Before you install</h2>
-    <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no disk encryption, dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
+    <p>For a PC, write the x86_64 ISO to a USB drive or start it in a virtual machine. Use the ARM64 image in UTM on Apple silicon. Try the live session before installing. There is no disk encryption, dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
   </article>
 </section>
 <section class="win" aria-labelledby="releases">

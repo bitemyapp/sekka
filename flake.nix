@@ -29,10 +29,13 @@
   # (checks.binary-cache).
   nixConfig = {
     extra-substituters = [
+      # Bootstrap the pinned Determinate Nix on builders using stock Nix.
+      "https://install.determinate.systems"
       "https://cache.sekka.computer"
       "https://cache.numtide.com?priority=55"
     ];
     extra-trusted-public-keys = [
+      "cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM="
       "cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y="
       "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
     ];
@@ -88,6 +91,10 @@
           ./modules/installer.nix
         ];
       };
+      arm = import ./nix/aarch64.nix {
+        inherit inputs installedLock;
+        sekkaSource = self.outPath;
+      };
       etc = installer.config.environment.etc;
       liveConfigs = [
         installer.config
@@ -109,6 +116,7 @@
         applications = inputs.calamares.nixosModules.applications;
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
+        utm = ./modules/utm.nix;
         aizome = inputs.aizome.nixosModules.default;
       };
       lib = {
@@ -134,6 +142,27 @@
         };
       };
       nixosConfigurations.installer = installer;
+      nixosConfigurations.installer-aarch64 = arm.installer;
+      packages.aarch64-linux = arm.packages;
+      checks.aarch64-linux = arm.checks;
+      devShells.aarch64-linux.default = nixpkgs.legacyPackages.aarch64-linux.mkShell {
+        inputsFrom = [
+          arm.packages.genkan
+          arm.packages.yukimi
+        ];
+        packages = with nixpkgs.legacyPackages.aarch64-linux; [
+          cargo
+          rustc
+          clippy
+          rustfmt
+          nixfmt
+          python3
+        ];
+      };
+      apps.aarch64-linux.update = {
+        type = "app";
+        program = "${arm.packages.yukimi}/bin/sekka-update";
+      };
       apps.${system} = {
         update = {
           type = "app";
@@ -196,36 +225,11 @@
         # push-cache publishes their closures, so whatever Sekka's modules
         # change (Hyprland and all that uses its patched Aquamarine) and
         # whatever a catalog application needs downloads rather than compiles.
-        installed-systems =
-          let
-            reference =
-              desktops: applications:
-              import ./nix/reference-systems.nix {
-                inherit
-                  inputs
-                  applicationCatalog
-                  desktops
-                  applications
-                  ;
-                free = true;
-              };
-            desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
-            applications = reference [ "plasma" ] (
-              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
-            );
-          in
-          pkgs.linkFarm "sekka-installed-systems" (
-            map (desktop: {
-              name = desktop;
-              path = desktops.systems.${desktop}.config.system.build.toplevel;
-            }) desktops.desktops
-            ++ [
-              {
-                name = "applications";
-                path = applications.systems.plasma.config.system.build.toplevel;
-              }
-            ]
-          );
+        installed-systems = import ./nix/installed-systems.nix {
+          inherit inputs system;
+          applicationCatalog = applicationCatalog;
+          desktops = installer.config.respin.referenceDesktops;
+        };
         application-cache = applicationCatalog.cache;
         # sekka.computer, ready to upload; nothing publishes it.
         inherit site;
@@ -579,6 +583,41 @@
           python3 -m unittest discover -s tests -p test_release.py
           touch $out
         '';
+        nightly-assets =
+          pkgs.runCommand "nightly-asset-tests"
+            {
+              nativeBuildInputs = with pkgs; [
+                bash
+                python3
+                coreutils
+                git
+                jq
+                gnugrep
+              ];
+            }
+            ''
+              mkdir -p scripts tests
+              cp ${./scripts/publish-nightly.sh} scripts/publish-nightly.sh
+              cp ${./tests/test_nightly.py} tests/test_nightly.py
+              python3 -m unittest discover -s tests -p test_nightly.py -v
+              # The real wrapper also runs ShellCheck on the publication script.
+              : ${publishNightly}
+              touch $out
+            '';
+        nightly-workflow =
+          pkgs.runCommand "nightly-workflow-check"
+            {
+              nativeBuildInputs = [
+                pkgs.actionlint
+                pkgs.shellcheck
+              ];
+            }
+            ''
+              actionlint -config-file ${./.github/actionlint.yaml} ${./.github/workflows/nightly.yml}
+              shellcheck ${./scripts/runner-host-setup.sh}
+              touch $out
+            '';
+        arm-emulation = import ./nix/arm-emulation-vm-test.nix { inherit pkgs; };
         release-workflow =
           pkgs.runCommand "release-workflow-check"
             {
@@ -615,5 +654,6 @@
           '';
       };
       formatter.${system} = pkgs.nixfmt;
+      formatter.aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt;
     };
 }

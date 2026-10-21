@@ -1,11 +1,13 @@
 # Resolve the catalog against maintained, locked application sources.
-{ inputs }:
+{
+  inputs,
+  system ? "x86_64-linux",
+}:
 let
-  system = "x86_64-linux";
   # Genkan's source as a path: reading through it needs no store copy (see
   # nix/calamares.nix).
   genkan = inputs.calamares.outPath;
-  catalog = builtins.fromJSON (builtins.readFile (genkan + "/rust/src/applications.json"));
+  catalog = import (genkan + "/rust/src/application-catalog.nix") { inherit system; };
   specialArgs = {
     applicationPkgs = import inputs.applications {
       inherit system;
@@ -79,7 +81,11 @@ in
               packages = map (p: {
                 inherit (p) name;
                 version = p.version or null;
-                path = p.outPath;
+                # This is catalog metadata, not a runtime dependency. The
+                # deepSeq above validates the complete system derivations;
+                # retaining string context here would build every optional
+                # app even for the focused ARM image that omits that cache.
+                path = builtins.unsafeDiscardStringContext p.outPath;
               }) (packageList app);
             }) catalog
           )

@@ -29,8 +29,8 @@
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = lib.mkIf (kernel == "latest") pkgs.linuxPackages_latest;
   # Typical detected hardware: both microcode bundles and common storage drivers.
-  hardware.cpu.intel.updateMicrocode = true;
-  hardware.cpu.amd.updateMicrocode = true;
+  hardware.cpu.intel.updateMicrocode = pkgs.stdenv.hostPlatform.isx86_64;
+  hardware.cpu.amd.updateMicrocode = pkgs.stdenv.hostPlatform.isx86_64;
   boot.initrd.availableKernelModules = [
     "nvme"
     "xhci_pci"
@@ -51,7 +51,9 @@
       "dmask=0077"
     ];
   };
-  swapDevices = lib.optional swap { device = "/dev/disk/by-uuid/00000000-0000-4000-8000-000000000001"; };
+  swapDevices = lib.optional swap {
+    device = "/dev/disk/by-uuid/00000000-0000-4000-8000-000000000001";
+  };
   boot.resumeDevice = lib.mkIf swap "/dev/disk/by-uuid/00000000-0000-4000-8000-000000000001";
   calamares.zswap.enable = swap;
   networking.hostName = "nixos";
@@ -66,7 +68,7 @@
   services.pipewire = {
     enable = true;
     alsa.enable = true;
-    alsa.support32Bit = true;
+    alsa.support32Bit = pkgs.stdenv.hostPlatform.isx86_64;
     pulse.enable = true;
   };
   users.mutableUsers = true;

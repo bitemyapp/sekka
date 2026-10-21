@@ -1,4 +1,4 @@
-# `nix run .#push-cache [FLAKE]`: uploads Sekka's own packages to the public
+# `nix run .#push-cache [FLAKE] [SYSTEM...]`: uploads Sekka's own packages to the public
 # binary cache at https://cache.sekka.computer (Cloudflare R2 bucket
 # sekka-cache), leaving the rest of their closures to cache.nixos.org.
 # DEVELOPERS.md describes the key and credentials it expects. The nightly
@@ -10,6 +10,10 @@ pkgs.writeShellApplication {
   runtimeInputs = [ pkgs.awscli2 ];
   text = ''
     flake=''${1:-.}
+    systems=("''${@:2}")
+    if (( ''${#systems[@]} == 0 )); then
+      systems=("${pkgs.stdenv.hostPlatform.system}")
+    fi
     config=''${SEKKA_CACHE_CONFIG:-''${XDG_CONFIG_HOME:-$HOME/.config}/sekka-cache}
     key=$config/cache.sekka.computer-1.sec
     endpoint=''${SEKKA_CACHE_ENDPOINT:-https://c408b91e58b3aa56c4f71046fcd416b6.r2.cloudflarestorage.com}
@@ -31,8 +35,27 @@ pkgs.writeShellApplication {
     # refuses unfree packages, so nothing unfree is published.
     # installed-systems is an installed system for every desktop, refusing
     # unfree packages too: everything they need that cache.nixos.org lacks.
-    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools installed-systems)
-    mapfile -t outputs < <(nix build --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+    installables=()
+    buildOptions=()
+    for system in "''${systems[@]}"; do
+      packages=(genkan tatami displays wallpapers yukimi installed-systems)
+      case $system in
+        x86_64-linux) packages+=(kakehashi aquamarine hyprland tools) ;;
+        aarch64-linux) buildOptions=(--max-jobs 8 --cores 8) ;;
+        *) echo "sekka-push-cache: unsupported system $system" >&2; exit 1 ;;
+      esac
+      for package in "''${packages[@]}"; do
+        installables+=("$flake#packages.$system.$package")
+      done
+    done
+    # Capture the exit status: process substitution would hide a failed build
+    # and could let the workflow move nightly after an incomplete cache push.
+    built=$(nix build "''${buildOptions[@]}" --no-update-lock-file --no-link --print-out-paths "''${installables[@]}")
+    mapfile -t outputs <<<"$built"
+    if [[ -z $built ]]; then
+      echo "sekka-push-cache: no package outputs to publish" >&2
+      exit 1
+    fi
 
     # Nix only adds a path to a binary cache that already holds its
     # references, so sign and compress the complete closure locally first.

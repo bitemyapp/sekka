@@ -24,6 +24,11 @@
       default = true;
       description = "Download the AI applications (numtide/llm-agents.nix) from https://cache.numtide.com instead of building them.";
     };
+    determinate.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Download the pinned Determinate Nix bootstrap packages from its signed public cache.";
+    };
   };
   config = lib.mkMerge [
     (lib.mkIf config.calamares.binaryCache.enable {
@@ -39,6 +44,14 @@
         extra-substituters = [ "https://cache.numtide.com?priority=55" ];
         extra-trusted-public-keys = [
           "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+        ];
+      };
+    })
+    (lib.mkIf config.calamares.binaryCache.determinate.enable {
+      nix.settings = {
+        extra-substituters = [ "https://install.determinate.systems" ];
+        extra-trusted-public-keys = [
+          "cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM="
         ];
       };
     })

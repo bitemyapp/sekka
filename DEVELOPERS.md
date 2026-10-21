@@ -24,7 +24,7 @@ Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outsi
 
 ## Build and check
 
-Use x86_64 Linux with Nix and flakes enabled. The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
+Use x86_64 Linux with Nix and flakes enabled for the PC image. The focused UTM image uses native aarch64 Linux derivations, also built through QEMU emulation on the x86 nightly builder; see [UTM on Apple silicon](#utm-on-apple-silicon). The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
 
 ```sh
 nix develop
@@ -65,6 +65,79 @@ Do not merge unrelated Cargo workspaces or broaden package source filters as par
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
+
+## UTM on Apple silicon
+
+The experimental ARM output is `packages.aarch64-linux.utm-iso` (also `iso`
+and `default` on that architecture). Build it on native aarch64 Linux with
+Nix and flakes enabled, including a Linux VM on an Apple silicon Mac, or on
+the configured x86 Linux nightly builder through static QEMU user emulation.
+Both use the same native ARM derivations and store paths; this is not a
+cross-compiled Nixpkgs package set. macOS itself cannot build Linux derivations. The existing x86_64 outputs keep their
+names and behaviour. Accept the root flake’s signed cache settings on a trusted
+builder (`--accept-flake-config`); its public Determinate bootstrap cache serves
+the exact pinned ARM Nix binaries, avoiding a source build of Nix and Wasmtime.
+
+```sh
+nix build .#packages.aarch64-linux.utm-iso --no-update-lock-file --out-link result-utm
+nix build .#checks.aarch64-linux.utm-profile .#checks.aarch64-linux.native-installer \
+  .#checks.aarch64-linux.yukimi .#checks.aarch64-linux.tatami --no-update-lock-file
+```
+
+Use UTM's **Virtualize → Linux** flow, with the **QEMU** backend (leave
+**Use Apple Virtualization** off). Choose aarch64, UEFI, six CPU cores,
+12 GiB RAM, a 64 GiB or larger disposable VirtIO disk, and the built ISO.
+Enable hardware OpenGL acceleration: the display must be `virtio-gpu-gl-pci`
+or `virtio-ramfb-gl`, with auto resolution enabled. Shared networking needs
+no inbound port forwards. Do not attach host disks to installer tests.
+In UTM 5's macOS **Settings → Display**, select **Apple Core OpenGL** as the
+renderer backend; this is the tested path and exposes OpenGL 4.1 through
+VirGL. In Plasma, auto resolution follows the UTM window size; enlarging that
+window provides more room for the installer and desktop. Tatami signs in with
+accelerated graphics but keeps its startup resolution when that window changes
+size. Use Plasma when automatic resizing matters.
+
+The guest module `nixosModules.utm` enables VirtIO drivers, the QEMU guest
+agent and a session-bound SPICE agent, and asks GTK to use GL. It disables
+the firmware framebuffer's `Unknown-1` output: with `virtio-ramfb-gl`, that
+otherwise becomes a hidden primary monitor and receives installer windows.
+The real `Virtual-1` output remains enabled. UTM's current documentation
+[recommends VirGL for Linux desktops](https://docs.getutm.app/guest-support/linux/#graphics-acceleration);
+its Vulkan/Venus path has desktop-rendering limitations. Check the actual
+renderer with `glxinfo -B` in the live session: it should name `virgl`,
+with accelerated rendering, rather than `llvmpipe`. A boot alone does not
+establish smooth interaction. Exercise windows, typing, scrolling, resize,
+clipboard, audio, shutdown, and host sleep/resume on the actual Mac.
+
+The pinned SPICE session agent is X11-based. Host-to-guest text paste works
+in Plasma, but native Wayland guest-to-host copy is not reliable. Do not
+bridge every native selection through `xclip`: KWin imports that owner back
+into Wayland, replacing HTML and file-copy formats with plain text. Do not
+advertise bidirectional Wayland clipboard or image/file transfer as tested.
+
+The live desktop is Plasma. Plasma and Tatami installed systems are prebuilt;
+other desktops and optional apps remain available online. Unlike the full PC
+image, this image omits the complete optional-application cache and its closure
+lists. Catalog `systems` restrictions are shared by Genkan's GUI/helper, the
+Nix module and Yukimi. Unsupported x86 applications are not offered on ARM.
+The generated installed flake takes its system from the native installer's
+compile target, and imports the UTM module for ARM. It retains the exact media
+source and dependency lock. Intel/AMD CPU microcode, NVIDIA's PC driver and
+32-bit ALSA are omitted on ARM.
+
+The nightly builds and publishes both x86_64 and ARM64 from one revision on
+wx-workstation. ARM64 remains experimental and has only been tested in UTM
+on Apple silicon. Its signed cache coverage check covers the prebuilt Plasma
+and Tatami systems and every free ARM catalog application; other desktop
+choices may compile locally. The x86 VM checks use KVM; ARM component tests
+run through user emulation, not ARM VM tests. See [Nightly builds](#nightly-builds)
+and [Setting up the builder](#setting-up-the-builder). The versioned release
+workflow remains inhibited. Component checks, ISO builds, UTM installation
+and physical hardware tests are separate claims.
+
+The [native ARM UTM validation report](docs/testing-aarch64-utm.md) records the
+exact image, component checks, disposable-disk installation, desktop checks,
+performance observations and limits from the 2026-10-19 test run.
 
 ## Sources and installed-system updates
 
@@ -727,7 +800,9 @@ check.
 
 ## Releases
 
-`.github/workflows/release.yml` builds and publishes an ISO. Its only trigger
+`.github/workflows/release.yml` retains the release steps, but its job is
+inhibited with `if: ${{ false }}`. Do not enable it without explicit maintainer
+authorization. Its only declared trigger
 is a manual dispatch from `main`, naming an existing `v`-prefixed tag whose
 commit is reachable from `main`:
 
@@ -748,7 +823,7 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 ### Nightly builds
 
 `.github/workflows/nightly.yml` runs at 4 AM `America/Chicago` and from its
-**Run workflow** button (Actions, "Build nightly Sekka ISO"), on `main` only:
+**Run workflow** button (Actions, "Build nightly Sekka ISOs"), on `main` only:
 
 ```sh
 gh workflow run nightly.yml --ref main
@@ -758,13 +833,20 @@ The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
 `main`. If the result is the newest build's `revision` in
 <https://downloads.sekka.computer/nightly/builds.json>, nothing has changed and
-it stops. Otherwise it runs `nix flake check` and builds `.#iso`, then, in this
-order and only if each step succeeded:
+it stops. Otherwise it checks x86 KVM access and ARM execution inside a Nix
+sandbox, runs the x86 `nix flake check` and ARM component checks, and builds
+`.#iso` plus `.#packages.aarch64-linux.utm-iso`. ARM builds use QEMU user
+emulation on the same x86 workstation, with at most eight concurrent builds
+and eight cores per build to limit emulation overhead. The resulting packages
+are native ARM binaries and reuse the normal ARM caches. Then, in this order
+and only if each step succeeded:
 
-1. `nix run .#push-cache` publishes Sekka's packages for that revision to
-   cache.sekka.computer.
-2. `scripts/check_cache_coverage.py .#installed-systems` follows, from each
-   desktop's installed system and the free catalog applications, everything
+1. `nix run .#push-cache -- . x86_64-linux aarch64-linux` publishes both
+   platforms' packages for that revision to cache.sekka.computer. The default
+   manual invocation still publishes only the caller's platform.
+2. `scripts/check_cache_coverage.py` checks both platforms' explicit
+   `packages.SYSTEM.installed-systems` outputs: the media's prebuilt desktop
+   systems and free catalog applications. It follows everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place
@@ -778,20 +860,40 @@ order and only if each step succeeded:
    Installed systems update to `nightly`, so they only ever reach a revision
    that passed and is cached. `nightly` is force-pushed when `main` moved
    past an earlier input update.
-4. `nix run .#publish-nightly` uploads the ISO to the R2 bucket
+4. `nix run .#publish-nightly -- result-iso/iso result-utm/iso` uploads both ISOs to the R2 bucket
    `sekka-downloads` as a new build, in a folder of its own that never
    changes, `nightly/builds/DATE-REVISION/`:
 
 - `sekka-nightly-DATE-REVISION-x86_64-linux.iso`
-- `SHA256SUMS`
+- `SHA256SUMS` (x86 only, preserving existing clients)
+- `aarch64-linux/sekka-nightly-DATE-REVISION-aarch64-linux.iso`
+- `aarch64-linux/SHA256SUMS` (ARM only)
 - `flake.lock`
-- `manifest.json`: revision, commit and upload times, size and SHA-256
+- `manifest.json`: revision, commit/upload times, and an `images` array with
+  each system, ISO/checksum paths, size and SHA-256. The original top-level
+  x86 fields stay present so existing Kakehashi versions still work.
 
 Then it writes `nightly/builds.json`, which lists the last seven builds, newest
 first, and removes everything else under `nightly/`, older builds and anything
 a failed run left. A failed check, build or upload leaves the list as it was,
-so the next night tries the same revision again. Seven builds of about 12 GB
-cost about a dollar a month in R2 storage beyond its free 10 GB.
+so the next night tries the same revision again. Both architectures are uploaded
+before the index changes; a failed ARM upload leaves the previous index intact.
+Retention keeps seven revisions, including every architecture within them.
+Each ISO has its own checksum file, so checking one download does not require
+also downloading the other architecture.
+
+Focused publication checks run without bucket credentials or host binfmt changes:
+
+```sh
+nix build .#checks.x86_64-linux.nightly-assets .#checks.x86_64-linux.nightly-workflow \
+  .#checks.x86_64-linux.arm-emulation .#site --no-update-lock-file
+```
+
+`arm-emulation` registers static QEMU only inside a disposable x86 VM, then
+runs native ARM binaries as an untrusted user through the guest's sandboxed
+Nix daemon. It does not configure the workstation. See the
+[2026-10-20 validation record](docs/testing-aarch64-nightly.md) for the checks
+actually run and the remaining deployment steps.
 
 `downloads.sekka.computer` is the bucket's custom domain, served through
 Cloudflare. Cloudflare's cache keeps no file over 512 MB on this plan, so ISOs
@@ -878,10 +980,21 @@ Once, as root on the builder, from a checkout:
 sudo bash scripts/runner-host-setup.sh
 ```
 
-It reserves uid and gid 30500 as `sekka-runner`, lets Nix's builds open
+Run this once on the idle workstation before the first dual-architecture
+nightly. It installs Ubuntu's `qemu-user-static` and `binfmt-support`, enables
+`qemu-aarch64` with the kernel's fix-binary (`F`) flag, and appends
+`aarch64-linux` to Nix's existing `extra-platforms`. Static QEMU with `F` works
+inside the daemon's mount namespaces without binding host executables into
+build sandboxes. The job container remains unprivileged; do not register
+binfmt handlers from a privileged Actions container. The preflight executes
+an actual ARM `uname` in a build sandbox and fails before the ISO builds if
+this setup is missing. Emulation is slower for uncached compilation; a native
+ARM remote builder could replace it if build times become unacceptable.
+
+The script reserves uid and gid 30500 as `sekka-runner`, lets Nix's builds open
 `/dev/kvm`, has the daemon collect garbage when free space falls under 100 GiB
-during a build (until 200 GiB are free), adds Sekka's binary cache and
-`cache.numtide.com`, and restarts the daemon. numtide's cache serves the AI
+during a build (until 200 GiB are free), adds the signed Sekka, numtide and
+Determinate bootstrap caches, and restarts the daemon. numtide's cache serves the AI
 applications from `numtide/llm-agents.nix`, which cache.nixos.org does not
 have; without it the builder compiles Codex and the rest from source. Untrusted
 clients can use only the daemon's caches, so these belong in its

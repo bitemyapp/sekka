@@ -11,16 +11,17 @@
   inputs.ai-apps.follows = "sekka/ai-apps";
   inputs.omp.follows = "sekka/omp";
 
-  outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }: {
+  outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }:
+  let system = "@SYSTEM@"; in {
     nixosConfigurations.@HOSTNAME@ = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
+      inherit system;
       specialArgs = {
         applicationPkgs = import applications {
-          system = "x86_64-linux";
+          inherit system;
           config.allowUnfree = true;
         };
-        aiPackages = ai-apps.packages.x86_64-linux;
-        ompPackage = omp.packages.x86_64-linux.omp;
+        aiPackages = ai-apps.packages.${system};
+        ompPackage = omp.packages.${system}.omp;
       };
       modules = [
         determinate.nixosModules.default
@@ -29,7 +30,7 @@
         ({ pkgs, ... }: {
           environment.systemPackages = [ fh.packages.${pkgs.stdenv.hostPlatform.system}.default ];
         })
-      ];
+      ] ++ nixpkgs.lib.optional (system == "aarch64-linux") sekka.nixosModules.utm;
     };
   };
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time root setup of the builder for the release workflow's runner
+# One-time root setup of the Ubuntu builder for the nightly/release runner
 # (nix/runner.nix, DEVELOPERS.md), on a host with Determinate Nix and
 # Docker. Run it there as root: `sudo bash scripts/runner-host-setup.sh`.
 # It is safe to run again.
@@ -7,6 +7,19 @@ set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
   echo "Run this as root: sudo bash $0" >&2
+  exit 1
+fi
+
+# Build the exact native ARM derivations through QEMU user emulation, retaining
+# upstream binary-cache reuse. A cross-compiled package set has different store
+# paths and a much smaller cache. Registration belongs on the host, never in a
+# privileged workflow container. Ubuntu's static interpreter and the F flag
+# keep it available inside Nix's mount namespaces without host filesystem binds.
+apt-get update
+apt-get install --yes qemu-user-static binfmt-support
+update-binfmts --enable qemu-aarch64
+if ! grep -q '^flags: .*F' /proc/sys/fs/binfmt_misc/qemu-aarch64; then
+  echo "qemu-aarch64 must be registered with the fix-binary (F) flag for Nix sandboxes." >&2
   exit 1
 fi
 
@@ -28,6 +41,11 @@ fi
 # may open it, now and whenever the device appears.
 conf=/etc/nix/nix.custom.conf
 touch "$conf"
+# Nix's extra- prefix appends to the extra-platforms setting rather than
+# replacing the daemon's existing i686/CPU compatibility platforms.
+if ! grep -qx 'extra-extra-platforms = aarch64-linux' "$conf"; then
+  echo 'extra-extra-platforms = aarch64-linux' >>"$conf"
+fi
 if ! grep -qx 'extra-system-features = kvm' "$conf"; then
   echo 'extra-system-features = kvm' >>"$conf"
 fi
@@ -71,5 +89,14 @@ extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc
 EOF
 fi
 
+# The root flake and installed systems use this signed public cache for the
+# pinned ARM Nix bootstrap binaries. The job user cannot add daemon caches.
+if ! grep -q 'install.determinate.systems' "$conf"; then
+  cat >>"$conf" <<'EOF'
+extra-substituters = https://install.determinate.systems
+extra-trusted-public-keys = cache.flakehub.com-3:hJuILl5sVK4iKm86JzgdXW12Y2Hwd5G07qKtHTOcDCM=
+EOF
+fi
+
 systemctl restart nix-daemon.service
-echo "Done: sekka-runner ($id), KVM for builds, garbage collection when space runs low, and the Sekka and numtide binary caches."
+echo "Done: sekka-runner ($id), native ARM emulation, KVM for x86 tests, garbage collection, and signed builder caches."

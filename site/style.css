@@ -177,6 +177,7 @@ kbd {
 .build p { margin: 0.25em 0; max-width: none; overflow-wrap: anywhere; }
 .build-age, .build-what, .build-extra { color: var(--text-secondary); }
 .build-extra { font-size: 0.9em; margin-left: 0.5em; }
+.build-system { display: block; margin-top: 0.65em; }
 .build.newest { border: 2px solid var(--accent); background: var(--surface-raised); padding: 1rem 1.25rem; }
 .build.newest .build-when strong { color: var(--text-strong); font-size: 1.15em; }
 .build.newest .build-iso { font-weight: 800; font-size: 1.05em; }
