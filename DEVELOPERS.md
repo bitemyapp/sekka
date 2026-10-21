@@ -446,6 +446,18 @@ at 1280×800, selects scale 2 through the window, checks its bounds and scrollin
 and returns to scale 1 through the visible controls. It also checks the offered
 scales and reopening the window. This component test does not qualify an ISO.
 
+Pop Out (Super+O) explicitly enables floating, fits its preferred 1300×900
+size to the window's own logical monitor work area, and pins it. A second
+invocation unpins and returns to tiling, including for windows that were
+already floating before activation. It uses the same geometry calculation
+as Displays, including scale, rotation, monitor origin and reserved panels;
+other floating windows keep their existing policy.
+`nix build .#checks.x86_64-linux.window-pop-vm` exercises the actual shortcut
+from tiled and floating terminals at scales 1 and 2, pinning across workspaces,
+return to tiling, and a simulated rotated monitor at a nonzero origin.
+The test also runs against the predecessor desktop module as a negative
+control. It is component GUI evidence, not ISO qualification.
+
 Tatami's software recording fallback mixes desktop and microphone audio in a
 temporary PipeWire source owned by the recording helper. It resolves the actual
 default endpoints, connects both before starting, and removes the temporary

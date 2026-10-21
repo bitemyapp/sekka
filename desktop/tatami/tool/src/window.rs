@@ -161,22 +161,31 @@ pub fn transparency() {
 }
 
 /// Dispatches for Super+O: pop the window out (floating, centered, pinned
-/// and on top at 1300x900), or put a popped window back.
-pub fn pop_steps(address: &str, pinned: bool) -> Vec<String> {
+/// and on top, up to 1300x900 within its monitor's workspace), or return it
+/// to tiling. An already-floating window must stay floating when popped.
+pub fn pop_steps(address: &str, pinned: bool, monitor: Option<&Value>) -> Vec<String> {
     let window = format!("window = \"address:{address}\"");
-    let float = format!("hl.dsp.window.float({{ {window}, action = \"toggle\" }})");
     let pin = format!("hl.dsp.window.pin({{ {window} }})");
     if pinned {
         vec![
             pin,
-            float,
+            format!("hl.dsp.window.float({{ {window}, action = \"disable\" }})"),
             format!("hl.dsp.window.tag({{ {window}, tag = \"-pop\" }})"),
         ]
     } else {
+        let Some(area) = monitor.and_then(|m| fit_geometry(1300, 900, m)) else {
+            return vec![];
+        };
         vec![
-            float,
-            format!("hl.dsp.window.resize({{ {window}, x = 1300, y = 900 }})"),
-            format!("hl.dsp.window.center({{ {window} }})"),
+            format!("hl.dsp.window.float({{ {window}, action = \"enable\" }})"),
+            format!(
+                "hl.dsp.window.resize({{ {window}, x = {}, y = {} }})",
+                area.w, area.h
+            ),
+            format!(
+                "hl.dsp.window.move({{ {window}, x = {}, y = {} }})",
+                area.x, area.y
+            ),
             pin,
             format!("hl.dsp.window.alter_zorder({{ {window}, mode = \"top\" }})"),
             format!("hl.dsp.window.tag({{ {window}, tag = \"+pop\" }})"),
@@ -188,7 +197,23 @@ pub fn pop() {
     if let Ok(window) = hypr::json("activewindow")
         && let Some(address) = hypr::address(&window)
     {
-        for step in pop_steps(address, window["pinned"] == true) {
+        let pinned = window["pinned"] == true;
+        let monitor = (!pinned)
+            .then(|| hypr::json("monitors").ok())
+            .flatten()
+            .and_then(|monitors| {
+                let id = window["monitor"].as_i64()?;
+                monitors.as_array()?.iter().find(|m| m["id"] == id).cloned()
+            });
+        let steps = pop_steps(address, pinned, monitor.as_ref());
+        if steps.is_empty() {
+            util::notify(
+                "\u{f0b2}",
+                "Could not pop out this window",
+                "Its monitor is unavailable",
+            );
+        }
+        for step in steps {
             hypr::dispatch(&step);
         }
     }
@@ -625,24 +650,41 @@ pub(crate) fn fit_displays(client: &Value, monitor: &Value) -> String {
     let Some(address) = hypr::address(client) else {
         return String::new();
     };
-    let Some(mut area) = hypr::monitor_rect(monitor) else {
+    let Some(area) = fit_geometry(
+        client["size"][0].as_i64().unwrap_or(880),
+        client["size"][1].as_i64().unwrap_or(800),
+        monitor,
+    ) else {
         return String::new();
     };
+    format!(
+        "hl.dispatch(hl.dsp.window.resize({{ window = \"address:{address}\", x = {}, y = {} }}))\n\
+         hl.dispatch(hl.dsp.window.move({{ window = \"address:{address}\", x = {}, y = {} }}))\n",
+        area.w, area.h, area.x, area.y
+    )
+}
+
+/// Fit and center a requested size in a logical workspace, leaving room for
+/// reserved panels and borders. Only callers requesting a fit use this policy.
+fn fit_geometry(width: i64, height: i64, monitor: &Value) -> Option<hypr::Rect> {
+    let mut area = hypr::monitor_rect(monitor)?;
     let reserved = |i: usize| monitor["reserved"][i].as_i64().unwrap_or(0).max(0);
     area.x += reserved(0) + 8;
     area.y += reserved(1) + 8;
     area.w = (area.w - reserved(0) - reserved(2) - 16).max(1);
     area.h = (area.h - reserved(1) - reserved(3) - 16).max(1);
-    let width = client["size"][0].as_i64().unwrap_or(880).clamp(1, area.w);
-    let height = client["size"][1].as_i64().unwrap_or(800).clamp(1, area.h);
+    let width = width.clamp(1, area.w);
+    let height = height.clamp(1, area.h);
     // Center after fitting: centering an oversized window gives negative
     // coordinates and can hide its title bar as well as its controls.
     let x = area.x + (area.w - width) / 2;
     let y = area.y + (area.h - height) / 2;
-    format!(
-        "hl.dispatch(hl.dsp.window.resize({{ window = \"address:{address}\", x = {width}, y = {height} }}))\n\
-         hl.dispatch(hl.dsp.window.move({{ window = \"address:{address}\", x = {x}, y = {y} }}))\n"
-    )
+    Some(hypr::Rect {
+        x,
+        y,
+        w: width,
+        h: height,
+    })
 }
 
 /// Turn a monitor off until the next configuration reload.
@@ -785,11 +827,48 @@ mod tests {
     }
     #[test]
     fn pop_out_and_back() {
-        let out = pop_steps("0xabc", false);
+        let monitor = json!({
+            "x": 0, "y": 0, "width": 1280, "height": 800,
+            "scale": 1, "transform": 0, "reserved": [0, 26, 0, 0]
+        });
+        let out = pop_steps("0xabc", false, Some(&monitor));
         assert_eq!(out.len(), 6);
-        assert!(out[0].contains("float") && out[3].contains("pin"));
-        let back = pop_steps("0xabc", true);
-        assert!(back[0].contains("pin") && back[2].contains("-pop"));
+        assert!(out[0].contains("action = \"enable\"") && out[3].contains("pin"));
+        assert!(out[1].contains("x = 1264, y = 758"));
+        assert!(out[2].contains("x = 8, y = 34"));
+        let back = pop_steps("0xabc", true, None);
+        assert!(back[0].contains("pin") && back[1].contains("action = \"disable\""));
+        assert!(back[2].contains("-pop"));
+        assert!(pop_steps("0xabc", false, None).is_empty());
+    }
+    #[test]
+    fn fitted_windows_respect_origin_transform_scale_and_all_reserved_edges() {
+        let monitor = json!({
+            "x": -640, "y": 80, "width": 1280, "height": 800,
+            "scale": 2, "transform": 1, "reserved": [10, 26, 20, 30]
+        });
+        assert_eq!(
+            fit_geometry(1300, 900, &monitor),
+            Some(hypr::Rect {
+                x: -622,
+                y: 114,
+                w: 354,
+                h: 568
+            })
+        );
+        let large = json!({
+            "x": 1920, "y": 0, "width": 2560, "height": 1440,
+            "scale": 1, "transform": 0, "reserved": [0, 26, 0, 0]
+        });
+        assert_eq!(
+            fit_geometry(1300, 900, &large),
+            Some(hypr::Rect {
+                x: 2550,
+                y: 283,
+                w: 1300,
+                h: 900
+            })
+        );
     }
     #[test]
     fn internal_panels_are_recognized() {
