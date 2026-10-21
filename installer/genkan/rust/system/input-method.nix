@@ -61,12 +61,12 @@ in
     # This file is read before ~/.config/aizome/environment, so deliberate
     # user settings still win. The other desktops retain their GTK/Qt IBus
     # modules; native Aizome apps use text-input-v3 instead of those modules.
-    environment.etc."xdg/aizome/environment".text = lib.mkIf wayland (
-      lib.mkAfter ''
+    environment.etc."xdg/aizome/environment" = lib.mkIf wayland {
+      text = lib.mkAfter ''
         GTK_IM_MODULE=wayland
         QT_IM_MODULE=wayland
-      ''
-    );
+      '';
+    };
 
     systemd.user.services.aizome-ibus = lib.mkIf wayland {
       description = "IBus Wayland input method for Aizome";
