@@ -62,18 +62,18 @@ let
   };
 
   # Before each job the runner runs this: it takes only the repository's
-  # workflows from main, started by hand or on their schedule, which only
-  # its maintainers can do or change. For anything else, a pull request's
-  # workflow above all, it ends every process of the job but the runner
-  # itself, which reports the job failed and leaves: a failed step alone
-  # would not stop later steps that run always(). This holds whatever
-  # GitHub's settings let through.
+  # workflows from main, started by hand, on their schedule or by a push to
+  # main, which only its maintainers can do or change. For anything else, a
+  # pull request's workflow above all, it ends every process of the job but
+  # the runner itself, which reports the job failed and leaves: a failed
+  # step alone would not stop later steps that run always(). This holds
+  # whatever GitHub's settings let through.
   admit = pkgs.writeShellScript "sekka-runner-admit.sh" ''
     job="''${GITHUB_REPOSITORY:-?} ''${GITHUB_EVENT_NAME:-?} ''${GITHUB_REF:-?}"
     case "$job" in
-      "${repository} workflow_dispatch refs/heads/main" | "${repository} schedule refs/heads/main") ;;
+      "${repository} workflow_dispatch refs/heads/main" | "${repository} schedule refs/heads/main" | "${repository} push refs/heads/main") ;;
       *)
-        echo "::error::This runner takes only workflows from main of ${repository}, started by hand or on schedule, not: $job"
+        echo "::error::This runner takes only workflows from main of ${repository}, started by hand, on schedule or by a push, not: $job"
         kill -KILL -1
         exit 1
         ;;
