@@ -170,6 +170,12 @@ otherwise a switch or rollback in Tatami overwrites the baseline with its
 `nix build .#checks.x86_64-linux.session-environment` exercises real GDM password
 login, activation and rollback in Tatami, Xfce's menu, and subsequent Wayland
 sessions with one lingering manager; the original unit is its failing control.
+The activation cases first observe natural retirement of GDM's previous greeter
+and its runtime directory. A visible desktop can precede that delayed teardown;
+activating while its GNOME targets stop can fail with a conflicting transaction.
+The check covers activation in a settled session, retains every zero-exit-status
+assertion, and does not certify activation concurrent with another session's
+logout. It neither stops the greeter nor retries a failed activation.
 After upgrading from the old inactive unit, start a new user manager, normally
 by rebooting. Activation can start that old inactive unit in the current
 desktop, and the fix does not repair an already contaminated snapshot. Manually

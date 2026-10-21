@@ -150,6 +150,25 @@ def switch(machine, path, label):
     capture(machine, label)
 
 
+def wait_greeter_retired(machine):
+    # GDM retires its previous Wayland greeter after a timeout. A rendered
+    # user desktop can therefore overlap the greeter's stop transaction.
+    # This check covers activation in a settled session; observe natural
+    # retirement rather than stopping the greeter or retrying activation.
+    uid = machine.succeed("id -u gdm-greeter").strip()
+    state = {}
+    for stage in ("before", "after"):
+        state[stage] = {
+            "uptime": machine.succeed("cat /proc/uptime").strip(),
+            "runtime_exists": machine.execute("test -d /run/user/" + uid)[0] == 0,
+            "unit": machine.execute("systemctl show user@" + uid + ".service -p ActiveState -p SubState -p MainPID"),
+            "login": machine.execute("loginctl show-user " + uid + " -p State -p Sessions -p Linger"),
+        }
+        if stage == "before":
+            machine.wait_until_succeeds("test ! -d /run/user/" + uid, timeout=90)
+    (Path(machine.out_dir) / (machine.name + "-greeter-retirement.json")).write_text(json.dumps(state, indent=2))
+
+
 for machine in (original, fixed):
     machine.start()
     machine.wait_for_unit("display-manager.service")
@@ -163,6 +182,7 @@ for machine in (original, fixed):
         for name in ("XDG_MENU_PREFIX", "WAYLAND_DISPLAY", "XDG_BACKEND", "DCONF_PROFILE"):
             assert name not in initial, (name, initial)
         capture(machine, "01-tatami")
+        wait_greeter_retired(machine)
         toplevel = machine.succeed("readlink -f /run/current-system").strip()
         invocation = user(machine, "systemctl --user show calamares-session-env.service -p InvocationID --value")
 
