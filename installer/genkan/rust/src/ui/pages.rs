@@ -469,7 +469,7 @@ pub(super) fn build_desktop_page() -> (adw::PreferencesPage, DesktopPage) {
     let page = adw::PreferencesPage::new();
     let environments = group(
         "Desktop Environments",
-        "Choose one or more. Every selected desktop appears on the login screen; this live session stays Plasma.",
+        "Choose one or more. Every selected desktop appears on the login screen. Your choices apply to the installed system.",
     );
     let flow = gtk::FlowBox::builder()
         .selection_mode(gtk::SelectionMode::None)
