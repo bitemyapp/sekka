@@ -6,8 +6,14 @@
 # fix, after the screenshare-sessions check passes with the new upstream
 # package. A patch failure during an input update requires that review; do
 # not just skip the patch.
+# The local capture-cursor patch keeps software cursors out of the shared
+# image, then overlays them only when requested. Remove it after the
+# capture-cursor-vm check passes with an upstream fix, including mirrors.
 final: prev: {
   hyprland = prev.hyprland.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ../patches/hyprland-screenshare-sessions.patch ];
+    patches = (old.patches or [ ]) ++ [
+      ../patches/hyprland-screenshare-sessions.patch
+      ../patches/hyprland-capture-cursor.patch
+    ];
   });
 }
