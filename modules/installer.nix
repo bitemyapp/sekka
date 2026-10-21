@@ -50,6 +50,7 @@ let
 in
 {
   imports = [
+    ./portal-fixes.nix
     # Deferred installations build the system from the live session's store.
     ../installer/genkan/rust/system/binary-cache.nix
     # The live session joins Wi-Fi with installed systems' wpa_supplicant.

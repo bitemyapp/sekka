@@ -57,6 +57,8 @@
       pkgs = nixpkgs.legacyPackages.${system};
       hyprlandOverlay = nixpkgs.lib.composeManyExtensions (import ./nix/overlays);
       hyprlandPkgs = pkgs.extend hyprlandOverlay;
+      xappOverlay = import ./nix/overlays/xapp.nix;
+      xappPkgs = pkgs.extend xappOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -102,7 +104,10 @@
         + c.isoImage.appendToMenuLabel;
     in
     {
-      overlays.default = hyprlandOverlay;
+      overlays.default = nixpkgs.lib.composeManyExtensions [
+        hyprlandOverlay
+        xappOverlay
+      ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
         desktops = inputs.calamares.nixosModules.desktops;
@@ -242,6 +247,15 @@
         };
       };
       checks.${system} = {
+        xapp-packages = import ./nix/xapp-packages-test.nix {
+          inherit pkgs inputs applicationCatalog;
+          patched = xappPkgs.xdg-desktop-portal-xapp;
+          compatibility = installer.config.specialisation.compatibility.configuration;
+        };
+        xapp-settings = import ./nix/xapp-settings-test.nix {
+          inherit pkgs;
+          patched = xappPkgs.xdg-desktop-portal-xapp;
+        };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
           inherit
