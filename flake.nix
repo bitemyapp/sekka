@@ -252,6 +252,7 @@
             ;
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+        genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
         iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
           inherit pkgs installer;
         };
