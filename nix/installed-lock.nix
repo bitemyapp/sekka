@@ -6,12 +6,23 @@
 let
   base = builtins.fromJSON (builtins.readFile ../flake.lock);
   external = base.nodes.${base.root}.inputs;
-  # Inputs only Sekka's own outputs use (nix/components.nix). The installed
-  # flake doesn't name them; they stay beneath Sekka and move with it.
-  followed = removeAttrs external [
-    "superluminal"
-    "tracy"
-  ];
+  # Only inputs named by templates/flake.nix.in belong at the installed root.
+  # Implementation dependencies such as Aizome, Superluminal and Tracy stay
+  # beneath Sekka. New Sekka inputs must not silently change the installer's
+  # target-flake contract (checked by the actual backend in template-lock).
+  followed = builtins.listToAttrs (
+    builtins.map (name: {
+      inherit name;
+      value = external.${name};
+    }) [
+      "nixpkgs"
+      "determinate"
+      "fh"
+      "applications"
+      "ai-apps"
+      "omp"
+    ]
+  );
   locked =
     if self ? rev then
       {
