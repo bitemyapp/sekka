@@ -168,6 +168,7 @@ class Patched(Search):
         for text, name in (('usb', 'Kakehashi'), ('etcher', 'Kakehashi'),
                            ('task manager', 'Activity'), ('htop', 'Activity'),
                            ('wifi', 'Network'), ('internet', 'Network'),
+                           ('pairing', 'Bluetooth'), ('headphones', 'Bluetooth'),
                            ('resolution', 'Displays'), ('hidpi', 'Displays')):
             with self.subTest(text=text):
                 self.assertEqual(self.first(text)[0], name)
@@ -180,6 +181,7 @@ class Patched(Search):
                           ('usb', ('Kakehashi', 'USB Image Writer')),
                           ('task manager', ('Activity', 'System Monitor')),
                           ('wifi', ('Network', 'Network Settings')),
+                          ('bluetooth settings', ('Bluetooth', 'Bluetooth Settings')),
                           ('display settings', ('Displays', 'Display Settings'))):
             with self.subTest(text=text):
                 self.assertEqual(self.first(text), row)

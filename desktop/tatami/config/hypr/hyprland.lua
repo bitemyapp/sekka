@@ -336,8 +336,9 @@ hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-
 -- The Displays window (tatami-displays), floating with room for the
 -- arrangement: its own size, as the floating-window tag's would win over it.
 hl.window_rule({ match = { class = "org.tatami.Displays" }, float = true, center = true, size = { 880, 800 } })
--- The Network window (tatami-network), likewise.
+-- The Network and Bluetooth settings windows, likewise.
 hl.window_rule({ match = { class = "org.tatami.Network" }, float = true, center = true, size = { 720, 760 } })
+hl.window_rule({ match = { class = "org.tatami.Bluetooth" }, float = true, center = true, size = { 720, 760 } })
 -- The Activity window (tatami-activity), wide enough for the list beside
 -- its inspector.
 hl.window_rule({ match = { class = "org.tatami.Activity" }, float = true, center = true, size = { 1160, 720 } })
@@ -349,12 +350,11 @@ hl.window_rule({
   tag = "+floating-window",
 })
 
--- Audio and Bluetooth (wiremix, bluetui) open where Omarchy 4's audio and
--- Bluetooth panels drop from the bar: 6px from the right edge, under it.
+-- Audio (wiremix) opens below the bar, 6px from the right edge.
 -- window_w is still the terminal's own width when the move applies, so the
 -- move uses the fixed width.
 hl.window_rule({
-  match = { class = "(org.tatami.wiremix|org.tatami.bluetui)" },
+  match = { class = "org.tatami.wiremix" },
   float = true,
   size = { 540, 360 },
   move = { "(monitor_w-546)", "32" },
