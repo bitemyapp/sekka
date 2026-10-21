@@ -307,6 +307,8 @@ names, command lines, PIDs, users and units, and opens the applications
 holding matching processes. Numbers sort largest first, zeros are dimmed so
 what is busy stands out, and each view keeps its own sort. Ctrl+1 to Ctrl+5
 switch views, Ctrl+Shift+A, P and T the grouping, and Ctrl+? lists the keys.
+With a process row focused, Menu or Shift+F10 opens its menu and Ctrl+C copies
+its command line. In the search field, editing keys still edit the search.
 It reads every two seconds, or every one or five (main menu), on a thread of
 its own; rows change in place, so the selection stays, and a list at its top
 stays there with the busiest first. `tatami-activity --pid PID`, `--lens

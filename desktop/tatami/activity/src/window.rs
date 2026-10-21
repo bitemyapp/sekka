@@ -891,6 +891,24 @@ fn actions(ui: &Rc<Ui>) {
 }
 
 fn shortcuts(ui: &Rc<Ui>) {
+    // SearchEntry forwards unhandled keys from the window, including editing
+    // keys. Handle process commands first, locally in the focused table. Using
+    // named actions also keeps the shortcuts visible in its context menu.
+    let process_keys = gtk::ShortcutController::new();
+    process_keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    for (trigger, action) in [
+        ("Delete", "win.quit"),
+        ("<Shift>Delete", "win.force-quit"),
+        ("<Control>c", "win.copy-command"),
+        ("Menu|<Shift>F10", "win.menu"),
+    ] {
+        process_keys.add_shortcut(gtk::Shortcut::new(
+            gtk::ShortcutTrigger::parse_string(trigger),
+            Some(gtk::NamedAction::new(action)),
+        ));
+    }
+    ui.table.view.add_controller(process_keys);
+
     let controller = gtk::ShortcutController::new();
     controller.set_scope(gtk::ShortcutScope::Managed);
     let bind = |trigger: &str, action: &str| {
@@ -900,12 +918,8 @@ fn shortcuts(ui: &Rc<Ui>) {
         ));
     };
     bind("Escape", "win.escape");
-    bind("Delete", "win.quit");
-    bind("<Shift>Delete", "win.force-quit");
     bind("<Control>i", "win.toggle-inspector");
     bind("<Control>f", "win.find");
-    bind("<Control>c", "win.copy-command");
-    bind("Menu|<Shift>F10", "win.menu");
     bind("<Control>question", "win.shortcuts");
     for (index, lens) in Lens::ALL.iter().enumerate() {
         bind(
