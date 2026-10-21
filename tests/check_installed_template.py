@@ -6,12 +6,13 @@ cargo build --locked --manifest-path installer/genkan/tests/vm-fixture/Cargo.tom
 python3 tests/check_installed_template.py
 """
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / '.work/fixture-target/debug/calamares-vm-fixture'
+FIXTURE = Path(os.environ.get('CALAMARES_FIXTURE', ROOT / '.work/fixture-target/debug/calamares-vm-fixture'))
 
 
 def command(*args):
@@ -21,7 +22,9 @@ def command(*args):
 lock = command('nix', 'eval', '--json', '.#lib.installedLock')
 parsed = json.loads(lock)
 assert 'sekka' in parsed['nodes'][parsed['root']]['inputs']
-assert not {'calamares', 'tatami', 'yukimi'} & parsed['nodes'][parsed['root']]['inputs'].keys()
+assert not {'calamares', 'tatami', 'yukimi', 'aizome'} & parsed['nodes'][parsed['root']]['inputs'].keys()
+# Aizome must remain pinned beneath Sekka, including its own follows edges.
+assert 'aizome' in parsed['nodes']['sekka']['inputs']
 cases = json.loads(command(str(FIXTURE), 'desktop-configurations'))
 with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as directory:
     target = Path(directory)
@@ -30,7 +33,8 @@ with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as director
     (target / 'flake.nix').write_text(template)
     # These devices are never opened: evaluation only, no builds or activation.
     (target / 'hardware-configuration.nix').write_text('{ ... }: {}\n')
-    for name in ['plasma', 'tatami', 'gnome-xfce']:
+    for name in ['aizome', 'aizome-tatami', 'aizome-plasma-gnome-xfce-hyprland-tatami',
+                 'plasma', 'tatami', 'gnome-xfce']:
         (target / 'configuration.nix').write_text(cases[name])
         derivation = command('nix', 'eval', '--no-update-lock-file', '--raw',
                              f'path:{target}#nixosConfigurations.sekka-test.config.system.build.toplevel.drvPath')
