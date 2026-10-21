@@ -419,7 +419,10 @@ deselected in the GUI while Rustup is selected.
 
 The build-tools choice includes wrapped GCC/G++ and libc headers, GNU Make,
 binutils, CMake, Ninja, pkg-config, Git, patch, and `file`. Rustup uses Nixpkgs' NixOS-aware
-package; users select a toolchain with `rustup default stable` after installation.
+package. The `sekka-rustup-default` user service selects stable for a new Rustup
+account at login, retrying until the download succeeds without holding up login.
+Nixpkgs' unwrapped `rust-analyzer`, at higher priority than Rustup's proxy, gives
+editors a language server that runs on NixOS with any toolchain.
 Additional native libraries should be provided by a project development shell.
 Build tools, Lazygit and the GitHub CLI each bring Git, and with it Git LFS
 through `programs.git.lfs`, which sets the LFS filter in `/etc/gitconfig`.

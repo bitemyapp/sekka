@@ -6,6 +6,8 @@ test "$(id -un)" = rusttest
 test "$(id -u)" = 1000
 test "$(findmnt -n -o FSTYPE /)" != tmpfs
 test -f /etc/installer-applications.json
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -57,7 +59,12 @@ cmp blob.bin lfs-clone/blob.bin
 printf '%s\n' 'PASS Git LFS'
 
 # A real freshly installed Rust toolchain, linking a compiled C library.
-rustup default stable
+# The login service downloads it in the background; wait, with a bound.
+timeout 600 bash -c '
+  until test "$(systemctl --user show sekka-rustup-default -p SubState --value)" = exited; do
+    sleep 1
+  done
+'
 rustup show
 cargo new native-link
 cd native-link
@@ -83,11 +90,16 @@ EOF
 test "$(cargo run --quiet)" = 'Rust and C linkage works'
 cargo test
 printf '%s\n' 'PASS Rustup stable, Cargo and native C linkage'
+
+# Editors find this rust-analyzer on PATH and use it when `--help` succeeds.
+# Loading the project makes it add the standard-library sources itself.
+rust-analyzer --help >/dev/null
+rust-analyzer analysis-stats . >/dev/null
+test -f "$(rustc --print sysroot)/lib/rustlib/src/rust/library/core/src/lib.rs"
+printf '%s\n' 'PASS rust-analyzer with standard-library sources'
 cd "$work"
 
 # Exercise rootless networking, execution and the Compose plugin as the user.
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 test "${DOCKER_HOST:-}" = "unix://$XDG_RUNTIME_DIR/docker.sock"
 systemctl --user is-active docker
 if id -nG | tr ' ' '\n' | grep -qx docker; then
