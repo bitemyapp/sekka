@@ -19,6 +19,10 @@ pub struct RawRequest {
     pub firmware: Firmware,
     #[serde(default)]
     pub filesystem: Filesystem,
+    #[serde(default)]
+    pub encrypt: bool,
+    #[serde(default)]
+    pub encryption_password: String,
     pub hostname: String,
     pub username: String,
     pub full_name: String,
@@ -59,6 +63,7 @@ pub struct RawRequest {
 impl Drop for RawRequest {
     fn drop(&mut self) {
         self.password.zeroize();
+        self.encryption_password.zeroize();
         self.wifi_profiles.zeroize();
     }
 }
@@ -145,6 +150,8 @@ pub struct InstallPlan {
     disk: disk::Identity,
     firmware: Firmware,
     filesystem: Filesystem,
+    encrypt: bool,
+    encryption_password: Zeroizing<String>,
     hostname: Hostname,
     username: Username,
     full_name: String,
@@ -166,6 +173,14 @@ impl RawRequest {
     /// Parse for review; confirmation is intentionally a separate transition.
     /// Called on a worker: timezone and Wi-Fi parsing can perform I/O/FFI.
     pub fn parse(mut self, settings: &Settings) -> Result<InstallPlan> {
+        if self.encrypt {
+            crate::encryption::validate_passphrase(&self.encryption_password)?;
+        } else {
+            ensure!(
+                self.encryption_password.is_empty(),
+                "An encryption passphrase was supplied with encryption disabled"
+            );
+        }
         let hostname = Hostname::parse(&self.hostname)?;
         let username = Username::parse(&self.username)?;
         ensure!(
@@ -217,6 +232,8 @@ impl RawRequest {
             disk: self.disk.clone(),
             firmware: self.firmware,
             filesystem: self.filesystem,
+            encrypt: self.encrypt,
+            encryption_password: Zeroizing::new(std::mem::take(&mut self.encryption_password)),
             hostname,
             username,
             full_name: std::mem::take(&mut self.full_name),
@@ -254,6 +271,12 @@ impl InstallPlan {
     }
     pub fn filesystem(&self) -> Filesystem {
         self.filesystem
+    }
+    pub fn encrypt(&self) -> bool {
+        self.encrypt
+    }
+    pub(crate) fn take_encryption_password(&mut self) -> Zeroizing<String> {
+        Zeroizing::new(std::mem::take(&mut *self.encryption_password))
     }
     pub fn hostname(&self) -> &Hostname {
         &self.hostname
@@ -356,6 +379,8 @@ impl ConfirmedInstall {
             disk: plan.disk,
             firmware: plan.firmware,
             filesystem: plan.filesystem,
+            encrypt: plan.encrypt,
+            encryption_password: std::mem::take(&mut *plan.encryption_password),
             hostname: plan.hostname.0,
             username: plan.username.0,
             full_name: plan.full_name,

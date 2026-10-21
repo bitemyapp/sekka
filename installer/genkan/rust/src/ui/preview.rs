@@ -136,6 +136,7 @@ pub fn apply(ui: &Rc<Ui>) {
     ui.activity_spinner.set_visible(false);
     ui.activity.set_text("");
     let review = Review {
+        encrypt: false,
         disk: sample_disk(
             "/dev/nvme0n1",
             "Samsung SSD 990 PRO 1TB",

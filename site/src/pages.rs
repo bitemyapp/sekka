@@ -118,7 +118,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <p>Sekka is an early, experimental project. It is not ready to be your dependable everyday operating system. Try it in a disposable virtual machine or on a spare computer with nothing you need to keep.</p>
   <ul class="facts">
     <li><strong>Installation erases a whole disk.</strong> There is no dual-boot setup, manual partitioning, or option to keep an existing operating system. Keep backups elsewhere.</li>
-    <li><strong>Disk encryption is not implemented.</strong> Neither are RAID or LVM setup, or offline installation. An internet connection is required.</li>
+    <li><strong>RAID, LVM setup and offline installation are not implemented.</strong> An internet connection is required.</li>
     <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
     <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
@@ -140,7 +140,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <div class="win">
     <h2>What it isn't, yet</h2>
     <ul class="facts gaps">
-      <li><strong>No encryption, manual partitioning or dual boot.</strong></li>
+      <li><strong>No manual partitioning or dual boot.</strong></li>
       <li><strong>No offline installation.</strong></li>
       <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
@@ -830,9 +830,9 @@ pub fn status(site: &Site) -> Result<Page> {
 
 <section class="tiles">
   <article class="win">
+    <p>Genkan offers optional LUKS2 encryption for the system, personal files and swap, with a separate startup passphrase. Boot files stay unencrypted. TRIM is enabled and reveals unused blocks. Encrypted installation has not been validated on physical hardware.</p>
     <h2>Not implemented</h2>
     <ul class="facts gaps">
-      <li>Disk encryption</li>
       <li>Manual partitioning, dual boot, keeping another operating system</li>
       <li>RAID and LVM</li>
       <li>Offline installation</li>
@@ -908,7 +908,7 @@ pub fn download(_site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Before you install</h2>
-    <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no disk encryption, dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
+    <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
   </article>
 </section>
 <section class="win" aria-labelledby="releases">

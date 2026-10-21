@@ -512,7 +512,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `aizome`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as a desktop and catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -894,10 +894,31 @@ well inside the wait:
   systems keep NixOS's default, randomization on; whether they hit this on
   real hardware hasn't been checked.
 
-## Disk encryption must pass TRIM through
+## Disk encryption
 
-Genkan does not create encrypted disks yet. When it does, the configuration it
-writes must set `boot.initrd.luks.devices.<name>.allowDiscards = true`.
+Genkan offers opt-in LUKS2 encryption of root and the optional swap partition,
+with the same separate disk passphrase on both. Passphrases are validated in
+both processes, carried by the existing private stdin protocol, held in
+zeroizing Rust owners and passed to cryptsetup through an anonymous memfd on
+stdin. They never enter command arguments, the generated flake, or an installed
+key file. The GUI clears disk passphrase fields when encryption is disabled
+and when installation starts. GTK's own editable buffers are not guaranteed
+to be zeroized.
+
+The helper chooses outer LUKS UUIDs and inner filesystem UUIDs before erasure.
+It uses LUKS2 with Argon2id and a 16 MiB payload offset, reserves that overhead
+in the layout, verifies container and filesystem identities, and closes its
+own mappings after unmounting (including failure cleanup). UEFI keeps the
+unencrypted ESP; encrypted BIOS adds a 1 GiB ext4 `/boot` after the 2 MiB BIOS
+boot area. Root remains partition 2, swap partition 3 when selected; BIOS
+`/boot` is numbered 4 with swap or 3 without it. GRUB reads plain boot files,
+so it does not need to unlock LUKS2. Encrypted BIOS installations retain GRUB's
+framebuffer (`gfxpayloadBios = "keep"`): returning to VGA text hid the initrd
+unlock prompt when the VM's DRM driver took over. Swap stays RAM-sized after header overhead,
+and its inner UUID remains the resume device. Encrypted hibernation itself has
+not been validated. Early console setup uses the selected keyboard for unlock.
+
+The configuration sets `boot.initrd.luks.devices.<name>.allowDiscards = true`.
 dm-crypt drops discard requests unless the mapping allows them, so the weekly
 `fstrim` and Btrfs's default `discard=async` never reach the SSD, and the drive
 keeps treating freed blocks as live data. `nixos-generate-config` emits only
@@ -914,11 +935,38 @@ interactive refresh to remove. Refreshing a passphrase-only mapping also needs
 the passphrase, so it fails without a terminal. If installed systems ever need
 this change, ship it as a configuration update that applies at the next boot.
 
-Discards reveal which blocks are unused to anyone holding the raw disk. Say so
-in the README's account of encryption. The encrypted-install VM check must show
-a non-zero `DISC-GRAN` in `lsblk --discard` for the opened mapping and a
-successful `fstrim -v /`; check that the virtual target disk itself advertises
-discard first, or the result proves nothing.
+Discards reveal which blocks are unused to anyone holding the raw disk; the
+README and disk page explain this tradeoff. The installer opens mappings with
+`--allow-discards` for formatting and testing, without a persistent header flag.
+
+```sh
+nix build .#genkan .#checks.x86_64-linux.storage .#checks.x86_64-linux.encrypted-storage --no-update-lock-file
+```
+
+The encrypted-storage component check runs the production partition/format/mount
+phase on a marked disposable virtual disk for ext4, Btrfs and XFS, with and
+without swap, and UEFI and BIOS layouts. It tests wrong passphrases, closing
+and reopening containers, data persistence, and cleanup. It then boots an
+encrypted root with Genkan's generated storage configuration and checks active
+encrypted swap, non-zero discard granularity on both the virtual disk and
+mapping, and `fstrim -v /`. The harness supplies the bootloader and Nix store:
+this is not a full ISO installation or disk-only reboot, and does not validate
+physical hardware or hibernation. The separate fixture accepts
+`CALAMARES_TEST_ENCRYPT=1` for full image installation runs; startup requires
+entering its public test passphrase.
+
+The [2026-10-21 full GUI installation record](docs/test-results/luks-gui-uefi.json)
+covers an 8 GiB UEFI VM installed through Genkan with ext4, encrypted root and
+swap, Aizome and Plasma. It includes two disk-only boots without the ISO or a
+shared host store, wrong-passphrase rejection, graphical login to both desktops,
+application use, file persistence and working TRIM. Installation used the ISO's
+Xfce/X11 compatibility entry: Genkan's page rendering got stuck in the default
+Plasma live session. That rendering issue remains unresolved. This run also
+found and fixed Aizome's omission from `respin.referenceDesktops`; keeping its
+closure on the ISO avoids compiling the default desktop in the live tmpfs.
+It does not establish a full BIOS install, physical hardware support, encrypted
+hibernation or an installed-system update. The record separates these limits
+from the component checks above.
 
 ## System tuning and responsiveness
 
