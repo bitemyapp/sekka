@@ -51,6 +51,9 @@ The installed lock's root names only the inputs in `templates/flake.nix.in`.
 Aizome and other dependencies used through Sekka stay nested beneath Sekka;
 adding one to the installed root makes Genkan reject every installation before
 disk writes. `checks.x86_64-linux.template-lock` runs the real backend parser.
+Genkan also seeds the selected time zone before the target's first activation.
+Aizome preserves that initial zone while keeping Settings free to change it;
+the VM fixture checks the installed zone after disk-only boot.
 `check_installed_template.py` also evaluates Aizome, Aizome/Tatami and all-desktop
 targets without changing the lock; `CALAMARES_FIXTURE` can select a packaged
 `calamares-vm-fixture` instead of the local debug build.
