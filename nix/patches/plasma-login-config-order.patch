@@ -1,0 +1,46 @@
+--- a/src/frontend/settings/plasmaloginsettings.cpp
++++ b/src/frontend/settings/plasmaloginsettings.cpp
+@@ -21,34 +21,32 @@
+ 
+ #include "plasmaloginsettings.h"
+ 
+-static void addDirectoryToConfig(KSharedConfig::Ptr config, const QDir &dir)
++static void appendDirectorySources(QStringList &sources, const QDir &dir)
+ {
+     const auto entryInfoList = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::LocaleAware);
+-
+-    QStringList sources;
+ 
+     for (const QFileInfo &fi : entryInfoList) {
+         sources << fi.absoluteFilePath();
+     }
+-
+-    config->addConfigSources(sources);
+ }
+ 
+ PlasmaLoginSettings &PlasmaLoginSettings::getInstance()
+ {
+     auto config = KSharedConfig::openConfig(QStringLiteral(PLASMALOGIN_CONFIG_FILE), KConfig::NoGlobals);
+ 
+-    QDir plasmaLoginSystemConfigDir(QStringLiteral(PLASMALOGIN_CONFIG_DIR));
++    // KConfig's constructor file has highest priority. Merge the remaining
++    // sources from shipped defaults to administrator overrides in one call.
++    QStringList sources{QStringLiteral(PLASMALOGIN_SYSTEM_CONFIG_FILE)};
++    QDir plasmaLoginSystemConfigDir(QStringLiteral(PLASMALOGIN_SYSTEM_CONFIG_DIR));
+     if (plasmaLoginSystemConfigDir.exists()) {
+-        addDirectoryToConfig(config, plasmaLoginSystemConfigDir);
++        appendDirectorySources(sources, plasmaLoginSystemConfigDir);
+     }
+ 
+-    config->addConfigSources({QStringLiteral(PLASMALOGIN_SYSTEM_CONFIG_FILE)});
+-
+-    QDir plasmaLoginConfigDir(QStringLiteral(PLASMALOGIN_SYSTEM_CONFIG_DIR));
++    QDir plasmaLoginConfigDir(QStringLiteral(PLASMALOGIN_CONFIG_DIR));
+     if (plasmaLoginConfigDir.exists()) {
+-        addDirectoryToConfig(config, plasmaLoginConfigDir);
++        appendDirectorySources(sources, plasmaLoginConfigDir);
+     }
++    config->addConfigSources(sources);
+ 
+     static PlasmaLoginSettings instance(config);
+     return instance;
