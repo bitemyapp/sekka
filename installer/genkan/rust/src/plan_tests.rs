@@ -7,6 +7,8 @@ const SWAP: &str = "66666666-7777-4888-9999-aaaaaaaaaaaa";
 /// Fixed identities matching a plan's firmware and swap choice.
 fn ids(plan: &InstallPlan) -> Identities {
     Identities {
+        encryption: None,
+        bios_boot: None,
         root: ROOT.into(),
         efi: (plan.firmware() == Firmware::Uefi).then(|| "A1B2-C3D4".into()),
         swap: plan.swap().then(|| SWAP.into()),
@@ -15,7 +17,7 @@ fn ids(plan: &InstallPlan) -> Identities {
 fn render(plan: &InstallPlan) -> String {
     config::configuration(plan, &ids(plan)).unwrap()
 }
-fn fixture() -> (tempfile::TempDir, Settings, RawRequest) {
+pub(crate) fn fixture() -> (tempfile::TempDir, Settings, RawRequest) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir(dir.path().join("Etc")).unwrap();
     fs::write(dir.path().join("Etc/UTC"), "TZif").unwrap();
@@ -37,6 +39,8 @@ fn fixture() -> (tempfile::TempDir, Settings, RawRequest) {
         },
         firmware: Firmware::Uefi,
         filesystem: Filesystem::Ext4,
+        encrypt: false,
+        encryption_password: String::new(),
         hostname: "my-machine".into(),
         username: "alice".into(),
         full_name: "Alice ${literal}".into(),
@@ -555,4 +559,66 @@ fn nvidia_gpus_get_nvidia_driver_only_when_unfree_is_allowed() {
         offload: false,
     };
     assert!(raw.parse(&settings).is_err());
+}
+
+#[test]
+fn encryption_is_opt_in_and_secrets_survive_only_the_private_request() {
+    let (_dir, settings, raw) = fixture();
+    let mut wire = serde_json::to_value(&raw).unwrap();
+    wire.as_object_mut().unwrap().remove("encrypt");
+    wire.as_object_mut().unwrap().remove("encryption_password");
+    let old: RawRequest = serde_json::from_value(wire).unwrap();
+    assert!(!old.parse(&settings).unwrap().encrypt());
+    for password in ["", "too short", "long-but-newline\n", "long-but-null\0"] {
+        let (_dir, settings, mut raw) = fixture();
+        raw.encrypt = true;
+        raw.encryption_password = password.into();
+        assert!(raw.parse(&settings).is_err());
+    }
+    let (_dir, settings, mut raw) = fixture();
+    raw.encryption_password = "separate-disk-passphrase".into();
+    assert!(raw.parse(&settings).is_err());
+    for firmware in [Firmware::Uefi, Firmware::Bios] {
+        for fs in Filesystem::ALL {
+            for swap in [false, true] {
+                let (_dir, settings, mut raw) = fixture();
+                raw.encrypt = true;
+                raw.encryption_password = "separate-disk-passphrase".into();
+                raw.firmware = firmware;
+                raw.filesystem = fs;
+                raw.swap = swap;
+                let plan = raw.parse(&settings).unwrap();
+                let identities = Identities::generate_for(firmware, swap, true).unwrap();
+                let config = config::configuration(&plan, &identities).unwrap();
+                assert!(config.contains("boot.initrd.luks.devices.cryptroot"));
+                assert_eq!(config.contains("boot.initrd.luks.devices.cryptswap"), swap);
+                assert_eq!(
+                    config.matches("allowDiscards = true").count(),
+                    1 + usize::from(swap)
+                );
+                assert!(config.contains("console.earlySetup = true"));
+                assert!(config.contains("fileSystems.\"/boot\""));
+                assert!(!config.contains("separate-disk-passphrase"));
+                assert!(!config.contains("keyFile"));
+                let mut bad = identities.clone();
+                bad.encryption = None;
+                assert!(config::configuration(&plan, &bad).is_err());
+                let mut bad = identities.clone();
+                bad.encryption.as_mut().unwrap().root = "../not-a-uuid".into();
+                assert!(config::configuration(&plan, &bad).is_err());
+                let wire = plan.into_request();
+                assert_eq!(wire.encryption_password, "separate-disk-passphrase");
+                let mut reparsed = wire.parse(&settings).unwrap();
+                assert_eq!(
+                    config::configuration(&reparsed, &identities).unwrap(),
+                    config
+                );
+                assert_eq!(
+                    &*reparsed.take_encryption_password(),
+                    "separate-disk-passphrase"
+                );
+                assert!(reparsed.take_encryption_password().is_empty());
+            }
+        }
+    }
 }

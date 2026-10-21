@@ -9,6 +9,7 @@ let
   # Inputs only Sekka's own outputs use (nix/components.nix). The installed
   # flake doesn't name them; they stay beneath Sekka and move with it.
   followed = removeAttrs external [
+    "aizome"
     "superluminal"
     "tracy"
   ];

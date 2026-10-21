@@ -3,6 +3,15 @@
 README and website images are original PNG captures with links to the full
 files. They are not upscaled, composited, or generated illustrations.
 
+The validation captures in `test-results/luks-gui-uefi/` are separate from the
+README and website gallery. They are original 1280 × 800 QEMU screendumps from
+the [2026-10-21 encrypted GUI installation](test-results/luks-gui-uefi.json),
+copied byte for byte without cropping or scaling. They show the live installer
+(including its unresolved Plasma rendering failure), the disk-only unlock
+prompt, and applications in the installed Aizome and Plasma sessions. Input
+was sent as keyboard and pointer events through QMP; there was no automatic
+login. The report records the exact ISO and test-only diagnostics setting.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of

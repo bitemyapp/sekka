@@ -36,6 +36,10 @@ pub(super) struct DiskPage {
     pub(super) filesystem: adw::ToggleGroup,
     pub(super) filesystem_row: adw::ActionRow,
     pub(super) swap: adw::SwitchRow,
+    pub(super) encrypt: adw::SwitchRow,
+    pub(super) encryption_password: adw::PasswordEntryRow,
+    pub(super) encryption_repeat: adw::PasswordEntryRow,
+    pub(super) encryption_hint: Label,
     pub(super) tuning: adw::SwitchRow,
     pub(super) layout: LayoutBar,
 }
@@ -264,7 +268,7 @@ pub(super) fn build_welcome() -> adw::StatusPage {
     warning_icon.set_valign(Align::Start);
     warning.append(&warning_icon);
     let warning_text = label(
-        "This installer erases one whole disk: GPT with ext4, Btrfs or XFS, UEFI or legacy BIOS. It does not support manual partitioning, encryption, keeping another operating system, or offline installation. Back up your data before continuing.",
+        "This installer erases one whole disk: GPT with ext4, Btrfs or XFS, UEFI or legacy BIOS. It does not support manual partitioning, keeping another operating system, or offline installation. Back up your data before continuing.",
     );
     warning_text.set_hexpand(true);
     warning.append(&warning_text);
@@ -322,6 +326,26 @@ pub(super) fn build_disk_page() -> (adw::PreferencesPage, DiskPage) {
         .active(true)
         .build();
     storage.add(&swap);
+    let encrypt = adw::SwitchRow::builder()
+        .title("Encrypt the installation with LUKS2")
+        .subtitle("Protects the system, personal files and swap. Unlock at startup with a separate passphrase. Boot files remain unencrypted. TRIM reveals which blocks are unused.")
+        .build();
+    storage.add(&encrypt);
+    let encryption_password = adw::PasswordEntryRow::builder()
+        .title("Disk passphrase (at least 12 characters)")
+        .visible(false)
+        .build();
+    let encryption_repeat = adw::PasswordEntryRow::builder()
+        .title("Confirm disk passphrase")
+        .visible(false)
+        .build();
+    storage.add(&encryption_password);
+    storage.add(&encryption_repeat);
+    let encryption_hint = caption(
+        "Remember your disk passphrase: it cannot be recovered or reset through your login account. Use the live session’s keyboard layout when typing, and select the same layout later for startup.",
+    );
+    encryption_hint.set_visible(false);
+    storage.add(&encryption_hint);
     let tuning = adw::SwitchRow::builder()
         .title("Performance tuning")
         .subtitle("CachyOS-inspired defaults: memory and writeback sysctls, I/O schedulers, ananicy-cpp process priorities and systemd-oomd. Uses the stock kernel and packages.")
@@ -339,6 +363,10 @@ pub(super) fn build_disk_page() -> (adw::PreferencesPage, DiskPage) {
             filesystem,
             filesystem_row,
             swap,
+            encrypt,
+            encryption_password,
+            encryption_repeat,
+            encryption_hint,
             tuning,
             layout,
         },
