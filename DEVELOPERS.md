@@ -811,6 +811,30 @@ unrelated-device isolation, repeated application, and reconnect-like resets.
 Physical USB wake must still be checked on each machine with Keep Awake off;
 record keyboard/mouse, hub, dock, firmware, and sleep mode when diagnosing it.
 
+## Network DNS and IPv6
+
+Network applies DNS and IPv6 mode changes together through NetworkManager's
+`Update2` D-Bus API, on its existing worker thread. The version guard rejects
+concurrent profile edits. Other controls retain their `nmcli` path.
+NetworkManager forbids IPv6 DNS addresses with `method=disabled`, so Network
+stores suspended addresses in the profile's `user.data` key
+`org.sekka.tatami.ipv6-dns` while off. The versioned value binds them to the
+current IPv4 DNS list and both families' automatic-DNS flags. Invalid or stale
+metadata refuses restoration until the user selects DNS again; it never
+overrides an external edit. Other applications' keys and settings are retained.
+`GetSettings` excludes secrets, and NetworkManager preserves existing secrets
+for a secret-free update. No password is read to change DNS.
+
+`nix build .#checks.x86_64-linux.network-dns-vm` exercises the actual window and
+daemon for both IPv6 transitions, automatic/preset/custom DNS, changes while
+off, reopening and daemon restart. It also runs the ignored
+`network_profile_transactions` Rust test inside that disposable VM: stored WPA
+secret and unrelated-setting preservation, a real concurrent version rejection,
+and atomic backend validation failure. The fixture package only retains the
+normal Cargo test executable; the UI uses the production Network package.
+Autologin, software graphics and the private NAT make this component evidence,
+not qualification of an ISO or physical network hardware.
+
 ## Simulated Wi-Fi
 
 `nix/simulated-wifi.nix` gives a test VM two mac80211_hwsim radios. The first,

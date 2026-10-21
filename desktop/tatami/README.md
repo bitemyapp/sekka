@@ -253,8 +253,10 @@ Network settings… in the network panel and in Setup › Network, and
 
 Changes apply at once: to the connection in use without reconnecting where
 NetworkManager can (IPv4, DNS, IPv6), otherwise the next time it connects.
-A change NetworkManager refuses is undone on the page too. NetworkManager
-does the work, through `nmcli`: the window reads it on a worker thread when
+A change NetworkManager refuses is undone on the page too. Turning IPv6 off
+keeps your DNS choices for when it is turned on again; changing DNS while it
+is off replaces those saved choices too. NetworkManager does the work: the
+window reads it on a worker thread when
 NetworkManager reports a change and every few seconds while open, asks for a
 scan now and then, and never waits for one. Passwords reach `nmcli` in a
 file only you can read, never on a command line. `tatami-network --join
