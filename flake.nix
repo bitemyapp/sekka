@@ -498,7 +498,7 @@
         tatami-background =
           pkgs.runCommand "tatami-background-tests"
             {
-              nativeBuildInputs = [ pkgs.python3 ];
+              nativeBuildInputs = [ (pkgs.python3.withPackages (p: [ p.pillow ])) ];
             }
             ''
               python3 ${./tests/test_tatami_background.py} ${self.packages.${system}.tatami}/bin/tatami
@@ -545,6 +545,10 @@
           inherit (self.packages.${system}) tatami displays;
         };
         displays-fit-vm = import ./nix/displays-fit-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        background-validation-vm = import ./nix/background-validation-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };

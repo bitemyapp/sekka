@@ -191,6 +191,17 @@ pub fn path() -> PathBuf {
 }
 
 fn change(action: &str, value: Option<&str>, output: Option<&str>) -> util::Result<()> {
+    // Check with the renderer's decoder before touching state or restarting it.
+    // In particular, a readable file need not be a usable image.
+    if action == "set" {
+        let image = Path::new(value.ok_or("Missing wallpaper setting")?);
+        if !image.is_absolute() || !image.is_file() || fs::File::open(image).is_err() {
+            return Err("Wallpaper must be an absolute path to a readable image file".into());
+        }
+        gdk_pixbuf::Pixbuf::from_file(image).map_err(|error| {
+            format!("Wallpaper could not be decoded as a supported image: {error}")
+        })?;
+    }
     let dir = util::state_dir();
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     // Serialize concurrent menu/CLI edits, including the legacy image symlink.
@@ -222,11 +233,6 @@ fn change(action: &str, value: Option<&str>, output: Option<&str>) -> util::Resu
             ),
             "set" => {
                 let image = Path::new(value);
-                if !image.is_absolute() || !image.is_file() || fs::File::open(image).is_err() {
-                    return Err(
-                        "Wallpaper must be an absolute path to a readable image file".into(),
-                    );
-                }
                 if output.is_none() {
                     link(image).map_err(|error| error.to_string())?;
                     restart();

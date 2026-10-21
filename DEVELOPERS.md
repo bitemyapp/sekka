@@ -1381,7 +1381,15 @@ and record their URL, dimensions and SHA-256 in
 and run `nix build .#checks.x86_64-linux.wallpapers` after changing the collection.
 `nix build .#checks.x86_64-linux.tatami-background` exercises Tatami's saved
 appearance settings, per-output inheritance, renderer arguments and menu commands
-using isolated state, without changing the host desktop.
+using isolated state, without changing the host desktop. Image selection decodes
+the complete file with GdkPixbuf before any saved-state or renderer change; the
+packaged loader set matches swaybg, including SVG, WebP and JPEG XL. The CLI check
+uses real image data and proves malformed, truncated, unreadable and missing
+files preserve the previous settings, symlink and renderer invocation count.
+`nix build .#checks.x86_64-linux.background-validation-vm` exercises the normal
+Walker menus in a disposable Tatami VM: invalid global and display-specific
+images show an error without changing the rendered wallpaper or service PID,
+then a valid image replaces it. This component check does not qualify an ISO.
 
 Keep original full-resolution PNGs and record how they were captured in `docs/screenshots.md`. Use real app captures, not generated mockups. Mark previews or historical images accurately. Preserve the original component licenses, SPDX declarations, artwork credits, and `docs/imports.json` provenance.
 

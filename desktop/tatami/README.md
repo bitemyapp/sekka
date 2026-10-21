@@ -384,6 +384,8 @@ Use **Style › Background** or **Super+Ctrl+Space** to choose a wallpaper.
 **Style › Background settings** controls the image, scaling mode and background
 color for all displays or a particular display. The original image files stay
 intact; the display handles scaling and cropping.
+Unreadable files and files that cannot be decoded as images show an error and
+leave the current wallpaper in place.
 
 | Mode | Result |
 | --- | --- |
