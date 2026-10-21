@@ -132,6 +132,66 @@ impl Stage {
     }
 }
 
+fn copy_to_ram_requested(command_line: &str) -> bool {
+    command_line
+        .split_whitespace()
+        .any(|word| word.split('=').next() == Some("copytoram"))
+}
+
+#[derive(Deserialize)]
+struct LiveStoreMount {
+    source: String,
+    fstype: String,
+    options: String,
+}
+
+fn live_store_loop(mount: &LiveStoreMount) -> Result<&str> {
+    ensure!(
+        mount.fstype == "squashfs" && mount.options.split(',').any(|option| option == "ro"),
+        "Copy-to-RAM media requires a read-only squashfs at /nix/.ro-store"
+    );
+    let device = mount.source.strip_prefix("/dev/loop");
+    ensure!(
+        device
+            .is_some_and(|number| !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())),
+        "The live store is not backed by a loop device"
+    );
+    Ok(mount.source.strip_prefix("/dev/").unwrap())
+}
+
+/// A temporary /iso alone is not live media: require the requested boot mode
+/// and the actual read-only store mounted from the RAM copy's squashfs image.
+fn ram_live_guard() -> Result<()> {
+    ensure!(
+        copy_to_ram_requested(&fs::read_to_string("/proc/cmdline")?),
+        "Temporary /iso is only supported after a copytoram boot"
+    );
+    #[derive(Deserialize)]
+    struct Mounts {
+        filesystems: Vec<LiveStoreMount>,
+    }
+    let mounts: Mounts = serde_json::from_str(&output(
+        "findmnt",
+        &[
+            "--json",
+            "--output",
+            "SOURCE,FSTYPE,OPTIONS",
+            "--mountpoint",
+            "/nix/.ro-store",
+        ],
+        15,
+    )?)?;
+    ensure!(mounts.filesystems.len() == 1, "Ambiguous live store mount");
+    let device = live_store_loop(&mounts.filesystems[0])?;
+    let backing = fs::read_to_string(format!("/sys/class/block/{device}/loop/backing_file"))?;
+    ensure!(
+        backing.trim() == "/iso/nix-store.squashfs"
+            && fs::metadata("/iso/nix-store.squashfs")?.is_file(),
+        "The live store is not backed by /iso/nix-store.squashfs"
+    );
+    Ok(())
+}
+
 pub fn live_guard(settings: &Settings) -> Result<()> {
     ensure!(
         unsafe { libc::geteuid() } == 0,
@@ -153,16 +213,16 @@ pub fn live_guard(settings: &Settings) -> Result<()> {
             == "tmpfs",
         "Refusing to run on an installed host: root is not temporary"
     );
-    ensure!(
-        output(
-            "findmnt",
-            &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/iso"],
-            15
-        )?
-        .trim()
-            == "iso9660",
-        "No read-only live ISO filesystem at /iso"
-    );
+    let media = output(
+        "findmnt",
+        &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/iso"],
+        15,
+    )?;
+    match media.trim() {
+        "iso9660" => (),
+        "tmpfs" => ram_live_guard()?,
+        _ => anyhow::bail!("No live ISO filesystem or verified RAM copy at /iso"),
+    }
     if settings.test_diagnostics {
         disk::vm_test_disk()?;
     }
@@ -735,6 +795,38 @@ fn closure_size(value: &serde_json::Value) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn copy_to_ram_is_an_exact_kernel_parameter() {
+        for command_line in ["copytoram", "quiet copytoram console=tty0", "copytoram=1"] {
+            assert!(copy_to_ram_requested(command_line));
+        }
+        for command_line in ["", "notcopytoram", "example=copytoram", "copytoram-extra"] {
+            assert!(!copy_to_ram_requested(command_line));
+        }
+    }
+
+    #[test]
+    fn ram_live_store_requires_readonly_squashfs_on_a_real_loop_device() {
+        let mount = |source: &str, fstype: &str, options: &str| LiveStoreMount {
+            source: source.into(),
+            fstype: fstype.into(),
+            options: options.into(),
+        };
+        assert_eq!(
+            live_store_loop(&mount("/dev/loop12", "squashfs", "ro,relatime")).unwrap(),
+            "loop12"
+        );
+        for invalid in [
+            mount("/dev/loop0", "squashfs", "rw"),
+            mount("/dev/loop0", "ext4", "ro"),
+            mount("/dev/sda1", "squashfs", "ro"),
+            mount("/dev/loop", "squashfs", "ro"),
+            mount("/dev/loop0/../../sda", "squashfs", "ro"),
+        ] {
+            assert!(live_store_loop(&invalid).is_err());
+        }
+    }
+
     #[test]
     fn closure_size_accepts_nix_json_formats_and_rejects_incomplete_results() {
         assert_eq!(

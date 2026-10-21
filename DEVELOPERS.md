@@ -100,6 +100,11 @@ actual installer initrd and runs its copy-to-RAM entrypoint and runtime tools
 inside that filesystem. Initrd generation does not follow references inside
 shell scripts, so both the helper and its runtime inputs must be included.
 The exact ISO still needs both low-memory and successful copy-to-RAM boot tests.
+Genkan accepts a RAM-backed `/iso` only after a `copytoram` boot with the
+read-only squashfs store mounted from `/iso/nix-store.squashfs`; temporary
+root and NixOS checks still apply. `nix build .#checks.x86_64-linux.genkan-live-media`
+exercises this guard against real ISO, tmpfs and squashfs mounts in disposable
+VMs, including unrelated media and installed-root refusals.
 
 ## Sources and installed-system updates
 
