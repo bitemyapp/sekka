@@ -256,6 +256,7 @@
           inherit pkgs;
           patched = xappPkgs.xdg-desktop-portal-xapp;
         };
+        hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
           inherit
@@ -277,7 +278,12 @@
         };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
-          inherit (hyprlandPkgs) aquamarine hyprland;
+          inherit (hyprlandPkgs)
+            aquamarine
+            hyprland
+            hyprtoolkit
+            hyprlauncher
+            ;
         };
         aquamarine = import ./nix/aquamarine-test.nix {
           inherit pkgs;

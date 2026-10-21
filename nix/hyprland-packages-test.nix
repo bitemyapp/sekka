@@ -4,6 +4,8 @@
   applicationCatalog,
   aquamarine,
   hyprland,
+  hyprtoolkit,
+  hyprlauncher,
 }:
 let
   inherit (pkgs) lib;
@@ -49,9 +51,13 @@ let
     assert evaluated.config.programs.hyprland.enable;
     assert evaluated.config.programs.hyprland.package.outPath == hyprland.outPath;
     assert evaluated.pkgs.aquamarine.outPath == aquamarine.outPath;
+    assert evaluated.pkgs.hyprtoolkit.outPath == hyprtoolkit.outPath;
+    assert evaluated.pkgs.hyprlauncher.outPath == hyprlauncher.outPath;
     {
       hyprland = evaluated.config.programs.hyprland.package.outPath;
       aquamarine = evaluated.pkgs.aquamarine.outPath;
+      hyprtoolkit = evaluated.pkgs.hyprtoolkit.outPath;
+      hyprlauncher = evaluated.pkgs.hyprlauncher.outPath;
     }
   ) configurations;
 in

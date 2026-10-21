@@ -4,4 +4,5 @@
 [
   (import ./aquamarine.nix)
   (import ./hyprland.nix)
+  (import ./hyprtoolkit.nix)
 ]

@@ -1,0 +1,149 @@
+--- a/src/window/IWaylandWindow.cpp
++++ b/src/window/IWaylandWindow.cpp
+@@ -1,5 +1,8 @@
+ #include "IWaylandWindow.hpp"
+ #include "WaylandPopup.hpp"
++
++#include <algorithm>
++#include <drm_fourcc.h>
+ 
+ #include <hyprtoolkit/element/Null.hpp>
+ 
+@@ -17,6 +20,9 @@
+ using namespace Hyprutils::Math;
+ 
+ CWaylandBuffer::CWaylandBuffer(SP<Aquamarine::IBuffer> buffer) : m_buffer(buffer) {
++    if (!buffer)
++        return;
++
+     auto params = makeShared<CCZwpLinuxBufferParamsV1>(g_waylandPlatform->m_waylandState.dmabuf->sendCreateParams());
+ 
+     if (!params) {
+@@ -71,18 +77,62 @@
+ void IWaylandWindow::resizeSwapchain(const Vector2D& pixelSize) {
+     m_damageRing.setSize(pixelSize);
+ 
+-    if (!m_waylandState.swapchain)
+-        m_waylandState.swapchain = Aquamarine::CSwapchain::create(g_waylandPlatform->m_allocator, g_waylandBackend->m_aqBackend->getImplementations().at(0));
+-
+-    m_waylandState.swapchain->reconfigure(Aquamarine::SSwapchainOptions{
+-        .length = 2,
+-        .size   = pixelSize,
+-        .format = g_waylandPlatform->m_dmabufFormats.at(0).drmFormat,
+-    });
+-
+-    for (size_t i = 0; i < m_waylandState.wlBuffers.size(); ++i) {
+-        m_waylandState.wlBuffers[i] = makeShared<CWaylandBuffer>(m_waylandState.swapchain->next(nullptr));
+-    }
++    if (g_waylandPlatform->m_dmabufFormats.empty()) {
++        g_logger->log(HT_LOG_ERROR, "wayland: compositor advertised no dmabuf formats");
++        m_waylandState.wlBuffers = {};
++        return;
++    }
++
++    auto swapchain = m_waylandState.swapchain;
++    if (!swapchain ||
++        !swapchain->reconfigure(Aquamarine::SSwapchainOptions{
++            .length = 2,
++            .size   = pixelSize,
++            .format = swapchain->currentOptions().format,
++        })) {
++        // Keep the compositor's preferred format on working hardware. Software
++        // GBM allocators can reject it even when the compositor can import it.
++        const auto PREFERRED     = g_waylandPlatform->m_dmabufFormats.front().drmFormat;
++        const bool HAS_ARGB      = std::ranges::any_of(g_waylandPlatform->m_dmabufFormats, [](const auto& fmt) { return fmt.drmFormat == DRM_FORMAT_ARGB8888; });
++        const auto TRY_ALLOCATOR = [&](SP<Aquamarine::CGBMAllocator> allocator) -> SP<Aquamarine::CSwapchain> {
++            if (!allocator)
++                return nullptr;
++
++            auto candidate = Aquamarine::CSwapchain::create(allocator, g_waylandBackend->m_aqBackend->getImplementations().at(0));
++            auto options   = Aquamarine::SSwapchainOptions{.length = 2, .size = pixelSize, .format = PREFERRED};
++            if (candidate->reconfigure(options))
++                return candidate;
++
++            if (HAS_ARGB && PREFERRED != DRM_FORMAT_ARGB8888) {
++                options.format = DRM_FORMAT_ARGB8888;
++                if (candidate->reconfigure(options))
++                    return candidate;
++            }
++            return nullptr;
++        };
++
++        swapchain = TRY_ALLOCATOR(g_waylandPlatform->m_allocator);
++        if (!swapchain)
++            swapchain = TRY_ALLOCATOR(g_waylandPlatform->primaryAllocator());
++    }
++
++    if (!swapchain) {
++        g_logger->log(HT_LOG_ERROR, "wayland: failed to allocate window buffers");
++        m_waylandState.wlBuffers = {};
++        return;
++    }
++
++    decltype(m_waylandState.wlBuffers) buffers;
++    for (auto& buffer : buffers) {
++        buffer = makeShared<CWaylandBuffer>(swapchain->next(nullptr));
++        if (!buffer->good()) {
++            g_logger->log(HT_LOG_ERROR, "wayland: failed to create window wl_buffer");
++            m_waylandState.wlBuffers = {};
++            return;
++        }
++    }
++    m_waylandState.swapchain = std::move(swapchain);
++    m_waylandState.wlBuffers = std::move(buffers);
+ }
+ 
+ void IWaylandWindow::onPreRender() {
+--- a/src/core/platforms/WaylandPlatform.cpp
++++ b/src/core/platforms/WaylandPlatform.cpp
+@@ -522,6 +522,33 @@
+     return out;
+ }
+ 
++SP<Aquamarine::CGBMAllocator> CWaylandPlatform::primaryAllocator() {
++    if (m_primaryAllocator)
++        return m_primaryAllocator;
++
++    // Software GBM may use dumb buffers, whose allocation ioctl is unavailable
++    // on render nodes. Try the matching primary node only after allocation on
++    // the original node failed; keep the renderer's original fd and allocator.
++    if (drmGetNodeTypeFromFd(m_drmState.fd) != DRM_NODE_RENDER)
++        return nullptr;
++
++    auto name = drmGetPrimaryDeviceNameFromFd(m_drmState.fd);
++    if (!name)
++        return nullptr;
++    const int FD = open(name, O_RDWR | O_NONBLOCK | O_CLOEXEC);
++    free(name);
++    if (FD < 0)
++        return nullptr;
++
++    m_primaryAllocator = Aquamarine::CGBMAllocator::create(FD, g_waylandBackend->m_aqBackend);
++    if (!m_primaryAllocator) {
++        close(FD);
++        return nullptr;
++    }
++    g_logger->log(HT_LOG_WARNING, "wayland: retrying buffer allocation on the matching primary DRM node");
++    return m_primaryAllocator;
++}
++
+ bool CWaylandPlatform::initDmabuf() {
+     m_waylandState.dmabufFeedback = makeShared<CCZwpLinuxDmabufFeedbackV1>(m_waylandState.dmabuf->sendGetDefaultFeedback());
+     if (!m_waylandState.dmabufFeedback) {
+--- a/src/core/platforms/WaylandPlatform.hpp
++++ b/src/core/platforms/WaylandPlatform.hpp
+@@ -72,10 +72,14 @@
+ 
+         SP<CWaylandSessionLockState> aquireSessionLock();
+ 
++        // Allocation fallback; the renderer retains the original DRM device.
++        SP<Aquamarine::CGBMAllocator> primaryAllocator();
++
+         // dmabuf formats
+         std::vector<Aquamarine::SDRMFormat> m_dmabufFormats;
+ 
+         SP<Aquamarine::CGBMAllocator>       m_allocator;
++        SP<Aquamarine::CGBMAllocator>       m_primaryAllocator;
+ 
+         struct {
+             wl_display* display = nullptr;

@@ -214,7 +214,7 @@ left about 144,000 sessions and Hyprland's main thread at 100% until the next
 login. With the patch the requested box identifies a region session; a managed
 session ends when its client disconnects, or after five seconds without a frame
 request and with no frame pending; and a client holds at most 32, losing its
-least recently used. `nix/overlays/default.nix` lists both overlays for the
+least recently used. `nix/overlays/default.nix` lists the shared overlays for the
 flake's package set, `overlays.default` and `modules/hyprland-fixes.nix`.
 `nix build .#checks.x86_64-linux.screenshare-sessions` runs the patched and
 the unpatched Nixpkgs Hyprland in two disposable VMs, each with a headless
@@ -224,6 +224,25 @@ regions at once, and connects repeatedly. The unpatched compositor must show
 both leaks: that is the negative control. Remove the patch when a Hyprland
 release includes the fix, after this check passes with the new upstream
 package; review any patch failure rather than skipping it.
+
+Hyprtoolkit 0.6.0 assumes its first advertised DMA-BUF format can be allocated
+and dereferences a null buffer when it cannot. This crashes Hyprlauncher on
+software graphics. `nix/patches/hyprtoolkit-buffer-allocation.patch` preserves
+successful allocations, retries with advertised ARGB8888, and can use the same
+device's primary DRM node when its render node cannot allocate software GBM
+buffers. The renderer keeps its original device. Failed allocation never becomes
+a null-buffer dereference. The shared overlay rebuilds Hyprlauncher against it.
+`nix build .#checks.x86_64-linux.hyprlauncher-software` opens the launcher with
+Super+R, searches for and launches an application, then reopens, rescales and
+cancels on software graphics with both supported kernel variants.
+The test asserts the applied monitor scale and actual buffer sizes, reads the
+visible launcher/result text within its mapped layer, and preserves full-screen
+captures. Its negative control rebuilds the launcher with only this toolkit
+patch removed and must reproduce the original null-buffer crash. The package
+selection check covers Hyprtoolkit and Hyprlauncher in ISO references, installed
+systems and standalone desktop modules. These component checks do not certify
+an ISO or accelerated graphics. Remove the patch after an upstream update
+passes the regression; do not skip a patch failure during an input update.
 
 Tatami's Elephant (`desktop/tatami/elephant/`) carries `search.patch`, a Sekka
 change that is not upstream. Stock Elephant searches applications either by
