@@ -177,6 +177,17 @@ clean teardown, then selects Plasma Wayland through the greeter. The original
 package is both the failing control and an ordinary-priority custom-package
 override check. This component test does not qualify an ISO.
 
+Plasma Login's frontend also loads shipped defaults and packaged fragments
+before administrator fragments, with the primary `/etc/plasmalogin.conf`
+retaining highest priority. This lets Genkan's chosen default session override
+the shipped Plasma default. `checks.x86_64-linux.plasma-login-config` compiles
+the actual package's config loader against pinned KConfig and checks missing
+files, fallback, fragment ordering, custom values and primary-file precedence;
+the original loader reproduces the wrong default. The session VM checks fresh
+Xfce preselection and logs in without changing it, then exercises a manual
+Plasma selection. Custom Plasma Login packages must also supply this fix if
+they use the affected upstream frontend.
+
 With several desktops installed, `calamares-session-env.service` records the
 user manager's initial environment, including custom variables. The login
 screen's PAM hook restores that baseline before another desktop starts. The

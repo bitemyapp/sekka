@@ -344,6 +344,9 @@ in
       # is a build-time setting; keep the Wayland startup path unchanged.
       package = lib.mkDefault (
         pkgs.kdePackages.plasma-login-manager.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ../../../../nix/patches/plasma-login-config-order.patch
+          ];
           cmakeFlags = (old.cmakeFlags or [ ]) ++ [
             "-DSESSION_COMMAND=${plasmaLoginSession}"
           ];

@@ -125,7 +125,7 @@ def wait_plasma_panel(machine):
     raise AssertionError(("Plasma panel clock", text))
 
 
-def login(machine, session="Xfce"):
+def login(machine, session="Xfce", expected_preselection=None):
     machine.wait_for_unit("display-manager.service")
     (Path(machine.out_dir) / (machine.name + "-login-configuration.txt")).write_text(
         machine.succeed("cat /etc/plasmalogin.conf.d/*.conf; systemctl cat plasmalogin.service")
@@ -135,6 +135,14 @@ def login(machine, session="Xfce"):
     # Wake the greeter's normally hidden idle controls.
     key(machine, "spc")
     wait_word(machine, "Demo", timeout=90)
+    if expected_preselection:
+        # Assert the first visible selection before touching the combo. Use
+        # its observed text region, retaining the full screenshot as evidence.
+        path = frame(machine, "fresh-preselection")
+        crop = path.with_name(path.stem + "-selection.png")
+        subprocess.run(["@magick@", str(path), "-crop", "285x24+495+502", "+repage", "-bordercolor", "white", "-border", "10", str(crop)], check=True)
+        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=10).strip()
+        assert expected_preselection in text, (expected_preselection, text)
     if session:
         click_word(machine, "Desktop")
         frame(machine, "session-menu-" + session)
@@ -200,7 +208,7 @@ def logout_xfce(machine, name):
 with subtest("current unwrapped Plasma Login leaves Xfce portals unavailable"):
     original.start()
     try:
-        login(original)
+        login(original, expected_preselection="Plasma (Wayland)")
         original.wait_until_succeeds("pgrep -u demo -f '^xfce4-session$'", timeout=90)
         wait_word(original, "Applications")
         assert state(original, "graphical-session.target") == "inactive"
@@ -218,7 +226,8 @@ with subtest("current unwrapped Plasma Login leaves Xfce portals unavailable"):
 with subtest("normal X11 login starts portals and logout tears them down with a lingering manager"):
     fixed.start()
     try:
-        login(fixed)
+        # The configured default must work without manually selecting Xfce.
+        login(fixed, session=None, expected_preselection="Xfce")
         xfce(fixed, "xfce-first")
         manager_pid = manager(fixed)
         logout_xfce(fixed, "xfce-first")
