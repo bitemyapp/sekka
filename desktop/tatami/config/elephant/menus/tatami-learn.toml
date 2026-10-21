@@ -14,7 +14,7 @@ value = "tatami keybindings"
 [[entries]]
 text = "Tatami"
 icon = ""
-value = "tatami browser https://github.com/bitemyapp/tatami/blob/stable/README.md"
+value = "tatami browser https://github.com/bitemyapp/sekka/blob/main/desktop/tatami/README.md"
 
 [[entries]]
 text = "Hyprland"
