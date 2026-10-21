@@ -247,6 +247,10 @@
         };
       };
       checks.${system} = {
+        session-environment = import ./nix/session-environment-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         xapp-packages = import ./nix/xapp-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
           patched = xappPkgs.xdg-desktop-portal-xapp;
