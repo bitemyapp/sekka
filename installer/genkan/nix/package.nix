@@ -43,6 +43,12 @@ pkgs.rustPlatform.buildRustPackage {
     + ":/run/current-system/sw/bin";
   # NixOS installs the setuid entry point here; the store binary is not setuid.
   CALAMARES_PKEXEC = "/run/wrappers/bin/pkexec";
+  # GTK's Vulkan software path on the Plasma live session can stop repainting
+  # midway through a page crossfade. OpenGL keeps those transitions responsive;
+  # preserve an explicit renderer (the Xfce compatibility profile uses cairo).
+  preFixup = ''
+    gappsWrapperArgs+=(--set-default GSK_RENDERER gl)
+  '';
   doCheck = true;
   passthru.storageTest = import ./storage-test.nix { inherit pkgs; };
   postInstall = ''
