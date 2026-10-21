@@ -1,4 +1,4 @@
-name: Build nightly Sekka ISO
+name: Build and cache nightly Sekka ISO
 
 on:
   schedule:
@@ -19,13 +19,13 @@ jobs:
     # Scheduled, or started by hand, from main only. It runs on the sandboxed
     # builder (nix/runner.nix and DEVELOPERS.md), one fresh container per
     # job, with Nix through the host's daemon. The environment holds the
-    # tokens that write the downloads bucket and the binary cache, and the
-    # cache's signing key, for main alone.
+    # binary-cache token and signing key, for main alone. ISO publication
+    # happens only on a workstation after testing the exact image.
     #
     # It brings Sekka's inputs up to date, then checks and builds that
     # revision. Only when everything passed and Sekka's packages are in the
     # binary cache does it commit the update to main, move the nightly
-    # branch (which installed systems follow) to it, and publish the ISO.
+    # branch (which installed systems follow) to it. It never publishes ISOs.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
@@ -33,18 +33,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check the publishing secrets
+      - name: Check the cache secrets
         shell: bash
         env:
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CACHE_R2_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
           CACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.CACHE_R2_SECRET_ACCESS_KEY }}
           CACHE_SIGNING_KEY: ${{ secrets.CACHE_SIGNING_KEY }}
         run: |
           # Fail now rather than after hours of building (DEVELOPERS.md).
           missing=()
-          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY CACHE_R2_ACCESS_KEY_ID CACHE_R2_SECRET_ACCESS_KEY CACHE_SIGNING_KEY; do
+          for name in CACHE_R2_ACCESS_KEY_ID CACHE_R2_SECRET_ACCESS_KEY CACHE_SIGNING_KEY; do
             [[ -n "${!name}" ]] || missing+=("$name")
           done
           if (( ${#missing[@]} )); then
@@ -55,7 +53,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Update Sekka's inputs
-        id: inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -70,17 +67,7 @@ jobs:
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit --quiet --file "$RUNNER_TEMP/message" -- flake.lock
           fi
-          revision=$(git rev-parse HEAD)
-          published=$(curl -fsS https://downloads.sekka.computer/nightly/builds.json | jq -r ".builds[0].revision // \"none\"") || published=none
-          if [[ "$published" == "$revision" ]]; then
-            echo "The nightly of $revision is already published, and its inputs are current."
-            echo build=false >> "$GITHUB_OUTPUT"
-          else
-            echo "Published: $published; to build: $revision."
-            echo build=true >> "$GITHUB_OUTPUT"
-          fi
       - name: Check the builder
-        if: steps.inputs.outputs.build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -97,7 +84,6 @@ jobs:
             exit 1
           }
       - name: Check components and build ISO
-        if: steps.inputs.outputs.build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -105,7 +91,6 @@ jobs:
           nix build .#iso --no-update-lock-file --print-build-logs --out-link result-iso
           git diff --exit-code
       - name: Publish Sekka's packages to its binary cache
-        if: steps.inputs.outputs.build == 'true'
         shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
@@ -120,7 +105,6 @@ jobs:
           # closures (many gigabytes) are staged on the runner's work volume.
           TMPDIR=$RUNNER_TEMP SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
       - name: Check that updating to it only downloads
-        if: steps.inputs.outputs.build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -129,7 +113,6 @@ jobs:
           # upstream publishes may make users compile.
           nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#installed-systems
       - name: Move main and nightly to this revision
-        if: steps.inputs.outputs.build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,12 +124,3 @@ jobs:
           git push "$remote" HEAD:refs/heads/main ||
             echo "::warning::main moved during the build; the input update stays on nightly only."
           git push --force "$remote" HEAD:refs/heads/nightly
-      - name: Publish the nightly ISO
-        if: steps.inputs.outputs.build == 'true'
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          set -euo pipefail
-          nix run --no-update-lock-file .#publish-nightly -- result-iso/iso
