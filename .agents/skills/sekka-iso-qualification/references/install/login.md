@@ -2,9 +2,15 @@
 
 - Boot the installed disk with no ISO, no live root and no installation share.
   Prove the root/store mounts and boot source. Repeat a cold boot and restart.
-- Confirm `display-manager.service` runs greetd/Aizome's greeter, the running
+- In the primary and default-only cases, confirm `display-manager.service`
+  runs greetd/Aizome's greeter, the running
   greeter executable is from the installed system, and no GDM, SDDM or Plasma
   greeter substitutes for it. Inspect the screen, process and unit together.
+- In the separate all-six/GNOME case, verify the documented GDM selection,
+  then GNOME's actual lock, wrong-password rejection and unlock. Genkan does
+  not expose `loginScreen`; an all-six install cannot select Aizome's greeter
+  through the normal GUI. Keep this coexistence coverage separate from the
+  mandatory Aizome-greeter cases; never force a different greeter in the guest.
 - Greeter lists exactly the selected sessions once each. Exercise user choice,
   password visibility, session choice, keyboard layout, focus and keyboard-only
   access, and the power menu. Aizome is the chosen default; last-session

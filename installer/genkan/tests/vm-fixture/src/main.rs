@@ -321,6 +321,12 @@ fn seed_previous_filesystem(device: &str) -> Result<()> {
 
 fn main() -> Result<()> {
     let operation = std::env::args().nth(1);
+    if operation.as_deref() == Some("desktop-choices") {
+        // The same inventory drives the real GUI; expose it for ISO checks.
+        let choices: Vec<_> = Desktop::ALL.iter().map(|desktop| desktop.id()).collect();
+        println!("{}", serde_json::to_string(&choices)?);
+        return Ok(());
+    }
     if operation.as_deref() == Some("validate-template") {
         let args: Vec<_> = std::env::args().skip(2).collect();
         ensure!(args.len() == 2, "Usage: validate-template TEMPLATE LOCK");
