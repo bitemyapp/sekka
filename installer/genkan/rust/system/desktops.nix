@@ -512,23 +512,5 @@ in
       picture-options='zoom'
     '';
     environment.xfce.excludePackages = lib.mkIf (has "xfce") [ pkgs.xfdesktop ];
-    # GNOME enables IBus, whose autostart entry skips only GNOME and KDE. In
-    # the Hyprland sessions it only reports that it should run from GNOME.
-    environment.etc."xdg/autostart/ibus-daemon.desktop" =
-      lib.mkIf
-        (
-          (has "hyprland" || has "tatami")
-          && config.i18n.inputMethod.enable
-          && config.i18n.inputMethod.type == "ibus"
-        )
-        {
-          text = ''
-            [Desktop Entry]
-            Type=Application
-            Name=IBus
-            Exec=${config.i18n.inputMethod.package}/bin/ibus-daemon --daemonize --xim
-            NotShowIn=GNOME;KDE;Hyprland;
-          '';
-        };
   };
 }

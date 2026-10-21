@@ -128,6 +128,35 @@ User `mpv.conf` and command-line preferences override those defaults.
 in an Aizome VM using the shipped config and checks both override routes.
 This component test does not replace playback through the exact ISO's normal UI.
 
+When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend
+inside Aizome. Sekka starts that frontend with `aizome-session.target`; GNOME
+keeps its own IBus service and Xfce keeps the legacy frontend. Aizome's GTK/Qt
+input modules use Wayland only within its session environment. An explicit
+custom IBus panel remains under the user's own integration.
+`checks.x86_64-linux.aizome-ibus-policy` evaluates these configuration cases;
+`checks.x86_64-linux.aizome-ibus` exercises real Hangul preedit, editing,
+spaces, digits and Enter in Sumi and GTK, plus desktop switches with a lingering
+user manager. A frontend exit of 1 is accepted only after its Aizome session
+has stopped or begun stopping. The test injects exit 1 into a temporary copy of
+the installed wrapper to check both states, then kills the real frontend and
+verifies automatic recovery before composing text. This instrumented component
+VM does not qualify an ISO.
+
+The Aizome frontend alone backports the physical-key forwarding part of
+[IBus commit 58b74bd76d79](https://github.com/ibus/ibus/commit/58b74bd76d79bfb909eb011f5f444f474a9415c1)
+to pinned IBus 1.5.34. Without it, Hangul commits composed text but loses
+forwarded spaces and digits through input-method-v2. Keycode-zero synthetic
+keysyms remain unsupported; the later upstream implementation depends on its
+1.5.35 keymap refactor. Sekka's all-desktop configuration adds no IBus engines,
+so it offers the built-in XKB/simple engines, which do not emit forwarded-key
+events. Its application catalog and Settings do not configure additional
+engines. The component test explicitly adds Hangul 1.5.5, whose forwarding
+call retains the physical keycode. This establishes coverage for those paths,
+not arbitrary engines installed and configured by a user. Before adding an
+engine to the shipped configuration, inspect its forwarding semantics and
+test its native and GTK text paths; a keycode-zero engine needs the remaining
+upstream fix first.
+
 ## Sources and installed-system updates
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
