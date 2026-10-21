@@ -88,7 +88,8 @@ The `tatami` helper (`tool/`) provides:
 - copy and paste that works in terminals (Super+C/V/X)
 - window commands: pop out, tiled fullscreen, transparency, gaps, square
   aspect, workspace layout. Gaps, aspect, layouts and a disabled touchpad
-  are re-applied at login
+  are re-applied at login. Super+O floats and pins the current window within
+  its screen's usable space; press it again to return the window to tiling
 - monitor scaling, laptop display, touchpad and zoom toggles, and keeping
   and applying the Displays window's settings (`tatami displays apply`)
 - time, battery and keyboard backlight notifications
