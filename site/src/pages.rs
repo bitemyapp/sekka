@@ -144,7 +144,7 @@ pub fn home(site: &Site) -> Result<Page> {
       <li><strong>No offline installation.</strong></li>
       <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
-      <li><strong>No release.</strong> Only <a href="/download/">nightly builds</a>, checked automatically in virtual machines.</li>
+      <li><strong>No release.</strong> Only experimental <a href="/download/">nightly builds</a>, published after testing the exact ISO in virtual machines.</li>
       <li><strong>Not all of it looks like Sekka yet.</strong> Genkan and Yukimi still use libadwaita's light theme and NixOS blues.</li>
     </ul>
     <p><a href="/status/">The full status, and how each part is tested</a></p>
@@ -801,7 +801,7 @@ pub fn status(site: &Site) -> Result<Page> {
         r#"<section class="tiles">
   <article class="win warn">
     <h2>Nightly builds, no release</h2>
-    <p>There is no versioned release yet. A <a href="/download/">nightly ISO</a> is built from <code>main</code> when it has changed, once Sekka's automated checks pass in virtual machines. A nightly may not have been tried on hardware yet. GitHub's “Source code” archives are not bootable images.</p>
+    <p>There is no versioned release yet. Automation builds candidates from <code>main</code> and fills the binary cache. A <a href="/download/">nightly ISO</a> is published separately from a workstation after testing those exact bytes through installation, installed-disk boots, login and desktop interaction in virtual machines. Its manifest links the qualification evidence and limitations. This does not establish compatibility with every physical machine. GitHub's “Source code” archives are not bootable images.</p>
   </article>
   <article class="win">
     <h2>Trying it anyway</h2>
@@ -884,20 +884,20 @@ pub fn download(_site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/download/",
         title: "Download Sekka's nightly ISO".into(),
-        description: "Sekka's nightly ISO for x86_64 PCs, built from main when it has changed and Sekka's automated checks pass. It is not a release, and its automated checks run in virtual machines.",
+        description: "Experimental Sekka ISOs for x86_64 PCs, published from a workstation after testing each exact image through installation, disk boot, login and desktop interaction in virtual machines.",
         body: format!(
             r#"<section class="win focus page-head">
   <div>
     <p class="eyebrow">Download</p>
     <h1>Sekka's nightly ISO.</h1>
-    <p class="lead">Each night at 4 AM Chicago time, if <code>main</code> has changed, Sekka's automated checks run, virtual-machine tests included. When they pass, a new ISO joins the builds below, and the last seven are kept. Each starts a live Plasma session with Genkan, the installer.</p>
-    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Its automated checks run in virtual machines, and it may not have been tried on hardware yet. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
+    <p class="lead">Sekka builds candidates and fills its binary cache each night. An ISO joins the downloads only after those exact bytes pass installation, installed-disk boot, login and desktop testing in virtual machines, followed by independent evidence review. Publication runs from a workstation; there is no automatic nightly ISO upload. The last seven published builds are kept. Each starts a live Plasma session with Genkan, the installer.</p>
+    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Read its qualification evidence and hardware limitations; VM results do not establish compatibility with your computer. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
   </div>
 </section>
 <section class="win" aria-labelledby="builds">
   <h2 id="builds">Builds</h2>
-  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size and upload time) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer.</p>
-  <!--builds--><p>The list of builds can't be shown just now. Every kept build is in <a href="{NIGHTLY}/builds.json">builds.json</a>, with paths under {NIGHTLY}/.</p><!--/builds-->
+  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size, upload time and a link to qualification evidence) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer. When no image is qualified, the download list stays empty.</p>
+  <!--builds--><p>The download list is temporarily unavailable. Try again, or check the <a href="{NIGHTLY}/builds.json">download index</a> directly.</p><!--/builds-->
 </section>
 <section class="tiles">
   <article class="win">

@@ -62,11 +62,15 @@ mod handler {
     /// list came from: HIT for this data centre's cache, MISS for R2.
     async fn list(base: &str) -> (Option<String>, Option<&'static str>) {
         let url = format!("{base}/builds.json");
+        let now = (Date::now().as_millis() / 1000) as i64;
         let cache = Cache::default();
         if let Ok(Some(mut cached)) = cache.get(&url, true).await {
             let status = cached.status_code();
             if let Ok(body) = cached.text().await {
-                return (render_list(status, &body, base), Some("HIT"));
+                return (
+                    render::response(status, &body, base, shared::REPO, now),
+                    Some("HIT"),
+                );
             }
         }
         let Ok(request) = Request::new(&url, Method::Get) else {
@@ -93,21 +97,9 @@ mod handler {
                 }
             }
         }
-        (render_list(status, &body, base), Some("MISS"))
-    }
-
-    fn render_list(status: u16, body: &str, base: &str) -> Option<String> {
-        match status {
-            404 => Some(render::NONE_YET.to_owned()),
-            200 => {
-                let builds: render::Builds = serde_json::from_str(body).ok()?;
-                if builds.builds.is_empty() {
-                    return None;
-                }
-                let now = (Date::now().as_millis() / 1000) as i64;
-                Some(render::render(&builds.builds, base, shared::REPO, now))
-            }
-            _ => None,
-        }
+        (
+            render::response(status, &body, base, shared::REPO, now),
+            Some("MISS"),
+        )
     }
 }

@@ -26,7 +26,20 @@ pub struct Build {
 const START: &str = "<!--builds-->";
 const END: &str = "<!--/builds-->";
 
-pub const NONE_YET: &str = "<p>No nightly has been published yet.</p>";
+pub const NONE_YET: &str = "<p>No qualified ISO is currently available for download.</p>";
+
+/// A valid empty index is an intentional absence of downloads, not an outage.
+/// HTTP failures and malformed data preserve the static unavailable fallback.
+pub fn response(status: u16, body: &str, base: &str, repo: &str, now: i64) -> Option<String> {
+    match status {
+        404 => Some(NONE_YET.to_owned()),
+        200 => {
+            let builds: Builds = serde_json::from_str(body).ok()?;
+            Some(render(&builds.builds, base, repo, now))
+        }
+        _ => None,
+    }
+}
 
 /// The page with `list` in place of its fallback, or None if the page has
 /// no place for it.
@@ -38,6 +51,9 @@ pub fn fill(page: &str, list: &str) -> Option<String> {
 
 /// The builds, newest first and marked as such. `now` is in Unix seconds.
 pub fn render(builds: &[Build], base: &str, repo: &str, now: i64) -> String {
+    if builds.is_empty() {
+        return NONE_YET.to_owned();
+    }
     let mut html = String::from("<ol class=\"builds\">\n");
     for (i, build) in builds.iter().enumerate() {
         let newest = i == 0;
@@ -242,11 +258,27 @@ mod tests {
     }
 
     #[test]
+    fn empty_index_is_distinct_from_unavailable_index() {
+        let page = "<main><!--builds--><p>unavailable</p><!--/builds--></main>";
+        for (status, body) in [(200, r#"{"builds":[]}"#), (404, "not found")] {
+            let list = response(status, body, BASE, REPO, 0).unwrap();
+            assert_eq!(list, NONE_YET);
+            let html = fill(page, &list).unwrap();
+            assert!(html.contains("No qualified ISO"));
+            assert!(!html.contains("unavailable") && !html.contains(".iso"));
+        }
+        for (status, body) in [(503, "unavailable"), (200, "bad JSON"), (200, "{}")] {
+            assert_eq!(response(status, body, BASE, REPO, 0), None);
+        }
+    }
+
+    #[test]
     fn reads_what_the_publisher_writes() {
         let json = r#"{"builds": [{"id": "20261014-aaaaaaa", "revision": "aaaaaaa", "committed": "2026-10-14T03:00:00-05:00",
           "uploaded": "2026-10-14T09:00:00Z", "system": "x86_64-linux", "iso": "builds/20261014-aaaaaaa/x.iso",
           "sha256sums": "builds/20261014-aaaaaaa/SHA256SUMS", "manifest": "builds/20261014-aaaaaaa/manifest.json",
-          "flake_lock": "builds/20261014-aaaaaaa/flake.lock", "bytes": 1, "sha256": "00"}]}"#;
+          "flake_lock": "builds/20261014-aaaaaaa/flake.lock", "bytes": 1, "sha256": "00",
+          "qualification": "builds/20261014-aaaaaaa/qualification/report.json", "objects": []}]}"#;
         let builds: Builds = serde_json::from_str(json).unwrap();
         assert_eq!(builds.builds[0].id, "20261014-aaaaaaa");
     }
