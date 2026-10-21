@@ -104,7 +104,9 @@ The `tatami` helper (`tool/`) provides:
   trying again while the network comes up; a click fetches at once, the icon
   dimmed until it is in. The place found from the IP address is kept for an
   hour
-- screenshots (freeze, region or window, copy, notify, Satty editing)
+- screenshots (freeze, region or window, copy, notify, Satty editing). Edit
+  from the fresh notification; after it closes, open the saved image in
+  Pictures through Files. Screenshot notices are not restored from history
 - screen recordings of a region or monitor, with desktop audio and the
   microphone, by gpu-screen-recorder, or wf-recorder where it cannot run
   (no hardware OpenGL); text (OCR) and QR codes from a region

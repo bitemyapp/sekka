@@ -34,3 +34,6 @@ invisible=false
 
 [summary~="Screenshot saved"]
 max-icon-size=80
+# The one-shot Edit action owner exits when the notification closes.
+# Restoring that card would offer an action that can no longer respond.
+history=0
