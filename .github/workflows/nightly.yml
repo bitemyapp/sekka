@@ -72,6 +72,8 @@ jobs:
         run: |
           set -euo pipefail
           nix --version
+          # Report only protocol endpoint/version/trust, never environment or config.
+          nix store info --store daemon --json | jq '{url, version, trusted}'
           # NixOS tests in the flake check run in VMs: a build that asks for
           # KVM must be able to open /dev/kvm, as QEMU will (see DEVELOPERS.md).
           # The ${...} in single quotes are Nix's own.

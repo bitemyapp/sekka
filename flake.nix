@@ -55,6 +55,7 @@
       installedLock = import ./nix/installed-lock.nix { inherit self; };
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      runnerNix = inputs.determinate.inputs.nix.packages.${system}.default;
       hyprlandOverlay = nixpkgs.lib.composeManyExtensions (import ./nix/overlays);
       hyprlandPkgs = pkgs.extend hyprlandOverlay;
       xappOverlay = import ./nix/overlays/xapp.nix;
@@ -170,6 +171,7 @@
         runner = import ./nix/runner.nix {
           inherit pkgs;
           inherit (pkgs) lib;
+          nixPackage = runnerNix;
         };
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
@@ -247,6 +249,10 @@
         };
       };
       checks.${system} = {
+        runner-protocol = import ./nix/runner-protocol-test.nix {
+          inherit pkgs;
+          runner = self.packages.${system}.runner;
+        };
         session-environment = import ./nix/session-environment-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
@@ -666,6 +672,7 @@
             ''
               # The sole constant-false job is intentional until publication is enabled.
               actionlint -ignore 'constant expression "false" in condition' -config-file ${./.github/actionlint.yaml} ${./.github/workflows/release.yml}
+              actionlint -config-file ${./.github/actionlint.yaml} ${./.github/workflows/nightly.yml}
               touch $out
             '';
         kernel-settings =

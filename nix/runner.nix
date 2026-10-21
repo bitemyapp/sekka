@@ -14,7 +14,11 @@
 # GitHub for each job's registration with a token only it can read, and
 # starts the job's container. The images hold no store paths: both run
 # programs from the host's store, kept by the `runner` package's GC root.
-{ pkgs, lib }:
+{
+  pkgs,
+  lib,
+  nixPackage,
+}:
 let
   repository = "bitemyapp/sekka";
   labels = [
@@ -50,7 +54,9 @@ let
       python3
       curl
       jq
-      nix
+      # The host runs Determinate Nix. Its cancellation status is not decoded
+      # by the upstream client, which hides the original failed derivation.
+      nixPackage
       cacert
     ];
   };
@@ -208,11 +214,14 @@ let
 in
 # Everything the containers run, kept alive by one GC root on the builder:
 # the images refer to store paths without holding them.
-pkgs.linkFarm "sekka-runner" {
+(pkgs.linkFarm "sekka-runner" {
   "job-image.tar.gz" = jobImage;
   "supervisor-image.tar.gz" = supervisorImage;
   job = job;
   "admit.sh" = admit;
   supervisor = supervisor;
   tools = tools;
-}
+}).overrideAttrs
+  (_: {
+    passthru = { inherit tools nixPackage; };
+  })
