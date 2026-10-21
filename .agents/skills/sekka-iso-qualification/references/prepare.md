@@ -22,6 +22,7 @@
    `respin-tools qemu-test --help`, `rust/src/vm.rs` and `rust/src/gui_input.rs`.
    Existing fixtures are supplemental; inspect their desktop list and bypasses
    before counting coverage. They may lag Aizome or silently exercise Plasma.
+   Before running component fixtures, read [isolation and provenance](component-tests.md).
 6. Expand the feature ledger from pinned Aizome `docs/apps.md`, `docs/shell.md`,
    settings source and app/menu entrypoints, and Sekka's
    `desktop/tatami/README.md`, `tool/src/main.rs`, `config/hypr/hyprland.lua`,
