@@ -15,6 +15,7 @@ let
     source = inputs.calamares;
   };
   diagnostics = import ../nix/live-diagnostics.nix { inherit pkgs; };
+  copytoram = import ../nix/iso-copytoram.nix { inherit pkgs; };
   copytoramNotice = pkgs.writeShellApplication {
     name = "sekka-copytoram-notice";
     runtimeInputs = [
@@ -77,8 +78,12 @@ in
     # Upstream copies after removing the original mount and has no RAM check.
     # A large Sekka ISO can otherwise OOM the initrd or leave .ro-store without
     # its backing image. Preserve media until a complete RAM copy is available.
+    boot.initrd.systemd.storePaths = [
+      "${copytoram}/bin/sekka-copy-iso-to-ram"
+    ]
+    ++ map (package: "${lib.getBin package}/bin") copytoram.runtimeInputs;
     boot.initrd.systemd.services.copytoram.script = lib.mkForce ''
-      exec ${import ../nix/iso-copytoram.nix { inherit pkgs; }}/bin/sekka-copy-iso-to-ram
+      exec ${copytoram}/bin/sekka-copy-iso-to-ram
     '';
     environment.etc."xdg/autostart/sekka-copytoram-notice.desktop".text = ''
       [Desktop Entry]

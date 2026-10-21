@@ -1,12 +1,18 @@
 # Initrd-only helper. The original media stays mounted until a complete copy
 # exists, so insufficient RAM or a copy error cannot strand the store mount.
 { pkgs }:
-pkgs.writeShellApplication {
-  name = "sekka-copy-iso-to-ram";
+let
   runtimeInputs = [
     pkgs.coreutils
     pkgs.util-linux
   ];
+in
+pkgs.writeShellApplication {
+  name = "sekka-copy-iso-to-ram";
+  inherit runtimeInputs;
+  # makeInitrdNG follows ELF dependencies, not references inside shell scripts.
+  # Let the live image include exactly the tools used by this wrapper's PATH.
+  passthru = { inherit runtimeInputs; };
   text = ''
     source=/sysroot/iso
     notice() {
