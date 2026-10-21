@@ -89,6 +89,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     ));
     hint.add_css_class("dim-label");
     hint.add_css_class("caption");
+    hint.set_wrap(true);
     let chooser = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     chooser.add_css_class("linked");
     chooser.set_halign(gtk::Align::Center);
@@ -108,7 +109,9 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         .child(&column)
         .build();
     let scroller = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never)
+        // At very large text scales even a settings row can be wider than
+        // the screen. Keep it reachable without forcing the window wider.
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
         .vexpand(true)
         .child(&clamp)
         .build();
@@ -696,6 +699,7 @@ fn display_groups(
     let suffix = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let show_label = gtk::Label::new(Some("Show all resolutions"));
     show_label.add_css_class("dim-label");
+    show_label.set_wrap(true);
     suffix.append(&show_label);
     suffix.append(&show_all);
     resolution.set_header_suffix(Some(&suffix));
@@ -838,11 +842,9 @@ fn display_groups(
         && let Some(level) = system::brightness(&device)
     {
         let group = adw::PreferencesGroup::builder().title("Brightness").build();
-        let row = adw::ActionRow::builder().title("Brightness").build();
         let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 1.0, 100.0, 1.0);
         slider.set_value(level);
         slider.set_hexpand(true);
-        slider.set_size_request(280, -1);
         slider.set_draw_value(false);
         let pending = Rc::new(RefCell::new(None));
         slider.connect_value_changed(move |slider| {
@@ -851,8 +853,7 @@ fn display_groups(
                 system::set_brightness(&device, percent)
             });
         });
-        row.add_suffix(&slider);
-        group.add(&row);
+        group.add(&control_row("Brightness", &slider));
         groups.push(group.upcast());
     }
     groups
@@ -864,7 +865,13 @@ fn scale_choices(ui: &Rc<Ui>, display: &Display) -> gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
     card.add_css_class("card");
     card.add_css_class("scale-card");
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let row = gtk::FlowBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .min_children_per_line(1)
+        .max_children_per_line(5)
+        .row_spacing(8)
+        .column_spacing(8)
+        .build();
     row.set_homogeneous(true);
     let scales = model::scale_choices(display.mode.width, display.mode.height, display.scale);
     let widest = scales
@@ -918,7 +925,7 @@ fn scale_choices(ui: &Rc<Ui>, display: &Display) -> gtk::Box {
                 edit_display(&ui, &name, false, move |s| s.scale = scale);
             }
         });
-        row.append(&button);
+        row.insert(&button, -1);
     }
     let captions = gtk::CenterBox::new();
     let larger = gtk::Label::new(Some("Larger Text"));
@@ -973,12 +980,10 @@ fn color_group(ui: &Rc<Ui>, display: &Display, current: &Settings) -> adw::Prefe
                 saturation,
             ),
         ] {
-            let row = adw::ActionRow::builder().title(title).build();
             let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.5, 2.0, 0.05);
             slider.set_value(value);
             slider.add_mark(1.0, gtk::PositionType::Bottom, None);
             slider.set_hexpand(true);
-            slider.set_size_request(240, -1);
             slider.set_draw_value(false);
             let pending = Rc::new(RefCell::new(None));
             let weak = Rc::downgrade(ui);
@@ -992,8 +997,7 @@ fn color_group(ui: &Rc<Ui>, display: &Display, current: &Settings) -> adw::Prefe
                     }
                 });
             });
-            row.add_suffix(&slider);
-            group.add(&row);
+            group.add(&control_row(title, &slider));
         }
     } else {
         let labels: Vec<String> = PROFILES
@@ -1098,24 +1102,26 @@ fn night_shift_group(ui: &Rc<Ui>, (tinted, night): (Option<u32>, u32)) -> adw::P
         .title("Night Shift")
         .active(tinted.is_some())
         .build();
-    let row = adw::ActionRow::builder().title("Color temperature").build();
     let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 1900.0, 5900.0, 100.0);
     slider.set_inverted(true);
     slider.set_value(tinted.unwrap_or(night) as f64);
     slider.set_hexpand(true);
-    slider.set_size_request(220, -1);
     slider.set_draw_value(false);
-    // Between its ends' names, as in macOS.
-    let range = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    // Labels under the ends leave the slider room at larger text scales.
+    let range = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let captions = gtk::CenterBox::new();
+    range.append(&slider);
+    range.append(&captions);
     range.set_sensitive(tinted.is_some());
     for (text, last) in [("Less Warm", false), ("More Warm", true)] {
         let label = gtk::Label::new(Some(text));
         label.add_css_class("dim-label");
         label.add_css_class("caption");
         if last {
-            range.append(&slider);
+            captions.set_end_widget(Some(&label));
+        } else {
+            captions.set_start_widget(Some(&label));
         }
-        range.append(&label);
     }
     let pending = Rc::new(RefCell::new(None));
     let weak = Rc::downgrade(ui);
@@ -1139,8 +1145,27 @@ fn night_shift_group(ui: &Rc<Ui>, (tinted, night): (Option<u32>, u32)) -> adw::P
         }
         system::set_night_shift(if on { "on" } else { "off" });
     });
-    row.add_suffix(&range);
     group.add(&switch);
-    group.add(&row);
+    group.add(&control_row("Color temperature", &range));
     group
+}
+
+/// A full-width control below its label. An inline fixed-width slider can
+/// squeeze the label down to single characters on a small logical screen.
+fn control_row(title: &str, control: &impl IsA<gtk::Widget>) -> adw::PreferencesRow {
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    body.set_margin_top(12);
+    body.set_margin_bottom(12);
+    body.set_margin_start(12);
+    body.set_margin_end(12);
+    let label = gtk::Label::new(Some(title));
+    label.set_xalign(0.0);
+    label.set_wrap(true);
+    body.append(&label);
+    body.append(control);
+    adw::PreferencesRow::builder()
+        .title(title)
+        .activatable(false)
+        .child(&body)
+        .build()
 }

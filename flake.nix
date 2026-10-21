@@ -513,6 +513,10 @@
           inherit (hyprlandPkgs) hyprland;
           inherit (self.packages.${system}) tatami displays;
         };
+        displays-fit-vm = import ./nix/displays-fit-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         displays-cursor-vm = import ./nix/displays-cursor-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;
