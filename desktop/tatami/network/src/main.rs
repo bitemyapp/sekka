@@ -8,9 +8,11 @@
 //! (nm.rs). `tatami-network --join NAME` opens it to join that network, as
 //! the network panel does for enterprise networks.
 mod details;
+mod dns;
 mod join;
 mod model;
 mod nm;
+mod profile;
 mod theme;
 mod window;
 

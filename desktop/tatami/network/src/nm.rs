@@ -133,7 +133,8 @@ pub fn rescan() {
 }
 
 pub fn settings(uuid: &str) -> Result<model::Settings, String> {
-    output(&[
+    let profile = crate::profile::Profile::read(uuid)?;
+    let text = output(&[
         "-t",
         "-f",
         model::SETTINGS_FIELDS,
@@ -141,8 +142,15 @@ pub fn settings(uuid: &str) -> Result<model::Settings, String> {
         "show",
         "uuid",
         uuid,
-    ])
-    .map(|text| model::settings(&text))
+    ])?;
+    if profile.current_version()? != profile.version {
+        return Err("The connection changed while reading its settings. Try again.".into());
+    }
+    let mut settings = model::settings(&text);
+    settings.version = profile.version;
+    settings.suspended_dns = profile.suspended_dns();
+    settings.refresh_dns();
+    Ok(settings)
 }
 
 pub fn set_wifi(on: bool) -> Result<(), String> {
@@ -334,6 +342,7 @@ pub fn rejoin(
 /// at once where NetworkManager can (`device reapply`), or by reconnecting.
 pub fn modify(
     uuid: &str,
+    version: u64,
     changes: &[(&str, String)],
     device: Option<&str>,
     reconnect: bool,
@@ -342,7 +351,11 @@ pub fn modify(
     for (name, value) in changes {
         args.extend([*name, value.as_str()]);
     }
-    change(&args)?;
+    if !dry_run() && changes.iter().any(|(name, _)| matches!(*name, "ipv4.dns" | "ipv6.method")) {
+        crate::profile::Profile::read(uuid)?.update(version, changes)?;
+    } else {
+        change(&args)?;
+    }
     match device {
         Some(_) if reconnect => connect(uuid, device, None),
         Some(device) => change(&["device", "reapply", device]),

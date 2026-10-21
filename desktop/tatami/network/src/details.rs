@@ -240,6 +240,7 @@ impl Page {
     /// Change settings, then read them back: the page is rebuilt from what
     /// NetworkManager kept, so a refused change does not stay on screen.
     fn apply(self: &Rc<Self>, ui: &Rc<Ui>, what: &str, changes: Vec<(&'static str, String)>) {
+        let version = self.settings.borrow().as_ref().map_or(0, |s| s.version);
         let device = {
             let state = ui.state.borrow();
             state
@@ -251,7 +252,7 @@ impl Page {
         let (page, ui, what) = (self.clone(), ui.clone(), what.to_owned());
         let uuid = self.uuid.clone();
         background(
-            move || nm::modify(&uuid, &changes, device.as_deref(), false),
+            move || nm::modify(&uuid, version, &changes, device.as_deref(), false),
             move |result| {
                 if let Err(error) = &result {
                     toast(
@@ -542,25 +543,7 @@ impl Page {
             .build();
         group.add(&provider);
         group.add(&servers);
-        let ipv6_off = settings.ipv6_method == "disabled" || settings.ipv6_method == "ignore";
-        let set = move |v4: Vec<String>, v6: Vec<String>| {
-            let manual = if v4.is_empty() && v6.is_empty() {
-                "no"
-            } else {
-                "yes"
-            };
-            let mut changes = vec![
-                ("ipv4.dns", v4.join(",")),
-                ("ipv4.ignore-auto-dns", manual.to_owned()),
-            ];
-            if !ipv6_off {
-                changes.extend([
-                    ("ipv6.dns", v6.join(",")),
-                    ("ipv6.ignore-auto-dns", manual.to_owned()),
-                ]);
-            }
-            changes
-        };
+        let selected_settings = settings.clone();
         let (page, changed, shown) = (self.clone(), ui.clone(), servers.clone());
         provider.connect_selected_notify(move |row| {
             if page.updating.get() {
@@ -587,17 +570,18 @@ impl Page {
             page.apply(
                 &changed,
                 "DNS",
-                set(
+                selected_settings.dns_changes(
                     v4.into_iter().map(str::to_owned).collect(),
                     v6.into_iter().map(str::to_owned).collect(),
                 ),
             );
         });
         let (page, changed) = (self.clone(), ui.clone());
+        let selected_settings = settings.clone();
         servers.connect_apply(move |row| match model::custom_servers(&row.text()) {
             Some((v4, v6)) => {
                 row.remove_css_class("error");
-                page.apply(&changed, "DNS", set(v4, v6));
+                page.apply(&changed, "DNS", selected_settings.dns_changes(v4, v6));
             }
             None => {
                 row.add_css_class("error");
@@ -635,12 +619,19 @@ impl Page {
             .map(|(value, _)| (*value).to_owned())
             .collect();
         let (page, changed) = (self.clone(), ui.clone());
+        let selected_settings = settings.clone();
         method.connect_selected_notify(move |row| {
             if page.updating.get() {
                 return;
             }
             if let Some(value) = values.get(row.selected() as usize) {
-                page.apply(&changed, "IPv6", vec![("ipv6.method", value.clone())]);
+                match selected_settings.ipv6_changes(value) {
+                    Ok(changes) => page.apply(&changed, "IPv6", changes),
+                    Err(error) => {
+                        toast(&changed, &error);
+                        page.load(&changed, true);
+                    }
+                }
             }
         });
         group.add(&method);

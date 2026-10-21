@@ -481,8 +481,13 @@ pub fn custom_servers(text: &str) -> Option<(Vec<String>, Vec<String>)> {
     let mut v6 = Vec::new();
     for word in text.split(|c: char| c == ',' || c.is_whitespace()) {
         match word.parse::<IpAddr>() {
-            Ok(IpAddr::V4(_)) => v4.push(word.to_owned()),
-            Ok(IpAddr::V6(_)) => v6.push(word.to_owned()),
+            Ok(address) => {
+                let servers = if address.is_ipv4() { &mut v4 } else { &mut v6 };
+                let address = address.to_string();
+                if !servers.contains(&address) {
+                    servers.push(address);
+                }
+            }
             Err(_) if word.is_empty() => {}
             Err(_) => return None,
         }
@@ -561,6 +566,7 @@ impl Mac {
 /// FIELDS connection show uuid UUID`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Settings {
+    pub version: u64,
     pub name: String,
     pub uuid: String,
     pub kind: Option<Kind>,
@@ -572,6 +578,11 @@ pub struct Settings {
     pub ipv4_gateway: String,
     pub dns: Option<Dns>,
     pub dns_servers: Vec<String>,
+    pub ipv4_dns: Vec<String>,
+    pub ipv4_ignore_auto_dns: bool,
+    pub ipv6_dns: Vec<String>,
+    pub ipv6_ignore_auto_dns: bool,
+    pub suspended_dns: Option<String>,
     pub ipv6_method: String,
     pub mac: String,
     pub hidden: bool,
@@ -580,18 +591,15 @@ pub struct Settings {
 
 pub const SETTINGS_FIELDS: &str = "connection.id,connection.uuid,connection.type,\
 connection.autoconnect,connection.metered,ipv4.method,ipv4.addresses,ipv4.gateway,\
-ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,ipv6.dns,802-11-wireless.cloned-mac-address,\
+ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,ipv6.dns,ipv6.ignore-auto-dns,802-11-wireless.cloned-mac-address,\
 802-11-wireless.hidden,802-11-wireless-security.key-mgmt";
 
 pub fn settings(text: &str) -> Settings {
     let block = blocks(text).into_iter().next().unwrap_or_default();
     let value = |name| get(&block, name).unwrap_or("").to_owned();
-    let servers: Vec<String> = list(get(&block, "ipv4.dns"))
-        .into_iter()
-        .chain(list(get(&block, "ipv6.dns")))
-        .collect();
     let ignore_auto = value("ipv4.ignore-auto-dns") == "yes";
-    Settings {
+    let mut settings = Settings {
+        version: 0,
         name: value("connection.id"),
         uuid: value("connection.uuid"),
         kind: get(&block, "connection.type").map(Kind::of_connection),
@@ -600,12 +608,31 @@ pub fn settings(text: &str) -> Settings {
         ipv4_method: value("ipv4.method"),
         ipv4_addresses: list(get(&block, "ipv4.addresses")),
         ipv4_gateway: value("ipv4.gateway"),
-        dns: Some(Dns::of(ignore_auto, &servers)),
-        dns_servers: servers,
+        dns: None,
+        dns_servers: Vec::new(),
+        ipv4_dns: list(get(&block, "ipv4.dns")),
+        ipv4_ignore_auto_dns: ignore_auto,
+        ipv6_dns: list(get(&block, "ipv6.dns")),
+        ipv6_ignore_auto_dns: value("ipv6.ignore-auto-dns") == "yes",
+        suspended_dns: None,
         ipv6_method: value("ipv6.method"),
         mac: value("802-11-wireless.cloned-mac-address"),
         hidden: value("802-11-wireless.hidden") == "yes",
         key_mgmt: value("802-11-wireless-security.key-mgmt"),
+    };
+    settings.refresh_dns();
+    settings
+}
+
+impl Settings {
+    pub fn refresh_dns(&mut self) {
+        let v6 = if self.ipv6_off() {
+            self.suspended_dns().ok().flatten().unwrap_or_else(|| self.ipv6_dns.clone())
+        } else {
+            self.ipv6_dns.clone()
+        };
+        self.dns_servers = self.ipv4_dns.iter().cloned().chain(v6).collect();
+        self.dns = Some(Dns::of(self.ipv4_ignore_auto_dns, &self.dns_servers));
     }
 }
 
@@ -819,6 +846,10 @@ mod tests {
             Some((vec!["9.9.9.9".into()], vec!["2620:fe::fe".into()]))
         );
         assert_eq!(custom_servers("dns.quad9.net"), None);
+        assert_eq!(
+            custom_servers("9.9.9.9 9.9.9.9 2620:00fe::fe 2620:fe::fe"),
+            Some((vec!["9.9.9.9".into()], vec!["2620:fe::fe".into()]))
+        );
     }
 
     #[test]
