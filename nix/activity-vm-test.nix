@@ -78,6 +78,7 @@ pkgs.testers.runNixOSTest {
         ];
       };
       hardware.graphics.enable = true;
+      programs.ydotool.enable = true;
       environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
     };
   testScript = ''
@@ -106,7 +107,44 @@ pkgs.testers.runNixOSTest {
              "--object-path /org/tatami/Activity/window/1 "
              f"--method org.gtk.Actions.Activate {name} \"{target}\" '{{}}'")
 
+    def inspector_pause_button():
+        # The application inspector's third button. Exercise the widget,
+        # not win.resume directly: the regression was its stale action name.
+        window = activity()
+        x = window["at"][0] + window["size"][0] - 78
+        y = window["at"][1] + 198
+        user("hyprctl dispatch " + shlex.quote(
+            f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
+        time.sleep(0.5)
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click 0xC0")
+
+    def wait_action(name):
+        # Wait for the sampler's next reading without depending on OCR or
+        # a fixed delay. The click below still exercises the inspector widget.
+        deadline = time.monotonic() + 20
+        while True:
+            state = user(f"${gdbus} call --session --dest org.tatami.Activity "
+                         "--object-path /org/tatami/Activity/window/1 "
+                         f"--method org.gtk.Actions.Describe {name}")
+            if "true" in state:
+                return
+            if time.monotonic() >= deadline:
+                raise Exception(f"{name} did not become enabled: {state}")
+            time.sleep(0.25)
+
+    def wait_paused(pids, paused):
+        deadline = time.monotonic() + 20
+        while True:
+            states = machine.succeed("ps -o stat= -p " + ",".join(pids)).split()
+            if len(states) == len(pids) and all(state.startswith("T") == paused for state in states):
+                return
+            if time.monotonic() >= deadline:
+                raise Exception(f"Expected paused={paused} for {pids}, got {states}")
+            time.sleep(0.5)
+
     machine.start()
+    machine.wait_for_unit("ydotoold.service")
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
     signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
     machine.wait_until_succeeds(
@@ -143,6 +181,20 @@ pkgs.testers.runNixOSTest {
         print(json.dumps(window, indent=1))
         assert window["floating"], window
         machine.screenshot("activity")
+
+    with subtest("The application inspector resumes every process it paused"):
+        foot = machine.succeed("pgrep -x foot").strip()
+        busy = machine.succeed("pgrep -x yes").strip()
+        # Include the terminal's shell without assuming the fixture user's shell.
+        pids = sorted({foot, busy, *machine.succeed("pgrep -P " + foot).split()})
+        inspector_pause_button()
+        wait_paused(pids, True)
+        wait_action("resume")
+        machine.screenshot("application-paused")
+        inspector_pause_button()
+        wait_paused(pids, False)
+        wait_action("pause")
+        machine.screenshot("application-resumed")
 
     with subtest("Processor power, shared out by use, from the meter's socket"):
         machine.succeed("systemctl stop tatami-power-meter.socket tatami-power-meter.service")

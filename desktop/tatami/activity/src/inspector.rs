@@ -212,6 +212,15 @@ impl Inspector {
         *self.gpus.borrow_mut() = names;
     }
 
+    /// Use the same whole-selection state as the window's actions. An
+    /// application's aggregate row has no single `process` to inspect.
+    pub fn set_paused(&self, paused: bool) {
+        self.pause
+            .set_label(if paused { "Resume" } else { "Pause" });
+        self.pause
+            .set_action_name(Some(if paused { "win.resume" } else { "win.pause" }));
+    }
+
     pub fn show(self: &Rc<Inspector>, entry: Option<&Entry>) {
         if let Some((old, handler)) = self.current.borrow_mut().take() {
             old.disconnect(handler);
@@ -613,12 +622,6 @@ impl Inspector {
             meta.push(process.state_text().to_owned());
         }
         self.meta.set_label(&meta.join(" · "));
-        let paused = data.process.as_ref().is_some_and(|p| p.state == 'T');
-        self.pause
-            .set_label(if paused { "Resume" } else { "Pause" });
-        self.pause
-            .set_action_name(Some(if paused { "win.resume" } else { "win.pause" }));
-
         for row in self.rows.borrow().iter() {
             let text = (row.get)(data);
             if row.long {
