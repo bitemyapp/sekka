@@ -305,6 +305,7 @@
         native-installer = calamares;
         storage = calamares.storageTest;
         applications = applicationCatalog.check;
+        rust-tools = import ./nix/rust-tools-test.nix { inherit pkgs applicationCatalog; };
         application-cache = applicationCatalog.cache;
         live-profiles =
           let
