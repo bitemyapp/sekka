@@ -442,6 +442,11 @@
           assert lib.all installs programs;
           pkgs.writeText "tatami.desktop" entry.text;
         tatami = self.packages.${system}.tatami;
+        tatami-recording = import ./nix/tatami-recording-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tatami;
+          inherit (hyprlandPkgs) hyprland;
+        };
         tuning = import ./nix/tuning-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;

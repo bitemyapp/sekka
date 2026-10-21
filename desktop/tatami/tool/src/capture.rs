@@ -5,6 +5,7 @@
 //! text (OCR with Tesseract) and QR codes (zbar) from a region, and colors.
 use crate::{
     hypr::{self, Rect},
+    recording_audio::{AudioMix, SessionChild},
     util,
 };
 use std::{
@@ -12,7 +13,7 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
     thread,
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 /// A directory from user-dirs.dirs (`KEY="$HOME/Pictures"` form), else
@@ -450,20 +451,59 @@ pub fn gsr_args(target: &Target, file: &str, audio: Option<&str>) -> Vec<String>
     args
 }
 
-/// wf-recorder's: one audio source at most, desktop audio before the
-/// microphone.
-pub fn wf_args(target: &Target, file: &str, desktop: bool, microphone: bool) -> Vec<String> {
+/// wf-recorder takes one source; combined capture uses our temporary mix.
+pub fn wf_args(target: &Target, file: &str, audio: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> = match target {
         Target::Monitor(name) => vec!["-o".into(), name.clone()],
         Target::Region(r) => vec!["-g".into(), r.slurp()],
     };
-    if desktop {
-        args.push("--audio=@DEFAULT_MONITOR@".into());
-    } else if microphone {
-        args.push("--audio=@DEFAULT_SOURCE@".into());
+    if let Some(audio) = audio {
+        args.push(format!("--audio={audio}"));
     }
-    args.extend(["-f".into(), file.to_owned()]);
+    // wf-recorder otherwise waits for screen damage in its Wayland dispatch;
+    // a static screen can keep it there after SIGINT and prevent finalization.
+    args.extend(["--no-damage".into(), "-f".into(), file.to_owned()]);
     args
+}
+
+/// Keep the mixer alive exactly as long as this recorder. Closing the owning
+/// helper (including SIGKILL) also ends both children via their parent-death
+/// signals; the mixer cannot leave persistent modules in the user's daemon.
+fn record_with_mix(target: &Target, file: &str) -> util::Result<()> {
+    let mut mix = AudioMix::start()?;
+    let mut recorder = SessionChild::spawn(
+        Command::new("wf-recorder")
+            .args(wf_args(target, file, Some(&mix.source)))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null()),
+        libc::SIGINT,
+    )?;
+    if !started(5) {
+        return Err("The software recorder failed to start".into());
+    }
+    util::signal_waybar(RECORDING_SIGNAL);
+    let mut last_check = Instant::now();
+    loop {
+        if let Some(status) = recorder.0.try_wait().map_err(|e| e.to_string())? {
+            util::signal_waybar(RECORDING_SIGNAL);
+            return if status.success() {
+                Ok(())
+            } else {
+                Err("The software recorder stopped unexpectedly".into())
+            };
+        }
+        if !mix.alive() {
+            return Err("The desktop and microphone audio mixer stopped unexpectedly".into());
+        }
+        if last_check.elapsed() >= Duration::from_secs(1) {
+            if !mix.healthy() {
+                return Err("A desktop or microphone audio source disconnected".into());
+            }
+            last_check = Instant::now();
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 /// Wait up to `tries` × 200 ms for a recorder to be running and stay so.
@@ -542,7 +582,22 @@ pub fn screenrecord(args: &[String]) {
     );
     // gpu-screen-recorder exits at once without hardware OpenGL.
     if !started(15) {
-        let wf = wf_args(&target, file, desktop, microphone);
+        if desktop && microphone {
+            if let Err(error) = record_with_mix(&target, file) {
+                eprintln!("Screen recording failed: {error}");
+                util::notify("\u{f0ec2}", "Screen recording failed", &error);
+            }
+            util::signal_waybar(RECORDING_SIGNAL);
+            return;
+        }
+        let audio = if desktop {
+            Some("@DEFAULT_MONITOR@")
+        } else if microphone {
+            Some("@DEFAULT_SOURCE@")
+        } else {
+            None
+        };
+        let wf = wf_args(&target, file, audio);
         util::spawn(
             "wf-recorder",
             &wf.iter().map(String::as_str).collect::<Vec<_>>(),
@@ -668,18 +723,26 @@ mod tests {
         assert_eq!(gsr[gsr.len() - 4..], ["-a", "default_output", "-ac", "aac"]);
         assert_eq!(gsr_args(&monitor, "/v/a.mp4", None)[1], "eDP-1");
         assert_eq!(
-            wf_args(&region, "/v/a.mp4", true, true),
+            wf_args(&region, "/v/a.mp4", Some("tatami_recording_123")),
             [
                 "-g",
                 "10,20 300x200",
-                "--audio=@DEFAULT_MONITOR@",
+                "--audio=tatami_recording_123",
+                "--no-damage",
                 "-f",
                 "/v/a.mp4"
             ]
         );
         assert_eq!(
-            wf_args(&monitor, "/v/a.mp4", false, true),
-            ["-o", "eDP-1", "--audio=@DEFAULT_SOURCE@", "-f", "/v/a.mp4"]
+            wf_args(&monitor, "/v/a.mp4", Some("@DEFAULT_SOURCE@")),
+            [
+                "-o",
+                "eDP-1",
+                "--audio=@DEFAULT_SOURCE@",
+                "--no-damage",
+                "-f",
+                "/v/a.mp4"
+            ]
         );
     }
     #[test]

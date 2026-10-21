@@ -323,6 +323,17 @@ between changes. Don't describe it as untested on hardware.
 with `tatami display`, as the bar's icon does, and checks that the cursor stays
 where it was.
 
+Tatami's software recording fallback mixes desktop and microphone audio in a
+temporary PipeWire source owned by the recording helper. It resolves the actual
+default endpoints, connects both before starting, and removes the temporary
+graph when the recorder or helper exits. Software recording requests continuous
+frames so a static screen cannot prevent stop/error cleanup from finalizing the
+video; this uses more capture work than damage-only recording. `nix build
+.#checks.x86_64-linux.tatami-recording` checks decoded independent tones through
+real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
+startup failure, interrupted processes and recovery. The component fixture
+supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
+
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
