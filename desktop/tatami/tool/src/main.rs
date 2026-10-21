@@ -18,6 +18,7 @@ mod menu;
 mod network;
 mod power;
 mod power_meter;
+mod recording_audio;
 mod terminal;
 mod toggle;
 mod update;
