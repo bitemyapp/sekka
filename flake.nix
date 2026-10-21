@@ -242,6 +242,7 @@
         };
       };
       checks.${system} = {
+        mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
           inherit
             pkgs

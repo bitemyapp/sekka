@@ -350,6 +350,9 @@ in
       lib.listToAttrs (map etcFile files)
       // lib.listToAttrs (map menuRow menuNames)
       // {
+        # Tatami supplies mpv, which can also become the default video player
+        # in a coinstalled desktop. Its software GPU path must play recordings.
+        "mpv/mpv.conf".source = ./mpv.conf;
         "xdg/tatami/update.json".text = builtins.toJSON {
           version = 1;
           session = {
