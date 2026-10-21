@@ -549,6 +549,11 @@
           inherit (hyprlandPkgs) hyprland;
           unpatchedHyprland = pkgs.hyprland;
         };
+        capture-cursor-vm = import ./nix/capture-cursor-vm-test.nix {
+          inherit pkgs;
+          inherit (hyprlandPkgs) hyprland;
+          unpatchedHyprland = pkgs.hyprland;
+        };
         display-recovery =
           pkgs.runCommand "tatami-display-recovery-tests"
             {

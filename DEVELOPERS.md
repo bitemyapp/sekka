@@ -273,6 +273,29 @@ systems and standalone desktop modules. These component checks do not certify
 an ISO or accelerated graphics. Remove the patch after an upstream update
 passes the regression; do not skip a patch failure during an input update.
 
+`nix/patches/hyprland-capture-cursor.patch` is a separate local fix for
+software cursors appearing in screenshots and OCR even when the capture
+protocol excludes them. Hyprland drew the cursor into its shared monitor
+image and assumed software captures already contained it. The patch uses
+the existing separate unmodified image while sharing or mirroring, omits
+cursor writes from that image, and adds the pointer explicitly when a
+capture requests it or a display mirrors another output. It preserves the
+display's render order and uses the existing GLES 3 draw-buffer support.
+Cursor overlays use the zoom transform saved with that image; capture crops
+are applied afterward, without advancing the detached zoom camera. Mirrored
+cursors now fade their alpha separately during source DPMS transitions;
+intermediate compositing can differ, while black and awake endpoints are
+preserved.
+`nix build .#checks.x86_64-linux.capture-cursor-vm` runs original and patched
+compositors on software-rendered virtio GPUs. Pixel comparisons cover both
+ext-image-copy-capture and wlr-screencopy, cursor inclusion and exclusion,
+movement, scale and rotation, blank OCR, decoded software recordings,
+ordinary and detached zoom with cropped captures, and the actual mirrored
+VM display including destination rotation, zoom and DPMS sleep/wake. The
+original must reproduce the cursor leak. These are component checks; they do not qualify a release image or
+physical graphics hardware. Remove this patch once an upstream fix passes
+the same regression, and review any patch conflict during input updates.
+
 Tatami's Elephant (`desktop/tatami/elephant/`) carries `search.patch`, a Sekka
 change that is not upstream. Stock Elephant searches applications either by
 name alone (`only_search_title`, which Omarchy sets) or by fuzzy matching the
