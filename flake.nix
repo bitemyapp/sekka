@@ -249,6 +249,10 @@
         };
       };
       checks.${system} = {
+        plasma-login-session = import ./nix/plasma-login-session-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         runner-protocol = import ./nix/runner-protocol-test.nix {
           inherit pkgs;
           runner = self.packages.${system}.runner;
