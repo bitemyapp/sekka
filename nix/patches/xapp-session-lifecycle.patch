@@ -1,0 +1,11 @@
+diff --git a/data/xdg-desktop-portal-xapp.service.in b/data/xdg-desktop-portal-xapp.service.in
+--- a/data/xdg-desktop-portal-xapp.service.in
++++ b/data/xdg-desktop-portal-xapp.service.in
+@@ -1,5 +1,7 @@
+ [Unit]
+ Description=Portal service (XApp implementation)
++PartOf=graphical-session.target
++After=graphical-session.target
+ 
+ [Service]
+ Type=dbus

@@ -161,6 +161,22 @@ upstream fix first.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
+Plasma Login Manager's generic X11 startup script bypasses NixOS's session
+wrapper. Xfce can then run while `graphical-session.target` remains inactive,
+preventing portal activation. Sekka's default package sets the upstream CMake
+`SESSION_COMMAND` to a parent around NixOS's wrapper, retaining its environment
+setup and explicitly stopping both graphical targets on exit. This ends portals
+before the X server closes, even when the user manager lingers. Wayland startup
+and the X server command remain unchanged. An explicitly selected custom Plasma
+Login package overrides this default and must provide its own X11 integration.
+The XApp portal unit also follows `graphical-session.target`, like the GTK
+backend, so it stops before X closes rather than failing on a stale display.
+`checks.x86_64-linux.plasma-login-session` uses normal password login and Xfce
+logout with a lingering user manager, checks real Settings portal calls and
+clean teardown, then selects Plasma Wayland through the greeter. The original
+package is both the failing control and an ordinary-priority custom-package
+override check. This component test does not qualify an ISO.
+
 With several desktops installed, `calamares-session-env.service` records the
 user manager's initial environment, including custom variables. The login
 screen's PAM hook restores that baseline before another desktop starts. The

@@ -71,6 +71,17 @@ let
       )
     } "$@"
   '';
+  # Keep a parent around the NixOS wrapper: a portal's Requisite can keep
+  # graphical-session.target needed after the legacy X11 session stops its
+  # fake target. End both before Plasma Login tears down the X server.
+  plasmaLoginSession = pkgs.writeShellScript "plasmalogin-x11-session" ''
+    cleanup() {
+      ${config.systemd.package}/bin/systemctl --user stop nixos-fake-graphical-session.target graphical-session.target
+      ${config.systemd.package}/bin/systemctl --user unset-environment DISPLAY XAUTHORITY XDG_SESSION_ID XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE
+    }
+    trap cleanup EXIT
+    ${config.services.displayManager.sessionData.wrapper} "$@"
+  '';
   # Each login through the login screen begins from the user manager's own
   # environment (see calamares-session-env below).
   sessionEnvRule = {
@@ -328,6 +339,16 @@ in
     # NVIDIA GPU; SDDM's Wayland greeter races kwallet-pam (sddm/sddm#1443).
     services.displayManager.plasma-login-manager = lib.mkIf plasmaLogin {
       enable = true;
+      # Plasma Login's built-in Xsession bypasses NixOS's session wrapper,
+      # leaving graphical-session.target inactive in Xfce. Its X11 wrapper
+      # is a build-time setting; keep the Wayland startup path unchanged.
+      package = lib.mkDefault (
+        pkgs.kdePackages.plasma-login-manager.overrideAttrs (old: {
+          cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+            "-DSESSION_COMMAND=${plasmaLoginSession}"
+          ];
+        })
+      );
       settings.Greeter.PreselectedSession = "${sessions.${defaultDesktop}}.desktop";
       settings.X11.ServerPath = "${plasmaLoginX}";
     };

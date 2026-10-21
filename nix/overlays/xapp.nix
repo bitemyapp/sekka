@@ -1,7 +1,12 @@
-# Local fix for XApp 1.1.3's synchronous GTK theme callback. Review/remove
-# when upstream fixes it; the original-crash control must be revisited then.
+# Local fixes for XApp 1.1.3's GTK theme callback and session lifetime.
+# Review/remove as upstream fixes them; revisit the corresponding controls.
 final: prev: {
   xdg-desktop-portal-xapp = prev.xdg-desktop-portal-xapp.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ../patches/xapp-settings-theme-idle.patch ];
+    patches = (old.patches or [ ]) ++ [
+      ../patches/xapp-settings-theme-idle.patch
+      # Match GTK's portal lifecycle: stop before the graphical session's
+      # display disappears instead of retaining a stale backend on the bus.
+      ../patches/xapp-session-lifecycle.patch
+    ];
   });
 }
