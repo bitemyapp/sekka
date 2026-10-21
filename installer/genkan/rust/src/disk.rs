@@ -101,6 +101,7 @@ pub fn discover() -> Result<Vec<Disk>> {
         30,
     )?;
     let mut disks = parse(&text)?;
+    let firmware = crate::Firmware::current();
     for disk in &mut disks {
         let p = Path::new(&disk.identity.path);
         let meta = fs::metadata(p)?;
@@ -117,6 +118,12 @@ pub fn discover() -> Result<Vec<Disk>> {
         let sys = Path::new("/sys/dev/block")
             .join(&disk.identity.major_minor)
             .canonicalize()?;
+        let logical_sector_size = fs::read_to_string(sys.join("queue/logical_block_size"))?
+            .trim()
+            .parse::<u64>()?;
+        if let Some(reason) = boot_sector_block(firmware, logical_sector_size) {
+            disk.blocked = Some(reason.into());
+        }
         if sys.starts_with("/sys/devices/virtual/block") {
             disk.blocked =
                 Some("Virtual memory or logical block device is not an installation target".into());
@@ -135,6 +142,15 @@ pub fn discover() -> Result<Vec<Disk>> {
         }
     }
     Ok(disks)
+}
+
+fn boot_sector_block(firmware: crate::Firmware, logical_sector_size: u64) -> Option<&'static str> {
+    // GRUB's BIOS bootstrap encodes its next stage in 512-byte sectors.
+    // A native 4 KiB BIOS read lands elsewhere even when grub-install succeeds.
+    // Check logical size only: 512e disks remain valid BIOS targets.
+    (firmware == crate::Firmware::Bios && logical_sector_size != 512).then_some(
+        "BIOS installation requires 512-byte logical sectors. Restart the installation media in UEFI mode to use this disk.",
+    )
 }
 
 pub fn revalidate(identity: &Identity) -> Result<()> {
@@ -339,6 +355,44 @@ pub(crate) fn verify_layout(disk: &Identity, layout: &Layout) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bios_requires_512_logical_sectors_but_uefi_accepts_4kn() {
+        assert!(boot_sector_block(crate::Firmware::Bios, 512).is_none());
+        assert!(boot_sector_block(crate::Firmware::Bios, 4096).is_some());
+        assert!(boot_sector_block(crate::Firmware::Uefi, 4096).is_none());
+    }
+    #[test]
+    #[ignore = "requires the marked disposable disks in the storage VM"]
+    fn real_bios_sector_discovery_and_revalidation() {
+        assert_eq!(crate::Firmware::current(), crate::Firmware::Bios);
+        let disks = discover().unwrap();
+        let native = disks
+            .iter()
+            .find(|d| d.identity.serial == "SEKKA_BIOS4KN_TEST")
+            .unwrap();
+        let emulated = disks
+            .iter()
+            .find(|d| d.identity.serial == "SEKKA_BIOS512E_TEST")
+            .unwrap();
+        for disk in [native, emulated] {
+            assert_eq!(disk.identity.bytes, 40 * 1024u64.pow(3));
+        }
+        assert!(
+            native
+                .blocked
+                .as_deref()
+                .unwrap()
+                .contains("Restart the installation media in UEFI mode")
+        );
+        assert!(
+            revalidate(&native.identity)
+                .unwrap_err()
+                .to_string()
+                .contains("512-byte logical sectors")
+        );
+        assert!(emulated.blocked.is_none());
+        revalidate(&emulated.identity).unwrap();
+    }
     #[test]
     fn layout_reserves_ram_sized_swap_at_the_end() {
         use crate::Firmware;
