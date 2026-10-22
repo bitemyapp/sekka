@@ -34,6 +34,13 @@ CORE = {
 CORE_IDS = {f'{gate}.{name}' for gate, names in CORE.items() for name in names}
 REPRODUCE = {'Q1.uefi-usb', 'Q2.gui-uefi', 'Q3.greeter', 'Q4.inventory',
              'Q5.inventory', 'Q6.updates'}
+FOCUSED_IDS = {
+    'Q0.provenance', 'Q0.capability', 'Q1.uefi-usb', 'Q1.bios-usb',
+    'Q1.live-functionality', 'Q2.gui-uefi', 'Q2.gui-bios', 'Q2.default-install',
+    'Q3.disk-only', 'Q3.greeter', 'Q3.session-lifecycle', 'Q4.core-desktop',
+    'Q5.core-desktop', 'Q6.applications', 'Q6.network', 'Q6.persistence',
+    'Q7.final-rerun',
+}
 CI_VARIABLES = ('CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'JENKINS_URL',
                 'TEAMCITY_VERSION', 'TF_BUILD', 'CIRCLECI')
 
@@ -131,7 +138,10 @@ def local_candidate(source):
 
 def validate_report(root, candidate, hostname=None, now=None):
     report = json.loads(evidence_path(root, 'report.json').read_text())
-    require(report['schema_version'] == 1, 'unsupported qualification schema')
+    focused = report['schema_version'] == 2
+    require(report['schema_version'] in (1, 2), 'unsupported qualification schema')
+    if focused:
+        require(report.get('profile') == 'focused-release-v1', 'unsupported focused release profile')
     require(report['candidate'] == candidate, 'qualification candidate differs from ISO, source or lock')
     require(report['workstation']['hostname'] == (hostname or socket.gethostname()),
             'qualification belongs to another workstation')
@@ -169,9 +179,22 @@ def validate_report(root, candidate, hostname=None, now=None):
             text(check[field], f'{ident}.{field}')
         references(check['evidence'])
         by_id[ident] = check
-    require(CORE_IDS <= by_id.keys(), f'missing core checks: {sorted(CORE_IDS - by_id.keys())}')
-    inventories = report['inventories']
-    require(set(inventories) == {'Q4', 'Q5'}, 'both desktop feature inventories are required')
+    required = FOCUSED_IDS if focused else CORE_IDS
+    require(required <= by_id.keys(), f'missing core checks: {sorted(required - by_id.keys())}')
+    if focused:
+        scope = report['scope']
+        text(scope['authorization'], 'focused scope authorization')
+        references(scope['authorization_evidence'])
+        for field in ('tested', 'excluded'):
+            require(isinstance(scope[field], list) and scope[field], f'scope.{field} must be nonempty')
+            for item in scope[field]:
+                text(item, f'scope.{field}')
+        require(report['limitations'], 'focused release requires explicit public limitations')
+        require(report.get('inventories', {}) == {}, 'focused report must not claim exhaustive inventories')
+        inventories = {}
+    else:
+        inventories = report['inventories']
+        require(set(inventories) == {'Q4', 'Q5'}, 'both desktop feature inventories are required')
     for gate, inventory in inventories.items():
         revision = candidate['aizome_revision' if gate == 'Q4' else 'sekka_revision']
         require(inventory['source_revision'] == revision, f'stale {gate} inventory')
@@ -196,13 +219,19 @@ def validate_report(root, candidate, hostname=None, now=None):
                     require(value == f'{ident}.{case}' and value in by_id and by_id[value]['gate'] == gate,
                             f'{ident}.{case}: requires an individual passing {gate} check')
     audit = report['audit']
-    reviewer = text(audit['reviewer'], 'independent reviewer')
-    require(reviewer != coordinator, 'coordinator cannot independently audit their own run')
+    reviewer = text(audit['reviewer'], 'reviewer')
+    if focused:
+        require(audit.get('mode') == 'coordinator-review', 'focused report must label coordinator review')
+        require(reviewer == coordinator, 'coordinator review identity mismatch')
+    else:
+        require(reviewer != coordinator, 'coordinator cannot independently audit their own run')
     require(audit['status'] == 'pass' and audit['unresolved_findings'] == [], 'audit has unresolved findings')
     require(audit['reviewed_report_sha256'] == audit_digest(report), 'audit is stale; review the final report')
     require(completed <= timestamp(audit['completed_at']) <= (now or datetime.now(timezone.utc)), 'invalid audit time')
     require(set(audit['reviewed_checks']) == set(by_id), 'audit must account for every check')
-    require(REPRODUCE <= set(audit['reproduced_checks']) <= set(by_id), 'audit lacks critical reproduced checks')
+    reproduced = set(audit['reproduced_checks'])
+    require((FOCUSED_IDS if focused else REPRODUCE) <= reproduced <= set(by_id),
+            'audit lacks critical reproduced checks')
     references(audit['evidence'])
     require(referenced == files.keys(), f'unreferenced evidence would be uploaded: {sorted(files.keys() - referenced)}')
     return report
@@ -314,6 +343,8 @@ def publish(source, root, *, remote=None):
             'sha256sums': prefix + 'SHA256SUMS', 'manifest': prefix + 'manifest.json',
             'flake_lock': prefix + 'flake.lock', 'bytes': candidate['iso_bytes'],
             'sha256': candidate['iso_sha256'], 'qualification': prefix + 'qualification/report.json',
+            'qualification_profile': 'focused-release-v1' if report['schema_version'] == 2 else 'exhaustive-v1',
+            'limitations': report['limitations'],
             'objects': [prefix + path for path in [*payloads, 'manifest.json', 'publication.json']],
         }
         write_json(stage / 'manifest.json', manifest)
