@@ -57,6 +57,11 @@ happens on topic branches merged into `main`; releases use version tags.
 | Terminal and tools | foot with v4's configuration, the Activity window (below, Super+Ctrl+T) and bottom in the terminal, fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
+File search in the launcher (`.` followed by a search) can need a reload after
+saving, renaming or removing files. An unfinished fix on this branch aims to
+refresh results automatically; see the
+[handoff](../../docs/tatami-file-search-refresh-handoff.md).
+
 The configuration lives in `/etc/xdg/tatami` and is used only by this
 session. The session puts that directory first in `XDG_CONFIG_DIRS` and
 starts Hyprland with `--config`, so other desktops on the same system are
