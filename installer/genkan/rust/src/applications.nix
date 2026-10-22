@@ -53,12 +53,6 @@ let
   };
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
   withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
-  # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
-  # workflows invoke it as `zed`. Expose the expected command whenever the
-  # editor is selected in the installer.
-  zedCli = lib.optional (has "zed") (pkgs.writeShellScriptBin "zed" ''
-    exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
-  '');
   launchers = map (
     app:
     pkgs.makeDesktopItem {
@@ -147,7 +141,7 @@ in
         message = "Selected applications require allowing proprietary software.";
       }
     ];
-    environment.systemPackages = packages ++ launchers ++ zedCli;
+    environment.systemPackages = packages ++ launchers;
     environment.etc."installer-applications.json".text = builtins.toJSON {
       selected = ids;
       packages = map (package: {

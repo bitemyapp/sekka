@@ -24,6 +24,7 @@ pins were selected on 2026-10-04:
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
+| [Zed's releases](https://github.com/zed-industries/zed/releases) | v1.25.2, added 2026-10-21; Zed updates itself after its first start | Zed |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -82,6 +83,37 @@ from source, so `push-cache` publishes it.
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
 to the privileged `docker` group. Compose is installed with the engine.
+
+## Programs that applications download
+
+Many applications download and run programs Nix didn't build: Zed and VS Code
+fetch language servers, Node.js, debuggers and extensions' tools, mise fetches
+runtimes, and npm, pip and Cargo builds fetch prebuilt binaries. Those programs
+are built for generic Linux. They ask for the loader at
+`/lib64/ld-linux-x86-64.so.2` and for libraries in the usual places, and their
+scripts start with `#!/bin/bash`. Plain NixOS has none of that, so they stop
+with "Could not start dynamically linked executable" or "No such file or
+directory". Telegram and Signal never run anything they didn't ship, which is
+why they were never affected.
+
+Every Sekka system, whatever applications were chosen, therefore runs them as
+Ubuntu does (`installer/genkan/rust/system/foreign-binaries.nix`): nix-ld
+provides the loader and a desktop's worth of libraries, and envfs makes `/bin`
+and `/usr/bin` show the programs on the caller's `PATH`. No application needs a
+workaround of its own for this.
+
+Zed is installed the way zed.dev installs it on Ubuntu. The catalog's `zed`
+command copies Zed's own release into `~/.local/zed.app` the first time it
+starts, offline, from the store (`nix/zed/package.nix`). From then on Zed
+updates that copy itself, and the command leaves a newer copy alone. Nixpkgs'
+`zed-editor` has updates switched off, and the store is read-only, so it could
+never update itself.
+
+`nix build .#checks.x86_64-linux.foreign-binaries-vm` runs Zed's generic
+rust-analyzer, Node.js from nodejs.org, Zed's release and a `#!/bin/bash`
+script on plain NixOS, where none of them start, and on Sekka, where all of
+them do. It then opens a Rust project in the catalog's Zed on a desktop and
+checks that Zed starts the rust-analyzer it downloaded.
 
 ## Sign-ins and the keyring
 
