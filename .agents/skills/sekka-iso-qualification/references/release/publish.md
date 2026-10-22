@@ -1,5 +1,9 @@
 # Q8 — workstation publication and R2 pruning
 
+The default below is exhaustive qualification. If the user explicitly approves
+a narrower release scope, use the distinct [focused report](focused.md) contract
+and disclose its limits. Never label focused evidence as exhaustive coverage.
+
 Publication must run on the user's workstation after exact-image testing. CI
 may build, test and upload binary-cache paths; it must not upload ISOs or hold
 `sekka-downloads` write credentials. Inspect the actual default-branch workflow

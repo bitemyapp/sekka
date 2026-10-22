@@ -138,6 +138,69 @@ class Qualification(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'audit is stale'):
             self.validate()
 
+    def focused(self):
+        self.report.update(schema_version=2, profile='focused-release-v1', inventories={},
+                           limitations=['Exhaustive app and physical hardware testing not performed.'],
+                           scope={'authorization': 'Synthetic explicit user approval of focused scope',
+                                  'authorization_evidence': ['ui.txt'],
+                                  'tested': ['Installation, boot, greeter and core desktops'],
+                                  'excluded': ['Exhaustive feature matrix']})
+        example = self.report['checks'][0]
+        self.report['checks'] = [dict(example, id=ident, gate=ident.split('.')[0])
+                                 for ident in sorted(release.FOCUSED_IDS)]
+        self.report['audit'].update(mode='coordinator-review', reviewer='coordinator-agent',
+                                   reviewed_checks=sorted(release.FOCUSED_IDS),
+                                   reproduced_checks=sorted(release.FOCUSED_IDS))
+        self.save()
+
+    def test_focused_scope_is_explicit_and_published(self):
+        self.focused()
+        self.assertEqual(self.validate(), self.report)
+        remote = RecordingR2()
+        self.publish(remote)
+        manifest = remote.current['builds'][0]
+        self.assertEqual(manifest['qualification_profile'], 'focused-release-v1')
+        self.assertEqual(manifest['limitations'], self.report['limitations'])
+        # A focused report cannot masquerade as the existing exhaustive schema.
+        self.report['schema_version'] = 1
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'missing core checks'):
+            self.validate()
+
+    def test_focused_scope_rejects_missing_disclosure_or_false_independence(self):
+        self.focused()
+        baseline = deepcopy(self.report)
+        mutations = [lambda r: r.update(profile='unknown'),
+                     lambda r: r['scope'].update(authorization=''),
+                     lambda r: r['scope'].update(authorization_evidence=[]),
+                     lambda r: r['scope'].update(excluded=[]),
+                     lambda r: r.update(limitations=[]),
+                     lambda r: r['audit'].update(mode='independent'),
+                     lambda r: r['audit'].update(reviewer='different-agent')]
+        for mutate in mutations:
+            self.report = deepcopy(baseline)
+            mutate(self.report)
+            self.save()
+            with self.assertRaises(ValueError):
+                self.validate()
+
+    def test_focused_scope_cannot_waive_or_reuse_a_failed_boot(self):
+        self.focused()
+        check = next(c for c in self.report['checks'] if c['id'] == 'Q3.disk-only')
+        check['status'] = 'blocked'
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'has not passed'):
+            self.validate()
+        check['status'] = 'pass'
+        check['candidate_sha256'] = '0' * 64
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'stale check'):
+            self.validate()
+        self.report['checks'].remove(check)
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'missing core checks'):
+            self.validate()
+
     def test_missing_failed_and_stale_checks(self):
         baseline = deepcopy(self.report)
         for status in ('not-run', 'running', 'fail', 'blocked', 'not-applicable', ''):
