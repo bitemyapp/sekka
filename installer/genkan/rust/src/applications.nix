@@ -59,6 +59,36 @@ let
   zedCli = lib.optional (has "zed") (pkgs.writeShellScriptBin "zed" ''
     exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
   '');
+  # Nixpkgs' rustup links a rust-analyzer proxy that fails until the component
+  # is installed, so editors such as Zed fall back to downloading a generic
+  # Linux build that cannot run on NixOS. Nixpkgs' build works with any
+  # toolchain. Unwrapped, it uses the toolchain's standard-library sources
+  # rather than Nixpkgs', adding rust-src through rustup when it is missing.
+  rustAnalyzer = lib.optional (has "rustup") (
+    lib.hiPrio applicationPkgs.rust-analyzer-unwrapped
+  );
+  # Selects stable for a new Rustup account, as `rustup default stable` would;
+  # existing settings are left alone. Until it succeeds, a marker rather than
+  # those settings decides, since editors or the person may run Rustup between
+  # attempts.
+  rustupDefault = pkgs.writeShellApplication {
+    name = "sekka-rustup-default";
+    runtimeInputs = [ applicationPkgs.rustup ];
+    text = ''
+      rustup_home="''${RUSTUP_HOME:-$HOME/.rustup}"
+      pending="$rustup_home/.sekka-default-pending"
+      if [[ ! -e "$rustup_home/settings.toml" ]]; then
+          mkdir -p "$rustup_home"
+          touch "$pending"
+      fi
+      if [[ -e "$pending" ]]; then
+          # Unlike `rustup default`, this repairs a download that was cut off.
+          rustup toolchain install stable
+          rustup default stable
+          rm "$pending"
+      fi
+    '';
+  };
   launchers = map (
     app:
     pkgs.makeDesktopItem {
@@ -147,7 +177,27 @@ in
         message = "Selected applications require allowing proprietary software.";
       }
     ];
-    environment.systemPackages = packages ++ launchers ++ zedCli;
+    environment.systemPackages = packages ++ launchers ++ zedCli ++ rustAnalyzer;
+    # For each person, including GUI-only users, retrying if the first login
+    # is offline.
+    systemd.user.services.sekka-rustup-default = lib.mkIf (has "rustup") {
+      description = "Install the stable Rust toolchain for a new Rustup account";
+      wantedBy = [ "default.target" ];
+      unitConfig = {
+        ConditionUser = "!@system";
+        StartLimitIntervalSec = 0;
+      };
+      serviceConfig = {
+        # Started once it executes, so the download cannot hold up the user's
+        # default.target or desktop services.
+        Type = "exec";
+        RemainAfterExit = true;
+        ExecStart = lib.getExe rustupDefault;
+        Restart = "on-failure";
+        RestartSec = "60s";
+        TimeoutStartSec = "infinity";
+      };
+    };
     environment.etc."installer-applications.json".text = builtins.toJSON {
       selected = ids;
       packages = map (package: {
