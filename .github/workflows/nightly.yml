@@ -1,4 +1,4 @@
-name: Build and cache nightly Sekka ISO
+name: Check and cache nightly Sekka
 
 on:
   schedule:
@@ -19,13 +19,14 @@ jobs:
     # Scheduled, or started by hand, from main only. It runs on the sandboxed
     # builder (nix/runner.nix and DEVELOPERS.md), one fresh container per
     # job, with Nix through the host's daemon. The environment holds the
-    # binary-cache token and signing key, for main alone. ISO publication
-    # happens only on a workstation after testing the exact image.
+    # binary-cache token and signing key, for main alone. It neither builds
+    # nor publishes ISOs: no check uses the image, and an ISO is built and
+    # published only on a workstation, after testing that exact image.
     #
-    # It brings Sekka's inputs up to date, then checks and builds that
-    # revision. Only when everything passed and Sekka's packages are in the
-    # binary cache does it commit the update to main, move the nightly
-    # branch (which installed systems follow) to it. It never publishes ISOs.
+    # It brings Sekka's inputs up to date, then checks that revision. Only
+    # when everything passed and Sekka's packages are in the binary cache
+    # does it commit the update to main, move the nightly branch (which
+    # installed systems follow) to it.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
@@ -85,7 +86,7 @@ jobs:
             echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
             exit 1
           }
-      - name: Check components and build ISO
+      - name: Check components
         shell: bash
         run: |
           set -euo pipefail
@@ -99,7 +100,6 @@ jobs:
             echo "::warning::Running failed checks once more: ${failed:-see the log above}. One that passes now is flaky; fix it."
             nix flake check --keep-going --no-update-lock-file --print-build-logs
           fi
-          nix build .#iso --no-update-lock-file --print-build-logs --out-link result-iso
           git diff --exit-code
       - name: Publish Sekka's packages to its binary cache
         shell: bash

@@ -1035,7 +1035,7 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 ### Nightly builds
 
 `.github/workflows/nightly.yml` runs at 4 AM `America/Chicago` and from its
-**Run workflow** button (Actions, "Build and cache nightly Sekka ISO"), on `main` only:
+**Run workflow** button (Actions, "Check and cache nightly Sekka"), on `main` only:
 
 ```sh
 gh workflow run nightly.yml --ref main
@@ -1043,8 +1043,8 @@ gh workflow run nightly.yml --ref main
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
-`main`. Every run checks and builds the candidate, even when no new ISO has
-been published. It runs `nix flake check` and builds `.#iso`. Every check runs
+`main`. Every run checks the candidate with `nix flake check`; it doesn't build
+`.#iso`, which no check uses and only qualification needs. Every check runs
 even after one fails, and the failed ones run once more, so a VM test losing a
 timing race once doesn't hold back upstream security fixes; a check that fails
 twice stops the update. The run's warning names the checks that needed the
