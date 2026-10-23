@@ -81,22 +81,46 @@ pkgs.testers.runNixOSTest {
         time.sleep(1)
     custom = False
     selection = 0
+    def settle(seconds=3, timeout=60):
+        # The page lists eth0's live addresses and DNS above its controls.
+        # They keep changing for seconds after a change (SLAAC, DNS reapply),
+        # moving the controls between a screenshot and a click. Act once
+        # NetworkManager's view of them has held still, and the page with it.
+        last, since = None, time.monotonic()
+        deadline = since + timeout
+        while time.monotonic() < deadline:
+            now = machine.succeed("nmcli -t -f GENERAL.STATE,IP4,IP6 device show eth0")
+            if now != last:
+                last, since = now, time.monotonic()
+            elif time.monotonic() - since >= seconds:
+                time.sleep(1)
+                return
+            time.sleep(0.5)
+        raise AssertionError("eth0 did not settle")
     def combo(offset, label):
         global selection
+        settle()
         bottom()
         c = window()
         button_y = c["at"][1]+c["size"][1]-offset
         click(c["at"][0]+c["size"][0]-120, button_y)
-        time.sleep(0.3)
         selection += 1
-        capture = f"selector-{selection:02d}-{label}"
-        machine.screenshot(capture)
-        image = pathlib.Path(machine.out_dir) / (capture + ".png")
-        rows = csv.DictReader(io.StringIO(subprocess.check_output(["${pkgs.tesseract}/bin/tesseract", str(image), "stdout", "--psm", "11", "tsv"], text=True)), delimiter="\t")
-        matches = [(int(r["left"])+int(r["width"])/2, int(r["top"])+int(r["height"])/2) for r in rows
-            if r["text"].strip().casefold() == label.casefold() and int(r["left"]) > c["at"][0]+c["size"][0]*0.65
-            and abs(int(r["top"])+int(r["height"])/2-button_y) > 20]
-        assert len(matches) == 1, (label, matches)
+        # Click the choice only where two screenshots agree it is.
+        previous = None
+        for attempt in range(10):
+            time.sleep(0.3)
+            capture = f"selector-{selection:02d}-{label}" + (f"-{attempt}" if attempt else "")
+            machine.screenshot(capture)
+            image = pathlib.Path(machine.out_dir) / (capture + ".png")
+            rows = csv.DictReader(io.StringIO(subprocess.check_output(["${pkgs.tesseract}/bin/tesseract", str(image), "stdout", "--psm", "11", "tsv"], text=True)), delimiter="\t")
+            matches = [(int(r["left"])+int(r["width"])/2, int(r["top"])+int(r["height"])/2) for r in rows
+                if r["text"].strip().casefold() == label.casefold() and int(r["left"]) > c["at"][0]+c["size"][0]*0.65
+                and abs(int(r["top"])+int(r["height"])/2-button_y) > 20]
+            if len(matches) == 1 and matches == previous:
+                break
+            previous = matches
+        else:
+            raise AssertionError((label, matches))
         click(*matches[0])
         time.sleep(2)
     def dns(index):
@@ -107,6 +131,7 @@ pkgs.testers.runNixOSTest {
         combo(51, ["Automatically", "Off"][index])
     def custom_dns(servers):
         if not custom: dns(3)
+        settle()
         bottom()
         c = window()
         click(c["at"][0]+c["size"][0]/2, c["at"][1]+c["size"][1]-171)
