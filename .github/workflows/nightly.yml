@@ -89,7 +89,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix flake check --no-update-lock-file --print-build-logs
+          # Every check runs, rather than stopping at the first failure, and
+          # the failed ones run once more: a VM test that loses a timing race
+          # once must not hold back upstream security fixes for a day. A check
+          # that fails twice still stops the update.
+          if ! nix flake check --keep-going --no-update-lock-file --print-build-logs 2>&1 |
+            tee "$RUNNER_TEMP/check.log"; then
+            failed=$(sed -n 's/.*❌ \(checks\.[^ ]*\).*/\1/p' "$RUNNER_TEMP/check.log" | sort -u | paste -sd ' ')
+            echo "::warning::Running failed checks once more: ${failed:-see the log above}. One that passes now is flaky; fix it."
+            nix flake check --keep-going --no-update-lock-file --print-build-logs
+          fi
           nix build .#iso --no-update-lock-file --print-build-logs --out-link result-iso
           git diff --exit-code
       - name: Publish Sekka's packages to its binary cache

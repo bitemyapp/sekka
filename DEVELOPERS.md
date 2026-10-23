@@ -1044,8 +1044,12 @@ gh workflow run nightly.yml --ref main
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
 `main`. Every run checks and builds the candidate, even when no new ISO has
-been published. It runs `nix flake check` and builds `.#iso`, then, in this
-order and only if each step succeeded:
+been published. It runs `nix flake check` and builds `.#iso`. Every check runs
+even after one fails, and the failed ones run once more, so a VM test losing a
+timing race once doesn't hold back upstream security fixes; a check that fails
+twice stops the update. The run's warning names the checks that needed the
+retry: they are flaky, and need fixing like any failure. Then, in this order
+and only if each step succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
