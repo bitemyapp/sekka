@@ -498,6 +498,11 @@
           applicationsModule = inputs.calamares.nixosModules.applications;
           inherit (applicationCatalog.specialArgs) applicationPkgs;
         };
+        foreign-binaries-vm = import ./nix/foreign-binaries-vm-test.nix {
+          inherit pkgs;
+          foreignBinariesModule = ./installer/genkan/rust/system/foreign-binaries.nix;
+          zedPackage = inputs.catalog.packages.${system}.zed;
+        };
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;

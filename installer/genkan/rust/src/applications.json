@@ -8,7 +8,7 @@
   {"id":"claude-desktop","name":"Claude Desktop","description":"Official Claude Linux desktop app. Sign in after installation.","category":"AI assistants","source":"ai","packages":["claude-desktop"],"unfree":true},
   {"id":"oh-my-pi","name":"oh-my-pi TUI","description":"Terminal coding agent with multiple model providers. Configure a provider after installation.","category":"AI assistants","source":"omp","packages":[],"terminal":"omp"},
   {"id":"opencode","name":"OpenCode","description":"Open-source coding agent for the terminal with multiple model providers.","category":"AI assistants","source":"ai","packages":["opencode"],"terminal":"opencode"},
-  {"id":"zed","name":"Zed","description":"Fast graphical code editor with collaboration and AI tools.","category":"Editors","packages":["zed-editor"]},
+  {"id":"zed","name":"Zed","description":"Fast graphical code editor with collaboration and AI tools.","category":"Editors","source":"sekka","packages":["zed"]},
   {"id":"vscode","name":"Visual Studio Code","description":"Microsoft's code editor with its extension marketplace.","category":"Editors","packages":["vscode"],"unfree":true},
   {"id":"neovim","name":"Neovim","description":"Extensible text editor for the terminal.","category":"Editors","packages":["neovim"],"terminal":"nvim"},
   {"id":"ghostty","name":"Ghostty","description":"Fast terminal emulator with tabs, splits, and GPU rendering.","category":"Terminals","packages":["ghostty"]},

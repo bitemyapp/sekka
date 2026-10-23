@@ -38,6 +38,7 @@ rec {
   catalog.packages.${system} = kakehashi.packages.${system} // {
     superluminal = superluminal.packages.${system}.default;
     tracy = tracy.packages.${system}.tracy;
+    zed = pkgs.callPackage ./zed/package.nix { };
   };
   calamares = {
     outPath = ../installer/genkan;
