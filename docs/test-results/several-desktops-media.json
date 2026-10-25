@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-25",
+  "result": "An installation choosing Aizome and GNOME compiled calamares-session-env and Aizome's patched IBus frontend from the ISO built from main, for which Genkan expected to fetch 1434 MiB (unpacked). From an ISO that also carries a prebuilt system with every desktop, the same installation compiled neither and expected 16 MiB.",
+  "method": "respin-tools qemu-test with the Genkan VM fixture, CALAMARES_TEST_DESKTOPS=aizome,gnome, --firmware uefi --install --applications none, both runs at the same time on one workstation. The figures are Genkan's own preparation summary (nix build --dry-run in the live session) and stage timings from each run's install.log. Genkan's \"MiB to download\" is the unpacked size of what Nix would fetch, which it compares with memory; the transfer itself is compressed and smaller.",
+  "rust_toolchain": "The Rust toolchain calamares-session-env builds with, as cache.nixos.org serves it: rustc 1.99.0, 1058.5 MiB unpacked (316.7 MiB compressed), and cargo 1.99.0, 38.4 MiB unpacked (12.9 MiB compressed).",
+  "host_devices_used": false,
+  "vm": "QEMU 11.1.2, KVM, OVMF 202608, 4 CPUs, 8 GiB, NVMe disk, QEMU user networking",
+  "runs": {
+    "main": {
+      "built_from": "a5e1fcc",
+      "iso_sha256": "527aa5f7bcd58c9e044a092bbb9885d7c410f019ecf602f32b6ec14bba58db11",
+      "iso_bytes": 12736100352,
+      "preparation": "198 builds, 1434 MiB to download",
+      "compiled": ["calamares-session-env-0.1.0", "ibus-1.5.34 (with ibus-wayland-forward-keycode.patch)"],
+      "preparation_stages_seconds": { "evaluation": 36.4, "build": 192.8, "cache": 10.5 },
+      "click_to_complete_seconds": 99.4,
+      "installed": "DESKTOPS=aizome,gnome; the fixture's installed-system checks passed"
+    },
+    "branch": {
+      "built_from": "a5e1fcc with this change to nix/reference-systems.nix",
+      "iso_sha256": "b6835c9fcf27046d4beb1303a6949f302023bc5f6134f7e62473472bc616c407",
+      "iso_bytes": 12742080512,
+      "preparation": "166 builds, 16 MiB to download",
+      "compiled": [],
+      "preparation_stages_seconds": { "evaluation": 36.6, "build": 13.7, "cache": 10.7 },
+      "click_to_complete_seconds": 103.8,
+      "installed": "DESKTOPS=aizome,gnome; the fixture's installed-system checks passed"
+    }
+  },
+  "media": "The system with every desktop adds 117 store paths, 200.6 MiB uncompressed, to the media's store, 149 MiB of it the patched IBus, whose files are almost all identical to the unpatched IBus already there. The ISO grew by 5,980,160 bytes.",
+  "cache": "scripts/check_cache_coverage.py .#installed-systems, with the system with every desktop added and before any push, reported calamares-session-env-0.1.0 and ibus-1.5.34 as compiled: neither cache.nixos.org nor cache.sekka.computer had them. push-cache publishes installed-systems before CI runs that check, so the next push to main publishes both.",
+  "limits": [
+    "Fixture installations, not GUI installations; the ISOs weren't qualified for release.",
+    "One selection (Aizome and GNOME) on UEFI. Plasma and Xfce, the fixture's default, needs calamares-session-env alone."
+  ]
+}

@@ -198,8 +198,9 @@
           ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
-        # An installed system for every desktop the media offers, and one with
-        # every free application in the catalog, with unfree packages refused.
+        # An installed system for every desktop the media offers, one with all
+        # of those desktops together, and one with every free application in
+        # the catalog, with unfree packages refused.
         # push-cache publishes their closures, so whatever Sekka's modules
         # change (Hyprland and all that uses its patched Aquamarine) and
         # whatever a catalog application needs downloads rather than compiles.
@@ -226,6 +227,10 @@
               name = desktop;
               path = desktops.systems.${desktop}.config.system.build.toplevel;
             }) desktops.desktops
+            ++ pkgs.lib.optional (desktops.together != null) {
+              name = "together";
+              path = desktops.together.config.system.build.toplevel;
+            }
             ++ [
               {
                 name = "applications";
