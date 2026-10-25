@@ -313,6 +313,7 @@
         native-installer = calamares;
         storage = calamares.storageTest;
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
+        encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         application-cache = applicationCatalog.cache;
         live-profiles =
@@ -494,6 +495,7 @@
           inherit (hyprlandPkgs) hyprland;
         };
         tuning = import ./nix/tuning-test.nix { inherit pkgs; };
+        boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
           applicationsModule = inputs.calamares.nixosModules.applications;

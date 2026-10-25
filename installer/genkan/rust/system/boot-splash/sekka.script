@@ -1,0 +1,354 @@
+# Sekka's boot splash: the stacked lockup on the Night ground, and under it
+# a 2px rail that fills in the crest's blue as the computer starts. Shutting
+# down and restarting say so in place of the rail. Passphrases are asked for
+# in the lock screen's field. Nothing moves except the rail.
+#
+# Plymouth runs this at one pixel per device pixel (DeviceScale=1 in
+# plymouthd.conf), and the splash picks a whole-number scale for itself
+# from the display, with pieces drawn for 1x, 2x and 3x, so nothing is
+# ever stretched.
+
+Window.SetBackgroundTopColor(0.102, 0.106, 0.149);       # surface #1a1b26
+Window.SetBackgroundBottomColor(0.102, 0.106, 0.149);
+
+global.mode = Plymouth.GetMode();
+global.updating = global.mode == "updates" || global.mode == "system-upgrade" || global.mode == "firmware-upgrade";
+
+if (global.mode == "shutdown") global.label_name = "shutdown";
+else if (global.mode == "reboot") global.label_name = "reboot";
+else if (global.mode == "firmware-upgrade") global.label_name = "firmware";
+else if (global.updating) global.label_name = "updates";
+else if (global.mode == "system-reset") global.label_name = "reset";
+else global.label_name = "";
+
+if (global.mode == "boot") global.hint_name = "boot";
+else if (global.mode == "shutdown" || global.mode == "reboot") global.hint_name = "shutdown";
+else global.hint_name = "";
+
+# Modes that show a label instead of the rail, except updates, which show both.
+global.railed = global.label_name == "" || global.updating;
+
+# After this many seconds, say how to see what is taking so long.
+HINT_AFTER = 15;
+# Messages shown at once, newest last.
+MESSAGES = 3;
+
+global.scale = 0;
+global.progress = 0;
+global.fill_px = -1;
+global.prompting = 0;
+global.caps_on = 0;
+global.bullets = 0;
+global.answer = "";
+global.prompt_text = "";
+global.hinted = 0;
+# Seconds spent waiting for someone to answer, and Plymouth's clock when
+# last told.
+global.waited = 0;
+global.clock = 0;
+# Plymouth's own estimate of how far the start has got, that estimate when
+# the last prompt closed, and the rail's fill then.
+global.estimate = 0;
+global.resumed_at = 0;
+global.resumed_from = 0;
+global.message_count = 0;
+global.messages = [];
+global.message_sprites = [];
+global.bullet_sprites = [];
+global.prompt_dirty = 1;
+
+# Names at the top level are globals: global.caps would be this caps, so
+# state is named apart from the sprites.
+lockup = Sprite();
+track = Sprite();
+fill = Sprite();
+label = Sprite();
+hint = Sprite();
+field = Sprite();
+caret = Sprite();
+caps = Sprite();
+prompt = Sprite();
+entry = Sprite();
+
+fun scale_for(w, h)
+{
+  short = Math.Min(w, h);
+  if (short >= 3240) return 3;
+  if (short >= 1600) return 2;
+  return 1;
+}
+
+fun piece(name)
+{
+  return Image(name + "-" + global.scale + "x.png");
+}
+
+fun font(px)
+{
+  return "IBM Plex Mono " + px * global.scale + "px";
+}
+
+fun centred(sprite, y, z)
+{
+  image = sprite.GetImage();
+  if (image) sprite.SetPosition(Math.Int((global.width - image.GetWidth()) / 2), y, z);
+}
+
+fun show(sprite, on)
+{
+  if (on) sprite.SetOpacity(1);
+  else sprite.SetOpacity(0);
+}
+
+fun load()
+{
+  lockup.SetImage(piece("lockup"));
+  track.SetImage(piece("track"));
+  global.fill_image = piece("fill");
+  field.SetImage(piece("field"));
+  caret.SetImage(piece("caret"));
+  caps.SetImage(piece("caps"));
+  global.bullet_image = piece("bullet");
+  if (global.label_name != "") label.SetImage(piece("label-" + global.label_name));
+  if (global.hint_name != "") hint.SetImage(piece("hint-" + global.hint_name));
+  global.fill_px = -1;
+  global.prompt_dirty = 1;
+  for (i = 0; global.bullet_sprites[i]; i++)
+    global.bullet_sprites[i].SetImage(global.bullet_image);
+}
+
+# Everything sits on a 4px grid at 1x, from the lockup's top: the rail 48px
+# under the 雪花, the field where the rail was, messages under them both.
+fun layout()
+{
+  global.width = Window.GetWidth();
+  global.height = Window.GetHeight();
+  s = scale_for(global.width, global.height);
+  if (s != global.scale) {
+    global.scale = s;
+    load();
+  }
+  # The crest's ink starts 8px into the lockup and the rail ends 302px in:
+  # centre that a little above the middle.
+  global.top = Math.Int(global.height * 0.47 - 155 * s);
+  centred(lockup, global.top, 1);
+
+  global.rail_y = global.top + 300 * s;
+  global.rail_x = Math.Int((global.width - 180 * s) / 2);
+  track.SetPosition(global.rail_x, global.rail_y, 2);
+  fill.SetPosition(global.rail_x, global.rail_y, 3);
+
+  # The label where the rail would be; while updating, the rail goes under it.
+  centred(label, global.rail_y - 9 * s, 2);
+  if (global.updating) {
+    global.rail_y += 28 * s;
+    track.SetY(global.rail_y);
+    fill.SetY(global.rail_y);
+  }
+
+  global.prompt_y = global.rail_y - 8 * s;
+  global.field_y = global.prompt_y + 32 * s;
+  global.field_x = Math.Int((global.width - 260 * s) / 2);
+  field.SetPosition(global.field_x, global.field_y, 4);
+  centred(caps, global.field_y + 46 * s, 4);
+  centred(hint, global.height - 63 * s, 2);
+  global.messages_y = global.rail_y + 30 * s;
+
+  global.fill_px = -1;
+  global.prompt_dirty = 1;
+  redraw();
+}
+
+fun draw_rail()
+{
+  px = Math.Int(180 * global.scale * Math.Clamp(global.progress, 0, 1));
+  # A new image only when the fill grows by a whole pixel.
+  if (px != global.fill_px && px > 0)
+    fill.SetImage(global.fill_image.Crop(0, 0, px, global.fill_image.GetHeight()));
+  global.fill_px = px;
+  show(fill, px > 0 && global.railed && !global.prompting);
+}
+
+fun draw_prompt()
+{
+  if (global.prompt_dirty || global.prompt_text != global.shown_prompt) {
+    global.prompt_dirty = 0;
+    global.shown_prompt = global.prompt_text;
+    if (global.prompt_text != "")
+      prompt.SetImage(Image.Text(global.prompt_text, 0.663, 0.694, 0.839, 1, font(13)));
+    else
+      prompt.SetImage(NULL);
+    centred(prompt, global.prompt_y, 4);
+  }
+  dot = global.bullet_image.GetWidth();
+  room = Math.Int((260 - 24) * global.scale / dot);
+  n = Math.Clamp(global.bullets, 0, room);
+  x = global.field_x + 12 * global.scale;
+  for (i = 0; i < n || global.bullet_sprites[i]; i++) {
+    if (!global.bullet_sprites[i]) global.bullet_sprites[i] = Sprite(global.bullet_image);
+    global.bullet_sprites[i].SetPosition(x + i * dot, global.field_y, 5);
+    show(global.bullet_sprites[i], global.prompting && i < n);
+  }
+  if (global.bullets < 0 && global.answer != "") {
+    # A question: what was typed, as typed.
+    entry.SetImage(Image.Text(global.answer, 0.753, 0.792, 0.961, 1, font(15)));
+    image = entry.GetImage();
+    entry.SetPosition(x, global.field_y + Math.Int((34 * global.scale - image.GetHeight()) / 2), 5);
+    x += image.GetWidth();
+    show(entry, global.prompting);
+  }
+  else {
+    show(entry, 0);
+    x += n * dot;
+  }
+  caret.SetPosition(x + global.scale, global.field_y + 8 * global.scale, 6);
+}
+
+fun redraw()
+{
+  p = global.prompting;
+  show(lockup, 1);
+  show(track, !p && global.railed);
+  show(label, !p && global.label_name != "");
+  draw_rail();
+  show(field, p);
+  show(caret, p);
+  show(prompt, p);
+  show(caps, p && global.caps_on);
+  if (p) draw_prompt();
+  else show(entry, 0);
+  for (i = 0; global.bullet_sprites[i]; i++)
+    if (!p) show(global.bullet_sprites[i], 0);
+  show(hint, global.hinted);
+  draw_messages();
+}
+
+fun draw_messages()
+{
+  first = Math.Max(0, global.message_count - MESSAGES);
+  y = global.messages_y;
+  if (global.prompting) y = global.field_y + 72 * global.scale;
+  for (i = 0; i < MESSAGES; i++) {
+    if (!global.message_sprites[i]) global.message_sprites[i] = Sprite();
+    sprite = global.message_sprites[i];
+    if (first + i < global.message_count) {
+      sprite.SetImage(Image.Text(global.messages[first + i], 0.576, 0.604, 0.729, 1, font(13)));
+      centred(sprite, y + i * 20 * global.scale, 3);
+      show(sprite, 1);
+    }
+    else {
+      show(sprite, 0);
+    }
+  }
+}
+
+fun on_progress(duration, progress)
+{
+  # Plymouth's clock keeps running while a disk waits for its passphrase
+  # (systemd doesn't pause it), and that time is spent waiting for someone,
+  # not on a slow start.
+  if (global.prompting) global.waited += duration - global.clock;
+  global.clock = duration;
+  global.estimate = progress;
+  # Plymouth's estimate goes on with the clock too, so the rail stops while
+  # someone answers and afterwards spreads what is left of the estimate over
+  # what is left of the rail.
+  if (!global.updating && !global.prompting) {
+    left = 1 - global.resumed_at;
+    p = global.progress;
+    if (left > 0) p = global.resumed_from + (progress - global.resumed_at) / left * (1 - global.resumed_from);
+    if (p > global.progress) {
+      global.progress = p;
+      draw_rail();
+    }
+  }
+  if (!global.hinted && global.hint_name != "" && !global.prompting && duration - global.waited >= HINT_AFTER) {
+    global.hinted = 1;
+    show(hint, 1);
+  }
+}
+
+fun on_system_update(progress)
+{
+  global.progress = progress / 100;
+  draw_rail();
+}
+
+fun on_password(prompt_text, bullets)
+{
+  global.prompting = 1;
+  global.prompt_text = prompt_text;
+  global.bullets = bullets;
+  redraw();
+}
+
+fun on_question(prompt_text, entry_text)
+{
+  global.prompting = 1;
+  global.prompt_text = prompt_text;
+  global.bullets = -1;
+  global.answer = entry_text;
+  redraw();
+}
+
+fun on_normal()
+{
+  if (global.prompting) {
+    global.resumed_at = global.estimate;
+    global.resumed_from = global.progress;
+  }
+  global.prompting = 0;
+  global.fill_px = -1;
+  redraw();
+}
+
+fun on_message(text)
+{
+  global.messages[global.message_count] = text;
+  global.message_count++;
+  draw_messages();
+}
+
+fun on_hide_message(text)
+{
+  j = 0;
+  for (i = 0; i < global.message_count; i++) {
+    if (global.messages[i] != text) {
+      global.messages[j] = global.messages[i];
+      j++;
+    }
+  }
+  global.message_count = j;
+  draw_messages();
+}
+
+# Caps Lock is only worth checking while someone types.
+fun on_refresh()
+{
+  if (global.prompting) {
+    c = Plymouth.GetCapslockState();
+    if (c != global.caps_on) {
+      global.caps_on = c;
+      show(caps, c);
+    }
+  }
+}
+
+fun on_quit()
+{
+  global.progress = 1;
+  draw_rail();
+}
+
+Plymouth.SetBootProgressFunction(on_progress);
+Plymouth.SetSystemUpdateFunction(on_system_update);
+Plymouth.SetDisplayPasswordFunction(on_password);
+Plymouth.SetDisplayQuestionFunction(on_question);
+Plymouth.SetDisplayNormalFunction(on_normal);
+Plymouth.SetDisplayMessageFunction(on_message);
+Plymouth.SetHideMessageFunction(on_hide_message);
+Plymouth.SetDisplayHotplugFunction(layout);
+Plymouth.SetRefreshFunction(on_refresh);
+Plymouth.SetQuitFunction(on_quit);
+
+layout();

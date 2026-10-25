@@ -918,6 +918,15 @@ unlock prompt when the VM's DRM driver took over. Swap stays RAM-sized after hea
 and its inner UUID remains the resume device. Encrypted hibernation itself has
 not been validated. Early console setup uses the selected keyboard for unlock.
 
+Swap opens after root in the initrd: the configuration adds `After=` on
+`systemd-cryptsetup@cryptroot.service` to `systemd-cryptsetup@cryptswap` as a
+drop-in (crypttab has no ordering option). systemd-cryptsetup tries the
+passphrases already typed before it asks, so swap opens with root's and never
+asks. Opened at once, swap was also tried with a mistyped root passphrase, and
+then each disk asked again. Opening them in turn adds one Argon2id unlock, about
+two seconds, to each boot, and the two unlocks no longer need their memory at
+the same time.
+
 The configuration sets `boot.initrd.luks.devices.<name>.allowDiscards = true`.
 dm-crypt drops discard requests unless the mapping allows them, so the weekly
 `fstrim` and Btrfs's default `discard=async` never reach the SSD, and the drive
@@ -952,8 +961,14 @@ encrypted swap, non-zero discard granularity on both the virtual disk and
 mapping, and `fstrim -v /`. The harness supplies the bootloader and Nix store:
 this is not a full ISO installation or disk-only reboot, and does not validate
 physical hardware or hibernation. The separate fixture accepts
-`CALAMARES_TEST_ENCRYPT=1` for full image installation runs; startup requires
-entering its public test passphrase.
+`CALAMARES_TEST_ENCRYPT=1` for full image installation runs, and
+`respin-tools qemu-test ISO --install` passes it through. On the installed boot
+the tool waits for the splash's passphrase field (its amber edge, in a
+screendump), keeps that frame as `unlock.png`, and types the fixture's public
+test passphrase before it waits for the guest agent; `boot-installed` does the
+same for an encrypted run. Genkan's test diagnostics add
+`plymouth.ignore-serial-consoles` to the serial console they set up, so the
+installed system shows the splash rather than Plymouth's text.
 
 The [2026-10-21 full GUI installation record](docs/test-results/luks-gui-uefi.json)
 covers an 8 GiB UEFI VM installed through Genkan with ext4, encrypted root and
@@ -990,6 +1005,94 @@ real machine's live session under build load for about 15 minutes.
 [docs/responsiveness.md](docs/responsiveness.md) describes it and records
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
+
+## Boot splash
+
+Genkan writes `calamares.bootSplash.enable = true;` into every installation; the
+installer has no choice to leave it out. The option turns on Plymouth with
+Sekka's theme, from `installer/genkan/rust/system/boot-splash/`. Systems
+installed before it keep booting without a splash until the option is set. The
+splash shows the stacked lockup on the Night ground, with a 2px rail under it in
+the crest's blue that fills as the computer starts. When shutting down or
+restarting, the label "Shutting down" or "Restarting" takes the rail's place. A
+passphrase request gets the Aizome lock screen's field. Esc shows the boot
+messages at any time, and after 15 seconds of starting, not counting time at a
+passphrase prompt, the splash says so. The live ISO shows boot messages instead
+(`modules/installer.nix`).
+
+On a disk Genkan encrypted, the splash asks for the passphrase in the initrd.
+Swap opens after root, with the passphrase root opened with, so one passphrase
+opens both and a mistyped one is asked for again only once (see "Disk
+encryption"). The initrd has no GPU driver on NixOS, and Plymouth waits
+8 seconds (`DeviceTimeout`) for one before it draws on the firmware's
+framebuffer, leaving the screen blank until then. It also passes over a
+framebuffer at 640×480, 800×600 or 1024×768, expecting a native driver to
+replace it, and GRUB leaves 1024×768 on BIOS. So the module sets
+`UseSimpledrm=2` when `boot.initrd.luks.devices` is set: the prompt appears at
+once at whatever mode the firmware set, and the splash moves to the GPU when
+its driver loads after unlocking. Unencrypted systems keep Plymouth's default.
+systemd's password agent doesn't pause Plymouth's clock or its progress
+estimate the way `plymouth ask-for-password` does, so the theme stops the rail
+and the hint's count while a prompt is up, then spreads what is left of the
+estimate over what is left of the rail. Esc swaps the theme for Plymouth's text
+view and back, which loads it again: the rail and the hint's count start over
+from Plymouth's figures.
+
+The module builds NixOS's Plymouth with three patches from `boot-splash/plymouth/`,
+for what went wrong in the encrypted-boot-splash check when the GPU's driver took
+over from the firmware's framebuffer or a passphrase was mistyped. None is
+upstream yet.
+
+- `keyboard-removal.patch`: Plymouth freed a display's keyboard without telling
+  plymouthd or the splash, and the script plugin's `Plymouth.GetCapslockState()`
+  went on reading it. plymouthd crashed in `ply_keyboard_get_capslock_state` in
+  3 of 11 test boots with a wrong passphrase and Esc.
+- `console-owner.patch`: Plymouth reads keys from the console terminal (NixOS's
+  `vconsole.conf` has no `XKBLAYOUT` for evdev input), and only one renderer
+  owns it. It was handed on only once no keyboards were left, so when the GPU's
+  framebuffer device got a renderer before its DRM device, no renderer read the
+  keyboard and nothing typed reached Plymouth, Esc included: 4 of 8 VM boots.
+- `abandoned-prompts.patch`: a question stayed on the splash after whoever asked
+  had hung up (`ply_boot_connection_on_hangup` only marked the connection). After
+  a mistyped passphrase, systemd's agent gave up the request for a disk that got
+  its passphrase another way, and the splash went on asking for an open disk.
+
+`generate.py` outlines the theme's text from IBM Plex Mono, and `package.nix`
+renders every piece at 1x, 2x and 3x. Plymouth's own scaling is off
+(`DeviceScale=1`). The script picks 2x from 1600 pixels on the display's
+shorter side and 3x from 3240, so nothing is stretched. Text it can't know
+ahead, such as a passphrase prompt or a message, is set at run time in IBM
+Plex Mono, the one font the initrd carries. Plymouth keeps the initrd's font
+configuration after the switch to the installed system, so the module puts
+the font at the same path there. Without it, that text comes out as empty
+boxes.
+
+```sh
+nix build .#checks.x86_64-linux.boot-splash --no-update-lock-file
+```
+
+The VM check boots at 1080p and at 4K (2x) and holds the splash until it has
+looked at it. It covers the rail, a message, and a passphrase typed into the
+field and handed back to whoever asked. It also covers Caps Lock, the Esc hint
+and the messages Esc shows, the handoff to the login prompt, the restart and
+shutdown labels, and a real power-off. Its screenshots are in the result.
+
+```sh
+nix build .#checks.x86_64-linux.encrypted-boot-splash --no-update-lock-file
+```
+
+The encrypted-boot-splash check runs Genkan's storage code on a disposable
+disk, for UEFI and for BIOS, as the encrypted-storage check does. It then boots
+the storage configuration Genkan generates, with the splash on and no GPU driver
+in the initrd. It covers the prompt in the initrd, one passphrase opening root
+and swap, the hint not counting time at the prompt, and the keyboard after the
+GPU takes over: Caps Lock, an answer typed into a new prompt, and Esc. It also
+covers a question going when whoever asked it does, the handoff to the login
+prompt, and a restart through the splash. On the restart it covers a wrong
+passphrase, asked for again for root alone, Caps Lock, Esc at the prompt, swap
+opening without asking, no question left up, and an encrypted root left clean.
+The harness supplies the bootloader and Nix store, so this isn't a full
+installation.
 
 ## Joining Wi-Fi networks
 

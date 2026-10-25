@@ -9,6 +9,8 @@
   console.earlySetup = true;
   boot.initrd.luks.devices.cryptroot = { device = "/dev/disk/by-uuid/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"; allowDiscards = true; };
   boot.initrd.luks.devices.cryptswap = { device = "/dev/disk/by-uuid/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"; allowDiscards = true; };
+  # Swap opens after root, with root's passphrase, so it never asks for its own.
+  boot.initrd.systemd.services."systemd-cryptsetup@cryptswap" = { overrideStrategy = "asDropin"; after = [ "systemd-cryptsetup@cryptroot.service" ]; };
   # Swap partition matched to installed RAM, also used to resume from hibernation.
   swapDevices = lib.mkForce [ { device = "/dev/disk/by-uuid/66666666-7777-4888-9999-aaaaaaaaaaaa"; } ];
   boot.resumeDevice = "/dev/disk/by-uuid/66666666-7777-4888-9999-aaaaaaaaaaaa";

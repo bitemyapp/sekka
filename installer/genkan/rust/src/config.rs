@@ -160,7 +160,7 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
         )
     });
     let diagnostic = if settings.test_diagnostics {
-        "  # Disposable QEMU verification only.\n  services.qemuGuest.enable = true;\n  boot.kernelParams = [ \"console=ttyS0,115200n8\" \"console=tty0\" ];\n"
+        "  # Disposable QEMU verification only. Plymouth would show only text with\n  # a serial console; the boot splash is part of what is verified.\n  services.qemuGuest.enable = true;\n  boot.kernelParams = [ \"console=ttyS0,115200n8\" \"console=tty0\" \"plymouth.ignore-serial-consoles\" ];\n"
     } else {
         ""
     };
@@ -176,6 +176,8 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
   calamares.defaultDesktop = {default_desktop};
   # CachyOS-inspired kernel, memory, I/O and service defaults (rust/system/tuning.nix in the calamares input).
   calamares.tuning.enable = {tuning};
+  # Sekka's boot splash; Esc shows the boot messages (rust/system/boot-splash).
+  calamares.bootSplash.enable = true;
   {boot}
 {kernel}{storage}{graphics}  networking.hostName = {hostname};
   networking.networkmanager.enable = true;
@@ -291,6 +293,12 @@ pub(crate) fn storage_configuration(request: &InstallPlan, ids: &Identities) -> 
                     by_uuid(uuid)
                 ));
             }
+        }
+        if encryption.swap.is_some() {
+            // Asked at once, swap would also be tried with a mistyped root
+            // passphrase and then ask again for itself. After root, it opens
+            // with the passphrase root opened with, so it never asks.
+            storage.push_str("  # Swap opens after root, with root's passphrase, so it never asks for its own.\n  boot.initrd.systemd.services.\"systemd-cryptsetup@cryptswap\" = { overrideStrategy = \"asDropin\"; after = [ \"systemd-cryptsetup@cryptroot.service\" ]; };\n");
         }
     }
     match &ids.swap {
@@ -428,6 +436,7 @@ mod tests {
             "calamares.applications=",
             "calamares.desktops=",
             "calamares.tuning.enable=",
+            "calamares.bootSplash.enable=true;",
             "boot.loader.systemd-boot.enable=true;",
             "boot.loader.efi.canTouchEfiVariables=true;",
             "pkgs.linuxPackages_latest",

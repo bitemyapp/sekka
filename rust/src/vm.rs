@@ -513,6 +513,7 @@ fn fixture_options() -> Result<String> {
     let mut options = String::new();
     for name in [
         "CALAMARES_TEST_DESKTOPS",
+        "CALAMARES_TEST_ENCRYPT",
         "CALAMARES_TEST_SWAP",
         "CALAMARES_TEST_TUNING",
         "CALAMARES_TEST_SESSION",
@@ -530,6 +531,75 @@ fn fixture_options() -> Result<String> {
         }
     }
     Ok(options)
+}
+
+/// Whether the fixture installs to encrypted storage (CALAMARES_TEST_ENCRYPT=1).
+fn encrypted() -> bool {
+    std::env::var("CALAMARES_TEST_ENCRYPT").as_deref() == Ok("1")
+}
+
+/// An encrypted installation asks for its disk passphrase on the boot splash
+/// before anything else starts, the guest agent included. Wait for the
+/// splash's passphrase field, keep that frame, and type the fixture's public
+/// test passphrase.
+fn unlock_disk(vm: &Vm, artifacts: &Path) -> Result<()> {
+    let mut qmp = vm.qmp(20)?;
+    let frame = artifacts.join("unlock.ppm");
+    let deadline =
+        Instant::now() + Duration::from_secs(if acceleration()? == "kvm" { 240 } else { 900 });
+    loop {
+        check_interrupt()?;
+        qmp.call("screendump", json!({"filename":frame}))?;
+        if passphrase_field(&fs::read(&frame)?)? {
+            break;
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "The boot splash never asked for the disk passphrase"
+        );
+        pause(Duration::from_secs(2))?;
+    }
+    fs::remove_file(&frame)?;
+    qmp.call(
+        "screendump",
+        json!({"filename":artifacts.join("unlock.png"),"format":"png"}),
+    )?;
+    // Fixed public disposable-VM passphrase (the fixture's), never the host's.
+    crate::gui_input::type_text(&mut qmp, "Qemu-Only-Test-123!")?;
+    crate::gui_input::key(&mut qmp, &["ret"])?;
+    Ok(())
+}
+
+/// Whether a PPM screendump shows the boot splash's passphrase field: its
+/// edge and caret are the splash's one amber (#e0af68).
+fn passphrase_field(ppm: &[u8]) -> Result<bool> {
+    let mut fields = Vec::new();
+    let mut start = None;
+    let mut offset = 0;
+    for (i, byte) in ppm.iter().enumerate() {
+        if byte.is_ascii_whitespace() {
+            if let Some(from) = start.take() {
+                fields.push(std::str::from_utf8(&ppm[from..i])?);
+                if fields.len() == 4 {
+                    offset = i + 1;
+                    break;
+                }
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    ensure!(
+        fields.len() == 4 && fields[0] == "P6" && fields[3] == "255",
+        "Not an 8-bit PPM screendump"
+    );
+    let near = |value: u8, target: u8| value.abs_diff(target) <= 8;
+    let (pixels, _) = ppm[offset..].as_chunks::<3>();
+    let amber = pixels
+        .iter()
+        .filter(|[r, g, b]| near(*r, 0xe0) && near(*g, 0xaf) && near(*b, 0x68))
+        .count();
+    Ok(amber >= 20)
 }
 
 /// Stage durations reported by the helper and the fixture's click-to-complete time.
@@ -756,6 +826,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
     let mut result = json!({"firmware":firmware,"media":"usb-storage","iso":iso.file_name().unwrap().to_string_lossy(),"iso_sha256":digest,"install":install,"gui":gui,"passed":false,"implementation":"native-rust","sekka_revision":revision,"disk_bus":disk_bus.name(),"filesystem":root_filesystem,"previous_filesystem":previous_filesystem,"qemu_acceleration":acceleration()?});
     result["applications"] = json!(applications);
     result["disk_size_gib"] = json!(disk_size_gib);
+    result["encrypted"] = json!(encrypted());
     let mut vm = Vm::start_with_devices(
         &work,
         &firmware,
@@ -854,6 +925,9 @@ pub fn main(args: Vec<String>) -> Result<()> {
                 disk_bus,
             )?;
             println!("Booting the installed disk with no ISO attached");
+            if encrypted() {
+                unlock_disk(&vm, &artifacts)?;
+            }
             let installed = verify_installed(
                 &mut vm,
                 &artifacts,
@@ -1002,20 +1076,28 @@ pub fn boot_installed(args: Vec<String>) -> Result<()> {
         .as_str()
         .unwrap_or("firefox")
         .to_owned();
-    let outcome = verify_installed(
-        &mut vm,
-        &artifacts,
-        &media_lock,
-        &fixture,
-        gui,
-        &root_filesystem,
-        &applications,
-    )
-    .and_then(|text| {
-        println!("{text}");
-        result["installed"] = json!(text);
-        vm.poweroff()
-    });
+    let unlocked = if result["encrypted"] == true {
+        unlock_disk(&vm, &artifacts)
+    } else {
+        Ok(())
+    };
+    let outcome = unlocked
+        .and_then(|()| {
+            verify_installed(
+                &mut vm,
+                &artifacts,
+                &media_lock,
+                &fixture,
+                gui,
+                &root_filesystem,
+                &applications,
+            )
+        })
+        .and_then(|text| {
+            println!("{text}");
+            result["installed"] = json!(text);
+            vm.poweroff()
+        });
     record(vm, &work, &artifacts, &mut result, outcome)
 }
 
@@ -1030,6 +1112,21 @@ mod tests {
         assert_eq!(value["prepared"]["closure_bytes"], 7);
         assert_eq!(value["click_to_complete_seconds"], 31.2);
         assert_eq!(value["prepared_seconds"], 40.0);
+    }
+    #[test]
+    fn passphrase_field_is_the_splash_amber() {
+        let frame = |rgb: [u8; 3], count: usize| {
+            let mut ppm = b"P6\n16 4\n255\n".to_vec();
+            for i in 0..64 {
+                ppm.extend_from_slice(if i < count { &rgb } else { &[0x1a, 0x1b, 0x26] });
+            }
+            ppm
+        };
+        assert!(passphrase_field(&frame([0xe0, 0xaf, 0x68], 24)).unwrap());
+        assert!(passphrase_field(&frame([0xe3, 0xb2, 0x66], 24)).unwrap());
+        assert!(!passphrase_field(&frame([0xe0, 0xaf, 0x68], 4)).unwrap());
+        assert!(!passphrase_field(&frame([0x7a, 0xa2, 0xf7], 64)).unwrap());
+        assert!(passphrase_field(b"P5\n1 1\n255\n\0").is_err());
     }
     #[test]
     fn installed_lock_is_read_from_its_own_line() {

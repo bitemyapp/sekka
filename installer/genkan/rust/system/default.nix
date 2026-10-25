@@ -10,6 +10,7 @@
   environment.systemPackages = [ pkgs.file ];
   imports = [
     ./binary-cache.nix
+    ./boot-splash
     ./desktops.nix
     ./input-method.nix
     ./nvidia.nix
