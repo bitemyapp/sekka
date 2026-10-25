@@ -1,8 +1,9 @@
 { lib, ... }: {
+  # Root appears once its passphrase is typed, so the initrd waits for it however long that takes.
   fileSystems."/" = {
     device = lib.mkForce "/dev/disk/by-uuid/11111111-2222-4333-8444-555555555555";
     fsType = "ext4";
-    options = [ "noatime" ];
+    options = [ "noatime" "x-systemd.device-timeout=0" ];
   };
   fileSystems."/boot" = {
     device = lib.mkForce "/dev/disk/by-uuid/A1B2-C3D4";

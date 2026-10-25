@@ -927,6 +927,14 @@ then each disk asked again. Opening them in turn adds one Argon2id unlock, about
 two seconds, to each boot, and the two unlocks no longer need their memory at
 the same time.
 
+Root's filesystem appears only once someone types the passphrase, so the
+configuration gives root `x-systemd.device-timeout=0`, systemd's way to wait
+without limit for a device that needs user input. systemd-cryptsetup's
+generator does this only for `/dev/mapper/cryptroot`, and root is mounted by
+its filesystem UUID; without the option, the initrd gave up on that device
+after systemd's default 90 seconds and stopped at a locked emergency console
+with the prompt still showing.
+
 The configuration sets `boot.initrd.luks.devices.<name>.allowDiscards = true`.
 dm-crypt drops discard requests unless the mapping allows them, so the weekly
 `fstrim` and Btrfs's default `discard=async` never reach the SSD, and the drive

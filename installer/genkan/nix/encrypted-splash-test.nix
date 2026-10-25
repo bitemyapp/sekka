@@ -1,10 +1,11 @@
 # Sekka's boot splash over Genkan's encrypted storage, in disposable VMs:
 # Genkan's production storage code encrypts the disk, then the VM boots the
 # storage configuration Genkan generates for it with the splash turned on.
-# The splash must ask for the passphrase in the initrd, take it once for
-# root and swap, ask again after a wrong one, carry on to the login prompt,
-# and restart without leaving the encrypted root unclean. Like the
-# encrypted-storage check, the harness supplies the bootloader and store.
+# The splash must ask for the passphrase in the initrd, wait however long
+# someone takes, take it once for root and swap, ask again after a wrong
+# one, carry on to the login prompt, and restart without leaving the
+# encrypted root unclean. Like the encrypted-storage check, the harness
+# supplies the bootloader and store.
 # Screenshots of each state are in the result.
 { pkgs }:
 let
@@ -156,11 +157,17 @@ pkgs.testers.runNixOSTest {
               machine.wait_for_text("sekka", timeout=WAIT)
               machine.screenshot(f"{firmware}-1-asked")
 
+          with subtest(f"{firmware}: the prompt waits however long someone takes"):
+              # Root appears only once the passphrase is typed. Left to
+              # systemd's 90-second device timeout, the initrd gave up on it
+              # and stopped at a locked emergency console.
+              time.sleep(max(0.0, 100 - (time.monotonic() - first_asked)))
+              asked(machine)
+
           with subtest(f"{firmware}: one passphrase opens root and swap"):
               machine.send_chars(PASSPHRASE)
-              # Someone takes their time over it: that isn't a slow start, so
+              # Someone took their time over it: that isn't a slow start, so
               # the hint doesn't come though Plymouth's clock is past 15 seconds.
-              time.sleep(max(0.0, 25 - (time.monotonic() - first_asked)))
               machine.screenshot(f"{firmware}-2-typed")
               assert "boot messages" not in machine.get_screen_text()
               machine.send_key("ret")
@@ -174,6 +181,7 @@ pkgs.testers.runNixOSTest {
               unlocks = machine.succeed(f"journalctl -b -o cat {UNLOCKS}")
               print(unlocks)
               assert REJECTED not in unlocks, unlocks
+              assert "Timed out waiting for device" not in machine.succeed("journalctl -b -o cat --no-pager")
               # The splash that asked in the initrd is still the one showing.
               assert machine.succeed("tr '\\0' ' ' < /proc/$(cat /run/plymouth/pid)/cmdline").startswith("@")
 

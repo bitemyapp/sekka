@@ -247,18 +247,21 @@ pub(crate) fn storage_configuration(request: &InstallPlan, ids: &Identities) -> 
         ids.bios_boot.is_some() == (request.encrypt() && request.firmware() == Firmware::Bios),
         "Boot filesystem identity does not match the reviewed layout"
     );
-    let mut storage = format!(
+    let mut options = request.filesystem().mount_options().to_vec();
+    let mut storage = String::new();
+    if request.encrypt() {
+        // An encrypted root appears only once someone types its passphrase.
+        // The initrd otherwise gives up on it after systemd's 90 s device
+        // timeout, at a locked emergency console, with the prompt still up.
+        options.push("x-systemd.device-timeout=0");
+        storage.push_str("  # Root appears once its passphrase is typed, so the initrd waits for it however long that takes.\n");
+    }
+    storage.push_str(&format!(
         "  fileSystems.\"/\" = {{\n    device = lib.mkForce {};\n    fsType = {};\n    options = [ {} ];\n  }};\n",
         by_uuid(&ids.root),
         q(request.filesystem().name()),
-        request
-            .filesystem()
-            .mount_options()
-            .iter()
-            .map(|o| q(o))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
+        options.iter().map(|o| q(o)).collect::<Vec<_>>().join(" ")
+    ));
     if let Some(serial) = &ids.efi {
         crate::filesystem::check_uuid(serial, "vfat")?;
         storage.push_str(&format!(

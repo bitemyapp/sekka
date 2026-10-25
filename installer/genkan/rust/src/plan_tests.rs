@@ -419,6 +419,8 @@ fn configuration_requires_identities_for_the_reviewed_firmware_and_swap() {
                 )));
                 assert!(text.contains(&format!("fsType = \"{}\"", filesystem.name())));
                 assert!(text.contains("\"noatime\""));
+                // Only an encrypted root waits without limit.
+                assert!(!text.contains("device-timeout"));
                 assert_eq!(
                     text.contains("/dev/disk/by-uuid/A1B2-C3D4"),
                     firmware == Firmware::Uefi
@@ -597,6 +599,8 @@ fn encryption_is_opt_in_and_secrets_survive_only_the_private_request() {
                     1 + usize::from(swap)
                 );
                 assert!(config.contains("console.earlySetup = true"));
+                // Root waits however long the passphrase takes, not 90 s.
+                assert_eq!(config.matches("\"x-systemd.device-timeout=0\"").count(), 1);
                 assert!(config.contains("fileSystems.\"/boot\""));
                 assert!(!config.contains("separate-disk-passphrase"));
                 assert!(!config.contains("keyFile"));
