@@ -16,7 +16,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces. There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -1067,8 +1067,10 @@ from Plymouth's figures.
 
 The module builds NixOS's Plymouth with three patches from `boot-splash/plymouth/`,
 for what went wrong in the encrypted-boot-splash check when the GPU's driver took
-over from the firmware's framebuffer or a passphrase was mistyped. None is
-upstream yet.
+over from the firmware's framebuffer or a passphrase was mistyped. None is in a
+Plymouth release yet. [docs/upstream/plymouth](docs/upstream/plymouth/README.md)
+has the first two as ported to Plymouth's `main` to be sent upstream, and says
+where each of the three stands and when Sekka can drop it.
 
 - `keyboard-removal.patch`: Plymouth freed a display's keyboard without telling
   plymouthd or the splash, and the script plugin's `Plymouth.GetCapslockState()`
@@ -1083,6 +1085,8 @@ upstream yet.
   had hung up (`ply_boot_connection_on_hangup` only marked the connection). After
   a mistyped passphrase, systemd's agent gave up the request for a disk that got
   its passphrase another way, and the splash went on asking for an open disk.
+  Plymouth's `main` already fixes this its own way (f3461296, e7fb0732), in no
+  release yet.
 
 `generate.py` outlines the theme's text from IBM Plex Mono, and `package.nix`
 renders every piece at 1x, 2x and 3x. Plymouth's own scaling is off
