@@ -65,6 +65,9 @@ let
           # Test VMs log to a serial console, which would make Plymouth show
           # only text.
           boot.kernelParams = [ "plymouth.ignore-serial-consoles" ];
+          # The test instrumentation waits 300 seconds for devices; an
+          # installed system waits systemd's default 90.
+          boot.initrd.systemd.settings.Manager.DefaultDeviceTimeoutSec = lib.mkForce 90;
           # Hold the splash until the test has looked at it.
           systemd.services.splash-hold = {
             wantedBy = [ "multi-user.target" ];
@@ -173,6 +176,10 @@ pkgs.testers.runNixOSTest {
               machine.send_key("ret")
               splash_up(machine)
               unlocked_at = uptime(machine)
+              # The boot that asked is the one that opened. When the initrd
+              # gave up on root, the test VM crashed and started again, and
+              # the next boot asked anew.
+              assert unlocked_at > time.monotonic() - first_asked, "the computer restarted while asking"
               machine.screenshot(f"{firmware}-3-unlocked")
               unlocked = machine.get_screen_text()
               machine.succeed("cryptsetup status cryptroot", "cryptsetup status cryptswap")
