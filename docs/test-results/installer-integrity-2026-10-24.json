@@ -1,0 +1,461 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "scope": "Installer integrity investigation; not a release qualification",
+  "source_base": "07d54bc9a044bd90653212589568e6e452834d6c",
+  "report": {
+    "hardware": "User-reported Intel-based Mac; model, RAM and USB writer not supplied",
+    "symptom": "After formatting, copying Firefox fails with hash mismatch importing path",
+    "original_machine_root_cause": "Unresolved: no original media, live-store dump or kernel logs available",
+    "screenshot_actual_nar_hash": "sha256-Gm7tpcS44++fiVututA/NU9adwOW1mOzA4J33LueEt4="
+  },
+  "public_image": {
+    "page": "https://sekka.computer/download/",
+    "url": "https://downloads.sekka.computer/nightly/builds/20261022-ed92471/sekka-nightly-20261022-ed92471-x86_64-linux.iso",
+    "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "bytes": 12167124992,
+    "sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+    "fresh_download": "pass: independently downloaded all bytes; exact published size and SHA-256",
+    "packed_store": "pass: 3641 registered paths, 34856758904 NAR bytes, verified after extraction",
+    "booted_store": "pass: all 3644 registered live-store paths verified in an 8 GiB UEFI VM before fault injection"
+  },
+  "firefox": {
+    "path": "/nix/store/i1k4x43j3857yjirh08dinz0zmqryaj6-firefox-unwrapped-158.0",
+    "expected_nar_hash": "sha256-zgHxY80qDkLwNegG9db7jlGxDcaSI3mT/JkydY61NnY=",
+    "nar_bytes": 410153160,
+    "cache_metadata": "https://cache.nixos.org/i1k4x43j3857yjirh08dinz0zmqryaj6.narinfo",
+    "agreement": "The screenshot's expected hash, binary-cache metadata, local cached package, extracted public ISO and unmodified booted ISO agree."
+  },
+  "reproduction": {
+    "classification": "Deliberate fault injection into the exact public ISO's temporary live store; not proof of the original Mac's corruption source",
+    "virtual_hardware": "QEMU 11.1.2, KVM, q35, OVMF 202608, 4 host vCPUs, 8192 MiB RAM, read-only USB ISO, disposable 80 GiB NVMe target",
+    "credentials": "Synthetic disposable VM account only",
+    "mutation": "Change Firefox application.ini version text from 158.0 to 158.1, preserving file and NAR size",
+    "old_preflight": "pass despite corrupt Firefox; the shipped helper reports Prepared and Preflight passed",
+    "old_install": "fail after partitioning and formatting: hash mismatch importing the same Firefox store path",
+    "injected_actual_nar_hash": "sha256-qv62tSRfJxV7tXC2ZfHMjYxulzgpWdM3wQG5x7s5t20=",
+    "comparison_with_report": "Same path, expected hash, installer stage and failure message; injected actual hash deliberately differs from the user's screenshot",
+    "nix_implementation": "Nix 2.35.3 LocalStore::doAddToStore hashes the incoming NAR stream through TeeSource while restoring it. This error does not itself establish a target-disk read-back failure.",
+    "fixed_install_corrupt": "pass: the rebuilt real ISO refuses the identical same-size Firefox corruption during live-store verification; no Prepared or Progress/formatting events",
+    "fixed_target_before_sha256": "469af0db1d4066b2c922c9dcca38e413b66fef289463186ed07b3651f037133e",
+    "fixed_target_after_sha256": "469af0db1d4066b2c922c9dcca38e413b66fef289463186ed07b3651f037133e",
+    "fixed_target_comparison": "pass: SHA-256 of the entire 85899345920-byte disposable target matches before and after refusal"
+  },
+  "fix": [
+    "Verify every registered live-store path before evaluation, including locally available inputs for deferred installation.",
+    "Verify the prepared system's recursive runtime closure after building and before returning Prepared.",
+    "Treat every nonzero verification result as failure; retain cancellation and show path-count progress.",
+    "Save expected/actual hashes and kernel warnings in a root-owned mode-0600 diagnostic under /run.",
+    "Make the public ISO derivation unpack and verify its actual squashfs against the build's closure registration before ISO assembly.",
+    "Keep copy-time integrity checking, signature policy, privilege boundaries, input locks and separate Cargo workspaces unchanged."
+  ],
+  "validation": {
+    "genkan_component": "pass: 96 unit/doc tests, 3 ignored tests; packaged GUI and helper built",
+    "publisher_tests": "pass: 20 tests",
+    "release_asset_tests": "pass: 2 tests",
+    "installer_vm": "pass: network-free BIOS component VM, real packaged helper and Determinate Nix; corrupt and missing paths refused, full 40 GiB target unchanged, diagnostics private and without the synthetic password",
+    "installer_vm_output": "/nix/store/a44mz4ps9ix0b3qf0s59ycj3hpmssl7i-vm-test-run-genkan-store-integrity",
+    "image_gate_component": "pass: real tiny ISO build plus six rejected corruptions (contents, executable bit, symlink, empty directory, missing path, registration)",
+    "image_gate_output": "/nix/store/vmpn0bmi0mhlgpzpl2g0j6f7kg0xyrd2-iso-store-integrity",
+    "flake_evaluation": "pass: nix flake check --no-build --no-update-lock-file exited 0; evaluation only, not a build of every check",
+    "diagnostic_iso": "pass: full published-revision ISO rebuilt with the integrity patch; mandatory gate verified 3641 packed paths; booted successfully as read-only USB",
+    "physical_hardware": "not run",
+    "clean_install": "pass: the rebuilt real ISO completed an 80 GiB NVMe/UEFI/ext4 Aizome + Firefox installation through the actual helper, including copy, activation, bootloader and unmount",
+    "main_iso": "not built: the full diagnostic image intentionally uses the published input revisions to isolate the installer change; main was evaluated/dry-run separately",
+    "disk_only_boot": "pass: no ISO or installation share attached; normal Aizome greeter and actual keyboard login observed at original 1280x800 resolution",
+    "flake_warnings": "Existing etc-yukimi-system.json derivations reference a source without context; lib is an unchecked custom flake output.",
+    "installed_firefox": "pass: NAR hash still matches the screenshot expected value after disk-only boot; Firefox window opens through ordinary desktop keyboard input",
+    "shutdown": "pass: installed desktop power menu and confirmation shut down the VM; all three investigation QEMU processes exited and PID files disappeared"
+  },
+  "qualification_gates": {
+    "Q0": "partial: public image identity and diagnostic patch provenance recorded; diagnostic checkout deliberately retains a dirty source snapshot",
+    "Q1": "partial: UEFI USB/default-entry diagnostic boot only; no full boot-mode, idle or input matrix",
+    "Q2": "partial: real helper fault injection and regression; not the complete GUI/storage/desktop matrix",
+    "Q3": "partial: disk-only boot reached the normal Aizome greeter and real keyboard password entry opened Aizome; no complete greeter/session/lock matrix",
+    "Q4": "not run: full Aizome inventory is outside this integrity investigation",
+    "Q5": "not run: full Tatami inventory is outside this integrity investigation",
+    "Q6": "not run: no full application/update/rollback qualification",
+    "Q7": "partial: focused fix, component regressions and a diagnostic image rebuilt; not a full release rerun",
+    "Q8": "not run: publication was not requested or authorized; public image unchanged"
+  },
+  "fixture_notes": [
+    "Component VM uses a temporary root, a synthetic mounted ISO for the live guard, a marked disposable disk, and a deliberately absent configuration template. The healthy control must reach configuration; corrupt inputs must fail earlier. This is not an installation certification.",
+    "An expanded component attempt produced no result and had no live QEMU process when inspected; it was canceled. The final fixture removes its unnecessary inter-VM network and passed. No product defect or specific harness root cause is inferred from that stalled attempt.",
+    "The real-ISO reproduction and recovery experiments invoke the actual helper over QGA with a synthetic request. No test_diagnostics setting, autologin change, package injection or greeter substitution is used.",
+    "The installed system does not expose QGA. The diagnostic guest-agent request timed out; disk provenance is collected through the ordinary desktop terminal instead, without changing installed services."
+  ],
+  "tested_product_sources_sha256": {
+    "installer/genkan/rust/src/install.rs": "84ddab180b0276b48396c9dfe84794fdacb49d2a836223b0d75df2a07f5b98f3",
+    "installer/genkan/rust/src/nixlog.rs": "5d4f45b2dd6fef7b41c80a3439f5f95faba62fbd09434276907a424a670a3f06"
+  },
+  "limits": [
+    "The reporter's exact ISO filename and checksum were not confirmed; the investigation used the current download-page image, whose Firefox path matches the report.",
+    "No stock-image failure was observed before deliberate corruption. USB/media read faults, RAM faults and live-store changes remain possibilities, not diagnosed causes.",
+    "Verification cannot guarantee against failures occurring afterward. Nix copy continues to reject changed input instead of installing unchecked bytes.",
+    "Deferred installs verify the available live store before formatting; unavailable downloads and builds still occur afterward and can fail independently.",
+    "The full diagnostic candidate uses the published revision with only the integrity changes. It is separate from main and is not a qualified replacement release.",
+    "No publication or release workflow was enabled or run. The public download remains unchanged."
+  ],
+  "local_evidence_directory": "/home/callen/work/sekka-installer-integrity/.work/investigation",
+  "evidence": {
+    "download-page.html": {
+      "sha256": "294c77b251760fad94bec52ffbb39556635bc73859fdd7f6ffa088149d6ec630",
+      "bytes": 8245
+    },
+    "public-builds.json": {
+      "sha256": "2533e2be789ee426672f4f4f77e8d27de831407b531f6a0fdc388ac8adfab8e4",
+      "bytes": 8126
+    },
+    "fresh-public.sha256": {
+      "sha256": "fcaa5db65eec478907a1d7629e561f1da43ebaf7e48bff4cc087d0caeffcf378",
+      "bytes": 83
+    },
+    "firefox.narinfo": {
+      "sha256": "0c28e06ebbbc6c3222bb9897cfd7abe979e75527220c9a41dd792d21694f2ac4",
+      "bytes": 2459
+    },
+    "published-image-verification.log": {
+      "sha256": "79953c7b01dca7e801831bfc93defbe1185ddf5f0264e7db817d2a9d8bff251d",
+      "bytes": 284741
+    },
+    "published-vm/launch.json": {
+      "sha256": "e9f5a9f8428b017c203fa4ac35da7b76f14ae1e1be404518de4c93b052d12e08",
+      "bytes": 1977
+    },
+    "published-vm/verify-all.json": {
+      "sha256": "3fe12ef9019f2274cbe3ece42d38af6021ab989ce823bce3e7e8f5e08b8b934e",
+      "bytes": 288333
+    },
+    "published-vm/full-reproduction.json": {
+      "sha256": "e352e82109eb1ab034b43d473da17a05025c1e580bf60ab96aea4ac68bfb8cab",
+      "bytes": 35492
+    },
+    "published-vm/old-install-hash.json": {
+      "sha256": "961e69190f89832df1f871714c0d78cbf3fe484894470a1724989f72315f8a6b",
+      "bytes": 949
+    },
+    "patched-vm/launch.json": {
+      "sha256": "5458381667a1cbaeaabdc0b64445056d6b725fe84a2cf848804cf8ec4a20c4ea",
+      "bytes": 2208
+    },
+    "patched-vm/corrupt-install-status.json": {
+      "sha256": "49bdbc31ad7db6bdb7afe93632b5b9900c2fdd181b0dfa82d95cdad1a460b60e",
+      "bytes": 37807
+    },
+    "patched-vm/disk-before.sha256": {
+      "sha256": "9568913cf415ed529da278f71d7414cd61320276afa8980d830de9b050200ef8",
+      "bytes": 108
+    },
+    "patched-vm/disk-after-refusal.sha256": {
+      "sha256": "9568913cf415ed529da278f71d7414cd61320276afa8980d830de9b050200ef8",
+      "bytes": 108
+    },
+    "patched-vm/restored-firefox.json": {
+      "sha256": "16da262dfa9f27a8f48200814b27e89ee3bfbe30278aff9188e11cb2ca482531",
+      "bytes": 135
+    },
+    "patched-vm/clean-install-status.json": {
+      "sha256": "2d733dae04bd470a19e55df34b51ef689b5a79a4a0f97e02e77695d9df88aa99",
+      "bytes": 92143
+    },
+    "repro-source.patch": {
+      "sha256": "d0559d0157e6a4fef60f5484e68c59e222694052eca7f15c5161a62567ac78bd",
+      "bytes": 8796
+    },
+    "repro-source.sha256": {
+      "sha256": "4919ddedf4bf615a9583d931be55ff164f7aadd93ca8cc7e265a73a30b91739d",
+      "bytes": 230
+    },
+    "repro-iso-build-full.log": {
+      "sha256": "a2aa7a88482363613522be04baff70d936370f31d62d90b4c754f378b2435de8",
+      "bytes": 40088
+    },
+    "offline-regression-full.log": {
+      "sha256": "fa5cbd5f9462460c4f6b438b92786d537806b8b22681791d616a20529cb66e9c",
+      "bytes": 129058
+    },
+    "offline-regression.paths": {
+      "sha256": "3eec361cf0e4164795af602a7b42a14bc590dd3360784959a65a3479e1944a5c",
+      "bytes": 143
+    },
+    "image-regression-full.log": {
+      "sha256": "7cda243bd5d58b70d2fd3913dfac8320391f2cc89a621163a0d84beeb1ec1c0c",
+      "bytes": 7935
+    },
+    "genkan-build-full.log": {
+      "sha256": "a22e8e30f042db8cc72d4191bcc6094d12ee84075d3043157001bfc19fb9697d",
+      "bytes": 16195
+    },
+    "publisher-tests.log": {
+      "sha256": "24579588be6b8215a9e30e58db12313c696e05dbd37d46cf886065c755cff807",
+      "bytes": 1211
+    },
+    "release-tests.log": {
+      "sha256": "04fe82fe9a302925ad8063387647415740448ac55ed3822b6ae4293b76e48cf1",
+      "bytes": 1312
+    },
+    "flake-check.log": {
+      "sha256": "34ef737b933125effa3432129c3126db39d156953b2dc6e181f75851fa151049",
+      "bytes": 19101
+    },
+    "patched-vm/disk-boot/launch.json": {
+      "sha256": "dc29c65ca79be28b421775d60e950b71b3a8402441d61c1a48a3bab1802d00ec",
+      "bytes": 2034
+    },
+    "patched-vm/disk-boot/greeter.png": {
+      "sha256": "af81d6a550a9369169691c0fafa5aed56115bdb700d2d8f54cd623676380c3c4",
+      "bytes": 665336
+    },
+    "patched-vm/disk-boot/login-input.json": {
+      "sha256": "1bf56099cf27ffd94db86da075dae81e5cecf2f4e551b1bfe2a49777807afaf9",
+      "bytes": 262
+    },
+    "patched-vm/disk-boot/desktop.png": {
+      "sha256": "7c2f5564348dda0e3fe89c701734bd5fa269bf30d763dcc93675d90acb07edae",
+      "bytes": 599811
+    },
+    "patched-vm/disk-boot/disk-and-firefox-hash.png": {
+      "sha256": "c7611dbe49c6c0b9b8a9030dcc8296545541f1e4abecf8506172876efea053aa",
+      "bytes": 595082
+    },
+    "patched-vm/disk-boot/provenance.json": {
+      "sha256": "bbdb33afd5a9e3b5f0eee63997c01c172c9c916576ceb35836006a8207ea5792",
+      "bytes": 508
+    },
+    "patched-vm/disk-boot/firefox.png": {
+      "sha256": "fbdb65cdfdc018c6c14354f4ad8ccae20de4c34e880ae89fff54869a0c7e2bb4",
+      "bytes": 226394
+    },
+    "patched-vm/disk-boot/input-actions.jsonl": {
+      "sha256": "6ffb8d17614093719cc1428e8e8257e556fd2226cdba27bef65203420f1c8482",
+      "bytes": 899
+    },
+    "patched-vm/disk-boot/shutdown-confirmation.png": {
+      "sha256": "8d3115aa140890a5ac80f9ef03aa8485cd50d8f06e0a0786648f2032a754168b",
+      "bytes": 240747
+    },
+    "shutdown-evidence.json": {
+      "sha256": "6fd1a1701f8708237ebddfc991b3536ac0e0efa2f1b01c94e5015d0dbc6c0441",
+      "bytes": 322
+    }
+  },
+  "diagnostic_image": {
+    "iso_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+    "iso_bytes": 12167145472,
+    "source_base": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "source_modifications": "installer integrity checks and mandatory squashfs verification only",
+    "utc": "2026-10-25T00:37:07.611865+00:00",
+    "store_path": "/nix/store/hdx9p0da0pdi8bfpvdd7l8a9xvwiw5kn-sekka-26.11.20261015.fe13242-x86_64-linux.iso",
+    "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+    "source_patch_sha256": "d0559d0157e6a4fef60f5484e68c59e222694052eca7f15c5161a62567ac78bd",
+    "aizome_revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344",
+    "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+    "workstation": "runnymede",
+    "qualification": "Diagnostic only; no release or publication approval"
+  },
+  "original_hardware_followup": [
+    "Exact ISO filename and a checksum of the original download and written media",
+    "Whether repeat attempts produce the same actual hash for the same path",
+    "Original live-store verification output, kernel I/O warnings and Mac model; test RAM/media only if evidence warrants it"
+  ],
+  "verification_cost": "Streaming full-store hashing adds preparation time and media reads. Initial verification took 193 seconds and the prepared closure took 36 seconds in this 8 GiB VM, with visible helper progress. These are diagnostic timings under host load, not physical USB benchmarks.",
+  "measured_timings_seconds": {
+    "verify-live-store": 193.031101404,
+    "checks": 193.417003381,
+    "configuration": 0.309259293,
+    "evaluation": 57.755643783,
+    "build": 9.964050825,
+    "verify-system": 36.37666748,
+    "cache": 12.15549513,
+    "storage": 1.2506042929999999,
+    "files": 0.005270444,
+    "copy": 80.099025533,
+    "bootloader": 0.809245406,
+    "flush": 1.043904463,
+    "install": 83.320223501
+  },
+  "prepared_system_summary": {
+    "closure_bytes": 8924071584,
+    "cached_bytes": 4126708885,
+    "cache_limited": true,
+    "downloaded_bytes": 18035508,
+    "deferred": false,
+    "root_bytes": 84823506944,
+    "swap_bytes": 0,
+    "seconds": 309.978342631
+  },
+  "investigation_ledger": [
+    {
+      "id": "I1",
+      "candidate_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "vm": "host",
+      "precondition": "Fresh download of the current public image",
+      "action": "Download every byte and hash it",
+      "expected": "Published byte size and SHA-256 match",
+      "status": "pass",
+      "observed": "Matches; independently retained public image also has the same hash",
+      "evidence": [
+        "fresh-public.sha256",
+        "public-builds.json"
+      ]
+    },
+    {
+      "id": "I2",
+      "candidate_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "vm": "host + published-vm",
+      "precondition": "Unmodified public image",
+      "action": "Verify extracted store and all booted registered paths",
+      "expected": "All package contents match registered hashes",
+      "status": "pass",
+      "observed": "3641 packed paths and 3644 live paths pass; Firefox agrees with cache metadata",
+      "evidence": [
+        "published-image-verification.log",
+        "published-vm/verify-all.json",
+        "firefox.narinfo"
+      ]
+    },
+    {
+      "id": "I3",
+      "candidate_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "vm": "published-vm",
+      "precondition": "Disposable NVMe target; same-size Firefox mutation in guest overlay",
+      "action": "Run shipped helper preparation and confirmed installation",
+      "expected": "Reproduce the reported late integrity failure",
+      "status": "pass",
+      "observed": "Preparation accepts corruption; install formats then fails at the same Firefox path with hash mismatch importing path",
+      "evidence": [
+        "published-vm/full-reproduction.json",
+        "published-vm/old-install-hash.json"
+      ]
+    },
+    {
+      "id": "I4",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "patched-vm",
+      "precondition": "Same virtual hardware; identical Firefox mutation; blank target",
+      "action": "Run rebuilt helper installation and hash entire target before/after",
+      "expected": "Reject before target writes and retain original hashes",
+      "status": "pass",
+      "observed": "Refusal before evaluation or formatting; full 80 GiB SHA-256 unchanged; diagnostics root mode 0600",
+      "evidence": [
+        "patched-vm/corrupt-install-status.json",
+        "patched-vm/disk-before.sha256",
+        "patched-vm/disk-after-refusal.sha256"
+      ]
+    },
+    {
+      "id": "I5",
+      "candidate_sha256": null,
+      "vm": "network-free component VM",
+      "precondition": "Current-main package with integrity changes; disposable 40 GiB disk",
+      "action": "Run genkan-store-integrity",
+      "expected": "Healthy control reaches configuration; corrupt and missing paths refused",
+      "status": "pass",
+      "observed": "Real Nix copy negative control fails as expected; helper preserves full disk and secret-free private diagnostics",
+      "evidence": [
+        "offline-regression-full.log",
+        "offline-regression.paths"
+      ]
+    },
+    {
+      "id": "I6",
+      "candidate_sha256": null,
+      "vm": "Nix build sandbox",
+      "precondition": "Tiny ISO through same upstream builder and mandatory wrapper",
+      "action": "Run iso-store-integrity",
+      "expected": "Accept good store; reject six corruption fixtures",
+      "status": "pass",
+      "observed": "Contents, mode, symlink, empty directory, whole path and registration mutations rejected",
+      "evidence": [
+        "image-regression-full.log"
+      ]
+    },
+    {
+      "id": "I7",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "Nix build sandbox",
+      "precondition": "Published source revision plus frozen integrity patch",
+      "action": "Build full diagnostic ISO",
+      "expected": "Verify actual packed store before ISO assembly",
+      "status": "pass",
+      "observed": "3641 packed paths verified; complete image built",
+      "evidence": [
+        "repro-source.patch",
+        "repro-source.sha256",
+        "repro-iso-build-full.log",
+        "patched-vm/launch.json"
+      ]
+    },
+    {
+      "id": "I8",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "patched-vm",
+      "precondition": "Restore Firefox from immutable image; verify expected NAR hash",
+      "action": "Run real helper install selecting Aizome and Firefox",
+      "expected": "Complete installation, activation, bootloader and unmount",
+      "status": "pass",
+      "observed": "Helper exits 0 and emits Complete; 8.924 GB closure copied",
+      "evidence": [
+        "patched-vm/restored-firefox.json",
+        "patched-vm/clean-install-status.json"
+      ]
+    },
+    {
+      "id": "I9",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "patched-vm/disk-boot",
+      "precondition": "Clean shutdown; no ISO or installation share",
+      "action": "Boot disk; type password at normal greeter; inspect terminal mounts/hash; open Firefox; shut down through UI",
+      "expected": "Installed disk works independently with intact Firefox",
+      "status": "pass",
+      "observed": "Aizome login succeeds; root/store use NVMe ext4; Firefox hash matches and window opens; normal shutdown exits QEMU",
+      "evidence": [
+        "patched-vm/disk-boot/launch.json",
+        "patched-vm/disk-boot/greeter.png",
+        "patched-vm/disk-boot/login-input.json",
+        "patched-vm/disk-boot/desktop.png",
+        "patched-vm/disk-boot/disk-and-firefox-hash.png",
+        "patched-vm/disk-boot/firefox.png",
+        "shutdown-evidence.json"
+      ]
+    },
+    {
+      "id": "I10",
+      "candidate_sha256": null,
+      "vm": "host",
+      "precondition": "Topic branch with focused changes",
+      "action": "Run component tests, publisher tests and flake evaluation",
+      "expected": "Changed components build and relevant checks pass",
+      "status": "pass",
+      "observed": "96 Rust unit/doc tests pass, 3 ignored; 20 publisher and 2 release-asset tests pass; flake evaluation exits 0",
+      "evidence": [
+        "genkan-build-full.log",
+        "publisher-tests.log",
+        "release-tests.log",
+        "flake-check.log"
+      ]
+    },
+    {
+      "id": "I11",
+      "candidate_sha256": null,
+      "vm": "physical Mac",
+      "precondition": "Original hardware and media not available",
+      "action": "Reproduce on reporting machine",
+      "expected": "Identify the original corruption source",
+      "status": "not-run",
+      "observed": "No exact media checksum, Mac model, original live-store bytes or kernel logs supplied",
+      "evidence": []
+    },
+    {
+      "id": "I12",
+      "candidate_sha256": null,
+      "vm": "release",
+      "precondition": "Publication not requested",
+      "action": "Qualify and publish a replacement ISO",
+      "expected": "Full release gates and exact replacement image approved",
+      "status": "not-run",
+      "observed": "Diagnostic results do not certify a release; publication inhibited and public download unchanged",
+      "evidence": []
+    }
+  ]
+}
