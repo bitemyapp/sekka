@@ -1069,8 +1069,8 @@ The module builds NixOS's Plymouth with three patches from `boot-splash/plymouth
 for what went wrong in the encrypted-boot-splash check when the GPU's driver took
 over from the firmware's framebuffer or a passphrase was mistyped. None is in a
 Plymouth release yet. [docs/upstream/plymouth](docs/upstream/plymouth/README.md)
-has the first two as ported to Plymouth's `main` to be sent upstream, and says
-where each of the three stands and when Sekka can drop it.
+has the first two as ported to Plymouth's `main` and sent upstream (plymouth!519
+and !520), and says where each of the three stands and when Sekka can drop it.
 
 - `keyboard-removal.patch`: Plymouth freed a display's keyboard without telling
   plymouthd or the splash, and the script plugin's `Plymouth.GetCapslockState()`

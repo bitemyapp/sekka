@@ -4,7 +4,7 @@
 | --- | --- |
 | Sekka's copy | [`console-owner.patch`](../../../installer/genkan/rust/system/boot-splash/plymouth/console-owner.patch), for 26.134.222 |
 | Upstream version | [console-owner.patch](console-owner.patch): 647bb13f, for `main` at 074cc389 |
-| Status, 2026-10-25 | Ready to send; the merge request isn't open yet ([Submitting](README.md#submitting)) |
+| Status | In review since 2026-10-25: [plymouth!520](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/520) ([Submitting](README.md#submitting)) |
 | Sent with | [keyboard-removal](keyboard-removal.md) |
 
 ## What goes wrong

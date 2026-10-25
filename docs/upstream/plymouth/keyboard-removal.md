@@ -4,7 +4,7 @@
 | --- | --- |
 | Sekka's copy | [`keyboard-removal.patch`](../../../installer/genkan/rust/system/boot-splash/plymouth/keyboard-removal.patch), for 26.134.222 |
 | Upstream version | [keyboard-removal.patch](keyboard-removal.patch): 049738c7 and 311dbd36, for `main` at 074cc389 |
-| Status, 2026-10-25 | Ready to send; the merge request isn't open yet ([Submitting](README.md#submitting)) |
+| Status | In review since 2026-10-25: [plymouth!519](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/519) ([Submitting](README.md#submitting)) |
 | Sent with | [console-owner](console-owner.md) |
 
 ## What goes wrong

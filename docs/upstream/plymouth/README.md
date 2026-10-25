@@ -18,8 +18,8 @@ builds Nixpkgs' Plymouth 26.134.222 with a fix for each, from
 
 | Sekka's patch | Upstream version | Status, 2026-10-25 |
 | --- | --- | --- |
-| [keyboard-removal](keyboard-removal.md) | [keyboard-removal.patch](keyboard-removal.patch), two commits | Ready to send |
-| [console-owner](console-owner.md) | [console-owner.patch](console-owner.patch), one commit | Ready to send |
+| [keyboard-removal](keyboard-removal.md) | [keyboard-removal.patch](keyboard-removal.patch), two commits | In review: [!519](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/519) |
+| [console-owner](console-owner.md) | [console-owner.patch](console-owner.patch), one commit | In review: [!520](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/520) |
 | [abandoned-prompts](abandoned-prompts.md) | None: Plymouth's own f3461296 and e7fb0732 | Fixed on `main`, in no release yet |
 
 ## Upstream versions
@@ -40,13 +40,20 @@ git am path/to/sekka/docs/upstream/plymouth/console-owner.patch
 
 ## Submitting
 
-Each branch goes to Plymouth as its own merge request, and each request names
-the other, since Sekka's check needs both. As of 2026-10-25 neither is open.
-The account sending them, bitemyapp on gitlab.freedesktop.org, can't fork
-projects until freedesktop's administrators verify it, which
-[freedesktop/freedesktop#4333](https://gitlab.freedesktop.org/freedesktop/freedesktop/-/work_items/4333)
-asks for. When the requests are open, their links go in the table above and in
-each patch's document.
+Each branch went to Plymouth as its own merge request on 2026-10-25, from the
+fork [bitemyapp/plymouth](https://gitlab.freedesktop.org/bitemyapp/plymouth),
+and each request names the other, since Sekka's check needs both:
+
+- [plymouth!519](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/519),
+  "device-manager, script: Stop using keyboards freed with their renderer", from
+  `keyboard-removal`.
+- [plymouth!520](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/520),
+  "device-manager: Free the local console when its renderer goes", from
+  `console-owner`.
+
+Plymouth's maintainers can push to both branches. If review changes them,
+export the new commits over the `.patch` files here, update the documents, and
+carry the same changes in Sekka's copies.
 
 All three commits carry a `Co-Authored-By: Claude` trailer, and both merge
 request descriptions say they were written with Claude Code.

@@ -13,8 +13,8 @@ change.
 
 | Project | Patch | What it fixes | Upstream, 2026-10-25 |
 | --- | --- | --- | --- |
-| Plymouth | [keyboard-removal](plymouth/keyboard-removal.md) | A crash when the GPU's driver takes over, from a keyboard Plymouth had freed | Ready to send; merge request not open yet |
-| Plymouth | [console-owner](plymouth/console-owner.md) | Nothing typed reaching Plymouth after the GPU's driver takes over, Esc included | Ready to send; merge request not open yet |
+| Plymouth | [keyboard-removal](plymouth/keyboard-removal.md) | A crash when the GPU's driver takes over, from a keyboard Plymouth had freed | In review: [plymouth!519](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/519) |
+| Plymouth | [console-owner](plymouth/console-owner.md) | Nothing typed reaching Plymouth after the GPU's driver takes over, Esc included | In review: [plymouth!520](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/520) |
 | Plymouth | [abandoned-prompts](plymouth/abandoned-prompts.md) | A question left on the splash after whoever asked it has gone | Not sent: fixed differently on Plymouth's `main` |
 
 [plymouth/README.md](plymouth/README.md) explains where the three Plymouth bugs
