@@ -543,14 +543,27 @@ fn encrypted() -> bool {
 /// splash's passphrase field, keep that frame, and type the fixture's public
 /// test passphrase.
 fn unlock_disk(vm: &Vm, artifacts: &Path) -> Result<()> {
-    let mut qmp = vm.qmp(20)?;
     let frame = artifacts.join("unlock.ppm");
     let deadline =
         Instant::now() + Duration::from_secs(if acceleration()? == "kvm" { 240 } else { 900 });
+    // QEMU has only just started: its monitor socket may not be there yet.
+    let mut qmp = loop {
+        check_interrupt()?;
+        match vm.qmp(20) {
+            Ok(qmp) => break qmp,
+            Err(error) => {
+                ensure!(Instant::now() < deadline, "No QEMU monitor: {error}");
+                pause(Duration::from_secs(1))?;
+            }
+        }
+    };
     loop {
         check_interrupt()?;
         qmp.call("screendump", json!({"filename":frame}))?;
-        if passphrase_field(&fs::read(&frame)?)? {
+        // Until the firmware sets a video mode there is nothing to dump.
+        if let Ok(ppm) = fs::read(&frame)
+            && passphrase_field(&ppm)?
+        {
             break;
         }
         ensure!(
@@ -559,7 +572,7 @@ fn unlock_disk(vm: &Vm, artifacts: &Path) -> Result<()> {
         );
         pause(Duration::from_secs(2))?;
     }
-    fs::remove_file(&frame)?;
+    let _ = fs::remove_file(&frame);
     qmp.call(
         "screendump",
         json!({"filename":artifacts.join("unlock.png"),"format":"png"}),
