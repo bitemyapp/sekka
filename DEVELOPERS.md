@@ -915,8 +915,9 @@ boot area. Root remains partition 2, swap partition 3 when selected; BIOS
 so it does not need to unlock LUKS2. Encrypted BIOS installations retain GRUB's
 framebuffer (`gfxpayloadBios = "keep"`): returning to VGA text hid the initrd
 unlock prompt when the VM's DRM driver took over. Swap stays RAM-sized after header overhead,
-and its inner UUID remains the resume device. Encrypted hibernation itself has
-not been validated. Early console setup uses the selected keyboard for unlock.
+and its inner UUID remains the resume device. Encrypted hibernation has been
+tried once by hand, on UEFI with Plasma (see the encrypted GUI installation
+record below). Early console setup uses the selected keyboard for unlock.
 
 Swap opens after root in the initrd: the configuration adds `After=` on
 `systemd-cryptsetup@cryptroot.service` to `systemd-cryptsetup@cryptswap` as a
@@ -996,6 +997,18 @@ covers installations from the ISO on UEFI and BIOS through `respin-tools
 qemu-test --install` (the fixture driving Genkan's backend, not its window):
 ext4, encrypted root and swap, then a disk-only boot that asked once for the
 passphrase on the boot splash and passed the fixture's installed-system checks.
+
+The [2026-10-24 encrypted GUI installation record](docs/test-results/encrypted-splash-gui.json)
+installs through Genkan's window, in the default Plasma live session, which
+rendered it on both firmwares: ext4 with Aizome and Plasma on UEFI, Btrfs with
+Aizome alone on BIOS, encrypted root and swap on both. The installed systems
+were then used through their own interfaces: the splash's prompt with a wrong
+passphrase, Caps Lock and Esc, both greeters' sessions, applications, restart
+and shutdown from Aizome's Toolchest and Plasma's launcher, and on UEFI a
+hibernation to the encrypted swap and a resume through the splash. The UEFI
+run found the 90-second device timeout described under "Disk encryption";
+the BIOS run, from an ISO with the fix, waited 130 seconds at the prompt and
+booted.
 
 ## System tuning and responsiveness
 

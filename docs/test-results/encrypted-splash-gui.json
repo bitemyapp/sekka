@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-24",
+  "result": "Encrypted installations through Genkan's window on UEFI and BIOS, then the installed systems driven through their own interfaces. The UEFI run found that the initrd gave up on an encrypted root left at the prompt for 90 seconds; 87d39c6 fixed it and the BIOS run, from an ISO built from that commit, waited 130 seconds and booted. Everything else passed.",
+  "input": "Keyboard and pointer events through QMP; screenshots by QMP screendump. No fixture, guest agent or automatic login on either run; no test diagnostics in the installed systems.",
+  "host_devices_used": false,
+  "runs": {
+    "uefi": {
+      "iso": {
+        "file": "sekka-26.11.20261020.02c087f-x86_64-linux.iso",
+        "built_from": "1614dc6",
+        "sha256": "49073967141dade623b44e1957fdea9b475358b9ed946f2ee731cf988569f762"
+      },
+      "vm": "QEMU 11.1.2, KVM, q35, OVMF 202608, 4 CPUs, 8 GiB, virtio-gpu-pci at 1280x800, 100 GiB sparse raw NVMe (serial SEKKA_TEST_ONLY), ISO as USB storage, QEMU user networking",
+      "selection": {
+        "filesystem": "ext4",
+        "swap_gib": 8,
+        "encryption": "LUKS2 root and swap, separate disk passphrase",
+        "desktops": ["aizome", "plasma"],
+        "default_desktop": "aizome",
+        "applications": ["firefox"],
+        "user": "sekkatest",
+        "hostname": "sekka-gui-uefi",
+        "locale": "en_US.UTF-8",
+        "keyboard": "us",
+        "timezone": "America/Chicago"
+      },
+      "installation": {
+        "mismatched_disk_passphrases": "Rejected on the disk page: \"Disk passphrases do not match.\"",
+        "preparation": "246 builds, 1126 MiB to download (see issues)",
+        "installation": "Typed ERASE /dev/nvme0n1, ticked the acknowledgement, installed in 2 min 44 s; Shut Down in Genkan powered QEMU off. Later boots had only the installed disk and UEFI variables."
+      },
+      "validation": {
+        "first_prompt": "The splash asked for root's passphrase on the firmware's 1280x800 framebuffer about 4 s after power-on.",
+        "wrong_passphrase": "Asked again, for cryptroot alone.",
+        "left_at_the_prompt": "FAILED before the fix: after a reset with no input, the splash still asked at 95 s and the screen was a locked emergency console at 105 s (\"Cannot open access to console, the root account is locked\"). It happened first while testing Caps Lock and Esc, 2 min 15 s after power-on.",
+        "caps_lock": "\"Caps Lock is on\" under the field while typing.",
+        "esc": "Plymouth's text view with systemd's lines and the question, then back to the splash.",
+        "unlock": "One passphrase opened root and swap; the rail filled and Aizome's greeter showed about 12 s later.",
+        "login": "A wrong password was refused (\"That password didn't work. Try again.\"); the right one started Aizome with Annai's welcome.",
+        "system": "lsblk: / and /nix/store on cryptroot (ext4), [SWAP] on cryptswap, vfat /boot; no installation media attached. systemd-analyze: 25.253 s in the initrd, most of it at the prompt. No failed units, no coredumps, no journal warnings about timeouts, Plymouth or cryptsetup.",
+        "applications": "Foot (Super+Return) and Firefox from the command palette, which loaded its privacy notice from the network.",
+        "restart": "Toolchest > Session > Restart: \"Restarting\" on the splash, then for about a second three systemd-shutdown lines saying it could not detach dm-0 (root, already read-only), then systemd-boot's menu and the prompt.",
+        "second_session": "Plasma (Wayland) from the greeter's session list. The kernel log showed root mounted without recovery.",
+        "hibernation": "Hibernate in Plasma's launcher: the guest powered off (no splash while hibernating). Started again, the splash asked once and the computer resumed to Plasma's lock screen with the same Konsole and its output; the kernel logged \"PM: hibernation: hibernation exit\" and uptime continued from before.",
+        "shutdown": "Shut Down in Plasma's launcher: \"Shutting down\" on the splash, and QEMU exited about 3 s later."
+      },
+      "artifacts": "artifacts/gui-uefi-7doVKDIL (not committed): disk, UEFI variables, serial logs, every screenshot"
+    },
+    "bios": {
+      "iso": {
+        "file": "sekka-26.11.20261020.02c087f-x86_64-linux.iso",
+        "built_from": "87d39c6",
+        "sha256": "a995781667ec7a852aed133114d3fc109f8ed29864807686ecea297ba796d81b"
+      },
+      "vm": "QEMU 11.1.2, KVM, q35, SeaBIOS with -fw_cfg name=opt/org.seabios/pci64,string=0 (without it SeaBIOS can't read an NVMe disk with 8 GiB of RAM; respin-tools does the same), 4 CPUs, 8 GiB, standard VGA with EDID at 1280x800, 100 GiB sparse raw NVMe (serial SEKKA_TEST_ONLY), ISO as USB storage, QEMU user networking",
+      "selection": {
+        "filesystem": "btrfs",
+        "swap_gib": 8,
+        "encryption": "LUKS2 root and swap, separate disk passphrase; unencrypted 1 GiB ext4 /boot",
+        "desktops": ["aizome"],
+        "default_desktop": "aizome",
+        "applications": ["firefox"],
+        "user": "biostester",
+        "hostname": "sekka-gui-bios",
+        "locale": "en_US.UTF-8",
+        "keyboard": "us",
+        "timezone": "America/Chicago"
+      },
+      "installation": {
+        "preparation": "109 builds, 19 MiB to download",
+        "installation": "Installed in 1 min 16 s; Shut Down in Genkan powered QEMU off. Later boots had only the installed disk."
+      },
+      "validation": {
+        "first_prompt": "The splash asked on GRUB's 1024x768 framebuffer within 8 s of power-on.",
+        "left_at_the_prompt": "Still asking at 130 s with no input. Esc's text view showed the root device's start job as \"(2min 22s / no limit)\".",
+        "wrong_passphrase": "Asked again, for cryptroot alone; the journal had one \"Failed to activate\" across both units.",
+        "caps_lock": "\"Caps Lock is on\" under the field while typing.",
+        "unlock": "Entered at 170 s; Aizome's greeter showed at 1280x800 once the GPU's driver took over.",
+        "login": "A wrong password was refused; the right one started Aizome.",
+        "system": "/etc/fstab: root by its filesystem UUID with x-initrd.mount,noatime,compress=zstd:1,x-systemd.device-timeout=0. Root on cryptroot (btrfs, compress=zstd:1, discard=async), [SWAP] on cryptswap, ext4 /boot. systemd-analyze: 2 min 53 s in the initrd, nearly all at the prompt. No failed units, no coredumps, no \"Timed out\" in the journal.",
+        "applications": "Foot, Settei and Hako from the command palette; Hako lists the encrypted root under Disks as \"cryptroot\".",
+        "restart": "Toolchest > Session > Restart: \"Restarting\" on the splash, GRUB's menu, then the prompt; the next session started normally.",
+        "shutdown": "Toolchest > Session > Shut Down: \"Shutting down\" on the splash, and QEMU exited."
+      },
+      "artifacts": "artifacts/gui-bios-jLEqUuTt (not committed): disk, serial logs, every screenshot"
+    }
+  },
+  "fix": {
+    "commits": ["87d39c6", "ad618d6"],
+    "problem": "Genkan mounts an encrypted root by its filesystem UUID. systemd-cryptsetup's generator lifts the device timeout only for /dev/mapper/cryptroot, so sysroot.mount's device kept systemd's default 90 s and the initrd stopped at a locked emergency console with the prompt still showing.",
+    "change": "87d39c6: encrypted installations give root x-systemd.device-timeout=0, and Genkan's unit tests check that only encrypted roots get it. ad618d6: checks.encrypted-boot-splash leaves the first prompt for 100 s with the initrd's device timeout set back to systemd's 90 (NixOS's test instrumentation raises it to 300) and asserts that the boot that opened root is the one that asked.",
+    "check_runs": {
+      "with_the_fix": "Passed, all 26 steps on UEFI and BIOS.",
+      "control": "The same check with the storage fixtures from before 87d39c6: systemd logged \"Timed out waiting for device /dev/disk/by-uuid/11111111-2222-4333-8444-555555555555\" at 92 s, the test VM restarted, and the check failed with \"the computer restarted while asking\"."
+    }
+  },
+  "issues": [
+    "Fixed: the 90-second device timeout above.",
+    "Not from this pull request: choosing two or more desktops downloads about 1.1 GiB during preparation (the UEFI run, and the earlier fixture installations with Plasma and Xfce). Those selections install calamares-session-env (#82), which the media doesn't carry: the media's reference systems have one desktop each. Genkan builds it during preparation, downloading a Rust toolchain: rustc 1.99.0 (1,109,942,048 bytes) and cargo (40,217,016 bytes) account for all but about 31 MB of the 1,181,116,007 bytes the fixture installation downloaded. With one desktop (the BIOS run) preparation downloaded 19 MiB.",
+    "Not from this pull request: Aizome's palette ranks \"General > Default Apps > Files\" in Settings above Hako for \"files\", and opening it shows Settei's General page rather than Default Apps.",
+    "Cosmetic: restarting shows systemd-shutdown's \"Could not detach DM /dev/dm-0\" lines for about a second after the splash goes; root is read-only by then and mounted without recovery afterwards.",
+    "Cosmetic: in Plymouth's text view the question ends in \"::\", systemd's colon and Plymouth's.",
+    "The bootloader screens (systemd-boot, GRUB) carry NixOS's names and GRUB's NixOS background."
+  ],
+  "screenshots": {
+    "directory": "docs/test-results/encrypted-splash-gui",
+    "note": "Original QEMU screendumps, copied byte for byte. The BIOS run's restart and shutdown frames were byte-identical to the UEFI run's and aren't repeated.",
+    "files": {
+      "uefi-1-emergency-after-90-seconds.png": "1280x800, before the fix: the console left after the initrd gave up on root",
+      "uefi-2-wrong-passphrase-asked-again.png": "1280x800, asked again for root after a wrong passphrase",
+      "uefi-3-greeter.png": "1280x800, Aizome's greeter after one passphrase",
+      "uefi-4-restarting.png": "1280x800, restarting from Aizome's Toolchest",
+      "uefi-5-restart-messages.png": "1280x800, systemd-shutdown's lines after the splash",
+      "uefi-6-resumed-from-hibernation.png": "1280x800, Plasma after resuming, with the kernel's hibernation lines",
+      "uefi-7-shutting-down.png": "1280x800, shutting down from Plasma",
+      "bios-1-still-asking-at-130-seconds.png": "1024x768, after the fix: still asking 130 s after power-on",
+      "bios-2-no-limit.png": "1024x768, Esc's text view: the root device's start job with no limit",
+      "bios-3-storage.png": "1280x800, lsblk, root's mount options, fstab and swap in Foot",
+      "bios-4-health.png": "1280x800, systemd-analyze, failed units, coredumps and unlock attempts"
+    }
+  },
+  "limits": [
+    "Virtual machines only; nothing here ran on physical hardware.",
+    "The UEFI installation came from the ISO before the fix; its installed system has the 90-second timeout. The fix was validated in an installation on BIOS and in checks.encrypted-boot-splash on both.",
+    "Hibernation was tried once, on UEFI with Plasma."
+  ]
+}

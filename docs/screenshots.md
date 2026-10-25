@@ -22,6 +22,16 @@ asking for the disk passphrase on the firmware's framebuffer, saved by
 prompt, a prompt after the GPU took over with Caps Lock on, restarting, Caps
 Lock at a prompt, and Plymouth's text view after Esc.
 
+The captures in `test-results/encrypted-splash-gui/` are original QEMU
+screendumps from the [2026-10-24 encrypted GUI installations](test-results/encrypted-splash-gui.json),
+copied byte for byte without cropping or scaling: 1280 × 800 once the GPU's
+driver has the display, and 1024 × 768 on GRUB's framebuffer at the BIOS
+prompt. Genkan's window and the installed systems were driven only with
+keyboard and pointer events through QMP, with no fixture, guest agent or
+automatic login. The UEFI captures include the emergency console the initrd
+left before the fix; the BIOS run's restart and shutdown frames were
+byte-identical to the UEFI run's and aren't repeated.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of
