@@ -11,8 +11,10 @@ permissions:
 # One push runs once, for its last commit, however many it brings. While one
 # run builds, GitHub keeps only the newest waiting run in this group and
 # cancels any older one, so a burst of merges builds the first and the last.
+# Keep manual dispatches from other refs out of main's queue, even when
+# their job is skipped by the branch guard below.
 concurrency:
-  group: sekka-cache
+  group: sekka-cache-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
