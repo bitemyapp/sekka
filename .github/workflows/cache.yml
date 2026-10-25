@@ -1,0 +1,92 @@
+name: Check and cache main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One push runs once, for its last commit, however many it brings. While one
+# run builds, GitHub keeps only the newest waiting run in this group and
+# cancels any older one, so a burst of merges builds the first and the last.
+# Keep manual dispatches from other refs out of main's queue, even when
+# their job is skipped by the branch guard below.
+concurrency:
+  group: sekka-cache-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cache:
+    # Every merge to main, or by hand from main, on the sandboxed builder
+    # (nix/runner.nix and DEVELOPERS.md). It checks the revision as it is,
+    # without updating inputs, and publishes Sekka's packages for it to the
+    # binary cache, so machines following main substitute rather than build
+    # them. It moves no branch and publishes no ISO: that is the nightly's.
+    # The nightly's own push to main uses the workflow token, which starts
+    # no workflow, and it publishes that revision itself.
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    environment: nightly
+    steps:
+      - name: Check the cache secrets
+        shell: bash
+        env:
+          CACHE_R2_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
+          CACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.CACHE_R2_SECRET_ACCESS_KEY }}
+          CACHE_SIGNING_KEY: ${{ secrets.CACHE_SIGNING_KEY }}
+        run: |
+          # Fail now rather than after hours of building (DEVELOPERS.md).
+          missing=()
+          for name in CACHE_R2_ACCESS_KEY_ID CACHE_R2_SECRET_ACCESS_KEY CACHE_SIGNING_KEY; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::The nightly environment lacks ${missing[*]}."
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # As in the nightly: the flake check's NixOS tests need KVM.
+          # The ${...} in single quotes are Nix's own.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
+            exit 1
+          }
+      - name: Check components
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake check --no-update-lock-file --print-build-logs
+          git diff --exit-code
+      - name: Publish Sekka's packages to its binary cache
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CACHE_R2_SECRET_ACCESS_KEY }}
+          CACHE_SIGNING_KEY: ${{ secrets.CACHE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          config=$(mktemp -d)
+          trap 'rm -rf "$config"' EXIT
+          (umask 077 && printf '%s' "$CACHE_SIGNING_KEY" > "$config/cache.sekka.computer-1.sec")
+          # The key stays on the container's /tmp, in memory; the signed
+          # closures are staged on the runner's work volume.
+          TMPDIR=$RUNNER_TEMP SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
+      - name: Check that updating to it only downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#installed-systems

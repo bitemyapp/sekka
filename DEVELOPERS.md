@@ -691,7 +691,8 @@ it last, only for paths neither cache.nixos.org nor Sekka's cache has. A
 system takes a new substituter only once activated, so the first update to
 this module still builds anything new itself.
 
-The nightly workflow publishes every revision it moves `nightly` to (see
+The cache workflow publishes every commit that reaches `main` (see Caching
+main), and the nightly workflow every revision it moves `nightly` to (see
 Nightly builds); the release workflow does not touch the cache. To publish by
 hand, from a clean checkout of reviewed `main`:
 
@@ -1139,6 +1140,26 @@ gh secret set CACHE_R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
 gh secret set CACHE_R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
 ```
 
+### Caching main
+
+`.github/workflows/cache.yml` runs on the builder for every push to `main`
+(each merged pull request) and from its **Run workflow** button (Actions,
+"Check and cache main"). A push runs it once, for its last commit, however
+many commits it brings: a rebase merge of several builds only the one it ends
+on. One run builds at a time; while it does, GitHub keeps only the newest
+waiting run and cancels older ones, so a burst of merges builds the first and
+the last.
+
+It runs `nix flake check` on the revision as merged, without updating inputs,
+then `nix run .#push-cache` and `scripts/check_cache_coverage.py`, as the
+nightly does. A failed check publishes nothing. It builds no ISO, moves no
+branch and publishes no download; machines following `main` substitute its
+packages instead of building them, and the next nightly finds them already
+built. It uses the `nightly` environment's three cache secrets, and fails
+before building if any is missing. The nightly's own push to `main` starts no
+run: the workflow token's pushes start no workflows, and the nightly publishes
+that revision itself.
+
 ### The builder
 
 Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
@@ -1158,11 +1179,11 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
 - Before the first step, the runner's job-started hook admits only
-  `workflow_dispatch` and `schedule` on `refs/heads/main` of
-  `bitemyapp/sekka`: workflows only maintainers can start or change. For
-  anything else, such as a pull request's workflow, it kills every process of
-  the job but the runner, so even `if: always()` steps never run, and the job
-  fails.
+  `workflow_dispatch`, `schedule` and `push` on `refs/heads/main` of
+  `bitemyapp/sekka`: workflows only maintainers can start or change, and
+  pushes to `main`, which only they can make. For anything else, such as a
+  pull request's workflow, it kills every process of the job but the runner,
+  so even `if: always()` steps never run, and the job fails.
 - The repository requires approval before any workflow from an outside
   contributor's pull request runs (Settings, Actions, General: "Require
   approval for all external contributors"). The workflow token defaults to
