@@ -136,6 +136,26 @@ after verification. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
 or build failures at that point.
 
+Additional RAM stress evidence is recorded in
+`docs/test-results/installer-memory-2026-10-24.json`. With the same diagnostic
+image, a 4 GiB VM completed the normal GUI installation while a background
+process held 1.5 GiB of random data resident and could not swap. The installer
+selected the deferred route, built the 8.31 GiB system on disk, and subsequently
+booted, accepted a normal login and opened Firefox with its expected hash.
+Available RAM fell to 56 MiB and zram swap use reached 3.23 GiB without OOM kills.
+This demonstrates that the complete system need not fit in physical RAM; it
+does not establish a universal minimum memory requirement.
+
+The 2 GiB clean-install case failed during Nix evaluation on both the unmodified
+public ISO and the diagnostic image: live-store space ran out and the kernel
+OOM-killed desktop processes before any target writes. The evaluations were
+then interrupted; these are failed tests, not graceful automatic refusals.
+The separate corrupt-file case at 2 GiB did refuse installation before erasure
+and preserved the entire target. Deferring downloads does not eliminate the
+RAM and temporary live-store space needed to evaluate the configuration first.
+Do not describe the deferred route as immune to memory exhaustion or these
+focused VM results as physical-hardware or full-release qualification.
+
 The ISO embeds a prebuilt system and precache path list for every desktop
 offered by Genkan, including default Aizome; the cache's `installed-systems`
 uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`

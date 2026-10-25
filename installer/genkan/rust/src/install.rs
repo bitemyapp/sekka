@@ -86,8 +86,8 @@ pub struct Summary {
     pub cache_limited: bool,
     /// Unpacked bytes downloaded into the live store during preparation.
     pub downloaded_bytes: u64,
-    /// The system could not be built in RAM; it is built on the target after
-    /// formatting instead (slower, but never exceeds live memory).
+    /// Downloads exceed the live-memory budget, so the system is built on the
+    /// target after formatting. Evaluation still needs live RAM and store space.
     pub deferred: bool,
     pub root_bytes: u64,
     pub swap_bytes: u64,
