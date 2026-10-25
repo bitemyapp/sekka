@@ -983,6 +983,12 @@ It does not establish a full BIOS install, physical hardware support, encrypted
 hibernation or an installed-system update. The record separates these limits
 from the component checks above.
 
+The [2026-10-24 encrypted installation record](docs/test-results/encrypted-splash-install.json)
+covers installations from the ISO on UEFI and BIOS through `respin-tools
+qemu-test --install` (the fixture driving Genkan's backend, not its window):
+ext4, encrypted root and swap, then a disk-only boot that asked once for the
+passphrase on the boot splash and passed the fixture's installed-system checks.
+
 ## System tuning and responsiveness
 
 `calamares.tuning.enable` (on by default) applies

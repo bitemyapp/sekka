@@ -12,6 +12,16 @@ prompt, and applications in the installed Aizome and Plasma sessions. Input
 was sent as keyboard and pointer events through QMP; there was no automatic
 login. The report records the exact ISO and test-only diagnostics setting.
 
+The captures in `test-results/encrypted-splash/` are original QEMU screendumps
+of the boot splash, copied byte for byte without cropping or scaling. The two
+`install-*-unlock.png` captures (1280 × 800 UEFI, 1024 × 768 BIOS) are installed
+systems from the [2026-10-24 encrypted installations](test-results/encrypted-splash-install.json)
+asking for the disk passphrase on the firmware's framebuffer, saved by
+`respin-tools` when it found the passphrase field. The `check-*.png` captures
+(1920 × 1080) come from the `encrypted-boot-splash` component check: the first
+prompt, a prompt after the GPU took over with Caps Lock on, restarting, Caps
+Lock at a prompt, and Plymouth's text view after Esc.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of
