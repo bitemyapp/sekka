@@ -19,7 +19,9 @@ let
         "vfat"
       ];
       boot.kernelModules = [ "dm-crypt" ];
-      boot.kernelParams = lib.mkOverride 5 [ "console=tty1" ];
+      # The last console= is /dev/console, where the password agent asks; the
+      # rest of the command line (root=fstab, resume=) stays.
+      boot.kernelParams = lib.mkAfter [ "console=tty1" ];
       boot.loader.systemd-boot.enable = firmware == "uefi";
       boot.loader.grub.enable = firmware == "bios";
       virtualisation = {
