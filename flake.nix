@@ -159,7 +159,10 @@
       };
       packages.${system} = {
         default = self.packages.${system}.iso;
-        iso = installer.config.system.build.isoImage;
+        iso = import ./nix/verified-iso.nix {
+          inherit pkgs;
+          iso = installer.config.system.build.isoImage;
+        };
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
@@ -291,6 +294,12 @@
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
+        genkan-store-integrity = import ./nix/genkan-integrity-test.nix {
+          inherit pkgs;
+          genkan = calamares;
+          nixPackage = runnerNix;
+        };
+        iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
         iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
           inherit pkgs installer;
         };

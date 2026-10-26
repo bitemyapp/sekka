@@ -1,0 +1,569 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Chicago; raw samples and most actions use UTC on October 25",
+  "scope": "Additional RAM stress tests for the installer integrity fix; diagnostic, not full release qualification",
+  "pr": "https://github.com/bitemyapp/sekka/pull/102",
+  "tested_product_commit": "dc2986ed6cda08d62431077df74204e656b73e0c",
+  "source_note": "The full diagnostic ISO retains the published October 22 base and locked dependencies, with the integrity product changes from this PR. This follow-up changes documentation and a Rust doc comment only; it does not claim a newly built current-main ISO.",
+  "previous_report": "docs/test-results/installer-integrity-2026-10-24.json",
+  "diagnostic_image": {
+    "iso_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+    "iso_bytes": 12167145472,
+    "source_base": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "source_modifications": "installer integrity checks and mandatory squashfs verification only",
+    "utc": "2026-10-25T00:37:07.611865+00:00",
+    "store_path": "/nix/store/hdx9p0da0pdi8bfpvdd7l8a9xvwiw5kn-sekka-26.11.20261015.fe13242-x86_64-linux.iso",
+    "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+    "source_patch_sha256": "d0559d0157e6a4fef60f5484e68c59e222694052eca7f15c5161a62567ac78bd",
+    "aizome_revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344",
+    "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+    "workstation": "runnymede",
+    "qualification": "Diagnostic only; no release or publication approval"
+  },
+  "public_control": {
+    "url": "https://downloads.sekka.computer/nightly/builds/20261022-ed92471/sekka-nightly-20261022-ed92471-x86_64-linux.iso",
+    "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "bytes": 12167124992,
+    "sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591"
+  },
+  "tested_product_sources_sha256": {
+    "installer/genkan/rust/src/install.rs": "84ddab180b0276b48396c9dfe84794fdacb49d2a836223b0d75df2a07f5b98f3",
+    "installer/genkan/rust/src/nixlog.rs": "5d4f45b2dd6fef7b41c80a3439f5f95faba62fbd09434276907a424a670a3f06"
+  },
+  "environment": {
+    "workstation": "runnymede",
+    "qemu": "11.1.2 from the root flake toolchain",
+    "firmware": "OVMF 202608, retained variables across live and disk-only boots",
+    "virtual_hardware": "KVM, q35, 4 host vCPUs, virtio GPU at original 1280x800, read-only USB ISO, disposable 80 GiB NVMe raw file",
+    "network": "QEMU user networking; no host folders or host devices shared. Disk-only diagnostics use a loopback-only SSH forward; SSH was enabled through the normal installer GUI.",
+    "live_swap": "Unmodified ISO zram: approximately 1961 MiB with 2 GiB guest RAM and 3909 MiB with 4 GiB guest RAM",
+    "host_load": "Other workstation workloads were present; timings are diagnostic observations, not performance benchmarks",
+    "synthetic_account": "Disposable test account only; no personal credentials or Wi-Fi profiles. Raw input traces stay local.",
+    "target_bytes": 85899345920,
+    "target_initialization": "New sparse raw file, with ASCII SEKKA DISPOSABLE RAM STRESS TEST TARGET followed by newline at byte zero; all remaining bytes zero",
+    "target_expected_sha256": "ae9fda48630872b3b15836954b9a24529add741f880ca78e09d3f255b1a923ae"
+  },
+  "pressure_method": {
+    "guest_memory_mib": 4096,
+    "background_payload_bytes": 1610612736,
+    "allocation": "1536 separate bytearrays of 1 MiB from os.urandom; XOR one byte of every 4096-byte page every two seconds",
+    "service": "systemd-run sekka-memory-pressure, MemoryMax=1800M, MemorySwapMax=0, existing ISO Python interpreter",
+    "meaning": "A large incompressible resident background application. No fabricated /proc/meminfo values, Nix reports, installer settings or target-build decisions.",
+    "lifetime": "Ready before the first GUI action; held through background verification, evaluation, confirmation, target build, bootloader and the completion screen; stopped after evidence collection.",
+    "sampler": "Every two seconds, record /proc/meminfo, memory PSI, vmstat counters, zram stats, Nix RSS/swap and pressure cgroup bytes/events. Sampling can be delayed by extreme pressure; observed minima are sampled values.",
+    "gui_phase_pressure": {
+      "first_gui_action_utc": "2026-10-25T03:10:43.434251+00:00",
+      "samples_after_first_gui_action": 480,
+      "minimum_pressure_resident_bytes": 1619329024,
+      "minimum_pressure_resident_mib": 1544.3125,
+      "required_pressure_bytes": 1610612736,
+      "all_gui_phase_samples_hold_required_pressure": true
+    },
+    "program": [
+      "import os",
+      "import time",
+      "",
+      "# Keep 1.5 GiB of incompressible anonymous memory resident in a separate cgroup",
+      "# with MemorySwapMax=0. This models a large background application without",
+      "# changing the installer, its settings, Nix's reports, or /proc/meminfo.",
+      "blocks = [bytearray(os.urandom(1024 * 1024)) for _ in range(1536)]",
+      "print('ready: holding 1610612736 bytes of random data', flush=True)",
+      "while True:",
+      "    for block in blocks:",
+      "        for offset in range(0, len(block), 4096):",
+      "            block[offset] ^= 1",
+      "    time.sleep(2)"
+    ]
+  },
+  "results": {
+    "corrupt_2g": {
+      "status": "pass",
+      "definition": "Refuse corrupted Firefox before target writes, not complete an installation",
+      "action": "In the booted diagnostic ISO overlay, change Firefox application.ini version 158.0 to 158.1, preserving its size. Invoke the real packaged helper with a confirmed Aizome/Firefox installation request.",
+      "result": "All 3644 paths checked; modified Firefox reported with expected/actual hashes; helper exits 1; no Prepared or Progress/formatting event; root-only integrity log retained.",
+      "repeat_seconds": 109.877749,
+      "memory": {
+        "samples": 113,
+        "first": "2026-10-25T03:07:21,257040397+00:00",
+        "last": "2026-10-25T03:11:07,275736260+00:00",
+        "mem_total_mib": 1961.8359375,
+        "min_available_mib": 1079.02734375,
+        "max_swap_used_mib": 670.421875,
+        "max_nix_rss_mib": 47.12890625,
+        "max_memory_psi_some_avg10": 2.82,
+        "max_memory_psi_full_avg10": 2.59,
+        "oom_kill_delta": 0,
+        "pgmajfault_delta": 3850,
+        "pswpin_delta": 3927,
+        "pswpout_delta": 9623,
+        "some_total_us_delta": 2400746,
+        "full_total_us_delta": 2329484
+      },
+      "target_before_sha256": "ae9fda48630872b3b15836954b9a24529add741f880ca78e09d3f255b1a923ae",
+      "target_after_sha256": "ae9fda48630872b3b15836954b9a24529add741f880ca78e09d3f255b1a923ae",
+      "target_assertion": "Independently measured SHA-256 of every byte before and after; equal",
+      "caveat": "The first monitoring run had a broken sampler. It was retained but excluded from RAM measurements; the corrected repeat reused that boot and may have warmed/reclaimed caches. The separate clean 2 GiB test used a fresh boot and target."
+    },
+    "clean_2g": {
+      "status": "fail",
+      "definition": "Complete clean Aizome/Firefox installation at 2 GiB RAM",
+      "action": "Fresh diagnostic-ISO boot and target; real packaged helper, same configuration as public control, ext4/UEFI, tuning on, target swap disabled. No pressure process or store mutation.",
+      "result": "Live verification passed in 114.913 seconds. During subsequent Nix evaluation, zram filled, a live-store source extraction returned ENOSPC, and kernel OOM killed plasmashell. Never reached Prepared or formatting.",
+      "memory": {
+        "samples": 158,
+        "first": "2026-10-25T03:13:01,015812259+00:00",
+        "last": "2026-10-25T03:21:05,466070284+00:00",
+        "mem_total_mib": 1961.8359375,
+        "min_available_mib": 58.46875,
+        "max_swap_used_mib": 1960.99609375,
+        "max_nix_rss_mib": 766.953125,
+        "max_memory_psi_some_avg10": 38.78,
+        "max_memory_psi_full_avg10": 25.14,
+        "oom_kill_delta": 1,
+        "pgmajfault_delta": 496233,
+        "pswpin_delta": 446483,
+        "pswpout_delta": 1008129,
+        "some_total_us_delta": 74466939,
+        "full_total_us_delta": 54565880
+      },
+      "oom_victims": [
+        ".plasmashell-wr"
+      ],
+      "termination": "After observing and preserving OOM/thrashing evidence, operator sent SIGINT to the guest evaluation process group. Final helper exit 1 includes interrupted-by-user; do not count this as automatic graceful low-memory rejection.",
+      "target_after_sha256": "ae9fda48630872b3b15836954b9a24529add741f880ca78e09d3f255b1a923ae",
+      "target_assertion": "Entire final 80 GiB file equals the expected marked-empty target hash. There was no separate pre-run hash for this fresh file.",
+      "attribution": "Failure occurred after the new verification stage. The unmodified public control reproduces it; this is not evidence that the integrity patch introduced the low-memory failure."
+    },
+    "public_control_2g": {
+      "status": "fail",
+      "definition": "Complete the same clean 2 GiB installation on the unmodified public ISO",
+      "action": "Fresh boot of the exact public ISO with matching published SHA-256; same virtual hardware, target generator and helper request as clean_2g; no corruption or pressure service.",
+      "result": "Nix evaluation filled zram and failed a live-store source extraction with ENOSPC. Kernel OOM killed plasmashell and later the autostart Genkan GUI. No target formatting.",
+      "memory": {
+        "samples": 26,
+        "first": "2026-10-25T03:25:00,223479632+00:00",
+        "last": "2026-10-25T03:27:59,130780495+00:00",
+        "mem_total_mib": 1961.8359375,
+        "min_available_mib": 72.24609375,
+        "max_swap_used_mib": 1960.99609375,
+        "max_nix_rss_mib": 613.3984375,
+        "max_memory_psi_some_avg10": 43.46,
+        "max_memory_psi_full_avg10": 40.25,
+        "oom_kill_delta": 2,
+        "pgmajfault_delta": 194813,
+        "pswpin_delta": 139975,
+        "pswpout_delta": 717530,
+        "some_total_us_delta": 43926310,
+        "full_total_us_delta": 38366826
+      },
+      "oom_victims": [
+        ".plasmashell-wr",
+        ".calamares-nixo"
+      ],
+      "termination": "Operator SIGINT after the first confirmed OOM; completion was delayed during thrashing. A later SIGKILL attempt found the evaluation process group already gone. Final helper exit 1 includes interrupted-by-user.",
+      "target_after_sha256": "ae9fda48630872b3b15836954b9a24529add741f880ca78e09d3f255b1a923ae",
+      "target_assertion": "Entire final 80 GiB file equals expected marked-empty target hash; no independent pre-run hash.",
+      "attribution": "Confirms the tested public revision already fails this 2 GiB case. Current-main full-image behavior was not retested."
+    },
+    "gui_4g_pressure": {
+      "status": "pass",
+      "definition": "Complete normal GUI installation under sustained resident pressure, exercise the real deferred route, then disk-only boot/login/Firefox",
+      "configuration": "UEFI/NVMe/ext4, Aizome and Firefox, tuning on, default 4 GiB target swap, en_US.UTF-8, US keyboard, America/Chicago, hostname pressure-test; SSH selected through GUI",
+      "interaction": "Actual QMP mouse/keyboard actions through welcome, disk, account, GitHub/SSH, desktop, applications, location, review/confirmation and installation. Normal greeter password entry and application-menu Firefox launch after disk-only boot.",
+      "memory": {
+        "samples": 495,
+        "first": "2026-10-25T03:10:13,753534057+00:00",
+        "last": "2026-10-25T03:27:03,718098054+00:00",
+        "mem_total_mib": 3910.0703125,
+        "min_available_mib": 56.3671875,
+        "max_swap_used_mib": 3305.58203125,
+        "max_nix_rss_mib": 925.11328125,
+        "max_memory_psi_some_avg10": 59.17,
+        "max_memory_psi_full_avg10": 52.64,
+        "oom_kill_delta": 0,
+        "pgmajfault_delta": 2848134,
+        "pswpin_delta": 3118871,
+        "pswpout_delta": 4021699,
+        "some_total_us_delta": 30425549,
+        "full_total_us_delta": 27560442,
+        "pressure": {
+          "samples": 495,
+          "min_resident_bytes": 21262336,
+          "max_resident_bytes": 1632915456,
+          "max_swap_bytes": 0,
+          "max_oom": 0,
+          "max_oom_kill": 0
+        }
+      },
+      "install_report": {
+        "kept_awake": true,
+        "prepared": {
+          "cache_limited": false,
+          "cached_bytes": 0,
+          "closure_bytes": 0,
+          "deferred": true,
+          "downloaded_bytes": 0,
+          "root_bytes": 80528539648,
+          "seconds": 302.50483048,
+          "swap_bytes": 4294967296
+        },
+        "seconds_from_confirmation_before_flush": 69.758315787,
+        "stages": {
+          "bootloader": 1.121583724,
+          "checks": 156.761361957,
+          "configuration": 0.15829758,
+          "copy": 67.355867325,
+          "evaluation": 145.585086623,
+          "files": 0.003242444,
+          "storage": 1.193341397,
+          "verify-live-store": 156.276493245
+        }
+      },
+      "deferred_proof": "Review screen explicitly says build on new disk because downloads exceed available memory; saved install.json has prepared.deferred=true and cached_bytes=0; observed nix build --store local?root=<target> command.",
+      "installed_closure_bytes": 8924086784,
+      "installed_closure_gib": 8.311203479766846,
+      "disk_only_boot": "Same 4096 MiB RAM; ISO and pressure service absent. Installed disk and retained firmware only, no host shares. Normal Aizome greeter/password login reached the desktop.",
+      "root": "/dev/nvme0n1p2, ext4",
+      "firefox_nar_hash": "sha256-zgHxY80qDkLwNegG9db7jlGxDcaSI3mT/JkydY61NnY=",
+      "firefox_launch": "Firefox opened from Toolchest > Applications > Internet > Firefox; original-resolution screenshot inspected.",
+      "shutdown": "Normal desktop Session > Shut Down opened its confirmation dialog; its 60-second countdown shut down the VM before a later confirmation click could be sent. QEMU exited.",
+      "limits": "Synthetic pressure installation diagnostic, not a certification of all 4 GiB computers. The artificial pressure load was not carried into the installed-system boot."
+    }
+  },
+  "interpretation": [
+    "The whole installed system need not fit into physical RAM: a measured 8.31 GiB closure installed with 4 GiB RAM while another 1.5 GiB remained resident, using the actual deferred target-build route.",
+    "The new integrity check completed under pressure and safely rejected corruption at 2 GiB. It does not solve memory requirements of Nix evaluation or space requirements of its RAM-backed live store.",
+    "Do not call 2 GiB installation reliable based on these results. Both tested images failed that case. An explicit low-memory installation strategy remains unresolved; this PR does not implement one.",
+    "Live zram was enabled as shipped. This is not a zero-swap test, a sustained hardware memory test, or proof against RAM/media faults.",
+    "No runtime changes were made after these tests. Only the inaccurate deferred-summary doc comment was corrected and this evidence was added."
+  ],
+  "fixture_notes": [
+    "The first 2 GiB corruption sampler lacked PATH and repeatedly printed command-not-found errors. Stopped it, retained its 23 MB log, removed the guest log to free its RAM-backed space, added explicit PATH/set -eu, then repeated. Only the corrected sampler contributes measurements.",
+    "Fast QMP typing at 75 ms lost characters under background pressure. Cleared/refilled the account fields with 250 ms spacing and 100 ms key hold; validation succeeded. This is recorded as an automation timing correction, not attributed as a product defect.",
+    "A public-control QGA diagnostic timed out under severe pressure. A concurrent signal request encountered a stale agent reply; subsequent guest-sync resynchronization retained the replies. Retrieved the actual SIGINT status, final helper result and logs; did not infer completion from the earlier timeout.",
+    "The nested disk-boot QMP socket path exceeded AF_UNIX length despite a short symlink destination. Resolved the symlink in the host controller and retried the screenshot; guest image/settings were unchanged.",
+    "The sampler includes pressure allocation ramp-up before GUI interaction. Its whole-run minimum cgroup bytes is therefore below the final load; a separate assertion checks every sample after the first GUI action is at least 1.5 GiB.",
+    "The installed desktop shutdown dialog completed its normal countdown before the explicit confirmation click. That later QMP click failed because QEMU had already exited; it is not credited as a delivered input.",
+    "Samples are observations, not guaranteed maxima/minima. Public-control sampling slowed markedly during thrashing; kernel OOM logs independently establish failure."
+  ],
+  "qualification_gates": {
+    "Q0": "partial: exact public/diagnostic image identities and launches recorded; diagnostic source snapshot retained",
+    "Q1": "partial: UEFI USB default entry at 2/4 GiB; no complete boot matrix",
+    "Q2": "partial: focused GUI/deferred stress case passed; 2 GiB clean installations failed; no full storage/desktop matrix",
+    "Q3": "partial: 4 GiB disk-only normal boot/password login passed; no complete session/lock matrix",
+    "Q4": "not-run: complete Aizome inventory outside this focused stress test",
+    "Q5": "not-run: complete Tatami inventory outside this focused stress test",
+    "Q6": "partial: installed Firefox hash/open verified; no update/rollback/full application matrix",
+    "Q7": "partial: focused evidence recorded in PR 102; known 2 GiB limitation unresolved; no new full-image release rerun",
+    "Q8": "not-run: publication not requested; workflow remains inhibited and public download unchanged"
+  },
+  "local_evidence_directory": "/home/callen/work/sekka-installer-integrity/.work/investigation",
+  "shutdown": {
+    "utc": "2026-10-25T03:32:39.371652+00:00",
+    "pid_files_absent": {
+      "stress-2g": true,
+      "stress-2g-clean": true,
+      "stress-2g-public-control": true,
+      "stress-4g-pressure": true,
+      "stress-4g-pressure/disk-boot": true
+    },
+    "matching_qemu_processes": [],
+    "method": "QGA orderly poweroff for the three helper cases; normal Genkan Shut Down button for the stressed GUI live session; Aizome Session > Shut Down and the confirmation dialog's normal 60-second countdown for the installed system."
+  },
+  "ledger": [
+    {
+      "id": "M1",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "stress-2g",
+      "precondition": "Corrupted same-size Firefox in diagnostic live overlay",
+      "action": "Confirmed actual-helper install",
+      "expected": "Refuse before writes and preserve entire target",
+      "status": "pass",
+      "observed": "All 3644 paths checked; modified Firefox reported with expected/actual hashes; helper exits 1; no Prepared or Progress/formatting event; root-only integrity log retained.",
+      "evidence": [
+        "stress-2g/corrupt-repeat.log",
+        "stress-2g/memory-summary.json",
+        "stress-2g/disk-before.sha256",
+        "stress-2g/disk-after-refusal.sha256"
+      ],
+      "pr": "https://github.com/bitemyapp/sekka/pull/102"
+    },
+    {
+      "id": "M2",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "stress-2g-clean",
+      "precondition": "Fresh pristine diagnostic ISO, 2 GiB RAM",
+      "action": "Actual-helper clean Aizome/Firefox install",
+      "expected": "Complete installation without OOM",
+      "status": "fail",
+      "observed": "Live verification passed in 114.913 seconds. During subsequent Nix evaluation, zram filled, a live-store source extraction returned ENOSPC, and kernel OOM killed plasmashell. Never reached Prepared or formatting.",
+      "evidence": [
+        "stress-2g-clean/clean.log",
+        "stress-2g-clean/kernel.log",
+        "stress-2g-clean/memory-summary.json",
+        "stress-2g-clean/evaluation-memory-exhausted.png"
+      ],
+      "pr": "https://github.com/bitemyapp/sekka/pull/102"
+    },
+    {
+      "id": "M3",
+      "candidate_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "vm": "stress-2g-public-control",
+      "precondition": "Fresh unmodified public ISO, 2 GiB RAM",
+      "action": "Identical clean-helper configuration",
+      "expected": "Complete installation without OOM",
+      "status": "fail",
+      "observed": "Nix evaluation filled zram and failed a live-store source extraction with ENOSPC. Kernel OOM killed plasmashell and later the autostart Genkan GUI. No target formatting.",
+      "evidence": [
+        "stress-2g-public-control/clean.log",
+        "stress-2g-public-control/kernel.log",
+        "stress-2g-public-control/memory-summary.json",
+        "stress-2g-public-control/evaluation-memory-exhausted.png"
+      ],
+      "pr": "https://github.com/bitemyapp/sekka/pull/102"
+    },
+    {
+      "id": "M4",
+      "candidate_sha256": "a40872b5df71a062c106fde5fba74a63f88596bafa5caa4376e7924986cda348",
+      "vm": "stress-4g-pressure",
+      "precondition": "Fresh diagnostic ISO, 4 GiB RAM, 1.5 GiB resident nonswappable load",
+      "action": "Full GUI install, then disk-only boot/login/Firefox and shutdown",
+      "expected": "Real deferred route completes without OOM; installed Firefox matches",
+      "status": "pass",
+      "observed": "Review screen explicitly says build on new disk because downloads exceed available memory; saved install.json has prepared.deferred=true and cached_bytes=0; observed nix build --store local?root=<target> command.",
+      "evidence": [
+        "stress-4g-pressure/install.json",
+        "stress-4g-pressure/memory-summary.json",
+        "stress-4g-pressure/pressure-through-gui-summary.json",
+        "stress-4g-pressure/review-ready.png",
+        "stress-4g-pressure/installation-latest.png",
+        "stress-4g-pressure/disk-boot/ssh-diagnostics.log",
+        "stress-4g-pressure/disk-boot/firefox.png"
+      ],
+      "pr": "https://github.com/bitemyapp/sekka/pull/102"
+    }
+  ],
+  "evidence": {
+    "boot-stress-disk.py": {
+      "sha256": "ea38a1fdcbb34f301c97fa5a80c5fea52baa2b3a3cf992581cc030dc44ab9e8d",
+      "bytes": 1622
+    },
+    "launch-stress.py": {
+      "sha256": "710e94167ff48efc50ba7775d065fd8ece1cfdec7e4ad7ca27e86f3185c9060c",
+      "bytes": 2069
+    },
+    "memory-pressure.py": {
+      "sha256": "f8298da2203d3f79aded974380254584270f723ebf17f75b9b955a46519b7360",
+      "bytes": 522
+    },
+    "memory-sampler.sh": {
+      "sha256": "925f6c7a3125123469895e5fa2e10c8ff564d9d1f82d9353d2b68ba8569edebe",
+      "bytes": 1024
+    },
+    "memory-shutdown-evidence.json": {
+      "sha256": "0ce591485507377d18af25c5088db4190629f967c1e7312fbe90ec2874e4103b",
+      "bytes": 513
+    },
+    "start-memory-case.py": {
+      "sha256": "68881264987d1ccd6690c312b3fa8618f9a1d8895fc58a0dc8d45e2f04edbd26",
+      "bytes": 2390
+    },
+    "stress-2g-clean/clean-result.json": {
+      "sha256": "cc92dd283835f70e5033192a96876b72f2b3b719da2e8b705462531005c7aca3",
+      "bytes": 97
+    },
+    "stress-2g-clean/clean-times": {
+      "sha256": "2473577674a580f31a47de8d7deb435ba9877e38be201c06d801ea7a08449007",
+      "bytes": 72
+    },
+    "stress-2g-clean/clean.log": {
+      "sha256": "3fecf2e6dbeaf4078448e881bc467144f8d4d6f1321c92ed2ea4d6955ef89f3b",
+      "bytes": 23109
+    },
+    "stress-2g-clean/disk-after-interrupt.sha256": {
+      "sha256": "5b1640d56bdbb0ddcb60de0d8bc7ca522ad56b57bb454a3a56f68e0b4708ceda",
+      "bytes": 113
+    },
+    "stress-2g-clean/evaluation-memory-exhausted.png": {
+      "sha256": "3bdd8e19ed26b47625bfe9a7ea0fc0283b1dd4b790746ee4f236e58c4be551ba",
+      "bytes": 99193
+    },
+    "stress-2g-clean/kernel.log": {
+      "sha256": "a350d3da2bc3443a818a7dc873565f865bb687dbdc3d7ba82bce181bbd09b2ad",
+      "bytes": 76886
+    },
+    "stress-2g-clean/launch.json": {
+      "sha256": "65456d187f05e08dfa2b9b6774e69cd44cccaf624632ffc9fabb1f77043510fb",
+      "bytes": 2458
+    },
+    "stress-2g-clean/memory-sampler.sh": {
+      "sha256": "925f6c7a3125123469895e5fa2e10c8ff564d9d1f82d9353d2b68ba8569edebe",
+      "bytes": 1024
+    },
+    "stress-2g-clean/memory-summary.json": {
+      "sha256": "44e44c99fc07e58f4d87da6eb7ff2e9048db088be9cbd40b371facfeccc99f31",
+      "bytes": 510
+    },
+    "stress-2g-clean/memory.log": {
+      "sha256": "ba4455e712aa904990c66ead7fe22b718e1acc180a571165ac1eb6d82bf1484f",
+      "bytes": 123532
+    },
+    "stress-2g-public-control/clean-result.json": {
+      "sha256": "cc92dd283835f70e5033192a96876b72f2b3b719da2e8b705462531005c7aca3",
+      "bytes": 97
+    },
+    "stress-2g-public-control/clean-times": {
+      "sha256": "07783c47d35adbd0e223ade7986a0466edacc1b9c48d12bcaf45e0fa94789b2c",
+      "bytes": 72
+    },
+    "stress-2g-public-control/clean.log": {
+      "sha256": "db0dae64d67335dfa36ef23658f56b8cf36795a9d82f269eddf3492e66f81149",
+      "bytes": 2028
+    },
+    "stress-2g-public-control/disk-after-interrupt.sha256": {
+      "sha256": "49e690a2c67242cfd286893109fd3e4a2546e194bb5a30d2ea19b8def74bdc35",
+      "bytes": 122
+    },
+    "stress-2g-public-control/evaluation-memory-exhausted.png": {
+      "sha256": "b2f6e995aaaf6dfec962bc27772fb677f93509e2901a18ff2402158ce2b69b23",
+      "bytes": 99185
+    },
+    "stress-2g-public-control/kernel.log": {
+      "sha256": "133a306fec8ad642f45aef2c97c115c788fe129589935786f800f93d51cfb9cd",
+      "bytes": 95414
+    },
+    "stress-2g-public-control/launch.json": {
+      "sha256": "25ce2fc62498dafb8743e741ddcda73f3e62a2ba0d04b23d5de7403de8dc3da9",
+      "bytes": 2222
+    },
+    "stress-2g-public-control/memory-sampler.sh": {
+      "sha256": "925f6c7a3125123469895e5fa2e10c8ff564d9d1f82d9353d2b68ba8569edebe",
+      "bytes": 1024
+    },
+    "stress-2g-public-control/memory-summary.json": {
+      "sha256": "ab035c7548c654c96e94329fc957085bc0808f6690ab1387f33738540fa1f070",
+      "bytes": 512
+    },
+    "stress-2g-public-control/memory.log": {
+      "sha256": "8f73a1172b7ec7d5a402c238b65c44b1709b237b788692e3301a7d9bb28caee2",
+      "bytes": 20280
+    },
+    "stress-2g/corrupt-repeat-times": {
+      "sha256": "12cc3efaec3074b47b383ee484b4653c841ddef9cde80ca58e7ee167fd1e013e",
+      "bytes": 72
+    },
+    "stress-2g/corrupt-repeat.log": {
+      "sha256": "579458c5f46e765132a776902ae3c2296f63820020add0aa0f690f764e4bb8d1",
+      "bytes": 20608
+    },
+    "stress-2g/disk-after-refusal.sha256": {
+      "sha256": "1cc583adfaccc6dbbaef10f6b536af05aabff5198bf195343304186218d4c6d4",
+      "bytes": 107
+    },
+    "stress-2g/disk-before.sha256": {
+      "sha256": "1cc583adfaccc6dbbaef10f6b536af05aabff5198bf195343304186218d4c6d4",
+      "bytes": 107
+    },
+    "stress-2g/kernel.log": {
+      "sha256": "9769294910115221abdeda10b6bf06b32e23af7f46673d2e694c550b4ab13d2c",
+      "bytes": 59436
+    },
+    "stress-2g/launch.json": {
+      "sha256": "8ee94a8b60bedd5f857e2d044934b6704e04715dfe9fa57378e810612e7e8fab",
+      "bytes": 2428
+    },
+    "stress-2g/memory-sampler-first-failure.log": {
+      "sha256": "7fa7216178f27cba2026ee707938a15b00f07e93f707623a334d0f468ac5fd4c",
+      "bytes": 23635741
+    },
+    "stress-2g/memory-sampler.sh": {
+      "sha256": "93964aa37cc4e23b665ea72ef02280c7662c1892ab5e31373e2f056f4e8bed21",
+      "bytes": 685
+    },
+    "stress-2g/memory-summary.json": {
+      "sha256": "cf965d3add05cfc68ddcb6beeeb4b1fa44d3f82648aa0fa042cd08948763a2e4",
+      "bytes": 502
+    },
+    "stress-2g/memory.log": {
+      "sha256": "4a4a8adeb941705f5f6e9f5b16f1495fff663441757bdf3f198ff4985b46b849",
+      "bytes": 86224
+    },
+    "stress-4g-pressure/disk-boot/desktop.png": {
+      "sha256": "bdcf9b181f7682f331a1d677462f44584d64c96ced19ea206cb7f22d27587d67",
+      "bytes": 599718
+    },
+    "stress-4g-pressure/disk-boot/firefox.png": {
+      "sha256": "a298d549d75c34c746f95a7e906532734cfd592eaaf83de5258db4952c9c6335",
+      "bytes": 299334
+    },
+    "stress-4g-pressure/disk-boot/greeter.png": {
+      "sha256": "4b772891cb7b0eefeb884a363c6cfb12af97828cf1f6251bd65e1df94c132659",
+      "bytes": 666804
+    },
+    "stress-4g-pressure/disk-boot/input-actions.jsonl": {
+      "sha256": "7c26f7bcf4ada85fb2ed4e8fb10ef7fdb48b6374f80d496ee8f583ff7ba40da1",
+      "bytes": 673
+    },
+    "stress-4g-pressure/disk-boot/launch.json": {
+      "sha256": "18a4e8039098b35fd205f7d0146a0e55d22763e2b07f92ed526baea15e21444c",
+      "bytes": 2349
+    },
+    "stress-4g-pressure/disk-boot/shutdown-confirmation.png": {
+      "sha256": "1954ac2cd87af96359d946e5d22d0467e06dfca190cb89e91fe80724e5665944",
+      "bytes": 301698
+    },
+    "stress-4g-pressure/disk-boot/ssh-diagnostics.log": {
+      "sha256": "30bbdbe472dda635c2ce5c14402575b4810711911df86b1c004eaaca5b2b9865",
+      "bytes": 1426
+    },
+    "stress-4g-pressure/input-actions.jsonl": {
+      "sha256": "954f48194cc45c74ade2aed76d8be5fbeb8b4a919fdbf9424d82984ed945d97b",
+      "bytes": 2816
+    },
+    "stress-4g-pressure/install.json": {
+      "sha256": "ba3ac319555a3b5d01c6b77a65f8920817c89120ae9733286b24ddb80b47e884",
+      "bytes": 580
+    },
+    "stress-4g-pressure/installation-latest.png": {
+      "sha256": "0c0db246689b68519349203a09a83993dff3dc201fc230ec0f82dcb6d558047f",
+      "bytes": 147920
+    },
+    "stress-4g-pressure/kernel.log": {
+      "sha256": "0a0db6c1899b38dfaed936c564ffc2c51829990a878d7ed4139f6be070c7ccfa",
+      "bytes": 60293
+    },
+    "stress-4g-pressure/launch.json": {
+      "sha256": "11716898d09335723929a8e1b0153390ae1cfafed7a7531a0ad50caaf2f5797a",
+      "bytes": 2473
+    },
+    "stress-4g-pressure/memory-sampler.sh": {
+      "sha256": "925f6c7a3125123469895e5fa2e10c8ff564d9d1f82d9353d2b68ba8569edebe",
+      "bytes": 1024
+    },
+    "stress-4g-pressure/memory-summary.json": {
+      "sha256": "60ac3036578c1a5de847d0219982a90ec2c26de1b6c5fe3a802aac5f02427fbf",
+      "bytes": 696
+    },
+    "stress-4g-pressure/memory.log": {
+      "sha256": "f2a4d83499165765e320b028842b8a803d882bfc482e2de1399e11aa92783934",
+      "bytes": 481678
+    },
+    "stress-4g-pressure/pressure-ready.json": {
+      "sha256": "747e628c0f8c44a6b82f71ddd6811e29a8e29b20a224e288111268334db2bde0",
+      "bytes": 432
+    },
+    "stress-4g-pressure/pressure-through-gui-summary.json": {
+      "sha256": "427ef105a711154bbe0847c5e4051667beb5b389c5d1f7972eec8b9d518acc19",
+      "bytes": 298
+    },
+    "stress-4g-pressure/review-ready.png": {
+      "sha256": "eefec4a30568edcc815cc744188c1f61ebda9dfd9290c4b41519cd5de4c16b2d",
+      "bytes": 194814
+    },
+    "summarize-memory.py": {
+      "sha256": "266b83132409b9d6ed9d38ae663e157bf66b3cb03e783219b46aed9c20d1e822",
+      "bytes": 3173
+    }
+  }
+}

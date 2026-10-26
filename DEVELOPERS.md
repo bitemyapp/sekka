@@ -90,6 +90,73 @@ exercises discovery and revalidation on disposable 4Kn and 512e disks.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
+Genkan verifies the live store's contents before evaluating the installation,
+including paths needed by the low-memory, deferred-build route. After a normal
+build it verifies the complete prepared runtime closure again. Nix's validity
+records, successful builds and page-cache warming do not verify existing bytes:
+without this check, a readable but corrupt package passes preparation, and
+`nix copy` discovers its hash mismatch only after the target has been erased.
+All nonzero verification results (including read errors) stop preparation.
+Progress remains cancellable, and failures retain Nix's expected/actual hashes
+plus kernel warnings in a root-only `/run/sekka-integrity-*.log`.
+`--no-trust` skips signatures for locally built/ISO-registered paths; it does
+not disable content hashing. Never use `--no-contents` or rewrite the expected
+hash to make a damaged path pass.
+
+The public `iso` package also verifies the actual compressed store before
+packing it into the ISO. `nix/verified-iso.nix` extends the upstream builder's
+squashfs command; `nix/verify-squashfs.nix` extracts it into a disposable local
+store, compares its registration with the build's closure manifest and checks
+every registered NAR hash. This runs inside the image derivation, so building
+an ISO cannot skip it by omitting `flake check`. Allow temporary space for an
+additional unpacked store. The upstream raw `nixosConfigurations.installer`
+image is an implementation input; build and publish `.#iso`.
+
+```sh
+nix build .#genkan .#checks.x86_64-linux.genkan-store-integrity \
+  .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
+```
+
+The installer regression uses the packaged helper and Determinate Nix in a
+disposable VM. Its negative control shows an existing-path build and ordinary
+read accepting corrupt bytes, followed by a real Nix copy reporting a hash
+mismatch. The helper must reject confirmed installs with corrupt or missing
+paths, preserve the entire 40 GiB target byte-for-byte and save private,
+secret-free diagnostics. The image regression builds a small ISO through the
+same mandatory gate and rejects changed contents, executable bits, symlinks,
+missing directories/paths and altered registration. Neither check certifies
+a complete release image or physical hardware.
+
+The October 24 investigation of the October 22 download is recorded in
+`docs/test-results/installer-integrity-2026-10-24.json`. The public ISO and its
+Firefox passed verification; injecting corruption into that exact ISO's live
+store reproduced the post-format copy failure. This establishes the missing
+installer integrity boundary, not what damaged the reporting Mac's bytes.
+Checks cannot guarantee against RAM faults, media changes or I/O failures
+after verification. Keep Nix's copy-time checks enabled; deferred installations
+still obtain unavailable downloads after formatting and can encounter network
+or build failures at that point.
+
+Additional RAM stress evidence is recorded in
+`docs/test-results/installer-memory-2026-10-24.json`. With the same diagnostic
+image, a 4 GiB VM completed the normal GUI installation while a background
+process held 1.5 GiB of random data resident and could not swap. The installer
+selected the deferred route, built the 8.31 GiB system on disk, and subsequently
+booted, accepted a normal login and opened Firefox with its expected hash.
+Available RAM fell to 56 MiB and zram swap use reached 3.23 GiB without OOM kills.
+This demonstrates that the complete system need not fit in physical RAM; it
+does not establish a universal minimum memory requirement.
+
+The 2 GiB clean-install case failed during Nix evaluation on both the unmodified
+public ISO and the diagnostic image: live-store space ran out and the kernel
+OOM-killed desktop processes before any target writes. The evaluations were
+then interrupted; these are failed tests, not graceful automatic refusals.
+The separate corrupt-file case at 2 GiB did refuse installation before erasure
+and preserved the entire target. Deferring downloads does not eliminate the
+RAM and temporary live-store space needed to evaluate the configuration first.
+Do not describe the deferred route as immune to memory exhaustion or these
+focused VM results as physical-hardware or full-release qualification.
+
 The ISO embeds a prebuilt system and precache path list for every desktop
 offered by Genkan, including default Aizome; the cache's `installed-systems`
 uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
