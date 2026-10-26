@@ -10,24 +10,9 @@
 let
   system = "x86_64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
-  upstreamAizome = import ../desktop/aizome/nix { inherit nixpkgs sidestep; };
-  scheduledAizome = upstreamAizome.packages.${system}.aizome.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ./scheduling/aizome-launch-scope.patch ];
-  });
 in
 rec {
-  aizome = upstreamAizome // {
-    packages.${system} = upstreamAizome.packages.${system} // {
-      aizome = scheduledAizome;
-      default = scheduledAizome;
-    };
-    nixosModules = upstreamAizome.nixosModules // {
-      default = { lib, ... }: {
-        imports = [ upstreamAizome.nixosModules.default ];
-        programs.aizome.package = lib.mkDefault scheduledAizome;
-      };
-    };
-  };
+  aizome = import ../desktop/aizome/nix { inherit nixpkgs sidestep; };
   tatami = {
     outPath = ../desktop/tatami;
     nixosModules.default = ../desktop/tatami/module.nix;

@@ -1055,9 +1055,10 @@ mq-deadline for NVMe. Sekka also has its own ananicy rules: shells run at
 nice 0, compilers at nice 3, and interactive AI harnesses at nice −4 with
 normal CPU scheduling. A user service gives their child jobs separate systemd
 scopes sharing a low-weight slice; the harness itself stays interactive.
-`nix/scheduling/` also patches ananicy's thread/fork/exec handling and Aizome's
-keybinding/IPC launcher, which otherwise left terminal builds in the
-compositor's scheduling group. [docs/tuning.md](docs/tuning.md)
+`nix/scheduling/` also patches ananicy's thread/fork/exec handling, and
+Aizome's keybinding/IPC launcher starts programs in `app.slice` rather than
+leaving terminal builds in the compositor's scheduling group.
+[docs/tuning.md](docs/tuning.md)
 describes the policy, matching limits, patch maintenance and VM checks.
 
 ```sh

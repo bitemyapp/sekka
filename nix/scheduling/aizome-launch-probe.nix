@@ -1,4 +1,4 @@
-# Compile the actual patched spawn/which functions in a small driver. This
+# Compile Aizome's actual spawn/which functions in a small driver. This
 # exercises the launcher with a real user manager without booting a GPU.
 { pkgs, source }:
 pkgs.runCommand "aizome-launch-probe"
@@ -7,13 +7,10 @@ pkgs.runCommand "aizome-launch-probe"
       pkgs.rustc
       pkgs.stdenv.cc
       pkgs.python3
-      pkgs.patch
     ];
   }
   ''
     cp ${source}/crates/aizome-comp-core/src/session.rs session.rs
-    chmod u+w session.rs
-    patch session.rs < ${./aizome-launch-scope.patch}
     python3 - <<'PY'
     from pathlib import Path
     source = Path('session.rs').read_text()
