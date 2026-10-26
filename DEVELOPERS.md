@@ -158,8 +158,14 @@ Do not describe the deferred route as immune to memory exhaustion or these
 focused VM results as physical-hardware or full-release qualification.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
-offered by Genkan, including default Aizome; the cache's `installed-systems`
-uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
+offered by Genkan, including default Aizome, and one more prebuilt system with
+all of those desktops together. Choosing several desktops brings packages no
+single desktop has: `calamares-session-env`, and Aizome's patched IBus frontend
+when GNOME is also chosen. Without that system an installation compiled them:
+for one choosing Aizome and GNOME, Genkan expected to fetch 1434 MiB
+(unpacked), most of it rustc and cargo; with it, 16 MiB
+([record](docs/test-results/several-desktops-media.json)). The cache's
+`installed-systems` uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
 compares that evaluated list with the actual GUI's `Desktop::ALL` inventory
 and checks that each reference system and path list is included in the ISO
 configuration. This is a packaging check; qualification still boots and
@@ -772,8 +778,9 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
-installed system for each desktop the media offers (`respin.referenceDesktops`)
-and one with every free catalog application, so everything Sekka's modules
+installed system for each desktop the media offers (`respin.referenceDesktops`),
+one with all of those desktops together, and one with every free catalog
+application, so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
@@ -1250,7 +1257,8 @@ and only if each step succeeded:
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
 2. `scripts/check_cache_coverage.py .#installed-systems` follows, from each
-   desktop's installed system and the free catalog applications, everything
+   desktop's installed system, the one with every desktop and the free
+   catalog applications, everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place
