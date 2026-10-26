@@ -29,7 +29,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#network .#activity .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#bluetooth .#activity .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -65,6 +65,7 @@ cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/bluetooth/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/activity/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
@@ -741,6 +742,55 @@ The push needs two credentials, neither of which belongs in the repository:
 Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
+
+## Tatami Bluetooth
+
+`desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,
+packaged as `bluetooth` (`tatami-bluetooth`). The bar, menu and Super+Ctrl+B
+launch it through `tatami bluetooth`; its desktop entry also opens the same
+single application instance. Its session stylesheet imports `tatami-gtk`
+through `config/tatami-bluetooth/style-dark.css`, with the same XDG override
+rules as Displays and Network.
+
+The unprivileged window uses GIO's asynchronous D-Bus calls to BlueZ's
+[Adapter1](https://bluez.readthedocs.io/en/latest/adapter-api/),
+[Device1](https://bluez.readthedocs.io/en/latest/device-api/) and
+[Agent1](https://bluez.readthedocs.io/en/latest/agent-api/) APIs. Reads and
+ordinary property changes have five-second deadlines; pairing has two minutes
+and connecting has thirty seconds. A snapshot is read every three seconds,
+with reads serialized and stale action/session results discarded. Rows keep
+their widgets across status and battery updates. Each BlueZ session is pinned
+to its unique bus owner, which is also checked on incoming agent calls.
+The application's KeyboardDisplay agent handles only a pairing explicitly
+started here and never replaces the default agent. It rejects unanswered
+prompts and closes display-only prompts when pairing finishes. Discovery
+belongs to this connection; it never sets global Discoverable or Pairable.
+Closing cancels pairing, releases discovery and unregisters the agent. BlueZ's
+bus-owner changes clear old state and prepare a new session.
+
+Aizome's Bluetooth pane informed the grouped device lists, device settings
+and the pairing dialog lifecycle. No Aizome workspace or dependency is pulled
+into Tatami. The root flake uses this local crate with its own narrow source
+filter and lockfile.
+
+```sh
+nix build .#bluetooth .#tatami --no-update-lock-file
+```
+
+The Bluetooth package's checks run the real GTK controls and GIO marshalling
+under Xvfb against a simulated BlueZ service on a private `dbus-daemon`.
+They cover power and failed changes, multiple adapters, discovery ownership,
+connect/disconnect, battery updates, PIN and passkey entry, comparison and
+service authorization, display-only prompts, rejection and cancellation,
+spoofed agent calls, rename/trust/block, confirmed removal, adapter loss,
+service restarts and closing with a pending pairing.
+The integration test is ignored by an ordinary `cargo test` because it needs
+an isolated display and `dbus-daemon`; the package check explicitly includes it.
+`TATAMI_BLUETOOTH_TEST_CAPTURES=/absolute/directory` optionally saves original
+GTK captures with simulated devices for review, not hardware evidence.
+These are component checks, not ISO builds, VM installations or physical
+Bluetooth interoperability validation. Physical adapter/device pairing remains
+to be checked; the test fixture does not emulate a Bluetooth controller.
 
 ## Activity
 

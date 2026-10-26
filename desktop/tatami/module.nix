@@ -21,6 +21,7 @@ let
   # The Network window (network/): joining networks, VPNs, DNS and
   # addresses, from the network panel's Network settings…
   network = pkgs.callPackage ./network/package.nix { };
+  bluetooth = pkgs.callPackage ./bluetooth/package.nix { };
   # The Activity window (activity/): what each application uses of the
   # processor, memory, energy, graphics and storage (Super+Ctrl+T).
   activity = pkgs.callPackage ./activity/package.nix { };
@@ -497,6 +498,7 @@ in
       tool
       displays
       network
+      bluetooth
       activity
       wallpapers
       # The weather beside the clock.
@@ -524,7 +526,6 @@ in
       pkgs.playerctl
       pkgs.wireplumber
       pkgs.wiremix
-      pkgs.bluetui
       # A system monitor in the terminal, beside Activity. bottom's own
       # desktop entry and icon list it in the launcher, which opens it in
       # foot until it exits.

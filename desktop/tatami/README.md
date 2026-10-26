@@ -53,7 +53,7 @@ happens on topic branches merged into `main`; releases use version tags.
 | Notifications and OSD | Mako as v4's 380px accent-bordered cards; SwayOSD as v4's bottom card |
 | Lock and idle | hyprlock with PAM in v4's style; hypridle locks and turns off displays |
 | Authentication | hyprpolkitagent in Tokyo Night, centered with the screen dimmed around it |
-| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Audio is wiremix and Bluetooth is bluetui (it pairs devices that ask for a passkey), in the same place; a second click closes them |
+| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Bluetooth opens its settings window (below). Audio is wiremix, in the same place; a second click closes it |
 | Terminal and tools | foot with v4's configuration, the Activity window (below, Super+Ctrl+T) and bottom in the terminal, fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
@@ -133,8 +133,8 @@ Not ported from Omarchy:
   reminders, dictation and AI agents.
 - Setup's Plugins, Security, Defaults, Direct Boot and Reset entries, and the
   Install, Remove, Update and Style menus.
-- The shell's own panels: the calendar is Waybar's, audio and Bluetooth are
-  the wiremix and bluetui terminal programs, and there is no notification
+- The shell's own panels: the calendar is Waybar's and audio uses
+  the wiremix terminal program, and there is no notification
   history panel or network statistics.
 
 ## Known issues
@@ -277,6 +277,26 @@ which Sekka does not install; a VPN set up elsewhere still shows, with its
 switch. Proxies, bridges, bonds, VLANs and mobile broadband are left to
 `nmcli` and `nmtui`.
 
+## Bluetooth
+
+Bluetooth in the bar, Setup › Bluetooth, and Super+Ctrl+B open a settings
+window in the same style as Displays and Network. Turn Bluetooth on or off,
+choose an adapter, reconnect a paired device, or pair something nearby.
+Connected devices show their battery level when they report one. Device
+settings let you give a device a local name, allow automatic connections,
+block it, or forget it after confirmation.
+
+Pairing asks you to compare codes, enter a PIN or six-digit passkey, or type
+a displayed code on the device. You can cancel while it is working. A device
+that pairs successfully stays saved even if it cannot connect right away.
+
+Opening the window looks for devices without turning the radio on or making
+the computer discoverable. Closing it stops its search. Start pairing from
+this window; pairing initiated by another device is left to the desktop's
+existing agent. File transfers, Bluetooth tethering and audio profile selection
+are not offered here. If a wireless switch or airplane mode blocks Bluetooth,
+clear that block before turning it on. Battery levels depend on the device.
+
 ## Activity
 
 The Activity window (`activity/`, `tatami-activity`, GTK 4 and libadwaita)
@@ -356,7 +376,7 @@ Tatami's own picker. Other desktops' modules can install it to offer them.
 
 `nix flake check` builds the helper and the Displays, Network and Activity
 windows (with their tests) and evaluates an example system with the module.
-They are Cargo crates in `tool/`, `displays/`, `network/` and `activity/`;
+They are Cargo crates in `tool/`, `displays/`, `network/`, `bluetooth/` and `activity/`;
 `nix develop` has
 Cargo and the libraries they build with, and `cargo test` in any of them
 runs its tests on Linux.

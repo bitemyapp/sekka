@@ -194,6 +194,7 @@
           tatami
           displays
           network
+          bluetooth
           activity
           wallpapers
           ;
@@ -525,6 +526,7 @@
             '';
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
+        bluetooth = self.packages.${system}.bluetooth;
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
@@ -624,6 +626,7 @@
                 ${./apps/kakehashi/linux/computer.sekka.Kakehashi.desktop} \
                 ${./desktop/tatami/activity/data/org.tatami.Activity.desktop} \
                 ${./desktop/tatami/network/data/org.tatami.Network.desktop} \
+                ${./desktop/tatami/bluetooth/data/org.tatami.Bluetooth.desktop} \
                 ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
               touch $out
             '';

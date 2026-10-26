@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth
+GenericName=Bluetooth Settings
+Comment=Pair headphones, keyboards and other Bluetooth devices
+Exec=tatami-bluetooth
+Icon=bluetooth
+Categories=Settings;HardwareSettings;
+Keywords=bluetooth;wireless;pair;pairing;headphones;headset;speaker;keyboard;mouse;controller;
+StartupNotify=true
