@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, aizomeSource }:
 let
   bash = "${pkgs.bash}/bin/bash";
   sleep = "${pkgs.coreutils}/bin/sleep";
@@ -25,6 +25,34 @@ let
     wait
   '';
   nvme = pkgs.runCommand "nvme.img" { } "${pkgs.coreutils}/bin/truncate -s 64M $out";
+  probe = pkgs.runCommand "scheduling-probe" { nativeBuildInputs = [ pkgs.stdenv.cc ]; } ''
+    mkdir -p $out/bin
+    cc -Wall -Wextra -Werror -pthread ${../tests/scheduling-probe.c} -o $out/bin/probe
+    for name in chrome nix codex node; do cp $out/bin/probe $out/bin/$name; done
+  '';
+  background = import ./scheduling/background.nix { inherit pkgs; };
+  launch = import ./scheduling/aizome-launch-probe.nix {
+    inherit pkgs;
+    source = aizomeSource;
+  };
+  launchChild = pkgs.writeShellScript "aizome-launch-child" ''
+    set -eu
+    test "$PWD" = /tmp
+    test "$AIZOME_LAUNCH_TEST" = preserved
+    test "$1" = 'literal $value'
+    exec ${probe}/bin/probe
+  '';
+  argvProbe = pkgs.writeShellScript "scheduling-argv" ''
+    set -eu
+    test "$PWD" = /tmp
+    test "$SCHED_MARKER" = preserved
+    test "$1" = 'literal $value'
+    exit 37
+  '';
+  nestedJob = pkgs.writeShellScript "nested-harness" ''
+    ${sleep} 3
+    exec ${probe}/bin/codex jobs ${probe}/bin/probe
+  '';
 in
 pkgs.testers.runNixOSTest {
   name = "sekka-tuning";
@@ -38,12 +66,20 @@ pkgs.testers.runNixOSTest {
       # The test driver reads the kernel log; tuning lowers it to 3.
       boot.consoleLogLevel = lib.mkForce 7;
       virtualisation.memorySize = 1024;
+      users.users.demo = {
+        isNormalUser = true;
+        uid = 1000;
+        linger = true;
+      };
+      environment.systemPackages = [ pkgs.python3 ];
       virtualisation.qemu.options = [
         "-drive file=${nvme},if=none,id=nvme,format=raw,snapshot=on"
         "-device nvme,serial=sekka,drive=nvme"
       ];
     };
   testScript = ''
+    import shlex
+
     machine.wait_for_unit("ananicy-cpp.service")
 
     # Ubuntu's lowlatency-kernel boot options take effect.
@@ -87,5 +123,115 @@ pkgs.testers.runNixOSTest {
     wait_nice(build, 3)
     assert "SCHED_IDLE" in machine.succeed(f"chrt -p {build}")
     assert machine.succeed(f"ionice -p {build}").strip() == "idle"
+
+    def user(command):
+        return "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 " + \
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus sh -c " + shlex.quote(command)
+
+    def all_threads(pid, policy=None, nice=None, io=None):
+        code = f"""
+    import os, pathlib, subprocess
+    tasks = list(pathlib.Path('/proc/{pid}/task').iterdir())
+    assert len(tasks) >= 5, tasks
+    for task in tasks:
+        tid = int(task.name)
+        if {policy!r} is not None:
+            assert os.sched_getscheduler(tid) == {policy!r}, (tid, os.sched_getscheduler(tid))
+        if {nice!r} is not None:
+            assert os.getpriority(os.PRIO_PROCESS, tid) == {nice!r}, (tid, os.getpriority(os.PRIO_PROCESS, tid))
+        if {io!r} is not None:
+            assert subprocess.check_output(['ionice', '-p', str(tid)], text=True).strip() == {io!r}
+    """
+        machine.wait_until_succeeds("python3 -c " + shlex.quote(code), timeout=30)
+
+    with subtest("existing Nix workers all receive idle CPU and I/O policy"):
+        machine.succeed("systemctl stop ananicy-cpp")
+        machine.succeed("systemd-run --unit=nix-probe ${probe}/bin/nix")
+        nix = machine.succeed("systemctl show -P MainPID nix-probe").strip()
+        all_threads(nix, policy=0)
+        machine.succeed("systemd-run --unit=chrome-probe ${probe}/bin/chrome retitle")
+        chrome = machine.succeed("systemctl show -P MainPID chrome-probe").strip()
+        all_threads(chrome, nice=0)
+        # Negative control: the original daemon changes the main thread,
+        # while workers created before it started retain normal policy.
+        machine.succeed("systemd-run --unit=unpatched-ananicy ${pkgs.ananicy-cpp}/bin/ananicy-cpp start")
+        machine.wait_until_succeeds(f"chrt -p {nix} | grep SCHED_IDLE")
+        control = f"import os,pathlib; p='{nix}'; assert any(os.sched_getscheduler(int(t.name)) == 0 for t in pathlib.Path('/proc/'+p+'/task').iterdir())"
+        machine.succeed("python3 -c " + shlex.quote(control))
+        machine.succeed("systemctl stop unpatched-ananicy")
+        machine.succeed("systemctl start ananicy-cpp")
+        all_threads(nix, policy=5, io="idle")
+        all_threads(chrome, nice=-4)
+
+    with subtest("late Nix threads are classified too"):
+        machine.succeed(f"kill -USR2 {nix}")
+        machine.wait_until_succeeds(f"test $(ls /proc/{nix}/task | wc -l) -eq 6")
+        all_threads(nix, policy=5, io="idle")
+
+    with subtest("a retitled Chrome child is classified without exec"):
+        machine.succeed(f"kill -USR1 {chrome}")
+        child = started(".", chrome)
+        wait_nice(child, -4)
+
+    with subtest("a shell wrapper's second exec gets its browser rule"):
+        machine.succeed("systemd-run --unit=chrome-wrapper ${bash} -c 'exec ${probe}/bin/chrome'")
+        wrapped = machine.succeed("systemctl show -P MainPID chrome-wrapper").strip()
+        all_threads(wrapped, nice=-4)
+
+    with subtest("interpreted harnesses override the generic Node idle rule"):
+        machine.succeed("systemd-run --unit=node-harness ${probe}/bin/node /tmp/node_modules/@google/gemini-cli/cli.js")
+        node = machine.succeed("systemctl show -P MainPID node-harness").strip()
+        all_threads(node, policy=0, nice=-4)
+
+    with subtest("harnesses stay interactive while their jobs enter a low-weight slice"):
+        machine.wait_for_unit("user@1000.service")
+        machine.succeed(user("systemd-run --user --unit=agent-parent --slice=app.slice ${probe}/bin/codex jobs ${probe}/bin/probe"))
+        agent_pid = started("${probe}/bin/codex")
+        wait_nice(agent_pid, -4)
+        group = machine.succeed(f"cat /proc/{agent_pid}/cgroup").strip()
+        assert "/app.slice/agent-parent.service" in group, group
+        assert machine.succeed(user("systemctl --user show -P CPUWeight app-background.slice")).strip() == "20"
+        machine.succeed(f"kill -USR1 {agent_pid}")
+        child = started(".", agent_pid)
+        machine.wait_until_succeeds(f"grep -q '/app.slice/app-background.slice/app-sekka-work-' /proc/{child}/cgroup")
+        assert machine.succeed(f"cat /proc/{agent_pid}/cgroup").strip() == group
+        wait_nice(agent_pid, -4)
+        # Even a shell reset to nice 0 cannot escape its ancestor's CPU weight.
+        command = "${background}/bin/sekka-background ${background}/bin/sekka-background " + \
+            "${argvProbe} 'literal $value'"
+        status, output = machine.execute(user("cd /tmp; export SCHED_MARKER=preserved; " + command))
+        assert status == 37, (status, output)
+        # The job scope follows explicit stops of the original launcher.
+        machine.succeed(user("systemctl --user stop agent-parent"))
+        machine.wait_until_fails(f"kill -0 {child}")
+
+    with subtest("a nested harness regains interactive priority from a background job"):
+        machine.succeed(user("systemd-run --user --unit=nested-parent --slice=app.slice ${probe}/bin/codex jobs ${nestedJob}"))
+        parent = machine.succeed(user("systemctl --user show -P MainPID nested-parent")).strip()
+        machine.succeed(f"kill -USR1 {parent}")
+        nested = started(".", parent)
+        machine.wait_until_succeeds(f"grep -q '/app-background.slice/' /proc/{nested}/cgroup")
+        machine.wait_until_succeeds(f"grep -q '/app.slice/app-sekka-agent-' /proc/{nested}/cgroup")
+        wait_nice(nested, -4)
+        machine.succeed(f"kill -USR1 {nested}")
+        child = started(".", nested)
+        machine.wait_until_succeeds(f"grep -q '/app-background.slice/' /proc/{child}/cgroup")
+
+    with subtest("Nix daemon policy is established before workers start"):
+        assert machine.succeed("systemctl show -P CPUSchedulingPolicy nix-daemon").strip() == "5"
+        assert machine.succeed("systemctl show -P CPUWeight nix-daemon").strip() == "20"
+
+    with subtest("Aizome keybinding and IPC launches leave the compositor service"):
+        machine.succeed(user("systemd-run --user --unit=compositor-probe --slice=session.slice " +
+            "-p CPUWeight=1000 ${launch}/bin/aizome-launch-probe ${launchChild} 'literal $value'"))
+        machine.wait_until_succeeds("test -s /tmp/aizome-launched-pid")
+        pid = machine.succeed("cat /tmp/aizome-launched-pid").strip()
+        machine.wait_until_succeeds(f"grep -q '/app.slice/' /proc/{pid}/cgroup")
+        machine.wait_until_succeeds(f"test $(readlink /proc/{pid}/exe) = ${probe}/bin/probe")
+        group = machine.succeed(f"cat /proc/{pid}/cgroup")
+        assert "/session.slice/" not in group, group
+        scope = group.strip().split("/")[-1]
+        assert scope.endswith(".scope"), group
+        assert machine.succeed(user(f"systemctl --user show -P CPUWeight {scope}")).strip() in ("100", "[not set]")
   '';
 }

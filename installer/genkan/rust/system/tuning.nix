@@ -108,7 +108,7 @@ in
       hardware.block.scheduler."nvme[0-9]*" = "mq-deadline";
       services.ananicy = {
         enable = true;
-        package = pkgs.ananicy-cpp;
+        package = import ../../../../nix/scheduling/ananicy.nix { inherit pkgs; };
         rulesProvider = rules;
         # Adjust priorities only; never move processes between cgroups. A
         # process outside its systemd unit escapes logind and polkit session
@@ -128,10 +128,8 @@ in
         # derives from nice at its default level. A rule without "sched" or
         # "ioclass" leaves both alone, so Nix builds keep the idle class
         # nix-daemon's rule gives them. Programs with generic names (Go's
-        # "compile") are left out. ananicy names a process after its argv[0]
-        # when it sees the exec and ignores a second exec right after, so a
-        # linker behind a NixOS wrapper script is taken for bash and keeps its
-        # inherited priority; linkers started directly (rust-lld) are matched.
+        # "compile") are left out. The packaged daemon handles wrapper execs,
+        # fork-only children and all threads (nix/scheduling).
         extraTypes = [
           {
             type = "Sekka_Build";
@@ -168,8 +166,59 @@ in
           ++ map (name: {
             inherit name;
             nice = 0;
-          }) shells;
+          }) shells
+          # Harnesses stay interactive, like Foot and Chrome. Only their child
+          # workloads enter the background slice, through the user service.
+          ++
+            map
+              (name: {
+                inherit name;
+                nice = -4;
+                sched = "normal";
+              })
+              [
+                "codex"
+                "claude"
+                "claude-code"
+                "gemini"
+                "omp"
+              ]
+          ++ [
+            {
+              name = "determinate-nixd";
+              type = "BG_CPUIO";
+            }
+          ];
       };
+      # One shared budget for all job scopes, compared with each ordinary
+      # app's weight 100. A shell/compiler rule cannot undo this group weight.
+      systemd.user.slices.app-background.sliceConfig = {
+        CPUWeight = lib.mkDefault 20;
+        IOWeight = lib.mkDefault 20;
+      };
+      environment.etc."sekka/background-scheduling".text = "enabled\n";
+      environment.systemPackages = [
+        (import ../../../../nix/scheduling/background.nix { inherit pkgs; })
+      ];
+      systemd.user.services.sekka-agent-workloads = {
+        description = "Separate interactive AI harnesses from their background jobs";
+        wantedBy = [ "default.target" ];
+        serviceConfig = {
+          ExecStart = "${pkgs.python3}/bin/python3 ${../../../../nix/scheduling/agent-workloads.py} ${pkgs.systemd}/bin/busctl";
+          Restart = "on-failure";
+          RestartSec = 2;
+          Slice = "background.slice";
+          NoNewPrivileges = true;
+        };
+      };
+      # Builders are children of the daemon, not of the agent's CLI scope.
+      # Set policy before any worker threads are created, for both Nix daemons.
+      systemd.services.nix-daemon.serviceConfig = {
+        CPUWeight = lib.mkDefault 20;
+        IOWeight = lib.mkDefault 20;
+      };
+      nix.daemonCPUSchedPolicy = lib.mkDefault "idle";
+      nix.daemonIOSchedClass = lib.mkDefault "idle";
       # Kill the largest offender under sustained memory pressure instead of
       # letting the desktop thrash.
       systemd.oomd = {
