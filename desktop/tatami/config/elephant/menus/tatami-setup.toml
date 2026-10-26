@@ -22,10 +22,10 @@ state = ["submenu"]
 keywords = ["wifi", "wi-fi", "wireless", "dns"]
 
 [[entries]]
-text = "Audio"
+text = "Sound"
 icon = "\U000F04C3"
 value = "tatami audio"
-keywords = ["sound", "volume", "speakers"]
+keywords = ["audio", "volume", "speakers", "headphones", "microphone", "mixer"]
 
 [[entries]]
 text = "Bluetooth"

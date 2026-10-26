@@ -53,7 +53,7 @@ happens on topic branches merged into `main`; releases use version tags.
 | Notifications and OSD | Mako as v4's 380px accent-bordered cards; SwayOSD as v4's bottom card |
 | Lock and idle | hyprlock with PAM in v4's style; hypridle locks and turns off displays |
 | Authentication | hyprpolkitagent in Tokyo Night, centered with the screen dimmed around it |
-| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Bluetooth opens its settings window (below). Audio is wiremix, in the same place; a second click closes it |
+| Panels | The bar's icons drop panels from the top right, under the bar, as v4's do. Network: the wired connection, Wi-Fi networks by signal with a password prompt for new ones, the Wi-Fi switch, the DNS provider (DHCP, Cloudflare, Google or custom servers) and Network settings…, the Network window (below), for VPNs, enterprise and hidden networks and each connection's settings. It opens at once with the networks NetworkManager has already seen, and asks for a fresh scan for its next opening. Power profile. The display icon opens the Displays window (below). Bluetooth opens its settings window and audio the Sound window (both below) |
 | Terminal and tools | foot with v4's configuration, the Activity window (below, Super+Ctrl+T) and bottom in the terminal, fastfetch, Nautilus, imv, mpv |
 | GTK applications | Dark Adwaita with Yaru icons, from a dconf profile selected only in this session |
 
@@ -133,8 +133,7 @@ Not ported from Omarchy:
   reminders, dictation and AI agents.
 - Setup's Plugins, Security, Defaults, Direct Boot and Reset entries, and the
   Install, Remove, Update and Style menus.
-- The shell's own panels: the calendar is Waybar's and audio uses
-  the wiremix terminal program, and there is no notification
+- The shell's own panels: the calendar is Waybar's, and there is no notification
   history panel or network statistics.
 
 ## Known issues
@@ -293,9 +292,47 @@ that pairs successfully stays saved even if it cannot connect right away.
 Opening the window looks for devices without turning the radio on or making
 the computer discoverable. Closing it stops its search. Start pairing from
 this window; pairing initiated by another device is left to the desktop's
-existing agent. File transfers, Bluetooth tethering and audio profile selection
-are not offered here. If a wireless switch or airplane mode blocks Bluetooth,
-clear that block before turning it on. Battery levels depend on the device.
+existing agent. File transfers and Bluetooth tethering are not offered here;
+a headset's audio profiles are in Sound. If a wireless switch or airplane
+mode blocks Bluetooth, clear that block before turning it on. Battery levels
+depend on the device.
+
+## Sound
+
+Open Sound from the bar's speaker icon, **Super+Ctrl+A**, **Setup › Sound**,
+or the launcher. It is one page, laid out as Aizome's Sound settings, in the
+same Tokyo Night appearance as Displays, Network and Bluetooth:
+
+- **Output:** your speakers, headphones and displays, each saying how it is
+  connected (built-in, USB, HDMI or Bluetooth) and whether it is playing or
+  unplugged. Choose one to make it the default. Under the list are its
+  volume and mute, its left–right balance, and its port when it has
+  several.
+- **Input:** your microphones, chosen the same way, with the chosen one's
+  volume, mute, balance and port, and a level meter that moves as you
+  speak. A microphone an application is recording from says so.
+  Speaker-monitor sources are kept out of the list.
+- **Applications:** each application playing or recording, with its own
+  volume, mute and device. Applications appear while they have an audio
+  stream open, including paused ones. An application that keeps its own
+  device can't be moved from here.
+- **Device profiles:** each sound card that offers a choice, such as a
+  Bluetooth headset's headset mode for calls or its high-quality playback,
+  a graphics card's HDMI outputs, or Off.
+
+Changes apply immediately. The default device is used for new streams;
+use Applications to move an existing stream. An application moved to the
+default device follows the default from then on. Changes made elsewhere, such
+as with the volume keys, and devices connected or removed appear as they
+happen. If the audio service restarts, Sound reconnects; a failed change
+shows its error and the current setting. Opening Sound again brings the
+existing window forward, and Escape closes it.
+
+While Sound is open it reads the chosen microphone's level for the meter;
+nothing is recorded or kept. Volume controls stop at 100% unless a device
+or application is already louder, when they reach 150%. There is no speaker
+test or alert-sound customization yet. Bluetooth pairing remains in
+Bluetooth; Sound shows connected devices and the profiles they offer.
 
 ## Activity
 
@@ -374,10 +411,10 @@ Tatami's own picker. Other desktops' modules can install it to offer them.
 
 ## Development
 
-`nix flake check` builds the helper and the Displays, Network and Activity
-windows (with their tests) and evaluates an example system with the module.
-They are Cargo crates in `tool/`, `displays/`, `network/`, `bluetooth/` and `activity/`;
-`nix develop` has
+`nix flake check` builds the helper and the Displays, Network, Bluetooth, Sound
+and Activity windows (with their tests) and evaluates an example system with
+the module. They are Cargo crates in `tool/`, `displays/`, `network/`,
+`bluetooth/`, `sound/` and `activity/`; `nix develop` has
 Cargo and the libraries they build with, and `cargo test` in any of them
 runs its tests on Linux.
 

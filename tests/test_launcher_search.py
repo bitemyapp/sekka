@@ -169,6 +169,7 @@ class Patched(Search):
                            ('task manager', 'Activity'), ('htop', 'Activity'),
                            ('wifi', 'Network'), ('internet', 'Network'),
                            ('pairing', 'Bluetooth'), ('headphones', 'Bluetooth'),
+                           ('microphone', 'Sound'), ('mixer', 'Sound'),
                            ('resolution', 'Displays'), ('hidpi', 'Displays')):
             with self.subTest(text=text):
                 self.assertEqual(self.first(text)[0], name)
@@ -182,6 +183,7 @@ class Patched(Search):
                           ('task manager', ('Activity', 'System Monitor')),
                           ('wifi', ('Network', 'Network Settings')),
                           ('bluetooth settings', ('Bluetooth', 'Bluetooth Settings')),
+                          ('sound settings', ('Sound', 'Sound Settings')),
                           ('display settings', ('Displays', 'Display Settings'))):
             with self.subTest(text=text):
                 self.assertEqual(self.first(text), row)

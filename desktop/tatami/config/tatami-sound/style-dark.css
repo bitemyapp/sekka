@@ -1,0 +1,43 @@
+/* The Sound window (tatami-sound) in Tatami's look: the windows' shared
+ * colors, font and corners, then its devices' and applications' tiles as
+ * the menu's, and the input level in Tatami's state colors. */
+
+@import url("../tatami-gtk/style-dark.css");
+
+/* Square tiles: slate, the chosen device's in the accent, an application's
+ * in purple while it plays. */
+.tile {
+  border-radius: 0;
+  background-color: #414868;
+  color: #c0caf5;
+}
+
+.tile.current {
+  background-color: #7aa2f7;
+  color: #1a1b26;
+}
+
+.tile.playing {
+  background-color: #bb9af7;
+  color: #1a1b26;
+}
+
+levelbar.input-level block {
+  border-radius: 0;
+}
+
+levelbar.input-level block.empty {
+  background-color: rgb(169 177 214 / 8%);
+}
+
+levelbar.input-level block.filled {
+  background-color: #9ece6a;
+}
+
+levelbar.input-level block.filled:nth-child(n+19) {
+  background-color: #e0af68;
+}
+
+levelbar.input-level block.filled:nth-child(n+23) {
+  background-color: #f7768e;
+}
