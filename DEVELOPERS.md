@@ -158,8 +158,14 @@ Do not describe the deferred route as immune to memory exhaustion or these
 focused VM results as physical-hardware or full-release qualification.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
-offered by Genkan, including default Aizome; the cache's `installed-systems`
-uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
+offered by Genkan, including default Aizome, and one more prebuilt system with
+all of those desktops together. Choosing several desktops brings packages no
+single desktop has: `calamares-session-env`, and Aizome's patched IBus frontend
+when GNOME is also chosen. Without that system an installation compiled them:
+for one choosing Aizome and GNOME, Genkan expected to fetch 1434 MiB
+(unpacked), most of it rustc and cargo; with it, 16 MiB
+([record](docs/test-results/several-desktops-media.json)). The cache's
+`installed-systems` uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
 compares that evaluated list with the actual GUI's `Desktop::ALL` inventory
 and checks that each reference system and path list is included in the ISO
 configuration. This is a packaging check; qualification still boots and
@@ -772,8 +778,9 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
-installed system for each desktop the media offers (`respin.referenceDesktops`)
-and one with every free catalog application, so everything Sekka's modules
+installed system for each desktop the media offers (`respin.referenceDesktops`),
+one with all of those desktops together, and one with every free catalog
+application, so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
@@ -1250,6 +1257,77 @@ opening without asking, no question left up, and an encrypted root left clean.
 The harness supplies the bootloader and Nix store, so this isn't a full
 installation.
 
+## Programs built for other distributions
+
+Installed systems enable nix-ld (`programs.nix-ld.enable`, with
+`lib.mkDefault`, in `installer/genkan/rust/system/prebuilt-binaries.nix`), so
+programs built for other Linux distributions start. Without it, NixOS puts a
+stub at `/lib64/ld-linux-x86-64.so.2` that prints an error and exits 127.
+Editors and version managers download such programs routinely. Zed fetches
+rust-analyzer, CodeLLDB, package-version-server and its AI agents, and Node.js
+when there is no suitable one on PATH. VS Code's extensions bring their own
+programs, and mise installs whole runtimes. This is a property of the platform,
+so Sekka handles it once rather than in each editor. A per-editor fix, such as
+putting Nixpkgs' rust-analyzer on PATH for Zed, covers one server in one
+editor. Nixpkgs' FHS variants (`zed-editor.fhs`, `vscode.fhs`) run the editor
+in a bubblewrap sandbox. nix-ld's README notes that setuid programs and other
+sandboxes, `nix build` among them, don't work inside one.
+
+nix-ld (Nixpkgs' 2.0.6) starts the program with the Nix store's glibc and the
+libraries linked in `/run/current-system/sw/share/nix-ld/lib`. NixOS sets
+`NIX_LD` and `NIX_LD_LIBRARY_PATH` for sessions. When they are unset, nix-ld
+falls back to the same paths. They are unset for Zed's downloads: Zed starts
+those with its own environment (`env: None` in `crates/languages/src/rust.rs`),
+and Zed started from a launcher has no login shell's environment. nix-ld passes
+the libraries to the loader as `LD_LIBRARY_PATH`. On x86_64 it then restores
+the environment the program was given before the program's entry point runs,
+so the programs it starts, such as rust-analyzer's cargo and rustc, don't
+inherit them.
+
+The libraries are Nixpkgs' default set for the module: glibc, libstdc++ and
+libgcc_s, zlib, zstd, xz, bzip2, OpenSSL, curl, libssh, libsodium, libxml2,
+acl, attr, and util-linux's and systemd's libraries. Sekka adds none. `readelf -d`
+on rust-analyzer 2026-10-19, CodeLLDB 1.12.3, codex-acp 0.16.0,
+package-version-server 0.0.10 and Node.js 24.22.1 shows that they need nothing
+beyond glibc, libgcc_s, libstdc++, zlib, OpenSSL 3 and the libraries CodeLLDB
+ships beside itself. The set is kept small on purpose. The loader searches
+`LD_LIBRARY_PATH` before a binary's `RUNPATH`, so a library in the set replaces
+one with the same name that a program ships beside itself. A system that needs
+more adds them to `programs.nix-ld.libraries`. `programs.nix-ld.enable = false`
+brings back the stub. Main's Plasma reference system already contains every
+library in the set. The change adds only nix-ld itself (75 KB, with no
+references) and a directory of links.
+
+Not covered:
+
+- 32-bit programs (`/lib/ld-linux.so.2`).
+- Scripts whose first line names `/bin/bash` or another path NixOS doesn't
+  have. `/bin/sh` and `/usr/bin/env` exist, and envfs would add the rest.
+- Native Python or Node.js modules loaded by Nixpkgs' interpreters, which
+  don't go through nix-ld.
+- Graphical programs that need libraries outside the set.
+
+The live session keeps the stub.
+
+```sh
+nix build .#checks.x86_64-linux.prebuilt-binaries --no-update-lock-file
+```
+
+The VM check puts the GitHub and nodejs.org builds of rust-analyzer, Node.js,
+package-version-server and CodeLLDB where Zed puts them, in
+`~/.local/share/zed`. It starts them as an account with an empty environment,
+as Zed does, and from a login shell. It checks that:
+
+- every library each one asks for is found, the ones above in nix-ld's set;
+- Zed's `--version` check of rust-analyzer passes;
+- rust-analyzer loads a Cargo project and the standard library, running
+  Nixpkgs' cargo and rustc;
+- the processes Node.js starts don't see nix-ld's libraries.
+
+With nix-ld disabled, the check fails at the first binary with the stub's
+message. It does not start Zed itself, and codex-acp was checked only with
+`readelf`.
+
 ## Joining Wi-Fi networks
 
 Installed systems and the live session join Wi-Fi through NetworkManager and
@@ -1361,7 +1439,8 @@ and only if each step succeeded:
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
 2. `scripts/check_cache_coverage.py .#installed-systems` follows, from each
-   desktop's installed system and the free catalog applications, everything
+   desktop's installed system, the one with every desktop and the free
+   catalog applications, everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place

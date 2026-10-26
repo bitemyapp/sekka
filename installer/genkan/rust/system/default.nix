@@ -14,6 +14,7 @@
     ./desktops.nix
     ./input-method.nix
     ./nvidia.nix
+    ./prebuilt-binaries.nix
     ./store-space.nix
     ./tuning.nix
     ./usb-wake.nix

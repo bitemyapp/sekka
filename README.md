@@ -36,6 +36,8 @@ The optional GitHub step can import your public SSH keys and set your Git identi
 
 Choose **fish** among the applications, here or later in Yukimi, and your terminals open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work.
 
+Programs built for other Linux distributions start as they would there. Editors and tools that download their own programs work without extra setup: Zed's language servers, debugger and AI agents, for example. These downloaded programs find the common libraries: the C and C++ runtimes, zlib, OpenSSL, curl, systemd and a few more. One that needs others, such as most graphical programs, still won't start, and neither will a script that asks for `/bin/bash`.
+
 ### Aizome: Sekka's own desktop
 
 Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
