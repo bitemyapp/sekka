@@ -65,6 +65,7 @@ The mark is a *yukiwa* 雪輪, the snow ring of Japanese family crests: six circ
 ## Motion
 
 - Tatami has no decorative motion. Yukimi's falling snow is the one ambient animation, and it pauses when the window is in the background. Keep it that way, and honour reduced-motion settings.
+- The boot splash (`installer/genkan/rust/system/boot-splash/`) is the stacked lockup with a 2px `accent` rail under it. The rail only fills as the computer starts; nothing else on the splash moves.
 
 ## Files
 

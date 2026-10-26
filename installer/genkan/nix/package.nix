@@ -31,6 +31,7 @@ pkgs.rustPlatform.buildRustPackage {
     pkgs.lib.makeBinPath [
       pkgs.util-linux
       pkgs.parted
+      pkgs.cryptsetup
       pkgs.e2fsprogs
       pkgs.btrfs-progs
       pkgs.xfsprogs

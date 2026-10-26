@@ -213,6 +213,12 @@ fn request() -> Result<RawRequest> {
         disk: disk::vm_test_disk()?,
         firmware: Firmware::current(),
         filesystem: selected_filesystem()?,
+        encrypt: std::env::var("CALAMARES_TEST_ENCRYPT").as_deref() == Ok("1"),
+        encryption_password: if std::env::var("CALAMARES_TEST_ENCRYPT").as_deref() == Ok("1") {
+            PASSWORD.into()
+        } else {
+            String::new()
+        },
         hostname: "rust-test".into(),
         username: "rusttest".into(),
         full_name: "Rust ${literal} Test".into(),
@@ -340,7 +346,7 @@ fn main() -> Result<()> {
     }
     if matches!(
         operation.as_deref(),
-        Some("desktop-configurations" | "application-configurations")
+        Some("desktop-configurations" | "application-configurations" | "storage-configurations")
     ) {
         // Non-destructive host-side generation for Nix module evaluation.
         // Produces the actual backend output, never a second implementation.
@@ -352,7 +358,11 @@ fn main() -> Result<()> {
             test_diagnostics: false,
         };
         let mut cases = Vec::new();
-        if operation.as_deref() == Some("application-configurations") {
+        if operation.as_deref() == Some("storage-configurations") {
+            for name in ["encrypted-uefi", "encrypted-bios"] {
+                cases.push((name.into(), vec![Desktop::Plasma], vec![], true));
+            }
+        } else if operation.as_deref() == Some("application-configurations") {
             let catalog = calamares_nixos::applications::catalog();
             for app in catalog {
                 cases.push((
@@ -403,6 +413,12 @@ fn main() -> Result<()> {
         for (name, desktops, applications, allow_unfree) in cases {
             // The all-inclusive case also takes every GitHub step option.
             let github = name == "all";
+            let encrypt = name.starts_with("encrypted-");
+            let firmware = if name == "encrypted-bios" {
+                Firmware::Bios
+            } else {
+                Firmware::Uefi
+            };
             let text = |value: &str| if github { value.into() } else { String::new() };
             let r = RawRequest {
                 disk: disk::Identity {
@@ -413,8 +429,14 @@ fn main() -> Result<()> {
                     wwn: "".into(),
                     model: "test".into(),
                 },
-                firmware: Firmware::Uefi,
+                firmware,
                 filesystem: Filesystem::Ext4,
+                encrypt,
+                encryption_password: if encrypt {
+                    PASSWORD.into()
+                } else {
+                    String::new()
+                },
                 hostname: "desktop-test".into(),
                 username: "alice".into(),
                 full_name: "Test".into(),
@@ -443,8 +465,14 @@ fn main() -> Result<()> {
                 config::configuration(
                     &r.parse(&settings)?,
                     &Identities {
+                        encryption: encrypt.then(|| calamares_nixos::encryption::Identities {
+                            root: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee".into(),
+                            swap: Some("bbbbbbbb-cccc-4ddd-8eee-ffffffffffff".into()),
+                        }),
+                        bios_boot: (encrypt && firmware == Firmware::Bios)
+                            .then(|| "12345678-1234-4567-8901-123456789012".into()),
                         root: "11111111-2222-4333-8444-555555555555".into(),
-                        efi: Some("A1B2-C3D4".into()),
+                        efi: (firmware == Firmware::Uefi).then(|| "A1B2-C3D4".into()),
                         swap: Some("66666666-7777-4888-9999-aaaaaaaaaaaa".into()),
                     },
                 )?,

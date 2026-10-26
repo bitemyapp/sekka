@@ -96,16 +96,6 @@ impl Template {
 pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> {
     let settings = request.settings();
     let q = nix_string;
-    let by_uuid = |uuid: &str| q(&format!("/dev/disk/by-uuid/{uuid}"));
-    crate::filesystem::check_uuid(&ids.root, request.filesystem().name())?;
-    ensure!(
-        ids.efi.is_some() == (request.firmware() == Firmware::Uefi),
-        "EFI filesystem identity does not match the reviewed firmware"
-    );
-    ensure!(
-        ids.swap.is_some() == request.swap(),
-        "Swap identity does not match the reviewed choice"
-    );
     let boot = match request.firmware() {
         Firmware::Uefi => "boot.loader.systemd-boot.enable = true;\n  boot.loader.efi.canTouchEfiVariables = true;".into(),
         Firmware::Bios => format!("boot.loader.grub.enable = true;\n  boot.loader.grub.device = {};\n  boot.loader.grub.useOSProber = false;", q(&request.disk().path)),
@@ -114,35 +104,7 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
         Kernel::Latest => "  boot.kernelPackages = pkgs.linuxPackages_latest;\n",
         Kernel::Lts => "",
     };
-    let mut storage = format!(
-        "  fileSystems.\"/\" = {{\n    device = lib.mkForce {};\n    fsType = {};\n    options = [ {} ];\n  }};\n",
-        by_uuid(&ids.root),
-        q(request.filesystem().name()),
-        request
-            .filesystem()
-            .mount_options()
-            .iter()
-            .map(|o| q(o))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
-    if let Some(serial) = &ids.efi {
-        crate::filesystem::check_uuid(serial, "vfat")?;
-        storage.push_str(&format!(
-            "  fileSystems.\"/boot\" = {{\n    device = lib.mkForce {};\n    fsType = \"vfat\";\n    options = [ \"fmask=0077\" \"dmask=0077\" ];\n  }};\n",
-            by_uuid(serial)
-        ));
-    }
-    match &ids.swap {
-        Some(uuid) => {
-            crate::filesystem::check_uuid(uuid, "swap")?;
-            storage.push_str(&format!(
-                "  # Swap partition matched to installed RAM, also used to resume from hibernation.\n  swapDevices = lib.mkForce [ {{ device = {0}; }} ];\n  boot.resumeDevice = {0};\n  calamares.zswap.enable = true;\n",
-                by_uuid(uuid)
-            ));
-        }
-        None => storage.push_str("  swapDevices = lib.mkForce [ ];\n"),
-    }
+    let storage = storage_configuration(request, ids)?;
     let graphics = match (&request.graphics().nvidia, request.allow_unfree()) {
         (Some(nvidia), true) => {
             let mut text = String::from(
@@ -198,7 +160,7 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
         )
     });
     let diagnostic = if settings.test_diagnostics {
-        "  # Disposable QEMU verification only.\n  services.qemuGuest.enable = true;\n  boot.kernelParams = [ \"console=ttyS0,115200n8\" \"console=tty0\" ];\n"
+        "  # Disposable QEMU verification only. Plymouth would show only text with\n  # a serial console; the boot splash is part of what is verified.\n  services.qemuGuest.enable = true;\n  boot.kernelParams = [ \"console=ttyS0,115200n8\" \"console=tty0\" \"plymouth.ignore-serial-consoles\" ];\n"
     } else {
         ""
     };
@@ -214,6 +176,8 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
   calamares.defaultDesktop = {default_desktop};
   # CachyOS-inspired kernel, memory, I/O and service defaults (rust/system/tuning.nix in the calamares input).
   calamares.tuning.enable = {tuning};
+  # Sekka's boot splash; Esc shows the boot messages (rust/system/boot-splash).
+  calamares.bootSplash.enable = true;
   {boot}
 {kernel}{storage}{graphics}  networking.hostName = {hostname};
   networking.networkmanager.enable = true;
@@ -260,6 +224,97 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
         unfree = request.allow_unfree(),
         state = q(&settings.state_version)
     ))
+}
+
+/// Shared storage fragment, also evaluated by the encrypted-boot VM check.
+pub(crate) fn storage_configuration(request: &InstallPlan, ids: &Identities) -> Result<String> {
+    let q = nix_string;
+    let by_uuid = |uuid: &str| q(&format!("/dev/disk/by-uuid/{uuid}"));
+    crate::filesystem::check_uuid(&ids.root, request.filesystem().name())?;
+    ensure!(
+        ids.efi.is_some() == (request.firmware() == Firmware::Uefi),
+        "EFI filesystem identity does not match the reviewed firmware"
+    );
+    ensure!(
+        ids.swap.is_some() == request.swap(),
+        "Swap identity does not match the reviewed choice"
+    );
+    ensure!(
+        ids.encryption.is_some() == request.encrypt(),
+        "Encryption identities do not match the reviewed choice"
+    );
+    ensure!(
+        ids.bios_boot.is_some() == (request.encrypt() && request.firmware() == Firmware::Bios),
+        "Boot filesystem identity does not match the reviewed layout"
+    );
+    let mut options = request.filesystem().mount_options().to_vec();
+    let mut storage = String::new();
+    if request.encrypt() {
+        // An encrypted root appears only once someone types its passphrase.
+        // The initrd otherwise gives up on it after systemd's 90 s device
+        // timeout, at a locked emergency console, with the prompt still up.
+        options.push("x-systemd.device-timeout=0");
+        storage.push_str("  # Root appears once its passphrase is typed, so the initrd waits for it however long that takes.\n");
+    }
+    storage.push_str(&format!(
+        "  fileSystems.\"/\" = {{\n    device = lib.mkForce {};\n    fsType = {};\n    options = [ {} ];\n  }};\n",
+        by_uuid(&ids.root),
+        q(request.filesystem().name()),
+        options.iter().map(|o| q(o)).collect::<Vec<_>>().join(" ")
+    ));
+    if let Some(serial) = &ids.efi {
+        crate::filesystem::check_uuid(serial, "vfat")?;
+        storage.push_str(&format!(
+            "  fileSystems.\"/boot\" = {{\n    device = lib.mkForce {};\n    fsType = \"vfat\";\n    options = [ \"fmask=0077\" \"dmask=0077\" ];\n  }};\n",
+            by_uuid(serial)
+        ));
+    }
+    if let Some(uuid) = &ids.bios_boot {
+        crate::filesystem::check_uuid(uuid, "ext4")?;
+        // Preserve the boot framebuffer: switching back to VGA text can leave
+        // the initrd unlock prompt invisible when DRM takes over.
+        storage.push_str("  boot.loader.grub.gfxpayloadBios = \"keep\";\n");
+        storage.push_str(&format!(
+            "  fileSystems.\"/boot\" = {{ device = lib.mkForce {}; fsType = \"ext4\"; options = [ \"nosuid\" \"nodev\" ]; }};\n",
+            by_uuid(uuid)
+        ));
+    }
+    if let Some(encryption) = &ids.encryption {
+        ensure!(
+            encryption.swap.is_some() == request.swap(),
+            "Encrypted swap identity does not match the reviewed choice"
+        );
+        storage.push_str("  console.earlySetup = true;\n");
+        for (name, uuid) in [
+            ("cryptroot", Some(&encryption.root)),
+            ("cryptswap", encryption.swap.as_ref()),
+        ] {
+            if let Some(uuid) = uuid {
+                crate::filesystem::check_uuid(uuid, "crypto_LUKS")?;
+                storage.push_str(&format!(
+                    "  boot.initrd.luks.devices.{name} = {{ device = {}; allowDiscards = true; }};\n",
+                    by_uuid(uuid)
+                ));
+            }
+        }
+        if encryption.swap.is_some() {
+            // Asked at once, swap would also be tried with a mistyped root
+            // passphrase and then ask again for itself. After root, it opens
+            // with the passphrase root opened with, so it never asks.
+            storage.push_str("  # Swap opens after root, with root's passphrase, so it never asks for its own.\n  boot.initrd.systemd.services.\"systemd-cryptsetup@cryptswap\" = { overrideStrategy = \"asDropin\"; after = [ \"systemd-cryptsetup@cryptroot.service\" ]; };\n");
+        }
+    }
+    match &ids.swap {
+        Some(uuid) => {
+            crate::filesystem::check_uuid(uuid, "swap")?;
+            storage.push_str(&format!(
+                "  # Swap partition matched to installed RAM, also used to resume from hibernation.\n  swapDevices = lib.mkForce [ {{ device = {0}; }} ];\n  boot.resumeDevice = {0};\n  calamares.zswap.enable = true;\n",
+                by_uuid(uuid)
+            ));
+        }
+        None => storage.push_str("  swapDevices = lib.mkForce [ ];\n"),
+    }
+    Ok(storage)
 }
 
 pub fn write_secret(path: &Path, hash: &str) -> Result<()> {
@@ -329,6 +384,8 @@ mod tests {
             },
             firmware: Firmware::Uefi,
             filesystem: crate::Filesystem::Ext4,
+            encrypt: false,
+            encryption_password: String::new(),
             hostname: "nixos".into(),
             username: "alice".into(),
             full_name: "".into(),
@@ -365,6 +422,8 @@ mod tests {
             test_diagnostics: false,
         };
         let ids = Identities {
+            encryption: None,
+            bios_boot: None,
             root: "00000000-0000-4000-8000-000000000000".into(),
             efi: Some("0000-0000".into()),
             swap: Some("00000000-0000-4000-8000-000000000001".into()),
@@ -380,6 +439,7 @@ mod tests {
             "calamares.applications=",
             "calamares.desktops=",
             "calamares.tuning.enable=",
+            "calamares.bootSplash.enable=true;",
             "boot.loader.systemd-boot.enable=true;",
             "boot.loader.efi.canTouchEfiVariables=true;",
             "pkgs.linuxPackages_latest",

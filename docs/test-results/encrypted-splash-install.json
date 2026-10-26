@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-24",
+  "result": "Encrypted UEFI and BIOS installations from the ISO booted from disk alone behind Sekka's boot splash, asked once for the disk passphrase and passed the fixture's installed-system checks. The encrypted-boot-splash component check passed all 24 steps on UEFI and BIOS.",
+  "source": {
+    "branch": "feat/genkan-luks-boot-splash",
+    "image_commit": "1614dc66db98ea1cc77a53444aea5012587366e0",
+    "dirty": false,
+    "tool_commit": "48e1893",
+    "note": "The ISO was built from 1614dc6. The installed boots used respin-tools from 48e1893, which changes only host-side VM tooling (rust/src/vm.rs) and is not in the image."
+  },
+  "iso": {
+    "file": "sekka-26.11.20261020.02c087f-x86_64-linux.iso",
+    "sha256": "49073967141dade623b44e1957fdea9b475358b9ed946f2ee731cf988569f762",
+    "build_command": "nix build .#iso --no-update-lock-file",
+    "installed_flake_lock_sha256": "8aad09cb62b831215a9d7cd05544f1065b3947b63a3b2bc91ed9158240dc8542"
+  },
+  "vm": {
+    "qemu": "11.1.2 (nixpkgs qemu_kvm)",
+    "acceleration": "KVM",
+    "firmware": ["UEFI (nixpkgs OVMF 202608)", "BIOS (SeaBIOS)"],
+    "memory_mib": 8192,
+    "cpus": 4,
+    "disk": "40 GiB NVMe raw sparse file",
+    "display": "-vga std",
+    "media": "ISO as USB mass storage for the installation; none for the installed boots",
+    "host_devices_used": false
+  },
+  "selection": {
+    "driver": "respin-tools qemu-test ISO --install with CALAMARES_TEST_ENCRYPT=1: Genkan's packaged backend driven by the VM fixture, not the GUI",
+    "filesystem": "ext4",
+    "encryption": "LUKS2 root and swap, the fixture's public test passphrase",
+    "swap": "8 GiB partition, zswap, resume",
+    "desktops": ["plasma", "xfce"],
+    "default_session": "plasma",
+    "applications": "none",
+    "test_diagnostics": "enabled by the fixture inside the disposable VM: QEMU guest agent, serial console, plymouth.ignore-serial-consoles"
+  },
+  "runs": [
+    {
+      "firmware": "uefi",
+      "install_run": "uefi-nvme-ext4-1792895698496-1431929",
+      "install_seconds": 175.9,
+      "installed_boot_run": "boot-uefi-1792896219107-1440052",
+      "passed": true,
+      "note": "The installation passed; its own installed boot, and a first boot-installed attempt, stopped at the passphrase prompt because the tool read a screendump and connected to QEMU's monitor too early (fixed in 48e1893). Neither got past the prompt, so the root file system was untouched until the boot that passed."
+    },
+    {
+      "firmware": "bios",
+      "install_run": "bios-nvme-ext4-1792896285318-1440436",
+      "installed_boot_run": "bios-nvme-ext4-1792896285318-1440436",
+      "passed": true
+    }
+  ],
+  "installed_boot_checks": [
+    "the boot splash's passphrase field appeared (amber edge found in a screendump), saved as unlock.png",
+    "one passphrase typed through QMP; swap opened after root without asking",
+    "display manager active; fixture verify: Determinate Nix, installed lock equal to the media's, password hash and PAM authentication, locked root, escaped configuration, desktop and Determinate services, time zone, Wi-Fi credentials and user restrictions",
+    "graphical login not exercised (fixture run without --gui)"
+  ],
+  "component_check": {
+    "check": "checks.x86_64-linux.encrypted-boot-splash",
+    "output": "/nix/store/q1bz5g4bilykw2f4igaragk9aabranyh-vm-test-run-genkan-encrypted-boot-splash",
+    "passed": true,
+    "steps": 24
+  },
+  "screenshots": "encrypted-splash/: install-*-unlock.png are the installed boots' unlock.png; check-*.png come from the component check's output. Original QEMU screendumps, copied byte for byte.",
+  "not_validated": [
+    "physical hardware",
+    "Genkan's GUI for an encrypted installation (see luks-gui-uefi.json for #58's)",
+    "encrypted hibernation"
+  ]
+}

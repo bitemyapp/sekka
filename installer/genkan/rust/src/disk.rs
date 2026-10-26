@@ -88,6 +88,26 @@ pub fn parse(text: &str) -> Result<Vec<Disk>> {
 }
 
 pub fn discover() -> Result<Vec<Disk>> {
+    discover_with_mappings(&[])
+}
+fn discover_with_mappings(mappings: &[String]) -> Result<Vec<Disk>> {
+    let allowed: Vec<_> = mappings
+        .iter()
+        .map(|path| -> Result<_> {
+            let meta = fs::metadata(path)?;
+            ensure!(
+                meta.file_type().is_block_device(),
+                "Mapping is not a block device"
+            );
+            Ok(Path::new("/sys/dev/block")
+                .join(format!(
+                    "{}:{}",
+                    libc::major(device_number(&meta)),
+                    libc::minor(device_number(&meta))
+                ))
+                .canonicalize()?)
+        })
+        .collect::<Result<_>>()?;
     let text = output(
         "lsblk",
         &[
@@ -135,7 +155,10 @@ pub fn discover() -> Result<Vec<Disk>> {
                 .filter_map(|e| e.ok().map(|e| e.path()))
                 .filter(|p| p.join("partition").exists()),
         ) {
-            if fs::read_dir(node.join("holders"))?.next().is_some() {
+            let holders = fs::read_dir(node.join("holders"))?
+                .map(|entry| Ok(entry?.path().canonicalize()?))
+                .collect::<Result<Vec<_>>>()?;
+            if holders.iter().any(|holder| !allowed.contains(holder)) {
                 disk.blocked =
                     Some("Device or partition is used by LVM, encryption or RAID".into());
             }
@@ -154,7 +177,10 @@ fn boot_sector_block(firmware: crate::Firmware, logical_sector_size: u64) -> Opt
 }
 
 pub fn revalidate(identity: &Identity) -> Result<()> {
-    let disks = discover()?;
+    revalidate_with_mappings(identity, &[])
+}
+pub(crate) fn revalidate_with_mappings(identity: &Identity, mappings: &[String]) -> Result<()> {
+    let disks = discover_with_mappings(mappings)?;
     let current = disks
         .iter()
         .find(|d| d.identity.path == identity.path)
@@ -209,12 +235,22 @@ pub struct Layout {
     pub boot: (u64, u64),
     pub root: (u64, u64),
     pub swap: Option<(u64, u64)>,
+    pub bios_boot: Option<(u64, u64)>,
+    pub encrypted: bool,
 }
 impl Layout {
     pub fn new(
         disk_bytes: u64,
         firmware: crate::Firmware,
         swap_bytes: Option<u64>,
+    ) -> Result<Self> {
+        Self::for_install(disk_bytes, firmware, swap_bytes, false)
+    }
+    pub fn for_install(
+        disk_bytes: u64,
+        firmware: crate::Firmware,
+        swap_bytes: Option<u64>,
+        encrypted: bool,
     ) -> Result<Self> {
         let boot = if firmware == crate::Firmware::Uefi {
             (1, 1025)
@@ -226,14 +262,30 @@ impl Layout {
         let end = (disk_bytes / MIB)
             .checked_sub(1)
             .context("Disk is too small")?;
-        let swap_mib = swap_bytes.map(|bytes| bytes.div_ceil(MIB));
+        let bios_boot = (encrypted && firmware == crate::Firmware::Bios).then_some((3, 1027));
+        let root_start = bios_boot.map_or(boot.1, |(_, end)| end);
+        let overhead = if encrypted {
+            crate::encryption::HEADER_BYTES
+        } else {
+            0
+        };
+        let swap_mib = swap_bytes
+            .map(|bytes| {
+                bytes
+                    .checked_add(overhead)
+                    .context("Swap size overflow")
+                    .map(|bytes| bytes.div_ceil(MIB))
+            })
+            .transpose()?;
         let root_end = end
             .checked_sub(swap_mib.unwrap_or(0))
-            .filter(|root_end| *root_end > boot.1)
+            .filter(|root_end| *root_end > root_start + overhead / MIB)
             .context("Disk is too small for the swap partition")?;
         let layout = Self {
             boot,
-            root: (boot.1, root_end),
+            root: (root_start, root_end),
+            bios_boot,
+            encrypted,
             swap: swap_mib.map(|_| (root_end, end)),
         };
         ensure!(
@@ -250,10 +302,22 @@ impl Layout {
         Ok(layout)
     }
     pub fn root_bytes(&self) -> u64 {
-        (self.root.1 - self.root.0) * MIB
+        (self.root.1 - self.root.0) * MIB - self.header_bytes()
     }
     pub fn swap_bytes(&self) -> Option<u64> {
-        self.swap.map(|(start, end)| (end - start) * MIB)
+        self.swap
+            .map(|(start, end)| (end - start) * MIB - self.header_bytes())
+    }
+    fn header_bytes(&self) -> u64 {
+        if self.encrypted {
+            crate::encryption::HEADER_BYTES
+        } else {
+            0
+        }
+    }
+    pub fn bios_boot_partition(&self) -> Option<u8> {
+        self.bios_boot
+            .map(|_| if self.swap.is_some() { 4 } else { 3 })
     }
     /// One parted invocation: fewer partition-table rereads and udev events.
     pub(crate) fn parted_script(&self, firmware: crate::Firmware, filesystem: &str) -> Vec<String> {
@@ -277,6 +341,9 @@ impl Layout {
         if let Some(swap) = self.swap {
             part("swap", "linux-swap", swap);
         }
+        if let Some(boot) = self.bios_boot {
+            part("boot", "ext4", boot);
+        }
         script.retain(|word| !word.is_empty());
         script.extend(
             if firmware == crate::Firmware::Uefi {
@@ -291,6 +358,9 @@ impl Layout {
     fn partitions(&self) -> Vec<(u8, (u64, u64))> {
         let mut partitions = vec![(1, self.boot), (2, self.root)];
         partitions.extend(self.swap.map(|swap| (3, swap)));
+        if let Some(boot) = self.bios_boot {
+            partitions.push((self.bios_boot_partition().unwrap(), boot));
+        }
         partitions
     }
 }
@@ -460,6 +530,53 @@ mod tests {
                 .unwrap()[0]
                 .blocked
                 .is_some()
+        );
+    }
+}
+
+#[cfg(test)]
+mod encryption_tests {
+    use super::*;
+    #[test]
+    fn encrypted_layout_reserves_headers_and_a_plain_bios_boot_filesystem() {
+        for firmware in [crate::Firmware::Uefi, crate::Firmware::Bios] {
+            for swap in [None, Some(4 * 1024 * MIB)] {
+                let layout = Layout::for_install(40 * 1024 * MIB, firmware, swap, true).unwrap();
+                assert_eq!(layout.swap_bytes(), swap);
+                assert_eq!(
+                    layout.root_bytes() + crate::encryption::HEADER_BYTES,
+                    (layout.root.1 - layout.root.0) * MIB
+                );
+                let mut spans = layout.partitions();
+                spans.sort_by_key(|(_, (start, _))| *start);
+                for pair in spans.windows(2) {
+                    assert_eq!(pair[0].1.1, pair[1].1.0);
+                }
+                assert_eq!(
+                    layout.bios_boot.is_some(),
+                    firmware == crate::Firmware::Bios
+                );
+                assert_eq!(
+                    layout.bios_boot_partition(),
+                    (firmware == crate::Firmware::Bios).then_some(if swap.is_some() {
+                        4
+                    } else {
+                        3
+                    })
+                );
+                if firmware == crate::Firmware::Bios {
+                    assert!(
+                        layout
+                            .parted_script(firmware, "ext4")
+                            .join(" ")
+                            .contains("mkpart boot ext4 3MiB 1027MiB")
+                    );
+                }
+            }
+        }
+        assert!(
+            Layout::for_install(40 * 1024 * MIB, crate::Firmware::Uefi, Some(u64::MAX), true)
+                .is_err()
         );
     }
 }
