@@ -508,6 +508,7 @@
           aizomeSource = inputs.aizome.outPath;
         };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
+        prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
           applicationsModule = inputs.calamares.nixosModules.applications;
