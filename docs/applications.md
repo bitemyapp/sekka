@@ -54,6 +54,12 @@ Rustup wrapper. Run `rustup default stable` after installation to download a
 toolchain. Rustup is intentionally not accompanied by a conflicting system-wide
 `rustc`/`cargo` package.
 
+Zed looks for rust-analyzer on PATH first. Nixpkgs' Rustup puts a proxy there
+that fails until the toolchain has the component, so Zed downloads GitHub's
+build instead. That build runs, like the other programs editors download
+([DEVELOPERS.md](../DEVELOPERS.md#programs-built-for-other-distributions)).
+`rustup component add rust-analyzer` makes Zed use the toolchain's own.
+
 Superluminal and Tracy are profilers packaged by other flakes, which Sekka
 takes as inputs and builds with the applications' Nixpkgs; the catalog lists
 them as Sekka's own packages (`"source": "sekka"`). Superluminal repackages

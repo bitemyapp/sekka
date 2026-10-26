@@ -1068,6 +1068,77 @@ real machine's live session under build load for about 15 minutes.
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
 
+## Programs built for other distributions
+
+Installed systems enable nix-ld (`programs.nix-ld.enable`, with
+`lib.mkDefault`, in `installer/genkan/rust/system/prebuilt-binaries.nix`), so
+programs built for other Linux distributions start. Without it, NixOS puts a
+stub at `/lib64/ld-linux-x86-64.so.2` that prints an error and exits 127.
+Editors and version managers download such programs routinely. Zed fetches
+rust-analyzer, CodeLLDB, package-version-server and its AI agents, and Node.js
+when there is no suitable one on PATH. VS Code's extensions bring their own
+programs, and mise installs whole runtimes. This is a property of the platform,
+so Sekka handles it once rather than in each editor. A per-editor fix, such as
+putting Nixpkgs' rust-analyzer on PATH for Zed, covers one server in one
+editor. Nixpkgs' FHS variants (`zed-editor.fhs`, `vscode.fhs`) run the editor
+in a bubblewrap sandbox. nix-ld's README notes that setuid programs and other
+sandboxes, `nix build` among them, don't work inside one.
+
+nix-ld (Nixpkgs' 2.0.6) starts the program with the Nix store's glibc and the
+libraries linked in `/run/current-system/sw/share/nix-ld/lib`. NixOS sets
+`NIX_LD` and `NIX_LD_LIBRARY_PATH` for sessions. When they are unset, nix-ld
+falls back to the same paths. They are unset for Zed's downloads: Zed starts
+those with its own environment (`env: None` in `crates/languages/src/rust.rs`),
+and Zed started from a launcher has no login shell's environment. nix-ld passes
+the libraries to the loader as `LD_LIBRARY_PATH`. On x86_64 it then restores
+the environment the program was given before the program's entry point runs,
+so the programs it starts, such as rust-analyzer's cargo and rustc, don't
+inherit them.
+
+The libraries are Nixpkgs' default set for the module: glibc, libstdc++ and
+libgcc_s, zlib, zstd, xz, bzip2, OpenSSL, curl, libssh, libsodium, libxml2,
+acl, attr, and util-linux's and systemd's libraries. Sekka adds none. `readelf -d`
+on rust-analyzer 2026-10-19, CodeLLDB 1.12.3, codex-acp 0.16.0,
+package-version-server 0.0.10 and Node.js 24.22.1 shows that they need nothing
+beyond glibc, libgcc_s, libstdc++, zlib, OpenSSL 3 and the libraries CodeLLDB
+ships beside itself. The set is kept small on purpose. The loader searches
+`LD_LIBRARY_PATH` before a binary's `RUNPATH`, so a library in the set replaces
+one with the same name that a program ships beside itself. A system that needs
+more adds them to `programs.nix-ld.libraries`. `programs.nix-ld.enable = false`
+brings back the stub. Main's Plasma reference system already contains every
+library in the set. The change adds only nix-ld itself (75 KB, with no
+references) and a directory of links.
+
+Not covered:
+
+- 32-bit programs (`/lib/ld-linux.so.2`).
+- Scripts whose first line names `/bin/bash` or another path NixOS doesn't
+  have. `/bin/sh` and `/usr/bin/env` exist, and envfs would add the rest.
+- Native Python or Node.js modules loaded by Nixpkgs' interpreters, which
+  don't go through nix-ld.
+- Graphical programs that need libraries outside the set.
+
+The live session keeps the stub.
+
+```sh
+nix build .#checks.x86_64-linux.prebuilt-binaries --no-update-lock-file
+```
+
+The VM check puts the GitHub and nodejs.org builds of rust-analyzer, Node.js,
+package-version-server and CodeLLDB where Zed puts them, in
+`~/.local/share/zed`. It starts them as an account with an empty environment,
+as Zed does, and from a login shell. It checks that:
+
+- every library each one asks for is found, the ones above in nix-ld's set;
+- Zed's `--version` check of rust-analyzer passes;
+- rust-analyzer loads a Cargo project and the standard library, running
+  Nixpkgs' cargo and rustc;
+- the processes Node.js starts don't see nix-ld's libraries.
+
+With nix-ld disabled, the check fails at the first binary with the stub's
+message. It does not start Zed itself, and codex-acp was checked only with
+`readelf`.
+
 ## Joining Wi-Fi networks
 
 Installed systems and the live session join Wi-Fi through NetworkManager and
