@@ -11,16 +11,26 @@
   pkgs,
   desktopsModule,
 }:
+let
+  inputProbe = pkgs.runCommand "terminal-input-probe" { nativeBuildInputs = [ pkgs.stdenv.cc ]; } ''
+    mkdir -p $out/bin
+    cc -Wall -Wextra -Werror ${../tests/terminal-input-probe.c} -o $out/bin/codex
+    cp $out/bin/codex $out/bin/build-worker
+  '';
+in
 pkgs.testers.runNixOSTest {
   name = "sekka-aizome-login";
   globalTimeout = 1200;
   node.pkgsReadOnly = false;
   nodes.machine =
-    { ... }:
+    { lib, ... }:
     {
       imports = [ desktopsModule ];
       calamares.desktops = [ "aizome" ];
       calamares.defaultDesktop = "aizome";
+      calamares.tuning.enable = true;
+      # The test driver needs console logging, which tuning reduces.
+      boot.consoleLogLevel = lib.mkForce 7;
       users.users.demo = {
         isNormalUser = true;
         uid = 1000;
@@ -40,6 +50,8 @@ pkgs.testers.runNixOSTest {
     };
   testScript = ''
     import shlex
+    import time
+    from typing import Any
 
     def user(command):
         return machine.succeed(
@@ -81,5 +93,43 @@ pkgs.testers.runNixOSTest {
         # A secret stores and reads back with no prompt, as an app's would.
         user("printf hunter2 | secret-tool store --label='Aizome login test' app aizome-login-test")
         assert user("secret-tool lookup app aizome-login-test").strip() == "hunter2"
+
+    with subtest("Foot delivers every TUI keystroke while agent child jobs saturate the CPUs"):
+        socket = machine.succeed("ls /run/user/1000/aizome.wayland-*.sock").strip()
+        user("AIZOME_SOCKET=" + shlex.quote(socket) + " aizomectl spawn -- foot -- ${inputProbe}/bin/codex")
+        machine.wait_until_succeeds("test -f /tmp/sekka-keyboard-input", timeout=60)
+        harness = machine.succeed("pgrep -u demo -x codex").strip()
+        foot = machine.succeed("pgrep -u demo -x foot").strip()
+        machine.wait_until_succeeds(f"test $(cut -d ' ' -f 19 /proc/{foot}/stat) = -4", timeout=30)
+        machine.wait_until_succeeds(f"test $(cut -d ' ' -f 19 /proc/{harness}/stat) = -4", timeout=30)
+        group = machine.succeed(f"cat /proc/{harness}/cgroup")
+        assert "/app.slice/" in group and "/session.slice/" not in group, group
+        assert "/app-background.slice/" not in group, group
+        workers = machine.succeed(f"pgrep -P {harness}").split()
+        assert len(workers) == 8, workers
+        for worker in workers:
+            machine.wait_until_succeeds(f"grep -q '/app-background.slice/' /proc/{worker}/cgroup")
+        # QEMU's emulated keyboard -> Aizome -> actual Foot -> raw TUI input.
+        # Include repetitions, spaces and punctuation; compare every byte.
+        expected = "codex input 0123456789 abcdefghijklmnopqrstuvwxyz .,- " * 10
+        machine.screenshot("foot-ready-under-agent-load")
+        # Explicit releases avoid send_chars/sendkey's virtual-time hold
+        # overlapping later keys when the loaded guest lags wall time.
+        qcodes = {" ": "spc", ".": "dot", ",": "comma", "-": "minus"}
+        assert machine.qmp_client is not None
+        for character in expected:
+            for down in (True, False):
+                # QMPSession annotates values as str, but QMP accepts JSON.
+                event: Any = {"events": [{
+                    "type": "key", "data": {"down": down, "key": {
+                        "type": "qcode", "data": qcodes.get(character, character)
+                    }}
+                }]}
+                machine.qmp_client.send("input-send-event", event)
+                time.sleep(0.01)
+        machine.sleep(3)
+        actual = machine.succeed("cat /tmp/sekka-keyboard-input")
+        machine.screenshot("foot-input-under-agent-load")
+        assert actual == expected, (len(expected), len(actual), expected, actual)
   '';
 }

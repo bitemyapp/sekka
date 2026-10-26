@@ -162,6 +162,7 @@
         iso = installer.config.system.build.isoImage;
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
+        aizome = inputs.aizome.packages.${system}.aizome;
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
@@ -492,7 +493,11 @@
           inherit (self.packages.${system}) tatami;
           inherit (hyprlandPkgs) hyprland;
         };
-        tuning = import ./nix/tuning-test.nix { inherit pkgs; };
+        tuning = import ./nix/tuning-test.nix {
+          inherit pkgs;
+          aizomeSource = inputs.aizome.outPath;
+        };
+        tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
           applicationsModule = inputs.calamares.nixosModules.applications;

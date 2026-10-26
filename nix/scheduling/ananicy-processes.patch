@@ -1,0 +1,184 @@
+--- a/src/worker.cpp
++++ b/src/worker.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include <chrono>
+ #include <functional>
++#include <filesystem>
+ 
+ #include <fmt/format.h>
+ #include <spdlog/spdlog.h>
+@@ -77,10 +78,23 @@
+   while (!stop_token.stop_requested()) {
+     while ((proc = process_queue->poll(500ms)).has_value()) {
+       const auto &p = proc.value();
+-      auto name = p.name;
+-      if (name.starts_with('.') && name.ends_with("-wrapped"))
+-        name = name.substr(1, name.find_last_of('-') - 1);
+-      const auto &rule = rules->get_rule(name);
++      // A wrapper may have exec'd again while this event was queued.
++      auto name = get_command_from_pid(p.pid);
++      auto normalize = [](std::string value) {
++        if (value.starts_with('.') && value.ends_with("-wrapped"))
++          value = value.substr(1, value.find_last_of('-') - 1);
++        return value;
++      };
++      auto rule = rules->get_rule(normalize(name));
++      if (rule.is_null()) {
++        // Chromium rewrites argv[0] to include its whole command line.
++        // Its executable still identifies it, even after a zygote fork.
++        std::error_code error;
++        auto exe = std::filesystem::read_symlink(
++            fmt::format("/proc/{}/exe", p.pid), error);
++        if (!error)
++          rule = rules->get_rule(normalize(exe.filename().string()));
++      }
+ 
+       processed_count++;
+ 
+--- a/src/platform/linux/priority.cpp
++++ b/src/platform/linux/priority.cpp
+@@ -37,6 +37,28 @@
+ }
+ 
+ namespace priority {
++
++// CPU policy and I/O priority, like nice, are per-thread on Linux. Apply
++// them to threads already created before the exec event reached us too.
++template <typename Apply>
++static bool for_each_thread(pid_t pid, Apply apply) {
++  std::error_code error;
++  fs::directory_iterator tasks(fmt::format("/proc/{}/task", pid), error);
++  if (error)
++    return false;
++  bool success = true;
++  for (const auto &entry : tasks) {
++    const auto tid = to_int<pid_t>(entry.path().filename().string());
++    if (tid <= 0)
++      continue;
++    errno = 0;
++    if (apply(tid) < 0 && errno != ESRCH) {
++      test_errno(errno, "for_each_thread", tid);
++      success = false;
++    }
++  }
++  return success;
++}
+ 
+ bool set_priority(pid_t pid, std::int32_t nice_value) {
+   std::int32_t errcode = 0;
+@@ -111,10 +133,9 @@
+     return true;
+   }
+ 
+-  errno = 0;
+-  ioprio_set(IOPRIO_WHO_PROCESS, static_cast<id_t>(pid), io_prio);
+-
+-  return test_errno(errno, __func__, pid);
++  return for_each_thread(pid, [io_prio](pid_t tid) {
++    return ioprio_set(IOPRIO_WHO_PROCESS, static_cast<id_t>(tid), io_prio);
++  });
+ }
+ 
+ bool set_sched(pid_t pid, const std::string_view &sched_name,
+@@ -142,15 +163,9 @@
+     spdlog::error("Invalid scheduler '{}'", __func__, sched_name);
+     return false;
+   }
+-  errno = 0;
+-  sched_setscheduler(pid, sched, &param);
+-
+-  const std::int32_t success = test_errno(errno, __func__, pid);
+-  if (success == -1)
+-    spdlog::error("{}: Error info: sched_name: {}, pid: {}", __func__,
+-                  sched_name, pid);
+-
+-  return success;
++  return for_each_thread(pid, [sched, &param](pid_t tid) {
++    return sched_setscheduler(tid, sched, &param);
++  });
+ }
+ 
+ bool set_oom_score_adjust(pid_t pid, std::int32_t value) {
+--- a/src/platform/linux/process.cpp
++++ b/src/platform/linux/process.cpp
+@@ -50,10 +50,9 @@
+ 
+   auto *e = static_cast<struct event *>(data);
+ 
+-  /// Don't add process to the queue,
+-  /// if it's equal to previous one.
+-  /// @see: https://gitlab.com/ananicy-cpp/ananicy-cpp/-/issues/20
+-  if (e->pid == 0 || !g_process_queue || e->pid == e->prev_pid) {
++  // Every exec matters: a NixOS shell wrapper may immediately exec the
++  // actual browser or compiler under the same PID.
++  if (e->pid == 0 || !g_process_queue) {
+     return;
+   }
+ 
+@@ -140,16 +139,10 @@
+       return EXIT_FAILURE;
+     }
+ 
+-    /// Don't add process to the queue,
+-    /// if it's equal to the previous one.
+-    /// @see: https://gitlab.com/ananicy-cpp/ananicy-cpp/-/issues/20
+-    static pid_t prev_pid;
+-
+     const pid_t pid = netlink_program->get_pid();
+-    if (pid == 0 || pid == prev_pid) {
++    if (pid == 0) {
+       continue;
+     }
+-    prev_pid = pid;
+ 
+     Process process{.pid = pid, .name = get_command_from_pid(pid)};
+     spdlog::trace("Pushing new process: pid = {}", pid);
+@@ -198,6 +191,33 @@
+   try {
+     std::vector<std::string> cmdline = process_info::get_cmdline_from_pid(pid);
+     if (!cmdline.empty()) {
++      // Interpreted harnesses must not inherit the generic Node/Bun idle
++      // rule. Keep this identification in sync with agent-workloads.py.
++      auto runtime = fs::path(cmdline[0]).filename().string();
++      if (runtime.starts_with('.') && runtime.ends_with("-wrapped"))
++        runtime = runtime.substr(1, runtime.size() - 9);
++      if ((runtime == "node" || runtime == "bun") && cmdline.size() > 1) {
++        const auto script = fs::path(cmdline[1]).filename().string();
++        if (script == "codex" || script == "claude" || script == "claude-code" || script == "gemini" || script == "omp")
++          return script;
++        if (cmdline[1].find("/gemini-cli/") != std::string::npos)
++          return "gemini";
++        if (cmdline[1].find("/claude-code/") != std::string::npos)
++          return "claude";
++        if (cmdline[1].find("/oh-my-pi/") != std::string::npos)
++          return "omp";
++      }
++      // Chromium collapses the command and switches into argv[0]. Do not
++      // mistake a slash in a switch's value for the executable's basename.
++      // /proc/PID/exe can be unreadable with the service's restricted caps.
++      const auto switches = cmdline[0].find(" --");
++      if (switches != std::string::npos) {
++        const auto executable = cmdline[0].substr(0, switches);
++        const auto browser = fs::path(executable).filename().string();
++        if (browser == "chrome" || browser == "chromium" ||
++            browser == "chromium-browser")
++          return browser;
++      }
+       auto exe_name_begin = cmdline[0].find_last_of('/');
+ 
+       spdlog::trace(fmt::format("{}: exe_name_begin: {}, cmdline: {}", __func__,
+--- a/libananicycpp_bpf/src/ananicy_cpp.bpf.c
++++ b/libananicycpp_bpf/src/ananicy_cpp.bpf.c
+@@ -98,8 +98,9 @@
+     static u64 prev_ts;
+     struct event *e;
+ 
+-    //u32 pid = ctx->child_pid;
+-    u32 pid = bpf_get_current_pid_tgid();
++    // Classify the child, including threads and browser zygote children
++    // that never exec. The parent is already classified.
++    u32 pid = ctx->child_pid;
+     e = handle_event(pid, &prev_pid, &prev_ts);
+     if (!e) /* can't happen */
+         return 0;
