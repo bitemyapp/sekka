@@ -251,6 +251,25 @@ fn unstacking_leaves_the_rest() {
 }
 
 #[test]
+fn neighbour_tabs_wrap_round_the_group() {
+    let mut m = model();
+    let a = add(&mut m, "a");
+    let b = add(&mut m, "b");
+    let c = add(&mut m, "c");
+    assert_eq!(m.neighbour_tab(a, true), None, "a window on its own has no tabs");
+    m.stack(a, b);
+    m.stack(a, c);
+    assert_eq!(m.neighbour_tab(a, true), Some(b));
+    assert_eq!(m.neighbour_tab(c, true), Some(a));
+    assert_eq!(m.neighbour_tab(a, false), Some(c));
+    assert_eq!(m.neighbour_tab(b, false), Some(a));
+    // Tab order, not the order they joined in.
+    m.reorder_tab(c, 0);
+    assert_eq!(m.neighbour_tab(c, true), Some(a));
+    assert_eq!(m.neighbour_tab(c, false), Some(b));
+}
+
+#[test]
 fn stacking_a_group_into_another_merges_them() {
     let mut m = model();
     let a = add(&mut m, "a");

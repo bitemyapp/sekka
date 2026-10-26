@@ -403,6 +403,13 @@ impl InputExt for State {
                     self.stack_with_behind(id);
                 }
             }
+            Action::PrevTab | Action::NextTab => {
+                if let Some(id) = focused
+                    && let Some(tab) = self.lg.r().wm.neighbour_tab(id, action == Action::NextTab)
+                {
+                    self.show_group_member(tab);
+                }
+            }
             Action::Fullscreen => {
                 if let Some(id) = focused {
                     self.set_fullscreen(id, None);

@@ -119,6 +119,27 @@ fn system_chords_stay_with_the_system_and_shell_ones_go_to_subscribers() {
 }
 
 #[test]
+fn alt_super_brackets_switch_a_groups_tabs() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("org.example.a", 0x2222cc));
+    let wa = c.wait_window("org.example.a");
+    let b = c.client(Spec::new("org.example.b", 0x22cc22));
+    let wb = c.wait_window("org.example.b");
+    c.ok(Request::Stack { a: wa.id, b: wb.id });
+    let shows = |id| move |ws: &[aizome_ipc::WindowInfo]| ws.iter().any(|w| w.id == id && w.group_active && w.focused);
+    c.wait_windows("b shows", shows(wb.id));
+    // ⌥❖] from the last tab wraps round to the first; ⌥❖[ goes back.
+    chord(&c, "alt+super+]");
+    c.wait_windows("⌥❖] shows a", shows(wa.id));
+    chord(&c, "alt+super+[");
+    c.wait_windows("⌥❖[ shows b", shows(wb.id));
+    // The brackets stayed with the system (not Ctrl+Alt+[ for the apps).
+    for s in [a.seen(), b.seen()] {
+        assert!(!s.keys.iter().any(|(k, _)| *k == 26 || *k == 27), "a bracket reached an app: {:?}", s.keys);
+    }
+}
+
+#[test]
 fn f10_opens_the_menu_bar_over_aizomes_apps_and_the_desktop() {
     let c = Compositor::start(Options::default());
     let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();

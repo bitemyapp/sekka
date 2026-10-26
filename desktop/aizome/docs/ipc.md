@@ -290,6 +290,7 @@ Handled by the compositor:
 | ⌃❖↑ | `overview` |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | `fill`, `minimise` (park), `split-left`, `split-right` |
 | ⌥❖S | `stack-with-behind` |
+| ⌥❖[, ⌥❖] | `previous-tab`, `next-tab` (in tab order, wrapping round) |
 | ⌃❖F | `fullscreen` |
 | ❖Return | `terminal` (`keys.terminal`, default `foot`, in the Desk's folder) |
 | ❖⇧3 | `screenshot-screen` |

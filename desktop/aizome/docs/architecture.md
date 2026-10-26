@@ -97,6 +97,7 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ⌃❖↑ | Desks overview |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | Fill, park (minimise), split left, split right: the marking menu's verbs |
 | ⌥❖S | Stack with the window behind |
+| ⌥❖[, ⌥❖] | Previous, next tab of the window's group |
 | ⌃❖F | Full screen |
 | ❖Return | Terminal (foot) in the Desk's folder |
 | ⌃❖Q | Lock |

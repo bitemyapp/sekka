@@ -111,7 +111,9 @@ let
     '';
   });
   # Read by aizome-session before it starts the compositor: what every
-  # program in the session sees.
+  # program in the session sees. SDL_VIDEODRIVER is left unset: older SDL 2
+  # builds, which many games bundle, read "wayland,x11" as one driver name
+  # and fail to start, and current SDL picks a working driver on its own.
   environment = {
     XDG_CURRENT_DESKTOP = "Aizome";
     XDG_SESSION_DESKTOP = "aizome";
@@ -122,7 +124,6 @@ let
     MOZ_ENABLE_WAYLAND = "1";
     QT_QPA_PLATFORM = "wayland;xcb";
     QT_QPA_PLATFORMTHEME = "gtk3";
-    SDL_VIDEODRIVER = "wayland,x11";
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AIZOME_WALLPAPER_NIGHT = toString cfg.wallpapers.night;
     AIZOME_WALLPAPER_DAY = toString cfg.wallpapers.day;

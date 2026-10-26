@@ -306,7 +306,8 @@ Notes for client authors:
 - **Stacks**: drag a tab past another window's tab (a dashed slot and
   "Release to stack with ‹title›" show) to stack; click a background tab
   to show it, drag it away to tear it out (⌥-drag tears out the showing
-  one); ⌥❖S stacks with the window behind; IPC `stack`/`unstack`.
+  one); ⌥❖S stacks with the window behind; ⌥❖[ and ⌥❖] show the
+  previous and next tab; IPC `stack`/`unstack`.
 - **Desks**: four by default (settings `[[desks]]`), global across
   outputs; sticky windows show on all; switching slides over the motion
   time (none in Austere or with reduced motion).

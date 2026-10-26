@@ -92,6 +92,8 @@ fn canonical_key(k: &str) -> String {
         "space" => "Space".into(),
         "tab" | "⇥" => "Tab".into(),
         "grave" | "`" => "Grave".into(),
+        "bracketleft" | "[" => "bracketleft".into(),
+        "bracketright" | "]" => "bracketright".into(),
         "escape" | "esc" => "Escape".into(),
         "print" => "Print".into(),
         "backspace" => "BackSpace".into(),
@@ -117,6 +119,8 @@ pub fn key_label(k: &str) -> String {
         "Tab" => "⇥".into(),
         "Space" => "Space".into(),
         "Grave" => "`".into(),
+        "bracketleft" => "[".into(),
+        "bracketright" => "]".into(),
         "Escape" => "⎋".into(),
         "BackSpace" => "⌫".into(),
         "Print" => "Print".into(),
@@ -159,6 +163,8 @@ pub fn defaults() -> Vec<(String, String)> {
         ("Alt+Super+Left", "split-left"),
         ("Alt+Super+Right", "split-right"),
         ("Alt+Super+S", "stack-with-behind"),
+        ("Alt+Super+bracketleft", "previous-tab"),
+        ("Alt+Super+bracketright", "next-tab"),
         ("Ctrl+Super+F", "fullscreen"),
         ("Super+Return", "terminal"),
         ("Ctrl+Super+Q", "lock"),
@@ -229,6 +235,8 @@ pub fn sections(desks: usize) -> Vec<Section> {
                 ("split-left", "Split left"),
                 ("split-right", "Split right"),
                 ("stack-with-behind", "Stack with the window behind"),
+                ("previous-tab", "Previous tab in the group"),
+                ("next-tab", "Next tab in the group"),
                 ("fullscreen", "Full screen"),
             ],
         ),
@@ -393,6 +401,11 @@ mod tests {
         assert_eq!(Chord::parse("Ctrl+Alt+Shift+Super+Left").unwrap().glyphs(), ["⌃", "⌥", "⇧", "❖", "←"]);
         assert_eq!(Chord::parse("Hyper+Q"), None);
         assert!(Chord::parse("XF86AudioMute").unwrap().stands_alone());
+        // Brackets as the compositor and a recorded key name them.
+        let c = Chord::parse("Alt+Super+[").unwrap();
+        assert_eq!(c, Chord::parse("Alt+Super+bracketleft").unwrap());
+        assert_eq!(c.to_config(), "Alt+Super+bracketleft");
+        assert_eq!(c.glyphs(), ["⌥", "❖", "["]);
     }
 
     #[test]

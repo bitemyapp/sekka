@@ -44,6 +44,8 @@ pub enum Action {
     SplitLeft,
     SplitRight,
     StackWithBehind,
+    PrevTab,
+    NextTab,
     Fullscreen,
     Terminal,
     TerminalClose,
@@ -96,6 +98,8 @@ impl Action {
             "split-left" => Action::SplitLeft,
             "split-right" => Action::SplitRight,
             "stack-with-behind" | "stack" => Action::StackWithBehind,
+            "previous-tab" => Action::PrevTab,
+            "next-tab" => Action::NextTab,
             "fullscreen" => Action::Fullscreen,
             "terminal" => Action::Terminal,
             "terminal-close" => Action::TerminalClose,
@@ -177,6 +181,8 @@ fn keysym_named(name: &str) -> Option<Keysym> {
         "Space" => keysyms::KEY_space,
         "Tab" | "⇥" => keysyms::KEY_Tab,
         "Grave" | "`" => keysyms::KEY_grave,
+        "[" => keysyms::KEY_bracketleft,
+        "]" => keysyms::KEY_bracketright,
         "Escape" | "Esc" => keysyms::KEY_Escape,
         "Print" => keysyms::KEY_Print,
         _ => {
@@ -229,6 +235,10 @@ pub fn defaults() -> Vec<(&'static str, String)> {
         ("Alt+Super+Left", "split-left".into()),
         ("Alt+Super+Right", "split-right".into()),
         ("Alt+Super+S", "stack-with-behind".into()),
+        // Not ❖[ ❖] (apps' Back and Forward) or ❖PgUp ❖PgDn (through the
+        // command key, Ctrl+PgUp/PgDn: a browser's own tabs).
+        ("Alt+Super+bracketleft", "previous-tab".into()),
+        ("Alt+Super+bracketright", "next-tab".into()),
         ("Ctrl+Super+F", "fullscreen".into()),
         ("Super+Return", "terminal".into()),
         ("Super+W", "terminal-close".into()),
@@ -349,6 +359,8 @@ mod tests {
         assert_eq!(parse_chord("Super+Shift+3").unwrap().sym.raw(), keysyms::KEY_3);
         assert!(parse_chord("Hyper+Q").is_none());
         assert_eq!(parse_chord("XF86AudioMute").unwrap().sym.raw(), keysyms::KEY_XF86AudioMute);
+        assert_eq!(parse_chord("Alt+Super+["), parse_chord("Alt+Super+bracketleft"));
+        assert_eq!(parse_chord("Alt+Super+]").unwrap().sym.raw(), keysyms::KEY_bracketright);
     }
 
     #[test]
@@ -365,6 +377,10 @@ mod tests {
         assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_3)]), Some(&Action::GoToDesk(3)));
         assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::Shell("palette".into())));
         assert!(Action::parse("go-to-desk-7") == Some(Action::GoToDesk(7)));
+        let alt_logo = Mods { alt: true, logo: true, ..Default::default() };
+        assert_eq!(b.find(alt_logo, &[Keysym::new(keysyms::KEY_bracketleft)]), Some(&Action::PrevTab));
+        assert_eq!(b.find(alt_logo, &[Keysym::new(keysyms::KEY_bracketright)]), Some(&Action::NextTab));
+        assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_bracketleft)]), None, "❖[ is the app's (Back)");
         // ⌥Print records (Alt turns Print into Sys_Req, so the key's own
         // symbol is what matches).
         let alt = Mods { alt: true, ..Default::default() };
