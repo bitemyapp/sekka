@@ -29,7 +29,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#network .#activity .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#bluetooth .#activity .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -65,6 +65,7 @@ cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/bluetooth/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/activity/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
@@ -88,6 +89,73 @@ reports success. UEFI and 512e disks remain supported. The storage VM check
 exercises discovery and revalidation on disposable 4Kn and 512e disks.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
+
+Genkan verifies the live store's contents before evaluating the installation,
+including paths needed by the low-memory, deferred-build route. After a normal
+build it verifies the complete prepared runtime closure again. Nix's validity
+records, successful builds and page-cache warming do not verify existing bytes:
+without this check, a readable but corrupt package passes preparation, and
+`nix copy` discovers its hash mismatch only after the target has been erased.
+All nonzero verification results (including read errors) stop preparation.
+Progress remains cancellable, and failures retain Nix's expected/actual hashes
+plus kernel warnings in a root-only `/run/sekka-integrity-*.log`.
+`--no-trust` skips signatures for locally built/ISO-registered paths; it does
+not disable content hashing. Never use `--no-contents` or rewrite the expected
+hash to make a damaged path pass.
+
+The public `iso` package also verifies the actual compressed store before
+packing it into the ISO. `nix/verified-iso.nix` extends the upstream builder's
+squashfs command; `nix/verify-squashfs.nix` extracts it into a disposable local
+store, compares its registration with the build's closure manifest and checks
+every registered NAR hash. This runs inside the image derivation, so building
+an ISO cannot skip it by omitting `flake check`. Allow temporary space for an
+additional unpacked store. The upstream raw `nixosConfigurations.installer`
+image is an implementation input; build and publish `.#iso`.
+
+```sh
+nix build .#genkan .#checks.x86_64-linux.genkan-store-integrity \
+  .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
+```
+
+The installer regression uses the packaged helper and Determinate Nix in a
+disposable VM. Its negative control shows an existing-path build and ordinary
+read accepting corrupt bytes, followed by a real Nix copy reporting a hash
+mismatch. The helper must reject confirmed installs with corrupt or missing
+paths, preserve the entire 40 GiB target byte-for-byte and save private,
+secret-free diagnostics. The image regression builds a small ISO through the
+same mandatory gate and rejects changed contents, executable bits, symlinks,
+missing directories/paths and altered registration. Neither check certifies
+a complete release image or physical hardware.
+
+The October 24 investigation of the October 22 download is recorded in
+`docs/test-results/installer-integrity-2026-10-24.json`. The public ISO and its
+Firefox passed verification; injecting corruption into that exact ISO's live
+store reproduced the post-format copy failure. This establishes the missing
+installer integrity boundary, not what damaged the reporting Mac's bytes.
+Checks cannot guarantee against RAM faults, media changes or I/O failures
+after verification. Keep Nix's copy-time checks enabled; deferred installations
+still obtain unavailable downloads after formatting and can encounter network
+or build failures at that point.
+
+Additional RAM stress evidence is recorded in
+`docs/test-results/installer-memory-2026-10-24.json`. With the same diagnostic
+image, a 4 GiB VM completed the normal GUI installation while a background
+process held 1.5 GiB of random data resident and could not swap. The installer
+selected the deferred route, built the 8.31 GiB system on disk, and subsequently
+booted, accepted a normal login and opened Firefox with its expected hash.
+Available RAM fell to 56 MiB and zram swap use reached 3.23 GiB without OOM kills.
+This demonstrates that the complete system need not fit in physical RAM; it
+does not establish a universal minimum memory requirement.
+
+The 2 GiB clean-install case failed during Nix evaluation on both the unmodified
+public ISO and the diagnostic image: live-store space ran out and the kernel
+OOM-killed desktop processes before any target writes. The evaluations were
+then interrupted; these are failed tests, not graceful automatic refusals.
+The separate corrupt-file case at 2 GiB did refuse installation before erasure
+and preserved the entire target. Deferring downloads does not eliminate the
+RAM and temporary live-store space needed to evaluate the configuration first.
+Do not describe the deferred route as immune to memory exhaustion or these
+focused VM results as physical-hardware or full-release qualification.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
 offered by Genkan, including default Aizome; the cache's `installed-systems`
@@ -691,7 +759,8 @@ it last, only for paths neither cache.nixos.org nor Sekka's cache has. A
 system takes a new substituter only once activated, so the first update to
 this module still builds anything new itself.
 
-The nightly workflow publishes every revision it moves `nightly` to (see
+The cache workflow publishes every commit that reaches `main` (see Caching
+main), and the nightly workflow every revision it moves `nightly` to (see
 Nightly builds); the release workflow does not touch the cache. To publish by
 hand, from a clean checkout of reviewed `main`:
 
@@ -740,6 +809,55 @@ The push needs two credentials, neither of which belongs in the repository:
 Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
+
+## Tatami Bluetooth
+
+`desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,
+packaged as `bluetooth` (`tatami-bluetooth`). The bar, menu and Super+Ctrl+B
+launch it through `tatami bluetooth`; its desktop entry also opens the same
+single application instance. Its session stylesheet imports `tatami-gtk`
+through `config/tatami-bluetooth/style-dark.css`, with the same XDG override
+rules as Displays and Network.
+
+The unprivileged window uses GIO's asynchronous D-Bus calls to BlueZ's
+[Adapter1](https://bluez.readthedocs.io/en/latest/adapter-api/),
+[Device1](https://bluez.readthedocs.io/en/latest/device-api/) and
+[Agent1](https://bluez.readthedocs.io/en/latest/agent-api/) APIs. Reads and
+ordinary property changes have five-second deadlines; pairing has two minutes
+and connecting has thirty seconds. A snapshot is read every three seconds,
+with reads serialized and stale action/session results discarded. Rows keep
+their widgets across status and battery updates. Each BlueZ session is pinned
+to its unique bus owner, which is also checked on incoming agent calls.
+The application's KeyboardDisplay agent handles only a pairing explicitly
+started here and never replaces the default agent. It rejects unanswered
+prompts and closes display-only prompts when pairing finishes. Discovery
+belongs to this connection; it never sets global Discoverable or Pairable.
+Closing cancels pairing, releases discovery and unregisters the agent. BlueZ's
+bus-owner changes clear old state and prepare a new session.
+
+Aizome's Bluetooth pane informed the grouped device lists, device settings
+and the pairing dialog lifecycle. No Aizome workspace or dependency is pulled
+into Tatami. The root flake uses this local crate with its own narrow source
+filter and lockfile.
+
+```sh
+nix build .#bluetooth .#tatami --no-update-lock-file
+```
+
+The Bluetooth package's checks run the real GTK controls and GIO marshalling
+under Xvfb against a simulated BlueZ service on a private `dbus-daemon`.
+They cover power and failed changes, multiple adapters, discovery ownership,
+connect/disconnect, battery updates, PIN and passkey entry, comparison and
+service authorization, display-only prompts, rejection and cancellation,
+spoofed agent calls, rename/trust/block, confirmed removal, adapter loss,
+service restarts and closing with a pending pairing.
+The integration test is ignored by an ordinary `cargo test` because it needs
+an isolated display and `dbus-daemon`; the package check explicitly includes it.
+`TATAMI_BLUETOOTH_TEST_CAPTURES=/absolute/directory` optionally saves original
+GTK captures with simulated devices for review, not hardware evidence.
+These are component checks, not ISO builds, VM installations or physical
+Bluetooth interoperability validation. Physical adapter/device pairing remains
+to be checked; the test fixture does not emulate a Bluetooth controller.
 
 ## Activity
 
@@ -1016,11 +1134,18 @@ booted.
 `installer/genkan/rust/system/tuning.nix`. That covers CachyOS-inspired kernel,
 memory, I/O and ananicy settings, plus Ubuntu's lowlatency boot options and
 mq-deadline for NVMe. Sekka also has its own ananicy rules: shells run at
-nice 0 and compilers at nice 3. [docs/tuning.md](docs/tuning.md) lists each
-setting and why.
+nice 0, compilers at nice 3, and interactive AI harnesses at nice −4 with
+normal CPU scheduling. A user service gives their child jobs separate systemd
+scopes sharing a low-weight slice; the harness itself stays interactive.
+`nix/scheduling/` also patches ananicy's thread/fork/exec handling and Aizome's
+keybinding/IPC launcher, which otherwise left terminal builds in the
+compositor's scheduling group. [docs/tuning.md](docs/tuning.md)
+describes the policy, matching limits, patch maintenance and VM checks.
 
 ```sh
-nix build .#checks.x86_64-linux.tuning --no-update-lock-file
+nix build .#checks.x86_64-linux.tuning .#checks.x86_64-linux.aizome-login --no-update-lock-file
+nix build .#checks.x86_64-linux.tuning-policy --no-update-lock-file
+python3 -m unittest discover -s tests -p test_agent_workloads.py
 tests/responsiveness/run.sh measure LABEL
 tests/responsiveness/run.sh compare BEFORE AFTER
 ```
@@ -1321,6 +1446,26 @@ gh secret set CACHE_R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
 gh secret set CACHE_R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
 ```
 
+### Caching main
+
+`.github/workflows/cache.yml` runs on the builder for every push to `main`
+(each merged pull request) and from its **Run workflow** button (Actions,
+"Check and cache main"). A push runs it once, for its last commit, however
+many commits it brings: a rebase merge of several builds only the one it ends
+on. One run builds at a time; while it does, GitHub keeps only the newest
+waiting run and cancels older ones, so a burst of merges builds the first and
+the last.
+
+It runs `nix flake check` on the revision as merged, without updating inputs,
+then `nix run .#push-cache` and `scripts/check_cache_coverage.py`, as the
+nightly does. A failed check publishes nothing. It builds no ISO, moves no
+branch and publishes no download; machines following `main` substitute its
+packages instead of building them, and the next nightly finds them already
+built. It uses the `nightly` environment's three cache secrets, and fails
+before building if any is missing. The nightly's own push to `main` starts no
+run: the workflow token's pushes start no workflows, and the nightly publishes
+that revision itself.
+
 ### The builder
 
 Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
@@ -1340,11 +1485,11 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
 - Before the first step, the runner's job-started hook admits only
-  `workflow_dispatch` and `schedule` on `refs/heads/main` of
-  `bitemyapp/sekka`: workflows only maintainers can start or change. For
-  anything else, such as a pull request's workflow, it kills every process of
-  the job but the runner, so even `if: always()` steps never run, and the job
-  fails.
+  `workflow_dispatch`, `schedule` and `push` on `refs/heads/main` of
+  `bitemyapp/sekka`: workflows only maintainers can start or change, and
+  pushes to `main`, which only they can make. For anything else, such as a
+  pull request's workflow, it kills every process of the job but the runner,
+  so even `if: always()` steps never run, and the job fails.
 - The repository requires approval before any workflow from an outside
   contributor's pull request runs (Settings, Actions, General: "Require
   approval for all external contributors"). The workflow token defaults to

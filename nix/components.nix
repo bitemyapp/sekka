@@ -10,8 +10,24 @@
 let
   system = "x86_64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
+  upstreamAizome = aizome;
+  scheduledAizome = upstreamAizome.packages.${system}.aizome.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./scheduling/aizome-launch-scope.patch ];
+  });
 in
 rec {
+  aizome = upstreamAizome // {
+    packages.${system} = upstreamAizome.packages.${system} // {
+      aizome = scheduledAizome;
+      default = scheduledAizome;
+    };
+    nixosModules = upstreamAizome.nixosModules // {
+      default = { lib, ... }: {
+        imports = [ upstreamAizome.nixosModules.default ];
+        programs.aizome.package = lib.mkDefault scheduledAizome;
+      };
+    };
+  };
   tatami = {
     outPath = ../desktop/tatami;
     nixosModules.default = ../desktop/tatami/module.nix;
@@ -19,6 +35,7 @@ rec {
       tatami = pkgs.callPackage ../desktop/tatami/tool/package.nix { };
       displays = pkgs.callPackage ../desktop/tatami/displays/package.nix { };
       network = pkgs.callPackage ../desktop/tatami/network/package.nix { };
+      bluetooth = pkgs.callPackage ../desktop/tatami/bluetooth/package.nix { };
       activity = pkgs.callPackage ../desktop/tatami/activity/package.nix { };
       wallpapers = pkgs.callPackage ../desktop/tatami/wallpapers/package.nix { };
       elephant = pkgs.callPackage ../desktop/tatami/elephant/package.nix { };

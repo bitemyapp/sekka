@@ -46,7 +46,7 @@ their flake's Sekka input, so updates bring changes to it.
 | Kernel | `kernel.nmi_watchdog=0` plus the `nowatchdog` parameter; watchdog modules `iTCO_wdt`, `sp5100_tco` and `wdat_wdt` blacklisted; `kernel.kptr_restrict=2`; console log level 3; `ntsync` module loaded for Wine/Proton; `preempt=full rcu_nocbs=all` (below) |
 | I/O | mq-deadline for NVMe and SATA SSDs, BFQ for rotating disks (below) |
 | Network | `net.core.netdev_max_backlog=4096` |
-| Scheduling | ananicy-cpp with the CachyOS rule set (`ananicy-rules-cachyos`), adjusting nice, I/O and OOM priorities only, with Sekka's rules for shells and compilers (below). Its cgroup features are off: moving processes out of their systemd units broke VT switching and session cleanup at logout |
+| Scheduling | ananicy-cpp with the CachyOS rule set (`ananicy-rules-cachyos`), adjusting process priorities, with Sekka's rules for shells, compilers and interactive AI harnesses (below). Its cgroup features are off: moving processes out of their systemd units broke VT switching and session cleanup at logout |
 | Memory pressure | systemd-oomd enabled for system and user slices |
 | systemd | `DefaultTimeoutStopSec=10s` for system and user managers; `DefaultLimitNOFILE` 2048:2097152 (system) and 1024:1048576 (user); `Delegate=cpu cpuset io memory pids` for user managers; journal capped at 50 MiB; coredumps cleaned after 3 days; rtkit logging at info |
 | Services already default in NixOS | weekly fstrim, dbus-broker, systemd initrd |
@@ -76,7 +76,7 @@ two options.
 
 mq-deadline serves the realtime, best-effort and idle I/O priority classes in
 that order (since Linux 5.14). It lets a waiting lower-class request through
-after 10 s (`prio_aging_expire`). nix-daemon's ananicy rule gives Nix builds
+after 10 s (`prio_aging_expire`). The Nix daemon starts with idle CPU and I/O scheduling, so its builders inherit
 the idle class, which Kyber, the previous NVMe choice, ignores. A `nix`
 command waiting on the daemon while other I/O keeps the disk saturated can
 see that delay too.
@@ -93,48 +93,96 @@ It stays on rotating disks.
 Kernel flusher threads submit a build's buffered writes, so the build's I/O
 class does not apply to them.
 
-### Process priorities
+### Interactive programs and background jobs
 
-CachyOS's ananicy rules give terminals and shells −4 ("Doc-View"). Everything
-started from a shell inherits its nice value, including builds, and on NixOS
-every wrapper script is a bash script. Sekka changes two things.
+Foot, Chrome/Chromium and the recognized AI harnesses (`codex`, `claude`,
+`claude-code`, `gemini`, `omp`) get nice −4. Harnesses explicitly get normal CPU
+scheduling, including every thread: typing, drawing and responding to tool results must
+remain responsive. Shells run at nice 0, and the listed compilers/linkers at
+nice 3. These are absolute values; `nice -n 19 bash` is reset to 0. Per-process
+nice values do not replace CPU allocation between systemd groups.
 
-- **Shells** (`bash`, `dash`, `fish`, `ksh`, `nu`, `tcsh`, `zsh`) run at
-  nice 0. A terminal keeps −4, and what runs in it starts at normal priority.
-  ananicy loads rule files in directory order and the last rule for a name
-  wins, so Sekka removes the shell rules from its copy of the CachyOS set
-  rather than adding rules after them. Because ananicy sets absolute values, a
-  shell started lower (`nice -n 19`, a service's `Nice=`) is also set to 0.
-  CachyOS's rule set it to −4.
-- **Compilers and linkers** (`cc1`, `cc1plus`, `lto1`, `clang`, `rustc`,
-  `clippy-driver`, and the `ld`, `lld` and `mold` variants) run at nice 3,
-  about half the CPU weight of a normal task. Each application has its own
-  cgroup with equal CPU weight, so this only affects competition inside the
-  application that started the build. A build loses CPU only when that
-  application is busy too. The rule sets nothing but nice, so Nix builds keep
-  the SCHED_IDLE policy and idle I/O class they inherit from `nix-daemon`
-  (SCHED_IDLE ignores nice). Being absolute, it also raises the compilers of
-  `nice -n 19 make` to 3; `chrt --idle` keeps a build lower.
+`sekka-agent-workloads.service` runs as each user. While a harness is running,
+every 250 ms it discovers harness process trees and asks that user's systemd
+manager to create scopes for their child jobs. All work scopes share
+`app-background.slice`, whose CPU
+and I/O weights are 20; an ordinary application has CPU weight 100. These are
+relative weights under contention, not quotas: jobs can use otherwise idle
+CPUs. Shells, arbitrary test binaries and their descendants stay in the work
+scope even when they change their own nice values. The harness remains in its
+launcher's unit. A nested harness that execs inside a work scope is moved to
+an interactive app scope, and its own jobs are separated again.
 
-ananicy identifies a process by its argv[0] when it is executed, and ignores a
-second exec of the same process straight after. NixOS's `ld` is a bash wrapper
-script that execs the real linker, so ananicy takes it for a shell and the
-linker keeps the shell's nice value. In a VM, `cc1` (10 of 10 compiles) and
-`rustc` behind nixpkgs' wrapper (6 of 6) were reniced; the wrapped `ld` was not
-(0 of 10). Linkers started directly, such as rustup's `rust-lld`, are matched.
-ananicy reaches a new process about half a second after it starts (measured on
-ganymede), so a compiler process that finishes sooner keeps its inherited
-priority.
+The service handles both packaged harnesses and recognized executables started
+by other launchers. It only manages the current user's processes already
+inside their user manager, leaves delegated subgroups alone, and uses
+systemd's `StartTransientUnit`/`AttachProcessesToUnit` APIs. Scopes follow
+explicit stops of their original unit through `PartOf`; the user manager
+tracks and cleans them up. Ananicy's raw cgroup migration and realtime
+workaround remain disabled. Discovery is periodic: short jobs may finish
+before classification, and a process that daemonizes and loses its ancestry
+before discovery cannot be attributed to an agent. Containers and privileged
+helpers are not moved. This is resource scheduling, not sandbox enforcement.
+
+`sekka-background COMMAND ...` explicitly runs other long jobs in the same
+background slice, preserving arguments, environment, working directory,
+terminal and exit status. It runs directly without a user manager or when
+`calamares.tuning.enable` is off. No AI harness is wrapped in this command.
+
+Nix builders belong to the daemon rather than the calling agent. Sekka sets
+`nix.daemonCPUSchedPolicy = "idle"`, `nix.daemonIOSchedClass = "idle"` and the
+daemon's CPU/IO weights to 20 as overridable defaults. This also covers
+Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
+
+### Launcher and ananicy repairs
+
+Aizome's desktop-entry launcher already uses app scopes, but its keybinding
+and IPC launcher directly spawned terminals in `aizome.service`. Their agents
+and builds consequently shared the compositor's weight 1000, inside
+`session.slice` at 400, ahead of `app.slice` at 100. Sekka applies
+`nix/scheduling/aizome-launch-scope.patch` to its pinned Aizome package so that
+those launches also enter `app.slice` using `systemd-run --scope`. Session
+environment, arguments and working directory are retained. Without a user
+manager, the launcher keeps its direct-spawn behavior.
+
+`nix/scheduling/ananicy-processes.patch` repairs gaps in ananicy-cpp 1.2.0:
+
+- Apply CPU scheduling and I/O priority to every existing thread, as nice
+  already was. Previously a Nix main thread could display SCHED_IDLE while
+  its garbage-collector workers used normal scheduling.
+- Report the child PID on BPF fork events, covering new threads and browser
+  zygote children that never exec.
+- Process consecutive execs of the same PID and refresh its identity when
+  applying a rule, so NixOS shell wrappers do not hide the real program.
+- Recognize Chromium's rewritten argv[0], including switches containing paths.
+  Use the executable name as a fallback when permission allows, without
+  adding ptrace privileges to the daemon.
+- Recognize known harness scripts under Node/Bun before applying their generic
+  background-runtime rule, so interpreted harnesses stay interactive.
+
+Review these patches whenever their inputs change and remove them when the
+upstream versions contain equivalent fixes. Existing terminals and harnesses
+should be restarted after installing the change.
 
 ### Checks
 
-`nix build .#checks.x86_64-linux.tuning` boots a VM with the installed kernel
-and the tuning module, and checks:
+`nix build .#checks.x86_64-linux.tuning-policy` checks disabling the policy,
+explicit overrides and process-tree classification.
+`nix build .#checks.x86_64-linux.tuning` boots a disposable VM and checks the
+preemption and disk-scheduler settings, terminal/shell/compiler nice values,
+all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
+children, wrapper execs, interactive harnesses and isolated jobs, nested
+harnesses, scope stop propagation, and the patched Aizome launch function with
+a real user manager. The unpatched ananicy binary is the failing control for
+pre-existing Nix worker threads. `tests/test_agent_workloads.py` checks process
+tree classification and the boundaries on which units the service may manage.
 
-- the boot options and the active preemption mode;
-- mq-deadline on an emulated NVMe disk and BFQ on a rotating one;
-- a terminal at −4 whose shell runs at 0 and whose compiler runs at 3;
-- a compiler at SCHED_IDLE with the idle I/O class, which keeps both.
+`nix build .#checks.x86_64-linux.aizome-login` additionally logs into the full
+Aizome desktop, opens actual Foot through its IPC launcher, starts a raw-mode
+TUI stand-in named `codex` with eight CPU-bound child jobs, and sends keyboard
+input through QEMU's emulated keyboard. It checks every received byte and the
+harness/job group separation. This checks the compositor/terminal input path;
+it does not run an authenticated Codex session or validate physical hardware.
 
 ### Not ported
 

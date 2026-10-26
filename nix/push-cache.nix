@@ -1,8 +1,9 @@
 # `nix run .#push-cache [FLAKE]`: uploads Sekka's own packages to the public
 # binary cache at https://cache.sekka.computer (Cloudflare R2 bucket
 # sekka-cache), leaving the rest of their closures to cache.nixos.org.
-# DEVELOPERS.md describes the key and credentials it expects. The nightly
-# workflow runs it for every revision it publishes.
+# DEVELOPERS.md describes the key and credentials it expects. The cache
+# workflow runs it for every push to main, the nightly workflow for every
+# revision it publishes.
 { pkgs }:
 pkgs.writeShellApplication {
   name = "sekka-push-cache";

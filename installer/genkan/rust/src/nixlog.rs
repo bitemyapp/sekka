@@ -9,6 +9,7 @@ const COPY_PATH: u64 = 100;
 const COPY_PATHS: u64 = 103;
 const BUILDS: u64 = 104;
 const BUILD: u64 = 105;
+const VERIFY_PATHS: u64 = 107;
 const SUBSTITUTE: u64 = 108;
 const RESULT_BUILD_LOG_LINE: u64 = 101;
 const RESULT_PROGRESS: u64 = 105;
@@ -111,6 +112,8 @@ pub struct Tracker {
     pub paths: (u64, u64),
     /// Builds done/expected.
     pub builds: (u64, u64),
+    /// Content verification, including the live media's registered paths.
+    pub verified: (u64, u64),
     /// Error messages, for a readable failure report.
     errors: Vec<String>,
     /// The most recent build log lines.
@@ -180,6 +183,7 @@ impl Tracker {
                     }
                     COPY_PATHS => self.paths = (done, expected),
                     BUILDS => self.builds = (done, expected),
+                    VERIFY_PATHS => self.verified = (done, expected),
                     _ => return None,
                 }
                 Some(Update::Progress)
@@ -242,6 +246,23 @@ mod tests {
         ] {
             assert!(build_result(bad).is_err(), "{bad}");
         }
+    }
+    #[test]
+    fn tracks_content_verification_and_retains_hash_errors() {
+        let mut t = Tracker::default();
+        t.line(r#"@nix {"action":"start","id":1,"type":107}"#);
+        assert_eq!(
+            t.line(r#"@nix {"action":"result","id":1,"type":105,"fields":[4,12,1,0]}"#),
+            Some(Update::Progress)
+        );
+        assert_eq!(t.verified, (4, 12));
+        assert_eq!(t.copied_bytes, 0);
+        t.line(r#"@nix {"action":"msg","level":0,"msg":"path '/nix/store/test' was modified! expected hash 'a', got 'b'"}"#);
+        assert!(
+            t.failure_report()
+                .unwrap()
+                .contains("expected hash 'a', got 'b'")
+        );
     }
     #[test]
     fn tracker_sums_copy_bytes_and_reports_builds() {

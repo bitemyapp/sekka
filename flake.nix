@@ -159,9 +159,13 @@
       };
       packages.${system} = {
         default = self.packages.${system}.iso;
-        iso = installer.config.system.build.isoImage;
+        iso = import ./nix/verified-iso.nix {
+          inherit pkgs;
+          iso = installer.config.system.build.isoImage;
+        };
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
+        aizome = inputs.aizome.packages.${system}.aizome;
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
@@ -193,6 +197,7 @@
           tatami
           displays
           network
+          bluetooth
           activity
           wallpapers
           ;
@@ -289,6 +294,12 @@
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
+        genkan-store-integrity = import ./nix/genkan-integrity-test.nix {
+          inherit pkgs;
+          genkan = calamares;
+          nixPackage = runnerNix;
+        };
+        iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
         iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
           inherit pkgs installer;
         };
@@ -494,7 +505,11 @@
           inherit (self.packages.${system}) tatami;
           inherit (hyprlandPkgs) hyprland;
         };
-        tuning = import ./nix/tuning-test.nix { inherit pkgs; };
+        tuning = import ./nix/tuning-test.nix {
+          inherit pkgs;
+          aizomeSource = inputs.aizome.outPath;
+        };
+        tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
@@ -523,6 +538,7 @@
             '';
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
+        bluetooth = self.packages.${system}.bluetooth;
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
@@ -622,6 +638,7 @@
                 ${./apps/kakehashi/linux/computer.sekka.Kakehashi.desktop} \
                 ${./desktop/tatami/activity/data/org.tatami.Activity.desktop} \
                 ${./desktop/tatami/network/data/org.tatami.Network.desktop} \
+                ${./desktop/tatami/bluetooth/data/org.tatami.Bluetooth.desktop} \
                 ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
               touch $out
             '';
