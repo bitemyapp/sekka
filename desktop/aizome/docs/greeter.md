@@ -32,6 +32,13 @@ with the same pieces (`aizome-face`).
 Whoever logged in last starts at their password. Other displays show the
 wallpaper and the time.
 
+The login screen uses the last logged-in person's saved per-display scales
+(or the only person's, before the first login). Aizome publishes those scales
+to AccountsService when the session starts and when the saved display settings
+change. Integer and fractional scales use the same display matching as the
+session. With no saved preference, the compositor detects the scale from the
+display's DPI as usual.
+
 ## How it runs
 
 greetd starts `aizome-greeter` as the `greeter` user, in a logind session
@@ -70,7 +77,8 @@ the first person's session.
   root-owned directories. On NixOS these are the store paths in
   `/etc/aizome/greeter.toml`.
 - **What it reads:** `/etc/passwd` and `login.defs` (accounts in
-  `UID_MIN`–`UID_MAX` with a login shell), AccountsService's pictures, and
+  `UID_MIN`–`UID_MAX` with a login shell), AccountsService's pictures and
+  public display scales, and
   its own state, `/var/lib/aizome-greeter/state.toml` (mode 0700, the
   greeter's). The state holds who logged in last and each person's
   session, nothing secret. Nothing in people's homes is read.
@@ -90,6 +98,15 @@ each time it starts. So an Aizome update leaves greetd's configuration and
 unit unchanged and applies live, and the next login screen is the new one.
 By store path, every update would change greetd's configuration, and
 updaters stage a display manager change for the next start.
+
+The package installs the `org.aizome.DisplayScales` AccountsService extension.
+It lets each person publish their own display identities and scales; changing
+another person's requires administrator authorization. The greeter reads only
+that public preference, so it works with homes that are private or encrypted.
+Modes, display enablement, commands and other personal settings are not copied.
+Explicit output rules in `compositor_settings` take precedence. Missing or
+invalid preferences leave the greeter's configuration in effect. After updating,
+the scales become available once the new Aizome shell has run in the session.
 
 Its keys:
 
@@ -131,6 +148,9 @@ stands in for greetd and takes anyone, with the password `aizome`.
   - desktop entries and `Exec` quoting;
   - the people and `login.defs`;
   - the configuration and what's remembered;
+  - choosing whose display scales to use (the scale filtering is tested by
+    `cargo test -p aizome-config`, and D-Bus access by
+    `cargo test -p aizome-sys --test display_scales`);
   - the conversation: a wrong password, several questions, cancelling, and
     late answers;
   - the screens, headless, with pictures in `target/greeter-shots/`.
@@ -141,5 +161,7 @@ stands in for greetd and takes anyone, with the password `aizome`.
   - a wrong password, then the right one, which starts Aizome and unlocks
     the keyring;
   - logging out and back, remembered;
+  - saved display scales shared through AccountsService and used at the next
+    login screen, with private homes and per-user isolation;
   - Bob in sway, then in X11;
   - the power menu.

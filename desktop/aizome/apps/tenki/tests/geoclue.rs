@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aizome_tenki::location::{LocateError, locate_on};
 use zbus::zvariant::OwnedObjectPath;
@@ -106,15 +106,23 @@ impl Manager {
 
 struct Client {
     deny: bool,
+    start_delay: Duration,
+    stop_gate: Option<StopGate>,
     started: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     desktop_id: String,
     accuracy: u32,
     running: bool,
 }
 
+struct StopGate {
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
 #[zbus::interface(name = "org.freedesktop.GeoClue2.Client")]
 impl Client {
     fn start(&mut self) -> zbus::fdo::Result<()> {
+        std::thread::sleep(self.start_delay);
         if self.deny {
             return Err(zbus::fdo::Error::AccessDenied("'org.aizome.Tenki' disallowed, no agent".into()));
         }
@@ -124,6 +132,10 @@ impl Client {
     }
 
     fn stop(&mut self) {
+        if let Some(gate) = &self.stop_gate {
+            gate.entered.send(()).unwrap();
+            gate.release.lock().unwrap().recv_timeout(Duration::from_secs(15)).expect("release Stop");
+        }
         self.running = false;
     }
 
@@ -179,8 +191,25 @@ impl Location {
 }
 
 fn serve(bus: &TestBus, deny: bool) -> (zbus::blocking::Connection, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    serve_delayed(bus, deny, Duration::ZERO, None)
+}
+
+fn serve_delayed(
+    bus: &TestBus,
+    deny: bool,
+    start_delay: Duration,
+    stop_gate: Option<StopGate>,
+) -> (zbus::blocking::Connection, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
     let started = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let client = Client { deny, started: started.clone(), desktop_id: String::new(), accuracy: 0, running: false };
+    let client = Client {
+        deny,
+        start_delay,
+        stop_gate,
+        started: started.clone(),
+        desktop_id: String::new(),
+        accuracy: 0,
+        running: false,
+    };
     let conn = zbus::blocking::connection::Builder::address(bus.address.as_str())
         .unwrap()
         .name("org.freedesktop.GeoClue2")
@@ -225,4 +254,33 @@ fn no_geoclue_is_unavailable() {
         Err(LocateError::Unavailable(_)) => {}
         other => panic!("expected unavailable, got {other:?}"),
     }
+}
+
+#[test]
+fn a_slow_start_is_part_of_the_location_deadline() {
+    let Some(bus) = TestBus::start() else { return };
+    let (_geoclue, _) = serve_delayed(&bus, false, Duration::from_millis(800), None);
+    let me = bus.connect();
+    let start = Instant::now();
+    let found = locate_on(&me, "org.aizome.Tenki", Duration::from_millis(100));
+    assert_eq!(found, Err(LocateError::TimedOut));
+    assert!(start.elapsed() < Duration::from_millis(600), "Start ignored the request deadline");
+}
+
+#[test]
+fn a_slow_stop_does_not_hold_the_position_hostage() {
+    let Some(bus) = TestBus::start() else { return };
+    let (entered, stop_entered) = std::sync::mpsc::channel();
+    let (release_stop, release) = std::sync::mpsc::channel();
+    let gate = StopGate { entered, release: std::sync::Mutex::new(release) };
+    let (_geoclue, _) = serve_delayed(&bus, false, Duration::ZERO, Some(gate));
+    let me = bus.connect();
+    let (finished, result) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        finished.send(locate_on(&me, "org.aizome.Tenki", Duration::from_secs(3))).unwrap();
+    });
+    stop_entered.recv_timeout(Duration::from_secs(5)).expect("worker reached Stop");
+    result.recv_timeout(Duration::from_secs(5)).expect("position returned while Stop is blocked").expect("a position");
+    release_stop.send(()).unwrap();
+    worker.join().unwrap();
 }

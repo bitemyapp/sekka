@@ -92,6 +92,12 @@ pub trait Program: Sized + 'static {
         let _ = cx;
     }
 
+    /// The pointer entered or left the window, independently of its widgets.
+    /// Useful for transient shell surfaces whose children handle pointer events.
+    fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Self::Msg>) {
+        let _ = (window, inside, cx);
+    }
+
     /// The compositor locked the session, as [`Cx::lock_session`] asked:
     /// only the lock's windows show until [`Cx::unlock_session`].
     fn session_locked(&mut self, cx: &mut Cx<Self::Msg>) {
@@ -114,6 +120,13 @@ pub trait Program: Sized + 'static {
     /// desktop's ⌃❖F), maximised. The kit views the window again after.
     fn window_state(&mut self, window: WindowKey, state: WindowState, cx: &mut Cx<Self::Msg>) {
         let _ = (window, state, cx);
+    }
+
+    /// A native drag successfully started from `window` (or one of its
+    /// popups). Its matching [`Program::drag_ended`] reports completion or
+    /// cancellation; a rejected start does not call this hook.
+    fn drag_started(&mut self, window: WindowKey, drag: DragId, cx: &mut Cx<Self::Msg>) {
+        let _ = (window, drag, cx);
     }
 
     /// A destination asks for the data of drag `drag` promised as `mime`

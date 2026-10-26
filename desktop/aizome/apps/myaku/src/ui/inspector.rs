@@ -26,22 +26,100 @@ fn section(title: &str, rows: Vec<Element<Msg>>) -> Element<Msg> {
     aizome_kit::widgets::layout::column(v).spacing(4.0).width(Length::Fill).into()
 }
 
+fn grouping(group: &model::Group, member: bool) -> Option<Element<Msg>> {
+    let mut rows = Vec::new();
+    if member {
+        rows.push(
+            row![
+                text(if group.kind == Some(Kind::App) { "Application" } else { "Group" })
+                    .size(12.0)
+                    .role(Role::Text3)
+                    .width(112.0),
+                button(group.name.clone())
+                    .plain()
+                    .compact()
+                    .on_press(Msg::Select(Sel::Group(group.key)))
+                    .id("inspector-group"),
+            ]
+            .spacing(8.0)
+            .into(),
+        );
+    }
+    if !group.attribution.trim().is_empty() {
+        rows.push(
+            text(group.attribution.clone())
+                .size(12.0)
+                .wrap()
+                .selectable()
+                .width(Length::Fill)
+                .id("group-attribution")
+                .into(),
+        );
+    }
+    (!rows.is_empty()).then(|| section("Grouping", rows))
+}
+
 fn opt<T>(v: Option<T>, f: impl Fn(T) -> String) -> String {
     v.map(f).unwrap_or_else(|| "—".into())
 }
 
 fn energy_note(f: &Frame) -> &'static str {
+    let cards = f.power.graphics.is_some();
     match f.power.meter {
         Meter::None if f.power.battery.is_none() && !f.power.on_battery => {
             "Not measured: the processor's power meter (RAPL) is readable only by root here, and the battery isn't discharging."
         }
         Meter::None => "Not measured: no power meter is readable here.",
+        Meter::Battery if cards => {
+            "Estimated from the battery's draw: the graphics cards' part by share of each card, the rest by share of the processor."
+        }
         Meter::Battery => "Estimated from the battery's draw, by share of the processor.",
-        Meter::Rapl => "Estimated from the processor's power meter, by share of the processor.",
+        Meter::Rapl | Meter::Package if cards => {
+            "Estimated from the power meters of the processor, by share of it, and of the graphics cards, by share of each card."
+        }
+        Meter::Rapl | Meter::Package => "Estimated from the processor's power meter, by share of the processor.",
+        Meter::Graphics => {
+            "Estimated from the graphics cards' power meters, by share of each card. The processor's (RAPL) is readable only by root here: what uses no card isn't measured."
+        }
     }
 }
 
-fn usage_sections(f: &Frame, u: &Usage, readable: bool) -> Vec<Element<Msg>> {
+/// What `members` use of the graphics cards. With several cards, its use of
+/// each it uses, whichever the table shows: "GeForce RTX 5090 · 2.0% · 876
+/// MiB".
+fn graphics(f: &Frame, members: &[usize]) -> Vec<Element<Msg>> {
+    let procs = || members.iter().map(|&i| &f.processes[i]);
+    let all = model::graphics_of(procs(), &f.gpus, None);
+    let percent = |n: Option<f64>| opt(n, |n| format!("{}%", model::percent(n)));
+    let mut rows = Vec::new();
+    if f.gpus.len() > 1 {
+        let names = model::gpu_names(&f.gpus);
+        for d in model::gpu_order(&f.gpus) {
+            // Shown where it's a client, or might be: the card's clients
+            // can't be read.
+            if procs().any(|p| p.uses(d)) || f.gpus[d].clients_unknown() {
+                let on = model::graphics_of(procs(), &f.gpus, Some(d));
+                rows.push(pair(&names[d], format!("{} · {}", percent(on.busy), opt(on.vram, model::bytes))));
+            }
+        }
+        if rows.is_empty() {
+            return vec![text("Uses no GPU.").size(12.0).role(Role::Text3).into()];
+        }
+    } else {
+        rows.push(pair("% GPU", percent(all.busy)));
+    }
+    rows.push(pair("% Video", percent(all.video)));
+    if f.gpus.len() == 1 {
+        rows.push(pair("Video memory", opt(all.vram, model::bytes)));
+    }
+    if f.gpus.iter().any(|g| g.reports_shared()) {
+        rows.push(pair("Shared GPU", opt(all.shared, model::bytes)));
+    }
+    rows
+}
+
+fn usage_sections(m: &Myaku, members: &[usize], u: &Usage, readable: bool) -> Vec<Element<Msg>> {
+    let f = &m.frame;
     let mut v = vec![section(
         "Processor",
         vec![
@@ -79,15 +157,7 @@ fn usage_sections(f: &Frame, u: &Usage, readable: bool) -> Vec<Element<Msg>> {
     energy.push(text(energy_note(f)).size(11.0).role(Role::Text3).wrap().width(Length::Fill).into());
     v.push(section("Energy", energy));
     if !f.gpus.is_empty() {
-        v.push(section(
-            "Graphics",
-            vec![
-                pair("% GPU", format!("{}%", model::percent(u.gpu))),
-                pair("% Video", format!("{}%", model::percent(u.video))),
-                pair("Video memory", model::bytes(u.vram)),
-                pair("Shared GPU", model::bytes(u.gpu_shared)),
-            ],
-        ));
+        v.push(section("Graphics", graphics(f, members)));
     }
     let mut disk = vec![
         pair("Reading", opt(u.read_rate, model::rate)),
@@ -123,7 +193,8 @@ pub fn view(m: &Myaku) -> Element<Msg> {
         Some(RowRef::Group(g)) => {
             let grp = &f.groups[g];
             let mut v = header(m, &grp.name, &group_detail(f, g), grp.kind);
-            v.extend(usage_sections(f, &grp.usage, grp.members.iter().all(|&i| f.processes[i].readable)));
+            v.extend(grouping(grp, false));
+            v.extend(usage_sections(m, &grp.members, &grp.usage, grp.members.iter().all(|&i| f.processes[i].readable)));
             let mut list: Vec<Element<Msg>> = Vec::new();
             for &i in grp.members.iter().take(40) {
                 let p = &f.processes[i];
@@ -144,21 +215,11 @@ pub fn view(m: &Myaku) -> Element<Msg> {
             let p = &f.processes[i];
             let meta = format!("PID {} · {} · {}", p.pid, p.user, p.state_text());
             let mut v = header(m, &p.name, &meta, f.groups[p.group].kind);
-            v.extend(usage_sections(f, &p.usage, p.readable));
+            v.extend(grouping(&f.groups[p.group], true));
+            v.extend(usage_sections(m, &[i], &p.usage, p.readable));
             let mut about = Vec::new();
             if !p.role.is_empty() {
                 about.push(pair("Role", p.role.clone()));
-            }
-            let group = &f.groups[p.group];
-            if group.members.len() > 1 || group.name != p.name {
-                about.push(
-                    row![
-                        text("Application").size(12.0).role(Role::Text3).width(112.0),
-                        button(group.name.clone()).plain().compact().on_press(Msg::Select(Sel::Group(group.key))),
-                    ]
-                    .spacing(8.0)
-                    .into(),
-                );
             }
             if let Some(parent) = f.processes.iter().find(|q| q.pid == p.ppid) {
                 about.push(

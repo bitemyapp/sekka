@@ -18,13 +18,17 @@ pub struct Compositor {
 }
 
 impl Compositor {
+    pub fn socket_name() -> String {
+        format!("aizome-greeter-{}", std::process::id())
+    }
+
     /// Start `argv` (the configuration's `compositor`) on a socket of its
     /// own, with `settings` for its settings file, and wait until it
     /// listens.
     pub fn start(argv: &[String], settings: Option<&PathBuf>) -> Result<Compositor, String> {
         let (program, args) = argv.split_first().ok_or("no compositor configured")?;
         let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).ok_or("XDG_RUNTIME_DIR isn't set")?;
-        let socket = format!("aizome-greeter-{}", std::process::id());
+        let socket = Self::socket_name();
         let mut cmd = Command::new(program);
         cmd.args(args).arg("--socket").arg(&socket);
         if let Some(s) = settings {

@@ -35,6 +35,7 @@ pub enum Msg {
     RemoveDesk(usize),
     RemoveConfirmed(usize),
     Collapsed(bool),
+    AutoHide(bool),
     Shelf(bool),
     Pin(usize),
     Unpin(String),
@@ -96,6 +97,7 @@ impl Pane for Desktop {
         vec![
             SettingEntry::new("desks", "Desks").keywords(&["workspaces", "virtual desktops", "rename", "folder"]),
             SettingEntry::new("collapsed", "Fold the Deskbar").keywords(&["hide deskbar", "collapse", "apps"]),
+            SettingEntry::new("auto-hide", "Automatically hide the Deskbar").keywords(&["auto hide", "dock", "apps"]),
             SettingEntry::new("pinned", "Apps kept in the Deskbar").keywords(&["pin", "favourites", "keep in deskbar"]),
             SettingEntry::new("shelf", "Show the Shelf").keywords(&["drag", "park", "shelf"]),
             SettingEntry::new("desktop-icons", "Icons on the desktop").keywords(&["home", "disks", "trash"]),
@@ -227,6 +229,11 @@ impl Pane for Desktop {
                 d.collapsed = on;
                 s.set_shell_section("deskbar", &d);
             }),
+            Msg::AutoHide(on) => cx.change(|s| {
+                let mut d = s.deskbar_settings();
+                d.auto_hide = on;
+                s.set_shell_section("deskbar", &d);
+            }),
             Msg::Shelf(on) => cx.change(|s| extra::set(&mut s.deskbar, "show_shelf", on)),
             Msg::Pin(i) => {
                 let Some((id, _)) = self.apps.as_ref().and_then(|a| a.get(i)).cloned() else { return };
@@ -315,6 +322,9 @@ impl Pane for Desktop {
             form::row("Fold the Deskbar", toggle(db.collapsed).on_toggle(Msg::Collapsed))
                 .entry("collapsed")
                 .help("Folded, it's the menu bar's “N apps ⌄”, which opens it."),
+            form::row("Automatically hide the Deskbar", toggle(db.auto_hide).on_toggle(Msg::AutoHide))
+                .entry("auto-hide")
+                .help("Point at the menu bar's apps control to reveal it. It hides after the pointer leaves."),
             form::row("Show the Shelf", toggle(extra::get_bool(&s.deskbar, "show_shelf", true)).on_toggle(Msg::Shelf))
                 .entry("shelf")
                 .help("A place to park what you're dragging: files, text, pictures."),
@@ -345,12 +355,9 @@ impl Pane for Desktop {
             );
             col.into()
         };
-        deskbar.push(
-            form::row("Kept in the Deskbar", pins)
-                .entry("pinned")
-                .stacked()
-                .help("Pinned apps stay listed while closed, first, ready to open."),
-        );
+        deskbar.push(form::row("Kept in the Deskbar", pins).entry("pinned").stacked().help(
+            "Pinned apps stay listed while closed, ready to open. Drag app rows in the Deskbar to arrange them.",
+        ));
 
         let desktop = extra::section_ref(s, "desktop");
         let icons = vec![

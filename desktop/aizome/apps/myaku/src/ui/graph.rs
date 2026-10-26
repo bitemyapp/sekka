@@ -47,6 +47,10 @@ pub enum Style {
     /// The first upward from the middle, the second downward (read and
     /// write, in and out).
     Mirrored,
+    /// Each from the bottom on its own: the first as an area, the second as
+    /// a line over it (a graphics card's busy time and its memory). An empty
+    /// series isn't drawn.
+    Overlaid,
 }
 
 /// The top of the scale: fixed, or the series' peak.
@@ -191,6 +195,19 @@ impl Widget for Graph {
                     cx.canvas.stroke(&line(&up), &stroke, ha);
                     cx.canvas.stroke(&line(&down), &stroke, hc);
                     cx.canvas.fill_rect(Rect::new(inner.x0, mid.round(), inner.x1, mid.round() + 1.0), t.line2());
+                }
+                Style::Overlaid => {
+                    let base = |_: usize| mid;
+                    let first = |i: usize| y_up(a.get(i));
+                    let second = |i: usize| y_up(c.get(i));
+                    if a.len() >= 2 {
+                        cx.canvas.fill(&area(&base, &first), ha.with_alpha(fill));
+                        cx.canvas.stroke(&line(&first), &stroke, ha);
+                    }
+                    if c.len() >= 2 {
+                        cx.canvas.fill(&area(&base, &second), hc.with_alpha(fill * 0.45));
+                        cx.canvas.stroke(&line(&second), &stroke, hc);
+                    }
                 }
             }
             cx.canvas.restore();

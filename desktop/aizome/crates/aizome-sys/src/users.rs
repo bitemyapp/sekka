@@ -25,6 +25,29 @@ use zbus::zvariant::OwnedObjectPath;
 const ACCOUNTS: &str = "org.freedesktop.Accounts";
 const ACCOUNTS_PATH: &str = "/org/freedesktop/Accounts";
 const IFACE_USER: &str = "org.freedesktop.Accounts.User";
+const IFACE_AIZOME: &str = "org.aizome.DisplayScales";
+
+/// A person's public display scales for the login screen. AccountsService
+/// persists this even when their home is unavailable before login.
+pub fn display_scales(bus: &Bus, uid: u32) -> Result<String> {
+    let path: OwnedObjectPath = bus.call(ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS, "FindUserById", &(i64::from(uid),))?;
+    bus.get(ACCOUNTS, path.as_str(), IFACE_AIZOME, "Scales")
+}
+
+/// Publish only our own display scales, without prompting for authentication.
+/// The installed AccountsService extension permits changing one's own data;
+/// changing another person's still requires administrator authorization.
+pub fn publish_display_scales(bus: &Bus, scales: &str) -> Result<()> {
+    let uid = unsafe { libc::getuid() };
+    let path: OwnedObjectPath = bus.call(ACCOUNTS, ACCOUNTS_PATH, ACCOUNTS, "FindUserById", &(i64::from(uid),))?;
+    bus.call(
+        ACCOUNTS,
+        path.as_str(),
+        "org.freedesktop.DBus.Properties",
+        "Set",
+        &(IFACE_AIZOME, "Scales", zbus::zvariant::Value::from(scales)),
+    )
+}
 
 /// The rounds of SHA-512 crypt: slow enough to resist guessing, fast enough
 /// (tens of milliseconds) at login.

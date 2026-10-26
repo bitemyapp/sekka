@@ -89,7 +89,9 @@ impl InputExt for State {
         };
         if !pointer.is_grabbed() {
             self.lg.m().interactive.hover = hover;
-            self.az.cursor_override = override_cursor;
+            // The picker owns the cursor until a selection completes or is
+            // cancelled, including motion before any button is pressed.
+            self.az.cursor_override = self.lg.r().overlays.area.as_ref().map(|a| a.cursor()).or(override_cursor);
         }
         crate::overlays::pointer_moved(self, pos);
         let focus = match under {

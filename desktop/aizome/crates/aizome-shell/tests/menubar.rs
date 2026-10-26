@@ -79,6 +79,25 @@ fn meters_repaint_only_their_bars() {
 }
 
 #[test]
+fn window_drag_targets_follow_a_header_with_the_deskbar_hide_control() {
+    use aizome_kit::Point;
+    let mut h = scene(false);
+    // Enough ordinary status items for the header to exceed its minimum width.
+    h.program_mut().tray.bluetooth = Some((true, true));
+    h.program_mut().tray.display = Some(0.8);
+    h.send(Msg::Nothing);
+    let bar = window_titled(&h, "Menu bar");
+    let left = W - aizome_shell::deskbar::WIDTH - aizome_shell::deskbar::SHADOW;
+    for (title, index) in [("1 Mail", 1), ("2 Build", 2), ("3 Write", 3)] {
+        let r = h.find(bar, title).expect("visible Desk");
+        // Include each tab's left edge, where a stale width selects its neighbour.
+        for x in [r.x0 + 3.0, r.center().x, r.x1 - 3.0] {
+            assert_eq!(h.program().desk_at_deskbar_point(Point::new(x - left, -12.0)), Some(index), "{title}");
+        }
+    }
+}
+
+#[test]
 fn pictures_of_the_bar() {
     for day in [false, true] {
         let mut h = scene(day);

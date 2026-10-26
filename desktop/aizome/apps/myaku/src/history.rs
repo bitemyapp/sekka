@@ -60,6 +60,15 @@ impl Ring {
     }
 }
 
+/// A graphics card's series, by its PCI address: fractions of its engines'
+/// time and of its memory.
+#[derive(Clone, Debug, Default, PartialEq, Hash)]
+pub struct CardHistory {
+    pub pci: String,
+    pub busy: Ring,
+    pub memory: Ring,
+}
+
 /// Every graph's series.
 #[derive(Clone, Debug, Default, PartialEq, Hash)]
 pub struct History {
@@ -74,10 +83,29 @@ pub struct History {
     pub disk_write: Ring,
     pub net_rx: Ring,
     pub net_tx: Ring,
+    /// The cards present, in the reading's order.
+    pub cards: Vec<CardHistory>,
 }
 
 impl History {
+    /// The series of the card at `pci`.
+    pub fn card(&self, pci: &str) -> Option<&CardHistory> {
+        self.cards.iter().find(|c| c.pci == pci)
+    }
+
     pub fn push(&mut self, f: &Frame) {
+        let mut cards = Vec::with_capacity(f.gpus.len());
+        for g in &f.gpus {
+            let mut c = match self.cards.iter().position(|c| c.pci == g.pci) {
+                Some(i) => self.cards.swap_remove(i),
+                None => CardHistory { pci: g.pci.clone(), ..Default::default() },
+            };
+            c.busy.push(g.busy.unwrap_or(0.0) as f32 / 100.0);
+            let memory = g.vram_used.zip(g.vram_total).filter(|(_, total)| *total > 0);
+            c.memory.push(memory.map_or(0.0, |(used, total)| used as f32 / total as f32));
+            cards.push(c);
+        }
+        self.cards = cards;
         let s = &f.system;
         self.cpu_user.push(s.user as f32);
         self.cpu_system.push(s.kernel as f32);
@@ -108,5 +136,26 @@ mod tests {
         assert_eq!(r.max(), (LEN + 4) as f32);
         r.push(f32::NAN);
         assert_eq!(r.last(), Some(0.0), "nothing odd is drawn");
+    }
+
+    #[test]
+    fn a_card_keeps_its_history_when_the_cards_are_numbered_again() {
+        let card = |pci: &str, busy| crate::model::Gpu {
+            pci: pci.into(),
+            busy: Some(busy),
+            vram_used: Some(8 << 30),
+            vram_total: Some(32 << 30),
+            ..Default::default()
+        };
+        let mut f = Frame { gpus: vec![card("0000:78:00.0", 10.0), card("0000:01:00.0", 60.0)], ..Default::default() };
+        let mut h = History::default();
+        h.push(&f);
+        f.gpus.reverse();
+        h.push(&f);
+        let nvidia = h.card("0000:01:00.0").unwrap();
+        assert_eq!((nvidia.busy.len(), nvidia.busy.last(), nvidia.memory.last()), (2, Some(0.6), Some(0.25)));
+        f.gpus.pop();
+        h.push(&f);
+        assert!(h.card("0000:78:00.0").is_none(), "a card that went away is forgotten");
     }
 }

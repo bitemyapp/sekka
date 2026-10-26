@@ -19,6 +19,7 @@ use std::time::{Duration, SystemTime};
 pub use aizome_theme::{Effects, FocusColor, ThemeName};
 
 pub mod compositor;
+pub mod greeter;
 pub mod location;
 pub mod shell;
 pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleClick, sun_times, temperature_rgb};

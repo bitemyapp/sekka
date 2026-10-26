@@ -195,7 +195,8 @@ pub fn size() -> Size {
 
 impl Shell {
     /// Serve polkit's agent for this session (in an Aizome session only),
-    /// on a thread that keeps it registered.
+    /// off the UI thread. The shell owns the handle; it follows polkit
+    /// restarts and releases its registration when the shell goes away.
     pub fn start_polkit(&mut self) {
         if !crate::shell::real_session() {
             return;
@@ -205,15 +206,12 @@ impl Shell {
             .name("polkit".into())
             .spawn(move || {
                 let t = tx.clone();
-                match aizome_sys::polkit::PolkitAgent::register(move |e| {
+                let agent = aizome_sys::polkit::PolkitAgent::register(move |e| {
                     t.send(Msg::Auth(e.into()));
-                }) {
-                    Ok(agent) => loop {
-                        std::thread::park();
-                        let _ = &agent;
-                    },
-                    Err(e) => log::warn!("the polkit agent: {e}"),
-                }
+                })
+                .map(std::sync::Arc::new)
+                .map_err(|e| e.to_string());
+                tx.send(Msg::PolkitReady(agent));
             })
             .ok();
     }

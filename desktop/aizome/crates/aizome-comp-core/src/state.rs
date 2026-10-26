@@ -143,6 +143,9 @@ pub struct OutputState {
     /// Frames that drew something (screencopy waits on these).
     pub damaged_frames: u64,
     pub last_frame: Option<Instant>,
+    /// When the display last showed a frame (its vblank, on the monotonic
+    /// clock), where it says: the next frames' times count from it.
+    pub presented: Option<Duration>,
     pub refresh: Duration,
     /// The display takes gamma ramps (Night Light).
     pub gamma: bool,
@@ -169,6 +172,7 @@ impl OutputState {
             frame_seq: 0,
             damaged_frames: 0,
             last_frame: None,
+            presented: None,
             refresh,
             gamma: false,
             gamma_client: false,
@@ -250,6 +254,8 @@ pub struct Aizome {
     pub alpha_modifier: AlphaModifierState,
     pub fifo: FifoManagerState,
     pub commit_timing: CommitTimingManagerState,
+    /// What lets commits waiting on fifo barriers and times through.
+    pub pacing: crate::pacing::Pacing,
     pub foreign_toplevel_list: ForeignToplevelListState,
     pub foreign_toplevel_mgmt: ForeignToplevelManagerState,
     pub screencopy: ScreencopyManagerState,
@@ -325,6 +331,8 @@ pub struct Aizome {
     /// Activation tokens that may move focus.
     pub valid_tokens: HashSet<String>,
     pub idle: crate::idle::IdleState,
+    /// What has the displays off: idleness, IPC, the laptop's lid.
+    pub power: crate::power::Power,
     pub children: crate::session::Children,
     /// Buttons whose presses the seat was given and whose releases it
     /// hasn't been yet. The seat ends its grabs (a client's implicit grab,
@@ -498,6 +506,7 @@ impl State {
             alpha_modifier,
             fifo,
             commit_timing,
+            pacing: Default::default(),
             foreign_toplevel_list,
             foreign_toplevel_mgmt,
             screencopy,
@@ -544,6 +553,7 @@ impl State {
             idle_inhibitors: HashSet::new(),
             valid_tokens: HashSet::new(),
             idle: Default::default(),
+            power: Default::default(),
             children: Default::default(),
             forwarded_buttons: HashSet::new(),
         };
@@ -560,6 +570,9 @@ impl State {
         // The safe point between frames: no logic code is on the stack.
         self.recover_logic();
         if std::mem::take(&mut self.az.outputs_dirty) {
+            // An output that came while the displays are off, or a panel
+            // behind the closed lid, goes dark before its first frame.
+            self.apply_power();
             self.lg_call((), |vt, st| (vt.outputs_changed)(st));
         }
         self.lg_call((), |vt, st| (vt.loop_iteration)(st));
@@ -579,11 +592,14 @@ impl State {
     pub fn redraw_due(&mut self) {
         let mut outputs: Vec<Output> = self.az.outputs.clone();
         outputs.extend(self.az.mirrors.iter().map(|(m, _)| m.clone()));
+        let mut released = false;
         for output in outputs {
             let queued = self.az.out.get(&output).is_some_and(|o| o.redraw_queued);
             if !queued || !self.backend.frame_due(&mut self.az, &output) {
                 continue;
             }
+            // Timestamped commits due when this frame shows go in it.
+            released |= self.release_timed(&output);
             // A mirror shows its source's picture, pointer and all.
             let source = self.az.mirror_source(&output);
             let started = Instant::now();
@@ -593,6 +609,12 @@ impl State {
             };
             let clear = crate::render::clear_color(&self.az);
             self.backend.redraw(&mut self.az, &output, scene, clear, started);
+            released |= self.release_cleared();
+        }
+        if released {
+            // What came through draws next, maybe on an output already
+            // passed over: come round again.
+            self.az.signal.wakeup();
         }
     }
 

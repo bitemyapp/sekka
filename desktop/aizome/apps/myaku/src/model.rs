@@ -73,14 +73,80 @@ impl Kind {
     }
 }
 
+/// Graphics measurements. An unavailable counter stays unknown when summed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GpuUsage {
+    pub busy: Option<f64>,
+    pub video: Option<f64>,
+    pub vram: Option<u64>,
+    pub shared: Option<u64>,
+}
+
+impl Default for GpuUsage {
+    fn default() -> Self {
+        Self { busy: Some(0.0), video: Some(0.0), vram: Some(0), shared: Some(0) }
+    }
+}
+
+impl GpuUsage {
+    pub const UNKNOWN: Self = Self { busy: None, video: None, vram: None, shared: None };
+
+    /// Add another's use of the same card, as an application sums its
+    /// processes.
+    pub fn add(&mut self, other: &Self) {
+        self.busy = self.busy.zip(other.busy).map(|(a, b)| a + b);
+        self.video = self.video.zip(other.video).map(|(a, b)| a + b);
+        self.vram = self.vram.zip(other.vram).map(|(a, b)| a + b);
+        self.shared = self.shared.zip(other.shared).map(|(a, b)| a + b);
+    }
+
+    /// Add the use of another card. Busy figures are shares of each card's
+    /// own engines, so they don't add: the busiest card stands for them, as
+    /// % GPU says. Memory adds, but shared memory only from a card that
+    /// reports it (`shared`).
+    fn beside(&mut self, other: &Self, shared: bool) {
+        let busiest = |a: Option<f64>, b: Option<f64>| a.zip(b).map(|(a, b)| a.max(b));
+        self.busy = busiest(self.busy, other.busy);
+        self.video = busiest(self.video, other.video);
+        self.vram = self.vram.zip(other.vram).map(|(a, b)| a + b);
+        if shared {
+            self.shared = self.shared.zip(other.shared).map(|(a, b)| a + b);
+        }
+    }
+}
+
+/// What `members` use of one card (`Some(device)`), or of every card
+/// together: on one card, their use adds up; across cards, as
+/// [`GpuUsage::beside`] has it.
+pub fn graphics_of<'a>(
+    members: impl Iterator<Item = &'a Process> + Clone,
+    gpus: &[Gpu],
+    device: Option<usize>,
+) -> GpuUsage {
+    let on = |d: usize| {
+        let mut u = GpuUsage::default();
+        for p in members.clone() {
+            u.add(&p.graphics_on(d, &gpus[d]));
+        }
+        u
+    };
+    match device {
+        Some(d) => on(d),
+        None => {
+            let mut all = GpuUsage::default();
+            for (d, gpu) in gpus.iter().enumerate() {
+                all.beside(&on(d), gpu.reports_shared());
+            }
+            all
+        }
+    }
+}
+
 /// One process's use of one graphics card.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GpuUse {
     pub device: usize,
-    pub busy: f64,
-    pub video: f64,
-    pub vram: u64,
-    pub shared: u64,
+    pub usage: GpuUsage,
 }
 
 /// The use of the system's resources by a process, or the sum of a
@@ -112,10 +178,7 @@ pub struct Usage {
     /// seconds measured.
     pub energy: f64,
     pub measured: f64,
-    pub gpu: f64,
-    pub video: f64,
-    pub vram: u64,
-    pub gpu_shared: u64,
+    pub graphics: GpuUsage,
     /// Storage read and written, in bytes a second and since it started.
     pub read_rate: Option<f64>,
     pub write_rate: Option<f64>,
@@ -156,10 +219,7 @@ impl Usage {
         self.power = sum(self.power, o.power);
         self.energy += o.energy;
         self.measured = self.measured.max(o.measured);
-        self.gpu += o.gpu;
-        self.video += o.video;
-        self.vram += o.vram;
-        self.gpu_shared += o.gpu_shared;
+        self.graphics.add(&o.graphics);
         self.read_rate = sum(self.read_rate, o.read_rate);
         self.write_rate = sum(self.write_rate, o.write_rate);
         self.read_total = sum(self.read_total, o.read_total);
@@ -197,6 +257,23 @@ pub struct Process {
 }
 
 impl Process {
+    /// Absence from a successfully read process list means zero; absence from
+    /// an unavailable list does not establish that the process uses no GPU.
+    pub fn graphics_on(&self, device: usize, gpu: &Gpu) -> GpuUsage {
+        let mut uses = self.gpus.iter().filter(|g| g.device == device);
+        let Some(first) = uses.next() else { return gpu.unlisted_usage };
+        let mut usage = first.usage;
+        for other in uses {
+            usage.add(&other.usage);
+        }
+        usage
+    }
+
+    /// Whether it is one of the card's clients, busy or not.
+    pub fn uses(&self, device: usize) -> bool {
+        self.gpus.iter().any(|g| g.device == device)
+    }
+
     pub fn key(&self) -> (u32, u64) {
         (self.pid, self.start_ticks)
     }
@@ -230,6 +307,9 @@ pub struct Group {
     pub app_id: Option<String>,
     /// A window's title, or the service's unit.
     pub detail: String,
+    /// A plain-language explanation of how the sampler determined membership.
+    /// This describes the group, independently of each process's parent.
+    pub attribution: String,
     pub windows: usize,
     pub focused: bool,
     /// Indices into [`Frame::processes`], the first process first.
@@ -303,16 +383,85 @@ pub struct Gpu {
     pub power: Option<f64>,
     pub temperature: Option<f64>,
     pub clock: Option<f64>,
+    /// What can be inferred for a process absent from this card's client lists.
+    pub unlisted_usage: GpuUsage,
 }
 
-/// Where the power figures come from.
+impl Gpu {
+    /// Whether it reports the system memory mapped for it: the DRM drivers
+    /// do; NVIDIA's NVML has no such figure.
+    pub fn reports_shared(&self) -> bool {
+        self.driver != "nvidia"
+    }
+
+    /// Whether its clients' figures can't be read: absent from its lists
+    /// says nothing.
+    pub fn clients_unknown(&self) -> bool {
+        self.unlisted_usage.busy.is_none() && self.unlisted_usage.vram.is_none()
+    }
+}
+
+/// A card's name without its maker or codename, as labels show it: "AMD
+/// Radeon Graphics (Granite Ridge)" is "Radeon Graphics", "NVIDIA GeForce
+/// RTX 5090" "GeForce RTX 5090". One that would say only "Graphics" keeps
+/// its maker.
+pub fn short_name(name: &str) -> String {
+    let mut name = name.trim();
+    if name.ends_with(')')
+        && let Some(i) = name.rfind(" (")
+    {
+        name = &name[..i];
+    }
+    for maker in ["NVIDIA ", "AMD ", "Intel "] {
+        if let Some(rest) = name.strip_prefix(maker)
+            && !rest.to_lowercase().starts_with("graphics")
+        {
+            name = rest;
+        }
+    }
+    name.to_owned()
+}
+
+/// The cards' labels, by index: short names, and where two are alike, each
+/// with its bus ("GeForce RTX 4090 · 41:00").
+pub fn gpu_names(gpus: &[Gpu]) -> Vec<String> {
+    let short: Vec<String> = gpus.iter().map(|g| short_name(&g.name)).collect();
+    short
+        .iter()
+        .zip(gpus)
+        .map(|(name, g)| {
+            if short.iter().filter(|n| *n == name).count() > 1 {
+                let bus = g.pci.strip_prefix("0000:").unwrap_or(&g.pci);
+                format!("{name} · {}", bus.strip_suffix(".0").unwrap_or(bus))
+            } else {
+                name.clone()
+            }
+        })
+        .collect()
+}
+
+/// The cards in the order the window lists them: discrete ones first, as
+/// they do the heavy work, then as the kernel numbers them.
+pub fn gpu_order(gpus: &[Gpu]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..gpus.len()).collect();
+    order.sort_by_key(|&i| (gpus[i].integrated, i));
+    order
+}
+
+/// Where the power figures come from. The discrete graphics cards' own
+/// meters add to any of them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Meter {
     /// The processor's RAPL counters (readable: Myaku runs as root, or the
     /// counters were opened up).
     Rapl,
+    /// The processor package's meter as its integrated graphics report it:
+    /// an AMD APU's covers the processor too, and anyone may read it.
+    Package,
     /// The battery, while it discharges.
     Battery,
+    /// The graphics cards' meters alone: what uses no card isn't measured.
+    Graphics,
     /// Nothing measures power here.
     #[default]
     None,
@@ -321,7 +470,10 @@ pub enum Meter {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Power {
     pub meter: Meter,
+    /// The processor package, from RAPL or the integrated graphics' meter.
     pub cpu: Option<f64>,
+    /// The discrete graphics cards' meters together.
+    pub graphics: Option<f64>,
     pub battery: Option<f64>,
     pub on_battery: bool,
     /// What the meters measure together, and the part processes are held
@@ -343,6 +495,35 @@ pub struct Frame {
     pub uid: u32,
     /// How long the reading took on the sampler's thread.
     pub cost: std::time::Duration,
+}
+
+impl Frame {
+    /// Each process's and application's use of the cards together, from its
+    /// use of each.
+    pub fn total_graphics(&mut self) {
+        let Frame { gpus, processes, groups, .. } = self;
+        for p in processes.iter_mut() {
+            p.usage.graphics = graphics_of(std::iter::once(&*p), gpus, None);
+        }
+        for g in groups.iter_mut() {
+            g.usage.graphics = graphics_of(g.members.iter().map(|&m| &processes[m]), gpus, None);
+        }
+    }
+
+    /// The reading as one card sees it: each process's and application's
+    /// graphics are its use of that card alone. The rest is as read, so
+    /// selection, grouping and sorting keep the same rows.
+    pub fn for_gpu(&self, device: usize) -> Frame {
+        let mut frame = self.clone();
+        let Frame { gpus, processes, groups, .. } = &mut frame;
+        for p in processes.iter_mut() {
+            p.usage.graphics = p.graphics_on(device, &gpus[device]);
+        }
+        for g in groups.iter_mut() {
+            g.usage.graphics = graphics_of(g.members.iter().map(|&m| &processes[m]), gpus, Some(device));
+        }
+        frame
+    }
 }
 
 /// Sizes in binary units: "512 KiB", "3.4 GiB".
@@ -490,5 +671,43 @@ mod tests {
             (75.0, Some(300), Some(80), 500, Some(2.0))
         );
         assert_eq!(total.memory(), 300);
+    }
+
+    #[test]
+    fn cards_get_short_distinct_names() {
+        assert_eq!(short_name("AMD Radeon Graphics (Granite Ridge)"), "Radeon Graphics");
+        assert_eq!(short_name("NVIDIA GeForce RTX 5090"), "GeForce RTX 5090");
+        assert_eq!(short_name("Intel Graphics (Panther Lake)"), "Intel Graphics");
+        assert_eq!(short_name("Intel graphics (8086:a7a0)"), "Intel graphics");
+        let twin = |pci: &str| Gpu { name: "NVIDIA GeForce RTX 4090".into(), pci: pci.into(), ..Default::default() };
+        let igpu = Gpu { name: "AMD Radeon Graphics".into(), integrated: true, ..Default::default() };
+        let gpus = [igpu, twin("0000:01:00.0"), twin("0000:41:00.0")];
+        assert_eq!(gpu_names(&gpus), ["Radeon Graphics", "GeForce RTX 4090 · 01:00", "GeForce RTX 4090 · 41:00"]);
+        assert_eq!(gpu_order(&gpus), [1, 2, 0], "discrete cards first");
+    }
+
+    #[test]
+    fn cards_busy_figures_are_not_added_together() {
+        let amd = Gpu { driver: "amdgpu".into(), ..Default::default() };
+        let nvidia = Gpu {
+            driver: "nvidia".into(),
+            unlisted_usage: GpuUsage { shared: None, ..Default::default() },
+            ..Default::default()
+        };
+        let on = |device, busy, mib: u64, shared| GpuUse {
+            device,
+            usage: GpuUsage { busy: Some(busy), vram: Some(mib << 20), shared, ..Default::default() },
+        };
+        let renderer =
+            Process { gpus: vec![on(0, 18.0, 6, Some(4 << 20)), on(1, 2.0, 876, None)], ..Default::default() };
+        let helper = Process { gpus: vec![on(1, 5.0, 10, None)], ..Default::default() };
+        let gpus = [amd, nvidia];
+        let both = [renderer, helper];
+        let all = graphics_of(both.iter(), &gpus, None);
+        // The busiest card: the helper and renderer share the NVIDIA card's 7%.
+        assert_eq!(all.busy, Some(18.0));
+        assert_eq!(all.vram, Some(892 << 20));
+        assert_eq!(all.shared, Some(4 << 20), "NVML reports no shared memory, which leaves the AMD figure");
+        assert_eq!(graphics_of(both.iter(), &gpus, Some(1)).busy, Some(7.0));
     }
 }

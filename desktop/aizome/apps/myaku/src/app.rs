@@ -10,7 +10,7 @@ use aizome_kit::prelude::*;
 use aizome_sys::sysinfo::Signal;
 
 use crate::history::History;
-use crate::model::{self, Frame, Kind, Lens, Meter};
+use crate::model::{self, Frame, Kind, Lens};
 use crate::sampler::{self, Command};
 use crate::ui::columns::{self, Col};
 
@@ -48,6 +48,10 @@ pub const INTERVALS: [(&str, u64); 3] = [("Every Second", 1000), ("Every 2 Secon
 pub enum Msg {
     Frame(Arc<Frame>),
     Lens(Lens),
+    /// Show the GPU lens for one card, by its PCI address, or every card.
+    Gpu(Option<String>),
+    /// The pointer came over a card's graph (`true`) or left it.
+    HoverGpu(String, bool),
     Show(Show),
     Search(String),
     FocusSearch,
@@ -57,6 +61,8 @@ pub enum Msg {
     Activate(usize),
     Select(Sel),
     Inspector(bool),
+    EnergyMeters,
+    CloseEnergyMeters,
     /// Ask before signalling the selection (`true`: force).
     AskQuit(bool),
     /// Signal what was selected when asked.
@@ -94,7 +100,19 @@ impl Request {
 
 pub struct Myaku {
     pub window: WindowKey,
+    /// The optional, live explanation of the meters used for Energy.
+    pub energy_meters: Option<WindowKey>,
+    /// What shows: the last reading, as the chosen card sees it in the GPU
+    /// lens.
     pub frame: Arc<Frame>,
+    reading: Arc<Frame>,
+    /// The card the GPU lens shows, by PCI address (stable across readings);
+    /// `None`, every card.
+    pub gpu: Option<String>,
+    /// The card whose graph the pointer is over.
+    pub hover_gpu: Option<String>,
+    /// Which reading and card `frame` was made from.
+    projected: Option<(u64, Option<usize>)>,
     pub history: History,
     pub lens: Lens,
     pub show: Show,
@@ -131,7 +149,12 @@ impl Myaku {
     pub fn with_frame(frame: Arc<Frame>, signaller: Signaller, request: Request) -> Myaku {
         let mut m = Myaku {
             window: WindowKey::NONE,
+            energy_meters: None,
             frame: Arc::new(Frame::default()),
+            reading: Arc::new(Frame::default()),
+            gpu: None,
+            hover_gpu: None,
+            projected: None,
             history: History::default(),
             lens: request.lens.unwrap_or(Lens::Cpu),
             show: Show::Apps,
@@ -170,14 +193,35 @@ impl Myaku {
         )
     }
 
+    /// The lens's sort, or its usual one while its column doesn't show.
     pub fn sort(&self) -> (Col, bool) {
-        self.sorts[self.lens.index()]
+        let (col, asc) = self.sorts[self.lens.index()];
+        if self.columns().contains(&col) { (col, asc) } else { (columns::default_sort(self.lens), false) }
     }
 
-    /// The lenses that have something to show here.
+    /// The table's columns. The GPU lens drops Shared GPU where no card
+    /// shown reports it (NVIDIA's), and with every card of several shown,
+    /// says which each row uses.
+    pub fn columns(&self) -> Vec<Col> {
+        let mut cols = columns::for_lens(self.lens).to_vec();
+        if self.lens == Lens::Gpu {
+            let gpus = &self.frame.gpus;
+            let device = self.gpu_filter();
+            if !gpus.iter().enumerate().any(|(i, g)| device.is_none_or(|d| d == i) && g.reports_shared()) {
+                cols.retain(|c| *c != Col::GpuShared);
+            }
+            if device.is_none() && gpus.len() > 1 {
+                let at = cols.iter().position(|c| *c == Col::Pid).unwrap_or(cols.len());
+                cols.insert(at, Col::Card);
+            }
+        }
+        cols
+    }
+
+    /// The available lenses. Energy stays available when no meter reads;
+    /// its missing measurements show as dashes.
     pub fn lens_shown(&self, lens: Lens) -> bool {
         match lens {
-            Lens::Energy => self.frame.power.meter != Meter::None,
             Lens::Gpu => !self.frame.gpus.is_empty(),
             _ => true,
         }
@@ -186,8 +230,9 @@ impl Myaku {
     /// Take a new reading.
     fn take(&mut self, frame: Arc<Frame>) {
         self.history.push(&frame);
-        self.frame = frame;
+        self.reading = frame;
         self.frames += 1;
+        self.project();
         if !self.lens_shown(self.lens) {
             self.lens = Lens::Cpu;
         }
@@ -207,6 +252,24 @@ impl Myaku {
             }
         }
         self.rebuild();
+    }
+
+    /// Make the frame shown from the reading: as the chosen card sees it in
+    /// the GPU lens, as read in the others (their % GPU is every card's).
+    fn project(&mut self) {
+        let device = self.gpu.as_ref().and_then(|pci| self.reading.gpus.iter().position(|g| &g.pci == pci));
+        if device.is_none() {
+            self.gpu = None;
+        }
+        let device = device.filter(|_| self.lens == Lens::Gpu);
+        if self.projected == Some((self.frames, device)) {
+            return;
+        }
+        self.projected = Some((self.frames, device));
+        self.frame = match device {
+            Some(d) => Arc::new(self.reading.for_gpu(d)),
+            None => self.reading.clone(),
+        };
     }
 
     /// The group or process selected, as indices into the frame.
@@ -231,9 +294,21 @@ impl Myaku {
             || p.user.to_lowercase() == q
     }
 
+    /// The card the GPU lens shows alone: its clients, and their use of it.
+    pub fn gpu_filter(&self) -> Option<usize> {
+        (self.lens == Lens::Gpu).then_some(())?;
+        let pci = self.gpu.as_ref()?;
+        self.frame.gpus.iter().position(|g| &g.pci == pci)
+    }
+
     /// The table's rows, filtered and sorted.
     pub fn rebuild(&mut self) {
+        self.project();
         let f = self.frame.clone();
+        let device = self.gpu_filter();
+        // Client membership, rather than nonzero utilization, keeps idle
+        // contexts and memory-holding processes visible.
+        let uses_gpu = |p: &model::Process| device.is_none_or(|d| p.gpus.iter().any(|g| g.device == d));
         let (col, asc) = self.sort();
         let cmp_p = |a: &usize, b: &usize| columns::compare_process(col, &f.processes[*a], &f.processes[*b], asc);
         let mut rows = Vec::new();
@@ -241,9 +316,12 @@ impl Myaku {
             Show::Apps => {
                 let mut groups: Vec<usize> = (0..f.groups.len())
                     .filter(|&g| {
-                        self.search.is_empty()
-                            || f.groups[g].name.to_lowercase().contains(&self.search.to_lowercase())
-                            || f.groups[g].members.iter().any(|&m| self.matches(&f.processes[m]))
+                        let group_matches = self.search.is_empty()
+                            || f.groups[g].name.to_lowercase().contains(&self.search.to_lowercase());
+                        f.groups[g]
+                            .members
+                            .iter()
+                            .any(|&m| uses_gpu(&f.processes[m]) && (group_matches || self.matches(&f.processes[m])))
                     })
                     .collect();
                 groups.sort_by(|a, b| columns::compare_group(col, &f.groups[*a], &f.groups[*b], &f, asc));
@@ -260,9 +338,10 @@ impl Myaku {
                             .iter()
                             .copied()
                             .filter(|&m| {
-                                self.search.is_empty()
-                                    || self.matches(&f.processes[m])
-                                    || grp.name.to_lowercase().contains(&self.search.to_lowercase())
+                                uses_gpu(&f.processes[m])
+                                    && (self.search.is_empty()
+                                        || self.matches(&f.processes[m])
+                                        || grp.name.to_lowercase().contains(&self.search.to_lowercase()))
                             })
                             .collect();
                         members.sort_by(cmp_p);
@@ -273,7 +352,9 @@ impl Myaku {
             Show::All | Show::Mine => {
                 let mut procs: Vec<usize> = (0..f.processes.len())
                     .filter(|&i| {
-                        (self.show == Show::All || f.processes[i].uid == f.uid) && self.matches(&f.processes[i])
+                        (self.show == Show::All || f.processes[i].uid == f.uid)
+                            && uses_gpu(&f.processes[i])
+                            && self.matches(&f.processes[i])
                     })
                     .collect();
                 procs.sort_by(cmp_p);
@@ -403,8 +484,25 @@ impl Program for Myaku {
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
             Msg::Frame(f) => self.take(f),
+            Msg::Gpu(pci) => {
+                self.gpu = pci;
+                if self.lens_shown(Lens::Gpu) {
+                    self.lens = Lens::Gpu;
+                }
+                self.rebuild();
+            }
+            Msg::HoverGpu(pci, inside) => {
+                if inside {
+                    self.hover_gpu = Some(pci);
+                } else if self.hover_gpu.as_ref() == Some(&pci) {
+                    self.hover_gpu = None;
+                }
+            }
             Msg::Lens(l) => {
                 if self.lens_shown(l) {
+                    // The cards' graphs go with the GPU lens, and the pointer
+                    // with them.
+                    self.hover_gpu = None;
                     self.lens = l;
                     self.rebuild();
                 }
@@ -419,7 +517,7 @@ impl Program for Myaku {
             }
             Msg::FocusSearch => cx.focus("search"),
             Msg::Sort(c, asc) => {
-                let cols = columns::for_lens(self.lens);
+                let cols = self.columns();
                 if let Some(col) = cols.get(c) {
                     self.sorts[self.lens.index()] = (*col, asc);
                     self.rebuild();
@@ -452,6 +550,17 @@ impl Program for Myaku {
                 }
             }
             Msg::Inspector(on) => self.inspector = on,
+            Msg::EnergyMeters => {
+                let window = *self.energy_meters.get_or_insert_with(|| {
+                    cx.open_window(WindowSpec::new("Energy Meters").size(520.0, 500.0).min_size(380.0, 320.0).utility())
+                });
+                cx.activate(window);
+            }
+            Msg::CloseEnergyMeters => {
+                if let Some(window) = self.energy_meters.take() {
+                    cx.close_window(window);
+                }
+            }
             Msg::AskQuit(force) => match self.can_quit() {
                 Ok(sel) => {
                     let (members, name) = self.targets(sel);
@@ -507,8 +616,19 @@ impl Program for Myaku {
         self.tell_sampler();
     }
 
-    fn view(&self, _window: WindowKey) -> Element<Msg> {
-        crate::ui::view::window(self)
+    fn view(&self, window: WindowKey) -> Element<Msg> {
+        if Some(window) == self.energy_meters { crate::ui::energy::view(self) } else { crate::ui::view::window(self) }
+    }
+
+    fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if Some(window) == self.energy_meters {
+            self.energy_meters = None;
+        } else if window == self.window
+            && let Some(meters) = self.energy_meters.take()
+        {
+            cx.close_window(meters);
+        }
+        true
     }
 
     fn menus(&self) -> MenuBar<Msg> {
@@ -524,7 +644,24 @@ impl Program for Myaku {
             .separator()
             .item(MenuItem::new("Applications", Msg::Show(Show::Apps)).checked(self.show == Show::Apps))
             .item(MenuItem::new("All Processes", Msg::Show(Show::All)).checked(self.show == Show::All))
-            .item(MenuItem::new("My Processes", Msg::Show(Show::Mine)).checked(self.show == Show::Mine))
+            .item(MenuItem::new("My Processes", Msg::Show(Show::Mine)).checked(self.show == Show::Mine));
+        // With several cards, which the GPU lens shows (choosing one opens it).
+        let gpus = &self.frame.gpus;
+        let view = if gpus.len() > 1 {
+            let names = model::gpu_names(gpus);
+            let shown = self.gpu.as_deref();
+            let cards = model::gpu_order(gpus).into_iter().fold(
+                Menu::new("GPUs").item(MenuItem::new("All GPUs", Msg::Gpu(None)).checked(shown.is_none())).separator(),
+                |menu, i| {
+                    let pci = gpus[i].pci.clone();
+                    menu.item(MenuItem::new(names[i].clone(), Msg::Gpu(Some(pci.clone()))).checked(shown == Some(&pci)))
+                },
+            );
+            view.submenu(cards)
+        } else {
+            view
+        };
+        let view = view
             .separator()
             .item(
                 MenuItem::new(
@@ -533,6 +670,7 @@ impl Program for Myaku {
                 )
                 .shortcut(Shortcut::cmd('I')),
             )
+            .item(MenuItem::new("Energy Meters…", Msg::EnergyMeters))
             .submenu(INTERVALS.iter().fold(Menu::new("Update Frequency"), |m, (label, ms)| {
                 m.item(MenuItem::new(*label, Msg::Interval(*ms)).checked(self.interval == *ms))
             }));

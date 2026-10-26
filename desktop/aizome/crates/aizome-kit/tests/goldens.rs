@@ -104,31 +104,13 @@ fn a_menu_from_the_in_window_bar() {
     }
     let w = h.window();
     h.resize(w, Size::new(560.0, 300.0));
-    // "Gallery" in bold, File… no: the app menu, Edit, View.
-    let x = [12.0, 80.0, 130.0, 170.0].into_iter().find(|_| true).unwrap_or(12.0);
-    let _ = x;
     h.focus_window(w, true);
     h.command(w, '1');
     assert_eq!(h.program().page, Page::Controls);
-    // Open View from the bar: the fourth title.
-    let titles = ["Gallery", "Edit", "View"];
-    let mut opened = false;
-    for px in (60..260).step_by(10) {
-        h.click(w, Point::new(px as f64, 12.0));
-        if let Some(&(p, _)) = h.popups(w).first() {
-            if h.texts_in(p).is_empty() && h.popups(w).len() == 1 {
-                // A menu draws its own rows: tell View's by its height.
-                let r = h.popups(w)[0].1;
-                if r.height() > 150.0 {
-                    opened = true;
-                    break;
-                }
-            }
-            h.named(w, NamedKey::Escape, Modifiers::NONE);
-        }
-    }
-    let _ = titles;
-    assert!(opened, "the View menu opened");
+    // Open the standard app menu. Its height changes when optional roles
+    // are omitted, so identify it by its title position, not its height.
+    h.click(w, Point::new(12.0, 12.0));
+    assert_eq!(h.popups(w).len(), 1, "the Gallery app menu opened");
     h.named(w, NamedKey::ArrowDown, Modifiers::NONE);
     h.named(w, NamedKey::ArrowDown, Modifiers::NONE);
     assert_golden(&mut h, w, snapshot("menu-night.png"), 1.0);

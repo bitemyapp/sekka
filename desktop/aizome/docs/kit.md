@@ -389,7 +389,7 @@ uncover and what changed; such a widget leaves its scroll offset out of its
 `Program::menus()` returns a `MenuBar`; the default is
 `MenuBar::standard(&info)`:
 
-- the app menu: About ‹Name›, Settings… ❖,, Services ▸, Hide ‹Name› ❖H,
+- the app menu: About ‹Name›, Services ▸, Hide ‹Name› ❖H,
   Hide Others ⌥❖H, Quit ‹Name› ❖Q;
 - Edit: Undo ❖Z, Redo ⇧❖Z, Cut ❖X, Copy ❖C, Paste ❖V, Paste as Plain Text
   ⌥⇧❖V, Select All ❖A, Find ▸ (Find… ❖F, Find Next ❖G, Find Previous ⇧❖G,
@@ -397,6 +397,10 @@ uncover and what changed; such a widget leaves its scroll offset out of its
 - Window: Minimise ❖M, Fill, Stack with…, Bring All to Front, and the
   windows;
 - Help: Search, ‹Name› Help.
+
+Apps with a settings dialog add a real `Settings…` action (❖,) to their
+app menu, as Tenki and Koyomi do. The standard menu omits it because the
+kit has no default settings dialog.
 
 Extend it:
 

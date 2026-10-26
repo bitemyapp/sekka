@@ -504,9 +504,9 @@ impl Pane for Battery {
                     form::row("Keep the computer awake", toggle(on).on_toggle(Msg::KeepAwake))
                         .entry("keep-awake")
                         .help(
-                            "It won't sleep, lock or turn the displays off, not even when the lid is closed, until \
-                             this is off again. A cup in the menu bar shows meanwhile. Sleep chosen from the menu \
-                             still sleeps.",
+                            "It won't sleep, lock or turn the displays off until this is off again: closing the lid \
+                             just turns its screen off. A cup in the menu bar shows meanwhile. Sleep chosen from the \
+                             menu still sleeps.",
                         ),
                 ],
             ));

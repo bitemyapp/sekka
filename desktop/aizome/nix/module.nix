@@ -301,6 +301,18 @@ in
     # Koyomi's alerts, as notifications, whether or not Koyomi is open
     # (the unit comes with the package).
     systemd.user.services.aizome-koyomi-agent.wantedBy = [ "graphical-session.target" ];
+    # Koe's dictation starts with the session for those who turned it on
+    # in Koe (the unit comes with the package; `aizome-koe enabled` is its
+    # condition). Nobody else runs it, and no model is downloaded until
+    # someone asks. It records with PipeWire's pw-record and copies with
+    # wl-copy, which NixOS doesn't give units it configures.
+    systemd.user.services.aizome-koe = {
+      wantedBy = [ "aizome-session.target" ];
+      path = [
+        pkgs.pipewire
+        pkgs.wl-clipboard
+      ];
+    };
     # After `nixos-rebuild switch`, a notification offers to reload Aizome
     # (its window manager and shell) without closing anything; a changed
     # compositor core waits for the next login (docs/reload.md).

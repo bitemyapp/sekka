@@ -103,7 +103,9 @@ Protocol version: **1** (`version` reports it).
   `return`, `escape`, `space`, `grave`, `up`/`down`/`left`/`right`, letters,
   digits, punctuation (`,` `.` `/` `;` `'` `[` `]` `\` `-` `=`), `f1`…`f12`,
   `print`) or an evdev code;
-- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse.
+- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse;
+- `lid {closed}`: the laptop's lid closing or opening, as its switch says
+  (`aizomectl input lid closed`).
 
 `aizomectl input key NAME` and `input button NAME` press and release
 (a tap); add `down` or `up` for one half. `aizomectl input type TEXT` taps
@@ -126,14 +128,42 @@ Chrome while the Deskbar grows, collapses and reopens:
 ```sh
 AIZOME_LAYOUT_TEST_SHELL="$(command -v aizome-shell)" \
 AIZOME_LAYOUT_TEST_CHROME="$(command -v google-chrome)" \
+AIZOME_LAYOUT_TEST_CALCULATOR="$(command -v aizome-soroban)" \
 cargo test -p aizome-comp --test layout_desktop -- --ignored --nocapture
 ```
 
 It needs the shell, Chrome and Calculator installed. Chrome uses a fresh
 temporary profile and a blank page. Both D-Bus addresses are isolated from
 the login session; no physical input or session services are changed.
+
+The app activation check needs only a built shell. It selects an already
+running app through the real palette and checks raising, keyboard focus,
+Desk switching, hidden/minimised windows, sticky windows and stack tabs.
+Its fixture uses different desktop and window app IDs and detects duplicate
+launches:
+
+```sh
+cargo build -p aizome-comp -p aizome-shell
+AIZOME_ACTIVATION_TEST_SHELL="${CARGO_TARGET_DIR:-target}/debug/aizome-shell" \
+cargo test -p aizome-comp --test layout_desktop palette_reveals_running_apps_on_their_desks -- --ignored --nocapture
+```
 Screenshots are kept in the Cargo target's `tmp/aizome-shots/` directory.
 Use a separate `CARGO_TARGET_DIR` when another checkout is being built.
+
+To check activation through the real shell and Settings app, build both
+and run the notebook desktop regressions. They move Settings to another
+Desk, minimise it, then use the command palette and a notification to
+raise that same window. Pane selection is also checked through Settings'
+single-instance socket. All processes use the same isolation as above.
+
+```sh
+cargo build -p aizome-shell -p aizome-settei
+AIZOME_NOTEBOOK_SHELL="$PWD/target/debug/aizome-shell" \
+AIZOME_NOTEBOOK_SETTEI="$PWD/target/debug/aizome-settei" \
+cargo test -p aizome-comp --test notebook_desktop -- --ignored --test-threads=1 --nocapture
+```
+
+Adjust the executable paths when using a different Cargo target directory.
 
 ## Responses
 
@@ -154,7 +184,8 @@ the notice after a restart), `panel` (its rectangle while open).
 `pointer_grab` (`popup`, or the button and whose surface, or none),
 `pressed_buttons` and `pressed_keys` (evdev codes the seat holds),
 `keyboard_grab`, `pointer_constraint` (`locked`, `confined`),
-`cursor_hidden`, `pointer_focus` and `keyboard_focus` (app IDs).
+`cursor_hidden`, `cursor_name` (the effective named cursor, or null for a client
+surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs).
 
 ### WindowInfo
 
@@ -184,7 +215,9 @@ counting sticky ones), `current`.
 `name`, `make`, `model`, `serial`, `enabled`, `current_mode {width, height,
 refresh (mHz), preferred}`, `modes`, `scale`, `transform`, `logical {x,y,w,h}`
 (in points), `usable {x,y,w,h}` (minus layer-shell exclusive zones),
-`physical_size_mm`, `powered`, `primary` (the main display: `primary = true`
+`physical_size_mm`, `powered` (false while it's off: for idleness,
+`power-off-monitors`, or a laptop's panel behind its closed lid), `primary`
+(the main display: `primary = true`
 in the settings or `set-primary-output`, else the first in the layout; the
 Deskbar's, and where windows rescued from outputs that go end up),
 `mirror` (the output whose picture it shows; `logical` and `usable` are then
@@ -324,3 +357,25 @@ layer surfaces (a menu of the menu bar shows over the Deskbar and over
 overlay surfaces), newest on top, and take the pointer there first. They
 are constrained to their parent's output by the positioner's constraint
 adjustments, not to the parent's area.
+
+### Demonstrating a group containing different applications
+
+This optional check starts Chrome and Calculator in a private headless
+compositor, groups their windows, clicks between their tabs, and Alt-drags
+the active tab out again. It keeps three screenshots in
+`target/tmp/aizome-shots/`: `heterogeneous-group-calculator`,
+`heterogeneous-group-browser`, and `heterogeneous-group-detached`.
+
+```sh
+AIZOME_LAYOUT_TEST_CHROME="$(command -v google-chrome)" \
+AIZOME_LAYOUT_TEST_CALCULATOR="$(command -v aizome-soroban)" \
+cargo test -p aizome-comp --test layout_desktop chrome_and_calculator_share_a_tab_group_and_tear_apart -- --exact --ignored --nocapture
+```
+
+A background tab can be dragged out without a modifier. Alt-drag detaches
+the active tab; an ordinary drag moves the group. The check uses a fresh
+Chrome profile and isolated display, home and D-Bus addresses.
+
+The captured sequence shows [Calculator active](images/heterogeneous-group-calculator.png),
+[Chrome active](images/heterogeneous-group-browser.png), and
+[the detached windows](images/heterogeneous-group-detached.png).

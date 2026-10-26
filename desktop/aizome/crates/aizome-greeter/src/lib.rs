@@ -6,6 +6,7 @@ pub mod app;
 pub mod clock;
 pub mod compositor;
 pub mod config;
+pub mod displays;
 pub mod greetd;
 pub mod login;
 pub mod sessions;

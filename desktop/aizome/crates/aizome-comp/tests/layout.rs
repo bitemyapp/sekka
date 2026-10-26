@@ -82,6 +82,28 @@ fn closing_the_launcher_preserves_filled_groups_splits_and_restore_geometry() {
 }
 
 #[test]
+fn an_auto_hidden_deskbar_reveals_without_resizing_apps() {
+    let c = start(Options::default());
+    let _client = c.client(Spec::new("filled", 0x6688aa));
+    let w = c.wait_window("filled");
+    c.ok(Request::Fill { id: Some(w.id), state: Some(true) });
+    c.settle();
+    let before = c.window("filled").unwrap().geometry;
+    let shell = ShellClient::spawn(&c);
+    shell.layer(
+        LayerSpec::new("aizome-deskbar-transient", Layer::Top, KeyboardInteractivity::OnDemand)
+            .anchor(Anchor::Top | Anchor::Right, (DESKBAR as u32, 360))
+            .zone(-1)
+            .top_margin(BAR),
+    );
+    c.settle();
+    assert_eq!(c.window("filled").unwrap().geometry, before, "reveal overlays the app");
+    shell.send(ShellCmd::Destroy("aizome-deskbar-transient"));
+    c.settle();
+    assert_eq!(c.window("filled").unwrap().geometry, before, "hide preserves its geometry");
+}
+
+#[test]
 fn oversized_defaults_and_remembered_windows_fit_at_each_scale() {
     for output in ["1280x800@1", "2880x1800@2", "1920x1200@1.5"] {
         let c = start(Options { outputs: &[output], ..Default::default() });

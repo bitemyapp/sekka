@@ -63,6 +63,13 @@ impl CompositorHandler for State {
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
+        // A commit waiting on a fifo barrier or a time gets a frame or a
+        // timer to let it through. This hook runs before smithay's own for
+        // those (added with the surface's fifo or timer object, later), so
+        // what the commit asks is still there to read.
+        add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
+            crate::pacing::commit_requested(state, surface);
+        });
         // Wait for a dmabuf's fence before applying the commit, so frames
         // never sample unfinished buffers.
         add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
@@ -175,7 +182,10 @@ impl State {
         self.az.windows.insert(id, Mapped { id, window: window.clone(), view: WinView::default() });
         self.az.by_surface.insert(surface.clone(), id);
         info!(id, app_id, title, ssd, "window opened");
-        let info = MapInfo { app_id, title, pid, parent, ssd, size };
+        let committed = toplevel.current_state();
+        let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
+        let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
+        let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));
         } else {
@@ -499,10 +509,27 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<WlOutput>) {
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, output: Option<WlOutput>) {
+        let target = output.as_ref().and_then(Output::from_resource).filter(|o| self.az.outputs.contains(o));
         match self.az.window_for_surface(surface.wl_surface()) {
-            Some(id) => self.toplevel_request(id, ToplevelRequest::Fullscreen(true)),
+            Some(id) => self.toplevel_request(id, ToplevelRequest::Fullscreen { on: true, output: target }),
             None => {
+                // Games commonly request fullscreen before their first commit.
+                // Agree on its state and size in the first configure, then carry
+                // that state into the window manager when its buffer arrives.
+                // Recovery has no fullscreen layout policy, just as it declines
+                // requests for already mapped windows. Don't promise a state
+                // that fallback placement cannot provide.
+                if self.lg.healthy() {
+                    let target = target.or_else(|| self.az.active_output()).or_else(|| self.az.primary_output());
+                    let size = target.map(|o| self.az.output_geometry(&o).size);
+                    surface.with_pending_state(|s| {
+                        s.states.set(xdg_toplevel::State::Fullscreen);
+                        s.fullscreen_output = output;
+                        s.size = size;
+                        s.bounds = size;
+                    });
+                }
                 if surface.is_initial_configure_sent() {
                     surface.send_configure();
                 }
@@ -512,7 +539,17 @@ impl XdgShellHandler for State {
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
         if let Some(id) = self.az.window_for_surface(surface.wl_surface()) {
-            self.toplevel_request(id, ToplevelRequest::Fullscreen(false));
+            self.toplevel_request(id, ToplevelRequest::Fullscreen { on: false, output: None });
+        } else {
+            surface.with_pending_state(|s| {
+                s.states.unset(xdg_toplevel::State::Fullscreen);
+                s.fullscreen_output = None;
+                s.size = None;
+            });
+            if surface.is_initial_configure_sent() {
+                self.lg_call((), |vt, st| (vt.first_configure)(st, &surface));
+                surface.send_configure();
+            }
         }
     }
 

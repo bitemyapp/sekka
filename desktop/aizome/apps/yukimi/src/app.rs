@@ -297,6 +297,7 @@ pub enum Msg {
     Job(u64, JobEvent),
     StopJob,
     CloseJob,
+    RetryAuthentication,
     JobDetails(bool),
     /// Put the log on the clipboard.
     CopyLog,
@@ -1525,6 +1526,15 @@ impl Program for Yukimi {
                 }
             }
             Msg::CloseJob => self.close_job(cx),
+            Msg::RetryAuthentication => {
+                if let Some(job) = &self.job
+                    && !job.running()
+                    && job.retry_authentication
+                {
+                    let operation = job.operation.clone();
+                    self.run(operation, cx);
+                }
+            }
             Msg::CopyLog => {
                 if let Some(job) = &self.job {
                     let log: Vec<&str> = job.log.iter().map(String::as_str).collect();
@@ -1601,7 +1611,7 @@ impl Program for Yukimi {
                 self.window,
                 Alert::new(
                     "Yukimi is changing the system",
-                    "Wait for it to finish, or stop it first. Stopping puts your configuration back as it was.",
+                    "Wait for it to finish, or ask it to stop first. Check the result before closing Yukimi.",
                 )
                 .cancel_button("Keep Going")
                 .destructive_button("Stop", Msg::StopJob),

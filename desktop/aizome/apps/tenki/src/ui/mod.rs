@@ -300,7 +300,7 @@ fn locating_state(app: &Tenki) -> Element<Msg> {
             "Location unavailable".into(),
             vec![e.message(), e.hint().into()],
             vec![
-                button("Stop Using Location").on_press(Msg::DeclineLocation).into(),
+                button("Search for a City").on_press(Msg::SearchInstead).into(),
                 button("Try Again").primary().on_press(Msg::Locate).into(),
             ],
             false,
@@ -308,8 +308,8 @@ fn locating_state(app: &Tenki) -> Element<Msg> {
         _ => notice(
             Icon::LocateFixed,
             "Finding where you are…".into(),
-            vec!["GeoClue is looking.".into()],
-            Vec::new(),
+            vec!["Finding your approximate location. You can search for a city at any time.".into()],
+            vec![button("Search for a City").on_press(Msg::SearchInstead).into()],
             true,
         ),
     }

@@ -1,56 +1,51 @@
-//! Where the computer is, from GeoClue 2 on the system bus, asked for at
-//! city accuracy: what the shell writes to `settings.toml`'s `[location]`
-//! so Night Light and Auto's theme follow sunset and sunrise there.
-//!
-//! GeoClue gives a position only to apps it trusts: with an agent running,
-//! the agent asks; without one, the system's configuration must allow the
-//! app by its desktop id (Aizome's NixOS module allows `org.aizome.Shell`).
-//! Without GeoClue, or without a position, Aizome reckons from the time
-//! zone's city instead (`aizome_config::location`).
-//!
-//! The same client as Tenki's (`apps/tenki/src/location.rs`), which asks
-//! as `org.aizome.Tenki`.
+//! City-level positions from GeoClue for Tenki and the shell's sunrise
+//! schedule. The desktop id must be allowed by GeoClue's agent or system
+//! configuration. Setup, D-Bus calls and waiting share one deadline.
 
+use std::future::Future;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use zbus::blocking::proxy::Builder;
-use zbus::blocking::{Connection, Proxy};
-use zbus::proxy::CacheProperties;
+use async_io::Timer;
+use futures_lite::future::{block_on, or};
+use zbus::proxy::{Builder, CacheProperties};
 use zbus::zvariant::OwnedObjectPath;
+use zbus::{Connection, Proxy};
 
 const SERVICE: &str = "org.freedesktop.GeoClue2";
+const MANAGER: &str = "/org/freedesktop/GeoClue2/Manager";
 
-/// GeoClue's accuracy levels: a city's is enough for the sun.
+/// GeoClue's accuracy levels: a city's is enough for weather and the sun.
 pub const ACCURACY_CITY: u32 = 4;
 
-/// A position GeoClue found.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Located {
     pub latitude: f64,
     pub longitude: f64,
     /// Metres.
     pub accuracy: f64,
+    /// The source's place name, if it supplied one.
+    pub description: Option<String>,
 }
 
-/// Why there's no position.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocateError {
-    /// No GeoClue on this machine (or no system bus).
     Unavailable(String),
-    /// GeoClue (or its agent) said no.
     Denied,
-    /// GeoClue didn't find one in time (no network, no source).
     TimedOut,
+    Cancelled,
     Failed(String),
 }
 
 impl std::fmt::Display for LocateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LocateError::Unavailable(e) => write!(f, "GeoClue isn't available ({e})"),
-            LocateError::Denied => f.write_str("GeoClue didn't allow it"),
-            LocateError::TimedOut => f.write_str("GeoClue found no position in time"),
-            LocateError::Failed(e) => write!(f, "GeoClue failed: {e}"),
+            Self::Unavailable(e) => write!(f, "GeoClue isn't available ({e})"),
+            Self::Denied => f.write_str("GeoClue didn't allow it"),
+            Self::TimedOut => f.write_str("GeoClue found no position in time"),
+            Self::Cancelled => f.write_str("Location request cancelled"),
+            Self::Failed(e) => write!(f, "GeoClue failed: {e}"),
         }
     }
 }
@@ -74,62 +69,159 @@ fn fdo(e: zbus::fdo::Error) -> LocateError {
     classify(zbus::Error::from(e))
 }
 
-/// Ask the GeoClue on the system bus where the computer is, as
-/// `desktop_id`, waiting at most `timeout`.
+/// Cancels one request, including a D-Bus call that never replies.
+/// A fresh request needs a fresh token.
+#[derive(Clone, Debug, Default)]
+pub struct Cancellation(Arc<CancelState>);
+
+#[derive(Debug, Default)]
+struct CancelState {
+    cancelled: AtomicBool,
+    event: event_listener::Event,
+}
+
+impl Cancellation {
+    pub fn cancel(&self) {
+        self.0.cancelled.store(true, Ordering::Release);
+        self.0.event.notify(usize::MAX);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.cancelled.load(Ordering::Acquire)
+    }
+
+    async fn cancelled(&self) {
+        let changed = self.0.event.listen();
+        if !self.is_cancelled() {
+            changed.await;
+        }
+    }
+}
+
+/// Ask GeoClue for a position. All work shares `timeout`, with at most
+/// another 250 ms to send cleanup messages. No worker remains waiting for
+/// a service reply after the deadline.
 pub fn locate(desktop_id: &str, timeout: Duration) -> Result<Located, LocateError> {
-    let conn = Connection::system().map_err(|e| LocateError::Unavailable(e.to_string()))?;
-    locate_on(&conn, desktop_id, timeout)
+    locate_cancellable(desktop_id, timeout, &Cancellation::default())
 }
 
-/// Ask the GeoClue on `conn`'s bus (tests serve a fake one on a private
-/// bus).
-pub fn locate_on(conn: &Connection, desktop_id: &str, timeout: Duration) -> Result<Located, LocateError> {
-    let manager = proxy(
-        conn,
-        "/org/freedesktop/GeoClue2/Manager".try_into().expect("a path"),
-        "org.freedesktop.GeoClue2.Manager",
-    )?;
-    let client_path: OwnedObjectPath = manager.call("GetClient", &()).map_err(classify)?;
-    let client = proxy(conn, client_path, "org.freedesktop.GeoClue2.Client")?;
-    client.set_property("DesktopId", desktop_id).map_err(fdo)?;
-    client.set_property("RequestedAccuracyLevel", ACCURACY_CITY).map_err(fdo)?;
-    client.call::<_, _, ()>("Start", &()).map_err(classify)?;
-    let deadline = Instant::now() + timeout;
-    let found = loop {
-        let at: OwnedObjectPath = match client.get_property("Location") {
-            Ok(p) => p,
-            Err(e) => break Err(classify(e)),
-        };
-        if at.as_str() != "/" {
-            break read_location(conn, at);
-        }
-        if Instant::now() >= deadline {
-            break Err(LocateError::TimedOut);
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    };
-    let _ = client.call::<_, _, ()>("Stop", &());
-    found
+pub fn locate_cancellable(desktop_id: &str, timeout: Duration, cancel: &Cancellation) -> Result<Located, LocateError> {
+    block_on(async {
+        let deadline = Instant::now() + timeout;
+        let conn = until(deadline, cancel, async {
+            Connection::system().await.map_err(|e| LocateError::Unavailable(e.to_string()))
+        })
+        .await?;
+        // Only this request owns the connection. Dropping it also removes
+        // GeoClue's client if GetClient or Start outlived our wait.
+        locate_until(&conn, desktop_id, deadline, cancel).await
+    })
 }
 
-/// An uncached proxy for `iface` at `path` of GeoClue.
-fn proxy(conn: &Connection, path: OwnedObjectPath, iface: &'static str) -> Result<Proxy<'static>, LocateError> {
+/// Like [`locate`], on a caller-owned connection (private buses in tests).
+pub fn locate_on(
+    conn: &zbus::blocking::Connection,
+    desktop_id: &str,
+    timeout: Duration,
+) -> Result<Located, LocateError> {
+    locate_on_cancellable(conn, desktop_id, timeout, &Cancellation::default())
+}
+
+pub fn locate_on_cancellable(
+    conn: &zbus::blocking::Connection,
+    desktop_id: &str,
+    timeout: Duration,
+    cancel: &Cancellation,
+) -> Result<Located, LocateError> {
+    block_on(locate_until(conn.inner(), desktop_id, Instant::now() + timeout, cancel))
+}
+
+async fn until<T>(
+    deadline: Instant,
+    cancel: &Cancellation,
+    work: impl Future<Output = Result<T, LocateError>>,
+) -> Result<T, LocateError> {
+    or(
+        async {
+            cancel.cancelled().await;
+            Err(LocateError::Cancelled)
+        },
+        or(
+            async {
+                Timer::at(deadline).await;
+                Err(LocateError::TimedOut)
+            },
+            work,
+        ),
+    )
+    .await
+}
+
+async fn locate_until(
+    conn: &Connection,
+    desktop_id: &str,
+    deadline: Instant,
+    cancel: &Cancellation,
+) -> Result<Located, LocateError> {
+    let mut client = None;
+    let result = until(deadline, cancel, async {
+        let manager = proxy(conn, MANAGER.try_into().expect("a path"), "org.freedesktop.GeoClue2.Manager").await?;
+        let path: OwnedObjectPath = manager.call("GetClient", &()).await.map_err(classify)?;
+        client = Some(proxy(conn, path, "org.freedesktop.GeoClue2.Client").await?);
+        let client = client.as_ref().expect("created above");
+        client.set_property("DesktopId", desktop_id).await.map_err(fdo)?;
+        client.set_property("RequestedAccuracyLevel", ACCURACY_CITY).await.map_err(fdo)?;
+        client.call::<_, _, ()>("Start", &()).await.map_err(classify)?;
+        loop {
+            let at: OwnedObjectPath = client.get_property("Location").await.map_err(classify)?;
+            if at.as_str() != "/" {
+                return read_location(conn, at).await;
+            }
+            Timer::after(Duration::from_millis(200)).await;
+        }
+    })
+    .await;
+    if let Some(client) = client {
+        // No reply expected: cleanup cannot hold a result hostage. Bound
+        // even sending, in case the bus stops draining its socket.
+        or(
+            async {
+                let _ = client.call_noreply("Stop", &()).await;
+                if let Ok(manager) =
+                    proxy(conn, MANAGER.try_into().expect("a path"), "org.freedesktop.GeoClue2.Manager").await
+                {
+                    let _ = manager.call_noreply("DeleteClient", &(client.path(),)).await;
+                }
+            },
+            async {
+                Timer::after(Duration::from_millis(250)).await;
+            },
+        )
+        .await;
+    }
+    result
+}
+
+async fn proxy(conn: &Connection, path: OwnedObjectPath, iface: &'static str) -> Result<Proxy<'static>, LocateError> {
     Builder::<Proxy<'static>>::new(conn)
         .destination(SERVICE)
         .and_then(|b| b.path(path))
         .and_then(|b| b.interface(iface))
         .map(|b| b.cache_properties(CacheProperties::No))
-        .and_then(|b| b.build())
+        .map_err(classify)?
+        .build()
+        .await
         .map_err(classify)
 }
 
-fn read_location(conn: &Connection, path: OwnedObjectPath) -> Result<Located, LocateError> {
-    let loc = proxy(conn, path, "org.freedesktop.GeoClue2.Location")?;
-    let latitude: f64 = loc.get_property("Latitude").map_err(classify)?;
-    let longitude: f64 = loc.get_property("Longitude").map_err(classify)?;
-    let accuracy: f64 = loc.get_property("Accuracy").unwrap_or(f64::NAN);
+async fn read_location(conn: &Connection, path: OwnedObjectPath) -> Result<Located, LocateError> {
+    let loc = proxy(conn, path, "org.freedesktop.GeoClue2.Location").await?;
+    let latitude: f64 = loc.get_property("Latitude").await.map_err(classify)?;
+    let longitude: f64 = loc.get_property("Longitude").await.map_err(classify)?;
+    let accuracy: f64 = loc.get_property("Accuracy").await.unwrap_or(f64::NAN);
+    let description = loc.get_property::<String>("Description").await.ok().filter(|s| !s.trim().is_empty());
     if !(-90.0..=90.0).contains(&latitude) || !(-180.0..=180.0).contains(&longitude) {
         return Err(LocateError::Failed(format!("an impossible position ({latitude}, {longitude})")));
     }
-    Ok(Located { latitude, longitude, accuracy })
+    Ok(Located { latitude, longitude, accuracy, description })
 }

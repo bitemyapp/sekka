@@ -1,11 +1,12 @@
 //! Displays: turning outputs off and on, mirroring one on another (scaled
-//! to fit, letterboxed), the main display, and Night Light over IPC.
+//! to fit, letterboxed), the main display, Night Light over IPC, and a
+//! laptop's panel going dark while its lid is closed.
 
 mod common;
 
 use std::time::Duration;
 
-use aizome_ipc::{Event, OutputInfo, Request, Response};
+use aizome_ipc::{Event, OutputInfo, Request, Response, Synthetic};
 use common::*;
 
 fn outputs(c: &Compositor) -> Vec<OutputInfo> {
@@ -219,4 +220,67 @@ fn the_renderer_setting_applies_at_the_next_start() {
     let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!() };
     assert_eq!(stats.renderer, "pixman");
     assert!(!stats.renderer_after_restart);
+}
+
+fn laptop() -> Options<'static> {
+    Options { outputs: &["eDP-1=1280x800@1", "1280x800@1"], settings: "", ..Default::default() }
+}
+
+fn lid(c: &Compositor, closed: bool) {
+    c.ok(Request::Synthesize { events: vec![Synthetic::Lid { closed }] });
+}
+
+/// Frames an output has drawn or tried to (with nothing changed) so far.
+fn redraws(c: &Compositor, name: &str) -> u64 {
+    let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!("no stats") };
+    let o = stats.outputs.iter().find(|o| o.name == name).unwrap_or_else(|| panic!("no stats for {name}"));
+    o.frames_rendered + o.frames_skipped
+}
+
+#[test]
+fn closing_the_lid_turns_the_laptops_panel_off_until_it_opens() {
+    let c = Compositor::start(laptop());
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
+    let w = c.wait_window("org.example.editor");
+    c.wait_windows("on the panel", |ws| ws[0].output.as_deref() == Some("eDP-1"));
+    assert!(output(&c, "eDP-1").powered && output(&c, "HEADLESS-2").powered);
+
+    lid(&c, true);
+    let panel = output(&c, "eDP-1");
+    assert!(!panel.powered, "the panel stayed on behind the lid: {panel:?}");
+    assert!(panel.enabled, "the panel is dark, not out of the layout");
+    assert!(output(&c, "HEADLESS-2").powered, "a monitor went off with the lid");
+    // Dark: what changes on it isn't drawn.
+    c.settle();
+    let before = redraws(&c, "eDP-1");
+    c.ok(Request::Move { id: Some(w.id), x: w.geometry.x + 30, y: w.geometry.y });
+    c.settle();
+    assert_eq!(redraws(&c, "eDP-1"), before, "drew behind the closed lid");
+    // Turning the displays on doesn't light the panel behind it.
+    c.ok(Request::PowerOffMonitors);
+    assert!(!output(&c, "HEADLESS-2").powered);
+    c.ok(Request::PowerOnMonitors);
+    assert!(output(&c, "HEADLESS-2").powered);
+    assert!(!output(&c, "eDP-1").powered, "powering the displays on lit the panel behind the lid");
+
+    lid(&c, false);
+    assert!(output(&c, "eDP-1").powered, "the panel stayed off with the lid open");
+    c.settle();
+    assert!(redraws(&c, "eDP-1") > before, "the panel didn't draw once on again");
+}
+
+#[test]
+fn a_panel_another_display_mirrors_stays_on_with_the_lid_closed() {
+    let c = Compositor::start(laptop());
+    c.ok(Request::MirrorOutput { name: "HEADLESS-2".into(), source: Some("eDP-1".into()) });
+    lid(&c, true);
+    assert!(output(&c, "eDP-1").powered, "the mirror's picture went dark with the panel");
+    // Mirroring no more, it goes dark.
+    c.ok(Request::MirrorOutput { name: "HEADLESS-2".into(), source: None });
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while output(&c, "eDP-1").powered {
+        assert!(std::time::Instant::now() < deadline, "the panel stayed on behind the lid");
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    assert!(output(&c, "HEADLESS-2").powered);
 }

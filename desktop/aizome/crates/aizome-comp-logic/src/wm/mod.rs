@@ -585,7 +585,10 @@ impl Model {
         self.generation += 1;
         let members = self.group_members(id);
         let w = self.wins.get(&id)?;
-        if w.placement == placement && placement != Placement::Free {
+        if w.placement == placement
+            && placement != Placement::Free
+            && !(placement == Placement::Fullscreen && w.rect != rect)
+        {
             return Some(w.rect);
         }
         let new_rect = if placement == Placement::Free { w.restore.unwrap_or(w.rect) } else { rect };

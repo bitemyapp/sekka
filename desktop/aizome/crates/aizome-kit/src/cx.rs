@@ -496,11 +496,12 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
     /// `DragSource::new().urls(files).actions(true, false).icon(chip, hotspot)`.
     /// Call it while the button that began the drag is down (from a
     /// message its press or moves sent): the compositor carries on from
-    /// that press. The program hears how it ended in
+    /// that press. The program hears a successful start in
+    /// [`Program::drag_started`], how it ended in
     /// [`Program::drag_ended`], and is asked for promised data in
     /// [`Program::provide_drag_data`]. `None` if the window isn't showing.
     pub fn start_drag(&mut self, window: WindowKey, source: sidestep_ui::DragSource) -> Option<crate::program::DragId> {
         let win = self.core.window_of(window)?;
-        self.platform.start_drag(win, source).map(crate::program::DragId)
+        self.core.start_drag(win, source, self.platform)
     }
 }

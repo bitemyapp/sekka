@@ -406,7 +406,7 @@ impl Shell {
                 kw.extend(a.generic_name.clone());
                 let key = format!("app:{}", a.app_id());
                 let mut item =
-                    Item::new(Scope::App, a.name.clone(), glyph, Action::Launch { app_id: a.app_id().to_owned() })
+                    Item::new(Scope::App, a.name.clone(), glyph, Action::FocusApp { app_id: a.app_id().to_owned() })
                         .trail(a.generic_name.clone().unwrap_or_default())
                         .keywords(kw)
                         .key(key.clone());
@@ -745,8 +745,8 @@ impl Shell {
                     crate::menus::build::desk_items(&self.wm.desks, |d| crate::actions::wm::move_to_desk(Some(*id), d)),
                 ),
             ],
-            (Scope::App, Action::Launch { app_id }) => {
-                let running = self.wm.is_running(app_id);
+            (Scope::App, Action::FocusApp { app_id }) => {
+                let running = self.wm.app_window_to_activate(app_id, self.apps.as_deref()).is_some();
                 vec![
                     Entry::action("Open", Action::FocusApp { app_id: app_id.clone() }),
                     Entry::action("New Window", Action::NewWindow { app_id: app_id.clone() }),

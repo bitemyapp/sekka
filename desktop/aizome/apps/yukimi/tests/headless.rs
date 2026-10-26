@@ -217,7 +217,8 @@ fn a_failure_stays_with_its_log() {
     let job = h.program().job.as_ref().unwrap();
     let Some(Outcome::Failed(why)) = &job.outcome else { panic!("{:?}", job.outcome) };
     assert!(why.starts_with("error: builder for gimp2 failed"), "{why}");
-    assert!(why.contains("the running system was not changed"));
+    assert!(!why.contains("was put back"));
+    assert!(!why.contains("system was not changed"));
     assert!(job.details, "the log shows");
     assert!(has(&h, sheet, "building the new system"));
     // It stays until closed.
@@ -591,4 +592,28 @@ fn comparisons_open_a_sheet_drill_into_inputs_and_filter_packages() {
     h.named(new_sheet, aizome_kit::sidestep_ui::NamedKey::Escape, aizome_kit::sidestep_ui::Modifiers::default());
     assert!(h.program().comparison.is_none());
     assert!(ran.lock().unwrap().is_empty(), "inspecting must not run update operations");
+}
+
+#[test]
+fn authentication_failure_offers_an_explicit_retry_and_runs_it_once() {
+    let (mut h, _, ran) = sample(WORKS);
+    let operation = Operation::Rollback { generation: 26 };
+    // A normal operation opens the sheet. Injecting the result below uses
+    // that same sheet, avoiding any fixture-only widget behavior.
+    h.send(Msg::Run(operation.clone()));
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    let id = h.program().job.as_ref().unwrap().id;
+    h.send(Msg::Job(
+        id,
+        aizome_yukimi::job::JobEvent::AuthorizationFailed(aizome_yukimi::job::AuthorizationFailure::Unavailable),
+    ));
+    let sheet = h.program().job_sheet.unwrap();
+    assert!(has(
+        &h,
+        sheet,
+        "The administrator password dialog is unavailable. Nothing was changed. Try again when it is available."
+    ));
+    assert!(h.click_text(sheet, "Try Again"));
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    assert_eq!(ran.lock().unwrap().as_slice(), [operation.clone(), operation]);
 }

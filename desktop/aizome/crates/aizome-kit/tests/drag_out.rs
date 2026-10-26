@@ -14,6 +14,7 @@ struct Files {
     selected: Vec<usize>,
     dragged: Rc<RefCell<Vec<Vec<usize>>>>,
     drags: Vec<DragEvent>,
+    started: Vec<(WindowKey, DragId)>,
     ended: Vec<(DragId, DropAction)>,
     table: bool,
 }
@@ -22,6 +23,7 @@ struct Files {
 enum Msg {
     Select(Vec<usize>),
     Drag(DragEvent),
+    StartDrag(WindowKey),
 }
 
 fn source(rows: &[usize]) -> DragSource {
@@ -36,10 +38,13 @@ impl Program for Files {
     fn launched(&mut self, cx: &mut Cx<Msg>) {
         cx.open_window(WindowSpec::new("DragOut").size(400.0, 300.0));
     }
-    fn update(&mut self, msg: Msg, _cx: &mut Cx<Msg>) {
+    fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
             Msg::Select(s) => self.selected = s,
             Msg::Drag(d) => self.drags.push(d),
+            Msg::StartDrag(window) => {
+                cx.start_drag(window, source(&[0]));
+            }
         }
     }
     fn view(&self, _w: WindowKey) -> Element<Msg> {
@@ -76,6 +81,9 @@ impl Program for Files {
         ]
         .into()
     }
+    fn drag_started(&mut self, window: WindowKey, drag: DragId, _cx: &mut Cx<Msg>) {
+        self.started.push((window, drag));
+    }
     fn provide_drag_data(&mut self, _drag: DragId, mime: &str, _cx: &mut Cx<Msg>) -> Option<Vec<u8>> {
         (mime == "image/png").then(|| b"PNG".to_vec())
     }
@@ -103,6 +111,7 @@ fn a_mouse_area_drags_out_past_a_few_points() {
     let drags = h.drags();
     assert_eq!(drags.len(), 1);
     let (id, carried) = drags[0];
+    assert_eq!(h.program().started, [(w, id)]);
     assert!(
         format!("{carried:?}").contains("text/plain") && format!("{carried:?}").contains("image/png"),
         "{carried:?}"
@@ -115,6 +124,29 @@ fn a_mouse_area_drags_out_past_a_few_points() {
     assert_eq!(h.drag_data(id, "text/html"), None);
     h.end_drag(id, DropAction::Copy);
     assert_eq!(h.program().ended, [(id, DropAction::Copy)]);
+}
+
+#[test]
+fn program_started_drags_report_their_source_and_id() {
+    let mut h = Harness::new(Files::default());
+    let w = h.window();
+    h.send(Msg::StartDrag(w));
+    let drag = h.drags()[0].0;
+    assert_eq!(h.program().started, [(w, drag)]);
+    h.end_drag(drag, DropAction::None);
+    assert_eq!(h.program().ended, [(drag, DropAction::None)]);
+}
+
+#[test]
+fn rejected_native_drags_do_not_report_a_start() {
+    let mut h = Harness::new(Files::default());
+    h.platform.reject_drags = true;
+    let w = h.window();
+    let from = h.find_id(w, "chip").unwrap().center();
+    press_and_move(&mut h, w, from, Vec2::new(30.0, 0.0));
+    h.send(Msg::StartDrag(w));
+    assert!(h.drags().is_empty());
+    assert!(h.program().started.is_empty());
 }
 
 #[test]

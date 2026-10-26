@@ -27,6 +27,12 @@ pub struct AreaPick {
     pub cache: DecorCache,
 }
 
+impl AreaPick {
+    pub fn cursor(&self) -> CursorIcon {
+        if self.window_mode { CursorIcon::Pointer } else { CursorIcon::Crosshair }
+    }
+}
+
 /// A pick to report rather than screenshot.
 pub struct Report {
     pub tag: String,
@@ -201,8 +207,7 @@ pub fn key(state: &mut State, syms: &[Keysym], pressed: bool) -> Option<KeyDecis
             if toggles {
                 a.window_mode = !a.window_mode;
                 a.start = None;
-                state.az.cursor_override =
-                    Some(if a.window_mode { CursorIcon::Pointer } else { CursorIcon::Crosshair });
+                state.az.cursor_override = Some(a.cursor());
                 state.az.queue_redraw_all();
             }
         }

@@ -8,8 +8,8 @@ use aizome_sys::apps::{App, AppIndex};
 use crate::look::Hue;
 
 /// The Toolchest's categories, in its order.
-pub const CATEGORIES: [&str; 9] =
-    ["Accessories", "Development", "Graphics", "Internet", "Office", "Media", "System", "Utilities", "Other"];
+pub const CATEGORIES: [&str; 10] =
+    ["Accessories", "Development", "Games", "Graphics", "Internet", "Office", "Media", "System", "Utilities", "Other"];
 
 /// Whether it's one of Aizome's own apps.
 pub fn is_aizome(app: &App) -> bool {
@@ -19,10 +19,13 @@ pub fn is_aizome(app: &App) -> bool {
 /// An app's place in the Toolchest's Applications, from its categories.
 pub fn category(categories: &[String]) -> &'static str {
     let has = |c: &str| categories.iter().any(|x| x == c);
-    if has("Utility") && ["TextEditor", "Calculator", "Clock", "Accessibility", "Viewer"].iter().any(|c| has(c)) {
-        "Accessories"
-    } else if has("Development") {
+    if has("Development") {
         "Development"
+    } else if has("Game") {
+        "Games"
+    } else if has("Utility") && ["TextEditor", "Calculator", "Clock", "Accessibility", "Viewer"].iter().any(|c| has(c))
+    {
+        "Accessories"
     } else if has("Graphics") {
         "Graphics"
     } else if has("Network") {
@@ -156,7 +159,27 @@ mod tests {
         assert_eq!(category(&cats("Utility;Archiving")), "Utilities");
         assert_eq!(category(&cats("Network;WebBrowser")), "Internet");
         assert_eq!(category(&cats("System;TerminalEmulator")), "System");
-        assert_eq!(category(&cats("Game")), "Other");
+        assert_eq!(category(&cats("Game")), "Games");
+    }
+
+    #[test]
+    fn development_editors_belong_with_development_tools() {
+        // Both Zed and VS Code publish these categories. Their generic
+        // text-editor role must not hide the more specific IDE role.
+        assert_eq!(category(&cats("Utility;TextEditor;Development;IDE")), "Development");
+        assert_eq!(category(&cats("Utility;TextEditor")), "Accessories");
+    }
+
+    #[test]
+    fn steam_desktop_entries_appear_in_games() {
+        let app = aizome_sys::apps::DesktopEntry::parse(
+            "[Desktop Entry]\nType=Application\nName=Example Game\nExec=steam steam://rungameid/123\nCategories=Game;\n",
+            "Example Game.desktop",
+            &aizome_sys::apps::Locale::untranslated(),
+        ).unwrap();
+        let groups = by_category(&[&app]);
+        assert_eq!(groups[0].0, "Games");
+        assert_eq!(groups[0].1[0].exec.as_deref(), Some("steam steam://rungameid/123"));
     }
 
     #[test]

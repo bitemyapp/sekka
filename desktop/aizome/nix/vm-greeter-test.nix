@@ -58,9 +58,35 @@ pkgs.testers.runNixOSTest {
     };
 
   testScript = ''
-    import json, time
+    import json, shlex, time, tomllib
 
     INSPECT = "/run/greeter-inspect"
+
+    def as_user(user, command):
+        return f"su -s /bin/sh {user} -c {shlex.quote(command)}"
+
+    def outputs(user):
+        uid = machine.succeed(f"id -u {user}").strip()
+        if user == "greeter":
+            # A killed compositor can leave an old IPC socket behind. The
+            # greeter names its Wayland socket after its own current pid.
+            pid = machine.succeed("pgrep -u greeter -x aizome-greeter").strip()
+            socket = f"/run/user/{uid}/aizome.aizome-greeter-{pid}.sock"
+        else:
+            socket = f"/run/user/{uid}/aizome.*.sock"
+        return json.loads(machine.succeed(as_user(user,
+            f"aizomectl --json --socket {socket} outputs")))["outputs"]
+
+    def scales(user, uid):
+        value = machine.succeed(as_user(user,
+            "busctl --system --json=short get-property org.freedesktop.Accounts "
+            f"/org/freedesktop/Accounts/User{uid} org.aizome.DisplayScales Scales"))
+        return tomllib.loads(json.loads(value)["data"])
+
+    def save_scale(scale):
+        text = f'[[outputs]]\nname = "Virtual-1"\nscale = {scale}\n'
+        machine.succeed(as_user("alice", "mkdir -p ~/.config/aizome; printf %s " + shlex.quote(text)
+            + " > ~/.config/aizome/settings.toml"))
 
     def docs():
         out = machine.succeed(
@@ -136,6 +162,9 @@ pkgs.testers.runNixOSTest {
 
     with subtest("the greeter starts on its own compositor and lists both people"):
         greeter_up()
+        assert outputs("greeter")[0]["scale"] == 1.0
+        machine.succeed("chmod 0700 /home/alice")
+        save_scale(1.5)
         shows("Alice Kimura")
         shows("Bob Tanaka")
         machine.screenshot("01-people")
@@ -177,11 +206,28 @@ pkgs.testers.runNixOSTest {
         state = machine.succeed("cat /var/lib/aizome-greeter/state.toml")
         assert 'last_user = "alice"' in state and 'alice = "aizome"' in state, state
 
+    with subtest("the session publishes saved scales at startup and after changes"):
+        until("the session's fractional scale", lambda: outputs("alice")[0]["scale"] == 1.5)
+        until("the public fractional scale", lambda: scales("greeter", 1000)["outputs"][0]["scale"] == 1.5)
+        save_scale(2.0)
+        until("the session at 2x", lambda: outputs("alice")[0]["scale"] == 2.0)
+        until("the public scale at 2x", lambda: scales("greeter", 1000)["outputs"][0]["scale"] == 2.0)
+        # AccountsService owns persistence; neither greeter nor Bob can write
+        # Alice's public preference, and the greeter cannot read her home.
+        machine.fail(as_user("greeter", "cat /home/alice/.config/aizome/settings.toml"))
+        machine.fail(as_user("bob",
+            "busctl --system --timeout=2 --allow-interactive-authorization=no set-property "
+            "org.freedesktop.Accounts /org/freedesktop/Accounts/User1000 "
+            "org.aizome.DisplayScales Scales s 'outputs = []'"))
+        machine.succeed("systemctl restart accounts-daemon")
+        assert scales("greeter", 1000)["outputs"][0]["scale"] == 2.0
+
     with subtest("logging out brings the greeter back, at her password"):
         log_out("alice")
         greeter_up()
         shows("Alice Kimura")
         shows("Log in as someone else")
+        assert outputs("greeter")[0]["scale"] == 2.0
         machine.screenshot("05-back")
 
     with subtest("someone else, and another session: Bob in sway"):
@@ -201,6 +247,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("Bob's session is remembered, and an X11 one starts under X"):
         greeter_up()
+        assert outputs("greeter")[0]["scale"] == 1.0, "Alice's scale must not leak into Bob's login"
         shows("Session: Sway")
         choose("xterm")
         machine.send_chars("bobs-password\n")
@@ -218,5 +265,15 @@ pkgs.testers.runNixOSTest {
         menu_open("Power")
         machine.screenshot("07-power")
         key("esc")
+
+    with subtest("a malformed public preference still allows login"):
+        machine.succeed(as_user("bob",
+            "busctl --system set-property org.freedesktop.Accounts "
+            "/org/freedesktop/Accounts/User1001 org.aizome.DisplayScales Scales s 'invalid = ['"))
+        machine.succeed(f"rm -f {INSPECT}/*.json")
+        machine.succeed("systemctl restart greetd")
+        greeter_up()
+        shows("Bob Tanaka")
+        assert outputs("greeter")[0]["scale"] == 1.0
   '';
 }

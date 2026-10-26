@@ -64,7 +64,7 @@ pub fn settings(pane: &str, anchor: Option<&str>) -> Launch {
 pub fn start(index: Option<&AppIndex>, launch: &Launch, token: Option<String>, cwd: Option<PathBuf>) {
     match launch {
         Launch::App { app_id, targets } => {
-            let Some(entry) = index.and_then(|i| i.get(app_id).or_else(|| i.match_window(app_id))) else {
+            let Some(entry) = index.and_then(|i| i.match_window_identity(app_id)) else {
                 log::warn!("no app {app_id} to launch");
                 return;
             };

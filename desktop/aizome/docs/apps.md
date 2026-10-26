@@ -21,6 +21,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Myaku 脈 | Activity | `apps/myaku` | `aizome-myaku` | `org.aizome.Myaku` | pulse |
 | Shashin 写真 | Images | `apps/shashin` | `aizome-shashin` | `org.aizome.Shashin` | photograph |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
+| Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
 
 Also part of the session, not separate apps: the Toolchest, the command
 palette, notifications, the lock screen and the polkit dialog (all in
@@ -225,13 +226,27 @@ where Sekka's Yukimi package installs it.
 As built: the helper is the program Sekka's polkit action
 `io.github.bitemyapp.Yukimi.change-system` names (its
 `org.freedesktop.policykit.exec.path`, read from the installed policy), run
-through `/run/wrappers/bin/pkexec` with the GTK Yukimi's arguments, so it
-needs `programs.yukimi.enable` (Sekka sets it on every desktop) and nothing
+through `/run/wrappers/bin/pkexec --disable-internal-agent` with the GTK
+Yukimi's helper arguments, so it needs `programs.yukimi.enable` (Sekka sets
+it on every desktop) and nothing
 of Aizome's. Its cache is `~/.cache/aizome/yukimi`, reading the GTK
 Yukimi's package index and last check from `~/.cache/yukimi` until it has
 its own. `aizome-yukimi --sample` shows a sample system;
 `AIZOME_YUKIMI_ETC=/some/etc` looks at another system's configuration
 without changing anything.
+
+Yukimi waits up to five seconds through an unavailable authentication
+agent by retrying only recognized pre-execution pkexec failures (complete
+C-locale diagnostics, matching exit status, and no helper stdout). It never
+retries a build or activation failure. An unavailable dialog offers **Try
+Again**; denial and cancellation are distinct. Generic failures preserve
+the helper's report without inventing a successful rollback.
+
+`nix build .#checks.x86_64-linux.polkit-recovery` exercises real Yukimi,
+polkit and PAM through two prebuilt system activations that change the
+package profile, then shell replacement, an interrupted password dialog,
+and retrying after a sustained agent outage. The fixture substitutes
+prebuilt profiles for Nix evaluation/building.
 
 Beyond the GTK Yukimi, it changes what used to take typing `sudo` commands:
 
@@ -380,7 +395,15 @@ one scale, and tiles for feels-like, UV, wind (with a compass), humidity,
 the sun and precipitation. The first launch keeps the city of the
 machine's time zone and asks once whether to use the location; GeoClue is
 asked at city accuracy as `org.aizome.Tenki`, and positions go to
-Open-Meteo rounded to 0.01°. Forecasts are cached per place in
+Open-Meteo rounded to 0.01°. **Search for a City** leaves a pending or
+failed location search and focuses the sidebar. Disabling location or
+closing Tenki cancels its request; a late answer cannot change or save
+the position. The shared `aizome-sys` client gives connection setup,
+service calls and the position lookup one 20-second deadline in Tenki,
+then at most 250 ms to send cleanup without waiting for a service reply.
+The shell uses the same client with its existing 30-second deadline.
+The private-bus tests stall setup, property reads and cleanup separately;
+they never contact the host's location service. Forecasts are cached per place in
 `$XDG_CACHE_HOME/aizome/tenki/` (the window opens on the cache and says
 "Updated 12 min ago", or "Offline"), places are kept in
 `$XDG_DATA_HOME/aizome/tenki/places.json`, and units and the location
@@ -496,6 +519,98 @@ and processes with CPU, memory, energy, disk and GPU use; sorting, search,
 quit and force quit; graphs of CPU, memory, disk and network over time; the
 inspector for a process. Through `aizome-sys::sysinfo`.
 
+Application groups follow identified windows and their process trees: helpers
+and commands belong with the app that started them, while a separately
+identified app launched from a terminal starts its own group. The desktop
+shell and session managers are boundaries. A dedicated application/service
+unit can reunite orphaned workers only when its ownership is unambiguous;
+sharing a login session or a slice is insufficient. Without compositor window
+information, grouping falls back to parentage and explicit application units.
+Labels use explicit identities or an unambiguous executable match, never a
+generic interpreter name or whichever window happened to be focused.
+
+The inspector's **Grouping** section explains the evidence separately from
+each process's **Parent** link. Shared unit membership does not imply direct
+parenthood. To inspect the same attribution without opening a window, run
+`cargo run -p aizome-myaku --example groups -- NAME` inside `nix develop`;
+omit `NAME` to include every group. This probe only reads the system.
+
+GPU readings use DRM statistics for AMD/Intel and NVML for NVIDIA (loaded
+at runtime, with no NVIDIA dependency on other machines). NVIDIA graphics and
+compute process lists are merged by PID without counting their memory twice;
+card totals come directly from the driver. The newer NVML memory query separates
+driver-reserved memory from allocations, matching `nvidia-smi`'s used figure;
+the fallback for older drivers includes reservations. Unavailable counters show
+a dash rather than zero. amdgpu leaves out the engines a client hasn't used,
+so an amdgpu client listing none is idle, not unknown (the compositor's idle
+context on an integrated Radeon, for one).
+
+Across cards, % GPU and % Video are the busiest card's, as their column says:
+each card's figure is a share of its own engines, so 18% of an integrated
+Radeon and 2% of an RTX 5090 are not 20% of anything. Video memory adds up.
+Shared GPU (system memory mapped through DRM's GTT) adds up from the cards
+that report it; NVML has no such figure, so the column leaves when only
+NVIDIA cards are shown. Most clients are idle at any moment, so at the same
+% GPU or % Video the memory held decides: a browser holding 800 MiB comes
+before the hundreds of processes that use no card.
+
+In the GPU lens, each card's graph takes a place in the strip along the
+bottom, Network's first, then Disk's: how busy it is (violet) and how full
+its memory (cyan), over two minutes, with used and total memory above. The
+discrete cards come first. With several cards, the table gains a **Card**
+column saying which each application uses ("GeForce RTX 5090", "Both"), and
+the table can show one card alone: from the toolbar's pop-up beside
+Applications, from View ▸ GPUs (which opens the GPU lens from any other), or
+by pressing the card's graph (again for every card). The card shown is
+framed in the focus colour, as Tansu frames the partition selected; a
+graph under the pointer is framed faintly. With one card shown, the table
+lists its clients, idle ones holding memory included, with their use of
+that card alone; applications on several cards say how many of their
+processes use it ("1 of 14 processes"); the status line counts its clients
+and gives its clock, temperature and power. The other lenses always show
+every card's use, and the inspector gives the selection's use of each card
+it uses whichever is shown. The choice follows the card's PCI address
+across readings. Cards are named without their maker or codename ("Radeon
+Graphics" for "AMD Radeon Graphics (Granite Ridge)"); alike cards add their
+bus ("GeForce RTX 4090 · 41:00"), as Myaku's numbering of them would not
+match `nvidia-smi`'s.
+`aizome-myaku --print` also includes card and application video-memory usage.
+
+The Energy lens is always available, including when no power meter can be
+read. Unmeasured values show as dashes, with "No power meter" in the status
+line; the selected lens stays open if readings stop.
+
+Choose **View → Energy Meters…**, or click the Energy status, to open a
+small live window listing the meters, their watts and whether each counts
+toward the total. It explains overlapping readings: a graphics card's
+power is already included when the battery supplies the total, and an AMD
+package reading is not added on top of RAPL. Unavailable readings are
+labelled without assuming why access failed. This optional window uses
+the sampler's existing readings and closes independently of the main view.
+
+The processor's meter is its RAPL counters, readable only by root, or else
+the meter an AMD integrated Radeon reports: amdgpu's is the whole package's
+on an APU, the processor included, and anyone may read it. Without either,
+the battery's draw counts while it discharges. Each discrete card's own
+meter adds to any of these: NVML's energy counter, or the card's hwmon
+meter. A desktop with no battery and RAPL kept for root (the integrated
+Radeon and RTX 5090 one) measures through these. Each meter is shared by
+use of what it measures: the processor's (or the battery's draw less the
+cards') by processor time, a card's by its clients' time on that card,
+and what is left is the devices idling. With only the cards' meters,
+what uses no card shows a dash.
+
+`cargo test -p aizome-myaku --test gpu` drives the choice from the toolbar,
+the strip and the menu on a made-up desktop with both cards
+(`fixture::workstation`), and covers figures across cards, other lenses,
+cards renumbered or gone, what can't be read, one card and five, and the
+smallest window; `--test look` holds its pictures in Night and Day, and
+`--test perf` a reading with one card shown (1.2 ms at the median, release,
+600 processes). On a machine with NVIDIA compute clients running, `cargo
+test -p aizome-myaku --test gpu live_ -- --ignored --nocapture` compares the
+sampler with `nvidia-smi` (allowing allocations to change between readings)
+and checks that idle amdgpu clients read as idle.
+
 ### Shashin (Images)
 
 The image viewer the desktop opens pictures with: PNG, JPEG, GIF
@@ -554,3 +669,29 @@ step; a "Show at login" checkbox.
 `$XDG_STATE_HOME/aizome/annai/state.json`. The session starts it through
 `apps/annai/data/org.aizome.Annai.Welcome.desktop`, an XDG autostart entry
 (`OnlyShowIn=Aizome`) installed into `/etc/xdg/autostart`.
+
+### Koe (Dictation)
+
+Speak, and the words are typed into the app in front: ❖⌥D to start and
+again to finish, recognised on this computer by Whisper (whisper.cpp,
+on the graphics card through Vulkan where there is one). Ported from Koe,
+its own repository until it joined Aizome; see `docs/koe.md`.
+
+As built: a window of two pages and a session service. **Dictation**
+sets everything up without a terminal: Download a Model and Turn On (Base,
+148 MB, checked against a pinned SHA-256; nothing is downloaded until
+asked), the switch (the service now and at each login, through the unit's
+`ExecCondition`, so it runs only for those who turned it on), the models
+(download, use, remove), language, translation, the graphics card, what
+happens to the words, finishing after a pause, and the shortcuts, which
+turning it on adds to `[keys.bindings]` when ❖⌥D and ❖⌥⎋ are free. With
+dictation off, the shortcut opens Koe. Settings are saved as they change
+in `$XDG_CONFIG_HOME/aizome/koe.toml`, and the service takes them up
+between dictations without restarting. **Vocabulary and Teaching** keeps
+packs of words (hints and approved corrections, shareable as `.koe.json`)
+and records reviewed examples for training later. The service
+(`aizome-koe daemon`) puts its microphone in the systray, pastes through
+the compositor's IPC after checking the focus and the lock, and keeps
+audio and transcripts in memory. `aizome-koe` also has the commands
+scripts and agents use (`record`, `status`, `watch`, `model`, `packs`,
+`words`, `examples`, `enable`, `disable`).

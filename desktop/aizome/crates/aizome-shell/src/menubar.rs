@@ -28,6 +28,7 @@ pub enum BarMsg {
     ItemScroll(u64, Vec2),
     /// The pointer came over a title while a menu is open.
     Hover(Slot),
+    DeskbarHover(bool),
     /// The notification line was clicked.
     Banner(u32),
     /// A Desk was right-clicked, at.
@@ -254,8 +255,10 @@ pub struct BarModel {
     pub tray: Tray,
     pub meters: Reading,
     pub clock: String,
-    /// `Some(n)` when the Deskbar is folded: `n apps â`.
+    /// Compact apps control when folded or set to hide automatically.
     pub folded_apps: Option<usize>,
+    pub deskbar_visible: bool,
+    pub deskbar_auto_hide: bool,
     /// Unread notifications, counted on the `N apps` control when folded.
     pub unread: usize,
     pub banner: Option<Banner>,
@@ -760,10 +763,10 @@ fn clock(label: &str, open: bool) -> Element<BarMsg> {
 }
 
 /// `N apps â`: the folded Deskbar.
-fn apps_control(n: usize, unread: usize, open: bool) -> Element<BarMsg> {
+fn apps_control(n: usize, unread: usize, open: bool, visible: bool, auto_hide: bool) -> Element<BarMsg> {
     let label = if n == 1 { "1 app".to_owned() } else { format!("{n} apps") };
     let m = label.clone();
-    drawn(0.0, HEIGHT, (label.clone(), unread, open), move |cx| {
+    drawn(0.0, HEIGHT, (label.clone(), unread, open, visible), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         if cx.is_hovered() || open {
@@ -772,7 +775,8 @@ fn apps_control(n: usize, unread: usize, open: bool) -> Element<BarMsg> {
         let s = ui_spec(t, 12.0, typeface::WEIGHT_SEMIBOLD, t.text2());
         let w = cx.draw_text_in(&label, &s, Rect::new(0.0, 0.0, b.x1, HEIGHT - 1.0), Align::Start);
         let mut x = w + 9.0;
-        Icon::ChevronDown.draw(cx.canvas, Point::new(x, 6.0), 12.0, t.text3());
+        let chevron = if visible { Icon::ChevronUp } else { Icon::ChevronDown };
+        chevron.draw(cx.canvas, Point::new(x, 6.0), 12.0, t.text3());
         x += 12.0;
         if unread > 0 {
             let r = look::digits(11.0 * t.metrics.factor, typeface::WEIGHT_SEMIBOLD, Hue::Red.color(t));
@@ -785,8 +789,11 @@ fn apps_control(n: usize, unread: usize, open: bool) -> Element<BarMsg> {
         if unread > 0 { w + 6.0 + 8.0 * unread.to_string().len() as f64 } else { w }
     })
     .on_click(BarMsg::Run(Action::SetDeskbarCollapsed(false)))
+    .on_hover_if(auto_hide, BarMsg::DeskbarHover(true))
+    .on_leave(BarMsg::DeskbarHover(false))
     .overflow(4.0)
     .text(format!("{n} apps"), SemanticRole::Button)
+    .tooltip("Show Deskbar")
     .key("apps")
     .into()
 }
@@ -813,7 +820,13 @@ fn header(model: &BarModel) -> Element<BarMsg> {
         items.push(memory_meter(&model.meters));
     }
     if let Some(n) = model.folded_apps {
-        items.push(apps_control(n, model.unread, model.open == Some(Slot::Apps)));
+        items.push(apps_control(
+            n,
+            model.unread,
+            model.open == Some(Slot::Apps),
+            model.deskbar_visible,
+            model.deskbar_auto_hide,
+        ));
     } else {
         for item in &tray.items {
             items.push(status_item(item, model.open == Some(Slot::Item(item.slot))));
@@ -858,6 +871,22 @@ fn header(model: &BarModel) -> Element<BarMsg> {
                 format!("Battery {p:.0}%"),
             ));
         }
+    }
+    if model.primary && model.deskbar_visible {
+        items.push(
+            drawn(16.0, HEIGHT, "hide-deskbar", |cx| {
+                let t = cx.theme();
+                if cx.is_hovered() {
+                    cx.canvas.fill_rect(cx.bounds(), t.hover(t.bar()));
+                }
+                Icon::ChevronUp.draw(cx.canvas, Point::new(2.0, 6.0), 12.0, t.text3());
+            })
+            .on_click(BarMsg::Run(Action::SetDeskbarCollapsed(true)))
+            .text("Hide Deskbar", SemanticRole::Button)
+            .tooltip("Hide Deskbar")
+            .key("hide-deskbar")
+            .into(),
+        );
     }
     let left = row(items).spacing(9.0).align(Align::Center).height(HEIGHT).into();
     let content = split(left, clock(&model.clock, open(TrayWidget::Clock)), HEADER, 16.0, (11.0, 10.0));
@@ -980,6 +1009,9 @@ pub fn header_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) ->
                 .ceil(),
             );
         }
+    }
+    if model.primary && model.deskbar_visible {
+        items.push(16.0);
     }
     let row: f64 = items.iter().sum::<f64>() + 9.0 * (items.len().saturating_sub(1)) as f64;
     let clock = m(&model.clock, &look::digits(12.5 * t.metrics.factor, typeface::WEIGHT_SEMIBOLD, t.text())).ceil();

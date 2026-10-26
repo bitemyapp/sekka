@@ -349,6 +349,13 @@ mod tests {
         let info = AppInfo::new("org.aizome.Test", "Test", "Tester");
         let mut core = Core::new(info.clone(), Appearance::default());
         core.menubar = MenuBar::<()>::standard(&info).into_specs();
+        assert!(!published(&core)[0].items.iter().any(|i| i.label == "Settings…"));
+        assert!(!core.menubar[0].actions().into_iter().any(|a| a.role == Some(MenuRole::Settings)));
+        // An app that explicitly adds a role without implementing it must
+        // still get the unavailable state in both menu implementations.
+        core.menubar = MenuBar::<()>::standard(&info)
+            .extend("Test", [MenuItem::role_item("Settings…", MenuRole::Settings)])
+            .into_specs();
         let menus = published(&core);
         for (index, label) in [(0, "Settings…"), (3, "Test Help")] {
             let item = menus[index].items.iter().find(|i| i.label == label).unwrap();

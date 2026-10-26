@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 /// One open DRM device, from `/proc/PID/fdinfo/FD`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DrmClient {
+    /// The driver that wrote the figures (`amdgpu`, `i915`).
+    pub driver: String,
     /// The card's PCI address (`0000:00:02.0`).
     pub pdev: String,
     /// Identifies the client: several descriptors may share one.
@@ -51,7 +53,9 @@ pub fn parse_fdinfo(text: &str) -> Option<DrmClient> {
     for line in text.lines() {
         let Some((key, value)) = line.split_once(':') else { continue };
         let value = value.trim();
-        if key == "drm-pdev" {
+        if key == "drm-driver" {
+            c.driver = value.to_owned();
+        } else if key == "drm-pdev" {
             c.pdev = value.to_owned();
         } else if key == "drm-client-id" {
             c.id = value.parse().ok()?;
@@ -85,6 +89,15 @@ pub fn parse_fdinfo(text: &str) -> Option<DrmClient> {
     c.vram = vram.or(vram_total).unwrap_or(0);
     c.shared = gtt.or(gtt_total).unwrap_or(0);
     Some(c)
+}
+
+impl DrmClient {
+    /// Whether its figures say how busy it kept the card. Most drivers list
+    /// every engine, or none when they don't count; amdgpu leaves out the
+    /// engines a client hasn't used, so there none listed means idle.
+    pub fn measures_busy(&self) -> bool {
+        !self.engines.is_empty() || !self.cycles.is_empty() || self.driver == "amdgpu"
+    }
 }
 
 /// Whether an engine draws or computes (as opposed to video).
@@ -209,6 +222,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!((amd.id, amd.vram, amd.shared), (12, 1 << 20, 2 << 20));
+        assert!(amd.measures_busy());
+        // An amdgpu client that hasn't submitted work lists no engines.
+        let idle = parse_fdinfo("drm-driver:\tamdgpu\ndrm-pdev:\t0000:78:00.0\ndrm-client-id:\t90\n").unwrap();
+        assert!(idle.measures_busy());
+        assert_eq!(ClientUse::between(&idle, &idle, 1.0), ClientUse::default());
+        let silent = parse_fdinfo("drm-driver:\tnouveau\ndrm-client-id:\t4\ndrm-memory-vram:\t4 MiB\n").unwrap();
+        assert!(!silent.measures_busy(), "a driver that counts nothing is unknown, not idle");
         let later =
             DrmClient { engines: vec![("gfx".into(), 1_500_000_000), ("dec".into(), 100_000_000)], ..amd.clone() };
         let u = ClientUse::between(&amd, &later, 1.0);

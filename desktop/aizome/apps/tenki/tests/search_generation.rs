@@ -33,8 +33,8 @@ impl Services for Delayed {
     fn forecast(&self, lat: f64, lon: f64) -> Result<String, FetchError> {
         self.recorded.forecast(lat, lon)
     }
-    fn locate(&self) -> Result<Located, LocateError> {
-        self.recorded.locate()
+    fn locate(&self, cancel: &aizome_tenki::location::Cancellation) -> Result<Located, LocateError> {
+        self.recorded.locate(cancel)
     }
     fn timezone(&self) -> Option<String> {
         None

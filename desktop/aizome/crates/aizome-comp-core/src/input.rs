@@ -1,5 +1,6 @@
-//! Input: pointer, keyboard, touch and gestures, from libinput, winit or
-//! IPC (synthetic events for tests), all through the same paths.
+//! Input: pointer, keyboard, touch, gestures and the lid switch, from
+//! libinput, winit or IPC (synthetic events for tests), all through the
+//! same paths.
 //!
 //! The core turns each event into a call the logic understands and keeps
 //! a few keys for itself, which work whatever the logic does: switching
@@ -10,9 +11,10 @@
 //! keys on.
 
 use smithay::backend::input::{
-    AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event as _, GestureBeginEvent, GestureEndEvent,
-    GesturePinchUpdateEvent as _, GestureSwipeUpdateEvent as _, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
-    PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, TouchEvent,
+    AbsolutePositionEvent, Axis, AxisSource, ButtonState, Device as _, DeviceCapability, Event as _, GestureBeginEvent,
+    GestureEndEvent, GesturePinchUpdateEvent as _, GestureSwipeUpdateEvent as _, InputBackend, InputEvent, KeyState,
+    KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, Switch, SwitchState,
+    SwitchToggleEvent as _, TouchEvent,
 };
 use smithay::desktop::{WindowSurfaceType, layer_map_for_output};
 use smithay::input::keyboard::{Keycode, Keysym, KeysymHandle, ModifiersState, keysyms};
@@ -218,6 +220,17 @@ impl State {
                 if let Some(touch) = self.az.seat.get_touch() {
                     touch.cancel(self);
                 }
+            }
+            InputEvent::SwitchToggle { event } => {
+                if event.switch() == Some(Switch::Lid) {
+                    self.lid_switched(event.state() == SwitchState::On);
+                }
+            }
+            // libinput says nothing of a lid opened while its device was
+            // gone (another VT had the seat), so a lid whose device goes
+            // counts as open until it says otherwise.
+            InputEvent::DeviceRemoved { device } if device.has_capability(DeviceCapability::Switch) => {
+                self.lid_switched(false);
             }
             InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. } => {}
             _ => {}

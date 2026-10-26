@@ -306,7 +306,7 @@ fn encodings_and_line_endings_survive_open_and_save() {
     h.type_text(w, " ✓");
     h.command(w, 's');
     assert_eq!(std::fs::read(&file).unwrap(), b"caf\xe9\r\nna\xefve\r\nok", "not saved yet");
-    h.send(Msg::SaveUtf8(w));
+    h.named(w, NamedKey::Enter, NONE);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "café\r\nnaïve\r\nok ✓");
     // Line endings switched.
     h.send(Msg::On(w, Command::SetLineEnding(LineEnding::Lf)));

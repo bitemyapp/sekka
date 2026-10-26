@@ -51,6 +51,8 @@ pub(crate) enum KitMsg {
     Quit,
     /// Close a window as if the user asked (the program may refuse).
     CloseRequest(WindowKey),
+    /// A native drag accepted by the platform, from a window or its popup.
+    DragStarted { window: WindowKey, drag: crate::program::DragId },
     /// Ask the shell to do something (Help ▸ Search); nothing without one.
     AskShell(aizome_shell_proto::ShellRequest),
 }
@@ -1459,7 +1461,7 @@ impl Core {
             if let Some(w) = self.wins.get_mut(&win) {
                 w.active = None;
             }
-            platform.start_drag(win, source);
+            self.start_drag(win, source, platform);
         }
         if relayout
             && let Some(w) = self.wins.get_mut(&win)
@@ -2023,6 +2025,18 @@ impl Core {
         win
     }
 
+    pub fn start_drag(
+        &mut self,
+        win: WinId,
+        source: sidestep_ui::DragSource,
+        platform: &mut dyn Platform,
+    ) -> Option<crate::program::DragId> {
+        let window = self.wins.get(&self.app_window_for(win))?.key()?;
+        let drag = crate::program::DragId(platform.start_drag(win, source)?);
+        self.queue.push_back(Box::new(KitMsg::DragStarted { window, drag }));
+        Some(drag)
+    }
+
     fn default_key(&mut self, win: WinId, ev: &KeyEvent, focused: Option<usize>, platform: &mut dyn Platform) {
         let m = ev.modifiers;
         match &ev.key {
@@ -2329,7 +2343,7 @@ impl Core {
             KitMsg::AlertChoice { alert, index } => crate::dialogs::alert_chosen(self, alert, index),
             KitMsg::Panel { panel, msg } => crate::dialogs::panel_message(self, panel, msg, platform),
             // The runtime handles these (they need the program).
-            KitMsg::Quit | KitMsg::CloseRequest(_) | KitMsg::AskShell(_) => {}
+            KitMsg::Quit | KitMsg::CloseRequest(_) | KitMsg::DragStarted { .. } | KitMsg::AskShell(_) => {}
         }
     }
 

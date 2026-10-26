@@ -44,6 +44,30 @@ fn windows_and_arithmetic() {
 }
 
 #[test]
+fn app_results_activate_existing_windows_and_close_the_palette() {
+    use aizome_sys::apps::{AppIndex, Locale, XdgDirs};
+    let mut h = scene(false);
+    let root = std::env::temp_dir().join(format!("aizome-palette-apps-{}", std::process::id()));
+    let dirs = XdgDirs::rooted(&root);
+    let apps = dirs.data_home.join("applications");
+    std::fs::create_dir_all(&apps).unwrap();
+    std::fs::write(
+        apps.join("org.aizome.Sumi.desktop"),
+        "[Desktop Entry]\nType=Application\nName=Text Editor\nExec=aizome-sumi\n",
+    )
+    .unwrap();
+    h.program_mut().apps = Some(std::sync::Arc::new(AppIndex::load_with(dirs, Locale::default())));
+    h.send(Msg::Run(Action::Palette { scope: Some(Scope::App), query: "Text Editor".into() }));
+    let p = window_titled(&h, "Palette");
+    let item = &h.program().palette.as_ref().unwrap().sections[0].rows[0].item;
+    assert_eq!(item.action, Action::FocusApp { app_id: "org.aizome.Sumi".into() });
+    h.named(p, NamedKey::Enter, Modifiers::NONE);
+    assert!(h.program().palette.is_none(), "activation closes the palette and releases the keyboard");
+    assert!(h.program().frecency.score("app:org.aizome.Sumi") > 0.9);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn keys_move_scope_run_and_close() {
     let mut h = scene(false);
     let p = open(&mut h, "");

@@ -259,7 +259,7 @@ fn the_current_location_comes_first_once_allowed() {
     assert_eq!(h2.program().locating, Locating::Failed(LocateError::Denied));
     assert!(texts_has(&h2, "Location unavailable"));
     let w2 = h2.window();
-    assert!(h2.click_text(w2, "Stop Using Location"));
+    assert!(h2.click_text(w2, "Search for a City"));
     assert_eq!(h2.program().rows().len(), 3);
 }
 
@@ -494,4 +494,124 @@ fn interactions_fit_the_frame_budget() {
         // Choosing a place redraws the whole main view: see docs/performance.md.
         assert!(p_select < Duration::from_millis(8), "choose p95 {p_select:?}");
     }
+}
+
+/// Real background work whose reply the test controls, including a
+/// provider that answers after cancellation. Forecasts stay recorded.
+struct PendingLocation {
+    recorded: Arc<Recorded>,
+    requests: std::sync::mpsc::Sender<(
+        aizome_tenki::location::Cancellation,
+        std::sync::mpsc::Sender<Result<Located, LocateError>>,
+    )>,
+}
+
+impl Services for PendingLocation {
+    fn forecast(&self, lat: f64, lon: f64) -> Result<String, aizome_tenki::services::FetchError> {
+        self.recorded.forecast(lat, lon)
+    }
+    fn search(&self, name: &str) -> Result<String, aizome_tenki::services::FetchError> {
+        self.recorded.search(name)
+    }
+    fn locate(&self, cancel: &aizome_tenki::location::Cancellation) -> Result<Located, LocateError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.requests.send((cancel.clone(), tx)).unwrap();
+        rx.recv_timeout(Duration::from_secs(3)).unwrap_or(Err(LocateError::TimedOut))
+    }
+    fn timezone(&self) -> Option<String> {
+        self.recorded.timezone()
+    }
+    fn now(&self) -> i64 {
+        self.recorded.now()
+    }
+}
+
+#[test]
+fn city_search_cancels_location_and_old_answers_cannot_overwrite_a_new_request() {
+    let (requests, replies) = std::sync::mpsc::channel();
+    let services = Arc::new(PendingLocation { recorded: recorded(), requests });
+    let s = three_places("cancel-location");
+    let mut h = Harness::new(Tenki::new(services, Some(s.clone())));
+    h.send(Msg::AllowLocation);
+    let (first, answer_first) = replies.recv_timeout(Duration::from_secs(2)).expect("location requested");
+    assert_eq!(h.program().locating, Locating::Busy);
+    assert!(texts_has(&h, "Finding where you are"));
+    let w = h.window();
+    h.resize(w, Size::new(640.0, 460.0));
+    h.save_png(w, Path::new(env!("CARGO_TARGET_TMPDIR")).join("tenki/location-pending.png"), 1.0);
+    assert!(h.click_text(w, "Search for a City"));
+    assert!(first.is_cancelled(), "manual search releases the pending location request");
+    assert_eq!(h.program().settings.location, Consent::Declined);
+    assert_eq!(h.program().locating, Locating::Idle);
+    h.type_text(w, "Tokyo");
+    assert_eq!(h.program().search.text, "Tokyo", "manual search focuses the city field");
+    h.send(Msg::ClearSearch);
+    h.send(Msg::AllowLocation);
+    let (second, answer_second) = replies.recv_timeout(Duration::from_secs(2)).expect("fresh location requested");
+    assert!(!second.is_cancelled());
+    let old = Located { latitude: 35.69, longitude: 139.69, accuracy: 4000.0, description: None };
+    answer_first.send(Ok(old.clone())).unwrap();
+    // Also deliver it synchronously while the second is pending, so the
+    // assertion never depends on how quickly a worker puts it in the inbox.
+    h.send(Msg::Located(1, Ok(old)));
+    assert!(h.program().current.is_none());
+    assert_eq!(h.program().locating, Locating::Busy);
+    assert!(s.load_state().located.is_none(), "cancelled results aren't saved");
+    answer_second
+        .send(Ok(Located { latitude: 41.85, longitude: -87.65, accuracy: 4000.0, description: None }))
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while h.program().current.is_none() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+        h.send(Msg::Idle);
+    }
+    assert_eq!(h.program().current.as_ref().map(|p| (p.latitude, p.longitude)), Some((41.85, -87.65)));
+    // Closing the program cancels a fresh request as well.
+    h.send(Msg::Locate);
+    let (last, answer_last) = replies.recv_timeout(Duration::from_secs(2)).unwrap();
+    std::mem::drop(h);
+    assert!(last.is_cancelled());
+    answer_last.send(Err(LocateError::Cancelled)).unwrap();
+}
+
+#[test]
+fn declining_location_invalidates_an_answer_already_queued_behind_the_click() {
+    for (name, decline) in [("search", Msg::SearchInstead), ("toggle", Msg::ToggleLocation)] {
+        let (requests, replies) = std::sync::mpsc::channel();
+        let recorded = recorded();
+        let services = Arc::new(PendingLocation { recorded: recorded.clone(), requests });
+        let s = three_places(&format!("queued-location-{name}"));
+        let mut h = Harness::new(Tenki::new(services, Some(s.clone())));
+        h.send(Msg::AllowLocation);
+        let (cancel, answer) = replies.recv_timeout(Duration::from_secs(2)).expect("location requested");
+        let location = Located { latitude: 43.0731, longitude: -89.4012, accuracy: 4000.0, description: None };
+        let key = aizome_tenki::app::current_place(location.latitude, location.longitude, None).cache_key();
+        // The runtime appends ready background replies after a queued
+        // widget message, before processing either one.
+        h.send_all([decline, Msg::Located(1, Ok(location))]);
+        assert!(cancel.is_cancelled());
+        assert_eq!(h.program().settings.location, Consent::Declined);
+        assert_eq!(h.program().locating, Locating::Idle);
+        assert!(h.program().current.is_none(), "the queued answer was not accepted");
+        assert!(s.load_state().located.is_none(), "the queued answer was not saved");
+        assert!(!h.program().weather.contains_key(&key), "no forecast was scheduled for that position");
+        assert!(!recorded.asked().contains(&format!("forecast {key}")));
+        answer.send(Err(LocateError::Cancelled)).unwrap();
+    }
+}
+
+#[test]
+fn unavailable_location_offers_manual_city_search() {
+    let r = recorded();
+    r.set_located(Err(LocateError::TimedOut));
+    let mut h = launch(&r, Some(three_places("location-timeout")), ThemeChoice::Day);
+    h.send(Msg::AllowLocation);
+    let w = h.window();
+    h.resize(w, Size::new(640.0, 460.0));
+    assert!(texts_has(&h, "Your location couldn't be found in time"));
+    h.save_png(w, Path::new(env!("CARGO_TARGET_TMPDIR")).join("tenki/location-timeout.png"), 1.0);
+    assert!(h.click_text(w, "Search for a City"));
+    h.type_text(w, "Kyoto");
+    assert_eq!(h.program().search.text, "Kyoto");
+    assert_eq!(h.program().settings.location, Consent::Declined);
 }

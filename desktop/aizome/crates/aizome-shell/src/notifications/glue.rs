@@ -7,11 +7,18 @@ use aizome_kit::Cx;
 impl Shell {
     /// A notification's card or line was clicked: its default action, and
     /// it's read.
-    pub fn open_note(&mut self, id: u32, _cx: &mut Cx<Msg>) {
+    pub fn open_note(&mut self, id: u32, cx: &mut Cx<Msg>) {
         let Some(n) = self.notes.get(id).cloned() else { return };
+        let focused = self.focus_app_window(&n.filed_under);
         if n.default_action().is_some() {
             self.note_action(id, "default");
         } else {
+            // Without a default action, the notification itself is the
+            // user's request to open its app. Never treat an arbitrary
+            // sender name as a command to run.
+            if !focused && self.apps.as_deref().is_some_and(|i| i.match_window_identity(&n.filed_under).is_some()) {
+                self.run(crate::actions::Action::FocusApp { app_id: n.filed_under }, cx);
+            }
             self.notes.close(id);
             self.note_closed(id, crate::notifications::store::CloseReason::Dismissed);
         }
@@ -113,32 +120,60 @@ impl Shell {
         self.wm.locked || self.lock.phase != crate::lock::Phase::Unlocked
     }
 
-    /// The Deskbar app a notification is filed under: its desktop entry's
-    /// app if that's running (or known), else a running app of its name,
-    /// else its name.
+    /// Prefer an explicit desktop identity, then the sender's process.
+    /// Name-only notifications may use an unambiguous declared name, but
+    /// display heuristics (such as reverse-DNS suffixes) aren't identity.
     pub fn file_under(&self, n: &crate::notifications::store::Incoming) -> String {
-        let running: Vec<String> = self.wm.deskbar(&self.deskbar_cfg.pinned).into_iter().map(|a| a.app_id).collect();
-        if let Some(entry) = &n.desktop_entry {
-            let entry = entry.trim_end_matches(".desktop");
-            if let Some(a) = running.iter().find(|a| {
-                a.eq_ignore_ascii_case(entry)
-                    || a.rsplit('.')
-                        .next()
-                        .is_some_and(|l| l.eq_ignore_ascii_case(entry.rsplit('.').next().unwrap_or(entry)))
-            }) {
-                return a.clone();
-            }
-            return entry.to_owned();
+        let index = self.apps.as_deref();
+        let canonical = |id: &str| {
+            index.and_then(|i| i.match_window_identity(id)).map_or_else(|| id.to_owned(), |a| a.app_id().to_owned())
+        };
+        let file_for = |id: &str| {
+            let entry = index.and_then(|i| i.match_window_identity(id));
+            let window = self.wm.most_recent_window_matching(|w| match (index, entry) {
+                (Some(index), Some(entry)) => index.match_window_identity(&w.app_id).is_some_and(|a| a.id == entry.id),
+                _ => crate::apps::same_app_id(&w.app_id, id),
+            });
+            // The Deskbar groups windows by their actual compositor ID.
+            // Use that row when present, retaining the installed identity
+            // when there is no running window to receive the notification.
+            window.map(|w| w.app_id.clone()).or_else(|| entry.map(|a| a.app_id().to_owned()))
+        };
+        let hint = n.desktop_entry.as_deref().map(str::trim).filter(|id| !id.is_empty());
+        if let Some(filed) = hint.and_then(file_for) {
+            return filed;
         }
-        if let Some(pid) = n.pid
-            && let Some(w) = self.wm.windows.values().find(|w| w.pid == Some(pid as i32))
+        if let Some(pid) = n.pid.and_then(|pid| i32::try_from(pid).ok())
+            && let Some(w) = self.wm.most_recent_window_matching(|w| w.pid == Some(pid))
         {
             return w.app_id.clone();
         }
+        // Keep an unavailable app's declared identity for later activation;
+        // never replace it with a different app that happens to look alike.
+        if let Some(hint) = hint {
+            return hint.strip_suffix(".desktop").unwrap_or(hint).to_owned();
+        }
+        if let Some(filed) = file_for(&n.app_name) {
+            return filed;
+        }
+        // Some senders, including the shell CLI, only supply a human name.
+        // Match names supplied by desktop entries or registered apps, never
+        // names synthesized for display from a window ID.
         let name = n.app_name.to_lowercase();
-        if let Some(a) = running.iter().find(|a| self.app_look(a).0.to_lowercase() == name || a.to_lowercase() == name)
-        {
-            return a.clone();
+        if !name.is_empty() {
+            let mut matches: Vec<String> = index
+                .into_iter()
+                .flat_map(|i| i.all())
+                .filter(|a| a.name.to_lowercase() == name)
+                .map(|a| a.app_id().to_owned())
+                .chain(self.registry.apps().filter(|a| a.name.to_lowercase() == name).map(|a| canonical(&a.app_id)))
+                .collect();
+            matches.sort();
+            matches.dedup();
+            if matches.len() == 1 {
+                let app = matches.pop().unwrap();
+                return file_for(&app).unwrap_or(app);
+            }
         }
         if n.app_name.is_empty() { "notifications".into() } else { n.app_name.clone() }
     }
@@ -234,5 +269,220 @@ impl Shell {
             ],
             cx,
         );
+    }
+}
+
+#[cfg(test)]
+mod activation_tests {
+    use super::*;
+    use crate::ipc::Ipc;
+    use crate::notifications::{cards::CardMsg, store::Incoming};
+    use crate::shell::Options;
+    use aizome_ipc::{Event, Request, WindowInfo};
+    use aizome_kit::testing::Harness;
+
+    #[test]
+    fn clicking_a_notification_raises_its_apps_recent_window() {
+        for default_action in [false, true] {
+            let mut h = Harness::new(Shell::new(Options::default()));
+            let (ipc, requests) = Ipc::recording();
+            let s = h.program_mut();
+            s.ipc = ipc;
+            s.wm.reset(crate::wm::Snapshot {
+                current_desk: 1,
+                windows: vec![
+                    WindowInfo { id: 10, app_id: "mail".into(), desk: Some(2), ..Default::default() },
+                    WindowInfo { id: 11, app_id: "mail".into(), desk: Some(2), minimised: true, ..Default::default() },
+                ],
+                ..Default::default()
+            });
+            s.wm.apply(&Event::WindowFocused { id: Some(11) });
+            s.notes.post_as(
+                7,
+                Incoming {
+                    app_name: "Mail".into(),
+                    actions: if default_action { vec![("default".into(), "Open".into())] } else { vec![] },
+                    ..Default::default()
+                },
+                "mail".into(),
+                false,
+                0,
+            );
+            h.send(Msg::Card(CardMsg::Open(7)));
+            assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 11 });
+            assert!(h.program().notes.get(7).is_none());
+        }
+    }
+
+    #[test]
+    fn dismissing_a_notification_does_not_activate_its_app() {
+        let mut h = Harness::new(Shell::new(Options::default()));
+        let (ipc, requests) = Ipc::recording();
+        h.program_mut().ipc = ipc;
+        h.program_mut().notes.post_as(7, Incoming::default(), "mail".into(), false, 0);
+        h.send(Msg::Card(CardMsg::Dismiss(7)));
+        assert!(requests.try_recv().is_err());
+        assert!(h.program().notes.get(7).is_none());
+    }
+
+    #[test]
+    fn notification_activation_prefers_the_current_desk_over_a_more_recent_remote_window() {
+        let mut h = Harness::new(Shell::new(Options::default()));
+        let (ipc, requests) = Ipc::recording();
+        let s = h.program_mut();
+        s.ipc = ipc;
+        s.wm.reset(crate::wm::Snapshot {
+            current_desk: 1,
+            windows: vec![
+                WindowInfo { id: 10, app_id: "mail".into(), desk: Some(1), minimised: true, ..Default::default() },
+                WindowInfo { id: 11, app_id: "mail".into(), desk: Some(2), ..Default::default() },
+            ],
+            focused: Some(11),
+            ..Default::default()
+        });
+        s.notes.post_as(7, Incoming::default(), "mail".into(), false, 0);
+        h.send(Msg::Card(CardMsg::Open(7)));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 10 });
+        assert!(requests.try_recv().is_err());
+    }
+
+    #[test]
+    fn opening_a_resident_notification_focuses_and_invokes_without_dismissing() {
+        let mut h = Harness::new(Shell::new(Options::default()));
+        let (ipc, requests) = Ipc::recording();
+        let s = h.program_mut();
+        s.ipc = ipc;
+        s.wm.reset(crate::wm::Snapshot {
+            windows: vec![WindowInfo {
+                id: 11,
+                app_id: "mail".into(),
+                desk: Some(2),
+                minimised: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        s.notes.post_as(
+            7,
+            Incoming {
+                app_name: "Mail".into(),
+                actions: vec![("default".into(), "Open".into())],
+                resident: true,
+                ..Default::default()
+            },
+            "mail".into(),
+            false,
+            0,
+        );
+        let action = (7, "default".into());
+        s.note_actions.insert(action.clone(), crate::actions::Action::None);
+        h.send(Msg::Card(CardMsg::Open(7)));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 11 });
+        assert!(requests.try_recv().is_err());
+        assert!(!h.program().note_actions.contains_key(&action), "the default action was invoked");
+        assert!(h.program().notes.get(7).unwrap().resident, "invoking an action keeps a resident notification");
+
+        h.send(Msg::Card(CardMsg::Dismiss(7)));
+        assert!(requests.try_recv().is_err());
+        assert!(h.program().notes.get(7).is_none(), "explicit dismissal still removes it");
+    }
+
+    #[test]
+    fn desktop_hint_does_not_file_under_a_competing_reverse_dns_suffix() {
+        let mut h = Harness::new(Shell::new(Options::default()));
+        let (ipc, requests) = Ipc::recording();
+        let s = h.program_mut();
+        s.ipc = ipc;
+        s.apps = Some(crate::apps::test_index(&[("com.spotify.Client", "")]));
+        s.wm.reset(crate::wm::Snapshot {
+            windows: vec![
+                WindowInfo { id: 10, app_id: "org.other.Client".into(), ..Default::default() },
+                WindowInfo { id: 11, app_id: "com.spotify.Client".into(), ..Default::default() },
+            ],
+            ..Default::default()
+        });
+        let incoming = Incoming { desktop_entry: Some("com.spotify.Client.desktop".into()), ..Default::default() };
+        let filed = s.file_under(&incoming);
+        assert_eq!(filed, "com.spotify.Client");
+        s.notes.post_as(7, incoming, filed, false, 0);
+        h.send(Msg::Card(CardMsg::Open(7)));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 11 });
+    }
+
+    #[test]
+    fn filing_prefers_declared_identity_then_pid_and_preserves_unknown_hints() {
+        let mut s = Shell::new(Options::default());
+        s.apps = Some(crate::apps::test_index(&[
+            ("com.spotify.Client", ""),
+            ("org.editor.Suite", "StartupWMClass=EditorWindow"),
+            ("org.closed.Editor", "StartupWMClass=ClosedEditor"),
+        ]));
+        s.wm.reset(crate::wm::Snapshot {
+            windows: vec![
+                WindowInfo { id: 10, app_id: "com.spotify.Client".into(), pid: Some(100), ..Default::default() },
+                WindowInfo { id: 11, app_id: "EditorWindow".into(), pid: Some(200), ..Default::default() },
+            ],
+            ..Default::default()
+        });
+        for hint in ["org.editor.Suite.desktop", "EditorWindow"] {
+            assert_eq!(
+                s.file_under(&Incoming { desktop_entry: Some(hint.into()), pid: Some(100), ..Default::default() }),
+                "EditorWindow",
+                "a known desktop identity wins over the sender process"
+            );
+        }
+        for hint in [None, Some("unknown-helper.desktop".into())] {
+            assert_eq!(
+                s.file_under(&Incoming { desktop_entry: hint, pid: Some(200), ..Default::default() }),
+                "EditorWindow",
+                "the sender process supplies a known window identity"
+            );
+        }
+        assert_eq!(
+            s.file_under(&Incoming { desktop_entry: Some("ClosedEditor".into()), ..Default::default() }),
+            "org.closed.Editor",
+            "an app without a window retains its canonical desktop identity"
+        );
+        let incoming = Incoming { desktop_entry: Some("org.editor.Suite".into()), ..Default::default() };
+        let filed = s.file_under(&incoming);
+        s.notes.post_as(7, incoming, filed, false, 0);
+        let rows = s.deskbar_model().apps;
+        assert_eq!(rows.iter().find(|row| row.app_id == "EditorWindow").unwrap().unread, 1);
+        assert!(!rows.iter().any(|row| row.app_id == "org.editor.Suite"));
+        assert_eq!(
+            s.file_under(&Incoming {
+                desktop_entry: Some("org.other.Client.desktop".into()),
+                app_name: "com.spotify.Client".into(),
+                ..Default::default()
+            }),
+            "org.other.Client"
+        );
+    }
+
+    #[test]
+    fn name_only_notifications_require_an_unambiguous_declared_name() {
+        let mut s = Shell::new(Options::default());
+        s.apps = Some(crate::apps::test_index(&[
+            ("com.spotify.Client", "Name=Client"),
+            ("org.other.Client", "Name=Client"),
+        ]));
+        s.wm.reset(crate::wm::Snapshot {
+            windows: vec![
+                WindowInfo { id: 10, app_id: "com.spotify.Client".into(), ..Default::default() },
+                WindowInfo { id: 11, app_id: "org.other.Client".into(), ..Default::default() },
+                WindowInfo { id: 12, app_id: "org.aizome.Settei".into(), ..Default::default() },
+            ],
+            ..Default::default()
+        });
+        s.registry.take(
+            1,
+            &aizome_shell_proto::AppMessage::Hello {
+                app_id: "org.aizome.Settei".into(),
+                pid: 123,
+                name: "Settei".into(),
+            },
+        );
+        assert_eq!(s.file_under(&Incoming { app_name: "Client".into(), ..Default::default() }), "Client");
+        assert_eq!(s.file_under(&Incoming { app_name: "Settei".into(), ..Default::default() }), "org.aizome.Settei");
     }
 }

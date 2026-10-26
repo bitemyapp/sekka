@@ -180,16 +180,21 @@ impl Backend {
         }
     }
 
-    /// Turns displays off or on (DPMS); a no-op off udev.
-    pub fn set_power(&mut self, az: &mut Aizome, on: bool) {
-        if let Backend::Udev(u) = self {
-            u.set_power(az, on);
-        }
-        for o in az.out.values_mut() {
+    /// Turns each display off or on (DPMS) as [`Aizome::wants_power`]
+    /// says; off udev only the state changes.
+    pub fn apply_power(&mut self, az: &mut Aizome) {
+        let outputs: Vec<Output> = az.out.keys().cloned().collect();
+        for output in outputs {
+            let on = az.wants_power(&output);
+            let Some(o) = az.out.get_mut(&output) else { continue };
+            if o.powered == on {
+                continue;
+            }
             o.powered = on;
-        }
-        if on {
-            az.queue_redraw_all();
+            o.redraw_queued |= on;
+            if let Backend::Udev(u) = self {
+                u.set_power(&output, on);
+            }
         }
     }
 
@@ -283,7 +288,7 @@ where
 }
 
 /// After a frame: statistics, the surfaces' primary outputs, frame
-/// callbacks and presentation feedback.
+/// callbacks, fifo barriers and presentation feedback.
 pub fn post_frame(az: &mut Aizome, output: &Output, frame: &Frame, presented: bool) {
     if let Some(o) = az.out.get_mut(output) {
         if frame.damaged {
@@ -309,6 +314,7 @@ pub fn post_frame(az: &mut Aizome, output: &Output, frame: &Frame, presented: bo
     }
     update_primary_outputs(az, output, &frame.states);
     send_frames(az, output);
+    crate::pacing::frame_drawn(az, output);
     if presented && frame.damaged {
         let mut feedback = take_feedback(az, output, &frame.states);
         let refresh = az.out.get(output).map(|o| o.refresh).unwrap_or(Duration::from_millis(16));
@@ -346,18 +352,15 @@ fn update_primary_outputs(az: &Aizome, output: &Output, states: &RenderElementSt
 pub fn send_frames(az: &Aizome, output: &Output) {
     let time = az.now();
     let throttle = Some(Duration::from_millis(995));
-    let geo = az.output_geometry(output);
+    // The render states account for occlusion, subsurfaces, thumbnails and
+    // other outputs. A logically shown window may be fully covered by a
+    // fullscreen client, as may the shell's top/background layers.
     for m in az.windows.values() {
-        let visible = m.view.shown && crate::state::from_rect(m.view.rect.grow(az.view.outset)).overlaps(geo);
-        if visible {
-            m.window.send_frame(output, time, throttle, |_, _| Some(output.clone()));
-        } else {
-            m.window.send_frame(output, time, throttle, surface_primary_scanout_output);
-        }
+        m.window.send_frame(output, time, throttle, surface_primary_scanout_output);
     }
     let map = layer_map_for_output(output);
     for layer in map.layers() {
-        layer.send_frame(output, time, throttle, |_, _| Some(output.clone()));
+        layer.send_frame(output, time, throttle, surface_primary_scanout_output);
     }
     drop(map);
     if let Some(lock) = az.out.get(output).and_then(|o| o.lock_surface.as_ref()) {

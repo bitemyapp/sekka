@@ -224,6 +224,11 @@ impl<P: Program> Runtime<P> {
                     self.core.close_key(key, platform);
                 }
             }
+            KitMsg::DragStarted { window, drag } => {
+                let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
+                self.program.drag_started(window, drag, &mut cx);
+                self.core.mark_all_dirty();
+            }
             KitMsg::AskShell(request) => match &mut self.shell {
                 Some(s) => s.send(&aizome_shell_proto::AppMessage::Request { request }),
                 None => log::debug!("no shell to ask {request:?}"),
@@ -315,6 +320,14 @@ impl<P: Program> Runtime<P> {
         self.flush(platform);
     }
 
+    pub fn pointer_presence(&mut self, win: WinId, inside: bool, platform: &mut dyn Platform) {
+        let Some(key) = self.core.wins.get(&win).and_then(|w| w.key()) else { return };
+        let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
+        self.program.pointer_presence(key, inside, &mut cx);
+        self.core.mark_all_dirty();
+        self.flush(platform);
+    }
+
     pub fn session_locked(&mut self, platform: &mut dyn Platform) {
         let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
         self.program.session_locked(&mut cx);
@@ -344,6 +357,7 @@ impl<P: Program> Runtime<P> {
     pub fn drag_ended(&mut self, drag: u64, action: sidestep_ui::DropAction, platform: &mut dyn Platform) {
         let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
         self.program.drag_ended(crate::program::DragId(drag), action, &mut cx);
+        self.core.mark_all_dirty();
         self.flush(platform);
     }
 
@@ -704,12 +718,18 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
             WindowEvent::Focused(on) => core.window_focus(win, on, &mut p),
             WindowEvent::Key(k) => core.key(win, k, &mut p),
             WindowEvent::ModifiersChanged(m) => core.mods = m,
-            WindowEvent::PointerEntered(at) => core.pointer_move(win, at, &mut p),
+            WindowEvent::PointerEntered(at) => {
+                core.pointer_move(win, at, &mut p);
+                rt.pointer_presence(win, true, &mut p);
+            }
             WindowEvent::PointerMoved { position, modifiers } => {
                 core.mods = modifiers;
                 core.pointer_move(win, position, &mut p);
             }
-            WindowEvent::PointerLeft => core.pointer_leave(win, &mut p),
+            WindowEvent::PointerLeft => {
+                core.pointer_leave(win, &mut p);
+                rt.pointer_presence(win, false, &mut p);
+            }
             WindowEvent::PointerButton { position, button, pressed, clicks, modifiers, .. } => {
                 core.mods = modifiers;
                 core.pointer_button(win, position, button, pressed, clicks, &mut p);

@@ -471,6 +471,8 @@ pub enum Synthetic {
     /// Presses a chord's keys in order and releases them in reverse:
     /// `"super+shift+3"`.
     Chord { keys: String },
+    /// Closes or opens the laptop's lid, as its switch does.
+    Lid { closed: bool },
 }
 
 fn yes() -> bool {
@@ -642,6 +644,9 @@ pub struct InputState {
     /// `confined`.
     pub pointer_constraint: Option<String>,
     pub cursor_hidden: bool,
+    /// The effective named cursor, or `None` for a client surface or hidden cursor.
+    #[serde(default)]
+    pub cursor_name: Option<String>,
     /// The app whose surface has the pointer, and the keyboard.
     pub pointer_focus: Option<String>,
     pub keyboard_focus: Option<String>,

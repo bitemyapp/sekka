@@ -524,13 +524,13 @@ impl<Msg> MenuBar<Msg> {
     }
 
     /// The app menu, Edit, Window and Help, as every Aizome app has them.
+    /// Apps with settings add their own Settings action to the app menu;
+    /// there is no default settings dialog for this menu to open.
     pub fn standard(info: &AppInfo) -> MenuBar<Msg> {
         let name = &info.name;
         let i = |label: &str, role: MenuRole| MenuItem::<Msg>::role_item(label, role);
         let app = Menu::new(name.clone())
             .item(i(&format!("About {name}"), MenuRole::About))
-            .separator()
-            .item(i("Settings…", MenuRole::Settings).shortcut(Shortcut::cmd(',')))
             .separator()
             .submenu(Menu::new("Services").item(i("No Services Apply", MenuRole::Services).enabled(false)))
             .separator()
@@ -679,5 +679,18 @@ mod tests {
         let bar = bar.with_file_menu(Menu::new("File")).with_menu(Menu::new("Format"));
         let titles: Vec<&str> = bar.menus().iter().map(|m| m.title.as_str()).collect();
         assert_eq!(titles, ["Soroban", "File", "Edit", "Format", "Window", "Help"]);
+    }
+
+    #[test]
+    fn standard_menus_do_not_offer_unimplemented_settings() {
+        let info = AppInfo::new("org.aizome.Soroban", "Soroban", "Calculator");
+        let bar: MenuBar<()> = MenuBar::standard(&info);
+        assert!(bar.menus()[0].find_shortcut(&press(ch(","), Modifiers::SUPER)).is_none());
+        assert!(
+            !bar.menus()[0]
+                .items
+                .iter()
+                .any(|item| { matches!(item, ItemSpec::Action(a) if a.role == Some(MenuRole::Settings)) })
+        );
     }
 }

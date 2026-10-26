@@ -12,6 +12,8 @@ name = "aizome-greeter"
 path = "src/main.rs"
 
 [dependencies]
+aizome-config.workspace = true
+aizome-sys.workspace = true
 aizome-kit.workspace = true
 aizome-theme.workspace = true
 aizome-face.workspace = true

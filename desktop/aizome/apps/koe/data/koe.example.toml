@@ -1,0 +1,42 @@
+# ~/.config/aizome/koe.toml — Koe's window writes it as its settings change.
+# All fields are optional; unknown fields are errors. The service takes up
+# a saved change within a second, between dictations.
+enabled = false                         # the window's switch: the service runs in your sessions while it's on
+[engine]
+backend = "local"                       # local | http (explicit opt-in)
+model = "~/.local/share/aizome/koe/models/ggml-base.bin"
+language = "auto"                       # or en, ja, fr, ...
+translate = false                       # Whisper's translation to English
+threads = 4
+gpu = true                              # Aizome's package has Vulkan; whisper.cpp uses the processor where no GPU starts
+prompt = "Aizome, Sekka, Koe"            # vocabulary hint, not an instruction
+
+[audio]
+# target = "alsa_input.example"          # node.name or object.serial from wpctl status
+max_seconds = 300
+min_ms = 250
+silence_seconds = 0.0                    # disabled; e.g. 1.5 auto-submits after speech
+silence_threshold = 0.008                # RMS gate, not a neural VAD
+
+[output]
+mode = "paste"                          # paste | clipboard | none
+desktop = "auto"                       # auto | aizome | wtype
+notify = true                           # native Aizome notifications, no transcript text
+append_space = false
+paste_delay_ms = 150
+require_same_window = true              # Aizome: refuse if focus changed while recognizing
+paste_shortcut = "auto"                 # auto | ctrl-v | ctrl-shift-v | super-v
+
+[tray]
+enabled = true                          # the systray microphone; applies at the service's next start
+
+[[replacements]]
+from = "seka"
+to = "Sekka"
+
+# Only used when engine.backend = "http". Speech then leaves this process.
+[engine.http]
+endpoint = "http://127.0.0.1:8080/inference"
+model = "whisper-1"
+# api_key_env = "KOE_API_KEY"             # value from environment, never from this file
+timeout_seconds = 120

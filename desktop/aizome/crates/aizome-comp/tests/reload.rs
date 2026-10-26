@@ -356,6 +356,31 @@ fn without_a_logic_windows_still_show_and_a_reload_brings_it() {
 }
 
 #[test]
+fn recovery_retracts_a_fullscreen_grant_when_logic_fails_before_mapping() {
+    let b = build();
+    let c = Compositor::start(Options {
+        exe: Some(&b.aizome),
+        logic: Some(&b.red),
+        outputs: &["1280x800@1", "1024x768@1"],
+        ..Default::default()
+    });
+    let a = c.client(Spec::new("fullscreen-before-recovery", 0x2255aa).fullscreen(Some(1)).defer_mapping());
+    a.wait_seen("fullscreen agreed before the first buffer", |s| s.fullscreen && s.configures > 0);
+    assert!(c.windows().is_empty(), "the client has not mapped yet");
+    // With no previous library to roll back to, three failures set logic aside.
+    for failures in 1..=3 {
+        assert!(matches!(c.request(Request::Action { action: "test-panic".into() }), Response::Error { .. }));
+        wait_for("logic recovery", 10, || stats(&c).logic.rollbacks >= failures);
+    }
+    assert!(!stats(&c).logic.healthy, "fallback will place the new window");
+    a.send(Cmd::Map);
+    let w = c.wait_window("fullscreen-before-recovery");
+    a.wait_seen("fallback retracts the fullscreen state", |s| !s.fullscreen);
+    assert_ne!(w.geometry, aizome_ipc::Rect::new(1280, 0, 1024, 768), "fallback uses normal placement");
+    assert!(a.connected());
+}
+
+#[test]
 fn a_library_built_against_another_core_is_refused() {
     let b = build();
     let c = Compositor::start(Options { exe: Some(&b.aizome), logic: Some(&b.base), ..Default::default() });

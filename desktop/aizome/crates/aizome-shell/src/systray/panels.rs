@@ -623,7 +623,9 @@ fn awake(p: &AwakePanel) -> Vec<Element<PanelMsg>> {
     let on = p.status != Status::Off;
     let mut v = vec![head("Keep Awake", Some(toggle(on).on_toggle(PanelMsg::KeepAwake).into()))];
     let (lines, hue) = match p.status {
-        Status::On => (["Won't sleep, lock or turn the displays off,", "not even when the lid is closed."], Hue::Text3),
+        Status::On => {
+            (["Won't sleep, lock or turn the displays off;", "closing the lid just turns its screen off."], Hue::Text3)
+        }
         Status::Unprotected => {
             (["Not working: the computer may sleep.", "Turn it off and on again to retry."], Hue::Red)
         }

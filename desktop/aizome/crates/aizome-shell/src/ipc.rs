@@ -48,6 +48,12 @@ impl Ipc {
         Ipc { tx: None }
     }
 
+    #[cfg(test)]
+    pub(crate) fn recording() -> (Ipc, std::sync::mpsc::Receiver<(Request, Option<u64>)>) {
+        let (tx, rx) = channel();
+        (Ipc { tx: Some(tx) }, rx)
+    }
+
     /// Follow the compositor at `path` (`$AIZOME_SOCKET` when `None`),
     /// handing what it says to `sink` on the IPC threads.
     pub fn spawn(path: Option<PathBuf>, sink: impl Fn(IpcEvent) + Send + Sync + 'static) -> Ipc {

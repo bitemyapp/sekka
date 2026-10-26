@@ -260,6 +260,17 @@ pub fn sections(desks: usize) -> Vec<Section> {
     ]
 }
 
+/// A command on a key of one's own, as the list names it: what it does,
+/// for the ones Aizome's apps give themselves (Koe's dictation, which
+/// it binds when it's turned on), else the command itself.
+pub fn command_label(command: &str) -> String {
+    match command {
+        "aizome-koe record toggle" => "Start or stop dictation".into(),
+        "aizome-koe record cancel" => "Cancel dictation".into(),
+        other => other.to_owned(),
+    }
+}
+
 /// What each chord does now: the defaults with `overrides` on top
 /// (`"none"` unbinds).
 pub fn effective(overrides: &BTreeMap<String, String>) -> BTreeMap<Chord, String> {

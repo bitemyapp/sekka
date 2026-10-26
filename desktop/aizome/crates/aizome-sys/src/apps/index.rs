@@ -291,8 +291,55 @@ impl AppIndex {
         Watcher::start(self.dirs.clone(), self.signature.clone(), wake, Duration::from_secs(2))
     }
 
-    /// The application a window belongs to, from its Wayland app ID or X11
-    /// `WM_CLASS`; see the module documentation for the rules.
+    /// Resolve an app ID for window actions using only desktop IDs and
+    /// explicit StartupWMClass aliases. Ambiguous aliases are not resolved;
+    /// suffix and executable-name guesses belong to display matching only.
+    pub fn match_window_identity(&self, app_id_or_wm_class: &str) -> Option<&App> {
+        let wanted = app_id_or_wm_class.trim();
+        if wanted.is_empty() {
+            return None;
+        }
+        if let Some(i) = self.by_id.get(&format!("{wanted}.desktop")).or_else(|| self.by_id.get(wanted)) {
+            return self.entries.get(*i);
+        }
+        let lower = wanted.to_lowercase();
+        let without_suffix = lower.strip_suffix(".desktop").unwrap_or(&lower);
+        // An application ID can itself end in .desktop (Telegram does).
+        // Match that complete ID before interpreting the suffix as a filename.
+        let steps: [&dyn Fn(&MatchKeys) -> bool; 3] = [
+            &|keys: &MatchKeys| keys.id == lower,
+            &|keys: &MatchKeys| keys.id == without_suffix,
+            &|keys: &MatchKeys| keys.wm_class.as_deref() == Some(without_suffix),
+        ];
+        for step in steps {
+            let mut matches = (0..self.entries.len()).filter(|&i| step(&self.info[i].keys));
+            if let Some(i) = matches.next() {
+                return if matches.next().is_none() { self.entries.get(i) } else { None };
+            }
+        }
+        None
+    }
+
+    /// Resolve a process's program to a single desktop entry for its label.
+    /// Accepts an executable path or basename, including NixOS wrappers.
+    /// Only the cached `Exec` basename participates: desktop IDs, display
+    /// names and reverse-DNS suffixes cannot establish program identity.
+    /// Generic runtimes and launchers cannot identify the app they run.
+    pub fn match_program_identity(&self, program: &str) -> Option<&App> {
+        let name = file_name(program.trim()).to_lowercase();
+        let name = unwrap_program_name(&name);
+        if name.is_empty() || generic_program(name) {
+            return None;
+        }
+        let mut matches = self.info.iter().enumerate().filter(|(_, info)| info.keys.exec.as_deref() == Some(name));
+        let (i, _) = matches.next()?;
+        matches.next().is_none().then(|| &self.entries[i])
+    }
+
+    /// A best-effort match for window names and icons. For activation use
+    /// [`Self::match_window_identity`]; these display heuristics can match
+    /// unrelated apps sharing a reverse-DNS suffix or executable name.
+    /// See the module documentation for the rules.
     pub fn match_window(&self, app_id_or_wm_class: &str) -> Option<&App> {
         let wanted = app_id_or_wm_class.trim();
         if wanted.is_empty() {
@@ -375,6 +422,58 @@ fn unwrap_program_name(name: &str) -> &str {
         name = inner;
     }
     name
+}
+
+/// An interpreter's executable identifies the runtime, not one of the
+/// applications using it, even when only one such desktop entry is installed.
+fn generic_program(name: &str) -> bool {
+    const RUNTIMES: &[&str] = &[
+        "electron", "node", "nodejs", "python", "pythonw", "pypy", "perl", "ruby", "php", "lua", "luajit", "java",
+        "javaw", "tclsh", "wish", "bun", "deno", "gjs", "qjs", "mono", "dotnet", "wine", "wine64",
+    ];
+    const LAUNCHERS: &[&str] = &[
+        "sh",
+        "bash",
+        "dash",
+        "zsh",
+        "fish",
+        "ash",
+        "ksh",
+        "mksh",
+        "csh",
+        "tcsh",
+        "nu",
+        "env",
+        "busybox",
+        "xargs",
+        "systemd-run",
+        "dbus-run-session",
+        "setsid",
+        "nohup",
+        "timeout",
+        "xdg-open",
+        "gio",
+        "gtk-launch",
+        "bwrap",
+        "flatpak",
+        "steam-run",
+        "nix",
+        "nix-shell",
+        "uwsm",
+        "aizome-session",
+    ];
+    LAUNCHERS.contains(&name)
+        || RUNTIMES.iter().any(|runtime| {
+            let Some(version) = name.strip_prefix(runtime) else { return false };
+            if version.is_empty() {
+                return true;
+            }
+            // python3.12, python3.13t, electron-34 and node22 are still
+            // shared runtimes; python-tools and similar app names aren't.
+            let version = version.strip_prefix('-').unwrap_or(version);
+            let version = version.trim_end_matches(['m', 'd', 't']);
+            version.starts_with(|c: char| c.is_ascii_digit()) && version.chars().all(|c| c.is_ascii_digit() || c == '.')
+        })
 }
 
 /// Call `found(id, path)` for each `.desktop` file under `dir`, in name
@@ -871,6 +970,29 @@ mod tests {
         drop(watcher);
     }
 
+    #[test]
+    fn window_identity_requires_an_unambiguous_id_or_explicit_alias() {
+        let tmp = TempDir::new("window-identity");
+        for (id, class) in [
+            ("org.example.Editor", "EditorWindow"),
+            ("org.example.One", "SharedWindow"),
+            ("org.example.Two", "SharedWindow"),
+        ] {
+            tmp.write(
+                &format!("usr/share/applications/{id}.desktop"),
+                &app("Editor", &format!("StartupWMClass={class}\n")),
+            );
+        }
+        let index = AppIndex::load_with(XdgDirs::rooted(tmp.path()), Locale::default());
+        for id in ["org.example.Editor", "org.example.Editor.desktop", "ORG.EXAMPLE.EDITOR", "editorwindow"] {
+            assert_eq!(index.match_window_identity(id).map(|a| a.id.as_str()), Some("org.example.Editor.desktop"));
+        }
+        for id in ["org.unrelated.Editor", "editor", "SharedWindow", "", "missing"] {
+            assert!(index.match_window_identity(id).is_none(), "{id} is not an unambiguous identity");
+        }
+        assert!(index.match_window("org.unrelated.Editor").is_some(), "display matching retains its heuristics");
+    }
+
     fn matcher() -> (TempDir, AppIndex) {
         let tmp = TempDir::new("match");
         let dir = "usr/share/applications";
@@ -933,6 +1055,92 @@ mod tests {
         assert_eq!(id("unknown-app"), None);
         assert_eq!(id(""), None);
         assert_eq!(id("   "), None);
+    }
+
+    #[test]
+    fn activation_matches_only_desktop_ids_and_declared_classes() {
+        let (tmp, _) = matcher();
+        tmp.write("usr/share/applications/com.spotify.Client.desktop", &app("Spotify", "StartupWMClass=Spotify\n"));
+        tmp.write("usr/share/applications/org.one.Client.desktop", &app("One", "StartupWMClass=SharedClient\n"));
+        tmp.write("usr/share/applications/org.two.Client.desktop", &app("Two", "StartupWMClass=SharedClient\n"));
+        let index = AppIndex::load_with(XdgDirs::rooted(tmp.path()), Locale::default());
+        let id = |window: &str| index.match_window_identity(window).map(|app| app.id.as_str());
+        for alias in ["code", "Code", "CODE.DESKTOP"] {
+            assert_eq!(id(alias), Some("code.desktop"));
+        }
+        assert_eq!(id("org.telegram.desktop"), Some("org.telegram.desktop.desktop"));
+        assert_eq!(id("ORG.TELEGRAM.DESKTOP"), Some("org.telegram.desktop.desktop"));
+        assert_eq!(id("Spotify"), Some("com.spotify.Client.desktop"));
+        assert_eq!(id("com.spotify.Client"), Some("com.spotify.Client.desktop"));
+        assert_eq!(id("org.one.Client"), Some("org.one.Client.desktop"));
+        for unknown in ["SharedClient", "org.other.Client", "Client", "nautilus", "zeditor", "com.example.Zed", ""] {
+            assert_eq!(id(unknown), None, "must not guess the identity of {unknown}");
+        }
+    }
+
+    #[test]
+    fn program_identity_uses_unique_exec_basenames_and_unwraps_nix_programs() {
+        let (_tmp, index) = matcher();
+        let id = |program: &str| index.match_program_identity(program).map(|app| app.id.as_str());
+        assert_eq!(id("zeditor"), Some("dev.zed.Zed.desktop"));
+        assert_eq!(id("/nix/store/abc-zed/bin/.zeditor-wrapped"), Some("dev.zed.Zed.desktop"));
+        assert_eq!(id("/usr/bin/..mpv-wrapped-wrapped"), Some("mpv.desktop"));
+        assert_eq!(id("mpv"), Some("mpv.desktop"), "the entry's env and Nix wrappers are normalized too");
+        for not_a_program in ["Zed", "dev.zed.Zed", "org.other.Zed", "", "/", "  "] {
+            assert_eq!(id(not_a_program), None, "no ID, display-name or reverse-DNS matching");
+        }
+        assert_eq!(id("code"), None, "the editor and URL handler both use code");
+        assert_eq!(id("/usr/bin/.code-wrapped"), None, "a wrapper cannot resolve an ambiguous basename");
+    }
+
+    #[test]
+    fn generic_programs_never_borrow_a_solitary_desktop_apps_identity() {
+        let tmp = TempDir::new("program-identities");
+        let generic = [
+            "electron",
+            "electron-34",
+            "node",
+            "nodejs",
+            "node22",
+            "python",
+            "python3.12",
+            "python3.13t",
+            "pypy3",
+            "java",
+            "java17",
+            "perl",
+            "ruby3.3",
+            "php8.4",
+            "lua5.4",
+            "luajit",
+            "bun",
+            "deno",
+            "dotnet",
+            "wine",
+            "sh",
+            "bash",
+            "zsh",
+            "fish",
+            "nu",
+            "busybox",
+            "systemd-run",
+            "bwrap",
+            "flatpak",
+            "gtk-launch",
+        ];
+        for (i, program) in generic.iter().chain(["python-tools", "electronically"].iter()).enumerate() {
+            tmp.write(
+                &format!("usr/share/applications/app-{i}.desktop"),
+                &format!("[Desktop Entry]\nType=Application\nName=App {i}\nExec=/usr/bin/{program} /opt/app/main\n"),
+            );
+        }
+        let index = AppIndex::load_with(XdgDirs::rooted(tmp.path()), Locale::default());
+        for program in generic {
+            assert!(index.match_program_identity(program).is_none(), "{program} is not an application's identity");
+            assert!(index.match_program_identity(&format!("/nix/store/runtime/bin/.{program}-wrapped")).is_none());
+        }
+        assert!(index.match_program_identity("python-tools").is_some());
+        assert!(index.match_program_identity("electronically").is_some());
     }
 
     #[test]

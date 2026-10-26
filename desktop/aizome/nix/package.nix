@@ -39,6 +39,11 @@
   libsecret,
   pam,
   systemd,
+  cmake,
+  shaderc,
+  openblas,
+  vulkan-headers,
+  vulkan-loader,
   src,
   sidestep,
   version ? "0.1.0",
@@ -107,6 +112,10 @@ rustPlatform.buildRustPackage {
     makeWrapper
     jq
     rustPlatform.bindgenHook
+    # Koe's whisper.cpp (built by whisper-rs-sys through CMake) and its
+    # Vulkan shaders.
+    cmake
+    shaderc
   ];
   buildInputs = [
     wayland
@@ -125,7 +134,24 @@ rustPlatform.buildRustPackage {
     pam
     libpulseaudio
     libsecret
+    openblas
+    vulkan-headers
+    vulkan-loader
   ];
+
+  # Koe's recognition: whisper.cpp with OpenBLAS, which picks kernels for
+  # the processor at run time while the rest stays portable (no -march),
+  # and Vulkan for any vendor's GPU (whisper.cpp uses the processor where
+  # none starts). whisper-rs-sys passes GGML_* to CMake, which Cargo runs:
+  # this isn't a CMake project.
+  dontUseCmakeConfigure = true;
+  BLAS_INCLUDE_DIRS = "${lib.getDev openblas}/include";
+  OPENBLAS_PATH = "${lib.getLib openblas}";
+  GGML_NATIVE = "OFF";
+  GGML_AVX = "OFF";
+  GGML_AVX2 = "OFF";
+  GGML_FMA = "OFF";
+  GGML_F16C = "OFF";
 
   postPatch = ''
     patchShebangs scripts
@@ -140,8 +166,14 @@ rustPlatform.buildRustPackage {
     # RUSTC_WORKSPACE_WRAPPER, whose path Cargo hashes into every workspace
     # crate's symbols, and a logic built from a checkout couldn't match.
     ${cargo}/bin/cargo build "''${flags[@]}" --release -p aizome-comp -p aizome-comp-logic
+    # ggml's shader generator starts a thread per shader variant (over a
+    # thousand), each with a stack the size of the soft limit: under
+    # nix-daemon's 64 MiB its glslc forks fail on a loaded machine, and the
+    # missing shaders only show as undefined symbols when Koe links.
+    ulimit -Ss 8192
     cargo build "''${flags[@]}" --profile release-lto --workspace \
-      --exclude aizome-comp --exclude aizome-comp-core --exclude aizome-comp-logic
+      --exclude aizome-comp --exclude aizome-comp-core --exclude aizome-comp-logic \
+      --features aizome-koe/openblas,aizome-koe/vulkan
     runHook postBuild
   '';
 
@@ -154,6 +186,9 @@ rustPlatform.buildRustPackage {
     rel=target/${target}/release
     lto=target/${target}/release-lto
     mkdir -p $out/bin $out/lib/aizome $out/share/aizome
+    install -Dm644 etc/org.aizome.DisplayScales.xml $out/share/dbus-1/interfaces/org.aizome.DisplayScales.xml
+    mkdir -p $out/share/accountsservice/interfaces
+    ln -s ../../dbus-1/interfaces/org.aizome.DisplayScales.xml $out/share/accountsservice/interfaces/org.aizome.DisplayScales.xml
     install -m755 $rel/aizome $out/bin/aizome
     # The core, the logic it loads, and the std they share.
     install -m644 $rel/libaizome_comp_core.so $rel/libaizome_comp_logic.so $out/lib/aizome/

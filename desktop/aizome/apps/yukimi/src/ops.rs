@@ -363,7 +363,9 @@ fn helper() -> Result<Command, String> {
     let helper = find_helper()?;
     let wrapper = Path::new("/run/wrappers/bin/pkexec");
     let mut c = Command::new(if wrapper.exists() { wrapper } else { Path::new("pkexec") });
-    c.arg(helper);
+    // A graphical application has no controlling terminal. Let the job
+    // recover a missing desktop agent instead of pkexec trying /dev/tty.
+    c.arg("--disable-internal-agent").arg(helper).env("LC_ALL", "C");
     Ok(c)
 }
 

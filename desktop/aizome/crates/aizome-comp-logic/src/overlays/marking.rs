@@ -282,6 +282,10 @@ impl PointerGrab<State> for MarkingGrab {
                 if let Some(o) = m.output.clone() {
                     data.az.queue_redraw(&o);
                 }
+                if let Some(location) = fit_on_output(data) {
+                    // We already hold the pointer lock in this grab callback.
+                    handle.motion(data, None, &MotionEvent { location, serial: event.serial, time: event.time });
+                }
                 return;
             }
             if m.sticky && !self.moved && m.hover.is_none() && m.desk_hover.is_none() {
@@ -516,24 +520,32 @@ pub fn click(state: &mut State, x: f64, y: f64) {
 /// A menu opened near an output's edge (a tab under the menu bar) moves
 /// in so all its verbs show, and the pointer moves with it.
 fn keep_on_output(state: &mut State) {
-    let Some(o) = state.lg.m().overlays.marking.as_ref().and_then(|m| m.output.clone()) else { return };
+    if let Some(pos) = fit_on_output(state)
+        && let Some(pointer) = state.az.seat.get_pointer()
+    {
+        pointer.set_location(pos);
+    }
+}
+
+/// Adjusts the menu and returns a pointer warp. Callers inside a pointer
+/// grab apply the warp through their existing inner handle.
+fn fit_on_output(state: &mut State) -> Option<Point<f64, Logical>> {
+    let o = state.lg.r().overlays.marking.as_ref()?.output.clone()?;
     let g = state.az.output_geometry(&o).to_f64();
-    let Some(m) = state.lg.m().overlays.marking.as_mut() else { return };
+    let m = state.lg.m().overlays.marking.as_mut()?;
     let reach = RADIUS + 48.0;
     let cx = m.center.0.clamp(g.loc.x + reach, (g.loc.x + g.size.w - reach).max(g.loc.x + reach));
     let cy = m.center.1.clamp(g.loc.y + reach, (g.loc.y + g.size.h - reach).max(g.loc.y + reach));
     if (cx, cy) == m.center {
-        return;
+        return None;
     }
     let (dx, dy) = (cx - m.center.0, cy - m.center.1);
     m.center = (cx, cy);
     m.pos = (m.pos.0 + dx, m.pos.1 + dy);
     let p = Point::from(m.pos);
     state.az.pointer_pos = p;
-    if let Some(pointer) = state.az.seat.get_pointer() {
-        pointer.set_location(p);
-    }
     state.az.queue_redraw(&o);
+    Some(p)
 }
 
 #[cfg(test)]

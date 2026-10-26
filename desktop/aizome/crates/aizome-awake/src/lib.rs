@@ -5,7 +5,8 @@
 //!
 //! - logind's **block** inhibitors for `sleep`, `idle` and
 //!   `handle-lid-switch`, so neither suspending, hibernating, logind's own
-//!   idle action nor closing the lid puts the computer to sleep;
+//!   idle action nor closing the lid puts the computer to sleep (the
+//!   compositor still turns the laptop's panel off behind a closed lid);
 //! - the compositor's **idle inhibitor** (`zwp_idle_inhibit_manager_v1`),
 //!   so Aizome doesn't lock the screen or turn the displays off when the
 //!   computer is left alone.

@@ -12,7 +12,8 @@ use aizome_kit::layout::{Constraints, Point, Size, Vec2};
 use aizome_kit::sidestep_ui::{Cursor, PointerButton};
 use aizome_kit::widget::{Event, EventCx, LayoutCx, PaintCx, SemanticRole, Semantics, Status, Widget};
 
-/// What a drag through a drawn element says, in its window's coordinates.
+/// What a drag through a drawn element says. Coordinates are those of the
+/// window unless the handler was installed with [`Drawn::on_drag_local`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DragPhase {
     /// The pointer moved far enough with the button down.
@@ -61,6 +62,7 @@ pub fn drawn<Msg>(
             wheel: None,
             press: None,
             drag: None,
+            drag_local: false,
             hover: false,
             cursor: None,
             label: None,
@@ -68,6 +70,7 @@ pub fn drawn<Msg>(
             text: None,
             fit: None,
             hovered_msg: None,
+            left_msg: None,
             pad: aizome_kit::Padding::default(),
             drop: None,
             drag_out: None,
@@ -122,6 +125,15 @@ impl<Msg: Clone + Send + 'static> Drawn<Msg> {
     /// Drags with the left button.
     pub fn on_drag(mut self, f: impl Fn(DragPhase) -> Msg + 'static) -> Self {
         self.w.drag = Some(MsgMap::new(f));
+        self.w.drag_local = false;
+        self
+    }
+
+    /// Drags in the element's current coordinates. Scrolling its container
+    /// is then included in the displacement from the original press.
+    pub fn on_drag_local(mut self, f: impl Fn(DragPhase) -> Msg + 'static) -> Self {
+        self.w.drag = Some(MsgMap::new(f));
+        self.w.drag_local = true;
         self
     }
 
@@ -139,6 +151,13 @@ impl<Msg: Clone + Send + 'static> Drawn<Msg> {
     /// Sent when the pointer comes over it (a menu bar switching menus).
     pub fn on_hover(mut self, msg: Msg) -> Self {
         self.w.hovered_msg = Some(MsgFn::new(msg));
+        self.w.hover = true;
+        self
+    }
+
+    /// Sent when the pointer leaves this element.
+    pub fn on_leave(mut self, msg: Msg) -> Self {
+        self.w.left_msg = Some(MsgFn::new(msg));
         self.w.hover = true;
         self
     }
@@ -211,6 +230,7 @@ struct DrawnWidget {
     wheel: Option<MsgMap<Vec2>>,
     press: Option<MsgMap<Press>>,
     drag: Option<MsgMap<DragPhase>>,
+    drag_local: bool,
     hover: bool,
     cursor: Option<Cursor>,
     label: Option<String>,
@@ -220,6 +240,7 @@ struct DrawnWidget {
     fit: Option<Fit>,
     /// Sent when the pointer comes over it.
     hovered_msg: Option<MsgFn>,
+    left_msg: Option<MsgFn>,
     /// Room round its child.
     pad: aizome_kit::Padding,
     /// How far outside its rectangle it paints.
@@ -309,6 +330,7 @@ impl Widget for DrawnWidget {
 
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
         let origin = cx.window_rect().origin().to_vec2();
+        let drag_origin = if self.drag_local { aizome_kit::Vec2::ZERO } else { origin };
         let rect = cx.window_rect();
         match event {
             Event::PointerDown { pos, button: PointerButton::Left, clicks, .. } => {
@@ -355,10 +377,10 @@ impl Widget for DrawnWidget {
                 let Some(from) = s.from else { return Status::Ignored };
                 if !s.dragging && (pos.x - from.x).hypot(pos.y - from.y) >= 4.0 {
                     s.dragging = true;
-                    cx.emit_map(drag, DragPhase::Start(from + origin));
+                    cx.emit_map(drag, DragPhase::Start(from + drag_origin));
                 }
                 if cx.state::<PressState>().dragging {
-                    cx.emit_map(drag, DragPhase::Move(*pos + origin));
+                    cx.emit_map(drag, DragPhase::Move(*pos + drag_origin));
                 }
                 Status::Handled
             }
@@ -372,7 +394,7 @@ impl Widget for DrawnWidget {
                 cx.invalidate();
                 if s.dragging {
                     if let Some(d) = &self.drag {
-                        cx.emit_map(d, DragPhase::End(*pos + origin));
+                        cx.emit_map(d, DragPhase::End(*pos + drag_origin));
                     }
                 } else if s.from.is_some()
                     && cx.bounds().contains(*pos)
@@ -419,6 +441,9 @@ impl Widget for DrawnWidget {
             },
             Event::PointerLeave => {
                 cx.state::<PressState>().over = false;
+                if let Some(m) = &self.left_msg {
+                    cx.emit(m);
+                }
                 Status::Ignored
             }
             _ => Status::Ignored,

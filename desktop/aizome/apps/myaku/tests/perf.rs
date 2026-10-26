@@ -12,6 +12,7 @@ use aizome_kit::testing::Harness;
 use aizome_kit::{Point, Vec2};
 use myaku::app::{Msg, Myaku, Request};
 use myaku::fixture;
+use myaku::model::Lens;
 
 const PROCESSES: usize = 600;
 
@@ -93,4 +94,29 @@ fn frames_fit_the_budget_and_memory_stays_put() {
         }
     }
     assert!(after < before + 8 * 1024, "{before} KiB → {after} KiB: readings mustn't pile up");
+}
+
+/// The GPU lens showing one card of two: each reading is seen as that card
+/// sees it before the table is made.
+#[test]
+fn one_card_shown_fits_the_budget_too() {
+    let (signals, _) = Myaku::recorder();
+    let frames: Vec<Arc<_>> = (1..=90).map(|t| Arc::new(fixture::workstation(PROCESSES, t))).collect();
+    let request = Request { lens: Some(Lens::Gpu), ..Default::default() };
+    let mut h = Harness::new(Myaku::with_frame(frames[0].clone(), signals, request));
+    h.send(Msg::Gpu(Some("0000:01:00.0".into())));
+    let w = h.window();
+    for f in &frames[1..30] {
+        h.send(Msg::Frame(f.clone()));
+    }
+    let _ = h.render(w, 2.0);
+    let mut readings = Vec::new();
+    for f in &frames[30..90] {
+        let f = f.clone();
+        readings.push(frame(&mut h, |h| h.send(Msg::Frame(f))));
+    }
+    let (p50, _) = report("reading, one GPU shown", readings);
+    if !cfg!(debug_assertions) {
+        assert!(p50 < Duration::from_millis(4), "p50 {p50:?}");
+    }
 }

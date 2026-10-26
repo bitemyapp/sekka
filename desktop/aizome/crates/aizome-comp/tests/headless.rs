@@ -110,6 +110,58 @@ fn ipc_focus_raises_and_activates() {
 }
 
 #[test]
+fn activating_a_hidden_app_announces_every_restored_window() {
+    use aizome_ipc::{AppSel, Event};
+    let c = Compositor::start(opts(None));
+    let _a = c.client(Spec::new("test.editor", 0x2222cc));
+    let a = c.wait_window("test.editor");
+    let _b = c.client(Spec::new("test.editor", 0x22cc22));
+    let windows = c.wait_windows("two editor windows", |ws| ws.len() == 2);
+    let expected: std::collections::BTreeSet<_> = windows.iter().map(|w| w.id).collect();
+    c.ok(Request::HideApp { app: AppSel { app_id: Some("test.editor".into()), pid: None } });
+    c.wait_windows("both hidden", |ws| ws.iter().all(|w| w.hidden));
+    let events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    c.ok(Request::Focus { id: a.id });
+    assert!(c.windows().iter().all(|w| !w.hidden), "the app was restored");
+    let mut announced = std::collections::BTreeSet::new();
+    for event in events {
+        let Ok(event) = event else { break };
+        if let Event::WindowChanged { window } = event
+            && !window.hidden
+        {
+            announced.insert(window.id);
+        }
+        if announced == expected {
+            break;
+        }
+    }
+    assert_eq!(announced, expected, "the shell must hear that every restored window is visible");
+}
+
+#[test]
+fn activating_a_stack_tab_announces_the_previous_tabs_state() {
+    use aizome_ipc::Event;
+    let c = Compositor::start(opts(None));
+    let _a = c.client(Spec::new("test.a", 0x2222cc));
+    let a = c.wait_window("test.a");
+    let _b = c.client(Spec::new("test.b", 0x22cc22));
+    let b = c.wait_window("test.b");
+    c.ok(Request::Stack { a: a.id, b: b.id });
+    let _cover = c.client(Spec::new("test.cover", 0xcc2222));
+    c.wait_window("test.cover");
+    let events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    c.ok(Request::Focus { id: a.id });
+    assert!(
+        events.map_while(Result::ok).any(|event| {
+            matches!(event, Event::WindowChanged { window } if window.id == b.id && !window.group_active)
+        }),
+        "the shell must hear that the previous tab is inactive"
+    );
+}
+
+#[test]
 fn stacks_share_a_frame_and_switch() {
     let c = Compositor::start(opts(None));
     let _a = c.client(Spec::new("test.a", 0x2222cc).title("Alpha"));

@@ -13,6 +13,7 @@ use aizome_ipc::{Request, Response, WindowInfo};
 use smithay::desktop::{WindowSurfaceType, layer_map_for_output};
 use smithay::input::pointer::{AxisFrame, MotionEvent};
 use smithay::output::Output;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 use smithay::wayland::shell::wlr_layer::{KeyboardInteractivity, Layer};
 
@@ -32,6 +33,15 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     let (w, h) = info.size;
     let rect = Rect::new(usable.x + (usable.w - w).max(0) / 2, usable.y + (usable.h - h).max(0) / 2, w, h);
     if let Some(m) = st.az.windows.get_mut(&id) {
+        if info.fullscreen {
+            // Logic may have granted fullscreen before failing, while the
+            // client was still preparing its first buffer. The activation
+            // configure below must describe fallback's normal placement.
+            m.toplevel().with_pending_state(|s| {
+                s.states.unset(xdg_toplevel::State::Fullscreen);
+                s.fullscreen_output = None;
+            });
+        }
         m.view.rect = rect;
         m.view.shown = true;
     }
@@ -60,7 +70,7 @@ pub fn window_unmapped(st: &mut State, id: WinId) {
 pub fn toplevel_request(st: &mut State, id: WinId, req: ToplevelRequest) {
     match req {
         ToplevelRequest::Activate { .. } => focus(st, Some(id)),
-        ToplevelRequest::Maximize(_) | ToplevelRequest::Fullscreen(_) => {
+        ToplevelRequest::Maximize(_) | ToplevelRequest::Fullscreen { .. } => {
             // Acknowledged, not granted.
             if let Some(m) = st.az.windows.get(&id) {
                 m.toplevel().send_configure();

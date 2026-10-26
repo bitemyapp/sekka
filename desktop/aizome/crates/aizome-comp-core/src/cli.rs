@@ -23,6 +23,9 @@ pub struct HeadlessOutput {
     pub width: i32,
     pub height: i32,
     pub scale: f64,
+    /// Its connector name (`eDP-1` stands for a laptop's panel); else
+    /// `HEADLESS-N`.
+    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -55,8 +58,10 @@ usage: aizome [options] [-- command args...]
                                   winit inside another Wayland or X session)
   --renderer gles|pixman          how to draw (default: gles, falling back to
                                   pixman); also AIZOME_RENDERER
-  --headless-output WxH[@S]       a headless output (repeatable; default
-                                  2880x1800@2)
+  --headless-output [NAME=]WxH[@S]
+                                  a headless output (repeatable; default
+                                  2880x1800@2), named HEADLESS-N or NAME
+                                  (eDP-1 acts as a laptop's panel)
   --socket NAME                   Wayland socket name (default: wayland-N)
   --config PATH                   settings file (default
                                   ~/.config/aizome/settings.toml)
@@ -118,7 +123,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
         o.renderer = Some(parse_renderer(&r)?);
     }
     if o.headless_outputs.is_empty() {
-        o.headless_outputs.push(HeadlessOutput { width: 2880, height: 1800, scale: 2.0 });
+        o.headless_outputs.push(HeadlessOutput { width: 2880, height: 1800, scale: 2.0, name: None });
     }
     Ok(o)
 }
@@ -131,11 +136,16 @@ fn parse_renderer(s: &str) -> Result<RendererKind, String> {
     }
 }
 
-/// `WxH` or `WxH@S`.
+/// `WxH` or `WxH@S`, named with `NAME=` before.
 pub fn parse_output(s: &str) -> Result<HeadlessOutput, String> {
-    let (size, scale) = match s.split_once('@') {
+    let (name, spec) = match s.split_once('=') {
+        Some(("", _)) => return Err(format!("no name in {s}")),
+        Some((n, rest)) => (Some(n.to_string()), rest),
+        None => (None, s),
+    };
+    let (size, scale) = match spec.split_once('@') {
         Some((a, b)) => (a, b.parse::<f64>().map_err(|_| format!("bad scale in {s}"))?),
-        None => (s, 1.0),
+        None => (spec, 1.0),
     };
     let (w, h) = size.split_once('x').ok_or_else(|| format!("bad size {s}"))?;
     let width = w.parse().map_err(|_| format!("bad width in {s}"))?;
@@ -143,7 +153,7 @@ pub fn parse_output(s: &str) -> Result<HeadlessOutput, String> {
     if width < 64 || height < 64 || !(0.5..=4.0).contains(&scale) {
         return Err(format!("{s} is out of range"));
     }
-    Ok(HeadlessOutput { width, height, scale })
+    Ok(HeadlessOutput { width, height, scale, name })
 }
 
 fn default_backend() -> BackendKind {
@@ -181,9 +191,14 @@ mod tests {
         assert_eq!(o.backend, BackendKind::Headless);
         assert_eq!(o.renderer, Some(RendererKind::Pixman));
         assert_eq!(o.headless_outputs.len(), 2);
-        assert_eq!(o.headless_outputs[1], HeadlessOutput { width: 2880, height: 1800, scale: 2.0 });
+        assert_eq!(o.headless_outputs[1], HeadlessOutput { width: 2880, height: 1800, scale: 2.0, name: None });
         assert!(o.no_shell);
         assert_eq!(o.command, ["foot"]);
         assert!(parse_output("10x10").is_err());
+        assert_eq!(
+            parse_output("eDP-1=1280x800@1"),
+            Ok(HeadlessOutput { width: 1280, height: 800, scale: 1.0, name: Some("eDP-1".into()) })
+        );
+        assert!(parse_output("=1280x800").is_err());
     }
 }

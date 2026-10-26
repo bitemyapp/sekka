@@ -1170,5 +1170,9 @@ fn input_state(state: &State) -> aizome_ipc::InputState {
         out.keyboard_focus = k.current_focus().and_then(|f| app_of(&f.0));
     }
     out.cursor_hidden = az.cursor_override.is_none() && matches!(az.cursor_status, CursorImageStatus::Hidden);
+    out.cursor_name = match (&az.cursor_override, &az.cursor_status) {
+        (Some(icon), _) | (None, CursorImageStatus::Named(icon)) => Some(icon.name().into()),
+        _ => None,
+    };
     out
 }

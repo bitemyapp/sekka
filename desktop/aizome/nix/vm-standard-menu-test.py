@@ -1,6 +1,6 @@
 """Real pointer/keyboard regression; inspection only reads painted controls.
 
-Role-only Settings/Help have no implementation. They must remain unavailable,
+Standard Settings is omitted and role-only Help remains unavailable,
 while Koyomi and Tenki's actual message-backed Settings still open and close.
 This component fixture does not qualify an ISO or physical hardware.
 """
@@ -111,11 +111,9 @@ try:
     with subtest("unsupported standard actions stay unavailable and menus recover"):
         launch("Shashin")
         x, bottom = menu("Shashin")
-        machine.screenshot("01-shashin-settings-unavailable")
-        # App menu: About, separator, Settings. Verified against the captured
-        # 1280x800 menu. These are pointer hits, not role/message injection.
-        click(x + 40, bottom + 48)
-        assert shell_state()["menu"] is not None, "disabled Settings must not activate"
+        # Settings is omitted; the captured menu verifies the visible result.
+        # Unit tests also assert omission from native and published menus.
+        machine.screenshot("01-shashin-settings-omitted")
         close_menu()
         input_("chord super+comma")
         assert not text_visible("Shashin", "Settings")

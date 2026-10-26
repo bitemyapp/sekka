@@ -150,6 +150,14 @@ Notes for client authors:
 - Frame callbacks fire after a frame that showed the surface, and roughly
   once a second for surfaces that don't show (other Desks, minimised).
   Nothing draws while nothing changes.
+- wp_fifo_v1 barriers clear the same way: after a frame on the surface's
+  output, so a Vulkan swapchain presenting with vsync (FIFO) gets one
+  frame a refresh, and within about a second where no frame shows the
+  surface (it doesn't show, or its display is off). A commit with a
+  wp_commit_timing_v1 timestamp goes into the first frame that reaches
+  the screen at or after it (counted from the display's last vblank), or
+  applies at that time if the surface doesn't show (`pacing.rs`;
+  `tests/pacing.rs`).
 - The shell's notification cards (layer namespace `aizome-notifications`)
   slide in from the screen's right edge when they come up and back out
   when they go, over the motion time with its ease-out and no fade (120 ms
@@ -255,6 +263,13 @@ Notes for client authors:
 - **Main display**: `primary = true` (or `set-primary-output`); else the
   first output. The pointer starts in its middle, and windows from outputs
   that go move there; the IPC reports it for the shell's Deskbar.
+- **The lid**: while a laptop's lid is closed (libinput's lid switch), its
+  own panel (`eDP-*`, `LVDS-*`, `DSI-*`) is off, its CRTC disabled as
+  idleness does, and other monitors stay on. Opening the lid turns it on
+  again and counts as input. It stays in the layout, so nothing moves.
+  That matters when logind doesn't suspend on the lid (Keep Awake,
+  docked); a panel another output mirrors stays on, since its frames
+  drive the mirror's. `powered` in the IPC's outputs says which are off.
 - **Night Light**: `[night_light]` `enabled`, `temperature` (K, default
   4000), `schedule` (`sunset`: from sunset to sunrise where the computer
   is, which is `latitude` and `longitude` when set by hand, else
@@ -329,7 +344,7 @@ connections and the way out depend on.
 | `fallback.rs` | The window management that runs while no logic does (none loaded, or set aside after repeated panics) |
 | `text.rs`, `icons.rs`, `svg.rs`, `painter.rs`, `pieces.rs`, `cursor.rs` | Labels (Sidestep's offscreen canvas), app icons (desktop files, icon themes, resvg), the overlays' painter, decoration pieces, xcursor |
 | `ipc.rs`, `requests.rs` | The IPC socket and the requests the core answers (the rest go to the logic) |
-| `session.rs`, `idle.rs`, `config.rs`, `outputs.rs`, `night.rs`, `timers.rs` | Start-up, supervising the shell (and restarting it beside the old one), idle events, live settings, outputs, Night Light, timers for the logic |
+| `session.rs`, `idle.rs`, `power.rs`, `config.rs`, `outputs.rs`, `night.rs`, `timers.rs` | Start-up, supervising the shell (and restarting it beside the old one), idle events, display power (idleness, IPC, the panel behind a closed lid), live settings, outputs, Night Light, timers for the logic |
 
 **`crates/aizome-comp-logic`** (`libaizome_comp_logic.so`): what happens on
 the desktop.
@@ -373,7 +388,8 @@ nix develop --command cargo test -p aizome-comp
   keys.
 - `tests/displays.rs`: outputs off and on (from IPC and the settings),
   mirroring scaled and letterboxed, the main display, Night Light's IPC
-  and schedule, the renderer setting.
+  and schedule, the renderer setting, and a laptop's panel (a headless
+  output named `eDP-1`) dark while its lid is closed.
 - `tests/protocols.rs`: wl_shm formats, shm buffers released after upload
   (GLES) or kept (pixman), drag and drop with an icon and actions.
 - `tests/chromium.rs`: a window opened the way Chromium and Electron

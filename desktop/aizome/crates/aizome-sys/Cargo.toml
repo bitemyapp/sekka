@@ -14,6 +14,7 @@ log.workspace = true
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
 # Already in zbus's tree: timeouts and merging signal streams.
 async-io = "2.3"
+event-listener = "5"
 futures-lite = { version = "2.6", default-features = false, features = ["std"] }
 libc = "0.2"
 # Password hashes for AccountsService (crypt(3) SHA-512).

@@ -135,6 +135,9 @@ pub struct MapInfo {
     pub ssd: bool,
     /// Its geometry's size.
     pub size: (i32, i32),
+    /// Fullscreen state agreed before the first buffer was mapped.
+    pub fullscreen: bool,
+    pub fullscreen_output: Option<Output>,
 }
 
 /// What a client asked of its toplevel.
@@ -150,7 +153,10 @@ pub enum ToplevelRequest {
         edges: xdg_toplevel::ResizeEdge,
     },
     Maximize(bool),
-    Fullscreen(bool),
+    Fullscreen {
+        on: bool,
+        output: Option<Output>,
+    },
     Minimize,
     /// The window menu, at a point relative to the window's geometry.
     WindowMenu(Point<i32, Logical>),

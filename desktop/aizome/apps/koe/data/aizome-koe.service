@@ -1,0 +1,24 @@
+# Koe's dictation service (aizome-koe daemon; docs/koe.md): it listens only
+# between a start and a stop, recognises on this computer, types into the
+# app in front, and puts its controls in the systray. Koe's window turns it
+# on and off, keeping the choice in ~/.config/aizome/koe.toml (`enabled`),
+# so it starts at login only for those who use it.
+[Unit]
+Description=Koe dictation
+Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/koe.md
+PartOf=aizome-session.target
+After=aizome.service pipewire.service
+
+[Service]
+Type=exec
+Slice=session.slice
+ExecCondition=@bindir@/aizome-koe enabled
+ExecStart=@bindir@/aizome-koe daemon
+Restart=on-failure
+RestartSec=2
+UMask=0077
+LimitCORE=0
+NoNewPrivileges=true
+# Vocabulary imports and exports see the same paths as the desktop.
+PrivateTmp=false
+TimeoutStopSec=10

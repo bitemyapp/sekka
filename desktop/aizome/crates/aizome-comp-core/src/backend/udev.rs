@@ -109,6 +109,19 @@ struct Surface {
     modes: Vec<smithay::reexports::drm::control::Mode>,
 }
 
+impl Surface {
+    /// Disables the CRTC (DPMS off); the next frame queued turns it on.
+    fn power_off(&mut self) {
+        let res = match &mut self.drm {
+            SurfaceOutput::Gles(o) => o.with_compositor(|c| c.clear()).map_err(|e| format!("{e:?}")),
+            SurfaceOutput::Pixman(o) => o.with_compositor(|c| c.clear()).map_err(|e| format!("{e:?}")),
+        };
+        if let Err(e) = res {
+            warn!("powering off {}: {e}", self.output.name());
+        }
+    }
+}
+
 struct Device {
     token: RegistrationToken,
     render_node: Option<DrmNode>,
@@ -131,7 +144,6 @@ pub struct Udev {
     #[allow(dead_code)]
     libinput: Libinput,
     input_devices: Vec<libinput::Device>,
-    powered: bool,
     /// Outputs turned off, by name: the device, connector and CRTC kept
     /// for turning them on.
     disabled: HashMap<String, (DrmNode, connector::Handle, crtc::Handle)>,
@@ -226,6 +238,11 @@ impl Udev {
                                         SurfaceOutput::Gles(o) => o.reset_buffers(),
                                         SurfaceOutput::Pixman(o) => o.reset_buffers(),
                                     }
+                                    // The other VT may have lit a display
+                                    // that's off here.
+                                    if state.az.out.get(&s.output).is_some_and(|o| !o.powered) {
+                                        s.power_off();
+                                    }
                                 }
                             }
                         }
@@ -246,7 +263,6 @@ impl Udev {
             devices: HashMap::new(),
             libinput,
             input_devices: Vec::new(),
-            powered: true,
             disabled: HashMap::new(),
         })
     }
@@ -386,10 +402,10 @@ impl Udev {
     }
 
     /// Whether an output can draw now: the session is active, the
-    /// displays are on, and it isn't waiting for a vblank (which brings
-    /// the redraw back).
+    /// display is on, and it isn't waiting for a vblank (which brings the
+    /// redraw back).
     pub fn frame_due(&mut self, az: &mut Aizome, output: &Output) -> bool {
-        if !self.session.is_active() || !self.powered {
+        if !self.session.is_active() || !az.out.get(output).is_some_and(|o| o.powered) {
             if let Some(o) = az.out.get_mut(output) {
                 o.redraw_queued = false;
             }
@@ -600,25 +616,15 @@ impl Udev {
         }
     }
 
-    pub fn set_power(&mut self, az: &mut Aizome, on: bool) {
-        self.powered = on;
-        for d in self.devices.values_mut() {
-            for s in d.surfaces.values_mut() {
-                if !on {
-                    let res = match &mut s.drm {
-                        SurfaceOutput::Gles(o) => o.with_compositor(|c| c.clear()).map_err(|e| format!("{e:?}")),
-                        SurfaceOutput::Pixman(o) => o.with_compositor(|c| c.clear()).map_err(|e| format!("{e:?}")),
-                    };
-                    if let Err(e) = res {
-                        warn!("powering off {}: {e}", s.output.name());
-                    }
-                }
-                s.redraw = Redraw::Idle;
-            }
+    /// Turns one display off, or lets it draw again (its next frame turns
+    /// it on).
+    pub fn set_power(&mut self, output: &Output, on: bool) {
+        let Some(id) = output.user_data().get::<UdevOutputId>().copied() else { return };
+        let Some(s) = self.devices.get_mut(&id.node).and_then(|d| d.surfaces.get_mut(&id.crtc)) else { return };
+        if !on {
+            s.power_off();
         }
-        if on {
-            az.queue_redraw_all();
-        }
+        s.redraw = Redraw::Idle;
     }
 
     /// Mode, scale, position and transform; turning an output off (its
@@ -1089,6 +1095,9 @@ fn vblank(state: &mut State, node: DrmNode, crtc: crtc::Handle, metadata: &mut O
         _ => (state.az.clock.now(), wp_presentation_feedback::Kind::Vsync),
     };
     let seq = metadata.as_ref().map(|m| m.sequence as u64).unwrap_or(0);
+    if let Some(o) = state.az.out.get_mut(&output) {
+        o.presented = Some(Duration::from(time));
+    }
     match submitted {
         Ok(Some(Some(mut feedback))) => feedback.presented(time, Refresh::fixed(refresh), seq, flags),
         Ok(_) => {}

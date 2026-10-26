@@ -27,7 +27,10 @@ While it's on, logind holds a **block** inhibitor, *Aizome Keep Awake*, on
 `sleep`, `idle` and `handle-lid-switch` (`systemd-inhibit --list` shows
 it):
 
-- **Closing the lid** doesn't suspend the computer.
+- **Closing the lid** doesn't suspend the computer. The laptop's own
+  screen still goes dark behind it (Aizome turns the panel off while the
+  lid is closed, and on again when it opens), and monitors attached stay
+  on.
 - **logind's idle action** (`IdleAction=` in logind.conf) doesn't run.
 - **Sleep asked for by anything else** is refused: other users' sessions,
   and the login screen's own suspend when it's left alone.
@@ -87,6 +90,10 @@ Awake. A headless or nested Aizome, or a test, leaves it alone.
 - `cargo test -p aizome-comp --test idle_inhibit`: an inhibitor on a
   surface never shown holds off idleness, and idleness comes once it's
   gone, or once its client goes without destroying it.
+- `cargo test -p aizome-comp --test displays lid`: closing the lid turns
+  the laptop's panel off and leaves other monitors on, turning the
+  displays on doesn't light the panel behind it, and opening the lid
+  lights it again.
 - `cargo test -p aizome-shell --test panels`: the cup, its panel, the
   Battery panel's switch and the palette's command.
 - `nix build .#checks.x86_64-linux.settings` (*Keep Awake* part), against

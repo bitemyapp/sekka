@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use aizome_ipc::{DeskInfo, Event, OutputInfo, WindowId, WindowInfo};
+use aizome_sys::apps::AppIndex;
 
 /// What an event changed, so only the surfaces that show it are viewed
 /// again.
@@ -168,16 +169,40 @@ impl Wm {
         self.opened.iter().filter_map(|id| self.windows.get(id))
     }
 
-    /// The app's windows, most recently focused first.
-    pub fn app_windows_by_recency(&self, app_id: &str) -> Vec<&WindowInfo> {
+    /// The most recently focused matching window, falling back to opening
+    /// order for windows that have never received focus.
+    pub fn most_recent_window_matching(&self, mut matches: impl FnMut(&WindowInfo) -> bool) -> Option<&WindowInfo> {
+        self.recent.iter().filter_map(|id| self.windows.get(id)).chain(self.in_open_order()).find(|w| matches(w))
+    }
+
+    /// The app's windows, most recently focused first. Resolve desktop
+    /// entry IDs and explicit window aliases through the application index,
+    /// without the display matcher's suffix or executable-name guesses.
+    pub fn app_windows_by_recency(&self, app_id: &str, index: Option<&AppIndex>) -> Vec<&WindowInfo> {
+        let entry = index.and_then(|i| i.match_window_identity(app_id));
+        let matches = |w: &&WindowInfo| {
+            w.app_id == app_id
+                || entry.is_some_and(|a| {
+                    index.and_then(|i| i.match_window_identity(&w.app_id)).is_some_and(|b| a.id == b.id)
+                })
+        };
         let mut out: Vec<&WindowInfo> =
-            self.recent.iter().filter_map(|id| self.windows.get(id)).filter(|w| w.app_id == app_id).collect();
-        for w in self.in_open_order() {
-            if w.app_id == app_id && !out.iter().any(|o| o.id == w.id) {
+            self.recent.iter().filter_map(|id| self.windows.get(id)).filter(matches).collect();
+        for w in self.in_open_order().filter(matches) {
+            if !out.iter().any(|o| o.id == w.id) {
                 out.push(w);
             }
         }
         out
+    }
+
+    /// Prefer the app's last-used window on this Desk, including sticky
+    /// windows. If it has none here, return its last window on any Desk.
+    /// Hidden, minimised and inactive tabs can all be revealed by Focus.
+    pub fn app_window_to_activate(&self, app_id: &str, index: Option<&AppIndex>) -> Option<&WindowInfo> {
+        self.app_windows_by_recency(app_id, index)
+            .into_iter()
+            .min_by_key(|w| !(w.sticky || w.desk.is_none() || w.desk == Some(self.current_desk)))
     }
 
     /// Whether an app has a window open.
@@ -382,8 +407,59 @@ mod tests {
         wm.apply(&Event::WindowOpened { window: win(2, "foot", "b") });
         wm.apply(&Event::WindowFocused { id: Some(2) });
         wm.apply(&Event::WindowFocused { id: Some(1) });
-        let ids: Vec<WindowId> = wm.app_windows_by_recency("foot").iter().map(|w| w.id).collect();
+        let ids: Vec<WindowId> = wm.app_windows_by_recency("foot", None).iter().map(|w| w.id).collect();
         assert_eq!(ids, [1, 2]);
+    }
+
+    #[test]
+    fn app_activation_prefers_this_desk_then_recency_and_can_select_hidden_windows() {
+        let mut wm = wm();
+        for id in 1..=3 {
+            let mut w = win(id, "foot", "terminal");
+            w.desk = Some(if id == 3 { 2 } else { 1 });
+            wm.apply(&Event::WindowOpened { window: w });
+            wm.apply(&Event::WindowFocused { id: Some(id) });
+        }
+        let chosen = |wm: &Wm| wm.app_window_to_activate("foot", None).map(|w| w.id);
+        assert_eq!(chosen(&wm), Some(2), "local MRU beats the newer window on Desk 2");
+        let w = wm.windows.get_mut(&2).unwrap();
+        w.minimised = true;
+        w.hidden = true;
+        w.group = Some(1);
+        w.group_active = false;
+        assert_eq!(chosen(&wm), Some(2), "Focus can reveal minimised, hidden and stacked windows");
+        wm.apply(&Event::DeskChanged { index: 3, id: 3, name: "3".into() });
+        assert_eq!(chosen(&wm), Some(3), "global MRU when none are local");
+        wm.windows.get_mut(&1).unwrap().sticky = true;
+        assert_eq!(chosen(&wm), Some(1), "a sticky window is local to every Desk");
+        wm.apply(&Event::WindowClosed { id: 1 });
+        assert_eq!(chosen(&wm), Some(3), "closed windows leave the activation history");
+        assert_eq!(wm.app_window_to_activate("not-running", None), None);
+    }
+
+    #[test]
+    fn app_activation_matches_desktop_entries_to_window_ids() {
+        use aizome_sys::apps::{Locale, XdgDirs};
+        let root = std::env::temp_dir().join(format!("aizome-activation-index-{}", std::process::id()));
+        let dirs = XdgDirs::rooted(&root);
+        let apps = dirs.data_home.join("applications");
+        std::fs::create_dir_all(&apps).unwrap();
+        std::fs::write(
+            apps.join("org.example.Editor.desktop"),
+            "[Desktop Entry]\nType=Application\nName=Editor\nExec=editor\nStartupWMClass=EditorWindow\n",
+        )
+        .unwrap();
+        let index = AppIndex::load_with(dirs, Locale::default());
+        let mut wm = wm();
+        wm.apply(&Event::WindowOpened { window: win(1, "EditorWindow", "document") });
+        wm.apply(&Event::WindowOpened { window: win(2, "org.example.Other", "other") });
+        wm.apply(&Event::WindowFocused { id: Some(2) });
+        for id in ["org.example.Editor", "org.example.Editor.desktop", "editorwindow"] {
+            assert_eq!(wm.app_window_to_activate(id, Some(&index)).map(|w| w.id), Some(1), "{id}");
+        }
+        assert!(wm.app_window_to_activate("unknown", Some(&index)).is_none());
+        assert_eq!(wm.app_window_to_activate("EditorWindow", None).map(|w| w.id), Some(1));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -145,11 +145,11 @@ impl State {
                 Response::Ok
             }
             Request::PowerOffMonitors => {
-                self.backend.set_power(&mut self.az, false);
+                self.set_monitors_power(false);
                 Response::Ok
             }
             Request::PowerOnMonitors => {
-                self.backend.set_power(&mut self.az, true);
+                self.set_monitors_power(true);
                 Response::Ok
             }
             Request::Lock => {
@@ -231,6 +231,7 @@ impl State {
                     self.keyboard_key(*c, false, time);
                 }
             }
+            Synthetic::Lid { closed } => self.lid_switched(closed),
         }
         Ok(())
     }

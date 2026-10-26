@@ -9,7 +9,7 @@ use std::time::Duration;
 use aizome_kit::prelude::*;
 
 use crate::forecast::{self, Forecast};
-use crate::location::{LocateError, Located};
+use crate::location::{Cancellation, LocateError, Located};
 use crate::places::{self, CURRENT_ID, Found, Origin, Place};
 use crate::services::{FetchError, Services};
 use crate::store::{Cached, Consent, Settings, State, Store};
@@ -96,7 +96,8 @@ pub enum Msg {
     DeclineLocation,
     ToggleLocation,
     Locate,
-    Located(Result<Located, LocateError>),
+    SearchInstead,
+    Located(u64, Result<Located, LocateError>),
     /// The time zone's city was searched for.
     TimezoneFound(String, Result<Vec<Found>, String>),
     /// Another launch asked for the window.
@@ -118,6 +119,8 @@ pub struct Tenki {
     /// The current location, once known.
     pub current: Option<Place>,
     pub locating: Locating,
+    location_generation: u64,
+    location_cancel: Cancellation,
     /// The id of the place showing.
     pub selected: Option<String>,
     /// Forecasts by position (`Place::cache_key`).
@@ -150,6 +153,8 @@ impl Tenki {
             places,
             current,
             locating: Locating::Idle,
+            location_generation: 0,
+            location_cancel: Cancellation::default(),
             selected: state.selected,
             weather: HashMap::new(),
             search: Search::default(),
@@ -360,12 +365,30 @@ impl Tenki {
     }
 
     fn locate(&mut self, cx: &mut Cx<Msg>) {
-        if self.locating == Locating::Busy {
+        if self.settings.location != Consent::Allowed || self.locating == Locating::Busy {
             return;
         }
+        self.cancel_location();
+        self.location_cancel = Cancellation::default();
         self.locating = Locating::Busy;
+        let cancel = self.location_cancel.clone();
+        let generation = self.location_generation;
         let services = self.services.clone();
-        self.run(cx, move || Msg::Located(services.locate()));
+        self.run(cx, move || Msg::Located(generation, services.locate(&cancel)));
+    }
+
+    fn cancel_location(&mut self) {
+        self.location_cancel.cancel();
+        self.location_generation += 1;
+        self.locating = Locating::Idle;
+    }
+
+    fn decline_location(&mut self, cx: &mut Cx<Msg>) {
+        self.cancel_location();
+        self.settings.location = Consent::Declined;
+        self.save_settings();
+        self.fix_selection();
+        self.ensure_timezone_city(cx);
     }
 
     fn move_row(&mut self, from: usize, to: usize) {
@@ -387,6 +410,7 @@ impl Tenki {
         let Some(p) = rows.get(n) else { return };
         let was_selected = self.selected.as_deref() == Some(p.id.as_str());
         if p.origin == Origin::Current {
+            self.cancel_location();
             self.settings.location = Consent::Declined;
             self.save_settings();
         } else {
@@ -446,6 +470,12 @@ pub fn current_place(lat: f64, lon: f64, description: Option<String>) -> Place {
         longitude: lon,
         timezone: None,
         origin: Origin::Current,
+    }
+}
+
+impl Drop for Tenki {
+    fn drop(&mut self) {
+        self.location_cancel.cancel();
     }
 }
 
@@ -625,34 +655,41 @@ impl Program for Tenki {
                 }
                 self.locate(cx);
             }
-            Msg::DeclineLocation => {
-                self.settings.location = Consent::Declined;
-                self.save_settings();
-                self.fix_selection();
-                self.ensure_timezone_city(cx);
-            }
+            Msg::DeclineLocation => self.decline_location(cx),
             Msg::ToggleLocation => {
-                let msg =
-                    if self.settings.location == Consent::Allowed { Msg::DeclineLocation } else { Msg::AllowLocation };
-                cx.send(msg);
+                if self.settings.location == Consent::Allowed {
+                    self.decline_location(cx);
+                } else {
+                    cx.send(Msg::AllowLocation);
+                }
             }
             Msg::Locate => self.locate(cx),
-            Msg::Located(r) => match r {
-                Ok(l) => {
-                    self.locating = Locating::Idle;
-                    let p = current_place(l.latitude, l.longitude, l.description);
-                    self.load_cached(&p.cache_key());
-                    self.current = Some(p.clone());
-                    self.save_state();
-                    if self.settings.location == Consent::Allowed {
-                        self.refresh(vec![p], STALE, cx);
+            Msg::SearchInstead => {
+                self.decline_location(cx);
+                cx.send(Msg::FocusSearch);
+            }
+            Msg::Located(generation, r) => {
+                if generation != self.location_generation || self.settings.location != Consent::Allowed {
+                    return;
+                }
+                match r {
+                    Ok(l) => {
+                        self.locating = Locating::Idle;
+                        let p = current_place(l.latitude, l.longitude, l.description);
+                        self.load_cached(&p.cache_key());
+                        self.current = Some(p.clone());
+                        self.save_state();
+                        if self.settings.location == Consent::Allowed {
+                            self.refresh(vec![p], STALE, cx);
+                        }
+                    }
+                    Err(LocateError::Cancelled) => self.locating = Locating::Idle,
+                    Err(e) => {
+                        log::info!("no location: {e:?}");
+                        self.locating = Locating::Failed(e);
                     }
                 }
-                Err(e) => {
-                    log::info!("no location: {e:?}");
-                    self.locating = Locating::Failed(e);
-                }
-            },
+            }
             Msg::TimezoneFound(tz, r) => {
                 self.timezone_busy = false;
                 let Ok(found) = r else { return };

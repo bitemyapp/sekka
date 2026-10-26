@@ -17,7 +17,8 @@ use crate::prelude::*;
 /// The shell's layer surfaces drawn frosted in Full
 /// (`crates/aizome-shell`: the Deskbar, torn-off menus, the palette and
 /// the notification cards).
-pub const FROSTED: [&str; 4] = ["aizome-deskbar", "aizome-menu", "aizome-palette", crate::slides::NOTES];
+pub const FROSTED: [&str; 5] =
+    ["aizome-deskbar", "aizome-deskbar-transient", "aizome-menu", "aizome-palette", crate::slides::NOTES];
 
 /// Whose popups (menus) are blurred behind: the shell's.
 const SHELL: &str = "aizome-";

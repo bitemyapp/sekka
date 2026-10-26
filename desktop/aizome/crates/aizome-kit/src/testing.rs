@@ -73,6 +73,8 @@ pub struct TestPlatform {
     /// Drags started out of the windows, in order (the drag's number is
     /// its place plus one).
     pub drags: Vec<(WinId, sidestep_ui::DragSource)>,
+    /// Simulate a platform that cannot start native drags.
+    pub reject_drags: bool,
     /// Each window's last frame as [`Harness::check_frame`] composed it.
     frames: HashMap<WinId, (u32, u32, Vec<u8>)>,
     /// Each window's pixels as [`Harness::render_damage`] keeps them.
@@ -113,6 +115,7 @@ impl TestPlatform {
             fullscreen: HashMap::new(),
             scrolls: HashMap::new(),
             drags: Vec::new(),
+            reject_drags: false,
             frames: HashMap::new(),
             kept: HashMap::new(),
             hidden: Default::default(),
@@ -277,6 +280,9 @@ impl Platform for TestPlatform {
     }
 
     fn start_drag(&mut self, id: WinId, source: sidestep_ui::DragSource) -> Option<u64> {
+        if self.reject_drags {
+            return None;
+        }
         self.drags.push((id, source));
         Some(self.drags.len() as u64)
     }
@@ -548,7 +554,15 @@ impl<P: Program> Harness<P> {
 
     /// Send the program a message, as if a widget had.
     pub fn send(&mut self, msg: P::Msg) {
-        self.rt.core.queue.push_back(Box::new(msg));
+        self.send_all([msg]);
+    }
+
+    /// Queue messages together before handling them, as when an input
+    /// event and background replies arrive in the same event-loop turn.
+    pub fn send_all(&mut self, messages: impl IntoIterator<Item = P::Msg>) {
+        for msg in messages {
+            self.rt.core.queue.push_back(Box::new(msg));
+        }
         self.rt.flush(&mut self.platform);
     }
 
@@ -563,6 +577,20 @@ impl<P: Program> Harness<P> {
     }
 
     // Input.
+
+    /// Native window entry, before ordinary movement among its widgets.
+    pub fn enter(&mut self, key: WindowKey, at: Point) {
+        let win = self.win(key);
+        self.rt.core.pointer_move(win, at, &mut self.platform);
+        self.rt.pointer_presence(win, true, &mut self.platform);
+    }
+
+    /// Native window exit (distinct from leaving a child widget).
+    pub fn leave(&mut self, key: WindowKey) {
+        let win = self.win(key);
+        self.rt.core.pointer_leave(win, &mut self.platform);
+        self.rt.pointer_presence(win, false, &mut self.platform);
+    }
 
     pub fn move_to(&mut self, key: WindowKey, at: Point) {
         let win = self.win(key);

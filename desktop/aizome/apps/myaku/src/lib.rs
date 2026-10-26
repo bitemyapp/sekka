@@ -16,6 +16,7 @@ pub mod group;
 pub mod history;
 pub mod instance;
 pub mod model;
+mod nvml;
 pub mod sampler;
 pub mod ui;
 

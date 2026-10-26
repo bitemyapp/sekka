@@ -1,0 +1,53 @@
+[package]
+name = "aizome-koe"
+description = "Koe 声, Aizome's dictation: speak, and your words are typed into the app in front, recognised on this computer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "koe"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-koe"
+path = "src/main.rs"
+
+# Recognition through whisper.cpp, built by whisper-rs-sys with CMake. The
+# package adds OpenBLAS (CPU kernels chosen for the processor at run time)
+# and Vulkan (any vendor's GPU); `--no-default-features` leaves only the
+# HTTP backend, for a quick build.
+[features]
+default = ["local"]
+local = ["dep:whisper-rs"]
+openblas = ["local", "whisper-rs/openblas"]
+vulkan = ["local", "whisper-rs/vulkan"]
+cuda = ["local", "whisper-rs/cuda"]
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+aizome-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+env_logger.workspace = true
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+hound = "3.5"
+# The tray, on zbus's async-io runtime as the rest of the workspace's zbus.
+ksni = { version = "0.3", default-features = false, features = ["async-io"] }
+libc = "0.2"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "multipart", "json", "stream"] }
+sha2 = "0.10"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "process", "signal", "sync", "time", "fs"] }
+# raw-api: ggml's device list, to know whether a graphics card started.
+whisper-rs = { version = "0.16", optional = true, features = ["raw-api"] }
+
+[dev-dependencies]
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

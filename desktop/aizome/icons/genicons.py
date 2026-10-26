@@ -204,6 +204,19 @@ def annai():
     return g
 
 
+@icon("org.aizome.Koe", "Koe (Dictation)")
+def koe():
+    # A microphone on its stand, the grille in the deepest dye, and the
+    # voice beside it as two amber level bars.
+    g = R(22, 10, 8, 2, PALE) + R(20, 12, 12, 18, PALE) + R(22, 30, 8, 2, PALE)
+    for y in (16, 20, 24):
+        g += R(22, y, 8, 2, AI)
+    g += R(14, 22, 2, 12, MID) + R(36, 22, 2, 12, MID) + R(16, 34, 20, 2, MID)
+    g += R(24, 36, 4, 8, MID) + R(18, 44, 16, 4, DEEP)
+    g += R(42, 20, 2, 8, AMBER) + R(46, 16, 2, 16, AMBER)
+    return g
+
+
 @icon("org.aizome.Toolchest", "Toolchest")
 def toolchest():
     return R(10, 10, 20, 10, AMBER) + R(10, 20, 40, 10, PALE) + R(10, 30, 40, 10, MID) + R(10, 40, 40, 10, DEEP)

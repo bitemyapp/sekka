@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{
-    wl_buffer, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_shm, wl_shm_pool, wl_surface,
+    wl_buffer, wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_shm, wl_shm_pool,
+    wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum};
 use wayland_protocols::xdg::shell::client::{xdg_popup, xdg_positioner, xdg_surface, xdg_wm_base};
@@ -90,6 +91,7 @@ pub enum ShellCmd {
         color: u32,
         grab: bool,
     },
+    Frame(&'static str),
     Destroy(&'static str),
     Quit,
 }
@@ -102,6 +104,8 @@ pub struct ShellSeen {
     pub keys: Vec<(String, u32)>,
     /// Surfaces configured and drawn.
     pub shown: Vec<String>,
+    /// Completed one-shot frame requests, by surface name.
+    pub frames: HashMap<String, u32>,
     /// Menus the compositor dismissed (popup_done).
     pub dismissed: Vec<String>,
     /// The surface the pointer is over, by name.
@@ -299,6 +303,11 @@ fn run(stream: UnixStream, rx: Receiver<ShellCmd>, seen: Arc<Mutex<ShellSeen>>) 
                         .surfaces
                         .insert(name.to_string(), Surf { surface, layer: None, popup: Some((xs, popup)), size, color });
                 }
+                ShellCmd::Frame(name) => {
+                    let s = &shell.surfaces[name];
+                    s.surface.frame(&qh, name.to_string());
+                    s.surface.commit();
+                }
                 ShellCmd::Destroy(name) => shell.destroy(name),
                 ShellCmd::Quit => quit = true,
             }
@@ -325,6 +334,19 @@ fn run(stream: UnixStream, rx: Receiver<ShellCmd>, seen: Arc<Mutex<ShellSeen>>) 
         shell.destroy(&n);
     }
     let _ = conn.flush();
+}
+
+impl Dispatch<wl_callback::WlCallback, String> for Shell {
+    fn event(
+        shell: &mut Self,
+        _: &wl_callback::WlCallback,
+        _: wl_callback::Event,
+        name: &String,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        *shell.seen.lock().unwrap().frames.entry(name.clone()).or_default() += 1;
+    }
 }
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Shell {

@@ -16,6 +16,7 @@ pub mod deskbar;
 mod deskbar_glue;
 pub mod desktop;
 mod desktop_glue;
+mod greeter;
 pub mod gtk;
 pub mod icons;
 pub mod ipc;

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::location::{LocateError, Located};
+use crate::location::{Cancellation, LocateError, Located};
 use crate::places::cache_key;
 
 /// Who Tenki says it is to Open-Meteo.
@@ -55,7 +55,7 @@ pub trait Services: Send + Sync + 'static {
     /// Open-Meteo's places named like `name`, as JSON.
     fn search(&self, name: &str) -> Result<String, FetchError>;
     /// The machine's position.
-    fn locate(&self) -> Result<Located, LocateError>;
+    fn locate(&self, cancel: &Cancellation) -> Result<Located, LocateError>;
     /// The machine's time zone (`America/Chicago`).
     fn timezone(&self) -> Option<String>;
     /// The Unix time now.
@@ -127,8 +127,8 @@ impl Services for Live {
         self.get(crate::places::SEARCH_URL, &crate::places::query(name))
     }
 
-    fn locate(&self) -> Result<Located, LocateError> {
-        crate::location::locate(crate::APP_ID, Duration::from_secs(20))
+    fn locate(&self, cancel: &Cancellation) -> Result<Located, LocateError> {
+        crate::location::locate_cancellable(crate::APP_ID, Duration::from_secs(20), cancel)
     }
 
     fn timezone(&self) -> Option<String> {
@@ -248,8 +248,8 @@ impl Services for Recorded {
         }
     }
 
-    fn locate(&self) -> Result<Located, LocateError> {
-        self.st().located.clone()
+    fn locate(&self, cancel: &Cancellation) -> Result<Located, LocateError> {
+        if cancel.is_cancelled() { Err(LocateError::Cancelled) } else { self.st().located.clone() }
     }
 
     fn timezone(&self) -> Option<String> {

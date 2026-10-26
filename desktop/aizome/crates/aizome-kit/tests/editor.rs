@@ -207,7 +207,7 @@ fn search_marks_add_move_and_clear_without_changing_text_or_selection() {
     let (mut h, w) = open("cat Cat caterpillar\nnumber:12 number:34\nplain line");
     let selection = h.program().content.selection();
     h.check_frame(w);
-    for marks in [vec![0..3, 4..7, 8..11], vec![4..7], vec![19..28], vec![]] {
+    for marks in [vec![0..3, 4..7, 8..11], std::iter::once(4..7).collect(), std::iter::once(19..28).collect(), vec![]] {
         h.send(Msg::Marks(marks, None));
         let frame = h.check_frame(w);
         assert_eq!(frame.differs, 0.0, "updated marks must match a full redraw: {frame:?}");
@@ -241,7 +241,7 @@ fn offscreen_search_mark_changes_do_not_redraw_visible_lines() {
     let w = h.window();
     h.check_frame(w);
     let at = h.program().content.rope().line_to_char(90);
-    h.send(Msg::Marks(vec![at..at + 4], Some(0)));
+    h.send(Msg::Marks(std::iter::once(at..at + 4).collect(), Some(0)));
     let frame = h.check_frame(w);
     assert_eq!(frame.differs, 0.0);
     assert_eq!(frame.damaged, 0.0, "offscreen marks leave the visible buffer alone: {frame:?}");

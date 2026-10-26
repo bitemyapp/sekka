@@ -40,37 +40,77 @@ pub enum JobEvent {
         as_root: bool,
     },
     Progress(Snapshot),
+    RecoveringAuthentication,
+    AuthorizationFailed(AuthorizationFailure),
     Done(Result<String, String>),
 }
 
-/// Words for failures a person can act on.
+/// These failures are identified from pkexec's complete output and exit
+/// status, before the privileged helper has run. Never infer this from a
+/// substring of a build's log (or from exit status 126/127 alone).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AuthorizationFailure {
+    Unavailable,
+    Cancelled,
+    Denied,
+}
+
+impl AuthorizationFailure {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Unavailable => {
+                "The administrator password dialog is unavailable. Nothing was changed. Try again when it is available."
+            }
+            Self::Cancelled => "Cancelled. Nothing was changed.",
+            Self::Denied => "Administrator permission was denied. Nothing was changed.",
+        }
+    }
+}
+
+fn authorization_failure(error: &nix::Error) -> Option<AuthorizationFailure> {
+    let nix::Error::CommandFailed { code, stdout, stderr: Some(stderr), .. } = error else { return None };
+    if !stdout.is_empty() {
+        return None;
+    }
+    match (*code, stderr.trim()) {
+        (Some(127), "Error executing command as another user: No authentication agent found.") => {
+            Some(AuthorizationFailure::Unavailable)
+        }
+        (Some(127), diagnostic)
+            if !diagnostic.contains('\n')
+                && diagnostic.starts_with(&format!("Error checking for authorization {}: ", crate::ops::ACTION)) =>
+        {
+            Some(AuthorizationFailure::Unavailable)
+        }
+        (Some(127), diagnostic)
+            if !diagnostic.contains('\n') && diagnostic.starts_with("Error getting authority: ") =>
+        {
+            Some(AuthorizationFailure::Unavailable)
+        }
+        (Some(126), "Error executing command as another user: Request dismissed") => {
+            Some(AuthorizationFailure::Cancelled)
+        }
+        (Some(127), "Error executing command as another user: Not authorized\n\nThis incident has been reported.") => {
+            Some(AuthorizationFailure::Denied)
+        }
+        _ => None,
+    }
+}
+
+/// Only the helper can confirm restoration. Unknown failures must not
+/// claim that configuration or the running system was rolled back.
 pub fn explain(error: &str, system: bool, stopped: bool) -> String {
-    if error.contains("System changes had already begun") {
+    if error == crate::ops::NO_HELPER || error.contains("System changes had already begun") {
         return error.to_owned();
-    }
-    if error == crate::ops::NO_HELPER {
-        return error.to_owned();
-    }
-    if error.contains("dismissed") || error.contains("Not authorized") || error.contains("126") {
-        return "Cancelled. Nothing was changed.".to_owned();
-    }
-    if error.contains("must be setuid root") || error.contains("pkexec\": No such file") {
-        return "This system can't ask for an administrator password the way Yukimi does: pkexec isn't set up. \
-                Yukimi's NixOS module sets it up (programs.yukimi.enable = true). Nothing was changed."
-            .to_owned();
     }
     if stopped {
         return if system {
-            "Stopped. Your configuration was put back as it was, and the running system was not changed.".to_owned()
+            format!("Stopped. {error}\n\nCheck Details for the operation's outcome before trying again.")
         } else {
-            "Stopped. Nothing was changed.".to_owned()
+            "Stopped. Check Details for the operation's outcome.".to_owned()
         };
     }
-    if system {
-        format!("{error}\n\nYour configuration was put back as it was, and the running system was not changed.")
-    } else {
-        error.to_owned()
-    }
+    error.to_owned()
 }
 
 impl Snapshot {
@@ -100,7 +140,7 @@ pub fn work(steps: Vec<Step>, stop: nix::Stop, send: impl Fn(JobEvent), finish: 
             send(JobEvent::Done(Err("Stopped".into())));
             return;
         }
-        let run = match step() {
+        let mut run = match step() {
             Ok(Some(run)) => run,
             Ok(None) => continue,
             Err(e) => {
@@ -110,35 +150,62 @@ pub fn work(steps: Vec<Step>, stop: nix::Stop, send: impl Fn(JobEvent), finish: 
         };
         stop.signal(!run.as_root);
         send(JobEvent::Started { as_root: run.as_root });
-        let (mut last, mut seen) = (Instant::now() - EVERY, 0u64);
-        // What happened since the window last heard: sent now and then, and
-        // whatever is left when the step ends, so the lines before a failure
-        // are never lost.
-        let mut pending: Option<Snapshot> = None;
-        let result = nix::stream(run.command, &stop, |progress| {
-            let newer = snapshot(progress, &mut seen);
-            match &mut pending {
-                Some(p) => p.merge(newer),
-                None => pending = Some(newer),
-            }
-            if last.elapsed() >= EVERY {
-                last = Instant::now();
-                if let Some(p) = pending.take() {
-                    send(JobEvent::Progress(p));
+        let recovery_deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let (mut last, mut seen) = (Instant::now() - EVERY, 0u64);
+            let mut pending: Option<Snapshot> = None;
+            let result = nix::stream_command(&mut run.command, &stop, |progress| {
+                let newer = snapshot(progress, &mut seen);
+                match &mut pending {
+                    Some(p) => p.merge(newer),
+                    None => pending = Some(newer),
                 }
+                if last.elapsed() >= EVERY {
+                    last = Instant::now();
+                    if let Some(p) = pending.take() {
+                        send(JobEvent::Progress(p));
+                    }
+                }
+            });
+            if let Some(p) = pending.take() {
+                send(JobEvent::Progress(p));
             }
-        });
-        if let Some(p) = pending.take() {
-            send(JobEvent::Progress(p));
-        }
-        match result {
-            Ok((output, progress)) => {
-                send(JobEvent::Progress(snapshot(&progress, &mut seen)));
-                out = output;
-            }
-            Err(e) => {
-                send(JobEvent::Done(Err(e.to_string())));
-                return;
+            match result {
+                Ok((output, progress)) => {
+                    send(JobEvent::Progress(snapshot(&progress, &mut seen)));
+                    out = output;
+                    break;
+                }
+                Err(error) => {
+                    if run.as_root
+                        && let Some(failure) = authorization_failure(&error)
+                    {
+                        if stop.requested() {
+                            send(JobEvent::AuthorizationFailed(AuthorizationFailure::Cancelled));
+                            return;
+                        }
+                        if failure == AuthorizationFailure::Unavailable && Instant::now() < recovery_deadline {
+                            send(JobEvent::RecoveringAuthentication);
+                            // Each attempt asks polkit again, so readiness is checked
+                            // by the authority itself, without a stale preflight flag.
+                            for _ in 0..5 {
+                                if stop.requested() {
+                                    break;
+                                }
+                                std::thread::sleep(Duration::from_millis(50));
+                            }
+                            if stop.requested() {
+                                send(JobEvent::AuthorizationFailed(AuthorizationFailure::Cancelled));
+                                return;
+                            }
+                            continue;
+                        }
+                        send(JobEvent::AuthorizationFailed(failure));
+                    } else {
+                        send(JobEvent::Done(Err(error.to_string())));
+                    }
+                    return;
+                }
             }
         }
     }
@@ -176,6 +243,7 @@ pub struct Job {
     /// How many lines were logged in all.
     pub logged: usize,
     pub outcome: Option<Outcome>,
+    pub retry_authentication: bool,
     /// The log shows.
     pub details: bool,
     /// When Nix last said something.
@@ -196,6 +264,7 @@ impl Job {
             log: VecDeque::new(),
             logged: 0,
             outcome: None,
+            retry_authentication: false,
             details: false,
             heard: Instant::now(),
             stop: nix::Stop::new(false),
@@ -237,6 +306,22 @@ impl Job {
                     self.log.pop_front();
                 }
                 None
+            }
+            JobEvent::RecoveringAuthentication => {
+                self.status = "Waiting for the administrator password dialog…".into();
+                self.heard = now;
+                None
+            }
+            JobEvent::AuthorizationFailed(failure) => {
+                self.retry_authentication = failure == AuthorizationFailure::Unavailable;
+                self.status = match failure {
+                    AuthorizationFailure::Cancelled => "Cancelled",
+                    AuthorizationFailure::Denied => "Permission denied",
+                    AuthorizationFailure::Unavailable => "Permission unavailable",
+                }
+                .into();
+                self.outcome = Some(Outcome::Failed(failure.message().into()));
+                self.outcome.as_ref()
             }
             JobEvent::Done(result) => {
                 let stopped = self.stop.requested();
@@ -337,13 +422,13 @@ echo '{{"ok":true}}'"#
         }
         let Some(Outcome::Failed(why)) = &job.outcome else { panic!() };
         assert!(why.starts_with("error: builder for firefox failed"));
-        assert!(why.ends_with("the running system was not changed."));
+        assert_eq!(why, "error: builder for firefox failed");
         assert!(job.details);
         assert_eq!(
             explain("Error executing command as another user: Not authorized", true, false),
-            "Cancelled. Nothing was changed."
+            "Error executing command as another user: Not authorized"
         );
-        assert!(explain("x", false, true).starts_with("Stopped. Nothing"));
+        assert!(explain("x", false, true).starts_with("Stopped."));
     }
 
     #[test]
@@ -383,5 +468,123 @@ echo '@nix {"action":"msg","level":0,"msg":"error: it broke"}' >&2; exit 1"#,
         work(vec![script("sleep 30"), script("echo never")], stop, move |e| sink.lock().unwrap().push(e), |o| o);
         assert!(started.elapsed() < Duration::from_secs(10));
         assert!(matches!(events.lock().unwrap().last(), Some(JobEvent::Done(Err(_)))));
+    }
+    fn root_script(text: &str) -> Step {
+        let step = script(text);
+        Box::new(move || {
+            let mut run = step()?.unwrap();
+            run.as_root = true;
+            Ok(Some(run))
+        })
+    }
+
+    #[test]
+    fn authentication_retries_only_before_the_helper_starts() {
+        let dir = std::env::temp_dir().join(format!("yukimi-auth-retry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let count = dir.join("attempts");
+        let helper = dir.join("helper");
+        let events = run(vec![root_script(&format!(
+            r#"
+            echo attempt >> '{count}'
+            if [ "$(wc -l < '{count}')" -lt 3 ]; then
+                echo 'Error executing command as another user: No authentication agent found.' >&2
+                exit 127
+            fi
+            echo executed >> '{helper}'
+            echo '{{"ok":true}}'
+        "#,
+            count = count.display(),
+            helper = helper.display()
+        ))]);
+        assert_eq!(std::fs::read_to_string(helper).unwrap(), "executed\n");
+        assert_eq!(events.iter().filter(|e| matches!(e, JobEvent::RecoveringAuthentication)).count(), 2);
+        assert!(matches!(events.last(), Some(JobEvent::Done(Ok(_)))));
+        // Even exit 127 and the familiar diagnostic cannot make a helper's
+        // build output safe to retry, or turn a build failure into cancellation.
+        let events = run(vec![root_script(
+            "echo '@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"building\"}' >&2; echo 'Error executing command as another user: No authentication agent found.' >&2; exit 127",
+        )]);
+        assert!(!events.iter().any(|e| matches!(e, JobEvent::RecoveringAuthentication)));
+        assert!(matches!(events.last(), Some(JobEvent::Done(Err(_)))));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn authentication_cancellation_and_denial_are_distinct() {
+        for (text, code, expected) in [
+            ("Error executing command as another user: Request dismissed", 126, AuthorizationFailure::Cancelled),
+            (
+                "Error executing command as another user: Not authorized\n\nThis incident has been reported.",
+                127,
+                AuthorizationFailure::Denied,
+            ),
+        ] {
+            let events = run(vec![root_script(&format!("printf '%s\\n' '{text}' >&2; exit {code}"))]);
+            assert_eq!(events.last(), Some(&JobEvent::AuthorizationFailed(expected)));
+        }
+        let error = nix::Error::CommandFailed {
+            message: "126 files failed".into(),
+            code: Some(126),
+            stdout: String::new(),
+            stderr: Some("126 files failed\n".into()),
+        };
+        assert_eq!(authorization_failure(&error), None);
+        assert_eq!(explain("126 files failed", true, false), "126 files failed");
+    }
+
+    #[test]
+    fn incomplete_or_non_utf8_output_never_causes_a_retry() {
+        for extra in [
+            "printf '\\377'",             // stdout must not be mistaken for empty output
+            "printf '\\377\\n' >&2",      // invalid stderr must not truncate the diagnostic
+            "head -c 8192 /dev/zero >&2", // stderr was too long to retain completely
+        ] {
+            let events = run(vec![root_script(&format!(
+                "echo 'Error executing command as another user: No authentication agent found.' >&2; {extra}; exit 127"
+            ))]);
+            assert!(!events.iter().any(|e| matches!(e, JobEvent::RecoveringAuthentication)));
+            assert!(matches!(events.last(), Some(JobEvent::Done(Err(_)))));
+        }
+    }
+
+    #[test]
+    fn unavailable_agent_exposes_retry_without_a_rollback_claim() {
+        let mut job = Job::new(Operation::Rollback { generation: 4 }, 1);
+        job.take(JobEvent::AuthorizationFailed(AuthorizationFailure::Unavailable), Instant::now());
+        assert!(job.retry_authentication);
+        assert_eq!(job.outcome, Some(Outcome::Failed(AuthorizationFailure::Unavailable.message().into())));
+    }
+
+    #[test]
+    fn stopping_authentication_recovery_does_not_launch_another_attempt() {
+        let stop = nix::Stop::new(false);
+        let mut events = Vec::new();
+        let sink = std::sync::Mutex::new(&mut events);
+        work(
+            vec![root_script(
+                "echo 'Error executing command as another user: No authentication agent found.' >&2; exit 127",
+            )],
+            stop.clone(),
+            |event| {
+                if matches!(event, JobEvent::RecoveringAuthentication) {
+                    stop.request();
+                }
+                sink.lock().unwrap().push(event);
+            },
+            |out| out,
+        );
+        assert_eq!(events.iter().filter(|e| matches!(e, JobEvent::RecoveringAuthentication)).count(), 1);
+        assert_eq!(events.last(), Some(&JobEvent::AuthorizationFailed(AuthorizationFailure::Cancelled)));
+    }
+
+    #[test]
+    fn recovery_has_a_deadline_and_preserves_the_safe_retry_action() {
+        let started = Instant::now();
+        let events = run(vec![root_script(
+            "echo 'Error executing command as another user: No authentication agent found.' >&2; exit 127",
+        )]);
+        assert!(started.elapsed() < Duration::from_secs(8));
+        assert_eq!(events.last(), Some(&JobEvent::AuthorizationFailed(AuthorizationFailure::Unavailable)));
     }
 }

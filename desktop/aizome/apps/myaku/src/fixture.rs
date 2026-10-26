@@ -4,7 +4,9 @@
 
 use std::time::Duration;
 
-use crate::model::{Frame, Gpu, GpuUse, Group, Kind, Memory, Meter, Power, Process, System, Usage};
+use aizome_sys::sysinfo::power::Floor;
+
+use crate::model::{Frame, Gpu, GpuUsage, GpuUse, Group, Kind, Memory, Meter, Power, Process, System, Usage};
 
 /// A small, steady generator of numbers in `[0, 1)`.
 struct Noise(u64);
@@ -91,8 +93,11 @@ pub fn frame(processes: usize, tick: u64) -> Frame {
             write_rate: own.then_some((noise.next() * 80_000.0 * (cpu / 10.0)).floor()),
             read_total: own.then_some(u64::from(pid) * 9_100_000),
             write_total: own.then_some(u64::from(pid) * 3_700_000),
-            gpu: if name == "firefox" && role == "GPU process" { 8.0 * jitter } else { 0.0 },
-            vram: if role == "GPU process" { 180 << 20 } else { 0 },
+            graphics: GpuUsage {
+                busy: Some(if name == "firefox" && role == "GPU process" { 8.0 * jitter } else { 0.0 }),
+                vram: Some(if role == "GPU process" { 180 << 20 } else { 0 }),
+                ..Default::default()
+            },
             ..Default::default()
         };
         procs.push(Process {
@@ -112,11 +117,7 @@ pub fn frame(processes: usize, tick: u64) -> Frame {
             cgroup: String::new(),
             kernel,
             readable: own,
-            gpus: if usage.gpu > 0.0 {
-                vec![GpuUse { device: 0, busy: usage.gpu, video: 0.0, vram: usage.vram, shared: 0 }]
-            } else {
-                Vec::new()
-            },
+            gpus: if role == "GPU process" { vec![GpuUse { device: 0, usage: usage.graphics }] } else { Vec::new() },
             usage,
             group: 0,
         });
@@ -140,6 +141,14 @@ pub fn frame(processes: usize, tick: u64) -> Frame {
             name: name.into(),
             app_id: app.map(str::to_owned),
             detail: detail.into(),
+            attribution: match kind {
+                Kind::App => format!(
+                    "The {name} process tree includes its helpers and commands. Members need not be direct children."
+                ),
+                Kind::Service => "This background program is shown separately from applications.".into(),
+                Kind::System => "Processes belonging to this system service are grouped together.".into(),
+                Kind::Kernel => "Kernel threads are grouped together separately from user programs.".into(),
+            },
             windows: usize::from(kind == Kind::App),
             focused: name == "Sumi",
             own: kind != Kind::System && kind != Kind::Kernel,
@@ -246,7 +255,132 @@ pub fn frame(processes: usize, tick: u64) -> Frame {
     f.power = Power { meter: Meter::None, ..Default::default() };
     f.processes = procs;
     f.groups = groups;
+    f.total_graphics();
     f
+}
+
+/// A reading of a desktop with two graphics cards: the processor's
+/// integrated Radeon, and an RTX 5090 that draws the screen and runs a
+/// language model in bursts, so that most of the graphics work and memory
+/// is the NVIDIA card's. Its clients are listed by NVML, which reports no
+/// shared memory.
+pub fn workstation(processes: usize, tick: u64) -> Frame {
+    let mut f = frame(processes, tick);
+    let t = tick as f64;
+    let wave = |phase: f64, speed: f64| (t * speed + phase).sin() * 0.5 + 0.5;
+    // The model answers now and then: the card's busy time comes in bursts.
+    let infer = wave(0.0, 0.17).powi(4);
+    f.gpus = vec![
+        Gpu {
+            name: "AMD Radeon Graphics (Granite Ridge)".into(),
+            driver: "amdgpu".into(),
+            pci: "0000:78:00.0".into(),
+            integrated: true,
+            busy: Some((2.0 + 4.0 * wave(1.0, 0.31)).round()),
+            video: Some(0.0),
+            vram_used: Some(22 << 20),
+            vram_total: Some(2 << 30),
+            power: Some(9.2),
+            temperature: Some(41.0),
+            ..Default::default()
+        },
+        Gpu {
+            name: "NVIDIA GeForce RTX 5090".into(),
+            driver: "nvidia".into(),
+            pci: "0000:01:00.0".into(),
+            busy: Some((4.0 + 88.0 * infer).round()),
+            video: Some(0.0),
+            vram_used: Some(((11.9 + 1.4 * infer) * (1u64 << 30) as f64) as u64),
+            vram_total: Some(32607 << 20),
+            power: Some(31.0 + 430.0 * infer),
+            temperature: Some((38.0 + 24.0 * infer).round()),
+            clock: Some(if infer > 0.05 { 2610.0 } else { 397.0 }),
+            unlisted_usage: GpuUsage { shared: None, ..Default::default() },
+            ..Default::default()
+        },
+    ];
+    for p in &mut f.processes {
+        p.gpus.clear();
+    }
+    let (amd, nvidia) = (0, 1);
+    let on = |device, busy: f64, vram: u64, shared: Option<u64>| GpuUse {
+        device,
+        usage: GpuUsage { busy: Some(busy), video: Some(0.0), vram: Some(vram), shared },
+    };
+    let mut give = |name: &str, role: &str, uses: Vec<GpuUse>| {
+        if let Some(p) = f.processes.iter_mut().find(|p| p.name == name && p.role == role && p.gpus.is_empty()) {
+            p.gpus = uses;
+        }
+    };
+    give("firefox", "GPU process", vec![on(nvidia, (3.0 + 4.0 * wave(2.0, 0.4)).round(), 412 << 20, None)]);
+    // The compositor's helper and the browser keep idle contexts on the Radeon.
+    give("firefox", "", vec![on(amd, 0.0, 12 << 10, Some(2 << 20))]);
+    give("aizome-shell", "", vec![on(nvidia, 1.0, 96 << 20, None), on(amd, 1.0, 6 << 20, Some(4 << 20))]);
+    give("code", "", vec![on(nvidia, 1.0, 180 << 20, None)]);
+    give("signal-desktop", "", vec![on(nvidia, 0.0, 248 << 20, None)]);
+    give("spotify", "", vec![on(amd, (1.0 + 2.0 * wave(0.7, 0.5)).round(), 64 << 20, Some(18 << 20))]);
+    // The model's runner: a service of the user's, with nearly all the card's memory.
+    let pid = f.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+    let runner = Process {
+        pid,
+        ppid: 1,
+        start_ticks: u64::from(pid) * 101,
+        started: 1_792_000_000,
+        name: "ollama".into(),
+        role: "runner".into(),
+        command: "/run/current-system/sw/bin/ollama runner --model qwen3-14b".into(),
+        exe: "/nix/store/0000-ollama/bin/ollama".into(),
+        user: "callen".into(),
+        uid: 1000,
+        state: if infer > 0.05 { 'R' } else { 'S' },
+        readable: true,
+        usage: Usage { cpu: 2.0 + 40.0 * infer, threads: 38, resident: 1_900 << 20, ..Default::default() },
+        gpus: vec![on(nvidia, (86.0 * infer).round(), (9.6 * (1u64 << 30) as f64) as u64, None)],
+        group: f.groups.len(),
+        ..Default::default()
+    };
+    f.groups.push(Group {
+        key: runner.key(),
+        kind: Some(Kind::Service),
+        name: "ollama".into(),
+        detail: "ollama.service".into(),
+        own: true,
+        members: vec![f.processes.len()],
+        usage: runner.usage.clone(),
+        ..Default::default()
+    });
+    f.processes.push(runner);
+    f.system.processes = f.processes.len();
+    f.total_graphics();
+    measure(&mut f);
+    f
+}
+
+/// The workstation's meters as the sampler reads them: RAPL is root's and
+/// there's no battery, but the Radeon's meter is the processor package's
+/// and the RTX has its own. Each process draws as it does now since the
+/// first reading.
+fn measure(f: &mut Frame) {
+    f.power = crate::sampler::meters(None, None, false, &f.gpus);
+    let cores = f.system.cores.len().max(1) as f64;
+    let mut floors = vec![Floor::default(); f.gpus.len()];
+    let parts = crate::sampler::attribute(&f.power, &f.gpus, &f.processes, cores, &mut Floor::default(), &mut floors);
+    f.power.attributed = parts.iter().flatten().sum();
+    let seconds = f.tick as f64;
+    let Frame { processes, groups, .. } = f;
+    for (p, part) in processes.iter_mut().zip(parts) {
+        p.usage.power = part;
+        if let Some(w) = part {
+            p.usage.energy = w * seconds;
+            p.usage.measured = seconds;
+        }
+    }
+    for g in groups.iter_mut() {
+        let members = || g.members.iter().map(|&m| &processes[m].usage);
+        g.usage.power = members().filter_map(|u| u.power).reduce(|a, b| a + b);
+        g.usage.energy = members().map(|u| u.energy).sum();
+        g.usage.measured = members().map(|u| u.measured).fold(0.0, f64::max);
+    }
 }
 
 #[cfg(test)]
@@ -258,5 +392,16 @@ mod tests {
         let members: usize = f.groups.iter().map(|g| g.members.len()).sum();
         assert_eq!(members, f.processes.len());
         assert_ne!(super::frame(600, 4).system.cpu, f.system.cpu, "it moves");
+    }
+
+    #[test]
+    fn a_workstation_works_its_nvidia_card() {
+        let f = super::workstation(300, 40);
+        let ollama = f.groups.iter().find(|g| g.name == "ollama").unwrap();
+        assert!(ollama.usage.graphics.vram > Some(9 << 30));
+        let firefox = f.groups.iter().find(|g| g.name == "Firefox").unwrap();
+        assert!(f.processes[firefox.members[0]].uses(0) && f.processes[firefox.members[1]].uses(1));
+        let members: usize = f.groups.iter().map(|g| g.members.len()).sum();
+        assert_eq!(members, f.processes.len());
     }
 }

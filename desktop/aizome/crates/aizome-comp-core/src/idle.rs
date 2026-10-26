@@ -65,7 +65,7 @@ impl State {
             idle.off_sent = false;
             self.az.ipc.emit(&Event::Resumed);
             if was_off {
-                self.backend.set_power(&mut self.az, true);
+                self.set_monitors_power(true);
             }
         }
     }
@@ -100,7 +100,7 @@ impl State {
         {
             self.az.idle.off_sent = true;
             self.az.ipc.emit(&Event::Idle { kind: "monitors-off".into() });
-            self.backend.set_power(&mut self.az, false);
+            self.set_monitors_power(false);
         }
     }
 }

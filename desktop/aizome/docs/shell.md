@@ -215,19 +215,41 @@ opens the actions of any row (for a file: Open, Open With ▸, Show in Hako,
 Copy Path, Move to Trash; for a window: Focus, Close, Move to Desk ▸; for an
 app: Open, New Window, Quit if running).
 
+Opening an app from the palette, Toolchest or Deskbar raises its most
+recently used window on the current Desk (sticky windows count as local).
+If it has no window here, it switches to its most recently used window's
+Desk and raises it. Activation restores a minimised window, unhides its app,
+selects its stack tab and gives it keyboard focus. Apps without windows are
+launched; **New Window** explicitly launches another instance.
+
 Selections are recorded in the frecency store (`app:`, `file:`, `cmd:`
 keys), so the palette learns.
 
 ## Deskbar
 
-At the top right under the bar (C2-Desktop): `chrome`, 232pt, hard shadow,
-collapsible by its header (the `N apps ⌄` control).
+At the top right under the bar (C2-Desktop): `chrome`, 232pt, hard shadow.
+The menu bar's Hide Deskbar control collapses it; the `N apps ⌄` control
+brings it back.
+
+Its height is limited to the space below the menu bar on the owning
+output. Scroll to reach overflowing app groups, notifications and Shelf
+items.
+
+Settings → Desktop & Deskbar can enable automatic hiding
+(`[deskbar] auto_hide = true`). Hover the menu bar's app control to reveal
+it; leaving the control and Deskbar hides it after 350 ms. Open menus and
+active drags keep it visible. A temporary reveal overlays applications
+without changing their layout. Manual collapse remains a separate saved
+preference; click the app control to restore it.
 
 - Each running app (by app ID, in launch order, pinned apps first): its
   icon (Lucide glyph for Aizome's apps by kind, the app's own icon at 16pt
   for others), name in Archivo 650 and window count right-aligned. Click
-  focuses its last window (or shows it if hidden); right-click: New Window,
-  Hide, Quit, Keep in Deskbar.
+  activates its last window on this Desk, or another Desk if none are local;
+  right-click: New Window,
+  Hide, Quit, Keep in Deskbar, Move Up and Move Down. Drag an app header to
+  rearrange groups. The `[deskbar] order` preference persists separately
+  from pins, including an absent app's position for its next launch.
 - Its windows indented beneath: the focused one with a 3pt `focus` bar at
   the left edge, hidden or minimised ones in italic `text3` with "hidden",
   stacked ones with "stack", ones on another desk with "desk N", urgent ones
@@ -254,6 +276,15 @@ on the card and in the Deskbar preview. Do Not Disturb (from the palette,
 the clock panel, or a schedule in settings) files them without the line.
 Screenshots post a notification with the image's thumbnail and "Show in
 Hako".
+
+Opening a notification raises its application's most recent window on the
+current Desk, falling back to another Desk if necessary. It reveals minimised
+windows and still invokes
+the notification's default action when it has one. With no default action
+and no running window, the shell can launch a known desktop entry. App
+identity comes from desktop IDs, declared window classes, the sender's
+process, or an unambiguous declared name; similar-looking names alone do
+not select another application.
 
 ## Screen recording
 
@@ -400,6 +431,20 @@ The polkit agent (`aizome-sys`) asks the shell: an overlay dialog with the
 mark, the action's message, the identity (a dropdown if several admins), a
 password field, Cancel and Authenticate, PAM's prompts and errors inline.
 
+The shell owns a `PolkitAgent` handle for its lifetime. The handle watches
+polkit's D-Bus owner before registering and registers again when the daemon
+restarts, including during a system update. Registration failures retry
+every two seconds; a healthy registration waits for owner changes without
+polling. This also lets a replacement shell wait for the previous shell to
+release its registration. Losing the authority cancels its pending dialogs
+and helper conversations; requests from the old authority are rejected.
+Initial setup failures retry, and losing the bus recreates the agent on
+a fresh private connection. A lost registration reply is cleaned up before
+retrying so the agent cannot collide with its own previous registration.
+Dropping the handle stops the worker and unregisters from that specific
+authority. The private-bus tests in `aizome-sys/tests/polkit.rs` exercise
+restarts, interrupted authentication, deferred registration and handover.
+
 ## Real and headless sessions
 
 Only the machine's Aizome session registers as polkit's agent, takes
@@ -421,7 +466,12 @@ idle lock still lock it.
   motion, clock format, Deskbar collapsed or not, which systray widgets show.
 - When the theme changes, the shell also tells foot instances (SIGUSR1 for
   dark, SIGUSR2 for light) and updates the GTK color-scheme (`dconf write
-  /org/gnome/desktop/interface/color-scheme`).
+  /org/gnome/desktop/interface/color-scheme`). Newly opened terminals and
+  terminals present when the shell starts or reconnects receive the current
+  palette too. Only Foot processes with windows on this compositor are
+  signalled, including custom app IDs and foot server windows.
+  Applications inside Foot may cache their own colours; see
+  [Codex's theme-change limitation and deferred remedy](terminal-theme-changes.md).
 - Apps launch through `aizome-sys::apps` (systemd user scopes) with an
   xdg-activation token, so their first window takes focus.
 - The shell never blocks its loop: D-Bus, PAM, file indexing and searches
@@ -429,3 +479,20 @@ idle lock still lock it.
 - Frame budget: every surface's frames stay under 4 ms (measure with
   `SIDESTEP_FRAME_STATS=1`); the clock tick repaints only the clock, a meter
   only its bars.
+
+## Checking Foot's live theme
+
+With `aizome` and `foot` installed, build the shell and run the real-terminal
+regression check:
+
+```sh
+nix develop --command cargo build -p aizome-shell
+nix develop --command nix shell --inputs-from . nixpkgs#python3 --command \
+  python3 scripts/check-foot-theme --shell target/debug/aizome-shell
+```
+
+It queries Foot's active background with OSC 11 in two isolated headless
+sessions, covering existing and newly opened terminals, custom app IDs,
+foot server windows, live Night/Day changes and a shell reload. The second
+session shares the Wayland socket name but must keep its own palette.
+Logs and screenshots are kept in the printed evidence directory.

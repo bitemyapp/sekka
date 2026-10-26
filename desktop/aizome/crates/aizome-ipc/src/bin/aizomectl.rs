@@ -96,10 +96,12 @@ recovery (what Ctrl+Alt+Del opens)
 input (through the compositor's own paths, for tests and scripts)
   input motion X Y | click [BUTTON] | button BUTTON [down|up]
   input scroll DX DY | key NAME [down|up] | chord super+shift+3 | type TEXT
+  input lid closed|open
                                 a key or button without down or up is pressed
                                 and released; type taps keys for letters,
                                 digits, space and punctuation (Shift where a
-                                US layout needs it: capitals, ! ( * + ? …)
+                                US layout needs it: capitals, ! ( * + ? …);
+                                lid as the laptop's lid switch
 ";
 
 fn main() -> ExitCode {
@@ -558,6 +560,15 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
                         }
                     }
                     v
+                }
+                "lid" => {
+                    need(&args, 2, "closed or open")?;
+                    let closed = match args[1].as_str() {
+                        "closed" | "close" | "shut" => true,
+                        "open" => false,
+                        o => return Err(format!("{o}: say closed or open")),
+                    };
+                    vec![Synthetic::Lid { closed }]
                 }
                 e => return Err(format!("unknown input {e}")),
             };

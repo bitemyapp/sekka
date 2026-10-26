@@ -24,12 +24,17 @@ pub enum Action {
     QuitApp {
         app_id: String,
     },
-    /// Focus an app's last window, showing it if hidden (or launch it).
+    /// Hide an app's windows, resolving desktop-entry and window IDs.
+    HideApp {
+        app_id: String,
+    },
+    /// Reveal and raise an app's last window on this Desk, or another Desk
+    /// if it has none here. Launch it when it has no windows.
     FocusApp {
         app_id: String,
     },
-    /// Launch an app by its desktop entry's id (`org.aizome.Hako`), or its
-    /// app id.
+    /// Open an app by its desktop entry's id (`org.aizome.Hako`), or its
+    /// app id: activate an existing window, or launch it if none exists.
     Launch {
         app_id: String,
     },
@@ -113,6 +118,11 @@ pub enum Action {
     Service(ServiceVerb),
     /// The Deskbar shows, or folds into the bar.
     SetDeskbarCollapsed(bool),
+    /// Move an app one place in the Deskbar without changing its pinned state.
+    MoveDeskbarApp {
+        app_id: String,
+        down: bool,
+    },
     /// Mount, unmount or eject a disk by its device path.
     Disk {
         device: String,

@@ -106,7 +106,7 @@ impl Headless {
         }
         let mut x = 0;
         for (i, c) in configs.iter().enumerate() {
-            let name = format!("HEADLESS-{}", i + 1);
+            let name = c.name.clone().unwrap_or_else(|| format!("HEADLESS-{}", i + 1));
             let output = Output::new(
                 name,
                 PhysicalProperties {

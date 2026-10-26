@@ -424,7 +424,7 @@ impl Keyboard {
                 caps = caps.push(space(6.0)).push(
                     icon_button(Icon::Minus).toolbar().on_press(Msg::RemoveCommand(c.to_config())).tooltip("Remove"),
                 );
-                form::row(a.trim_start_matches("spawn ").to_owned(), caps)
+                form::row(keys::command_label(a.trim_start_matches("spawn ")), caps)
                     .leading(icon(Icon::SquareTerminal).size(16.0).role(Role::Text3))
                     .compact()
             })

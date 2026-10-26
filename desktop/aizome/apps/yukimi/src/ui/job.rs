@@ -92,6 +92,12 @@ pub fn sheet(app: &Yukimi) -> Element<Msg> {
     c = c.push(details);
     let buttons = if running {
         row![spacer(), button("Stop").destructive().on_press_maybe((!job.stop.requested()).then_some(Msg::StopJob))]
+    } else if job.retry_authentication {
+        row![
+            spacer(),
+            button("Close").on_press(Msg::CloseJob),
+            button("Try Again").primary().default().on_press(Msg::RetryAuthentication)
+        ]
     } else {
         row![spacer(), button("Close").primary().default().on_press(Msg::CloseJob)]
     };

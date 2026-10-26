@@ -1,15 +1,14 @@
-//! The GeoClue client the shell asks where the computer is with, against
-//! a fake GeoClue on a private bus (its own `dbus-daemon`, which can
-//! activate nothing): the position it gives, a refusal, and no GeoClue at
-//! all. Skips if `dbus-daemon` isn't there.
+//! The shell and Tenki's shared GeoClue client on a private bus: positions,
+//! refusals, stalled calls, cancellation and cleanup. Its `dbus-daemon`
+//! can activate nothing. Skips if `dbus-daemon` isn't there.
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use aizome_sys::location::{LocateError, locate_on};
+use aizome_sys::location::{Cancellation, LocateError, locate_on, locate_on_cancellable};
 use zbus::zvariant::OwnedObjectPath;
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -96,28 +95,74 @@ fn path(p: &str) -> OwnedObjectPath {
 const CLIENT: &str = "/org/freedesktop/GeoClue2/Client/1";
 const LOCATION: &str = "/org/freedesktop/GeoClue2/Location/1";
 
-struct Manager;
+#[derive(Clone, Copy, Default)]
+enum Slow {
+    #[default]
+    None,
+    GetClient,
+    SetDesktopId,
+    Location,
+    Latitude,
+    NoPosition,
+}
+
+fn stall() {
+    std::thread::sleep(Duration::from_millis(800));
+}
+
+struct Manager {
+    slow: Slow,
+    deleted: std::sync::Arc<AtomicUsize>,
+}
 
 #[zbus::interface(name = "org.freedesktop.GeoClue2.Manager")]
 impl Manager {
     fn get_client(&self) -> OwnedObjectPath {
+        if matches!(self.slow, Slow::GetClient) {
+            stall();
+        }
         path(CLIENT)
+    }
+
+    fn delete_client(&self, _client: OwnedObjectPath) {
+        self.deleted.fetch_add(1, Ordering::SeqCst);
     }
 }
 
 struct Client {
     deny: bool,
+    slow: Slow,
+    start_delay: Duration,
+    stop_gate: Option<CallGate>,
+    start_gate: Option<CallGate>,
     started: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     desktop_id: String,
     accuracy: u32,
     running: bool,
 }
 
+/// Keep a service call outstanding until its caller has returned.
+struct CallGate {
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl CallGate {
+    fn wait(&self) {
+        self.entered.send(()).unwrap();
+        self.release.lock().unwrap().recv_timeout(Duration::from_secs(15)).expect("release service call");
+    }
+}
+
 #[zbus::interface(name = "org.freedesktop.GeoClue2.Client")]
 impl Client {
     fn start(&mut self) -> zbus::fdo::Result<()> {
+        if let Some(gate) = &self.start_gate {
+            gate.wait();
+        }
+        std::thread::sleep(self.start_delay);
         if self.deny {
-            return Err(zbus::fdo::Error::AccessDenied("'org.aizome.Shell' disallowed, no agent".into()));
+            return Err(zbus::fdo::Error::AccessDenied("'org.aizome.Tenki' disallowed, no agent".into()));
         }
         self.running = true;
         self.started.lock().unwrap().push(format!("{} {}", self.desktop_id, self.accuracy));
@@ -125,12 +170,18 @@ impl Client {
     }
 
     fn stop(&mut self) {
+        if let Some(gate) = &self.stop_gate {
+            gate.wait();
+        }
         self.running = false;
     }
 
     #[zbus(property)]
     fn location(&self) -> OwnedObjectPath {
-        path(if self.running { LOCATION } else { "/" })
+        if matches!(self.slow, Slow::Location) {
+            stall();
+        }
+        path(if self.running && !matches!(self.slow, Slow::NoPosition) { LOCATION } else { "/" })
     }
 
     #[zbus(property)]
@@ -140,6 +191,9 @@ impl Client {
 
     #[zbus(property)]
     fn set_desktop_id(&mut self, id: String) {
+        if matches!(self.slow, Slow::SetDesktopId) {
+            stall();
+        }
         self.desktop_id = id;
     }
 
@@ -154,60 +208,196 @@ impl Client {
     }
 }
 
-struct Location;
+struct Location(Slow);
 
 #[zbus::interface(name = "org.freedesktop.GeoClue2.Location")]
 impl Location {
     #[zbus(property)]
     fn latitude(&self) -> f64 {
-        48.8534
+        if matches!(self.0, Slow::Latitude) {
+            stall();
+        }
+        43.0731
     }
 
     #[zbus(property)]
     fn longitude(&self) -> f64 {
-        2.3488
+        -89.4012
     }
 
     #[zbus(property)]
     fn accuracy(&self) -> f64 {
         5000.0
     }
+
+    #[zbus(property)]
+    fn description(&self) -> String {
+        String::new()
+    }
 }
 
 fn serve(bus: &TestBus, deny: bool) -> (zbus::blocking::Connection, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    serve_delayed(bus, deny, Duration::ZERO, None)
+}
+
+fn serve_delayed(
+    bus: &TestBus,
+    deny: bool,
+    start_delay: Duration,
+    stop_gate: Option<CallGate>,
+) -> (zbus::blocking::Connection, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let (conn, started, _) = serve_slow(bus, deny, start_delay, stop_gate, Slow::None, None);
+    (conn, started)
+}
+
+fn serve_slow(
+    bus: &TestBus,
+    deny: bool,
+    start_delay: Duration,
+    stop_gate: Option<CallGate>,
+    slow: Slow,
+    start_gate: Option<CallGate>,
+) -> (zbus::blocking::Connection, std::sync::Arc<std::sync::Mutex<Vec<String>>>, std::sync::Arc<AtomicUsize>) {
+    let deleted = std::sync::Arc::new(AtomicUsize::new(0));
     let started = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let client = Client { deny, started: started.clone(), desktop_id: String::new(), accuracy: 0, running: false };
+    let client = Client {
+        deny,
+        slow,
+        start_delay,
+        stop_gate,
+        start_gate,
+        started: started.clone(),
+        desktop_id: String::new(),
+        accuracy: 0,
+        running: false,
+    };
     let conn = zbus::blocking::connection::Builder::address(bus.address.as_str())
         .unwrap()
         .name("org.freedesktop.GeoClue2")
         .unwrap()
-        .serve_at("/org/freedesktop/GeoClue2/Manager", Manager)
+        .serve_at("/org/freedesktop/GeoClue2/Manager", Manager { slow, deleted: deleted.clone() })
         .unwrap()
         .serve_at(CLIENT, client)
         .unwrap()
-        .serve_at(LOCATION, Location)
+        .serve_at(LOCATION, Location(slow))
         .unwrap()
         .build()
         .expect("the fake GeoClue on the bus");
-    (conn, started)
+    (conn, started, deleted)
 }
 
 #[test]
-fn geoclue_gives_the_shell_a_position_at_city_accuracy() {
+fn geoclue_gives_a_position_at_city_accuracy() {
     let Some(bus) = TestBus::start() else { return };
     let (_geoclue, started) = serve(&bus, false);
     let me = bus.connect();
-    let found = locate_on(&me, "org.aizome.Shell", Duration::from_secs(3)).expect("a position");
-    assert_eq!((found.latitude, found.longitude), (48.8534, 2.3488));
-    // Asked as the shell, for a city's accuracy (4).
-    assert_eq!(started.lock().unwrap().as_slice(), ["org.aizome.Shell 4"]);
+    let found = locate_on(&me, "org.aizome.Tenki", Duration::from_secs(3)).expect("a position");
+    assert_eq!((found.latitude, found.longitude), (43.0731, -89.4012));
+    assert_eq!(found.accuracy, 5000.0);
+    assert_eq!(found.description, None, "an empty description is none");
+    // Asked as Tenki, for a city's accuracy (4).
+    assert_eq!(started.lock().unwrap().as_slice(), ["org.aizome.Tenki 4"]);
 }
 
 #[test]
-fn a_refusal_or_no_geoclue_gives_no_position() {
+fn a_refusal_is_a_denial() {
+    let Some(bus) = TestBus::start() else { return };
+    let (_geoclue, _) = serve(&bus, true);
+    let me = bus.connect();
+    assert_eq!(locate_on(&me, "org.aizome.Tenki", Duration::from_secs(3)), Err(LocateError::Denied));
+}
+
+#[test]
+fn no_geoclue_is_unavailable() {
     let Some(bus) = TestBus::start() else { return };
     let me = bus.connect();
-    assert!(matches!(locate_on(&me, "org.aizome.Shell", Duration::from_secs(3)), Err(LocateError::Unavailable(_))));
-    let (_geoclue, _) = serve(&bus, true);
-    assert_eq!(locate_on(&me, "org.aizome.Shell", Duration::from_secs(3)), Err(LocateError::Denied));
+    match locate_on(&me, "org.aizome.Tenki", Duration::from_secs(3)) {
+        Err(LocateError::Unavailable(_)) => {}
+        other => panic!("expected unavailable, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_slow_start_is_part_of_the_location_deadline() {
+    let Some(bus) = TestBus::start() else { return };
+    let (_geoclue, _) = serve_delayed(&bus, false, Duration::from_millis(800), None);
+    let me = bus.connect();
+    let start = Instant::now();
+    let found = locate_on(&me, "org.aizome.Tenki", Duration::from_millis(100));
+    assert_eq!(found, Err(LocateError::TimedOut));
+    assert!(start.elapsed() < Duration::from_millis(600), "Start ignored the request deadline");
+}
+
+#[test]
+fn a_slow_stop_does_not_hold_the_position_hostage() {
+    let Some(bus) = TestBus::start() else { return };
+    let (entered, stop_entered) = std::sync::mpsc::channel();
+    let (release_stop, release) = std::sync::mpsc::channel();
+    let gate = CallGate { entered, release: std::sync::Mutex::new(release) };
+    let (_geoclue, _) = serve_delayed(&bus, false, Duration::ZERO, Some(gate));
+    let me = bus.connect();
+    let (finished, result) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        finished.send(locate_on(&me, "org.aizome.Tenki", Duration::from_secs(3))).unwrap();
+    });
+    stop_entered.recv_timeout(Duration::from_secs(5)).expect("worker reached Stop");
+    result.recv_timeout(Duration::from_secs(5)).expect("position returned while Stop is blocked").expect("a position");
+    release_stop.send(()).unwrap();
+    worker.join().unwrap();
+}
+
+#[test]
+fn every_setup_and_read_call_obeys_the_same_deadline() {
+    for slow in [Slow::GetClient, Slow::SetDesktopId, Slow::Location, Slow::Latitude, Slow::NoPosition] {
+        let Some(bus) = TestBus::start() else { return };
+        let (_geoclue, _, _) = serve_slow(&bus, false, Duration::ZERO, None, slow, None);
+        let me = bus.connect();
+        let start = Instant::now();
+        assert_eq!(locate_on(&me, "org.aizome.Tenki", Duration::from_millis(100)), Err(LocateError::TimedOut));
+        assert!(start.elapsed() < Duration::from_millis(600), "a request exceeded its deadline");
+    }
+}
+
+#[test]
+fn cancellation_interrupts_a_service_call_and_releases_the_client() {
+    let Some(bus) = TestBus::start() else { return };
+    let (entered, start_entered) = std::sync::mpsc::channel();
+    let (release_start, release) = std::sync::mpsc::channel();
+    let gate = CallGate { entered, release: std::sync::Mutex::new(release) };
+    let (_geoclue, _, deleted) = serve_slow(&bus, false, Duration::ZERO, None, Slow::None, Some(gate));
+    let me = bus.connect();
+    let cancel = Cancellation::default();
+    let (finished, result) = std::sync::mpsc::channel();
+    let worker = {
+        let cancel = cancel.clone();
+        std::thread::spawn(move || {
+            finished.send(locate_on_cancellable(&me, "org.aizome.Tenki", Duration::from_secs(10), &cancel)).unwrap();
+        })
+    };
+    start_entered.recv_timeout(Duration::from_secs(3)).expect("worker reached Start");
+    cancel.cancel();
+    assert_eq!(
+        result.recv_timeout(Duration::from_secs(5)).expect("cancellation returned while Start is blocked"),
+        Err(LocateError::Cancelled)
+    );
+    release_start.send(()).unwrap();
+    worker.join().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while deleted.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(deleted.load(Ordering::SeqCst), 1, "the abandoned client was deleted");
+}
+
+#[test]
+fn a_cancelled_request_never_starts() {
+    let Some(bus) = TestBus::start() else { return };
+    let (_geoclue, started) = serve(&bus, false);
+    let cancel = Cancellation::default();
+    cancel.cancel();
+    assert_eq!(
+        locate_on_cancellable(&bus.connect(), "org.aizome.Tenki", Duration::from_secs(2), &cancel),
+        Err(LocateError::Cancelled)
+    );
+    assert!(started.lock().unwrap().is_empty());
 }

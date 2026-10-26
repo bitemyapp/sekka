@@ -50,19 +50,20 @@ fn main() {
         unsafe {
             std::env::set_var("DBUS_SESSION_BUS_ADDRESS", "disabled:");
             std::env::set_var("SIDESTEP_APPEARANCE", "dark");
+            // Set this before AccountsService starts D-Bus worker threads.
+            std::env::set_var("WAYLAND_DISPLAY", Compositor::socket_name());
         }
     }
+    let display_settings = if nested { None } else { aizome_greeter::displays::prepare(&cfg) };
     let compositor = if nested {
         None
     } else {
-        match Compositor::start(&cfg.compositor, cfg.compositor_settings.as_ref()) {
-            Ok(c) => {
-                // Safety: no other thread is running yet.
-                unsafe { std::env::set_var("WAYLAND_DISPLAY", &c.socket) };
-                Some(c)
-            }
+        let settings = display_settings.as_ref().map(|s| s.path()).or(cfg.compositor_settings.as_ref());
+        match Compositor::start(&cfg.compositor, settings) {
+            Ok(c) => Some(c),
             Err(e) => {
                 log::error!("the compositor: {e}");
+                drop(display_settings);
                 std::process::exit(1);
             }
         }
@@ -76,6 +77,7 @@ fn main() {
     };
     // The display is free before greetd starts the session.
     drop(compositor);
+    drop(display_settings);
     std::process::exit(code);
 }
 
