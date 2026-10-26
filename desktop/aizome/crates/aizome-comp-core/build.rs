@@ -46,7 +46,7 @@ fn main() {
         || env("CARGO_ENCODED_RUSTFLAGS").is_some_and(|f| f.contains("prefer-dynamic"));
     if !wrapped {
         println!(
-            "cargo:warning=aizome-comp-core needs `-C prefer-dynamic`: build in `nix develop`, or set \
+            "cargo:warning=aizome-comp-core needs `-C prefer-dynamic`: build in `nix develop .#aizome`, or set \
              RUSTC_WRAPPER={}/scripts/rustc-wrapper",
             workspace.display()
         );

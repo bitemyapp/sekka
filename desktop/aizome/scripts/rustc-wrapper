@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cargo's rustc wrapper for Aizome (RUSTC_WRAPPER; `nix develop` and the
+# Cargo's rustc wrapper for Aizome (RUSTC_WRAPPER; `nix develop .#aizome` and the
 # Nix package set it).
 #
 # The compositor's core, aizome-comp-core, is a Rust dylib that the

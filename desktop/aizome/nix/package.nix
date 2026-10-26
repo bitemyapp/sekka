@@ -249,7 +249,7 @@ rustPlatform.buildRustPackage {
 
   meta = {
     description = "Aizome, Sekka's desktop environment, on Sidestep's native Rust toolkit";
-    homepage = "https://github.com/bitemyapp/aizome";
+    homepage = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
     license = with lib.licenses; [
       mit
       asl20

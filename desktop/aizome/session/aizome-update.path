@@ -5,7 +5,7 @@
 # reloads by itself.
 [Unit]
 Description=Watch for Aizome updates
-Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/reload.md
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/reload.md
 PartOf=aizome-session.target
 After=aizome-session.target
 

@@ -2,7 +2,7 @@
 """Check real Foot palettes in isolated headless Aizome sessions.
 
 Requires Python 3, aizome and foot on PATH. For a development shell binary,
-run inside `nix develop` so its runtime libraries are available:
+run inside `nix develop .#aizome` so its runtime libraries are available:
   python3 scripts/check-foot-theme --shell target/debug/aizome-shell
 Uses OSC 11 replies from Foot itself; no screenshots or signal mocks decide
 whether a palette changed. Logs and screenshots go in --out (a temp dir by default).

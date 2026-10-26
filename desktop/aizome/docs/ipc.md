@@ -114,7 +114,7 @@ US layout needs it (capitals, `!` `(` `*` `+` `?` and the like).
 
 ### Testing window layout without using the login session
 
-In `nix develop`, run `cargo test -p aizome-comp --test layout`.
+In `nix develop .#aizome`, run `cargo test -p aizome-comp --test layout`.
 The tests start separate headless compositors, with private runtime,
 configuration, state and home directories. They cover launch/close,
 tab groups, restore, oversized defaults, display scaling and Deskbar

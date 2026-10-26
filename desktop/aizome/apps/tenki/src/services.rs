@@ -17,7 +17,7 @@ use crate::places::cache_key;
 pub const USER_AGENT: &str = concat!(
     "Aizome-Tenki/",
     env!("CARGO_PKG_VERSION"),
-    " (Aizome desktop weather; +https://github.com/bitemyapp/aizome)"
+    " (Aizome desktop weather; +https://github.com/bitemyapp/sekka)"
 );
 
 /// Why a fetch failed.

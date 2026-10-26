@@ -7,4 +7,4 @@ if [[ -n ${IN_NIX_SHELL:-} ]]; then
   exec bash "$@"
 fi
 
-exec nix develop --command bash "$@"
+exec nix develop .#aizome --command bash "$@"

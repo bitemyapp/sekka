@@ -10,7 +10,7 @@
 # new compositor says what happened.
 [Unit]
 Description=Aizome compositor
-Documentation=https://github.com/bitemyapp/aizome
+Documentation=https://github.com/bitemyapp/sekka/tree/main/desktop/aizome
 BindsTo=graphical-session.target
 Before=graphical-session.target
 Wants=graphical-session-pre.target

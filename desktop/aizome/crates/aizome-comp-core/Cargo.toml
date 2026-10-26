@@ -11,7 +11,7 @@ repository.workspace = true
 # library loaded into it, so there is one copy of smithay, wayland-server,
 # std and the rest (their statics, their TypeIds) however often the logic
 # is reloaded. It needs `-C prefer-dynamic`, which scripts/rustc-wrapper
-# adds (RUSTC_WRAPPER; `nix develop` and the package set it).
+# adds (RUSTC_WRAPPER; `nix develop .#aizome` and the package set it).
 [lib]
 crate-type = ["dylib"]
 

@@ -3,7 +3,7 @@
 # session services follow.
 [Unit]
 Description=Aizome session
-Documentation=https://github.com/bitemyapp/aizome
+Documentation=https://github.com/bitemyapp/sekka/tree/main/desktop/aizome
 BindsTo=graphical-session.target
 Wants=graphical-session-pre.target
 After=graphical-session-pre.target

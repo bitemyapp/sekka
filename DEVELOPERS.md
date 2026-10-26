@@ -818,6 +818,49 @@ Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
 
+## Aizome
+
+Aizome's source is in `desktop/aizome`, a Cargo workspace of its own with its
+NixOS module, VM checks and documentation (`desktop/aizome/docs/`). It moved
+here from [bitemyapp/aizome](https://github.com/bitemyapp/aizome), which keeps
+its history ([migration record](docs/migration.md#aizome)). Changes to Aizome
+are Sekka pull requests now, and reach the nightly with the rest of Sekka.
+
+`desktop/aizome/nix/default.nix` gives what Aizome's flake gave: its packages,
+module, checks and development shell, built with Sekka's Nixpkgs.
+`nix/components.nix` hands them to the rest of Sekka as `inputs.aizome`, as it
+does Tatami's and Yukimi's.
+
+```sh
+nix build .#aizome .#aizome-fonts
+nix develop .#aizome
+nix build .#aizome-checks.session -L
+```
+
+`aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
+gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
+CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
+Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
+`aizome-ibus-policy`) still run with the others.
+
+The package version is a plain `0.1.0`. Aizome's flake added its own revision
+to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
+would rebuild Aizome. The source hash already tells the builds apart.
+
+The workspace depends on Sidestep's crates by path, through the
+`desktop/aizome/sidestep` link to `../sidestep-aizome`. The package puts
+Sekka's `sidestep` input there. To build with Cargo, clone the fork's `aizome`
+branch at `desktop/sidestep-aizome`, or link a checkout there (Git ignores
+it), at the revision `flake.nix` names. `aizome-dev` warns when the checkout's
+Sidestep differs from the one the running session was built against. The
+`sidestep` input names its revision rather than the branch, so the nightly's
+`nix flake update` leaves it alone. To move Sidestep, change that revision,
+run `nix flake lock`, and build Aizome and run its checks against it.
+
+Aizome's `just` recipes and `aizome-dev` enter `nix develop .#aizome`, found by
+looking up from `desktop/aizome` to Sekka's flake. Without `--checkout`,
+`aizome-dev` uses `$AIZOME_CHECKOUT`, else `~/work/sekka/desktop/aizome`.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

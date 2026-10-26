@@ -306,7 +306,7 @@ pointer input, Tab, Return and Escape. The covered field's text/IME focus
 is suspended, then restored when that layer is uncovered, so cancelling
 a confirmation returns to the same draft. `cargo test -p aizome-kit --test
 nested_modals` checks stacked layers and focus restoration;
-`checks.x86_64-linux.koyomi-modal`
+`aizome-checks.koyomi-modal`
 drives the packaged calendar's recurring-event save/delete confirmations
 in a disposable VM.
 
@@ -319,7 +319,7 @@ Close and the title-bar close request wait for that window's Cancel or default
 action. Dialog-owned dropdown/context menus keep working. Published menu
 states update when the dialog closes, and stale shell actions are checked
 again on arrival. `cargo test -p aizome-kit --test modal_commands` covers these
-routes; `checks.x86_64-linux.shashin-modal` checks a real unsaved-picture alert,
+routes; `aizome-checks.shashin-modal` checks a real unsaved-picture alert,
 blocked Save, cancellation, default Save and reopening in a disposable VM.
 
 Alert actions stay in a trailing row when all their measured labels fit.
@@ -581,7 +581,7 @@ Set `AIZOME_FONT_DIR` to the fonts (`~/work/.aizome-fonts` here) so
 pictures use Aizome's type. The folder is made from the flake, so it holds
 exactly the files the session installs (`nix/module.nix`'s `fonts.packages`:
 Archivo from `nix/fonts.nix`, nixpkgs' IBM Plex Mono and Noto Sans Symbols
-2): `nix build .#fonts -o ~/work/.aizome-fonts`, again whenever `flake.lock`
+2): `nix build .#aizome-fonts -o ~/work/.aizome-fonts`, again whenever `flake.lock`
 moves nixpkgs. (The module takes IBM Plex and Noto from the system's
 nixpkgs: the same files while the system follows the flake's.) Goldens
 are drawn with it; one that changes after that is a change of type, to

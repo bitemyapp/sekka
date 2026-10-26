@@ -81,7 +81,7 @@ focus. In 12/12 instrumented opens, an immediate Escape still went to the app.
 The desktop fixture now waits for compositor-confirmed layer focus before
 sending palette keys, rather than relying on model state or a longer sleep.
 
-Original integrated checks (inside `nix develop`, with the distribution's font
+Original integrated checks (inside `nix develop .#aizome`, with the distribution's font
 directory supplied as `AIZOME_FONT_DIR`):
 
 | Check | Result |

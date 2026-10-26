@@ -50,17 +50,17 @@ generation from the boot menu.
 
 ## On another NixOS system with flakes
 
-Add Aizome's flake and module to the system's flake:
+Add Sekka's flake and its Aizome module to the system's flake:
 
 ```nix
 {
-  inputs.aizome.url = "github:bitemyapp/aizome";
-  inputs.aizome.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.sekka.url = "github:bitemyapp/sekka";
+  inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   # …
-  outputs = { nixpkgs, aizome, ... }: {
+  outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.<host> = nixpkgs.lib.nixosSystem {
       modules = [
-        aizome.nixosModules.default
+        sekka.nixosModules.aizome
         { programs.aizome.enable = true; }
         # …
       ];

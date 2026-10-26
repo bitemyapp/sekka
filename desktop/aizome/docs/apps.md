@@ -208,7 +208,7 @@ As built, beyond the above:
 - The NixOS module lets a local, active administrator (wheel) change the
   time zone, the computer's name, the language and keyboard, and
   networks without a password prompt, as GNOME does.
-- `nix build .#checks.x86_64-linux.settings` boots a VM and changes
+- `nix build .#aizome-checks.settings` boots a VM and changes
   something in every pane by clicking and typing through the compositor
   (`nix/vm-settings-test.nix`, `nix/vm-settings-test.py`), then checks
   the system took it and that Settings shows it when opened again.
@@ -242,7 +242,7 @@ retries a build or activation failure. An unavailable dialog offers **Try
 Again**; denial and cancellation are distinct. Generic failures preserve
 the helper's report without inventing a successful rollback.
 
-`nix build .#checks.x86_64-linux.polkit-recovery` exercises real Yukimi,
+`nix build .#aizome-checks.polkit-recovery` exercises real Yukimi,
 polkit and PAM through two prebuilt system activations that change the
 package profile, then shell replacement, an interrupted password dialog,
 and retrying after a sustained agent outage. The fixture substitutes
@@ -436,17 +436,17 @@ images (attach `.iso`/`.img` as loop devices). Manual attachments stay until
 Detach, including blank images opened for partitioning; read-only attachments
 cannot be written. The system image-mount helper enables automatic detach only
 after mounting succeeds, and releases its own loop if probing or mounting fails.
-`nix build .#checks.x86_64-linux.loop-images` checks these lifetimes against real
+`nix build .#aizome-checks.loop-images` checks these lifetimes against real
 UDisks2 and kernel loop devices in a disposable VM, including error recovery.
 Invalid or out-of-range typed
 partition sizes stay in the create or resize dialog with an explanation;
 they cannot queue the last valid size. Correct the text or choose a size with
-the slider to continue. `checks.x86_64-linux.tansu-size` exercises the packaged
+the slider to continue. `aizome-checks.tansu-size` exercises the packaged
 interface on its in-memory sample disks; it does not test real storage.
 Ext2/3/4 resizing checks and repairs the unmounted filesystem before either
 growing or shrinking it. A failed check stops before changing the partition
 size; a failure in a later step is reported with any earlier changes retained.
-`nix build .#checks.x86_64-linux.tansu-resize` exercises normal packaged Tansu
+`nix build .#aizome-checks.tansu-resize` exercises normal packaged Tansu
 mount, unmount, grow and shrink controls on a disposable VM disk, checking the
 actual filesystem size and preservation of ten files after each resize.
 Everything goes through UDisks2 (`aizome-sys::disks`). Tests never use host
@@ -509,7 +509,7 @@ the store.
 Independent Aizome application scopes bound process groups, including an editor
 opened by Hako. The desktop shell is a launcher, not one application containing
 everything it starts. Ordinary descendants and browser helper scopes remain
-grouped. `nix build .#checks.x86_64-linux.myaku-grouping` exercises actual Hako,
+grouped. `nix build .#aizome-checks.myaku-grouping` exercises actual Hako,
 Sumi, Firefox and Myaku launches, independent inspectors, pause/resume and Quit
 cancel/confirm without signaling unrelated applications. It is a component test,
 not an ISO qualification result.
@@ -532,7 +532,7 @@ generic interpreter name or whichever window happened to be focused.
 The inspector's **Grouping** section explains the evidence separately from
 each process's **Parent** link. Shared unit membership does not imply direct
 parenthood. To inspect the same attribution without opening a window, run
-`cargo run -p aizome-myaku --example groups -- NAME` inside `nix develop`;
+`cargo run -p aizome-myaku --example groups -- NAME` inside `nix develop .#aizome`;
 omit `NAME` to include every group. This probe only reads the system.
 
 GPU readings use DRM statistics for AMD/Intel and NVML for NVIDIA (loaded

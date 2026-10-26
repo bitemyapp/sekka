@@ -50,11 +50,11 @@ just replace yukimi
 
 The recipe passes the directory containing its `justfile` to `aizome-dev`,
 so it also works from a subdirectory and does not use another checkout
-named by `AIZOME_CHECKOUT`. Recipes automatically enter `nix develop`
+named by `AIZOME_CHECKOUT`. Recipes automatically enter `nix develop .#aizome`
 unless `IN_NIX_SHELL` already identifies a Nix shell. The shared recipe
 shell in `scripts/just-shell` handles this for all ordinary recipes.
 `just` must itself be on your PATH; if it is not installed yet, bootstrap
-with `nix develop -c just replace yukimi`.
+with `nix develop .#aizome -c just replace yukimi`.
 Use any app name (`hako`, `sumi`, …). It builds before asking the old app
 to close, respects save prompts, and starts the result even if the app
 was not already running. It changes this running instance; subsequent
@@ -64,7 +64,7 @@ desktop launches use the installed version. Run it again after more edits.
 session was built and hands the result to the session:
 
 ```sh
-aizome-dev watch                      # ~/work/aizome, or --checkout PATH / $AIZOME_CHECKOUT
+aizome-dev watch                      # ~/work/sekka/desktop/aizome, or --checkout PATH / $AIZOME_CHECKOUT
 aizome-dev reload logic               # build once and reload
 aizome-dev reload shell
 aizome-dev reload hako                # an app: closed, rebuilt, started again
@@ -344,7 +344,7 @@ be one binary again; the logic's reloadability is worth the 0.05 ms.
 
 The core needs `-C prefer-dynamic` (it links std dynamically so the
 binary and every logic share one std); `scripts/rustc-wrapper` adds it
-for that crate alone, and `nix develop` and the package set it as
+for that crate alone, and `nix develop .#aizome` and the package set it as
 `RUSTC_WRAPPER`. The package installs `libaizome_comp_core.so`,
 `libaizome_comp_logic.so` and the toolchain's `libstd-*.so` in
 `lib/aizome`, found through `$ORIGIN` rpaths.

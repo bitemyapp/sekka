@@ -91,10 +91,10 @@ Password fields omit their contents from UI inspection and accessibility.
 Run the focused tests with:
 
 ```sh
-nix develop -c cargo test -p aizome-network-agent
-nix develop -c cargo test -p aizome-kit --test text_field
-nix develop -c cargo test -p aizome-settei --test network
-nix build .#checks.x86_64-linux.network-auth -L
+nix develop .#aizome -c cargo test -p aizome-network-agent
+nix develop .#aizome -c cargo test -p aizome-kit --test text_field
+nix develop .#aizome -c cargo test -p aizome-settei --test network
+nix build .#aizome-checks.network-auth -L
 ```
 
 The VM uses `mac80211_hwsim` radios, WPA2 and WPA3 access points, a PEAP

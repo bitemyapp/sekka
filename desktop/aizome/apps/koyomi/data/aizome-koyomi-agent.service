@@ -7,7 +7,7 @@
 # (systemd.user.services.aizome-koyomi-agent.wantedBy).
 [Unit]
 Description=Koyomi calendar alerts
-Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/koyomi.md
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/koyomi.md
 PartOf=graphical-session.target
 After=graphical-session.target
 

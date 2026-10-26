@@ -279,9 +279,9 @@ the scene's elements, rendering what's damaged and submitting it.
   scenarios below, resetting the statistics around each:
 
   ```sh
-  nix develop --command cargo build --release -p aizome-comp --bin aizome --examples
-  nix develop --command target/release/examples/frame_bench --renderer gles
-  nix develop --command target/release/examples/frame_bench --renderer pixman
+  nix develop .#aizome --command cargo build --release -p aizome-comp --bin aizome --examples
+  nix develop .#aizome --command target/release/examples/frame_bench --renderer gles
+  nix develop .#aizome --command target/release/examples/frame_bench --renderer pixman
   ```
 
 - Release build (thin LTO), Intel Core Ultra 7 365 (8 threads), Mesa

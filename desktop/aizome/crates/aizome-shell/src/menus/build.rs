@@ -143,7 +143,7 @@ pub fn desktop(desks: &[DeskInfo]) -> Vec<Menu> {
             vec![
                 Entry::action("Search", Action::Palette { scope: Some(Scope::Command), query: String::new() })
                     .shortcut(sc("❖", "Space")),
-                Entry::action("Aizome Help", Action::OpenUrl { url: "https://github.com/bitemyapp/aizome".into() }),
+                Entry::action("Aizome Help", Action::OpenUrl { url: "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome".into() }),
                 Entry::separator(),
                 Entry::action("Aizome Tour", Action::Spawn { argv: vec!["aizome-annai".into()] }),
             ],

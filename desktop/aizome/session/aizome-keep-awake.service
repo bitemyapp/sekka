@@ -6,7 +6,7 @@
 # and Settings do the same.
 [Unit]
 Description=Aizome Keep Awake
-Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/keep-awake.md
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/keep-awake.md
 PartOf=aizome-session.target
 After=aizome.service
 # It retries each second for as long as it's on, never giving up.

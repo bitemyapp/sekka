@@ -1,7 +1,7 @@
 # The font files Aizome draws with, in one folder, as the kit and the
 # compositor look for them in $AIZOME_FONT_DIR: the same files the session
 # installs (module.nix's fonts.packages), so tests, goldens and a dev run
-# set the type the session shows. `nix build .#fonts -o ~/work/.aizome-fonts`
+# set the type the session shows. `nix build .#aizome-fonts -o ~/work/.aizome-fonts`
 # makes or refreshes the folder (docs/kit.md).
 {
   lib,

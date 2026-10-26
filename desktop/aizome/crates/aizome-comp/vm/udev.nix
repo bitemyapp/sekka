@@ -3,9 +3,9 @@
 # runs a development build shared in from the host, so it needs no Nix
 # build of Aizome:
 #
-#   nix develop --command cargo build -p aizome-comp -p aizome-ipc
+#   nix develop .#aizome --command cargo build -p aizome-comp -p aizome-ipc
 #   export AIZOME_BIN=$CARGO_TARGET_DIR/debug        # holds aizome, aizomectl
-#   export AIZOME_LD_LIBRARY_PATH=$(nix develop --command sh -c 'echo $LD_LIBRARY_PATH')
+#   export AIZOME_LD_LIBRARY_PATH=$(nix develop .#aizome --command sh -c 'echo $LD_LIBRARY_PATH')
 #   nix build --impure -f crates/aizome-comp/vm/udev.nix driver -o vm-driver
 #   env -u WAYLAND_DISPLAY -u DISPLAY ./vm-driver/bin/nixos-test-driver -o vm-out
 #

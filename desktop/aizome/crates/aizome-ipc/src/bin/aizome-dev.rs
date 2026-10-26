@@ -35,8 +35,8 @@ usage: aizome-dev [COMMAND] [WHAT...] [--checkout PATH] [--optimised]
 
   WHAT is logic, shell, or an app (hako, sumi, …): default logic and shell.
 
-  --checkout PATH  the Aizome checkout (default: $AIZOME_CHECKOUT, else
-                   ~/work/aizome)
+  --checkout PATH  the Aizome checkout: desktop/aizome in a Sekka checkout
+                   (default: $AIZOME_CHECKOUT, else ~/work/sekka/desktop/aizome)
   --optimised      build the logic as optimised as the session's own (by
                    default it builds quicker, at opt-level 1)
 
@@ -63,7 +63,7 @@ fn main() -> ExitCode {
     }
     let checkout = checkout
         .or_else(|| std::env::var_os("AIZOME_CHECKOUT").map(PathBuf::from))
-        .unwrap_or_else(|| home().join("work/aizome"));
+        .unwrap_or_else(|| home().join("work/sekka/desktop/aizome"));
     let checkout = match std::fs::canonicalize(&checkout) {
         Ok(c) if c.join("Cargo.toml").is_file() => c,
         _ => return fail(&format!("{} isn't an Aizome checkout (--checkout PATH)", checkout.display())),
@@ -257,11 +257,23 @@ impl Dev {
         }
         let mut env: HashMap<String, String> = std::env::vars().collect();
         let in_shell = std::env::var_os("IN_NIX_SHELL").is_some();
-        if !in_shell && self.checkout.join("flake.nix").is_file() {
+        // Sekka's flake holds the shell, as `aizome` (nix develop looks
+        // upward from the checkout for it); a checkout of the old Aizome
+        // repository has its own flake, with the shell as its default.
+        let shell = if self.checkout.join("flake.nix").is_file() {
+            Some(self.checkout.as_os_str().to_owned())
+        } else if self.checkout.ancestors().skip(1).any(|dir| dir.join("flake.nix").is_file()) {
+            let mut shell = self.checkout.as_os_str().to_owned();
+            shell.push("#aizome");
+            Some(shell)
+        } else {
+            None
+        };
+        if let Some(shell) = shell.filter(|_| !in_shell) {
             say(format!("entering the dev shell of {}", self.checkout.display()));
             let out = Command::new("nix")
                 .arg("develop")
-                .arg(&self.checkout)
+                .arg(&shell)
                 .args(["--command", "env", "-0"])
                 .stderr(Stdio::inherit())
                 .output()
@@ -309,7 +321,7 @@ impl Dev {
 
         // The same compiler as the session's?
         let rustc = find_in(env.get("PATH").map(String::as_str).unwrap_or(""), "rustc")
-            .ok_or("no rustc: run aizome-dev in the checkout's dev shell (nix develop)")?;
+            .ok_or("no rustc: run aizome-dev in the checkout's dev shell (nix develop .#aizome)")?;
         let version = Command::new(&rustc)
             .arg("-vV")
             .output()

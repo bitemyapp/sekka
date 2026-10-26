@@ -7,7 +7,7 @@
 # and the power menu. Driven by keys typed into the VM, checked through the
 # greeter's inspection files (its elements and their text) and what runs.
 #
-#     nix build .#checks.x86_64-linux.greeter -L
+#     nix build .#aizome-checks.greeter -L
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
   name = "aizome-greeter";

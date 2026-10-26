@@ -5,7 +5,7 @@
 # so it starts at login only for those who use it.
 [Unit]
 Description=Koe dictation
-Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/koe.md
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/koe.md
 PartOf=aizome-session.target
 After=aizome.service pipewire.service
 

@@ -67,7 +67,7 @@ desktop's disk came from the mounts and sysfs rather than UDisks.
   UPower, logind, UDisks2, BlueZ), so the systray shows this laptop's
   battery and Wi-Fi state. Nothing was changed: no network joined, no disk
   touched. Sound came from a private PipeWire with a null sink and source.
-- **Fonts**: `AIZOME_FONT_DIR` (Archivo, IBM Plex Mono, Noto Sans Symbols 2: `nix build .#fonts`, see docs/kit.md).
+- **Fonts**: `AIZOME_FONT_DIR` (Archivo, IBM Plex Mono, Noto Sans Symbols 2: `nix build .#aizome-fonts`, see docs/kit.md).
   **Wallpapers**: the design repository's *Da Nang at night* and *Tokyo at
   dusk*.
 - The terminal is foot with Aizome's `foot.ini`, running fish from nixpkgs.

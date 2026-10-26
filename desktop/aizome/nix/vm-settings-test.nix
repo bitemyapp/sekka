@@ -15,8 +15,8 @@
 # virtual controller (btvirt over hci_vhci), CUPS with a driverless IPP
 # printer announcing itself over mDNS, and power-profiles-daemon.
 #
-#     nix build .#checks.x86_64-linux.settings -L
-#     nix build .#checks.x86_64-linux.settings.driverInteractive && ./result/bin/nixos-test-driver
+#     nix build .#aizome-checks.settings -L
+#     nix build .#aizome-checks.settings.driverInteractive && ./result/bin/nixos-test-driver
 {
   pkgs,
   self,

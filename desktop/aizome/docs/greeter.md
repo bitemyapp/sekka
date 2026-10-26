@@ -154,7 +154,7 @@ stands in for greetd and takes anyone, with the password `aizome`.
   - the conversation: a wrong password, several questions, cancelling, and
     late answers;
   - the screens, headless, with pictures in `target/greeter-shots/`.
-- `nix build .#checks.x86_64-linux.greeter` runs the VM test: two people,
+- `nix build .#aizome-checks.greeter` runs the VM test: two people,
   and Aizome, sway and xterm's X11 session, typed at as a person would. It
   checks:
   - the list and the session menu;

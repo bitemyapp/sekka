@@ -39,15 +39,15 @@ calamares.desktops = [ "aizome" /* and any others */ ];
 calamares.defaultDesktop = "aizome";
 ```
 
-On any NixOS system with flakes:
+On any NixOS system with flakes, from Sekka's flake:
 
 ```nix
 {
-  inputs.aizome.url = "github:bitemyapp/aizome";
-  outputs = { nixpkgs, aizome, ... }: {
+  inputs.sekka.url = "github:bitemyapp/sekka";
+  outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.example = nixpkgs.lib.nixosSystem {
       modules = [
-        aizome.nixosModules.default
+        sekka.nixosModules.aizome
         { programs.aizome.enable = true; }
       ];
     };
@@ -59,15 +59,21 @@ Then pick **Aizome** on the login screen.
 
 ## Developing
 
-The workspace builds against the `aizome` branch of
+Aizome lives in Sekka's repository, in `desktop/aizome`; Sekka's flake
+builds it, and its changes are Sekka pull requests. The workspace builds
+against the `aizome` branch of
 [Sidestep](https://github.com/bitemyapp/sidestep), checked out beside this
-repository as `../sidestep-aizome`:
+directory as `../sidestep-aizome` (`desktop/sidestep-aizome`, which Git
+ignores), at the revision of the `sidestep` input in Sekka's `flake.nix`:
 
 ```sh
 git clone -b aizome https://github.com/bitemyapp/sidestep ../sidestep-aizome
-nix develop
+git -C ../sidestep-aizome switch --detach REVISION  # from Sekka's flake.nix
+nix develop .#aizome
 cargo build
 ```
+
+A link to a Sidestep checkout elsewhere works too.
 
 To try one app from the current checkout or worktree in your running Aizome
 session:
@@ -76,10 +82,10 @@ session:
 just replace yukimi
 ```
 
-Recipes automatically enter `nix develop` when outside a Nix shell and
+Recipes automatically enter `nix develop .#aizome` when outside a Nix shell and
 reuse the current environment when already inside one. `just` itself must
-be on your PATH; it is also included in `nix develop`, so if it is not
-installed yet, use `nix develop -c just replace yukimi`.
+be on your PATH; it is also included in `nix develop .#aizome`, so if it is not
+installed yet, use `nix develop .#aizome -c just replace yukimi`.
 Substitute any app name, such as
 `hako` or `sumi`. This builds that app, asks its existing windows to close,
 and starts the new binary. A failed build leaves the running app alone;
@@ -94,7 +100,7 @@ cargo run -p aizome-comp -- --backend headless &
 aizomectl screenshot desktop.png
 ```
 
-`nix build .#checks.x86_64-linux.session` logs into Aizome in a VM.
+`nix build .#aizome-checks.session` logs into Aizome in a VM.
 
 - [docs/architecture.md](docs/architecture.md): the parts and their contracts.
 - [docs/shell.md](docs/shell.md): what the shell draws and does.

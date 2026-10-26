@@ -1,7 +1,7 @@
 //! Aizome's fonts: Archivo for the interface, IBM Plex Mono for code,
 //! shortcuts and numbers, Noto Sans Symbols 2 for ❖ ⇧ ⌥ ⌃. The kit
 //! installs, for this process, the faces in `$AIZOME_FONT_DIR`, which then
-//! win over the system's copies of their families (`nix build .#fonts`
+//! win over the system's copies of their families (`nix build .#aizome-fonts`
 //! makes that folder: the files the session installs), and the families
 //! fontconfig lacks from `../share/aizome/fonts` beside the executable;
 //! where neither has one, the system's sans and mono stand in.

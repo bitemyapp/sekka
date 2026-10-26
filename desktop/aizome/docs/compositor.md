@@ -363,7 +363,7 @@ the desktop.
 ## Tests
 
 ```sh
-nix develop --command cargo test -p aizome-comp
+nix develop .#aizome --command cargo test -p aizome-comp
 ```
 
 - Unit tests: the model (placement, focus order, stacks, Desks), tab

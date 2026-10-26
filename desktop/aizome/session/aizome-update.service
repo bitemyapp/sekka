@@ -1,7 +1,7 @@
 # Offers to reload Aizome after a system update (aizome-update.path).
 [Unit]
 Description=Offer to reload Aizome after an update
-Documentation=https://github.com/bitemyapp/aizome/blob/main/docs/reload.md
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/reload.md
 PartOf=aizome-session.target
 
 [Service]

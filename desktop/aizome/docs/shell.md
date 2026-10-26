@@ -486,8 +486,8 @@ With `aizome` and `foot` installed, build the shell and run the real-terminal
 regression check:
 
 ```sh
-nix develop --command cargo build -p aizome-shell
-nix develop --command nix shell --inputs-from . nixpkgs#python3 --command \
+nix develop .#aizome --command cargo build -p aizome-shell
+nix develop .#aizome --command nix shell --inputs-from . nixpkgs#python3 --command \
   python3 scripts/check-foot-theme --shell target/debug/aizome-shell
 ```
 

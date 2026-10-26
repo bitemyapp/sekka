@@ -6,8 +6,8 @@
 # alice straight into the session, as a login screen would after her
 # password.
 #
-#     nix build .#checks.x86_64-linux.session -L
-#     nix build .#checks.x86_64-linux.session.driverInteractive && ./result/bin/nixos-test-driver
+#     nix build .#aizome-checks.session -L
+#     nix build .#aizome-checks.session.driverInteractive && ./result/bin/nixos-test-driver
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
   name = "aizome-session";

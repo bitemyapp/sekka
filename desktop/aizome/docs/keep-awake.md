@@ -96,7 +96,7 @@ Awake. A headless or nested Aizome, or a test, leaves it alone.
   lights it again.
 - `cargo test -p aizome-shell --test panels`: the cup, its panel, the
   Battery panel's switch and the palette's command.
-- `nix build .#checks.x86_64-linux.settings` (*Keep Awake* part), against
+- `nix build .#aizome-checks.settings` (*Keep Awake* part), against
   real logind: on puts the block in `BlockInhibited` and the cup in the
   bar; a killed holder takes the locks again; off lets them go and takes
   the cup away; and with it off, the unit doesn't start.

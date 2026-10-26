@@ -141,7 +141,7 @@ It remembers which alerts it showed, so a restart doesn't repeat them;
 after a sleep it shows those it missed within the last six hours if their
 events aren't over.
 
-`nix build .#checks.x86_64-linux.koyomi-session` exercises normal GDM
+`nix build .#aizome-checks.koyomi-session` exercises normal GDM
 Xfce→GNOME→Aizome logins and logouts with one persistent user manager. It
 checks that the agent runs in each session, stops after logout and refuses
 a manual start outside a graphical session.
