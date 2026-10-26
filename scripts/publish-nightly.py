@@ -124,12 +124,12 @@ def local_candidate(source):
     lock_bytes = subprocess.check_output(['git', 'show', f'{revision}:flake.lock'])
     require(lock_path.read_bytes() == lock_bytes, 'lock changed during source validation')
     lock = json.loads(lock_bytes)
-    aizome = lock['nodes'][lock['nodes'][lock['root']]['inputs']['aizome']]
-    sidestep = lock['nodes'][aizome['inputs']['sidestep']]
+    # Aizome is Sekka's own source (desktop/aizome); Sidestep, which it builds
+    # against, is the input it pins.
+    sidestep = lock['nodes'][lock['nodes'][lock['root']]['inputs']['sidestep']]
     candidate = {
         'iso_sha256': digest(iso), 'iso_bytes': iso.stat().st_size,
         'sekka_revision': revision, 'flake_lock_sha256': digest(lock_path),
-        'aizome_revision': aizome['locked']['rev'],
         'sidestep_revision': sidestep['locked']['rev'], 'iso_store_path': str(output),
     }
     require(candidate['iso_bytes'] > 0, 'empty ISO')
@@ -196,8 +196,7 @@ def validate_report(root, candidate, hostname=None, now=None):
         inventories = report['inventories']
         require(set(inventories) == {'Q4', 'Q5'}, 'both desktop feature inventories are required')
     for gate, inventory in inventories.items():
-        revision = candidate['aizome_revision' if gate == 'Q4' else 'sekka_revision']
-        require(inventory['source_revision'] == revision, f'stale {gate} inventory')
+        require(inventory['source_revision'] == candidate['sekka_revision'], f'stale {gate} inventory')
         references(inventory['evidence'])
         features = inventory['features']
         require(isinstance(features, list) and features, f'empty {gate} feature inventory')

@@ -1,16 +1,20 @@
-# First-party source is always taken from this checkout; Aizome comes from
-# its own repository (the flake's aizome input), and the catalog's
-# applications from other flakes from Sekka's own inputs of those names.
+# First-party source is always taken from this checkout, Aizome's with
+# Sekka's `sidestep` input, and the catalog's applications from other flakes
+# from Sekka's own inputs of those names.
 {
   nixpkgs,
-  aizome,
+  sidestep,
   superluminal,
   tracy,
 }:
 let
   system = "x86_64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
-  upstreamAizome = aizome;
+  upstreamAizome = import ../desktop/aizome/nix {
+    inherit nixpkgs sidestep;
+    version = "0.1.0-ca4e289";
+    rev = "ca4e289e7bdc9ffe9371f71416c7c3f04e325344";
+  };
   scheduledAizome = upstreamAizome.packages.${system}.aizome.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [ ./scheduling/aizome-launch-scope.patch ];
   });

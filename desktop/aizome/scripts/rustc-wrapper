@@ -1,0 +1,16 @@
+#!/bin/sh
+# Cargo's rustc wrapper for Aizome (RUSTC_WRAPPER; `nix develop` and the
+# Nix package set it).
+#
+# The compositor's core, aizome-comp-core, is a Rust dylib that the
+# `aizome` binary and the hot-swapped logic library both link, so one copy
+# of std, smithay and every other dependency serves all three. That needs
+# std linked dynamically, which only `-C prefer-dynamic` on the core asks
+# for (the crates that link the core follow it). Cargo can't pass a flag to
+# one crate, so this adds it; everything else compiles untouched.
+rustc="$1"
+shift
+case " $* " in
+  *" --crate-name aizome_comp_core "*) exec "$rustc" "$@" -C prefer-dynamic ;;
+  *) exec "$rustc" "$@" ;;
+esac

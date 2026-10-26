@@ -1,0 +1,24 @@
+[package]
+name = "aizome-myaku"
+description = "Myaku 脈, Aizome's activity monitor: what each application uses, graphs over time, quitting what misbehaves"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "myaku"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-myaku"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-sys.workspace = true
+aizome-ipc = { path = "../../crates/aizome-ipc" }
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"

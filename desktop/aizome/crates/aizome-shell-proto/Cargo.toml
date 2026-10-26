@@ -1,0 +1,12 @@
+[package]
+name = "aizome-shell-proto"
+description = "The protocol on Aizome's shell socket: apps publish their menus to the global menu bar and hear which item was chosen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

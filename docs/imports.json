@@ -35,5 +35,13 @@
     "paths": [
       "."
     ]
+  },
+  {
+    "repository": "bitemyapp/aizome",
+    "revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344",
+    "destination": "desktop/aizome",
+    "paths": [
+      "."
+    ]
   }
 ]

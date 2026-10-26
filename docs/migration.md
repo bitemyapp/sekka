@@ -78,3 +78,26 @@ Sekka ISO or validation on physical hardware. No ISO release was published.
 The release workflow's sole job is unconditionally disabled until an explicit
 reviewed change enables it. See [DEVELOPERS.md](../DEVELOPERS.md) for the checks
 and release requirements.
+
+## Aizome
+
+Aizome joined Sekka in October 2026, after the first migration. Until then
+Sekka took it from [bitemyapp/aizome](https://github.com/bitemyapp/aizome) as
+a flake input. A change to Aizome reached Sekka's `main` only through a second
+pull request that moved the pin, and the nightly built whatever Aizome's `main`
+held that night. Its source is now in `desktop/aizome`, a snapshot like the
+others. [imports.json](imports.json) records the revision, and bitemyapp/aizome
+keeps the history.
+
+- Aizome's flake became `desktop/aizome/nix/default.nix`. It gives the same
+  packages, NixOS module, VM checks and development shell, built with Sekka's
+  Nixpkgs, as Aizome's input did with `inputs.nixpkgs.follows`. The flake's
+  own `flake.nix` and `flake.lock` were not imported: Sekka's lock is the only
+  one.
+- Sidestep, which the workspace builds against by path, remains a separate
+  product. It is now Sekka's `sidestep` input, at the revision Aizome's lock
+  pinned. `flake.nix` names that revision, so the nightly's input update
+  doesn't move it.
+- The installed flake's lock loses its nested `aizome` node and keeps
+  `sidestep` beneath Sekka. The ISO qualification report no longer records
+  an Aizome revision: the Sekka revision includes Aizome's source.

@@ -60,8 +60,8 @@ It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
 (Activity) and Shashin (Images). Aizome is new, and so far it has run only in
-virtual machines. See [its repository](https://github.com/bitemyapp/aizome)
-for what is done and what isn't.
+virtual machines. See [its README](desktop/aizome/README.md) for what is done
+and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

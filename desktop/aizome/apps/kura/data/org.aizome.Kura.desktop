@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Kura
+GenericName=Disk Usage
+Comment=See what fills a disk as rings, gather what can go, and move it to the Trash
+Keywords=disk usage;storage;space;free space;disk space;du;analyzer;cleanup;trash;
+Categories=System;Filesystem;Utility;
+Icon=org.aizome.Kura
+Exec=aizome-kura %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Kura
+DBusActivatable=false

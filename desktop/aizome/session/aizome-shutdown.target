@@ -1,0 +1,8 @@
+# Started by aizome-session after the compositor exits: stops the session's
+# units (everything bound to graphical-session.target).
+[Unit]
+Description=Shut down the Aizome session
+DefaultDependencies=no
+StopWhenUnneeded=true
+Conflicts=graphical-session.target graphical-session-pre.target aizome-session.target
+After=graphical-session.target graphical-session-pre.target aizome-session.target

@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=Yukimi
+GenericName=Software
+Comment=See what's installed, find what's available, update and go back, on Sekka's NixOS
+Keywords=software;packages;install;uninstall;remove;update;upgrade;app store;nix;nixos;nixpkgs;flake;generations;rollback;store;garbage;
+Categories=System;PackageManager;
+Icon=org.aizome.Yukimi
+Exec=aizome-yukimi %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Yukimi
+DBusActivatable=false
+Actions=updates;discover;
+
+[Desktop Action updates]
+Name=Check for Updates
+Exec=aizome-yukimi --page updates
+
+[Desktop Action discover]
+Name=Find Software
+Exec=aizome-yukimi --page discover

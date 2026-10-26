@@ -1,0 +1,15 @@
+[package]
+name = "yukimi-store"
+description = "Read the Nix store: store paths, their names and versions, the store database, closures and garbage-collector roots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Copied from Sekka's Yukimi (apps/yukimi/crates/yukimi-store), with its
+# dependencies named here instead of in Sekka's workspace.
+[dependencies]
+# SQLite built in, so Aizome needs no system library for the store database.
+rusqlite = { version = "0.40", features = ["bundled"] }
+thiserror = "2"

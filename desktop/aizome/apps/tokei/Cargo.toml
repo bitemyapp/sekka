@@ -1,0 +1,29 @@
+[package]
+name = "aizome-tokei"
+description = "Tokei 時計, Aizome's clock: world clocks, alarms through systemd user timers, a timer and a stopwatch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_tokei"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-tokei"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# Instants, civil times and IANA zones (the system's zoneinfo, with a
+# bundled copy where there's none), as Koyomi has them.
+jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+# An alarm's notification has Snooze and Stop: posted and heard over D-Bus.
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

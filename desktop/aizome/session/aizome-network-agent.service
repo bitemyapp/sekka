@@ -1,0 +1,18 @@
+[Unit]
+Description=Aizome network credential agent
+PartOf=aizome-session.target
+# The compositor imports WAYLAND_DISPLAY before reporting readiness.
+After=aizome.service
+Before=xdg-desktop-autostart.target
+
+[Service]
+Slice=session.slice
+Type=exec
+ExecStart=@bindir@/aizome-network-agent
+Restart=on-failure
+RestartSec=2
+UMask=0077
+LimitCORE=0
+
+[Install]
+WantedBy=aizome-session.target

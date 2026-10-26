@@ -1,0 +1,22 @@
+[package]
+name = "aizome-network-agent"
+description = "Aizome's session NetworkManager credential agent and native authentication dialogs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-kit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+async-channel = "2.5"
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

@@ -6,4 +6,7 @@ __pycache__/
 /rust/target/
 
 **/target/
+# The Sidestep checkout desktop/aizome/sidestep links to, for working on
+# Aizome with Cargo (desktop/aizome/README.md).
+/desktop/sidestep-aizome
 /.wrangler/

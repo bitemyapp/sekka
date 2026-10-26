@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Shashin
+GenericName=Images
+Comment=Look at pictures: zoom, turn, step through a folder, a slideshow
+Keywords=images;image viewer;pictures;photos;viewer;slideshow;png;jpeg;gif;webp;svg;
+Categories=Graphics;Viewer;RasterGraphics;2DGraphics;Photography;
+MimeType=image/png;image/apng;image/jpeg;image/gif;image/webp;image/bmp;image/x-bmp;image/tiff;image/x-icon;image/vnd.microsoft.icon;image/svg+xml;image/svg+xml-compressed;
+Icon=org.aizome.Shashin
+Exec=aizome-shashin %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Shashin
+DBusActivatable=false

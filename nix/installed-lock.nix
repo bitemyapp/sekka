@@ -7,7 +7,7 @@ let
   base = builtins.fromJSON (builtins.readFile ../flake.lock);
   external = base.nodes.${base.root}.inputs;
   # Only inputs named by templates/flake.nix.in belong at the installed root.
-  # Implementation dependencies such as Aizome, Superluminal and Tracy stay
+  # Implementation dependencies such as Sidestep, Superluminal and Tracy stay
   # beneath Sekka. New Sekka inputs must not silently change the installer's
   # target-flake contract (checked by the actual backend in template-lock).
   followed = builtins.listToAttrs (

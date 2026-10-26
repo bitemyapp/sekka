@@ -23,8 +23,9 @@
    Existing fixtures are supplemental; inspect their desktop list and bypasses
    before counting coverage. They may lag Aizome or silently exercise Plasma.
    Before running component fixtures, read [isolation and provenance](component-tests.md).
-6. Expand the feature ledger from pinned Aizome `docs/apps.md`, `docs/shell.md`,
-   settings source and app/menu entrypoints, and Sekka's
+6. Expand the feature ledger from Sekka's `desktop/aizome/docs/apps.md`,
+   `desktop/aizome/docs/shell.md`, Aizome's settings source and app/menu
+   entrypoints, and
    `desktop/tatami/README.md`, `tool/src/main.rs`, `config/hypr/hyprland.lua`,
    `config/elephant/menus/`, and first-party `.desktop` files. Add newly shipped
    functionality even if this skill's examples omit it. Record inventories as

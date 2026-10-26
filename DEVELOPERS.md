@@ -8,6 +8,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | --- | --- |
 | `flake.nix`, `flake.lock` | Public outputs and the authoritative external dependency lock |
 | `installer/genkan/` | Rust installer, privileged helper, system modules, application catalog, storage tests |
+| `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
 | `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
@@ -18,7 +19,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, brand |
 
-The initial import preserves component layouts and separate Cargo workspaces. There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
+The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
 Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
@@ -48,7 +49,7 @@ python3 -m unittest discover -s tests -p test_release.py
 ```
 
 The installed lock's root names only the inputs in `templates/flake.nix.in`.
-Aizome and other dependencies used through Sekka stay nested beneath Sekka;
+Dependencies used only through Sekka, such as Sidestep, stay nested beneath Sekka;
 adding one to the installed root makes Genkan reject every installation before
 disk writes. `checks.x86_64-linux.template-lock` runs the real backend parser.
 Genkan also seeds the selected time zone before the target's first activation.
@@ -586,7 +587,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `sidestep`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, Sidestep for Aizome's build and the others as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `sidestep` input names its revision, so the nightly's input update never moves it: a new Sidestep is a change to `flake.nix`, reviewed with the Aizome changes that need it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,

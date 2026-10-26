@@ -1,0 +1,24 @@
+[package]
+name = "aizome-ipc"
+description = "Aizome's compositor IPC: request, response and event types, a blocking client, and the aizomectl, aizome-dev and aizome-share-picker commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "aizomectl"
+path = "src/bin/aizomectl.rs"
+
+[[bin]]
+name = "aizome-dev"
+path = "src/bin/aizome-dev.rs"
+
+[[bin]]
+name = "aizome-share-picker"
+path = "src/bin/aizome-share-picker.rs"

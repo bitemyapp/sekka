@@ -1,0 +1,548 @@
+# Cities Tokei can show, a tab between each of: name, country, IANA zone,
+# degrees north, degrees east. The first part is tzdata's zone1970.tab (a
+# zone's main city, its first country from iso3166.tab); then major cities
+# that share a zone. Generated once and kept small; see apps/tokei/src/cities.rs.
+Andorra	Andorra	Europe/Andorra	42.50	1.52
+Dubai	United Arab Emirates	Asia/Dubai	25.30	55.30
+Kabul	Afghanistan	Asia/Kabul	34.52	69.20
+Tirane	Albania	Europe/Tirane	41.33	19.83
+Yerevan	Armenia	Asia/Yerevan	40.18	44.50
+Casey	Antarctica	Antarctica/Casey	-66.28	110.52
+Davis	Antarctica	Antarctica/Davis	-68.58	77.97
+Mawson	Antarctica	Antarctica/Mawson	-67.60	62.88
+Palmer	Antarctica	Antarctica/Palmer	-64.80	-64.10
+Rothera	Antarctica	Antarctica/Rothera	-67.57	-68.13
+Troll	Antarctica	Antarctica/Troll	-72.01	2.53
+Vostok	Antarctica	Antarctica/Vostok	-78.40	106.90
+Buenos Aires	Argentina	America/Argentina/Buenos_Aires	-34.60	-58.45
+Córdoba	Argentina	America/Argentina/Cordoba	-31.40	-64.18
+Salta	Argentina	America/Argentina/Salta	-24.78	-65.42
+Jujuy	Argentina	America/Argentina/Jujuy	-24.18	-65.30
+Tucuman	Argentina	America/Argentina/Tucuman	-26.82	-65.22
+Catamarca	Argentina	America/Argentina/Catamarca	-28.47	-65.78
+La Rioja	Argentina	America/Argentina/La_Rioja	-29.43	-66.85
+San Juan	Argentina	America/Argentina/San_Juan	-31.53	-68.52
+Mendoza	Argentina	America/Argentina/Mendoza	-32.88	-68.82
+San Luis	Argentina	America/Argentina/San_Luis	-33.32	-66.35
+Rio Gallegos	Argentina	America/Argentina/Rio_Gallegos	-51.63	-69.22
+Ushuaia	Argentina	America/Argentina/Ushuaia	-54.80	-68.30
+Pago Pago	Samoa (American)	Pacific/Pago_Pago	-14.27	-170.70
+Vienna	Austria	Europe/Vienna	48.22	16.33
+Lord Howe	Australia	Australia/Lord_Howe	-31.55	159.08
+Macquarie	Australia	Antarctica/Macquarie	-54.50	158.95
+Hobart	Australia	Australia/Hobart	-42.88	147.32
+Melbourne	Australia	Australia/Melbourne	-37.82	144.97
+Sydney	Australia	Australia/Sydney	-33.87	151.22
+Broken Hill	Australia	Australia/Broken_Hill	-31.95	141.45
+Brisbane	Australia	Australia/Brisbane	-27.47	153.03
+Lindeman	Australia	Australia/Lindeman	-20.27	149.00
+Adelaide	Australia	Australia/Adelaide	-34.92	138.58
+Darwin	Australia	Australia/Darwin	-12.47	130.83
+Perth	Australia	Australia/Perth	-31.95	115.85
+Eucla	Australia	Australia/Eucla	-31.72	128.87
+Baku	Azerbaijan	Asia/Baku	40.38	49.85
+Barbados	Barbados	America/Barbados	13.10	-59.62
+Dhaka	Bangladesh	Asia/Dhaka	23.72	90.42
+Brussels	Belgium	Europe/Brussels	50.83	4.33
+Sofia	Bulgaria	Europe/Sofia	42.68	23.32
+Bermuda	Bermuda	Atlantic/Bermuda	32.28	-64.77
+La Paz	Bolivia	America/La_Paz	-16.50	-68.15
+Noronha	Brazil	America/Noronha	-3.85	-32.42
+Belém	Brazil	America/Belem	-1.45	-48.48
+Fortaleza	Brazil	America/Fortaleza	-3.72	-38.50
+Recife	Brazil	America/Recife	-8.05	-34.90
+Araguaína	Brazil	America/Araguaina	-7.20	-48.20
+Maceió	Brazil	America/Maceio	-9.67	-35.72
+Bahia	Brazil	America/Bahia	-12.98	-38.52
+São Paulo	Brazil	America/Sao_Paulo	-23.53	-46.62
+Campo Grande	Brazil	America/Campo_Grande	-20.45	-54.62
+Cuiabá	Brazil	America/Cuiaba	-15.58	-56.08
+Santarém	Brazil	America/Santarem	-2.43	-54.87
+Porto Velho	Brazil	America/Porto_Velho	-8.77	-63.90
+Boa Vista	Brazil	America/Boa_Vista	2.82	-60.67
+Manaus	Brazil	America/Manaus	-3.13	-60.02
+Eirunepe	Brazil	America/Eirunepe	-6.67	-69.87
+Rio Branco	Brazil	America/Rio_Branco	-9.97	-67.80
+Thimphu	Bhutan	Asia/Thimphu	27.47	89.65
+Minsk	Belarus	Europe/Minsk	53.90	27.57
+Belize	Belize	America/Belize	17.50	-88.20
+St. John's	Canada	America/St_Johns	47.57	-52.72
+Halifax	Canada	America/Halifax	44.65	-63.60
+Glace Bay	Canada	America/Glace_Bay	46.20	-59.95
+Moncton	Canada	America/Moncton	46.10	-64.78
+Goose Bay	Canada	America/Goose_Bay	53.33	-60.42
+Toronto	Canada	America/Toronto	43.65	-79.38
+Iqaluit	Canada	America/Iqaluit	63.73	-68.47
+Winnipeg	Canada	America/Winnipeg	49.88	-97.15
+Resolute	Canada	America/Resolute	74.70	-94.83
+Rankin Inlet	Canada	America/Rankin_Inlet	62.82	-92.08
+Regina	Canada	America/Regina	50.40	-104.65
+Swift Current	Canada	America/Swift_Current	50.28	-107.83
+Edmonton	Canada	America/Edmonton	53.55	-113.47
+Cambridge Bay	Canada	America/Cambridge_Bay	69.11	-105.05
+Inuvik	Canada	America/Inuvik	68.35	-133.72
+Vancouver	Canada	America/Vancouver	49.27	-123.12
+Dawson Creek	Canada	America/Dawson_Creek	55.77	-120.23
+Fort Nelson	Canada	America/Fort_Nelson	58.80	-122.70
+Whitehorse	Canada	America/Whitehorse	60.72	-135.05
+Dawson	Canada	America/Dawson	64.07	-139.42
+Zurich	Switzerland	Europe/Zurich	47.38	8.53
+Abidjan	Côte d’Ivoire	Africa/Abidjan	5.32	-4.03
+Rarotonga	Cook Islands	Pacific/Rarotonga	-21.23	-159.77
+Santiago	Chile	America/Santiago	-33.45	-70.67
+Coyhaique	Chile	America/Coyhaique	-45.57	-72.07
+Punta Arenas	Chile	America/Punta_Arenas	-53.15	-70.92
+Easter	Chile	Pacific/Easter	-27.15	-109.43
+Shanghai	China	Asia/Shanghai	31.23	121.47
+Ürümqi	China	Asia/Urumqi	43.80	87.58
+Bogotá	Colombia	America/Bogota	4.60	-74.08
+Costa Rica	Costa Rica	America/Costa_Rica	9.93	-84.08
+Havana	Cuba	America/Havana	23.13	-82.37
+Cape Verde	Cape Verde	Atlantic/Cape_Verde	14.92	-23.52
+Nicosia	Cyprus	Asia/Nicosia	35.17	33.37
+Famagusta	Cyprus	Asia/Famagusta	35.12	33.95
+Prague	Czech Republic	Europe/Prague	50.08	14.43
+Berlin	Germany	Europe/Berlin	52.50	13.37
+Santo Domingo	Dominican Republic	America/Santo_Domingo	18.47	-69.90
+Algiers	Algeria	Africa/Algiers	36.78	3.05
+Guayaquil	Ecuador	America/Guayaquil	-2.17	-79.83
+Galapagos	Ecuador	Pacific/Galapagos	-0.90	-89.60
+Tallinn	Estonia	Europe/Tallinn	59.42	24.75
+Cairo	Egypt	Africa/Cairo	30.05	31.25
+El Aaiun	Western Sahara	Africa/El_Aaiun	27.15	-13.20
+Madrid	Spain	Europe/Madrid	40.40	-3.68
+Ceuta	Spain	Africa/Ceuta	35.88	-5.32
+Canary	Spain	Atlantic/Canary	28.10	-15.40
+Helsinki	Finland	Europe/Helsinki	60.17	24.97
+Fiji	Fiji	Pacific/Fiji	-18.13	178.42
+Stanley	Falkland Islands	Atlantic/Stanley	-51.70	-57.85
+Kosrae	Micronesia	Pacific/Kosrae	5.32	162.98
+Faroe	Faroe Islands	Atlantic/Faroe	62.02	-6.77
+Paris	France	Europe/Paris	48.87	2.33
+London	Britain (UK)	Europe/London	51.51	-0.13
+Tbilisi	Georgia	Asia/Tbilisi	41.72	44.82
+Cayenne	French Guiana	America/Cayenne	4.93	-52.33
+Gibraltar	Gibraltar	Europe/Gibraltar	36.13	-5.35
+Nuuk	Greenland	America/Nuuk	64.18	-51.73
+Danmarkshavn	Greenland	America/Danmarkshavn	76.77	-18.67
+Scoresbysund	Greenland	America/Scoresbysund	70.48	-21.97
+Thule	Greenland	America/Thule	76.57	-68.78
+Athens	Greece	Europe/Athens	37.97	23.72
+South Georgia	South Georgia & the South Sandwich Islands	Atlantic/South_Georgia	-54.27	-36.53
+Guatemala	Guatemala	America/Guatemala	14.63	-90.52
+Guam	Guam	Pacific/Guam	13.47	144.75
+Bissau	Guinea-Bissau	Africa/Bissau	11.85	-15.58
+Guyana	Guyana	America/Guyana	6.80	-58.17
+Hong Kong	Hong Kong	Asia/Hong_Kong	22.28	114.15
+Tegucigalpa	Honduras	America/Tegucigalpa	14.10	-87.22
+Port-au-Prince	Haiti	America/Port-au-Prince	18.53	-72.33
+Budapest	Hungary	Europe/Budapest	47.50	19.08
+Jakarta	Indonesia	Asia/Jakarta	-6.17	106.80
+Pontianak	Indonesia	Asia/Pontianak	-0.03	109.33
+Makassar	Indonesia	Asia/Makassar	-5.12	119.40
+Jayapura	Indonesia	Asia/Jayapura	-2.53	140.70
+Dublin	Ireland	Europe/Dublin	53.33	-6.25
+Jerusalem	Israel	Asia/Jerusalem	31.78	35.22
+Kolkata	India	Asia/Kolkata	22.53	88.37
+Chagos	British Indian Ocean Territory	Indian/Chagos	-7.33	72.42
+Baghdad	Iraq	Asia/Baghdad	33.35	44.42
+Tehran	Iran	Asia/Tehran	35.67	51.43
+Rome	Italy	Europe/Rome	41.90	12.48
+Jamaica	Jamaica	America/Jamaica	17.97	-76.79
+Amman	Jordan	Asia/Amman	31.95	35.93
+Tokyo	Japan	Asia/Tokyo	35.65	139.74
+Nairobi	Kenya	Africa/Nairobi	-1.28	36.82
+Bishkek	Kyrgyzstan	Asia/Bishkek	42.90	74.60
+Tarawa	Kiribati	Pacific/Tarawa	1.42	173.00
+Kanton	Kiribati	Pacific/Kanton	-2.78	-171.72
+Kiritimati	Kiribati	Pacific/Kiritimati	1.87	-157.33
+Pyongyang	Korea (North)	Asia/Pyongyang	39.02	125.75
+Seoul	Korea (South)	Asia/Seoul	37.55	126.97
+Almaty	Kazakhstan	Asia/Almaty	43.25	76.95
+Qyzylorda	Kazakhstan	Asia/Qyzylorda	44.80	65.47
+Qostanay	Kazakhstan	Asia/Qostanay	53.20	63.62
+Aqtobe	Kazakhstan	Asia/Aqtobe	50.28	57.17
+Aqtau	Kazakhstan	Asia/Aqtau	44.52	50.27
+Atyrau	Kazakhstan	Asia/Atyrau	47.12	51.93
+Oral	Kazakhstan	Asia/Oral	51.22	51.35
+Beirut	Lebanon	Asia/Beirut	33.88	35.50
+Colombo	Sri Lanka	Asia/Colombo	6.93	79.85
+Monrovia	Liberia	Africa/Monrovia	6.30	-10.78
+Vilnius	Lithuania	Europe/Vilnius	54.68	25.32
+Riga	Latvia	Europe/Riga	56.95	24.10
+Tripoli	Libya	Africa/Tripoli	32.90	13.18
+Casablanca	Morocco	Africa/Casablanca	33.65	-7.58
+Chisinau	Moldova	Europe/Chisinau	47.00	28.83
+Kwajalein	Marshall Islands	Pacific/Kwajalein	9.08	167.33
+Yangon	Myanmar (Burma)	Asia/Yangon	16.78	96.17
+Ulaanbaatar	Mongolia	Asia/Ulaanbaatar	47.92	106.88
+Hovd	Mongolia	Asia/Hovd	48.02	91.65
+Macau	Macau	Asia/Macau	22.20	113.54
+Martinique	Martinique	America/Martinique	14.60	-61.08
+Malta	Malta	Europe/Malta	35.90	14.52
+Mauritius	Mauritius	Indian/Mauritius	-20.17	57.50
+Maldives	Maldives	Indian/Maldives	4.17	73.50
+Mexico City	Mexico	America/Mexico_City	19.40	-99.15
+Cancún	Mexico	America/Cancun	21.08	-86.77
+Mérida	Mexico	America/Merida	20.97	-89.62
+Monterrey	Mexico	America/Monterrey	25.67	-100.32
+Matamoros	Mexico	America/Matamoros	25.83	-97.50
+Chihuahua	Mexico	America/Chihuahua	28.63	-106.08
+Ciudad Juarez	Mexico	America/Ciudad_Juarez	31.73	-106.48
+Ojinaga	Mexico	America/Ojinaga	29.57	-104.42
+Mazatlán	Mexico	America/Mazatlan	23.22	-106.42
+Bahia Banderas	Mexico	America/Bahia_Banderas	20.80	-105.25
+Hermosillo	Mexico	America/Hermosillo	29.07	-110.97
+Tijuana	Mexico	America/Tijuana	32.53	-117.02
+Kuching	Malaysia	Asia/Kuching	1.55	110.33
+Maputo	Mozambique	Africa/Maputo	-25.97	32.58
+Windhoek	Namibia	Africa/Windhoek	-22.57	17.10
+Noumea	New Caledonia	Pacific/Noumea	-22.27	166.45
+Norfolk	Norfolk Island	Pacific/Norfolk	-29.05	167.97
+Lagos	Nigeria	Africa/Lagos	6.45	3.40
+Managua	Nicaragua	America/Managua	12.15	-86.28
+Kathmandu	Nepal	Asia/Kathmandu	27.72	85.32
+Nauru	Nauru	Pacific/Nauru	-0.52	166.92
+Niue	Niue	Pacific/Niue	-19.02	-169.92
+Auckland	New Zealand	Pacific/Auckland	-36.87	174.77
+Chatham	New Zealand	Pacific/Chatham	-43.95	-176.55
+Panama	Panama	America/Panama	8.97	-79.53
+Lima	Peru	America/Lima	-12.05	-77.05
+Tahiti	French Polynesia	Pacific/Tahiti	-17.53	-149.57
+Marquesas	French Polynesia	Pacific/Marquesas	-9.00	-139.50
+Gambier	French Polynesia	Pacific/Gambier	-23.13	-134.95
+Port Moresby	Papua New Guinea	Pacific/Port_Moresby	-9.50	147.17
+Bougainville	Papua New Guinea	Pacific/Bougainville	-6.22	155.57
+Manila	Philippines	Asia/Manila	14.59	120.97
+Karachi	Pakistan	Asia/Karachi	24.87	67.05
+Warsaw	Poland	Europe/Warsaw	52.25	21.00
+Miquelon	St Pierre & Miquelon	America/Miquelon	47.05	-56.33
+Pitcairn	Pitcairn	Pacific/Pitcairn	-25.07	-130.08
+Puerto Rico	Puerto Rico	America/Puerto_Rico	18.47	-66.11
+Gaza	Palestine	Asia/Gaza	31.50	34.47
+Hebron	Palestine	Asia/Hebron	31.53	35.09
+Lisbon	Portugal	Europe/Lisbon	38.72	-9.13
+Madeira	Portugal	Atlantic/Madeira	32.63	-16.90
+Azores	Portugal	Atlantic/Azores	37.73	-25.67
+Palau	Palau	Pacific/Palau	7.33	134.48
+Asunción	Paraguay	America/Asuncion	-25.27	-57.67
+Qatar	Qatar	Asia/Qatar	25.28	51.53
+Bucharest	Romania	Europe/Bucharest	44.43	26.10
+Belgrade	Serbia	Europe/Belgrade	44.83	20.50
+Kaliningrad	Russia	Europe/Kaliningrad	54.72	20.50
+Moscow	Russia	Europe/Moscow	55.76	37.62
+Simferopol	Russia	Europe/Simferopol	44.95	34.10
+Kirov	Russia	Europe/Kirov	58.60	49.65
+Volgograd	Russia	Europe/Volgograd	48.73	44.42
+Astrakhan	Russia	Europe/Astrakhan	46.35	48.05
+Saratov	Russia	Europe/Saratov	51.57	46.03
+Ulyanovsk	Russia	Europe/Ulyanovsk	54.33	48.40
+Samara	Russia	Europe/Samara	53.20	50.15
+Yekaterinburg	Russia	Asia/Yekaterinburg	56.85	60.60
+Omsk	Russia	Asia/Omsk	55.00	73.40
+Novosibirsk	Russia	Asia/Novosibirsk	55.03	82.92
+Barnaul	Russia	Asia/Barnaul	53.37	83.75
+Tomsk	Russia	Asia/Tomsk	56.50	84.97
+Novokuznetsk	Russia	Asia/Novokuznetsk	53.75	87.12
+Krasnoyarsk	Russia	Asia/Krasnoyarsk	56.02	92.83
+Irkutsk	Russia	Asia/Irkutsk	52.27	104.33
+Chita	Russia	Asia/Chita	52.05	113.47
+Yakutsk	Russia	Asia/Yakutsk	62.00	129.67
+Khandyga	Russia	Asia/Khandyga	62.66	135.55
+Vladivostok	Russia	Asia/Vladivostok	43.17	131.93
+Ust-Nera	Russia	Asia/Ust-Nera	64.56	143.23
+Magadan	Russia	Asia/Magadan	59.57	150.80
+Sakhalin	Russia	Asia/Sakhalin	46.97	142.70
+Srednekolymsk	Russia	Asia/Srednekolymsk	67.47	153.72
+Kamchatka	Russia	Asia/Kamchatka	53.02	158.65
+Anadyr	Russia	Asia/Anadyr	64.75	177.48
+Riyadh	Saudi Arabia	Asia/Riyadh	24.63	46.72
+Guadalcanal	Solomon Islands	Pacific/Guadalcanal	-9.53	160.20
+Khartoum	Sudan	Africa/Khartoum	15.60	32.53
+Singapore	Singapore	Asia/Singapore	1.28	103.85
+Paramaribo	Suriname	America/Paramaribo	5.83	-55.17
+Juba	South Sudan	Africa/Juba	4.85	31.62
+São Tomé	Sao Tome & Principe	Africa/Sao_Tome	0.33	6.73
+El Salvador	El Salvador	America/El_Salvador	13.70	-89.20
+Damascus	Syria	Asia/Damascus	33.50	36.30
+Grand Turk	Turks & Caicos Is	America/Grand_Turk	21.47	-71.13
+Ndjamena	Chad	Africa/Ndjamena	12.12	15.05
+Bangkok	Thailand	Asia/Bangkok	13.75	100.52
+Dushanbe	Tajikistan	Asia/Dushanbe	38.58	68.80
+Fakaofo	Tokelau	Pacific/Fakaofo	-9.37	-171.23
+Dili	East Timor	Asia/Dili	-8.55	125.58
+Ashgabat	Turkmenistan	Asia/Ashgabat	37.95	58.38
+Tunis	Tunisia	Africa/Tunis	36.80	10.18
+Tongatapu	Tonga	Pacific/Tongatapu	-21.13	-175.20
+Istanbul	Turkey	Europe/Istanbul	41.02	28.97
+Taipei	Taiwan	Asia/Taipei	25.05	121.50
+Kyiv	Ukraine	Europe/Kyiv	50.43	30.52
+New York	United States	America/New_York	40.71	-74.01
+Detroit	United States	America/Detroit	42.33	-83.05
+Louisville	United States	America/Kentucky/Louisville	38.25	-85.76
+Monticello	United States	America/Kentucky/Monticello	36.83	-84.85
+Indianapolis	United States	America/Indiana/Indianapolis	39.77	-86.16
+Vincennes	United States	America/Indiana/Vincennes	38.68	-87.53
+Winamac	United States	America/Indiana/Winamac	41.05	-86.60
+Marengo	United States	America/Indiana/Marengo	38.38	-86.34
+Petersburg	United States	America/Indiana/Petersburg	38.49	-87.28
+Vevay	United States	America/Indiana/Vevay	38.75	-85.07
+Chicago	United States	America/Chicago	41.85	-87.65
+Tell City	United States	America/Indiana/Tell_City	37.95	-86.76
+Knox	United States	America/Indiana/Knox	41.30	-86.62
+Menominee	United States	America/Menominee	45.11	-87.61
+Center	United States	America/North_Dakota/Center	47.12	-101.30
+New Salem	United States	America/North_Dakota/New_Salem	46.84	-101.41
+Beulah	United States	America/North_Dakota/Beulah	47.26	-101.78
+Denver	United States	America/Denver	39.74	-104.98
+Boise	United States	America/Boise	43.61	-116.20
+Phoenix	United States	America/Phoenix	33.45	-112.07
+Los Angeles	United States	America/Los_Angeles	34.05	-118.24
+Anchorage	United States	America/Anchorage	61.22	-149.90
+Juneau	United States	America/Juneau	58.30	-134.42
+Sitka	United States	America/Sitka	57.18	-135.30
+Metlakatla	United States	America/Metlakatla	55.13	-131.58
+Yakutat	United States	America/Yakutat	59.55	-139.73
+Nome	United States	America/Nome	64.50	-165.41
+Adak	United States	America/Adak	51.88	-176.66
+Honolulu	United States	Pacific/Honolulu	21.31	-157.86
+Montevideo	Uruguay	America/Montevideo	-34.91	-56.21
+Samarkand	Uzbekistan	Asia/Samarkand	39.67	66.80
+Tashkent	Uzbekistan	Asia/Tashkent	41.33	69.30
+Caracas	Venezuela	America/Caracas	10.50	-66.93
+Ho Chi Minh City	Vietnam	Asia/Ho_Chi_Minh	10.75	106.67
+Efate	Vanuatu	Pacific/Efate	-17.67	168.42
+Apia	Samoa (western)	Pacific/Apia	-13.83	-171.73
+Johannesburg	South Africa	Africa/Johannesburg	-26.25	28.00
+# Major cities sharing a zone.
+Washington	United States	America/New_York	38.90	-77.04
+Boston	United States	America/New_York	42.36	-71.06
+Philadelphia	United States	America/New_York	39.95	-75.17
+Atlanta	United States	America/New_York	33.75	-84.39
+Miami	United States	America/New_York	25.76	-80.19
+Orlando	United States	America/New_York	28.54	-81.38
+Tampa	United States	America/New_York	27.95	-82.46
+Pittsburgh	United States	America/New_York	40.44	-79.99
+Charlotte	United States	America/New_York	35.23	-80.84
+Raleigh	United States	America/New_York	35.78	-78.64
+Baltimore	United States	America/New_York	39.29	-76.61
+Cleveland	United States	America/New_York	41.50	-81.69
+Columbus	United States	America/New_York	39.96	-83.00
+Houston	United States	America/Chicago	29.76	-95.37
+Dallas	United States	America/Chicago	32.78	-96.80
+Austin	United States	America/Chicago	30.27	-97.74
+San Antonio	United States	America/Chicago	29.42	-98.49
+New Orleans	United States	America/Chicago	29.95	-90.07
+Minneapolis	United States	America/Chicago	44.98	-93.27
+St. Louis	United States	America/Chicago	38.63	-90.20
+Kansas City	United States	America/Chicago	39.10	-94.58
+Nashville	United States	America/Chicago	36.16	-86.78
+Milwaukee	United States	America/Chicago	43.04	-87.91
+Oklahoma City	United States	America/Chicago	35.47	-97.52
+Memphis	United States	America/Chicago	35.15	-90.05
+Salt Lake City	United States	America/Denver	40.76	-111.89
+Albuquerque	United States	America/Denver	35.08	-106.65
+Tucson	United States	America/Phoenix	32.22	-110.97
+San Francisco	United States	America/Los_Angeles	37.77	-122.42
+San Diego	United States	America/Los_Angeles	32.72	-117.16
+San Jose	United States	America/Los_Angeles	37.34	-121.89
+Seattle	United States	America/Los_Angeles	47.61	-122.33
+Portland	United States	America/Los_Angeles	45.52	-122.68
+Las Vegas	United States	America/Los_Angeles	36.17	-115.14
+Sacramento	United States	America/Los_Angeles	38.58	-121.49
+Montreal	Canada	America/Toronto	45.50	-73.57
+Ottawa	Canada	America/Toronto	45.42	-75.70
+Quebec City	Canada	America/Toronto	46.81	-71.21
+Calgary	Canada	America/Edmonton	51.05	-114.07
+Victoria	Canada	America/Vancouver	48.43	-123.37
+Guadalajara	Mexico	America/Mexico_City	20.67	-103.35
+Puebla	Mexico	America/Mexico_City	19.04	-98.21
+San José	Costa Rica	America/Costa_Rica	9.93	-84.08
+Panama City	Panama	America/Panama	8.98	-79.52
+San Salvador	El Salvador	America/El_Salvador	13.69	-89.22
+Guatemala City	Guatemala	America/Guatemala	14.63	-90.51
+San Juan	Puerto Rico	America/Puerto_Rico	18.47	-66.11
+Kingston	Jamaica	America/Jamaica	17.97	-76.79
+Nassau	Bahamas	America/Nassau	25.05	-77.35
+Rio de Janeiro	Brazil	America/Sao_Paulo	-22.91	-43.17
+Brasília	Brazil	America/Sao_Paulo	-15.79	-47.88
+Belo Horizonte	Brazil	America/Sao_Paulo	-19.92	-43.94
+Porto Alegre	Brazil	America/Sao_Paulo	-30.03	-51.23
+Curitiba	Brazil	America/Sao_Paulo	-25.43	-49.27
+Salvador	Brazil	America/Bahia	-12.97	-38.50
+Medellín	Colombia	America/Bogota	6.24	-75.58
+Cali	Colombia	America/Bogota	3.45	-76.53
+Quito	Ecuador	America/Guayaquil	-0.18	-78.47
+Rosario	Argentina	America/Argentina/Buenos_Aires	-32.95	-60.64
+Valparaíso	Chile	America/Santiago	-33.05	-71.61
+Cusco	Peru	America/Lima	-13.53	-71.97
+Amsterdam	Netherlands	Europe/Amsterdam	52.37	4.90
+Rotterdam	Netherlands	Europe/Amsterdam	51.92	4.48
+The Hague	Netherlands	Europe/Amsterdam	52.08	4.30
+Stockholm	Sweden	Europe/Stockholm	59.33	18.07
+Gothenburg	Sweden	Europe/Stockholm	57.71	11.97
+Copenhagen	Denmark	Europe/Copenhagen	55.68	12.57
+Oslo	Norway	Europe/Oslo	59.91	10.75
+Bergen	Norway	Europe/Oslo	60.39	5.32
+Reykjavík	Iceland	Atlantic/Reykjavik	64.15	-21.94
+Munich	Germany	Europe/Berlin	48.14	11.58
+Hamburg	Germany	Europe/Berlin	53.55	9.99
+Frankfurt	Germany	Europe/Berlin	50.11	8.68
+Cologne	Germany	Europe/Berlin	50.94	6.96
+Stuttgart	Germany	Europe/Berlin	48.78	9.18
+Düsseldorf	Germany	Europe/Berlin	51.23	6.77
+Leipzig	Germany	Europe/Berlin	51.34	12.37
+Milan	Italy	Europe/Rome	45.46	9.19
+Naples	Italy	Europe/Rome	40.85	14.27
+Turin	Italy	Europe/Rome	45.07	7.69
+Florence	Italy	Europe/Rome	43.77	11.26
+Venice	Italy	Europe/Rome	45.44	12.32
+Barcelona	Spain	Europe/Madrid	41.39	2.17
+Valencia	Spain	Europe/Madrid	39.47	-0.38
+Seville	Spain	Europe/Madrid	37.39	-5.98
+Bilbao	Spain	Europe/Madrid	43.26	-2.93
+Palma	Spain	Europe/Madrid	39.57	2.65
+Las Palmas	Spain	Atlantic/Canary	28.12	-15.44
+Lyon	France	Europe/Paris	45.76	4.84
+Marseille	France	Europe/Paris	43.30	5.37
+Nice	France	Europe/Paris	43.70	7.27
+Toulouse	France	Europe/Paris	43.60	1.44
+Bordeaux	France	Europe/Paris	44.84	-0.58
+Strasbourg	France	Europe/Paris	48.57	7.75
+Manchester	United Kingdom	Europe/London	53.48	-2.24
+Birmingham	United Kingdom	Europe/London	52.49	-1.89
+Edinburgh	United Kingdom	Europe/London	55.95	-3.19
+Glasgow	United Kingdom	Europe/London	55.86	-4.25
+Liverpool	United Kingdom	Europe/London	53.41	-2.98
+Bristol	United Kingdom	Europe/London	51.45	-2.59
+Leeds	United Kingdom	Europe/London	53.80	-1.55
+Cambridge	United Kingdom	Europe/London	52.21	0.12
+Oxford	United Kingdom	Europe/London	51.75	-1.26
+Cardiff	United Kingdom	Europe/London	51.48	-3.18
+Belfast	United Kingdom	Europe/London	54.60	-5.93
+Cork	Ireland	Europe/Dublin	51.90	-8.47
+Geneva	Switzerland	Europe/Zurich	46.20	6.14
+Bern	Switzerland	Europe/Zurich	46.95	7.45
+Basel	Switzerland	Europe/Zurich	47.56	7.59
+Antwerp	Belgium	Europe/Brussels	51.22	4.40
+Luxembourg	Luxembourg	Europe/Luxembourg	49.61	6.13
+Monaco	Monaco	Europe/Monaco	43.74	7.42
+Porto	Portugal	Europe/Lisbon	41.15	-8.61
+Salzburg	Austria	Europe/Vienna	47.81	13.06
+Kraków	Poland	Europe/Warsaw	50.06	19.94
+Gdańsk	Poland	Europe/Warsaw	54.35	18.65
+Wrocław	Poland	Europe/Warsaw	51.11	17.04
+Brno	Czechia	Europe/Prague	49.20	16.61
+Bratislava	Slovakia	Europe/Bratislava	48.15	17.11
+Ljubljana	Slovenia	Europe/Ljubljana	46.06	14.51
+Zagreb	Croatia	Europe/Zagreb	45.81	15.98
+Split	Croatia	Europe/Zagreb	43.51	16.44
+Sarajevo	Bosnia and Herzegovina	Europe/Sarajevo	43.86	18.41
+Skopje	North Macedonia	Europe/Skopje	42.00	21.43
+Podgorica	Montenegro	Europe/Podgorica	42.44	19.26
+Valletta	Malta	Europe/Malta	35.90	14.51
+Thessaloniki	Greece	Europe/Athens	40.64	22.94
+Ankara	Turkey	Europe/Istanbul	39.93	32.86
+Izmir	Turkey	Europe/Istanbul	38.42	27.14
+Antalya	Turkey	Europe/Istanbul	36.90	30.71
+Kharkiv	Ukraine	Europe/Kyiv	49.99	36.23
+Odesa	Ukraine	Europe/Kyiv	46.48	30.72
+Lviv	Ukraine	Europe/Kyiv	49.84	24.03
+Saint Petersburg	Russia	Europe/Moscow	59.93	30.34
+Kazan	Russia	Europe/Moscow	55.79	49.12
+Sochi	Russia	Europe/Moscow	43.60	39.73
+Tartu	Estonia	Europe/Tallinn	58.38	26.72
+Accra	Ghana	Africa/Accra	5.60	-0.19
+Addis Ababa	Ethiopia	Africa/Addis_Ababa	9.03	38.74
+Dakar	Senegal	Africa/Dakar	14.72	-17.47
+Kinshasa	DR Congo	Africa/Kinshasa	-4.32	15.31
+Luanda	Angola	Africa/Luanda	-8.84	13.23
+Cape Town	South Africa	Africa/Johannesburg	-33.92	18.42
+Durban	South Africa	Africa/Johannesburg	-29.86	31.02
+Pretoria	South Africa	Africa/Johannesburg	-25.75	28.19
+Dar es Salaam	Tanzania	Africa/Dar_es_Salaam	-6.79	39.21
+Zanzibar	Tanzania	Africa/Dar_es_Salaam	-6.16	39.19
+Kampala	Uganda	Africa/Kampala	0.35	32.58
+Kigali	Rwanda	Africa/Kigali	-1.94	30.06
+Abuja	Nigeria	Africa/Lagos	9.08	7.40
+Alexandria	Egypt	Africa/Cairo	31.20	29.92
+Marrakesh	Morocco	Africa/Casablanca	31.63	-8.01
+Rabat	Morocco	Africa/Casablanca	34.02	-6.84
+Harare	Zimbabwe	Africa/Harare	-17.83	31.05
+Lusaka	Zambia	Africa/Lusaka	-15.39	28.32
+Antananarivo	Madagascar	Indian/Antananarivo	-18.88	47.51
+Port Louis	Mauritius	Indian/Mauritius	-20.16	57.50
+Abu Dhabi	United Arab Emirates	Asia/Dubai	24.45	54.38
+Doha	Qatar	Asia/Qatar	25.29	51.53
+Jeddah	Saudi Arabia	Asia/Riyadh	21.49	39.19
+Mecca	Saudi Arabia	Asia/Riyadh	21.39	39.86
+Kuwait City	Kuwait	Asia/Kuwait	29.38	47.99
+Manama	Bahrain	Asia/Bahrain	26.23	50.59
+Muscat	Oman	Asia/Muscat	23.59	58.41
+Tel Aviv	Israel	Asia/Jerusalem	32.09	34.78
+Sanaa	Yemen	Asia/Aden	15.37	44.19
+Isfahan	Iran	Asia/Tehran	32.65	51.67
+Osaka	Japan	Asia/Tokyo	34.69	135.50
+Kyoto	Japan	Asia/Tokyo	35.01	135.77
+Yokohama	Japan	Asia/Tokyo	35.44	139.64
+Nagoya	Japan	Asia/Tokyo	35.18	136.91
+Sapporo	Japan	Asia/Tokyo	43.06	141.35
+Fukuoka	Japan	Asia/Tokyo	33.59	130.40
+Hiroshima	Japan	Asia/Tokyo	34.39	132.46
+Naha	Japan	Asia/Tokyo	26.21	127.68
+Busan	South Korea	Asia/Seoul	35.18	129.08
+Incheon	South Korea	Asia/Seoul	37.46	126.71
+Beijing	China	Asia/Shanghai	39.90	116.41
+Shenzhen	China	Asia/Shanghai	22.54	114.06
+Guangzhou	China	Asia/Shanghai	23.13	113.26
+Chengdu	China	Asia/Shanghai	30.57	104.07
+Chongqing	China	Asia/Shanghai	29.56	106.55
+Wuhan	China	Asia/Shanghai	30.59	114.31
+Xi'an	China	Asia/Shanghai	34.34	108.94
+Hangzhou	China	Asia/Shanghai	30.27	120.16
+Nanjing	China	Asia/Shanghai	32.06	118.80
+Tianjin	China	Asia/Shanghai	39.34	117.36
+Suzhou	China	Asia/Shanghai	31.30	120.58
+Lhasa	China	Asia/Shanghai	29.65	91.12
+Macau	Macau	Asia/Macau	22.20	113.54
+Kaohsiung	Taiwan	Asia/Taipei	22.63	120.30
+Taichung	Taiwan	Asia/Taipei	24.15	120.67
+Kuala Lumpur	Malaysia	Asia/Kuala_Lumpur	3.14	101.69
+Penang	Malaysia	Asia/Kuala_Lumpur	5.41	100.33
+Phuket	Thailand	Asia/Bangkok	7.88	98.39
+Chiang Mai	Thailand	Asia/Bangkok	18.79	98.98
+Denpasar	Indonesia	Asia/Makassar	-8.65	115.22
+Surabaya	Indonesia	Asia/Jakarta	-7.25	112.75
+Bandung	Indonesia	Asia/Jakarta	-6.92	107.62
+Cebu	Philippines	Asia/Manila	10.32	123.89
+Hanoi	Vietnam	Asia/Ho_Chi_Minh	21.03	105.85
+Da Nang	Vietnam	Asia/Ho_Chi_Minh	16.05	108.20
+Phnom Penh	Cambodia	Asia/Phnom_Penh	11.56	104.92
+Vientiane	Laos	Asia/Vientiane	17.97	102.63
+Mandalay	Myanmar	Asia/Yangon	21.96	96.08
+New Delhi	India	Asia/Kolkata	28.61	77.21
+Mumbai	India	Asia/Kolkata	19.08	72.88
+Bengaluru	India	Asia/Kolkata	12.97	77.59
+Chennai	India	Asia/Kolkata	13.08	80.27
+Hyderabad	India	Asia/Kolkata	17.39	78.49
+Pune	India	Asia/Kolkata	18.52	73.86
+Ahmedabad	India	Asia/Kolkata	23.02	72.57
+Jaipur	India	Asia/Kolkata	26.91	75.79
+Goa	India	Asia/Kolkata	15.50	73.83
+Chittagong	Bangladesh	Asia/Dhaka	22.36	91.78
+Lahore	Pakistan	Asia/Karachi	31.55	74.34
+Islamabad	Pakistan	Asia/Karachi	33.68	73.05
+Astana	Kazakhstan	Asia/Almaty	51.17	71.45
+Samarkand	Uzbekistan	Asia/Samarkand	39.65	66.96
+Male	Maldives	Indian/Maldives	4.18	73.51
+Canberra	Australia	Australia/Sydney	-35.28	149.13
+Gold Coast	Australia	Australia/Brisbane	-28.02	153.40
+Cairns	Australia	Australia/Brisbane	-16.92	145.77
+Alice Springs	Australia	Australia/Darwin	-23.70	133.88
+Wellington	New Zealand	Pacific/Auckland	-41.29	174.78
+Christchurch	New Zealand	Pacific/Auckland	-43.53	172.64
+Queenstown	New Zealand	Pacific/Auckland	-45.03	168.66
+Suva	Fiji	Pacific/Fiji	-18.14	178.44
+Papeete	French Polynesia	Pacific/Tahiti	-17.54	-149.57
+Hagåtña	Guam	Pacific/Guam	13.48	144.75
+UTC		UTC	0.00	0.00

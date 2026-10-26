@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Soroban
+GenericName=Calculator
+Comment=Basic, scientific and programmer arithmetic, with a paper tape
+Keywords=calculator;math;arithmetic;calculate;scientific;programmer;hexadecimal;binary;
+Categories=Utility;Calculator;
+Icon=org.aizome.Soroban
+Exec=aizome-soroban %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Soroban
+DBusActivatable=false

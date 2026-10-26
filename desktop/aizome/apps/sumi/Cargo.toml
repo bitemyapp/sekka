@@ -1,0 +1,29 @@
+[package]
+name = "aizome-sumi"
+description = "Sumi 墨, Aizome's text editor: Markdown styled as you type, syntax colouring, find and replace, encodings, autosave"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_sumi"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-sumi"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+env_logger.workspace = true
+ropey = "1.6"
+regex = "1"
+
+[dev-dependencies]
+aizome-search.workspace = true

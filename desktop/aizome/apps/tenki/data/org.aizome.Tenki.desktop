@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Tenki
+GenericName=Weather
+Comment=Current conditions, the next two days by the hour and ten days ahead
+Keywords=weather;forecast;temperature;rain;wind;climate;meteo;
+Categories=Utility;
+Icon=org.aizome.Tenki
+Exec=aizome-tenki %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Tenki
+DBusActivatable=false

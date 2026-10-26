@@ -1,0 +1,26 @@
+[package]
+name = "aizome-yukimi"
+description = "Yukimi 雪見, Sekka's Nix software manager, made native for Aizome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "aizome-yukimi"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-theme.workspace = true
+# Yukimi's UI-independent crates, copied from Sekka (crates/ beside this
+# manifest). Being path dependencies inside the workspace makes them members.
+yukimi-config = { path = "crates/yukimi-config" }
+yukimi-store = { path = "crates/yukimi-store" }
+yukimi-system = { path = "crates/yukimi-system" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+libc = "0.2"

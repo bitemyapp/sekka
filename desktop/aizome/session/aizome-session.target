@@ -1,0 +1,12 @@
+# Units that belong to an Aizome session hang off this target; it binds
+# graphical-session.target, which xdg-desktop-autostart.target and
+# session services follow.
+[Unit]
+Description=Aizome session
+Documentation=https://github.com/bitemyapp/aizome
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=xdg-desktop-autostart.target
+Wants=aizome-network-agent.service
+Before=xdg-desktop-autostart.target

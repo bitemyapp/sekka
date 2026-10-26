@@ -1,0 +1,86 @@
+[workspace]
+resolver = "3"
+# Apps join by name once they have a manifest: an app directory without
+# Cargo.toml would break an "apps/*" glob, and every build, for everyone.
+members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen"]
+# Sidestep's fork, reached through the `sidestep` link beside this file
+# (../sidestep-aizome on a developer's disk; the source itself in the Nix
+# package). Its crates are path dependencies, not members.
+exclude = ["sidestep"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bitemyapp/aizome"
+
+[workspace.dependencies]
+aizome-theme = { path = "crates/aizome-theme" }
+aizome-ipc = { path = "crates/aizome-ipc" }
+aizome-config = { path = "crates/aizome-config" }
+aizome-face = { path = "crates/aizome-face" }
+aizome-kit = { path = "crates/aizome-kit" }
+aizome-sys = { path = "crates/aizome-sys" }
+aizome-search = { path = "crates/aizome-search" }
+# Sidestep's native toolkit, from the `aizome` branch of the Sidestep fork.
+# During development `sidestep` links to the worktree beside this
+# repository; the Nix package puts the revision it pins there (see
+# nix/package.nix). The path stays inside the workspace so Cargo hashes it
+# relative to the workspace, and a build of this checkout gives the
+# compositor's core the same symbols as the package's: what makes a logic
+# library built here loadable into the running session (docs/reload.md).
+sidestep-ui = { path = "sidestep/crates/sidestep-ui" }
+sidestep-engine = { path = "sidestep/crates/sidestep-engine" }
+# The compositor: its core (a Rust dylib that owns the Wayland display and
+# every client) and the logic it loads and reloads at run time.
+aizome-comp-core = { path = "crates/aizome-comp-core" }
+aizome-comp-logic = { path = "crates/aizome-comp-logic" }
+smithay = { version = "0.7.0", default-features = false, features = [
+    "backend_drm",
+    "backend_gbm",
+    "backend_egl",
+    "backend_libinput",
+    "backend_udev",
+    "backend_session_libseat",
+    "backend_winit",
+    "desktop",
+    "renderer_gl",
+    "renderer_pixman",
+    "renderer_multi",
+    "wayland_frontend",
+] }
+tracing = "0.1"
+libloading = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+
+# Dependencies build without debug info: the disk is small, and backtraces
+# through our own crates are what matter.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 2
+
+# tiny-skia's portable SIMD wraps 16-bit lanes on purpose (see Sidestep's
+# workspace manifest).
+[profile.dev.package.tiny-skia]
+overflow-checks = false
+
+# The compositor's core and logic are Rust dylibs, which can't take part in
+# LTO (and a binary that links one can't use it), so `release` has none:
+# `cargo build --release` works for every crate. The Nix package builds
+# everything but the compositor with `release-lto`, as before.
+[profile.release]
+debug = "line-tables-only"
+lto = false
+codegen-units = 4
+
+[profile.release-lto]
+inherits = "release"
+lto = "thin"

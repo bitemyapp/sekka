@@ -1,0 +1,30 @@
+[package]
+name = "aizome-tenki"
+description = "Tenki 天気, Aizome's weather: current conditions, 48 hours and ten days from Open-Meteo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_tenki"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-tenki"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# HTTPS to Open-Meteo: rustls (ring) with webpki-roots, pure Rust but ring's
+# assembly; already in the workspace for Yukimi.
+ureq = "3"
+# GeoClue over the system bus, as aizome-sys speaks D-Bus.
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
