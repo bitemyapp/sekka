@@ -37,13 +37,6 @@ impl Profile {
     pub(crate) fn kernel(self) -> &'static str {
         if self == Self::Lts { "lts" } else { "latest" }
     }
-    fn session(self) -> &'static str {
-        if self == Self::Compatibility {
-            "x11"
-        } else {
-            "wayland"
-        }
-    }
 }
 
 /// A successful QMP send alone proves nothing about the guest input stack.
@@ -160,13 +153,11 @@ pub fn main(args: Vec<String>) -> Result<()> {
         vm.wait_agent()?;
         println!("Guest agent ready; waiting for the {profile:?} desktop and installer");
         let deadline = Instant::now() + Duration::from_secs(180);
-        let desktop = if profile == Profile::Compatibility {
-            "xfce4-session"
-        } else {
-            "plasmashell"
-        };
+        // Aizome's compositor in every profile; the recovery profile draws in
+        // software. Its other processes (aizome-session, -shell, -greeter)
+        // don't match.
         let live = loop {
-            match vm.execute(&format!("set -e; systemctl is-active display-manager; pgrep -u 1000 -f '(^|/)[.]?{desktop}(-wrapped)?( |$)'; pgrep -u 1000 -f '(^|/)[.]?calamares-nixos(-wrapped)?( |$)'; uname -r; cat /etc/calamares-nixos/settings.json; test ! -e /etc/nixos-generate-config.conf; nix --version"), Duration::from_secs(30)) {
+            match vm.execute("set -e; systemctl is-active display-manager; pgrep -u 1000 -f '(^|/)[.]?aizome(-wrapped)? '; pgrep -u 1000 -f '(^|/)[.]?calamares-nixos(-wrapped)?( |$)'; uname -r; cat /etc/calamares-nixos/settings.json; test ! -e /etc/nixos-generate-config.conf; nix --version", Duration::from_secs(30)) {
                 Ok(text) => break text,
                 Err(error) => { ensure!(Instant::now() < deadline, "Live desktop failed: {error}"); pause(Duration::from_secs(2))?; }
             }
@@ -181,7 +172,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
         );
         let session = vm.execute("set -e; s=$(loginctl list-sessions --no-legend | awk '$2 == 1000 && $4 == \"seat0\" {print $1; exit}'); test -n \"$s\"; loginctl show-session \"$s\" -p Type -p Active -p Seat", Duration::from_secs(30))?;
         ensure!(
-            session.contains(&format!("Type={}", profile.session()))
+            session.contains("Type=wayland")
                 && session.contains("Active=yes")
                 && session.contains("Seat=seat0"),
             "Wrong/inactive seat: {session}"
@@ -189,17 +180,19 @@ pub fn main(args: Vec<String>) -> Result<()> {
         result["live"] = json!(live);
         result["session"] = json!(session);
         if profile == Profile::Compatibility {
-            let rendering = vm.execute(&format!("set -e; {USER_ENV}\ntr '\\0' '\\n' < /proc/$pid/environ | grep -E '^(LIBGL_ALWAYS_SOFTWARE|GSK_RENDERER)='; runuser -u nixos -- env DISPLAY=\"$display\" XAUTHORITY=\"$authority\" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus xfconf-query -c xfwm4 -p /general/use_compositing"), Duration::from_secs(30))?;
+            // The compositor says which renderer it chose; programs in the
+            // session get Mesa's software GL.
+            let rendering = vm.execute(&format!("set -e; {USER_ENV}\ntr '\\0' '\\n' < /proc/$pid/environ | grep -E '^(AIZOME_RENDERER|LIBGL_ALWAYS_SOFTWARE)='; journalctl -b _UID=1000 --no-pager -o cat | grep -m1 'pixman renderer'"), Duration::from_secs(30))?;
             ensure!(
-                rendering.contains("LIBGL_ALWAYS_SOFTWARE=1")
-                    && rendering.contains("GSK_RENDERER=cairo")
-                    && rendering.lines().any(|s| s == "false"),
+                rendering.contains("AIZOME_RENDERER=pixman")
+                    && rendering.contains("LIBGL_ALWAYS_SOFTWARE=1")
+                    && rendering.contains("pixman renderer"),
                 "Software recovery settings not active: {rendering}"
             );
             result["recovery_rendering"] = json!(rendering);
         }
         println!("Live session verified; testing graphical input delivery");
-        // Process existence precedes GTK's first mapped window. Let autostart
+        // Process existence precedes the installer's first mapped window. Let autostart
         // settle, then check focus explicitly so a late installer window cannot
         // steal the marker intended for the probe.
         pause(Duration::from_secs(5))?;
@@ -227,8 +220,9 @@ pub fn main(args: Vec<String>) -> Result<()> {
                 Instant::now() < deadline,
                 "Input probe never received focus"
             );
-            // Ordinary window switching, not synthetic X11 keyboard events.
-            gui_input::key(&mut qmp, &["alt", "tab"])?;
+            // Ordinary window switching (Aizome's ❖Tab), not synthetic X11
+            // keyboard events.
+            gui_input::key(&mut qmp, &["meta_l", "tab"])?;
             pause(Duration::from_millis(500))?;
         }
         let mice = qmp.call("query-mice", json!({}))?;
@@ -278,7 +272,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
         );
         result["input_delivery"] = json!(true);
         result["pointer_devices"] = selected;
-        gui_input::key(&mut qmp, &["alt", "f4"])?;
+        vm.execute("pkill -u 1000 -x xev || true", Duration::from_secs(10))?;
         let diagnostics = vm.execute("installer-live-diagnostics", Duration::from_secs(180))?;
         fs::write(artifacts.join("hardware-report.txt"), diagnostics)?;
         vm.poweroff()?;

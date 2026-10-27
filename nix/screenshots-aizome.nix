@@ -1,5 +1,5 @@
-# Aizome's README captures, in a disposable VM; no host desktop or disks are
-# used.
+# Aizome's README captures, and Genkan's window in Aizome, in a disposable
+# VM; no host desktop or disks are used.
 #
 # The VM is a Sekka system built from the same desktop module installed
 # systems import, with Aizome chosen, logged in automatically as the demo
@@ -12,10 +12,17 @@
 #     nix build .#screenshots-aizome --out-link result-screenshots-aizome
 {
   pkgs,
+  genkan,
   desktopsModule,
 }:
 let
   inherit (pkgs) lib;
+  # Genkan's welcome page with sample data; preview mode exists only in
+  # debug builds.
+  preview = genkan.overrideAttrs {
+    cargoBuildType = "debug";
+    doCheck = false;
+  };
   width = 2880;
   height = 1800;
   # A document for Sumi, as on Aizome's design board.
@@ -208,6 +215,12 @@ pkgs.testers.runNixOSTest {
     ctl(f"minimise {wait_window('org.aizome.Settei')['id']}")
     launch("aizome-yukimi")
     capture("aizome-yukimi", settle=20, crop=frame("org.aizome.Yukimi"))
+    ctl(f"minimise {wait_window('org.aizome.Yukimi')['id']}")
+    # Genkan, as the live media open it, on its welcome page with sample
+    # data, with the pointer off its window.
+    ctl("input motion 20 860")
+    launch("env CALAMARES_UI_PREVIEW=welcome ${preview}/bin/calamares-nixos")
+    capture("genkan", settle=8, crop=frame("org.calamares.NixOSRust"))
 
     print(ctl("stats"))
     aizome.shutdown()

@@ -7,10 +7,11 @@ The validation captures in `test-results/luks-gui-uefi/` are separate from the
 README and website gallery. They are original 1280 × 800 QEMU screendumps from
 the [2026-10-21 encrypted GUI installation](test-results/luks-gui-uefi.json),
 copied byte for byte without cropping or scaling. They show the live installer
-(including its unresolved Plasma rendering failure), the disk-only unlock
-prompt, and applications in the installed Aizome and Plasma sessions. Input
-was sent as keyboard and pointer events through QMP; there was no automatic
-login. The report records the exact ISO and test-only diagnostics setting.
+(including a rendering failure of Genkan's former GTK window in the former
+Plasma live session), the disk-only unlock prompt, and applications in the
+installed Aizome and Plasma sessions. Input was sent as keyboard and pointer
+events through QMP; there was no automatic login. The report records the exact
+ISO and test-only diagnostics setting.
 
 The captures in `test-results/encrypted-splash/` are original QEMU screendumps
 of the boot splash, copied byte for byte without cropping or scaling. The two
@@ -40,7 +41,6 @@ around it are left out.
 
 | Image | Original resolution | What it shows |
 | --- | --- | --- |
-| [Genkan](images/sekka/genkan.png) | 2200 × 1508 | Genkan's window: its current GTK interface in its debug-only welcome preview, with synthetic installation/cache data, on Sekka's Plasma session |
 | [Activity](images/sekka/activity.png) | 2320 × 1440 | Tatami's Activity window on its CPU view, after a minute of readings, opened with Super+Ctrl+T from a terminal (Super+Return) measuring how small the system's software compresses (`tar -chC /run/current-system sw \| xz -T2 \| wc -c`, which writes nothing), so that terminal, with its `tar`, `xz` and `wc`, is selected, then moved to an empty workspace with Super+Shift+2 |
 | [Activity's Memory view](images/sekka/activity-memory.png) | 2320 × 1440 | The same window on its Memory view (Ctrl+2): each application's proportional, private, resident and shared memory, and memory use and pressure under the list |
 | [Tatami menu](images/sekka/tatami-menu.png) | 2880 × 1800 | The whole Tatami desktop, with nothing open but the Tatami menu (Super+Space) |
@@ -54,6 +54,7 @@ around it are left out.
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
 | [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
+| [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window |
 
 They come from [nix/screenshots.nix](../nix/screenshots.nix):
 
@@ -74,11 +75,10 @@ which hides the pointer until it moves. GNOME Shell's first-login welcome dialog
 dismissed with Escape. Captures are the virtual display at its native
 resolution; the test keeps each whole capture an application was cropped
 from as `NAME-display.png`, and crops with ImageMagick at the window's
-rectangle as the compositor reports it (Hyprland's `hyprctl clients`, KWin's
-through `kdotool`), doubled for the scale. Tatami's windows are a little
-translucent, so the wallpaper shows faintly through them. No installation,
-update, or garbage collection is invoked.
-Genkan's preview uses fixed sample data and is excluded from production builds.
+rectangle as the compositor reports it (Hyprland's `hyprctl clients`), doubled
+for the scale. Tatami's windows are a little translucent, so the wallpaper
+shows faintly through them. No installation, update, or garbage collection is
+invoked.
 Yukimi shows the real test VM's limited configuration and store, including
 unavailable freshness information. The Network window reads the VM's real
 NetworkManager, but its Wi-Fi is simulated (mac80211_hwsim, with hostapd and
@@ -110,5 +110,8 @@ Aizome's own display settings path (`aizomectl output`), a 1440 × 900 layout.
 There is no GPU, so Aizome composites in software, its pixman fallback. It is
 driven through the compositor's own input path (`aizomectl input`, `spawn`,
 `stack`, `resize`), as keys and clicks a person would make; captures are the
-virtual display at its native resolution, and the two application images are
-crops of it to the window with its tab and shadow, unscaled.
+virtual display at its native resolution, and the three application images are
+crops of it to the window with its tab and shadow, unscaled. Genkan is the
+debug build's welcome preview (`CALAMARES_UI_PREVIEW=welcome`), with the
+pointer moved off its window; its sample data are fixed, and production builds
+leave the preview out.

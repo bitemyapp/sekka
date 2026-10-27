@@ -67,7 +67,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <article class="win mat mat-wide-bottom">
     <header class="mat-head"><h3>Or a desktop you already know</h3></header>
     <div class="mat-body">
-      <p>Plasma is the live session and the installer's preselected choice. GNOME, Xfce and vanilla Hyprland are there too. Install several and pick one at the login screen; they share your account.</p>
+      <p>Plasma, GNOME, Xfce and vanilla Hyprland are there too, beside Aizome. Install several and pick one at the login screen; they share your account.</p>
       <div class="pair">{plasma}{gnome}</div>
     </div>
   </article>
@@ -83,7 +83,7 @@ pub fn home(site: &Site) -> Result<Page> {
         genkan_shot = site.shot(
             "genkan.png",
             "Genkan's welcome page: nine steps down the side, from Welcome to Install, and a warning that the installer erases one whole disk.",
-            "Genkan's debug preview with sample data, on Sekka's Plasma session. It still wears libadwaita's light theme and the NixOS snowflake.",
+            "Genkan's debug preview with sample data, in Aizome.",
             "",
         )?,
         tatami_shot = site.shot(
@@ -145,7 +145,7 @@ pub fn home(site: &Site) -> Result<Page> {
       <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
       <li><strong>No release.</strong> Only experimental <a href="/download/">nightly builds</a>, published after testing the exact ISO in virtual machines.</li>
-      <li><strong>Not all of it looks like Sekka yet.</strong> Genkan and Yukimi still use libadwaita's light theme and NixOS blues.</li>
+      <li><strong>Not all of it looks like Sekka yet.</strong> Outside Aizome, Yukimi still uses libadwaita's light theme and NixOS blues.</li>
     </ul>
     <p><a href="/status/">The full status, and how each part is tested</a></p>
   </div>
@@ -636,8 +636,8 @@ pub fn design(site: &Site) -> Result<Page> {
   <p class="step-n">7</p>
   <h2 id="unfinished">What isn't finished</h2>
   <ul class="facts">
-    <li><strong>The desktop doesn't use the crest yet.</strong> Tatami's bar shows the NixOS logo and Genkan's welcome page shows the NixOS snowflake.</li>
-    <li><strong>Genkan and Yukimi are still light libadwaita with NixOS blues</strong>, not Tokyo Night, and Yukimi's icon is outside the family.</li>
+    <li><strong>The desktop doesn't use the crest yet.</strong> Tatami's bar shows the NixOS logo.</li>
+    <li><strong>Yukimi's GTK window is still light libadwaita with NixOS blues</strong>, not Tokyo Night, and Yukimi's icon is outside the family.</li>
     <li><strong>Tatami is dark only.</strong> Day and High contrast exist in the tokens and on this site, not in the desktop.</li>
     <li><strong>The week-number grey fails contrast in Night and Day</strong>, kept because it is Tatami's real value and only decorative.</li>
     <li><strong>Pages share no raster image</strong>, so links posted elsewhere show no picture.</li>
@@ -805,7 +805,7 @@ pub fn status(site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Trying it anyway</h2>
-    <p>The image starts a live Plasma session with Genkan; the boot menu also offers an older kernel and an Xfce recovery session. Use a virtual machine, or a spare computer with nothing you need on it, and try the live session on your hardware before you install. To build an image yourself, see <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>:</p>
+    <p>The image starts a live Aizome session with Genkan; the boot menu also offers an older kernel and a recovery entry that draws Aizome in software. Use a virtual machine, or a spare computer with nothing you need on it, and try the live session on your hardware before you install. To build an image yourself, see <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>:</p>
     <pre class="code"><code>nix build .#iso --out-link result-iso</code></pre>
   </article>
 </section>
@@ -890,7 +890,7 @@ pub fn download(_site: &Site) -> Result<Page> {
   <div>
     <p class="eyebrow">Download</p>
     <h1>Sekka's nightly ISO.</h1>
-    <p class="lead">Sekka builds candidates and fills its binary cache each night. An ISO joins the downloads only after those exact bytes pass installation, installed-disk boot, login and desktop testing in virtual machines, followed by independent evidence review. Publication runs from a workstation; there is no automatic nightly ISO upload. The last seven published builds are kept. Each starts a live Plasma session with Genkan, the installer.</p>
+    <p class="lead">Sekka builds candidates and fills its binary cache each night. An ISO joins the downloads only after those exact bytes pass installation, installed-disk boot, login and desktop testing in virtual machines, followed by independent evidence review. Publication runs from a workstation; there is no automatic nightly ISO upload. The last seven published builds are kept. Each starts a live session with Genkan, the installer: Aizome's, or Plasma's in earlier builds.</p>
     <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Read its qualification evidence and hardware limitations; VM results do not establish compatibility with your computer. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
   </div>
 </section>

@@ -104,7 +104,7 @@ fn main() -> io::Result<()> {
                 "-u",
                 "display-manager",
                 "-u",
-                "plasmalogin",
+                "greetd",
             ],
         ),
     ] {
