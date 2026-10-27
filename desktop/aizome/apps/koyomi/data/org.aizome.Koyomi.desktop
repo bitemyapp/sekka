@@ -1,0 +1,23 @@
+[Desktop Entry]
+Type=Application
+Name=Koyomi
+GenericName=Calendar
+Comment=Month, week and day views of your calendars, with alerts
+Keywords=calendar;agenda;events;schedule;appointments;meetings;dates;ical;ics;reminders;
+Categories=Office;Calendar;
+MimeType=text/calendar;application/ics;
+Icon=org.aizome.Koyomi
+Exec=aizome-koyomi %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Koyomi
+DBusActivatable=false
+Actions=new-event;today;
+
+[Desktop Action new-event]
+Name=New Event
+Exec=aizome-koyomi --new
+
+[Desktop Action today]
+Name=Today
+Exec=aizome-koyomi --show today

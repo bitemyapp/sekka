@@ -1,0 +1,24 @@
+[package]
+name = "aizome-annai"
+description = "Annai 案内 (Welcome), Aizome's welcome: short pages with live illustrations of tabs, menus, the palette, Desks and the command key"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_annai"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-annai"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-theme.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true

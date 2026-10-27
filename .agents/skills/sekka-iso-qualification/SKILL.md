@@ -16,7 +16,7 @@ image. Keep the full scope below even when a session spans several agent turns.
 ## Coordinator and evidence
 
 Create a durable run directory outside tracked source. Record ISO SHA-256 and
-size, Sekka commit, lock SHA-256, locked Aizome/Sidestep commits, tool versions,
+size, Sekka commit, lock SHA-256, locked Sidestep commit, tool versions,
 workstation, VM command, firmware, virtual hardware, and start time. Use unique
 VM/socket/disk names. Only disposable disk files may be mutated; never pass host
 block devices, personal folders, or credentials into a guest.

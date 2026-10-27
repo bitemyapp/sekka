@@ -1,0 +1,34 @@
+[Desktop Entry]
+Type=Application
+Name=Settei
+GenericName=Settings
+Comment=Arrange the desktop: appearance, keyboard, displays, network, sound, users and the rest
+Keywords=settings;preferences;control panel;system;configuration;options;appearance;keyboard;mouse;trackpad;network;bluetooth;sound;displays;users;
+Categories=Settings;DesktopSettings;
+Icon=org.aizome.Settei
+Exec=aizome-settei %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Settei
+DBusActivatable=false
+Actions=appearance;keyboard;network;displays;sound;
+
+[Desktop Action appearance]
+Name=Appearance
+Exec=aizome-settei --pane appearance
+
+[Desktop Action keyboard]
+Name=Keyboard
+Exec=aizome-settei --pane keyboard
+
+[Desktop Action network]
+Name=Network
+Exec=aizome-settei --pane network
+
+[Desktop Action displays]
+Name=Displays
+Exec=aizome-settei --pane displays
+
+[Desktop Action sound]
+Name=Sound
+Exec=aizome-settei --pane sound

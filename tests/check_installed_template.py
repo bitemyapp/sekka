@@ -22,9 +22,11 @@ def command(*args):
 lock = command('nix', 'eval', '--json', '.#lib.installedLock')
 parsed = json.loads(lock)
 assert 'sekka' in parsed['nodes'][parsed['root']]['inputs']
-assert not {'calamares', 'tatami', 'yukimi', 'aizome'} & parsed['nodes'][parsed['root']]['inputs'].keys()
-# Aizome must remain pinned beneath Sekka, including its own follows edges.
-assert 'aizome' in parsed['nodes']['sekka']['inputs']
+assert not {'calamares', 'tatami', 'yukimi', 'aizome', 'sidestep'} & parsed['nodes'][parsed['root']]['inputs'].keys()
+# Aizome is Sekka's own source; Sidestep, which it builds against, stays
+# pinned beneath Sekka.
+assert 'aizome' not in parsed['nodes']
+assert 'sidestep' in parsed['nodes']['sekka']['inputs']
 cases = json.loads(command(str(FIXTURE), 'desktop-configurations'))
 cases.update(json.loads(command(str(FIXTURE), 'storage-configurations')))
 with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as directory:

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Runs an Aizome session headless, away from whatever session you are in:
+# the compositor with a virtual output, the shell (unless --no-shell), and
+# the command after `--`, if any. It prints the environment to talk to the
+# session, waits for the command (or Ctrl-C), and stops everything.
+#
+#   scripts/headless-session [--output 2880x1800@2] [--no-shell] [--bin DIR] [-- cmd args…]
+#
+# --bin DIR is where aizome, aizome-shell and aizomectl are (default: the
+# newest of the workspace's debug target directories). Screenshots:
+#   AIZOME_SOCKET=… aizomectl screenshot out.png
+set -euo pipefail
+output=2880x1800@2
+shell=1
+bin=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    --no-shell) shell=0; shift ;;
+    --bin) bin=$2; shift 2 ;;
+    --) shift; break ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+done
+if [ -z "$bin" ]; then
+  bin=$(ls -td "${CARGO_TARGET_DIR:-}"/debug "$HOME"/work/.aizome-target*/debug 2>/dev/null \
+    | while read -r d; do [ -x "$d/aizome" ] && echo "$d"; done | head -1)
+fi
+[ -x "$bin/aizome" ] || { echo "no aizome binary found; build it or pass --bin" >&2; exit 1; }
+
+unset WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+name="aizome-headless-$$"
+export PATH="$bin:$PATH"
+export AIZOME_FONT_DIR=${AIZOME_FONT_DIR:-$HOME/work/.aizome-fonts}
+args=(--backend headless --headless-output "$output" --socket "$name" --no-session --no-xwayland)
+[ "$shell" = 1 ] || args+=(--no-shell)
+log=$(mktemp -t aizome-headless.XXXXXX.log)
+"$bin/aizome" "${args[@]}" >"$log" 2>&1 &
+comp=$!
+trap 'kill $comp 2>/dev/null; wait $comp 2>/dev/null || true' EXIT
+for _ in $(seq 1 100); do
+  [ -S "$XDG_RUNTIME_DIR/aizome.$name.sock" ] && break
+  kill -0 $comp 2>/dev/null || { cat "$log" >&2; exit 1; }
+  sleep 0.1
+done
+export WAYLAND_DISPLAY=$name
+export AIZOME_SOCKET="$XDG_RUNTIME_DIR/aizome.$name.sock"
+export AIZOME_SHELL_SOCKET="$XDG_RUNTIME_DIR/aizome-shell.$name.sock"
+echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY AIZOME_SOCKET=$AIZOME_SOCKET AIZOME_SHELL_SOCKET=$AIZOME_SHELL_SOCKET"
+echo "compositor log: $log"
+if [ $# -gt 0 ]; then
+  "$@"
+else
+  wait $comp
+fi

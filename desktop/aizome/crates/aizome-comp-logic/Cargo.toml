@@ -1,0 +1,33 @@
+[package]
+name = "aizome-comp-logic"
+description = "The hot-swappable half of Aizome's compositor: window management, tab groups, Desks, bindings, focus policy, decorations, overlays and the frame's scene, loaded and reloaded by the core without disconnecting a client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# A Rust dylib the core loads with dlopen (never linked into the binary).
+# Every dependency it shares with the core comes from the core's copy, so
+# a reload brings no second smithay or std; see docs/reload.md for what
+# logic code may and may not do.
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+aizome-comp-core.workspace = true
+aizome-theme.workspace = true
+aizome-config.workspace = true
+aizome-ipc.workspace = true
+sidestep-ui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smithay.workspace = true
+tracing.workspace = true
+png = "0.18"
+resvg = { version = "0.46", default-features = false }
+libc = "0.2"
+bitflags = "2"
+
+[build-dependencies]
+sha2 = "0.10"

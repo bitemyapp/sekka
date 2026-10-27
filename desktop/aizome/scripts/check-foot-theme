@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Check real Foot palettes in isolated headless Aizome sessions.
+
+Requires Python 3, aizome and foot on PATH. For a development shell binary,
+run inside `nix develop .#aizome` so its runtime libraries are available:
+  python3 scripts/check-foot-theme --shell target/debug/aizome-shell
+Uses OSC 11 replies from Foot itself; no screenshots or signal mocks decide
+whether a palette changed. Logs and screenshots go in --out (a temp dir by default).
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import tty
+
+
+def probe(path):
+    tty.setraw(0)
+    os.write(1, b"Foot palette probe\r\n\x1b[31mRed  \x1b[32mGreen  \x1b[34mBlue\x1b[0m\r\n")
+    while True:
+        os.write(1, b"\x1b]11;?\x1b\\")
+        reply = b""
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if select.select([0], [], [], 0.1)[0]:
+                reply += os.read(0, 4096)
+                match = re.search(rb"11;rgb:([0-9a-f]+)/([0-9a-f]+)/([0-9a-f]+)", reply)
+                if match:
+                    color = "".join(part.decode()[:2] for part in match.groups())
+                    path.write_text(color)
+                    break
+        time.sleep(0.05)
+
+
+def until(description, check):
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        if result := check():
+            return result
+        time.sleep(0.05)
+    raise AssertionError("timed out: " + description)
+
+
+class Session:
+    def __init__(self, root, shell, theme):
+        self.root = root
+        self.shell = shell
+        self.children = []
+        self.env = os.environ.copy()
+        for key in ("DISPLAY", "WAYLAND_SOCKET", "AIZOME_SESSION", "AIZOME_SHELL_PREVIOUS_PID"):
+            self.env.pop(key, None)
+        # Deliberately use the same Wayland socket name in both sessions:
+        # comparing WAYLAND_DISPLAY alone does not identify a session.
+        for key, value in {
+            "HOME": root / "home",
+            "XDG_RUNTIME_DIR": root / "run",
+            "XDG_CONFIG_HOME": root / "config",
+            "XDG_CONFIG_DIRS": root / "config",
+            "XDG_STATE_HOME": root / "state",
+            "XDG_DATA_HOME": root / "data",
+            "XDG_CACHE_HOME": root / "cache",
+        }.items():
+            value.mkdir(parents=True, mode=0o700, exist_ok=True)
+            self.env[key] = str(value)
+        self.env.update({
+            "AIZOME_SESSION": "0",
+            "WAYLAND_DISPLAY": "wayland-test",
+            "AIZOME_SOCKET": str(root / "run/aizome.wayland-test.sock"),
+            "AIZOME_SHELL_SOCKET": str(root / "run/aizome-shell.wayland-test.sock"),
+            "AIZOME_SHELL_BIN": shell,
+            "AIZOME_RENDERER": "pixman",
+            "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + str(root / "no-session-bus"),
+            "DBUS_SYSTEM_BUS_ADDRESS": "unix:path=" + str(root / "no-system-bus"),
+        })
+        config = root / "config/foot"
+        config.mkdir()
+        shutil.copyfile(Path(__file__).resolve().parents[1] / "etc/foot/foot.ini", config / "foot.ini")
+        self.settings = root / "config/aizome/settings.toml"
+        self.settings.parent.mkdir()
+        self.theme(theme, reload=False)
+
+    def spawn(self, name, *args):
+        with (self.root / (name + ".log")).open("w") as log:
+            child = subprocess.Popen(args, env=self.env, stdout=log, stderr=log, start_new_session=True)
+        self.children.append(child)
+        return child
+
+    def start(self, shell=True):
+        args = [] if shell else ["--no-shell"]
+        self.spawn("compositor", "aizome", "--backend", "headless", "--socket", "wayland-test",
+                   "--headless-output", "1000x700@1", "--no-session", "--no-xwayland", *args)
+        until("compositor socket", lambda: Path(self.env["AIZOME_SOCKET"]).exists())
+        if shell:
+            until("shell socket", lambda: Path(self.env["AIZOME_SHELL_SOCKET"]).exists())
+
+    def ctl(self, *args):
+        return subprocess.check_output(["aizomectl", "--json", *args], env=self.env, text=True, timeout=10)
+
+    def theme(self, name, reload=True):
+        self.settings.write_text('[appearance]\ntheme = "' + name + '"\n')
+        if reload:
+            self.ctl("reload-config")
+
+    def terminal(self, name, *args, client=False):
+        colors = self.root / (name + ".color")
+        self.spawn(name, "footclient" if client else "foot", *args,
+                   sys.executable, str(Path(__file__).resolve()), "--probe", str(colors))
+        until(name + " ready", lambda: colors.exists())
+        return colors
+
+    def expect(self, color, *probes):
+        for path in probes:
+            until(str(path) + " = " + color, lambda: path.read_text() == color)
+
+    def shot(self, name):
+        self.ctl("screenshot", str(self.root / (name + ".png")))
+
+    def close(self):
+        for child in reversed(self.children):
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        for child in reversed(self.children):
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--shell", default=shutil.which("aizome-shell"))
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--probe", type=Path, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if args.probe:
+        probe(args.probe)
+        return
+    if not args.shell:
+        parser.error("pass --shell or put aizome-shell on PATH")
+    shell = str(Path(args.shell).resolve())
+    root = (args.out or Path(tempfile.mkdtemp(prefix="aizome-foot-theme-"))).resolve()
+    print("Evidence:", root, flush=True)
+    day = Session(root / "day", shell, "day")
+    other = Session(root / "other", shell, "night")
+    try:
+        other.start()
+        outside = other.terminal("other")
+        other.expect("1a1b26", outside)
+
+        # A shell joining an existing Day session must repair dark terminals.
+        day.start(shell=False)
+        existing = day.terminal("existing")
+        day.expect("1a1b26", existing)
+        day.spawn("late-shell", shell)
+        day.expect("f4f5fa", existing)
+        print("PASS shell startup adopts existing terminals", flush=True)
+
+        fresh = day.terminal("fresh")
+        custom = day.terminal("custom", "--app-id=theme-probe")
+        day.expect("f4f5fa", fresh, custom)
+        day.shot("day")
+        print("PASS new terminals, including custom app IDs, follow Day", flush=True)
+
+        server_socket = str(day.root / "run/foot-server.sock")
+        day.spawn("server", "foot", "--server=" + server_socket)
+        until("foot server", lambda: Path(server_socket).exists())
+        client = day.terminal("client", "--server-socket=" + server_socket, client=True)
+        day.expect("f4f5fa", client)
+        probes = (existing, fresh, custom, client)
+        day.theme("night")
+        day.expect("1a1b26", *probes)
+        day.theme("day")
+        day.expect("f4f5fa", *probes)
+        other.expect("1a1b26", outside)
+        print("PASS live Night/Day and foot server; other session stays dark", flush=True)
+
+        # Verify a replacement shell adopts open windows too, using the
+        # other session's supervised shell rather than the manual one above.
+        other.theme("day")
+        other.expect("f4f5fa", outside)
+        before = json.loads(other.ctl("windows"))["windows"]
+        foot_pid = before[0]["pid"]
+        os.kill(foot_pid, signal.SIGUSR1)
+        other.expect("1a1b26", outside)
+        other.ctl("reload", "--shell")
+        other.expect("f4f5fa", outside)
+        after = json.loads(other.ctl("windows"))["windows"]
+        assert [(w["id"], w["pid"]) for w in after] == [(w["id"], w["pid"]) for w in before]
+        other.shot("after-shell-reload")
+        print("PASS shell reload repairs existing terminals without closing them", flush=True)
+    finally:
+        day.close()
+        other.close()
+
+
+if __name__ == "__main__":
+    main()

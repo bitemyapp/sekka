@@ -1,0 +1,17 @@
+[package]
+name = "aizome-config"
+description = "Aizome's settings file (~/.config/aizome/settings.toml): schema, defaults, load/save and change watching"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-theme.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+# The local time and time zone (localtime_r, tzset), for sunrise and sunset.
+libc = "0.2"

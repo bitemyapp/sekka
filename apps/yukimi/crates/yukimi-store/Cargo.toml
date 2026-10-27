@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# Aizome keeps SQLite built in; the GTK package uses the system library.
+bundled = ["rusqlite/bundled"]
+
 [dependencies]
 rusqlite.workspace = true
 thiserror.workspace = true

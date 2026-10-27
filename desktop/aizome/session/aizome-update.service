@@ -1,0 +1,11 @@
+# Offers to reload Aizome after a system update (aizome-update.path).
+[Unit]
+Description=Offer to reload Aizome after an update
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/reload.md
+PartOf=aizome-session.target
+
+[Service]
+Type=oneshot
+# The new system's aizomectl; it waits while the notification shows.
+ExecStart=/usr/bin/env aizomectl reload --offer
+TimeoutStartSec=infinity

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Just runs this from the checkout containing its justfile. Keep its shell
+# arguments intact so recipe parameters remain data across nix develop.
+set -euo pipefail
+
+if [[ ${AIZOME_DEV_SHELL:-} == 1 ]]; then
+  exec bash "$@"
+fi
+
+exec nix develop .#aizome --command bash "$@"

@@ -1,0 +1,42 @@
+[package]
+name = "aizome-shashin"
+description = "Shashin 写真 (Images), Aizome's image viewer: PNG, JPEG, GIF, WebP, BMP, TIFF, ICO and SVG, quick to open big photos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_shashin"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-shashin"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+aizome-face.workspace = true
+aizome-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# The codecs Sidestep's `Image` reads with (the same version and features,
+# so nothing is built twice), used directly to decode off the interface
+# thread, scale, turn and write pictures.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico"] }
+# SVG, rendered at the display's scale; already in the workspace for the
+# compositor. Text in SVGs is set with the system's fonts.
+resvg = { version = "0.46", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
+# EXIF for Get Info: camera, lens and settings. Pure Rust and small.
+kamadak-exif = "0.6"
+# Thumbnails in the freedesktop cache (shared with Hako): their names are
+# the MD5 of the file's URI, their PNGs carry its URI and time.
+md5 = "0.8"
+png = "0.18"
+# The clipboard as Sidestep's engine keeps it, to offer a picture as
+# image/png (sidestep-ui offers only text).
+sidestep-engine.workspace = true

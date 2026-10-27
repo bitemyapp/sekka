@@ -1,0 +1,27 @@
+# Keep Awake (aizome-awake; docs/keep-awake.md). While it runs, logind
+# blocks sleep, idle and lid-close sleep, and the compositor doesn't lock
+# the screen or turn the displays off when the computer is left alone.
+# `aizome-awake on` starts it and keeps the setting, so it starts again at
+# the next login; `aizome-awake off` stops it. The menu bar, the palette
+# and Settings do the same.
+[Unit]
+Description=Aizome Keep Awake
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/keep-awake.md
+PartOf=aizome-session.target
+After=aizome.service
+# It retries each second for as long as it's on, never giving up.
+StartLimitIntervalSec=0
+
+[Service]
+Slice=session.slice
+# Ready only once logind lists its locks and the compositor has its idle
+# inhibitor.
+Type=notify
+NotifyAccess=main
+# The package's own (NixOS gives units it configures a PATH of its own,
+# without the system's programs).
+ExecCondition=@bindir@/aizome-awake requested
+ExecStart=@bindir@/aizome-awake hold
+Restart=always
+RestartSec=1
+TimeoutStartSec=15

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Sumi
+GenericName=Text Editor
+Comment=Edit text and code, with Markdown styled as you type
+Keywords=text editor;editor;text;markdown;notepad;code;plain text;txt;
+Categories=Utility;TextEditor;Development;
+MimeType=text/plain;text/markdown;text/x-markdown;text/rust;text/x-python;text/javascript;text/x-typescript;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-go;text/x-nix;application/x-shellscript;application/toml;application/json;application/yaml;text/x-log;
+Icon=org.aizome.Sumi
+Exec=aizome-sumi %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Sumi
+DBusActivatable=false

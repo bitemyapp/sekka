@@ -1,6 +1,6 @@
 # Developing Sekka
 
-Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag. The `nightly` branch, which installed systems follow, belongs to the nightly workflow alone; never push to it.
+Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami desktops, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag. The `nightly` branch, which installed systems follow, belongs to the nightly workflow alone; never push to it.
 
 ## Repository map
 
@@ -8,7 +8,9 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | --- | --- |
 | `flake.nix`, `flake.lock` | Public outputs and the authoritative external dependency lock |
 | `installer/genkan/` | Rust installer, privileged helper, system modules, application catalog, storage tests |
+| `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
+| `vendor/sidestep/` | Git submodule: the Sidestep fork Aizome builds against in development |
 | `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
@@ -18,7 +20,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
 
-The initial import preserves component layouts and separate Cargo workspaces. There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
+The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs; the one submodule, `vendor/sidestep`, is Sidestep's fork, which Aizome builds against ([Aizome](#aizome)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
 Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
@@ -48,7 +50,7 @@ python3 -m unittest discover -s tests -p test_release.py
 ```
 
 The installed lock's root names only the inputs in `templates/flake.nix.in`.
-Aizome and other dependencies used through Sekka stay nested beneath Sekka;
+Dependencies used only through Sekka, such as Sidestep, stay nested beneath Sekka;
 adding one to the installed root makes Genkan reject every installation before
 disk writes. `checks.x86_64-linux.template-lock` runs the real backend parser.
 Genkan also seeds the selected time zone before the target's first activation.
@@ -675,7 +677,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `aizome`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as a desktop and catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `sidestep`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, Sidestep for Aizome's build and the others as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `sidestep` input names its revision, so the nightly's input update never moves it: a new Sidestep is a change to `flake.nix`, reviewed with the Aizome changes that need it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -905,6 +907,76 @@ The push needs two credentials, neither of which belongs in the repository:
 Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
+
+## Aizome
+
+Aizome's source is in `desktop/aizome`, a Cargo workspace of its own with its
+NixOS module, VM checks and documentation (`desktop/aizome/docs/`). It moved
+here from [bitemyapp/aizome](https://github.com/bitemyapp/aizome), which keeps
+its history ([migration record](docs/migration.md#aizome)). Changes to Aizome
+are Sekka pull requests now, and reach the nightly with the rest of Sekka.
+
+`desktop/aizome/nix/default.nix` gives what Aizome's flake gave: its packages,
+module, checks and development shell, built with Sekka's Nixpkgs.
+`nix/components.nix` hands them to the rest of Sekka as `inputs.aizome`, as it
+does Tatami's and Yukimi's.
+
+```sh
+nix build .#aizome .#aizome-fonts
+nix develop .#aizome
+nix build .#aizome-checks.session -L
+```
+
+`aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
+gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
+CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
+Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
+`aizome-ibus-policy`) still run with the others.
+
+The package version is a plain `0.1.0`. Aizome's flake added its own revision
+to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
+would rebuild Aizome. The source hash already tells the builds apart.
+
+The workspace depends on Sidestep's crates by path, through the
+`desktop/aizome/sidestep` link to `../../vendor/sidestep`, a Git submodule
+of the fork's `aizome` branch. Clone with `--recurse-submodules`, or run
+`git submodule update --init vendor/sidestep`; entering
+`nix develop .#aizome` does the latter when the submodule isn't checked out
+yet. The hook never moves a checked-out submodule, so Sidestep work there is
+kept, and it says when the submodule differs from the revision the package
+builds against. `git pull` doesn't update submodules: after one that moves
+Sidestep, run `git submodule update vendor/sidestep`. `aizome-dev` warns
+when the submodule differs from the Sidestep the running session was built
+against; the ABI check always refuses an incompatible logic library.
+
+Nix builds take Sidestep from the flake's `sidestep` input, not the
+submodule: installed systems fetch Sekka as a GitHub tarball, which leaves
+submodules empty. The submodule and the input must name the same commit,
+which `tests/test_aizome_development.py` checks in a Git checkout
+(`python3 -m unittest tests/test_aizome_development.py`; the
+`aizome-development` Nix check runs the rest without Git metadata and skips
+it). The input names its
+revision rather than the branch, so the nightly's `nix flake update` leaves
+it alone. To move Sidestep, check out the new revision in `vendor/sidestep`
+and stage it, put the same revision in `flake.nix`, run `nix flake lock`,
+and build Aizome and run its checks against it.
+
+Aizome's `just` recipes and `aizome-dev` enter the worktree's
+`nix develop .#aizome` shell, including when called from a different Nix
+shell. Without `--checkout`, `aizome-dev` uses `$AIZOME_CHECKOUT`, then the
+current Sekka worktree, then `~/work/sekka/desktop/aizome`. `--checkout`
+accepts either the Sekka root or its Aizome component. `CARGO_BUILD_JOBS`
+can limit build concurrency without changing the core's ABI.
+
+The native Yukimi interface stays in `desktop/aizome/apps/yukimi`; both it
+and the GTK interface use the canonical backend libraries under
+`apps/yukimi/crates`. Their Cargo workspaces and locks remain separate.
+Aizome's package copies only its component, those shared libraries and their
+workspace manifest, plus the pinned Sidestep source. Editing unrelated
+Sekka components or Yukimi's GTK interface does not rebuild Aizome.
+`aizome-dev watch` includes the shared backend and rebuilds native Yukimi
+when it changes. Aizome retains bundled SQLite through `yukimi-store`'s
+`bundled` feature; GTK keeps its system SQLite dependency.
 
 ## Tatami Bluetooth
 
@@ -1233,9 +1305,10 @@ mq-deadline for NVMe. Sekka also has its own ananicy rules: shells run at
 nice 0, compilers at nice 3, and interactive AI harnesses at nice −4 with
 normal CPU scheduling. A user service gives their child jobs separate systemd
 scopes sharing a low-weight slice; the harness itself stays interactive.
-`nix/scheduling/` also patches ananicy's thread/fork/exec handling and Aizome's
-keybinding/IPC launcher, which otherwise left terminal builds in the
-compositor's scheduling group. [docs/tuning.md](docs/tuning.md)
+`nix/scheduling/` also patches ananicy's thread/fork/exec handling, and
+Aizome's keybinding/IPC launcher starts programs in `app.slice` rather than
+leaving terminal builds in the compositor's scheduling group.
+[docs/tuning.md](docs/tuning.md)
 describes the policy, matching limits, patch maintenance and VM checks.
 
 ```sh

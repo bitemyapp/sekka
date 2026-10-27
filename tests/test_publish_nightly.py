@@ -82,7 +82,7 @@ class Qualification(unittest.TestCase):
         self.candidate = {
             'iso_sha256': release.digest(self.iso), 'iso_bytes': self.iso.stat().st_size,
             'sekka_revision': 'a' * 40, 'flake_lock_sha256': release.digest(ROOT / 'flake.lock'),
-            'aizome_revision': 'b' * 40, 'sidestep_revision': 'c' * 40,
+            'sidestep_revision': 'c' * 40,
             'iso_store_path': '/nix/store/synthetic-iso',
         }
         ids = sorted(release.CORE_IDS) + ['Q4.app.test.success', 'Q4.app.test.cancel',
@@ -98,7 +98,7 @@ class Qualification(unittest.TestCase):
                             expected='synthetic expected', observed='synthetic observed', status='pass',
                             evidence=['ui.txt']) for ident in ids],
             'inventories': {
-                'Q4': {'source_revision': 'b' * 40, 'evidence': ['ui.txt'], 'features': [{
+                'Q4': {'source_revision': 'a' * 40, 'evidence': ['ui.txt'], 'features': [{
                     'id': 'Q4.app.test', 'name': 'Synthetic app', 'source_refs': ['docs/apps.md'],
                     'cases': {case: f'Q4.app.test.{case}' for case in ('success', 'cancel', 'recovery')}}]},
                 'Q5': {'source_revision': 'a' * 40, 'evidence': ['ui.txt'], 'features': [{

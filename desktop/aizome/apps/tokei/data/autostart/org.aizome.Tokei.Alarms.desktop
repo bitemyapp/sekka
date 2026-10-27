@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tokei Alarms
+Comment=Schedules Tokei's alarms as systemd user timers at login
+Exec=aizome-tokei --sync
+Icon=org.aizome.Tokei
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-Phase=Applications

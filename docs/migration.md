@@ -78,3 +78,37 @@ Sekka ISO or validation on physical hardware. No ISO release was published.
 The release workflow's sole job is unconditionally disabled until an explicit
 reviewed change enables it. See [DEVELOPERS.md](../DEVELOPERS.md) for the checks
 and release requirements.
+
+## Aizome
+
+Aizome joined Sekka in October 2026, after the first migration. Until then
+Sekka took it from [bitemyapp/aizome](https://github.com/bitemyapp/aizome) as
+a flake input. A change to Aizome reached Sekka's `main` only through a second
+pull request that moved the pin, and the nightly built whatever Aizome's `main`
+held that night. Its source is now in `desktop/aizome`, a snapshot like the
+others. [imports.json](imports.json) records the revision, and bitemyapp/aizome
+keeps the history.
+
+The import includes Aizome main through `1a50f8e`: input-method keyboard
+grabs, independent Desks and swapping, docked lid removal, the Desk underline
+notification, and sandboxed applications surviving shell reloads. Sekka's
+keybinding/IPC launch patch is folded into the local source.
+
+- Aizome's flake became `desktop/aizome/nix/default.nix`. It gives the same
+  packages, NixOS module, VM checks and development shell, built with Sekka's
+  Nixpkgs, as Aizome's input did with `inputs.nixpkgs.follows`. The flake's
+  own `flake.nix` and `flake.lock` were not imported: Sekka's lock is the only
+  one.
+- Sidestep, which the workspace builds against by path, remains a separate
+  product. It is now Sekka's `sidestep` input, at the revision Aizome's lock
+  pinned. `flake.nix` names that revision, so the nightly's input update
+  doesn't move it. The `vendor/sidestep` submodule records the same revision
+  for development, in place of the separate checkout beside Aizome's.
+- The installed flake's lock loses its nested `aizome` node and keeps
+  `sidestep` beneath Sekka. The ISO qualification report no longer records
+  an Aizome revision: the Sekka revision includes Aizome's source.
+- Native Yukimi uses the existing `apps/yukimi/crates` backend instead of
+  retaining a copied backend inside Aizome. Aizome's additions are preserved
+  there; the GTK and Aizome Cargo workspaces and package boundaries remain
+  separate. Aizome's filtered package source includes only the shared backend
+  and its workspace metadata, not Yukimi's GTK interface or privileged helper.

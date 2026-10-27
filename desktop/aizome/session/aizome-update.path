@@ -1,0 +1,17 @@
+# After a system update (nixos-rebuild switch moves /run/current-system),
+# aizome-update.service offers to reload Aizome: a notification says what
+# a reload would pick up (the window manager, the shell) and its button
+# does it; a compositor core that changed runs at the next login. Nothing
+# reloads by itself.
+[Unit]
+Description=Watch for Aizome updates
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/reload.md
+PartOf=aizome-session.target
+After=aizome-session.target
+
+[Path]
+PathChanged=/run/current-system
+Unit=aizome-update.service
+
+[Install]
+WantedBy=aizome-session.target

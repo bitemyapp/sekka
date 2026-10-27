@@ -1,0 +1,30 @@
+# Koyomi's alert agent: posts each calendar alert as a desktop
+# notification (org.freedesktop.Notifications, served by aizome-shell)
+# with Snooze and Open, whether or not the calendar window is open.
+#
+# The package installs this to lib/systemd/user/, with @bindir@ replaced
+# by its bin directory; NixOS starts it with the graphical session
+# (systemd.user.services.aizome-koyomi-agent.wantedBy).
+[Unit]
+Description=Koyomi calendar alerts
+Documentation=https://github.com/bitemyapp/sekka/blob/main/desktop/aizome/docs/koyomi.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# Check at startup without retaining the target. A Requisite dependency
+# prevents StopWhenUnneeded from ending an Xfce session after logout.
+ExecCondition=@systemctl@ --user --quiet is-active graphical-session.target
+ExecStart=@bindir@/aizome-koyomi --agent
+Restart=on-failure
+RestartSec=5
+Slice=app.slice
+# It reads calendars and writes its own state; nothing else.
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=graphical-session.target

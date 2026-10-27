@@ -1,7 +1,7 @@
 # Adapted from DeterminateSystems/nixos-iso (Apache-2.0).
 # Official graphical base, native Rust installer, unchanged system input lock.
 {
-  description = "Sekka: NixOS with Genkan, Tatami and Yukimi";
+  description = "Sekka: NixOS with Genkan, Aizome, Tatami and Yukimi";
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   inputs.determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
   inputs.fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
@@ -9,10 +9,17 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
-  # Aizome, Sekka's own desktop, on Sidestep's native toolkit: its own
-  # repository, built with Sekka's Nixpkgs.
-  inputs.aizome.url = "github:bitemyapp/aizome";
-  inputs.aizome.inputs.nixpkgs.follows = "nixpkgs";
+  # Sidestep's native toolkit, the `aizome` branch of bitemyapp's fork,
+  # which Aizome (desktop/aizome) builds against by path. Pinned by revision,
+  # as Aizome's own lock pinned it, so the nightly's input update leaves it
+  # alone: moving Sidestep is a reviewed change here. The vendor/sidestep
+  # submodule, which development builds use, records the same revision
+  # (tests/test_aizome_development.py); Nix can't use it, as GitHub's
+  # tarballs of Sekka leave submodules empty.
+  inputs.sidestep = {
+    url = "github:bitemyapp/sidestep/dae957e913376a26e642d6abee533eb755fb9092";
+    flake = false;
+  };
 
   # Catalog applications packaged by other flakes, from forks under bitemyapp:
   # only commits there reach the nightly. Sekka builds them with the
@@ -49,7 +56,7 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) aizome superluminal tracy;
+        inherit (externalInputs) sidestep superluminal tracy;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -123,6 +130,9 @@
       };
       devShells.${system} = {
         kakehashi = kakehashi.shell;
+        # Aizome's workspace (desktop/aizome), which its `just` recipes and
+        # aizome-dev enter.
+        aizome = inputs.aizome.devShells.${system}.default;
         default = pkgs.mkShell {
           inputsFrom = [
             calamares
@@ -142,6 +152,10 @@
         };
       };
       nixosConfigurations.installer = installer;
+      # Aizome's own VM checks (desktop/aizome/nix), under the names its
+      # flake gave them: `nix build .#aizome-checks.session`. Not among
+      # `checks`, which CI runs, as they weren't in Aizome's repository.
+      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
       apps.${system} = {
         update = {
           type = "app";
@@ -168,6 +182,9 @@
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
+        # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
+        # (desktop/aizome/docs/kit.md).
+        aizome-fonts = inputs.aizome.packages.${system}.fonts;
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
@@ -588,6 +605,7 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        aizome-development = import ./nix/aizome-development-test.nix { inherit pkgs; };
         aizome-login = import ./nix/aizome-login-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

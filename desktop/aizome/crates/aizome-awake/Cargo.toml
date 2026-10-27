@@ -1,0 +1,19 @@
+[package]
+name = "aizome-awake"
+description = "Keep Awake: logind's sleep, idle and lid-switch locks and the compositor's idle inhibitor, held by a user service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "aizome-awake"
+path = "src/main.rs"
+
+[dependencies]
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+libc = "0.2"
+serde_json.workspace = true

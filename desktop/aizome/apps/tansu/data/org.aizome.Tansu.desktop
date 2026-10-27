@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Tansu
+GenericName=Disks
+Comment=See drives and their partitions, and change them safely: format, resize, encrypt, attach images, check SMART health
+Keywords=disks;disk utility;partitions;partition editor;gparted;format;resize;drives;usb;sd card;luks;encryption;iso;image;smart;
+Categories=System;Filesystem;Utility;
+Icon=org.aizome.Tansu
+Exec=aizome-tansu %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Tansu
+MimeType=application/x-cd-image;application/x-raw-disk-image;
+DBusActivatable=false
