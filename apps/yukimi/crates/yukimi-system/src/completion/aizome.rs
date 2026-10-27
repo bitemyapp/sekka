@@ -35,6 +35,14 @@ struct Running {
     runtime: Result<Runtime, String>,
 }
 
+struct EnvironmentUpdate {
+    changed: Vec<String>,
+    launch: Environment,
+    /// Removing a managed override exposes a login-shell value we cannot
+    /// recover from the compositor's environment.
+    unresolved: BTreeSet<String>,
+}
+
 pub(super) fn read(active: &Path) -> Completion {
     inspect(active).unwrap_or_else(|reason| Completion::new(Action::Unknown, reason))
 }
@@ -56,8 +64,8 @@ fn inspect(active: &Path) -> Result<Completion, String> {
     let installed = Installed { compositor, shell, abi };
     let socket = aizome_ipc::socket_path().ok_or("The running Aizome session could not be located.")?;
     let running = snapshot(&socket, Path::new("/proc"), Duration::from_secs(2))?;
-    let current = environment_file(&active.join(ENVIRONMENT), true)?;
-    let environment = session_environment_changes(&current, &running.environment);
+    let environment = environment_file(&active.join(ENVIRONMENT), false)
+        .and_then(|current| session_environment(&current, &running.environment));
     let result = assess_session(&installed, &running, environment);
     // Include the runtime file reads above: a concurrent switch must not
     // turn evidence about the previous generation into an all-clear.
@@ -67,8 +75,17 @@ fn inspect(active: &Path) -> Result<Completion, String> {
     Ok(result)
 }
 
-fn assess_session(installed: &Installed, running: &Running, environment: Result<Vec<String>, String>) -> Completion {
-    let mut result = assess(installed, running, environment.as_deref().unwrap_or_default());
+fn assess_session(
+    installed: &Installed,
+    running: &Running,
+    environment: Result<EnvironmentUpdate, String>,
+) -> Completion {
+    let empty = BTreeSet::new();
+    let (changed, launch, unresolved) = match &environment {
+        Ok(update) => (update.changed.as_slice(), &update.launch, &update.unresolved),
+        Err(_) => (&[][..], &running.environment, &empty),
+    };
+    let mut result = assess(installed, running, changed, launch, unresolved);
     if let Err(reason) = environment {
         // A known core change still needs a login, which also records the
         // environment. Missing evidence must never certify None or Reload.
@@ -92,12 +109,14 @@ fn snapshot(socket: &Path, proc: &Path, timeout: Duration) -> Result<Running, St
     let failed = || {
         "The running Aizome desktop could not be checked. Refresh Yukimi to try again; desktop update completion is unverified.".to_owned()
     };
-    let mut client = Client::connect_to_timeout(socket, timeout).map_err(|_| failed())?;
+    let mut client = connect(socket).map_err(|_| failed())?;
     client.stream().set_read_timeout(Some(timeout)).map_err(|_| failed())?;
     client.stream().set_write_timeout(Some(timeout)).map_err(|_| failed())?;
-    let Response::Version { pid, protocol, exe: Some(exe), build: Some(build), .. } =
-        client.request(&Request::Version).map_err(|_| failed())?
-    else {
+    let response = client.request(&Request::Version).map_err(|_| failed())?;
+    if matches!(&response, Response::Version { exe: None, .. } | Response::Version { build: None, .. }) {
+        return Err("This Aizome session predates the desktop completion check. Sign out and back in with the updated launcher, then check again.".into());
+    }
+    let Response::Version { pid, protocol, exe: Some(exe), build: Some(build), .. } = response else {
         return Err(failed());
     };
     if pid == 0 || protocol != aizome_ipc::PROTOCOL_VERSION {
@@ -112,12 +131,7 @@ fn snapshot(socket: &Path, proc: &Path, timeout: Duration) -> Result<Running, St
     // This is the compositor's environment, not Yukimi's (which may have
     // been launched from a terminal with its own PATH and shell overrides).
     let raw = std::fs::read(process.join("environ")).map_err(|_| failed())?;
-    let environment: Environment = String::from_utf8(raw)
-        .map_err(|_| failed())?
-        .split('\0')
-        .filter_map(|entry| entry.split_once('='))
-        .map(|(key, value)| (key.to_owned(), value.to_owned()))
-        .collect();
+    let environment = process_environment(&raw)?;
     let cwd = std::fs::read_link(process.join("cwd")).map_err(|_| failed())?;
     let Response::Stats { stats } = client.request(&Request::Stats { reset: false }).map_err(|_| failed())? else {
         return Err(failed());
@@ -153,7 +167,87 @@ fn snapshot(socket: &Path, proc: &Path, timeout: Duration) -> Result<Running, St
     })
 }
 
-fn assess(installed: &Installed, running: &Running, environment_changed: &[String]) -> Completion {
+// Unix connect is a single nonblocking attempt. A full accept queue fails
+// immediately (EAGAIN), rather than waiting or treating POLLHUP as success.
+// Keep this policy in the consumer, outside the compositor's ABI dependencies.
+fn connect(path: &Path) -> std::io::Result<Client> {
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::{ffi::OsStrExt, net::UnixStream};
+    let bytes = path.as_os_str().as_bytes();
+    // Safety: sockaddr_un consists of integer fields; all-zero is valid.
+    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    if bytes.is_empty() || bytes.contains(&0) || bytes.len() >= address.sun_path.len() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid Unix socket path"));
+    }
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    for (target, byte) in address.sun_path.iter_mut().zip(bytes) {
+        *target = *byte as libc::c_char;
+    }
+    // Safety: the flags and protocol describe a Unix stream socket.
+    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // Safety: socket returned a new, owned descriptor.
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+    let length = (std::mem::offset_of!(libc::sockaddr_un, sun_path) + bytes.len() + 1) as libc::socklen_t;
+    // Safety: address is initialized and length covers its family and terminated path.
+    if unsafe { libc::connect(fd.as_raw_fd(), (&address as *const libc::sockaddr_un).cast(), length) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let stream = UnixStream::from(fd);
+    stream.set_nonblocking(false)?;
+    Client::from_stream(stream)
+}
+
+fn process_environment(raw: &[u8]) -> Result<Environment, String> {
+    let mut environment = Environment::new();
+    for entry in raw.split(|b| *b == 0) {
+        let Some(at) = entry.iter().position(|b| *b == b'=') else { continue };
+        let Ok(key) = std::str::from_utf8(&entry[..at]) else { continue };
+        match std::str::from_utf8(&entry[at + 1..]) {
+            Ok(value) => {
+                environment.insert(key.to_owned(), value.to_owned());
+            }
+            Err(_)
+                if matches!(
+                    key,
+                    "PATH"
+                        | "AIZOME_SHELL_BIN"
+                        | "LD_LIBRARY_PATH"
+                        | "LD_PRELOAD"
+                        | "LD_AUDIT"
+                        | ENVIRONMENT_KEYS
+                        | ENVIRONMENT_FILE
+                ) =>
+            {
+                return Err(format!(
+                    "Aizome's {key} is not valid UTF-8, so its launch environment could not be verified."
+                ));
+            }
+            // A managed name omitted here is rejected by the startup-record
+            // check. Unrelated inherited bytes need not block inspection.
+            Err(_) => (),
+        }
+    }
+    Ok(environment)
+}
+
+fn assess(
+    installed: &Installed,
+    running: &Running,
+    environment_changed: &[String],
+    launch: &Environment,
+    unresolved: &BTreeSet<String>,
+) -> Completion {
+    // Development libraries are mutable and cannot attest to a system update.
+    // Check before mapped-runtime errors obscure the actionable explanation.
+    if running.compositor != installed.compositor && !running.compositor.starts_with("/nix/store") {
+        return Completion::new(
+            Action::Unknown,
+            "Aizome is running from a development build. Its reload does not necessarily select the active system's desktop. Check the session's launch configuration before signing out and back in.",
+        );
+    }
     let mut result = Completion::default();
     if installed.abi != running.abi {
         result.action = Action::Logout;
@@ -188,30 +282,32 @@ fn assess(installed: &Installed, running: &Running, environment_changed: &[Strin
         }
         result.reasons.push("Aizome's configured renderer takes effect at the next login.".into());
     }
-    let Some(path) = running.environment.get("PATH") else {
+    let path = launch.get("PATH");
+    if path.is_none() && !unresolved.contains("PATH") {
         result.action = Action::Unknown;
         result
             .reasons
             .insert(0, "The session's PATH is unavailable, so its Aizome launch paths could not be verified.".into());
         return result;
-    };
+    }
+    if !unresolved.is_empty() {
+        if result.action != Action::Unknown {
+            result.action = Action::Logout;
+        }
+        result.reasons.push(format!("The managed {} override was removed. Signing out applies the change; the next login's launch paths cannot be verified yet and will be checked again after login.", unresolved.iter().cloned().collect::<Vec<_>>().join(", ")));
+    }
+    let path = path.map(String::as_str).unwrap_or("");
+    let shell =
+        launch.get("AIZOME_SHELL_BIN").filter(|value| !value.is_empty()).map(String::as_str).unwrap_or("aizome-shell");
     for (name, expected, selected) in [
         ("aizome", &installed.compositor, program("aizome", path, &running.cwd)),
-        (
-            "aizome-shell",
-            &installed.shell,
-            program(
-                running
-                    .environment
-                    .get("AIZOME_SHELL_BIN")
-                    .filter(|value| !value.is_empty())
-                    .map(String::as_str)
-                    .unwrap_or("aizome-shell"),
-                path,
-                &running.cwd,
-            ),
-        ),
+        ("aizome-shell", &installed.shell, program(shell, path, &running.cwd)),
     ] {
+        if (unresolved.contains("PATH") && (name == "aizome" || !shell.contains('/')))
+            || (name == "aizome-shell" && unresolved.contains("AIZOME_SHELL_BIN"))
+        {
+            continue;
+        }
         let configuration = if name == "aizome" { "profile and PATH" } else { "profile, PATH and AIZOME_SHELL_BIN" };
         match selected {
             Some(selected) if selected == *expected => (),
@@ -227,14 +323,6 @@ fn assess(installed: &Installed, running: &Running, environment_changed: &[Strin
     }
     if result.action != Action::None {
         return result;
-    }
-    // A development compositor reloads the library beside itself, not the
-    // system package. Its check cannot certify a system update as applied.
-    if running.compositor != installed.compositor && !running.compositor.starts_with("/nix/store") {
-        return Completion::new(
-            Action::Unknown,
-            "Aizome is running from a development build. Its reload does not necessarily select the active system's desktop. Check the session's launch configuration before signing out and back in.",
-        );
     }
     if !running.logic_healthy || running.reload.core.action != "same" {
         return Completion::new(
@@ -308,6 +396,9 @@ fn runtime_matches(installed: &Path, executable: &Path, running: &Runtime) -> Re
 }
 
 fn same_file_contents(a: &Path, b: &Path) -> std::io::Result<bool> {
+    if a == b && a.starts_with("/nix/store") && a.is_file() {
+        return Ok(true);
+    }
     let mut a = std::fs::File::open(a)?;
     let mut b = std::fs::File::open(b)?;
     if a.metadata()?.len() != b.metadata()?.len() {
@@ -354,7 +445,7 @@ fn mapped_runtime(maps: &str) -> Result<Runtime, String> {
     Ok(Runtime { core: cores.pop_first().unwrap(), standard_library: standards.pop_first().unwrap() })
 }
 
-fn session_environment_changes(current: &Environment, running: &Environment) -> Result<Vec<String>, String> {
+fn session_environment(current: &Environment, running: &Environment) -> Result<EnvironmentUpdate, String> {
     let missing = || {
         "Aizome's applied startup environment was not recorded by this session's launcher. Sign out and back in with the updated launcher, then refresh Yukimi; environment completion is unverified.".to_owned()
     };
@@ -378,7 +469,18 @@ fn session_environment_changes(current: &Environment, running: &Environment) -> 
     if expected.get("XDG_CURRENT_DESKTOP").is_none_or(|value| value.is_empty()) {
         expected.insert("XDG_CURRENT_DESKTOP".into(), "Aizome".into());
     }
-    Ok(environment_changes(&previous, &expected, &Environment::new(), running))
+    let changed = environment_changes(&previous, &expected, running);
+    let unresolved = ["PATH", "AIZOME_SHELL_BIN"]
+        .into_iter()
+        .filter(|key| previous.contains(*key) && !expected.contains_key(*key))
+        .map(str::to_owned)
+        .collect();
+    let mut launch = running.clone();
+    for key in &previous {
+        launch.remove(key);
+    }
+    launch.extend(expected);
+    Ok(EnvironmentUpdate { changed, launch, unresolved })
 }
 
 fn environment_file(path: &Path, required: bool) -> Result<Environment, String> {
@@ -392,19 +494,35 @@ fn environment_file(path: &Path, required: bool) -> Result<Environment, String> 
         .split_terminator('\n')
         .filter(|line| !line.starts_with('#'))
         .filter_map(|line| line.split_once('='))
-        .filter(|(key, _)| !matches!(*key, ENVIRONMENT_KEYS | ENVIRONMENT_FILE))
+        .filter(|(key, _)| {
+            !key.is_empty()
+                && !key.as_bytes()[0].is_ascii_digit()
+                && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        })
+        .filter(|(key, _)| {
+            !matches!(
+                *key,
+                ENVIRONMENT_KEYS
+                    | ENVIRONMENT_FILE
+                    | "vars"
+                    | "user_environment"
+                    | "file"
+                    | "line"
+                    | "key"
+                    | "state"
+                    | "restarts"
+                    | "started"
+                    | "status"
+                    | "result"
+                    | "IFS"
+            )
+        })
         .map(|(key, value)| (key.to_owned(), value.to_owned()))
         .collect())
 }
 
-fn environment_changes(
-    previous: &BTreeSet<String>,
-    current: &Environment,
-    user: &Environment,
-    running: &Environment,
-) -> Vec<String> {
-    let mut expected = current.clone();
-    expected.extend(user.clone());
+fn environment_changes(previous: &BTreeSet<String>, current: &Environment, running: &Environment) -> Vec<String> {
+    let expected = current;
     let keys: BTreeSet<_> = previous.iter().chain(expected.keys()).collect();
     keys.into_iter()
         .filter(|key| match expected.get(*key) {
@@ -424,6 +542,10 @@ mod tests {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::{fs::symlink, net::UnixListener};
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn check(installed: &Installed, running: &Running, changed: &[String]) -> Completion {
+        super::assess(installed, running, changed, &running.environment, &BTreeSet::new())
+    }
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     struct Fixture {
@@ -488,7 +610,7 @@ mod tests {
         running.abi = "b".repeat(64);
         running.reload.core = ReloadPart::new("same", "an older PATH target can report the same core");
         running.reload.logic = ReloadPart::new("refused", "different core");
-        let c = assess(&f.installed(), &running, &[]);
+        let c = check(&f.installed(), &running, &[]);
         assert_eq!(c.action, Action::Logout);
         assert!(c.description().contains("restarting only the shell does not replace the compositor"));
         assert!(c.description().contains("No computer restart is needed"));
@@ -504,7 +626,7 @@ mod tests {
             } else {
                 running.reload.shell.action = "would-reload".into();
             }
-            let c = assess(&f.installed(), &running, &[]);
+            let c = check(&f.installed(), &running, &[]);
             assert_eq!(c.action, Action::Reload);
             assert!(c.description().contains("Reload Aizome"));
             assert!(!c.description().contains("Sign out"));
@@ -514,7 +636,7 @@ mod tests {
     #[test]
     fn current_components_are_applied_even_though_settings_would_reload() {
         let f = Fixture::new();
-        assert_eq!(assess(&f.installed(), &f.running(), &[]), Completion::default());
+        assert_eq!(check(&f.installed(), &f.running(), &[]), Completion::default());
         // Another package generation can contain the same core build.
         let old = Fixture::new();
         assert!(
@@ -533,7 +655,7 @@ mod tests {
             // The mapped library is from before a native dependency/RPATH
             // change. Rust's ABI and the reload report are still identical.
             std::fs::write(f.root.join("lib/aizome").join(file), "new native library identity").unwrap();
-            let result = assess(&f.installed(), &running, &[]);
+            let result = check(&f.installed(), &running, &[]);
             assert_eq!(result.action, Action::Logout, "{file}");
             assert!(result.description().contains("libraries changed"));
         }
@@ -551,10 +673,10 @@ mod tests {
         let f = Fixture::new();
         let mut running = f.running();
         running.runtime = Err("missing mapped library evidence".into());
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
         running.runtime = f.running().runtime;
         std::fs::remove_file(f.root.join("lib/aizome/libstd-test.so")).unwrap();
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
     }
 
     #[test]
@@ -593,7 +715,7 @@ mod tests {
         running
             .environment
             .insert("PATH".into(), format!("{}:{}", old.root.join("bin").display(), f.root.join("bin").display()));
-        let c = assess(&f.installed(), &running, &[]);
+        let c = check(&f.installed(), &running, &[]);
         assert_eq!(c.action, Action::Unknown);
         assert!(c.description().contains("instead of the active system"));
         assert!(c.description().contains("Sign out and back in"));
@@ -607,9 +729,9 @@ mod tests {
         let old = Fixture::new();
         let mut running = f.running();
         running.environment.insert("AIZOME_SHELL_BIN".into(), old.root.join("bin/aizome-shell").display().to_string());
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
         running.environment.insert("AIZOME_SHELL_BIN".into(), f.installed().shell.display().to_string());
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::None);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::None);
     }
 
     #[test]
@@ -623,7 +745,7 @@ mod tests {
         let mut running = f.running();
         running.environment.remove("PATH");
         running.cwd = f.root.join("bin");
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
     }
 
     #[test]
@@ -631,7 +753,96 @@ mod tests {
         let f = Fixture::new();
         let mut running = f.running();
         running.compositor = f.root.join("target/debug/aizome");
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        std::fs::create_dir_all(running.compositor.parent().unwrap()).unwrap();
+        std::fs::copy(&f.installed().compositor, &running.compositor).unwrap();
+        running.runtime = Err("mutable development libraries".into());
+        let result = check(&f.installed(), &running, &[]);
+        assert_eq!(result.action, Action::Unknown);
+        assert!(result.description().contains("development build"));
+    }
+
+    fn next_environment(f: &Fixture, running: &mut Running, managed: &[&str], text: &str) -> EnvironmentUpdate {
+        let file = f.root.join("environment");
+        std::fs::write(&file, text).unwrap();
+        running.environment.insert("XDG_SESSION_TYPE".into(), "wayland".into());
+        running
+            .environment
+            .insert(ENVIRONMENT_KEYS.into(), format!("1 XDG_SESSION_TYPE {}", managed.join(" ")).trim_end().to_owned());
+        running.environment.insert(ENVIRONMENT_FILE.into(), file.display().to_string());
+        session_environment(&Environment::new(), &running.environment).unwrap()
+    }
+
+    #[test]
+    fn removing_a_path_override_allows_login_without_claiming_the_next_path_is_verified() {
+        let f = Fixture::new();
+        let old = Fixture::new();
+        let mut running = f.running();
+        running.environment.insert("PATH".into(), old.root.join("bin").display().to_string());
+        let next = next_environment(&f, &mut running, &["PATH"], "");
+        assert!(next.changed.contains(&"PATH".into()));
+        let result = assess_session(&f.installed(), &running, Ok(next));
+        assert_eq!(result.action, Action::Logout);
+        assert!(result.description().contains("checked again after login"));
+        assert!(!result.description().contains("instead of the active system"));
+    }
+
+    #[test]
+    fn next_login_uses_new_overrides_instead_of_the_old_sessions_selection() {
+        let f = Fixture::new();
+        let old = Fixture::new();
+        let mut running = f.running();
+        let next =
+            next_environment(&f, &mut running, &[], &format!("AIZOME_SHELL_BIN={}\n", old.installed().shell.display()));
+        let result = assess_session(&f.installed(), &running, Ok(next));
+        assert_eq!(result.action, Action::Unknown, "a new stale-shell override must withhold Sign Out");
+        assert!(result.reasons[0].contains("instead of the active system"));
+
+        running.environment.insert("PATH".into(), old.root.join("bin").display().to_string());
+        let next = next_environment(&f, &mut running, &["PATH"], &format!("PATH={}\n", f.root.join("bin").display()));
+        let result = assess_session(&f.installed(), &running, Ok(next));
+        assert_eq!(result.action, Action::Logout, "replacing the stale path makes a new login useful");
+        assert!(!result.description().contains("instead of the active system"));
+    }
+
+    #[test]
+    fn removing_a_shell_override_requires_a_new_login_and_recheck() {
+        let f = Fixture::new();
+        let old = Fixture::new();
+        let mut running = f.running();
+        running.environment.insert("AIZOME_SHELL_BIN".into(), old.installed().shell.display().to_string());
+        let next = next_environment(&f, &mut running, &["AIZOME_SHELL_BIN"], "");
+        let result = assess_session(&f.installed(), &running, Ok(next));
+        assert_eq!(result.action, Action::Logout);
+        assert!(result.description().contains("checked again after login"));
+    }
+
+    #[test]
+    fn unrelated_non_utf8_environment_does_not_discard_the_session_check() {
+        let f = Fixture::new();
+        let mut raw = format!("PATH={}\0UNRELATED=", f.root.join("bin").display()).into_bytes();
+        raw.extend_from_slice(b"\xff\0");
+        let parsed = process_environment(&raw).unwrap();
+        assert!(parsed.contains_key("PATH"));
+        assert!(!parsed.contains_key("UNRELATED"));
+        for key in ["PATH", "AIZOME_SHELL_BIN", "LD_PRELOAD", ENVIRONMENT_KEYS, ENVIRONMENT_FILE] {
+            let mut raw = format!("{key}=").into_bytes();
+            raw.push(0xff);
+            assert!(process_environment(&raw).unwrap_err().contains(key));
+        }
+        // A managed entry is needed even if it is not a launch-path variable.
+        let raw = b"AIZOME_ENVIRONMENT_KEYS=1 MANAGED\0MANAGED=\xff\0";
+        assert!(session_environment(&Environment::new(), &process_environment(raw).unwrap()).is_err());
+    }
+
+    #[test]
+    fn an_absent_optional_system_environment_keeps_the_known_core_change() {
+        let f = Fixture::new();
+        let mut running = f.running();
+        running.abi = "b".repeat(64);
+        let _ = next_environment(&f, &mut running, &[], "");
+        let next = environment_file(&f.root.join("missing-system-environment"), false)
+            .and_then(|current| session_environment(&current, &running.environment));
+        assert_eq!(assess_session(&f.installed(), &running, next).action, Action::Logout);
     }
 
     #[test]
@@ -639,7 +850,7 @@ mod tests {
         let f = Fixture::new();
         let mut running = f.running();
         running.renderer_after_restart = true;
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Logout);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Logout);
     }
 
     #[test]
@@ -653,15 +864,15 @@ mod tests {
                 } else {
                     running.reload.shell.action = action.into();
                 }
-                assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown, "{action}");
+                assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown, "{action}");
             }
         }
         let mut running = f.running();
         running.logic_healthy = false;
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
         running.logic_healthy = true;
         running.reload.core.action = "skipped".into();
-        assert_eq!(assess(&f.installed(), &running, &[]).action, Action::Unknown);
+        assert_eq!(check(&f.installed(), &running, &[]).action, Action::Unknown);
     }
 
     #[test]
@@ -670,14 +881,11 @@ mod tests {
             [("SDL_VIDEODRIVER".into(), "wayland,x11".into()), ("QT_QPA_PLATFORM".into(), "wayland".into())].into();
         let current: Environment = [("QT_QPA_PLATFORM".into(), "wayland;xcb".into())].into();
         let previous = old.keys().cloned().collect();
-        assert_eq!(
-            environment_changes(&previous, &current, &Environment::new(), &old),
-            vec!["QT_QPA_PLATFORM", "SDL_VIDEODRIVER"]
-        );
-        assert!(environment_changes(&previous, &current, &old, &old).is_empty());
-        assert!(environment_changes(&previous, &current, &Environment::new(), &current).is_empty());
+        assert_eq!(environment_changes(&previous, &current, &old), vec!["QT_QPA_PLATFORM", "SDL_VIDEODRIVER"]);
+        assert!(environment_changes(&previous, &old, &old).is_empty());
+        assert!(environment_changes(&previous, &current, &current).is_empty());
         let f = Fixture::new();
-        let c = assess(&f.installed(), &f.running(), &["SDL_VIDEODRIVER".into()]);
+        let c = check(&f.installed(), &f.running(), &["SDL_VIDEODRIVER".into()]);
         assert_eq!(c.action, Action::Logout);
         assert!(c.description().contains("old environment"));
     }
@@ -689,14 +897,9 @@ mod tests {
         for value in ["wayland,x11", "x11", ""] {
             let running: Environment = [("SDL_VIDEODRIVER".into(), value.into())].into();
             let applied = running.keys().cloned().collect();
-            assert_eq!(
-                environment_changes(&applied, &Environment::new(), &Environment::new(), &running),
-                vec!["SDL_VIDEODRIVER"]
-            );
+            assert_eq!(environment_changes(&applied, &Environment::new(), &running), vec!["SDL_VIDEODRIVER"]);
             // Unrelated inherited application variables are not managed.
-            assert!(
-                environment_changes(&BTreeSet::new(), &Environment::new(), &Environment::new(), &running).is_empty()
-            );
+            assert!(environment_changes(&BTreeSet::new(), &Environment::new(), &running).is_empty());
         }
     }
 
@@ -704,10 +907,10 @@ mod tests {
     fn missing_or_invalid_startup_records_are_unverified() {
         let f = Fixture::new();
         let mut running: Environment = [(ENVIRONMENT_FILE.into(), f.root.join("missing").display().to_string())].into();
-        assert!(session_environment_changes(&Environment::new(), &running).is_err());
+        assert!(session_environment(&Environment::new(), &running).is_err());
         for record in ["", "2 HOME", "1 ", "1 ABSENT", "1 bad-name", "1 9INVALID"] {
             running.insert(ENVIRONMENT_KEYS.into(), record.into());
-            assert!(session_environment_changes(&Environment::new(), &running).is_err(), "{record}");
+            assert!(session_environment(&Environment::new(), &running).is_err(), "{record}");
         }
     }
 
@@ -717,7 +920,7 @@ mod tests {
         for action in ["unchanged", "would-reload"] {
             let mut running = f.running();
             running.reload.logic.action = action.into();
-            let environment = session_environment_changes(&Environment::new(), &running.environment);
+            let environment = session_environment(&Environment::new(), &running.environment);
             assert_eq!(assess_session(&f.installed(), &running, environment).action, Action::Unknown);
         }
         let mut running = f.running();
@@ -735,7 +938,7 @@ mod tests {
             let environment = config.join("aizome/environment");
             std::fs::create_dir_all(environment.parent().unwrap()).unwrap();
             std::fs::write(&environment, format!(
-                "USER_ONLY=first\nUSER_ONLY=$literal=last\nSDL_VIDEODRIVER=x11\nXDG_CONFIG_HOME={}\nXDG_SESSION_DESKTOP=ignored\nXDG_SESSION_TYPE=ignored\nAIZOME_ENVIRONMENT_KEYS=forged\nAIZOME_ENVIRONMENT_FILE=/forged\nPATH={}:{}\n",
+                "vars=forged\nuser_environment=/forged\nfile=/forged\nline=forged\nkey=forged\nIFS=broken\nstate=forged\nrestarts=forged\nstarted=forged\nstatus=forged\nresult=forged\nbad-key=ignored\n9bad=ignored\nUSER_ONLY=first\nUSER_ONLY=$literal=last\nSDL_VIDEODRIVER=x11\nXDG_CONFIG_HOME={}\nXDG_SESSION_DESKTOP=ignored\nXDG_SESSION_TYPE=ignored\nAIZOME_ENVIRONMENT_KEYS=forged\nAIZOME_ENVIRONMENT_FILE=/forged\nPATH={}:{}\n",
                 f.root.join("elsewhere").display(), f.root.join("bin").display(), std::env::var("PATH").unwrap()
             )).unwrap();
             for (name, script) in [
@@ -781,6 +984,21 @@ esac
             assert_eq!(running["USER_ONLY"], "$literal=last");
             assert_eq!(running[ENVIRONMENT_FILE], environment.display().to_string());
             assert!(running[ENVIRONMENT_KEYS].split(' ').any(|key| key == "USER_ONLY"));
+            for name in [
+                "vars",
+                "user_environment",
+                "file",
+                "line",
+                "key",
+                "IFS",
+                "state",
+                "restarts",
+                "started",
+                "status",
+                "result",
+            ] {
+                assert!(!running[ENVIRONMENT_KEYS].split(' ').any(|key| key == name));
+            }
             if manager == "running" {
                 let names = std::fs::read_to_string(imports).unwrap();
                 assert!(names.lines().any(|name| name == ENVIRONMENT_KEYS));
@@ -790,9 +1008,9 @@ esac
             // Read-only access to the same system file the launcher read;
             // every command that could touch the session is a private stub.
             let current = environment_file(Path::new("/etc/xdg/aizome/environment"), false).unwrap();
-            assert_eq!(session_environment_changes(&current, &running).unwrap(), Vec::<String>::new());
+            assert_eq!(session_environment(&current, &running).unwrap().changed, Vec::<String>::new());
             std::fs::remove_file(environment).unwrap();
-            let changes = session_environment_changes(&current, &running).unwrap();
+            let changes = session_environment(&current, &running).unwrap().changed;
             assert!(changes.contains(&"USER_ONLY".into()));
         }
     }

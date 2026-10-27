@@ -17,6 +17,23 @@ use yukimi_system::updates;
 
 use crate::model::Model;
 
+/// User services may have no XDG_SESSION_ID. logind's `auto` then selects
+/// the user's display session, as Aizome's own power controls do.
+pub(crate) fn logout_command(session: Option<&str>) -> Command {
+    let mut command = Command::new("loginctl");
+    command.args(["terminate-session", session.filter(|id| !id.is_empty()).unwrap_or("auto")]);
+    command
+}
+
+#[test]
+fn sign_out_selects_the_display_session_when_no_session_id_is_exported() {
+    for (session, expected) in [(None, "auto"), (Some(""), "auto"), (Some("7"), "7")] {
+        let command = logout_command(session);
+        assert_eq!(command.get_program(), "loginctl");
+        assert_eq!(command.get_args().collect::<Vec<_>>(), ["terminate-session", expected]);
+    }
+}
+
 /// A change to what the system installs: each part is left as it is when
 /// `None` (or empty).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

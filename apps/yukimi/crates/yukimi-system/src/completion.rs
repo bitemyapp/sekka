@@ -550,6 +550,10 @@ pub fn in_tatami() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|s| s.split(':').any(|s| s.eq_ignore_ascii_case("tatami")))
 }
 
+fn in_aizome() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|s| s.split(':').any(|s| s.eq_ignore_ascii_case("aizome")))
+}
+
 fn awake_command_matches(raw: &[u8], expected: &str) -> bool {
     let Some((tool, systemd)) = expected.split_once(':') else {
         return false;
@@ -622,7 +626,7 @@ fn read_with_session(include_session: bool) -> Completion {
     }
     let system = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
     with_session(system, include_session, || {
-        if std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|s| s.split(':').any(|s| s.eq_ignore_ascii_case("aizome"))) {
+        if in_aizome() {
             aizome::read(&active)
         } else if in_tatami() {
             read_tatami(&active)

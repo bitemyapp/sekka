@@ -53,6 +53,7 @@ in the active system, independently of the compositor's PATH. ABI equality
 only establishes compatibility for loading logic. Yukimi also compares the
 executable and the core and Rust runtime libraries identified in the
 compositor's `/proc/PID/maps` with the active package's files, byte for byte.
+The same immutable store path needs no content comparison.
 Their ELF search paths name immutable Nix native-library packages, so native
 dependency and packaging changes also require a new login. Identical files
 in another package generation still allow a logic/shell reload. Missing,
@@ -61,14 +62,24 @@ ambiguous or mutable mapped libraries, or runtime loader overrides
 This covers the packaged runtime; externally selected GPU drivers are
 outside this comparison.
 
-Yukimi also checks the compositor's launch environment for profile/PATH and
-`AIZOME_SHELL_BIN` overrides. An override needs attention before a reload
-or new login can be relied on to select the system package. Missing build
+Yukimi also checks the next launch environment for profile/PATH and
+`AIZOME_SHELL_BIN` overrides, applying the current managed environment files
+to the recorded startup environment. An override selecting an old package
+needs attention before a reload or new login can be relied on to select the
+system package. Removing a managed PATH or shell override requires a login;
+the underlying login-shell value is unknown until then, so Yukimi explicitly
+asks for another check after login. Missing build
 information, an unavailable IPC connection or an unsuccessful reload
 check remains unverified, rather than becoming an all-clear. The check
 only reads state; it never reloads or restarts the desktop automatically.
-IPC connection attempts and reads/writes have timeouts, including when a
-stalled compositor's socket accept queue is full.
+IPC connection attempts are nonblocking and fail immediately when a stalled
+compositor's accept queue is full. Reads and writes have timeouts. This work
+runs on a worker, never the interface thread.
+
+Renderer advice compares the current setting with the setting at compositor
+startup. A GPU fallback or explicit startup renderer override alone does not
+request another login. Sign Out uses logind's display-session lookup when
+systemd-launched applications have no `XDG_SESSION_ID`.
 
 Startup environment values are compared with the active system's
 `etc/xdg/aizome/environment` and the user's environment file. Variables
@@ -82,13 +93,19 @@ the baseline. User overrides take precedence, except for the session type
 and desktop name the launcher always assigns. Sessions started by an older
 launcher have no record: they remain unverified until a new login with the
 updated launcher (a known core change still calls for sign-out).
+Missing optional environment files mean no overrides. The launcher reserves
+its bookkeeping variable names and the two record names; these cannot be
+set through environment files. Unrelated non-UTF-8 inherited variables do
+not prevent inspection, but undecodable managed values remain unverified.
 This checks Aizome's managed environment; it does not predict arbitrary
-changes in login scripts or custom service
-launchers. Ordinary applications still use their new versions when
+changes in login scripts or custom service launchers. It does not yet compare
+the running versions of session services such as Koe, Keep Awake, Tokei,
+Koyomi or the portal. Ordinary applications still use their new versions when
 closed and reopened. The privileged system helper keeps its system-only
 completion check; session advice is added by the unprivileged frontend.
-For a read-only diagnosis from a checkout in `nix develop`, run
-`cargo run -p yukimi-system --example completion` inside the desktop session.
+For a read-only diagnosis from Sekka's root in `nix develop .#aizome`, run
+`cargo run --locked --manifest-path desktop/aizome/Cargo.toml -p yukimi-system --example completion`
+inside the desktop session.
 
 ## Hacking on Aizome live
 

@@ -1209,9 +1209,7 @@ impl Yukimi {
                 c.args(["--check-inhibitors=yes", "reboot"]);
                 c
             } else {
-                let mut c = std::process::Command::new("loginctl");
-                c.arg("terminate-session").arg(std::env::var("XDG_SESSION_ID").unwrap_or_default());
-                c
+                crate::ops::logout_command(std::env::var("XDG_SESSION_ID").ok().as_deref())
             };
             match command.output() {
                 Ok(out) if out.status.success() => Msg::Finished(Ok(())),

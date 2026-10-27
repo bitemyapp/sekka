@@ -31,7 +31,11 @@ for file in /etc/xdg/aizome/environment "$user_environment"; do
       '' | '#'*) continue ;;
       *=*)
         key=${line%%=*}
-        case "$key" in AIZOME_ENVIRONMENT_KEYS | AIZOME_ENVIRONMENT_FILE) continue ;; esac
+        # Literal environment entries must not replace the shell's parser,
+        # its bookkeeping, or the evidence recorded below.
+        case "$key" in
+          '' | [0-9]* | *[!a-zA-Z0-9_]* | AIZOME_ENVIRONMENT_KEYS | AIZOME_ENVIRONMENT_FILE | vars | user_environment | file | line | key | state | restarts | started | status | result | IFS) continue ;;
+        esac
         export "$key=${line#*=}"
         # Each name once: systemctl import-environment refuses the whole
         # list when a name repeats.
