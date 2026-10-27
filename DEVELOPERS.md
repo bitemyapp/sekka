@@ -1340,9 +1340,9 @@ an update doesn't set it. The module declares it as one of Yukimi's choices, so
 Aizome's Settei (General → Startup, which proposes it in Yukimi), Aizome's
 Yukimi Desktops page and `sekka-update --choose calamares.bootSplash.enable=true`
 turn it on or off; turning it changes the initrd and kernel parameters, so it
-stages for the next start. The
-splash shows the stacked lockup on the Night ground, with a 2px rail under it in
-the crest's blue that fills as the computer starts. When shutting down or
+stages for the next start. The splash shows the stacked lockup on the Night
+ground, with a 2px rail under it in the crest's blue that fills as the computer
+starts. When shutting down or
 restarting, the label "Shutting down" or "Restarting" takes the rail's place. A
 passphrase request gets the Aizome lock screen's field. Esc shows the boot
 messages at any time, and after 15 seconds of starting, not counting time at a
@@ -1399,6 +1399,17 @@ Plex Mono, the one font the initrd carries. Plymouth keeps the initrd's font
 configuration after the switch to the installed system, so the module puts
 the font at the same path there. Without it, that text comes out as empty
 boxes.
+
+`nix build .#checks.x86_64-linux.boot-splash-choice --no-update-lock-file`
+evaluates complete installed Aizome configurations with the option absent,
+off and on, using the local Aizome and Yukimi packages. It checks the JSON
+choice Settei and Yukimi read, Plymouth's theme and boot parameters, and
+standalone use without Yukimi. The packaged-helper tests in
+`tests/test_sekka_update.py` also exercise enabling and disabling the splash,
+restart planning when the initrd changes, invalid values, preserving custom
+Nix expressions and restoring the configuration after a failed build. Their
+Nix and activation commands are stubbed; these checks do not certify an
+interactive Settei → Yukimi → Apply → restart or an ISO.
 
 ```sh
 nix build .#checks.x86_64-linux.boot-splash --no-update-lock-file

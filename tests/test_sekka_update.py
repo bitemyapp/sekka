@@ -274,7 +274,61 @@ class Update(unittest.TestCase):
             {'setting': 'calamares.loginScreen', 'title': 'Login screen', 'value': 'gdm',
              'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'gdm', 'title': 'GNOME'}]},
             {'setting': 'calamares.desktops', 'title': 'Desktops', 'many': True, 'value': ['tatami'],
-             'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'tatami', 'title': 'Tatami'}]}]}))
+             'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'tatami', 'title': 'Tatami'}]},
+            {'setting': 'calamares.bootSplash.enable', 'title': 'Boot splash', 'boolean': True, 'value': 'false',
+             'options': [{'id': 'true', 'title': 'On'}, {'id': 'false', 'title': 'Off'}]}]}))
+
+    def test_boot_splash_choice_writes_booleans_and_stages_changed_boot_artifacts(self):
+        self.declare_choices()
+        self.compatible_live_system()
+        # Model the initrd change made by Plymouth, not an unrelated reason
+        # to defer activation. The actual module is evaluated separately.
+        (self.root / 'artifacts/splash-initrd').touch()
+        (self.root / 'system-new/initrd').unlink()
+        (self.root / 'system-new/initrd').symlink_to('/artifacts/splash-initrd')
+        original = (self.config / 'configuration.nix').read_text()
+        # The same helper command native Yukimi sends after Settei proposes
+        # the change. A choice by itself must not update the source lock.
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--choose',
+                              'calamares.bootSplash.enable=true', '--mode', 'auto')
+        report = json.loads(result.stdout)
+        self.assertEqual(report['mode'], 'boot')
+        self.assertEqual(report['completion']['action'], 'reboot')
+        self.assertIn('calamares.bootSplash.enable = true;', (self.config / 'configuration.nix').read_text())
+        self.assertEqual((self.root / 'run/current-system').readlink(), Path('/system-old'))
+        self.assertEqual((self.root / 'nix/var/nix/profiles/system').readlink(), Path('system-2-link'))
+        self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
+        self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        self.assertFalse(any(command[0] == 'nix' and 'update' in command for command in commands))
+
+        # The CLI takes the same choice, replacing rather than duplicating it.
+        self.run_cmd('/bin/sekka-update', '--choose', 'calamares.bootSplash.enable=false')
+        configured = (self.config / 'configuration.nix').read_text()
+        self.assertIn('calamares.bootSplash.enable = false;', configured)
+        self.assertEqual(configured.count('calamares.bootSplash.enable'), 1)
+        self.assertIn('./hardware-configuration.nix', configured)
+
+        # A build failure must put the original, absent option back too.
+        (self.config / 'configuration.nix').write_text(original)
+        before = {name: (self.config / name).read_text() for name in ('flake.nix', 'flake.lock', 'configuration.nix')}
+        (self.root / 'state/fail').touch()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--choose',
+                     'calamares.bootSplash.enable=true', '--mode', 'auto', ok=False)
+        for name, text in before.items():
+            self.assertEqual((self.config / name).read_text(), text)
+
+    def test_boot_splash_choice_preserves_custom_expressions(self):
+        self.declare_choices()
+        configuration = '{ lib, ... }: { calamares.bootSplash.enable = lib.mkForce false; }'
+        (self.config / 'configuration.nix').write_text(configuration)
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--choose',
+                              'calamares.bootSplash.enable=true', ok=False)
+        self.assertIn('not set to plain `true` or `false`', result.stderr)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), configuration)
+        self.assertFalse((self.root / 'state/building').exists())
+        self.unchanged()
 
     def test_early_updates_and_declared_choices_in_one_update(self):
         self.declare_choices()
@@ -298,6 +352,7 @@ class Update(unittest.TestCase):
         self.declare_choices()
         for choice in ['services.openssh.enable=true', 'calamares.loginScreen=lightdm',
                        'calamares.loginScreen=aizome,gdm', 'calamares.desktops=aizome,aizome',
+                       'calamares.bootSplash.enable=yes', 'calamares.bootSplash.enable=true,false',
                        'calamares.loginScreen=$(reboot)']:
             result = self.run_cmd('/bin/sekka-update', '--choose', choice, ok=False)
             self.assertRegex(result.stderr, 'choice|one value|chosen twice|valid')
