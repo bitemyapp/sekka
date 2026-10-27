@@ -14,11 +14,10 @@ path = "src/main.rs"
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true
-# Yukimi's UI-independent crates, copied from Sekka (crates/ beside this
-# manifest). Being path dependencies inside the workspace makes them members.
-yukimi-config = { path = "crates/yukimi-config" }
-yukimi-store = { path = "crates/yukimi-store" }
-yukimi-system = { path = "crates/yukimi-system" }
+# Both interfaces use Sekka's canonical UI-independent Yukimi libraries.
+yukimi-config = { path = "../../../../apps/yukimi/crates/yukimi-config" }
+yukimi-store = { path = "../../../../apps/yukimi/crates/yukimi-store", features = ["bundled"] }
+yukimi-system = { path = "../../../../apps/yukimi/crates/yukimi-system" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

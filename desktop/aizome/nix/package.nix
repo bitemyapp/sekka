@@ -3,9 +3,9 @@
 #
 # The workspace depends on Sidestep's crates by path, through the
 # `sidestep` link to ../sidestep-aizome, so the source here is a directory
-# holding this repository and the Sidestep fork side by side, as they sit
-# on a developer's disk. The fork's revision is pinned by the flake's
-# `sidestep` input.
+# retaining Sekka's desktop/aizome and apps/yukimi paths, with the pinned
+# Sidestep fork beside the desktop. Only Aizome and the shared Yukimi
+# backend are copied; unrelated Sekka components stay outside this source.
 #
 # Two builds: the compositor with `release` (its core and logic are Rust
 # dylibs, which can't take part in LTO; docs/reload.md), everything else
@@ -45,17 +45,19 @@
   vulkan-headers,
   vulkan-loader,
   src,
+  yukimiSrc,
   sidestep,
   version ? "0.1.0",
   rev ? null,
 }:
 let
   source = runCommand "aizome-source" { } ''
-    mkdir -p $out
-    cp -r ${src} $out/aizome
-    cp -r ${sidestep} $out/sidestep-aizome
-    chmod u+w $out/aizome
-    ln -sfn ../sidestep-aizome $out/aizome/sidestep
+    mkdir -p $out/desktop $out/apps
+    cp -r ${src} $out/desktop/aizome
+    cp -r ${sidestep} $out/desktop/sidestep-aizome
+    cp -r ${yukimiSrc} $out/apps/yukimi
+    chmod u+w $out/desktop/aizome
+    ln -sfn ../sidestep-aizome $out/desktop/aizome/sidestep
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
@@ -104,7 +106,7 @@ rustPlatform.buildRustPackage {
   pname = "aizome";
   inherit version;
   src = source;
-  sourceRoot = "aizome-source/aizome";
+  sourceRoot = "aizome-source/desktop/aizome";
   cargoLock.lockFile = "${src}/Cargo.lock";
 
   nativeBuildInputs = [

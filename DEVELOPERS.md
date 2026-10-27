@@ -1,6 +1,6 @@
 # Developing Sekka
 
-Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag. The `nightly` branch, which installed systems follow, belongs to the nightly workflow alone; never push to it.
+Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami desktops, Yukimi system manager, and Kakehashi USB writer. Work on a short-lived topic branch from `main`, open a pull request, squash-merge it, and delete the topic branch. There is no `stable`, `develop`, or release branch. Releases identify a commit with a version tag. The `nightly` branch, which installed systems follow, belongs to the nightly workflow alone; never push to it.
 
 ## Repository map
 
@@ -937,18 +937,33 @@ to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
 would rebuild Aizome. The source hash already tells the builds apart.
 
 The workspace depends on Sidestep's crates by path, through the
-`desktop/aizome/sidestep` link to `../sidestep-aizome`. The package puts
-Sekka's `sidestep` input there. To build with Cargo, clone the fork's `aizome`
-branch at `desktop/sidestep-aizome`, or link a checkout there (Git ignores
-it), at the revision `flake.nix` names. `aizome-dev` warns when the checkout's
-Sidestep differs from the one the running session was built against. The
+`desktop/aizome/sidestep` link to `../sidestep-aizome`. Entering
+`nix develop .#aizome` from this repository creates the ignored
+`desktop/sidestep-aizome` link to the exact pinned source. An existing
+checkout or link is preserved, so Sidestep development can use a writable
+checkout instead. `aizome-dev` warns when that checkout differs from the
+one the running session was built against; the ABI check always refuses
+an incompatible logic library. The
 `sidestep` input names its revision rather than the branch, so the nightly's
 `nix flake update` leaves it alone. To move Sidestep, change that revision,
 run `nix flake lock`, and build Aizome and run its checks against it.
 
-Aizome's `just` recipes and `aizome-dev` enter `nix develop .#aizome`, found by
-looking up from `desktop/aizome` to Sekka's flake. Without `--checkout`,
-`aizome-dev` uses `$AIZOME_CHECKOUT`, else `~/work/sekka/desktop/aizome`.
+Aizome's `just` recipes and `aizome-dev` enter the worktree's
+`nix develop .#aizome` shell, including when called from a different Nix
+shell. Without `--checkout`, `aizome-dev` uses `$AIZOME_CHECKOUT`, then the
+current Sekka worktree, then `~/work/sekka/desktop/aizome`. `--checkout`
+accepts either the Sekka root or its Aizome component. `CARGO_BUILD_JOBS`
+can limit build concurrency without changing the core's ABI.
+
+The native Yukimi interface stays in `desktop/aizome/apps/yukimi`; both it
+and the GTK interface use the canonical backend libraries under
+`apps/yukimi/crates`. Their Cargo workspaces and locks remain separate.
+Aizome's package copies only its component, those shared libraries and their
+workspace manifest, plus the pinned Sidestep source. Editing unrelated
+Sekka components or Yukimi's GTK interface does not rebuild Aizome.
+`aizome-dev watch` includes the shared backend and rebuilds native Yukimi
+when it changes. Aizome retains bundled SQLite through `yukimi-store`'s
+`bundled` feature; GTK keeps its system SQLite dependency.
 
 ## Tatami Bluetooth
 

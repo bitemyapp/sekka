@@ -35,8 +35,9 @@ usage: aizome-dev [COMMAND] [WHAT...] [--checkout PATH] [--optimised]
 
   WHAT is logic, shell, or an app (hako, sumi, …): default logic and shell.
 
-  --checkout PATH  the Aizome checkout: desktop/aizome in a Sekka checkout
-                   (default: $AIZOME_CHECKOUT, else ~/work/sekka/desktop/aizome)
+  --checkout PATH  a Sekka checkout or its desktop/aizome workspace
+                   (default: $AIZOME_CHECKOUT, then the current worktree,
+                   then ~/work/sekka/desktop/aizome)
   --optimised      build the logic as optimised as the session's own (by
                    default it builds quicker, at opt-level 1)
 
@@ -63,10 +64,11 @@ fn main() -> ExitCode {
     }
     let checkout = checkout
         .or_else(|| std::env::var_os("AIZOME_CHECKOUT").map(PathBuf::from))
+        .or_else(|| std::env::current_dir().ok().and_then(|p| find_checkout(&p)))
         .unwrap_or_else(|| home().join("work/sekka/desktop/aizome"));
-    let checkout = match std::fs::canonicalize(&checkout) {
-        Ok(c) if c.join("Cargo.toml").is_file() => c,
-        _ => return fail(&format!("{} isn't an Aizome checkout (--checkout PATH)", checkout.display())),
+    let checkout = match find_checkout(&checkout).and_then(|p| std::fs::canonicalize(p).ok()) {
+        Some(c) => c,
+        None => return fail(&format!("{} isn't an Aizome checkout (--checkout PATH)", checkout.display())),
     };
     let mut dev = match Dev::new(checkout, optimised) {
         Ok(d) => d,
@@ -116,6 +118,31 @@ fn take_opt(args: &mut Vec<String>, name: &str) -> Result<Option<String>, String
 
 fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// Locate the component in this worktree, including when invoked from the
+/// repository root, an app subdirectory, or an old standalone checkout.
+fn find_checkout(path: &Path) -> Option<PathBuf> {
+    for dir in path.ancestors() {
+        for candidate in [dir.to_path_buf(), dir.join("desktop/aizome")] {
+            if candidate.join("Cargo.toml").is_file() && candidate.join("crates/aizome-comp-core/Cargo.toml").is_file()
+            {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn dev_shell(checkout: &Path) -> Option<std::ffi::OsString> {
+    if checkout.join("flake.nix").is_file() {
+        return Some(checkout.as_os_str().to_owned());
+    }
+    let root =
+        checkout.ancestors().find(|dir| dir.join("flake.nix").is_file() && dir.join("desktop/aizome") == checkout)?;
+    let mut shell = root.as_os_str().to_owned();
+    shell.push("#aizome");
+    Some(shell)
 }
 
 fn say(msg: impl AsRef<str>) {
@@ -256,24 +283,14 @@ impl Dev {
             return Ok(e.clone());
         }
         let mut env: HashMap<String, String> = std::env::vars().collect();
-        let in_shell = std::env::var_os("IN_NIX_SHELL").is_some();
-        // Sekka's flake holds the shell, as `aizome` (nix develop looks
-        // upward from the checkout for it); a checkout of the old Aizome
-        // repository has its own flake, with the shell as its default.
-        let shell = if self.checkout.join("flake.nix").is_file() {
-            Some(self.checkout.as_os_str().to_owned())
-        } else if self.checkout.ancestors().skip(1).any(|dir| dir.join("flake.nix").is_file()) {
-            let mut shell = self.checkout.as_os_str().to_owned();
-            shell.push("#aizome");
-            Some(shell)
-        } else {
-            None
-        };
-        if let Some(shell) = shell.filter(|_| !in_shell) {
+        // Resolve the exact worktree's shell even when called from another
+        // Nix shell. Its environment is cached for the rest of this process.
+        if let Some(shell) = dev_shell(&self.checkout) {
             say(format!("entering the dev shell of {}", self.checkout.display()));
             let out = Command::new("nix")
                 .arg("develop")
                 .arg(&shell)
+                .current_dir(&self.checkout)
                 .args(["--command", "env", "-0"])
                 .stderr(Stdio::inherit())
                 .output()
@@ -301,7 +318,7 @@ impl Dev {
         // Nothing that changes how Cargo builds, but the session's flags.
         env.retain(|k, _| {
             !(k.starts_with("CARGO_PROFILE_")
-                || k.starts_with("CARGO_BUILD_")
+                || (k.starts_with("CARGO_BUILD_") && k != "CARGO_BUILD_JOBS")
                 || k == "CARGO_ENCODED_RUSTFLAGS"
                 || k == "RUSTC_WORKSPACE_WRAPPER"
                 || k == "RUSTC"
@@ -621,6 +638,10 @@ fn plan(changed: &[PathBuf], checkout: &Path) -> BTreeSet<What> {
     let mut out = BTreeSet::new();
     for p in changed {
         let s = p.to_string_lossy();
+        if p.starts_with("../../apps/yukimi") {
+            out.insert(What::App("yukimi".into()));
+            continue;
+        }
         let crate_dir = p.components().nth(1).map(|c| c.as_os_str().to_string_lossy().into_owned());
         if s.starts_with("apps/") {
             if let Some(app) = crate_dir {
@@ -802,6 +823,11 @@ fn snapshot(checkout: &Path) -> BTreeMap<PathBuf, SystemTime> {
     for top in ["crates", "apps", "sidestep/crates", "Cargo.toml", "Cargo.lock"] {
         walk(checkout, &checkout.join(top), &mut out);
     }
+    if checkout.parent().and_then(Path::parent).is_some_and(|root| root.join("desktop/aizome") == checkout) {
+        for top in ["../../apps/yukimi/crates", "../../apps/yukimi/Cargo.toml"] {
+            walk(checkout, &checkout.join(top), &mut out);
+        }
+    }
     out
 }
 
@@ -843,6 +869,42 @@ mod tests {
         assert_eq!(p(&["apps/hako/src/main.rs"]), BTreeSet::from([What::App("hako".into())]));
         assert_eq!(p(&["crates/aizome-kit/src/app.rs"]), BTreeSet::from([What::Logic, What::Shell]));
         assert_eq!(p(&["crates/aizome-comp/tests/reload.rs"]), BTreeSet::new());
+        assert_eq!(
+            p(&["../../apps/yukimi/crates/yukimi-system/src/updates.rs"]),
+            BTreeSet::from([What::App("yukimi".into())])
+        );
+        assert_eq!(p(&["../../apps/yukimi/Cargo.toml"]), BTreeSet::from([What::App("yukimi".into())]));
+    }
+
+    #[test]
+    fn resolves_the_current_worktree_and_its_own_dev_shell() {
+        let root = std::env::temp_dir().join(format!(
+            "aizome-dev-checkout-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let checkout = root.join("desktop/aizome");
+        let core = checkout.join("crates/aizome-comp-core");
+        std::fs::create_dir_all(&core).unwrap();
+        std::fs::write(root.join("flake.nix"), "").unwrap();
+        std::fs::write(checkout.join("Cargo.toml"), "").unwrap();
+        std::fs::write(core.join("Cargo.toml"), "").unwrap();
+        for from in [&root, &checkout, &core] {
+            assert_eq!(find_checkout(from), Some(checkout.clone()));
+        }
+        assert_eq!(dev_shell(&checkout), Some(format!("{}#aizome", root.display()).into()));
+        let shared = root.join("apps/yukimi/crates/yukimi-config/src/lib.rs");
+        std::fs::create_dir_all(shared.parent().unwrap()).unwrap();
+        std::fs::write(&shared, "").unwrap();
+        let before = snapshot(&checkout);
+        std::fs::remove_file(&shared).unwrap();
+        assert_eq!(
+            changed_files(&before, &snapshot(&checkout)),
+            [PathBuf::from("../../apps/yukimi/crates/yukimi-config/src/lib.rs")]
+        );
+        std::fs::write(checkout.join("flake.nix"), "").unwrap();
+        assert_eq!(dev_shell(&checkout), Some(checkout.as_os_str().to_owned()));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

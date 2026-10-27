@@ -8,7 +8,7 @@
 //! follows nixpkgs`) are shown as such.
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
 
@@ -34,7 +34,7 @@ enum InputRef {
 }
 
 /// A source as `flake.lock` records it.
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Locked {
     #[serde(rename = "type", default)]
@@ -81,10 +81,22 @@ impl Locked {
     pub fn web_url(&self) -> Option<String> {
         match (self.kind.as_str(), &self.owner, &self.repo, &self.rev) {
             ("github", Some(owner), Some(repo), Some(rev)) => {
-                Some(format!("https://github.com/{owner}/{repo}/commit/{rev}"))
+                let host = self.host.as_deref().unwrap_or("github.com");
+                Some(format!("https://{host}/{owner}/{repo}/commit/{rev}"))
             }
             _ => None,
         }
+    }
+
+    /// Compare this pinned revision with a target in the same repository.
+    pub fn compare_url(&self, target: &str) -> Option<String> {
+        if self.rev.as_deref()? == target || target.is_empty() {
+            return None;
+        }
+        let commit = self.web_url()?;
+        let (repo, revision) = commit.rsplit_once("/commit/")?;
+        // Two dots compare the endpoints themselves, including branch switches.
+        Some(format!("{repo}/compare/{revision}..{target}"))
     }
 }
 
@@ -182,7 +194,57 @@ pub struct FlakeLock {
     raw: Raw,
 }
 
+/// A source and its resolved inputs. Names come from input edges, not the
+/// arbitrary node IDs Nix chooses when writing a lock file.
+#[derive(Clone, Debug, Default)]
+pub struct InputTree {
+    pub locked: Option<Locked>,
+    pub children: BTreeMap<String, InputTree>,
+}
+
 impl FlakeLock {
+    /// Resolve an input path, including `follows` paths rooted at this lock.
+    pub fn input_tree(&self, path: &[&str]) -> Result<InputTree> {
+        fn resolve<'a>(raw: &'a Raw, path: &[&str], depth: usize) -> Result<&'a str> {
+            if depth > 64 {
+                return Err(Error::Lock("input follows paths form a cycle".into()));
+            }
+            let mut id = raw.root.as_str();
+            for name in path {
+                id = match raw.nodes.get(id).and_then(|n| n.inputs.get(*name)) {
+                    Some(InputRef::Node(id)) => id,
+                    Some(InputRef::Follows(path)) => {
+                        resolve(raw, &path.iter().map(String::as_str).collect::<Vec<_>>(), depth + 1)?
+                    }
+                    None => return Err(Error::Lock(format!("input {name} is missing"))),
+                };
+            }
+            Ok(id)
+        }
+        fn tree(raw: &Raw, id: &str, ancestors: &mut Vec<String>, remaining: &mut usize) -> Result<InputTree> {
+            if *remaining == 0 || ancestors.len() > 64 {
+                return Err(Error::Lock("input graph is too large to display".into()));
+            }
+            *remaining -= 1;
+            let node = raw.nodes.get(id).ok_or_else(|| Error::Lock(format!("node {id} is missing")))?;
+            let mut out = InputTree { locked: node.locked.clone(), ..Default::default() };
+            if ancestors.iter().any(|a| a == id) {
+                return Ok(out);
+            }
+            ancestors.push(id.to_owned());
+            for (name, input) in &node.inputs {
+                let child = match input {
+                    InputRef::Node(id) => id,
+                    InputRef::Follows(path) => resolve(raw, &path.iter().map(String::as_str).collect::<Vec<_>>(), 0)?,
+                };
+                out.children.insert(name.clone(), tree(raw, child, ancestors, remaining)?);
+            }
+            ancestors.pop();
+            Ok(out)
+        }
+        tree(&self.raw, resolve(&self.raw, path, 0)?, &mut Vec::new(), &mut 4096)
+    }
+
     pub fn parse(text: &str) -> Result<FlakeLock> {
         let raw: Raw = serde_json::from_str(text).map_err(|e| Error::Lock(e.to_string()))?;
         if !raw.nodes.contains_key(&raw.root) {

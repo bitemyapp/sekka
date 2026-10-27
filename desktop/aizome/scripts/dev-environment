@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Prepare this worktree's path dependency without replacing a developer's
+# own Sidestep checkout or link. The root flake supplies the pinned source.
+set -euo pipefail
+
+search_dir=$PWD
+while [[ $search_dir != / ]]; do
+  if [[ -f $search_dir/desktop/aizome/Cargo.toml ]]; then
+    sidestep_link=$search_dir/desktop/sidestep-aizome
+    if [[ ! -e $sidestep_link && ! -L $sidestep_link ]]; then
+      ln -s -- "$AIZOME_SIDESTEP_SOURCE" "$sidestep_link"
+    fi
+    exit 0
+  fi
+  search_dir=$(dirname -- "$search_dir")
+done

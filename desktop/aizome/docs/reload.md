@@ -51,7 +51,7 @@ just replace yukimi
 The recipe passes the directory containing its `justfile` to `aizome-dev`,
 so it also works from a subdirectory and does not use another checkout
 named by `AIZOME_CHECKOUT`. Recipes automatically enter `nix develop .#aizome`
-unless `IN_NIX_SHELL` already identifies a Nix shell. The shared recipe
+unless `AIZOME_DEV_SHELL` identifies Aizome's development shell. The shared recipe
 shell in `scripts/just-shell` handles this for all ordinary recipes.
 `just` must itself be on your PATH; if it is not installed yet, bootstrap
 with `nix develop .#aizome -c just replace yukimi`.
@@ -64,7 +64,7 @@ desktop launches use the installed version. Run it again after more edits.
 session was built and hands the result to the session:
 
 ```sh
-aizome-dev watch                      # ~/work/sekka/desktop/aizome, or --checkout PATH / $AIZOME_CHECKOUT
+aizome-dev watch                      # current worktree, or --checkout PATH / $AIZOME_CHECKOUT
 aizome-dev reload logic               # build once and reload
 aizome-dev reload shell
 aizome-dev reload hako                # an app: closed, rebuilt, started again
@@ -155,7 +155,8 @@ way nothing half-loads.
 
 The checkout's `../sidestep-aizome` must be at the revision the
 package was built from (the flake's `sidestep` input): Sidestep's crates
-are part of the core. The package records it (`sidestep_rev` in
+are part of the core. The development shell links the pinned source there
+when no developer checkout or link already exists. The package records it (`sidestep_rev` in
 `build-env.json`); `aizome-dev` says before building when the checkout's
 Sidestep is elsewhere or has changes, with the command that fixes it,
 and a refused reload names the packages whose sources differ.

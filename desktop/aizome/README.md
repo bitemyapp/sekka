@@ -60,20 +60,17 @@ Then pick **Aizome** on the login screen.
 ## Developing
 
 Aizome lives in Sekka's repository, in `desktop/aizome`; Sekka's flake
-builds it, and its changes are Sekka pull requests. The workspace builds
-against the `aizome` branch of
-[Sidestep](https://github.com/bitemyapp/sidestep), checked out beside this
-directory as `../sidestep-aizome` (`desktop/sidestep-aizome`, which Git
-ignores), at the revision of the `sidestep` input in Sekka's `flake.nix`:
+builds it, and its changes are Sekka pull requests. From the repository root:
 
 ```sh
-git clone -b aizome https://github.com/bitemyapp/sidestep ../sidestep-aizome
-git -C ../sidestep-aizome switch --detach REVISION  # from Sekka's flake.nix
 nix develop .#aizome
+cd desktop/aizome
 cargo build
 ```
 
-A link to a Sidestep checkout elsewhere works too.
+The development shell links the exact pinned Sidestep source automatically.
+To work on Sidestep too, place a writable checkout or link at
+`desktop/sidestep-aizome`; an existing one is preserved.
 
 To try one app from the current checkout or worktree in your running Aizome
 session:
@@ -82,8 +79,8 @@ session:
 just replace yukimi
 ```
 
-Recipes automatically enter `nix develop .#aizome` when outside a Nix shell and
-reuse the current environment when already inside one. `just` itself must
+Recipes automatically enter Aizome's development shell when needed.
+`just` itself must
 be on your PATH; it is also included in `nix develop .#aizome`, so if it is not
 installed yet, use `nix develop .#aizome -c just replace yukimi`.
 Substitute any app name, such as
@@ -96,8 +93,7 @@ See [live reload](docs/reload.md) for watching changes on every save.
 Run the whole desktop without touching your own session, headless:
 
 ```sh
-cargo run -p aizome-comp -- --backend headless &
-aizomectl screenshot desktop.png
+scripts/headless-session --no-shell --bin target/debug -- aizomectl screenshot desktop.png
 ```
 
 `nix build .#aizome-checks.session` logs into Aizome in a VM.

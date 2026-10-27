@@ -89,6 +89,11 @@ held that night. Its source is now in `desktop/aizome`, a snapshot like the
 others. [imports.json](imports.json) records the revision, and bitemyapp/aizome
 keeps the history.
 
+The import includes Aizome main through `1a50f8e`: input-method keyboard
+grabs, independent Desks and swapping, docked lid removal, the Desk underline
+notification, and sandboxed applications surviving shell reloads. Sekka's
+keybinding/IPC launch patch is folded into the local source.
+
 - Aizome's flake became `desktop/aizome/nix/default.nix`. It gives the same
   packages, NixOS module, VM checks and development shell, built with Sekka's
   Nixpkgs, as Aizome's input did with `inputs.nixpkgs.follows`. The flake's
@@ -101,3 +106,8 @@ keeps the history.
 - The installed flake's lock loses its nested `aizome` node and keeps
   `sidestep` beneath Sekka. The ISO qualification report no longer records
   an Aizome revision: the Sekka revision includes Aizome's source.
+- Native Yukimi uses the existing `apps/yukimi/crates` backend instead of
+  retaining a copied backend inside Aizome. Aizome's additions are preserved
+  there; the GTK and Aizome Cargo workspaces and package boundaries remain
+  separate. Aizome's filtered package source includes only the shared backend
+  and its workspace metadata, not Yukimi's GTK interface or privileged helper.

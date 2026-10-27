@@ -217,9 +217,10 @@ As built, beyond the above:
 
 Yukimi, Sekka's Nix software manager, made native: the same Overview,
 Installed, Discover, Updates, History and Storage views and the same
-behaviour (read `apps/yukimi/README.md`), rebuilt with the kit. Copy the
-UI-independent crates (`yukimi-config`, `yukimi-store`, `yukimi-system`)
-into `apps/yukimi/crates/` and keep using Sekka's installed privileged
+behaviour (read Sekka's `apps/yukimi/README.md`), rebuilt with the kit.
+It shares the canonical UI-independent crates (`yukimi-config`,
+`yukimi-store`, `yukimi-system`) under Sekka's `apps/yukimi/crates/`
+with the GTK interface, and uses Sekka's installed privileged
 helper (`yukimi-helper`, with its polkit policy) for system changes, found
 where Sekka's Yukimi package installs it.
 

@@ -3,7 +3,7 @@
 # arguments intact so recipe parameters remain data across nix develop.
 set -euo pipefail
 
-if [[ -n ${IN_NIX_SHELL:-} ]]; then
+if [[ ${AIZOME_DEV_SHELL:-} == 1 ]]; then
   exec bash "$@"
 fi
 

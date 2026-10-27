@@ -54,6 +54,15 @@ let
       (lib.fileset.maybeMissing ../session)
     ];
   };
+  # Only the shared backend and its workspace metadata, not Yukimi's GTK
+  # interface or privileged helper. Their edits must not rebuild Aizome.
+  yukimiSrc = lib.fileset.toSource {
+    root = ../../../apps/yukimi;
+    fileset = lib.fileset.unions [
+      ../../../apps/yukimi/Cargo.toml
+      ../../../apps/yukimi/crates
+    ];
+  };
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -63,6 +72,7 @@ let
       aizome = pkgs.callPackage ./package.nix {
         inherit
           src
+          yukimiSrc
           sidestep
           version
           rev
@@ -135,6 +145,12 @@ let
         # whisper-rs's own bindings, for the CPU build (the package's
         # Vulkan build makes its own; package.nix).
         WHISPER_DONT_GENERATE_BINDINGS = "1";
+        AIZOME_DEV_SHELL = "1";
+        AIZOME_SIDESTEP_SOURCE = toString sidestep;
+        AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
+        shellHook = ''
+          ${pkgs.bash}/bin/bash ${../scripts/dev-environment}
+        '';
         RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # The compositor's core is a Rust dylib that needs -C prefer-dynamic
         # (docs/reload.md); the wrapper adds it for that crate alone.
