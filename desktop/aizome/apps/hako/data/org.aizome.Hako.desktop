@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=Hako
+GenericName=Files
+Comment=Browse, copy, move and tidy your files in columns, with a Trash that gives things back
+Keywords=files;file manager;folders;browser;explorer;finder;documents;trash;copy;move;
+Categories=System;FileTools;FileManager;Utility;Core;
+MimeType=inode/directory;
+Icon=org.aizome.Hako
+Exec=aizome-hako %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Hako
+DBusActivatable=false
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=aizome-hako

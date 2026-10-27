@@ -139,9 +139,10 @@ Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
 Aizome's desktop-entry launcher already uses app scopes, but its keybinding
 and IPC launcher directly spawned terminals in `aizome.service`. Their agents
 and builds consequently shared the compositor's weight 1000, inside
-`session.slice` at 400, ahead of `app.slice` at 100. Sekka applies
-`nix/scheduling/aizome-launch-scope.patch` to its pinned Aizome package so that
-those launches also enter `app.slice` using `systemd-run --scope`. Session
+`session.slice` at 400, ahead of `app.slice` at 100. Aizome's `spawn`
+(`desktop/aizome/crates/aizome-comp-core/src/session.rs`) now starts those
+launches in `app.slice` too, using `systemd-run --scope`. Sekka patched its
+pinned Aizome package this way until Aizome moved into Sekka. Session
 environment, arguments and working directory are retained. Without a user
 manager, the launcher keeps its direct-spawn behavior.
 
@@ -160,8 +161,8 @@ manager, the launcher keeps its direct-spawn behavior.
 - Recognize known harness scripts under Node/Bun before applying their generic
   background-runtime rule, so interpreted harnesses stay interactive.
 
-Review these patches whenever their inputs change and remove them when the
-upstream versions contain equivalent fixes. Existing terminals and harnesses
+Review the ananicy patch whenever ananicy-cpp changes and remove it when the
+upstream version contains equivalent fixes. Existing terminals and harnesses
 should be restarted after installing the change.
 
 ### Checks
@@ -172,8 +173,8 @@ explicit overrides and process-tree classification.
 preemption and disk-scheduler settings, terminal/shell/compiler nice values,
 all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
 children, wrapper execs, interactive harnesses and isolated jobs, nested
-harnesses, scope stop propagation, and the patched Aizome launch function with
-a real user manager. The unpatched ananicy binary is the failing control for
+harnesses, scope stop propagation, and Aizome's launch function with a real
+user manager. The unpatched ananicy binary is the failing control for
 pre-existing Nix worker threads. `tests/test_agent_workloads.py` checks process
 tree classification and the boundaries on which units the service may manage.
 

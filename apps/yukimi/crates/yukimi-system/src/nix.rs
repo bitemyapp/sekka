@@ -13,6 +13,14 @@ pub enum Error {
     Spawn(String, std::io::Error),
     #[error("{0}")]
     Failed(String),
+    #[error("{message}")]
+    CommandFailed {
+        message: String,
+        code: Option<i32>,
+        stdout: String,
+        /// Complete stderr only when small enough to classify safely.
+        stderr: Option<String>,
+    },
     #[error("Nix's answer could not be read: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -94,7 +102,17 @@ impl Stop {
 /// Run a program that speaks Nix's progress log on its error output,
 /// calling `update` with the progress after each event. Returns its
 /// standard output.
-pub fn stream(mut command: Command, stop: &Stop, mut update: impl FnMut(&Progress)) -> Result<(String, Progress)> {
+pub fn stream(mut command: Command, stop: &Stop, update: impl FnMut(&Progress)) -> Result<(String, Progress)> {
+    stream_command(&mut command, stop, update)
+}
+
+/// As `stream`, retaining the command for a caller that can prove a retry
+/// is safe (for example pkexec failing before it starts the helper).
+pub fn stream_command(
+    command: &mut Command,
+    stop: &Stop,
+    mut update: impl FnMut(&Progress),
+) -> Result<(String, Progress)> {
     let program = command.get_program().to_string_lossy().into_owned();
     let mut child = {
         let mut state = stop.0.lock().unwrap_or_else(|p| p.into_inner());
@@ -113,30 +131,58 @@ pub fn stream(mut command: Command, stop: &Stop, mut update: impl FnMut(&Progres
     };
     let stdout = child.stdout.take().expect("piped");
     let reader = std::thread::spawn(move || {
-        let mut out = String::new();
-        let _ = std::io::Read::read_to_string(&mut BufReader::new(stdout), &mut out);
-        out
+        let mut out = Vec::new();
+        std::io::Read::read_to_end(&mut BufReader::new(stdout), &mut out)?;
+        Ok::<_, std::io::Error>(String::from_utf8_lossy(&out).into_owned())
     });
     let mut progress = Progress::default();
-    for line in BufReader::new(child.stderr.take().expect("piped")).lines().map_while(|l| l.ok()) {
-        if progress.feed(&line) {
+    let mut stderr = Some(String::new());
+    let mut errors = BufReader::new(child.stderr.take().expect("piped"));
+    let mut bytes = Vec::new();
+    loop {
+        bytes.clear();
+        match errors.read_until(b'\n', &mut bytes) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => {
+                // A partial diagnostic cannot establish that pkexec failed
+                // before the helper started. Still reap the child below.
+                stderr = None;
+                break;
+            }
+        }
+        if let Some(text) = &mut stderr {
+            if text.len() + bytes.len() < 8192
+                && let Ok(line) = std::str::from_utf8(&bytes)
+            {
+                text.push_str(line);
+            } else {
+                stderr = None;
+            }
+        }
+        if progress.feed(String::from_utf8_lossy(&bytes).trim_end_matches(['\r', '\n'])) {
             update(&progress);
         }
     }
+    drop(errors);
     let status = child.wait().map_err(|e| Error::Spawn("nix".into(), e))?;
     {
         let mut state = stop.0.lock().unwrap_or_else(|p| p.into_inner());
         state.pid = None;
         state.stdin = None;
     }
-    let out = reader.join().unwrap_or_default();
+    let out = reader
+        .join()
+        .map_err(|_| Error::Failed("The command's output reader stopped unexpectedly".into()))?
+        .map_err(|error| Error::Failed(format!("The command's output could not be read: {error}")))?;
     if !status.success() {
         let message = progress
             .errors()
             .last()
             .map(str::to_owned)
             .unwrap_or_else(|| progress.log.iter().rev().take(5).cloned().collect::<Vec<_>>().join("\n"));
-        return Err(Error::Failed(message));
+        return Err(Error::CommandFailed { message, code: status.code(), stdout: out, stderr });
     }
     Ok((out, progress))
 }

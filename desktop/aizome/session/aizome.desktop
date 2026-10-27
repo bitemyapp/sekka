@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Aizome
+Comment=Sekka's desktop: Haiku tabs, NeXT menus and IRIX's Toolchest, in indigo
+Exec=aizome-session
+Type=Application
+DesktopNames=Aizome

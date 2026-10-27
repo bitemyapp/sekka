@@ -13,11 +13,14 @@ let
   hyprland = has "hyprland" || has "tatami" || has "omarchy";
   # An explicitly configured panel belongs to the user's own integration.
   wayland = aizome && im.ibus.panel == null;
-  # Only Aizome's frontend needs this backport. Keep the distribution's
+  # Only Aizome's frontend needs these backports. Keep the distribution's
   # daemon, configured engines and GTK/Qt modules for the other desktops.
-  # Remove once pinned IBus includes upstream 58b74bd76d79.
+  # Remove once pinned IBus includes upstream 58b74bd76d79 and a8ff75597150.
   frontend = pkgs.ibus.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ../../../../nix/patches/ibus-wayland-forward-keycode.patch ];
+    patches = (old.patches or [ ]) ++ [
+      ../../../../nix/patches/ibus-wayland-forward-keycode.patch
+      ../../../../nix/patches/ibus-wayland-serial.patch
+    ];
   });
   startFrontend = pkgs.writeShellScript "sekka-aizome-ibus" ''
     ${frontend}/libexec/ibus-ui-gtk3 --enable-wayland-im --exec-daemon --daemon-args "--xim --panel disable"

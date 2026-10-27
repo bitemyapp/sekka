@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Compile the real registry callbacks before and after the IBus backport.
+set -euo pipefail
+[[ $# == 2 ]] || { echo 'usage: check-ibus-wayland-serial BEFORE.c AFTER.c' >&2; exit 2; }
+fixture=$(dirname -- "$0")/ibus-wayland-serial.c
+work=$(mktemp -d -t ibus-serial.XXXXXXXX)
+trap 'rm -rf -- "$work"' EXIT
+for variant in before after; do
+  mkdir "$work/$variant"
+  awk '
+    /^registry_handle_global \(/ { print "static void"; copying=1 }
+    copying { print; if ($0 == "}") exit }
+  ' "$1" > "$work/$variant/registry-handler.inc"
+  "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -I "$work/$variant" \
+    "$fixture" -o "$work/$variant/test"
+  shift
+done
+status=0
+"$work/before/test" > "$work/before.log" 2>&1 || status=$?
+[[ $status == 42 ]] || { cat "$work/before.log"; echo "expected regression exit 42, got $status" >&2; exit 1; }
+grep -q '^wl_output reset serial 1 to 0$' "$work/before.log"
+echo 'Unpatched IBus reproduces the monitor-hotplug serial reset'
+"$work/after/test"

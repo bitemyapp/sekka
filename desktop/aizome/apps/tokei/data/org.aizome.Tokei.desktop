@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Tokei
+GenericName=Clock
+Comment=World clocks, alarms, a timer and a stopwatch
+Keywords=clock;alarm;timer;stopwatch;world clock;time zone;countdown;
+Categories=Utility;Clock;
+Icon=org.aizome.Tokei
+Exec=aizome-tokei %U
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Tokei
+DBusActivatable=false

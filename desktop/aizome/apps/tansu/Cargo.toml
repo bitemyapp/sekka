@@ -1,0 +1,28 @@
+[package]
+name = "aizome-tansu"
+description = "Tansu 箪笥, Aizome's disks: partitions on a map, operations queued and confirmed, through UDisks2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tansu"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-tansu"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-sys.workspace = true
+aizome-theme.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[dev-dependencies]
+# A fake UDisks2 on a private bus, for the tests that run plans through
+# aizome-sys's real client (already in aizome-sys's tree).
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

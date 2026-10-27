@@ -1,0 +1,42 @@
+[package]
+name = "aizome-comp-core"
+description = "The stable core of Aizome's compositor: the Wayland display and every client, smithay's protocol states, outputs, input devices and the renderer, IPC, the session, and the loader that swaps the compositor's logic at run time"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# A Rust dylib: the `aizome` binary links it, and so does every logic
+# library loaded into it, so there is one copy of smithay, wayland-server,
+# std and the rest (their statics, their TypeIds) however often the logic
+# is reloaded. It needs `-C prefer-dynamic`, which scripts/rustc-wrapper
+# adds (RUSTC_WRAPPER; `nix develop .#aizome` and the package set it).
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+aizome-theme.workspace = true
+aizome-config.workspace = true
+aizome-ipc.workspace = true
+sidestep-ui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smithay.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "tracing-log", "std"] }
+png = "0.18"
+# App icons in SVG (icon themes' scalable sizes); no text or raster images.
+resvg = { version = "0.46", default-features = false }
+xcursor = "0.3"
+libc = "0.2"
+bitflags = "2"
+libloading.workspace = true
+# The processes behind X11 apps' windows (xwayland-satellite owns them on
+# the Wayland side): X-Resource client IDs, for the recovery overlay's
+# Force Quit. Pure Rust, no libxcb.
+x11rb = { version = "0.13", default-features = false, features = ["res"] }
+
+[build-dependencies]
+sha2 = "0.10"
+toml.workspace = true

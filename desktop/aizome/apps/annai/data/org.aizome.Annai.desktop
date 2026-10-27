@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Annai
+GenericName=Welcome
+Comment=A short tour of Aizome: tabs, menus, the palette, Desks and the command key
+Keywords=welcome;tour;help;introduction;getting started;guide;aizome;
+Categories=System;Documentation;
+Icon=org.aizome.Annai
+Exec=aizome-annai
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Annai
+DBusActivatable=false

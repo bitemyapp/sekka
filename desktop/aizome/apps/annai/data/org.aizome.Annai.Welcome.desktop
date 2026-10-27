@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Aizome
+Comment=Shows Aizome's welcome at the first login
+Exec=aizome-annai --first-run
+Icon=org.aizome.Annai
+NoDisplay=true
+Terminal=false
+OnlyShowIn=Aizome;
+X-GNOME-Autostart-Phase=Applications
+X-GNOME-Autostart-Delay=2

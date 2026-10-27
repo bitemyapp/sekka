@@ -1,0 +1,11 @@
+[package]
+name = "aizome-theme"
+description = "Aizome's design tokens: the Night, Day and High Contrast palettes, metrics, type and the mark"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true

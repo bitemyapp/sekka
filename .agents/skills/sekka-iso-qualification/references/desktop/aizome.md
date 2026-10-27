@@ -1,11 +1,13 @@
 # Q4 — Aizome, through real input
 
-Use the Aizome source pinned by this ISO, not whichever checkout happens to be
-nearby. Inventory `docs/shell.md`, `docs/apps.md`, settings pages, menus and
-shortcuts. Assign each feature its own ledger ID (Q4.shell.*, Q4.app.NAME.*,
-Q4.settings.PAGE.*). All actual installed apps and pages are required, including
-ones added after this reference was written. For each action record visible
-success, cancellation, relevant invalid input, persistence and recovery.
+Use the Aizome source in this ISO's Sekka commit (`desktop/aizome`), not
+whichever checkout happens to be nearby. Inventory
+`desktop/aizome/docs/shell.md`, `desktop/aizome/docs/apps.md`, settings pages,
+menus and shortcuts. Assign each feature its own ledger ID (Q4.shell.*,
+Q4.app.NAME.*, Q4.settings.PAGE.*). All actual installed apps and pages are
+required, including ones added after this reference was written. For each
+action record visible success, cancellation, relevant invalid input,
+persistence and recovery.
 
 ## Compositor and shell
 

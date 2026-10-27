@@ -1,0 +1,31 @@
+[package]
+name = "aizome-shell"
+description = "Aizome's desktop shell: the menu bar, Toolchest, Desks strip, systray, Deskbar and Shelf, command palette, menus, notifications, OSD, desktop, lock screen and polkit dialog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+resvg = { version = "0.46", default-features = false }
+aizome-theme.workspace = true
+aizome-ipc.workspace = true
+aizome-config.workspace = true
+aizome-kit.workspace = true
+aizome-face.workspace = true
+aizome-sys.workspace = true
+aizome-search.workspace = true
+aizome-shell-proto = { path = "../aizome-shell-proto" }
+aizome-awake = { path = "../aizome-awake" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+
+[[bin]]
+name = "aizome-shell"
+path = "src/main.rs"

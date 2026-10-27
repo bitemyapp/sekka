@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<node>
+  <interface name="org.aizome.DisplayScales">
+    <annotation name="org.freedesktop.Accounts.VendorExtension" value="true"/>
+    <!-- Public display preferences only. AccountsService checks the caller's
+         uid; other users retain the default administrator-only write policy. -->
+    <annotation name="org.freedesktop.Accounts.Authentication.ChangeOwn" value=""/>
+    <property name="Scales" type="s" access="readwrite">
+      <annotation name="org.freedesktop.Accounts.DefaultValue.String" value="outputs = []"/>
+    </property>
+  </interface>
+</node>

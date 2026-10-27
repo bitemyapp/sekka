@@ -1,0 +1,3 @@
+# As in Sidestep, the toolkit Aizome is built on.
+max_width = 120
+use_small_heuristics = "Max"

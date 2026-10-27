@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Myaku
+GenericName=Activity
+Comment=See what each application uses of the processor, memory, energy, graphics and storage, and quit what misbehaves
+Keywords=activity;activity monitor;system monitor;task manager;processes;process;cpu;memory;ram;energy;power;gpu;disk;network;quit;force quit;kill;top;htop;
+Categories=System;Monitor;
+Icon=org.aizome.Myaku
+Exec=aizome-myaku
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Myaku
+DBusActivatable=false

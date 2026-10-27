@@ -1,0 +1,18 @@
+[package]
+name = "aizome-search"
+description = "Aizome's search: fuzzy matching, the file index, frecency and inline arithmetic behind the command palette and Find"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Helix's matcher: Smith-Waterman with Unicode normalisation and smart case.
+nucleo-matcher = "0.3"
+# The walk that honours .gitignore, as ripgrep and fd do (and Omperor's
+# file picker).
+ignore = "0.4"
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true

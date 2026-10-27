@@ -1,0 +1,285 @@
+From a8a8cb374b0e08cd22c5f40dedf3a034d15907fd Mon Sep 17 00:00:00 2001
+From: Chris Allen <callen.23dc@gmail.com>
+Date: Tue, 20 Oct 2026 15:04:34 -0500
+Subject: [PATCH 1/3] screencast: forget the retry timer when destroying the
+ cast
+
+xdpw_screencast_instance_destroy() frees every timer of the cast,
+process_retry among them, but leaves the pointer to it. Disconnecting
+the stream afterwards changes its state, and the state handler disarms
+process_retry again: xdpw_destroy_timer() on freed memory. The portal
+crashes this way whenever a cast is closed while starved of buffers,
+with the retry timer armed.
+---
+ src/screencast/screencast.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/screencast/screencast.c b/src/screencast/screencast.c
+index a8fdc10..8a567f8 100644
+--- a/src/screencast/screencast.c
++++ b/src/screencast/screencast.c
+@@ -93,6 +93,9 @@ void xdpw_screencast_instance_destroy(struct xdpw_screencast_instance *cast) {
+ 			xdpw_destroy_timer(timer);
+ 		}
+ 	}
++	// The stream's state changes while it disconnects below, which disarms
++	// the retry timer again
++	cast->process_retry = NULL;
+ 	struct xdpw_session *sess, *stmp;
+ 	wl_list_for_each_safe(sess, stmp, &cast->ctx->state->xdpw_sessions, link) {
+ 		if (sess->screencast_data.screencast_instance == cast) {
+-- 
+2.55.0
+
+
+From e2ff7d73bcd174fa03155f04b1f4564cb7cd1267 Mon Sep 17 00:00:00 2001
+From: Chris Allen <callen.23dc@gmail.com>
+Date: Tue, 20 Oct 2026 15:05:12 -0500
+Subject: [PATCH 2/3] screencast: cancel a capture before its buffer goes back
+ to PipeWire
+
+When the stream stops streaming, or PipeWire removes the buffer being
+captured into, the capture into it carried on: a delayed capture's
+timer stayed armed, and an ext frame in flight stayed alive. Its
+listener then acted on whatever the cast was capturing by the time the
+frame finished. After a pause and resume, STREAMING dequeues a new
+buffer and creates a second frame on the session, a protocol error
+(duplicate_frame) under a compositor that checks; under one that
+doesn't, the old frame's ready destroys the new frame and queues the
+new buffer, never captured, as a complete frame. The delayed capture
+of the new buffer then finds no buffer ("ext: started frame without
+buffer"), and the stream may stall.
+
+Keep the delayed capture's timer, and cancel the capture, the timer
+and the frame, whenever the stream leaves STREAMING and before the
+current buffer is removed. The events of a destroyed frame are never
+dispatched, so a frame's events always belong to the current capture.
+Record a wlr-screencopy frame when it is created rather than at its
+first event, so that it can be cancelled too.
+---
+ include/screencast_common.h          |  1 +
+ include/wlr_screencast.h             |  1 +
+ src/screencast/pipewire_screencast.c | 20 +++++++++++---------
+ src/screencast/screencast.c          |  3 ++-
+ src/screencast/wlr_screencast.c      | 26 ++++++++++++++++++++++++--
+ src/screencast/wlr_screencopy.c      |  1 +
+ 6 files changed, 40 insertions(+), 12 deletions(-)
+
+diff --git a/include/screencast_common.h b/include/screencast_common.h
+index 113c44f..799f2c9 100644
+--- a/include/screencast_common.h
++++ b/include/screencast_common.h
+@@ -199,6 +199,7 @@ struct xdpw_screencast_instance {
+ 	bool pwr_stream_state;
+ 	uint32_t framerate;
+ 	struct xdpw_timer *process_retry;
++	struct xdpw_timer *capture_timer;
+ 
+ 	// wlroots
+ 	union {
+diff --git a/include/wlr_screencast.h b/include/wlr_screencast.h
+index 4ec56dc..fe765e3 100644
+--- a/include/wlr_screencast.h
++++ b/include/wlr_screencast.h
+@@ -25,6 +25,7 @@ bool xdpw_wlr_target_from_data(struct xdpw_screencast_context *ctx, struct xdpw_
+ 		struct xdpw_screencast_restore_data *data);
+ 
+ void xdpw_wlr_frame_capture(struct xdpw_screencast_instance *cast);
++void xdpw_wlr_frame_capture_cancel(struct xdpw_screencast_instance *cast);
+ int xdpw_wlr_session_init(struct xdpw_screencast_instance *cast);
+ void xdpw_wlr_session_close(struct xdpw_screencast_instance *cast);
+ 
+diff --git a/src/screencast/pipewire_screencast.c b/src/screencast/pipewire_screencast.c
+index 1f24760..592979a 100644
+--- a/src/screencast/pipewire_screencast.c
++++ b/src/screencast/pipewire_screencast.c
+@@ -368,14 +368,15 @@ static void pwr_handle_stream_state_changed(void *data,
+ 		xdpw_pwr_dequeue_buffer(cast);
+ 		xdpw_wlr_frame_capture(cast);
+ 		break;
+-	case PW_STREAM_STATE_PAUSED:
+-		if (old == PW_STREAM_STATE_STREAMING && cast->current_frame.pw_buffer) {
+-			xdpw_pwr_enqueue_buffer(cast);
+-		}
+-		// fall through
+ 	default:
+ 		cast->pwr_stream_state = false;
+ 		pwr_disarm_process_retry(cast);
++		// The capture has to stop before PipeWire gets its buffer back
++		xdpw_wlr_frame_capture_cancel(cast);
++		if (state == PW_STREAM_STATE_PAUSED && old == PW_STREAM_STATE_STREAMING
++				&& cast->current_frame.pw_buffer) {
++			xdpw_pwr_enqueue_buffer(cast);
++		}
+ 		break;
+ 	}
+ }
+@@ -580,15 +581,16 @@ static void pwr_handle_stream_remove_buffer(void *data, struct pw_buffer *buffer
+ 
+ 	logprint(DEBUG, "pipewire: remove buffer event handle");
+ 
++	if (cast->current_frame.pw_buffer == buffer) {
++		xdpw_wlr_frame_capture_cancel(cast);
++		cast->current_frame.pw_buffer = NULL;
++		cast->current_frame.xdpw_buffer = NULL;
++	}
+ 	struct xdpw_buffer *xdpw_buffer = buffer->user_data;
+ 	if (xdpw_buffer) {
+ 		wl_list_remove(&xdpw_buffer->link);
+ 		xdpw_buffer_destroy(xdpw_buffer);
+ 	}
+-	if (cast->current_frame.pw_buffer == buffer) {
+-		cast->current_frame.pw_buffer = NULL;
+-		cast->current_frame.xdpw_buffer = NULL;
+-	}
+ 	for (uint32_t plane = 0; plane < buffer->buffer->n_datas; plane++) {
+ 		buffer->buffer->datas[plane].fd = -1;
+ 	}
+diff --git a/src/screencast/screencast.c b/src/screencast/screencast.c
+index 8a567f8..2c5228d 100644
+--- a/src/screencast/screencast.c
++++ b/src/screencast/screencast.c
+@@ -94,8 +94,9 @@ void xdpw_screencast_instance_destroy(struct xdpw_screencast_instance *cast) {
+ 		}
+ 	}
+ 	// The stream's state changes while it disconnects below, which disarms
+-	// the retry timer again
++	// these timers again
+ 	cast->process_retry = NULL;
++	cast->capture_timer = NULL;
+ 	struct xdpw_session *sess, *stmp;
+ 	wl_list_for_each_safe(sess, stmp, &cast->ctx->state->xdpw_sessions, link) {
+ 		if (sess->screencast_data.screencast_instance == cast) {
+diff --git a/src/screencast/wlr_screencast.c b/src/screencast/wlr_screencast.c
+index 0c8aad7..252eeea 100644
+--- a/src/screencast/wlr_screencast.c
++++ b/src/screencast/wlr_screencast.c
+@@ -37,18 +37,40 @@ static void wlr_frame_capture_start(struct xdpw_screencast_instance *cast) {
+ }
+ 
+ static void wlr_frame_capture_timer(void *data) {
+-	wlr_frame_capture_start((struct xdpw_screencast_instance *)data);
++	struct xdpw_screencast_instance *cast = data;
++	cast->capture_timer = NULL; // timer destroyed in event loop
++	wlr_frame_capture_start(cast);
+ }
+ 
+ void xdpw_wlr_frame_capture(struct xdpw_screencast_instance *cast) {
+ 	uint64_t delay_ns = fps_limit_measure_end(&cast->fps_limit, cast->framerate);
+ 	if (delay_ns > 0) {
+-		xdpw_add_timer(cast->ctx->state, delay_ns, wlr_frame_capture_timer, cast);
++		cast->capture_timer = xdpw_add_timer(cast->ctx->state, delay_ns,
++			wlr_frame_capture_timer, cast);
+ 	} else {
+ 		wlr_frame_capture_start(cast);
+ 	}
+ }
+ 
++// Stops the capture into the current buffer, scheduled or in flight, so that
++// the buffer can go back to PipeWire. A destroyed frame's events are never
++// dispatched, so a late ready or failed can't act on the next capture.
++void xdpw_wlr_frame_capture_cancel(struct xdpw_screencast_instance *cast) {
++	xdpw_destroy_timer(cast->capture_timer);
++	cast->capture_timer = NULL;
++
++	if (cast->ctx->ext_image_copy_capture_manager
++			&& cast->ctx->ext_output_image_capture_source_manager) {
++		if (cast->ext_session.frame) {
++			ext_image_copy_capture_frame_v1_destroy(cast->ext_session.frame);
++			cast->ext_session.frame = NULL;
++			logprint(TRACE, "ext: frame cancelled");
++		}
++	} else if (cast->ctx->screencopy_manager) {
++		xdpw_wlr_sc_session_close(cast);
++	}
++}
++
+ void xdpw_wlr_session_close(struct xdpw_screencast_instance *cast) {
+ 	if (cast->ctx->ext_image_copy_capture_manager
+ 			&& cast->ctx->ext_output_image_capture_source_manager) {
+diff --git a/src/screencast/wlr_screencopy.c b/src/screencast/wlr_screencopy.c
+index 81beb9e..ed119f4 100644
+--- a/src/screencast/wlr_screencopy.c
++++ b/src/screencast/wlr_screencopy.c
+@@ -231,6 +231,7 @@ static void wlr_register_cb(struct xdpw_screencast_instance *cast) {
+ 
+ 	struct zwlr_screencopy_frame_v1 *frame = zwlr_screencopy_manager_v1_capture_output(
+ 		cast->ctx->screencopy_manager, cast->target->with_cursor, cast->target->output->output);
++	cast->wlr_session.wlr_frame = frame;
+ 	zwlr_screencopy_frame_v1_add_listener(frame, &wlr_frame_listener, cast);
+ 	logprint(TRACE, "wlroots: callbacks registered");
+ }
+-- 
+2.55.0
+
+
+From 71b2e370bfb3d8907d5761728b316e4b9794e63c Mon Sep 17 00:00:00 2001
+From: Chris Allen <callen.23dc@gmail.com>
+Date: Tue, 20 Oct 2026 15:05:44 -0500
+Subject: [PATCH 3/3] screencast: keep a paused capture's buffer instead of
+ queuing it
+
+When the stream pauses in the middle of a capture, the PAUSED handler
+queued the capture's buffer as it was: never filled, flagged corrupted,
+and stamped with the last frame's presentation time, which is zero
+before the first frame. The stream pauses and resumes this way as a
+consumer links, so that buffer can be the first one a consumer sees.
+GStreamer's pipewiresrc, as a live source, takes its timestamp offset
+from the first buffer and then waits on the clock for each later
+buffer's pts plus that offset: after a first pts of zero, the second
+buffer, stamped with CLOCK_MONOTONIC, waits about as long as the
+machine has been up, and the stream stalls after one frame.
+
+Keep the buffer dequeued while the stream is paused, with its capture
+cancelled, and capture into it when the stream resumes. Without a kept
+buffer, resume through the process handler, which retries when no
+buffer can be dequeued.
+---
+ src/screencast/pipewire_screencast.c | 19 ++++++++++++-------
+ 1 file changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/src/screencast/pipewire_screencast.c b/src/screencast/pipewire_screencast.c
+index 592979a..62814f2 100644
+--- a/src/screencast/pipewire_screencast.c
++++ b/src/screencast/pipewire_screencast.c
+@@ -353,6 +353,8 @@ static void pwr_disarm_process_retry(struct xdpw_screencast_instance *cast) {
+ 	cast->process_retry = NULL;
+ }
+ 
++static void pwr_handle_stream_on_process(void *data);
++
+ static void pwr_handle_stream_state_changed(void *data,
+ 		enum pw_stream_state old, enum pw_stream_state state, const char *error) {
+ 	struct xdpw_screencast_instance *cast = data;
+@@ -365,18 +367,21 @@ static void pwr_handle_stream_state_changed(void *data,
+ 	switch (state) {
+ 	case PW_STREAM_STATE_STREAMING:
+ 		cast->pwr_stream_state = true;
+-		xdpw_pwr_dequeue_buffer(cast);
+-		xdpw_wlr_frame_capture(cast);
++		if (cast->current_frame.pw_buffer) {
++			// Kept from before a pause, which cancelled its capture
++			xdpw_wlr_frame_capture(cast);
++		} else {
++			pwr_handle_stream_on_process(cast);
++		}
+ 		break;
+ 	default:
+ 		cast->pwr_stream_state = false;
+ 		pwr_disarm_process_retry(cast);
+-		// The capture has to stop before PipeWire gets its buffer back
++		// Keep the buffer for when the stream resumes. Queued uncaptured, it
++		// would go out flagged corrupted and stamped with the last frame's
++		// time, zero before the first frame, and a consumer that syncs to
++		// the stamps would then wait as long as the clock has run.
+ 		xdpw_wlr_frame_capture_cancel(cast);
+-		if (state == PW_STREAM_STATE_PAUSED && old == PW_STREAM_STATE_STREAMING
+-				&& cast->current_frame.pw_buffer) {
+-			xdpw_pwr_enqueue_buffer(cast);
+-		}
+ 		break;
+ 	}
+ }
+-- 
+2.55.0
+

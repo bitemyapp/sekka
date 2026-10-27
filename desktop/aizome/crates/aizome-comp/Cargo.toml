@@ -1,0 +1,31 @@
+[package]
+name = "aizome-comp"
+description = "Aizome's Wayland compositor: the `aizome` binary, which runs the core and loads the logic, and their tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "aizome"
+path = "src/main.rs"
+
+[dependencies]
+aizome-comp-core.workspace = true
+# Not linked: the binary loads it at run time (`--logic`, else beside the
+# binary). Depending on it makes Cargo build it with the binary and its
+# tests.
+aizome-comp-logic.workspace = true
+
+[dev-dependencies]
+aizome-ipc.workspace = true
+sidestep-ui.workspace = true
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+png = "0.18"
+libc = "0.2"
+serde_json.workspace = true
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

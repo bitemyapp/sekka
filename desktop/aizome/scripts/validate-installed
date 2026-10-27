@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# Drives a second, headless Aizome session made of the binaries installed on
+# this laptop (/run/current-system), away from the person's own session:
+# its own runtime directory, home and session bus; the system bus is read
+# (the menu bar's network, battery and Bluetooth) and nothing on it is
+# changed. Screenshots are of the headless output only.
+#
+#   scripts/validate-installed OUT [gles|pixman] [BIN]
+#
+# BIN is where the installed binaries are (default /run/current-system/sw/bin).
+# THEME=night|day|high-contrast in the environment picks the appearance
+# (default: Aizome's own, by the time of day).
+# Run it under its own session bus: dbus-run-session -- scripts/validate-installed …
+# OUT gets the screenshots, the windows each step had, the compositor's log
+# and its frame times (stats.txt). See docs/checklist.md.
+set -uo pipefail
+case "${DBUS_SESSION_BUS_ADDRESS:-}" in
+  ""|*"/run/user/"*) echo "run it under a session bus of its own: dbus-run-session -- $0 $*" >&2; exit 2 ;;
+esac
+out=${1:?usage: validate-installed OUT [gles|pixman] [BIN]}
+renderer=${2:-gles}
+mkdir -p "$out"
+B=${3:-/run/current-system/sw/bin}
+unset WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET AIZOME_SOCKET AIZOME_SHELL_SOCKET AIZOME_SESSION \
+  XDG_SESSION_ID XDG_CURRENT_DESKTOP
+scratch=$(mktemp -d -t aizome-validate.XXXXXX)
+export XDG_RUNTIME_DIR=$scratch/run HOME=$scratch/home
+mkdir -p "$XDG_RUNTIME_DIR" "$HOME"/{Documents,Notes,Desktop,Pictures} && chmod 700 "$XDG_RUNTIME_DIR"
+export XDG_CONFIG_HOME=$HOME/.config XDG_DATA_HOME=$HOME/.local/share XDG_CACHE_HOME=$HOME/.cache XDG_STATE_HOME=$HOME/.local/state
+if [ -n "${THEME:-}" ]; then
+  mkdir -p "$XDG_CONFIG_HOME/aizome"
+  printf '[appearance]\ntheme = "%s"\n' "$THEME" >"$XDG_CONFIG_HOME/aizome/settings.toml"
+fi
+while IFS= read -r line; do case "$line" in *=*) export "${line%%=*}=${line#*=}";; esac; done </etc/xdg/aizome/environment
+export PATH=$B:$PATH
+cp "$(dirname "$0")/../README.md" "$HOME/Documents/README.md" 2>/dev/null || printf '# Aizome
+' >"$HOME/Documents/README.md"
+printf '# Groceries\n\n- rice\n- miso\n- nori\n' >"$HOME/Notes/Groceries.md"
+[ "$renderer" = pixman ] && export AIZOME_RENDERER=pixman
+
+# Sound from a PipeWire of its own, with a null sink as its default output.
+# Its WirePlumber has every hardware monitor off (ALSA, Bluetooth, cameras),
+# so nothing opens a real device; the systray's sound widget has an output
+# to show.
+sound=()
+if [ -x "$B/pipewire" ] && [ -x "$B/pipewire-pulse" ] && [ -x "$B/wireplumber" ]; then
+  mkdir -p "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d"
+  cat >"$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/90-no-hardware.conf" <<'CONF'
+wireplumber.profiles = {
+  main = {
+    monitor.alsa = disabled
+    monitor.alsa-midi = disabled
+    monitor.bluez = disabled
+    monitor.bluez-midi = disabled
+    monitor.v4l2 = disabled
+    monitor.libcamera = disabled
+    support.reserve-device = disabled
+    support.logind = disabled
+  }
+}
+CONF
+  "$B/pipewire" >"$out/pipewire.log" 2>&1 & sound+=($!)
+  for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/pipewire-0" ] && break; sleep 0.1; done
+  "$B/pw-cli" create-node adapter '{ factory.name=support.null-audio-sink node.name=validate-speakers
+    node.description="Validation Speakers" media.class=Audio/Sink object.linger=true
+    audio.position=[FL FR] }' >/dev/null 2>&1
+  "$B/wireplumber" >>"$out/pipewire.log" 2>&1 & sound+=($!)
+  "$B/pipewire-pulse" >>"$out/pipewire.log" 2>&1 & sound+=($!)
+  for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/pulse/native" ] && break; sleep 0.1; done
+  sleep 1
+fi
+
+name=aizome-validate-$$
+"$B/aizome" --backend headless --headless-output 2880x1800@2 --socket "$name" --no-session --no-xwayland \
+  >"$out/compositor.log" 2>&1 &
+comp=$!
+trap 'kill $comp "${sound[@]}" 2>/dev/null; wait $comp 2>/dev/null; rm -rf "$scratch"' EXIT
+for _ in $(seq 1 100); do [ -S "$XDG_RUNTIME_DIR/aizome.$name.sock" ] && break; sleep 0.1; done
+export WAYLAND_DISPLAY=$name AIZOME_SOCKET=$XDG_RUNTIME_DIR/aizome.$name.sock
+export AIZOME_SHELL_SOCKET=$XDG_RUNTIME_DIR/aizome-shell.$name.sock
+c() { "$B/aizomectl" "$@"; }
+shot() { sleep "${2:-1.5}"; c screenshot "$out/$1.png" >/dev/null && echo "shot $1"; }
+win() { c windows | awk -v a="$1" '$2 == a { id = $1 } END { print id }'; }
+# A window's content rectangle in points: x y width height.
+geom() {
+  c windows | awk -v a="$1" '$2 == a && match($0, /-?[0-9]+,-?[0-9]+ [0-9]+x[0-9]+/) {
+    split(substr($0, RSTART, RLENGTH), p, /[, x]/); g = p[1] " " p[2] " " p[3] " " p[4] } END { print g }'
+}
+wait_win() { for _ in $(seq 1 80); do [ -n "$(win "$1")" ] && return 0; sleep 0.25; done; echo "MISSING $1"; return 1; }
+
+for _ in $(seq 1 80); do [ -S "$AIZOME_SHELL_SOCKET" ] && break; sleep 0.25; done
+sleep 3
+c version
+c outputs | head -3
+
+# The desktop: Hako and foot (fish) stacked as one tab group, Sumi on a file.
+c spawn -- aizome-hako "$HOME"; wait_win org.aizome.Hako
+c spawn -- foot; wait_win foot
+c stack "$(win org.aizome.Hako)" "$(win foot)"
+c spawn -- aizome-sumi "$HOME/Documents/README.md"; wait_win org.aizome.Sumi
+sleep 2
+c stats --reset >/dev/null
+shot 01-desktop-tab-group 2
+c windows >"$out/windows-tabbed.txt"
+# Switch tabs in the group by focusing foot.
+c focus "$(win foot)"; shot 02-tab-switched 1
+
+# Strip's palette over Sumi: its menu commands, apps and the shortcut coach.
+c focus "$(win org.aizome.Sumi)"; sleep 0.5
+c input chord super+space; sleep 1; c input type find; shot 03-palette 1.5
+c input key Escape; sleep 0.5
+
+# NeXT's whole menu at the pointer (❖-right-click over Sumi), and the
+# marking menu (a right press held on Sumi's tab).
+read -r sx sy sw sh <<<"$(geom org.aizome.Sumi)"
+c input motion $((sx + sw / 2)) $((sy + sh / 3))
+c input key super down; c input click right; c input key super up
+shot 03b-menu-at-pointer 1
+c input key escape; sleep 0.5
+c input motion $((sx + 40)) $((sy - 10))
+c input button right down; sleep 0.8
+shot 03c-marking-menu 0.3
+c input key escape; sleep 0.2; c input button right up; sleep 0.5
+
+# The Desks overview and the switcher.
+c overview on; shot 04-overview 1.5; c overview off; sleep 0.5
+c switcher; shot 05-switcher 1; c input key Escape; sleep 0.5
+
+# Every app of the suite.
+for app in aizome-soroban aizome-koyomi aizome-tokei aizome-tenki aizome-fusen aizome-kura \
+  aizome-tansu aizome-settei aizome-yukimi aizome-myaku aizome-shashin aizome-annai; do
+  c spawn -- "$app"
+done
+for id in Soroban Koyomi Tokei Tenki Fusen Kura Tansu Settei Yukimi Myaku Shashin Annai; do
+  wait_win "org.aizome.$id" && echo "window org.aizome.$id"
+done
+sleep 4
+shot 06-apps 1
+c windows >"$out/windows.txt"
+# Each app on its own, filled, as it opened.
+for id in Soroban Koyomi Tokei Tenki Fusen Kura Tansu Settei Yukimi Myaku Shashin Annai; do
+  w=$(win "org.aizome.$id")
+  [ -n "$w" ] || continue
+  c focus "$w"; c fill "$w" on
+  shot "app-$(echo "$id" | tr '[:upper:]' '[:lower:]')" 1.2
+  c fill "$w" off
+done
+# Settings on its own, filled.
+c focus "$(win org.aizome.Settei)"; c fill "$(win org.aizome.Settei)" on; shot 07-settings 1.5
+c fill "$(win org.aizome.Settei)" off
+c stats >"$out/stats.txt"
+cat "$out/stats.txt"
+c quit >/dev/null 2>&1 || true
+sleep 1

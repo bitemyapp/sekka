@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Fusen
+GenericName=Notes
+Comment=Notes as Markdown files, with stickies that float above your windows
+Keywords=notes;sticky notes;stickies;notepad;memo;todo;checklist;markdown;
+Categories=Utility;
+Icon=org.aizome.Fusen
+Exec=aizome-fusen %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Fusen
+DBusActivatable=false
+Actions=new-note;
+
+[Desktop Action new-note]
+Name=New Note
+Exec=aizome-fusen --new ""

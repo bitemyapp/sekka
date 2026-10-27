@@ -103,6 +103,21 @@ fn get(url: &str, accept: &str) -> Result<String, String> {
     response.into_body().read_to_string().map_err(|e| e.to_string())
 }
 
+/// Read the lock file at an immutable GitHub revision without evaluating or
+/// building the flake. Used when an update target has no saved generation yet.
+pub fn revision_lock(source: &Locked) -> Result<String, String> {
+    if source.kind != "github" || source.host.as_deref().unwrap_or("github.com") != "github.com" {
+        return Err("This source has no saved lock file; remote input browsing supports github.com sources.".into());
+    }
+    let (Some(owner), Some(repo), Some(rev)) = (&source.owner, &source.repo, &source.rev) else {
+        return Err("This source has no exact repository revision.".into());
+    };
+    if !rev.bytes().all(|b| b.is_ascii_hexdigit()) || rev.len() != 40 {
+        return Err("This source has no full commit ID.".into());
+    }
+    get(&format!("https://raw.githubusercontent.com/{owner}/{repo}/{rev}/flake.lock"), "text/plain")
+}
+
 /// Parse an RFC 3339 time in UTC (`2026-10-08T08:01:05Z`, with or without
 /// fractions of a second) as Unix time.
 pub fn parse_time(text: &str) -> Option<i64> {
@@ -420,7 +435,7 @@ mod tests {
 
     /// Asks GitHub; run with `cargo test -- --ignored` when online.
     #[test]
-    #[ignore]
+    #[ignore = "asks GitHub over the network"]
     fn sekka_targets_its_nightly() {
         let lock = FlakeLock::parse(
             r#"{ "root": "root", "version": 7, "nodes": {

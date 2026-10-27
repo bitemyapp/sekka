@@ -1,0 +1,12 @@
+[package]
+name = "aizome-face"
+description = "Aizome's look over its kit: the mark, text specs, hard shadows, wallpapers ready to blit, and the drawn and field widgets the shell and the login screen share"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-theme.workspace = true

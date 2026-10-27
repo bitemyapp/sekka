@@ -22,27 +22,6 @@
         "type": "github"
       }
     },
-    "aizome": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "sidestep": "sidestep"
-      },
-      "locked": {
-        "lastModified": 1793063718,
-        "narHash": "sha256-WLugdrxv9kkbYoUno4T6YDjLukvJQYKfFt2ixf1I+Qs=",
-        "owner": "bitemyapp",
-        "repo": "aizome",
-        "rev": "4fddd2dea16b7713825cd7927f046c1975b61ef1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "bitemyapp",
-        "repo": "aizome",
-        "type": "github"
-      }
-    },
     "applications": {
       "locked": {
         "lastModified": 1792502884,
@@ -599,12 +578,12 @@
     "root": {
       "inputs": {
         "ai-apps": "ai-apps",
-        "aizome": "aizome",
         "applications": "applications",
         "determinate": "determinate",
         "fh": "fh",
         "nixpkgs": "nixpkgs_5",
         "omp": "omp",
+        "sidestep": "sidestep",
         "superluminal": "superluminal",
         "tracy": "tracy"
       }
@@ -659,8 +638,8 @@
       },
       "original": {
         "owner": "bitemyapp",
-        "ref": "aizome",
         "repo": "sidestep",
+        "rev": "dae957e913376a26e642d6abee533eb755fb9092",
         "type": "github"
       }
     },

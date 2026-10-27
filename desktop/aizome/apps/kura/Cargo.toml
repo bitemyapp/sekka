@@ -1,0 +1,33 @@
+[package]
+name = "aizome-kura"
+description = "Kura (Disk Usage): what fills a disk, as a sunburst for people and an index for agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "kura"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-kura"
+path = "src/main.rs"
+
+[features]
+default = ["gui"]
+# The window. Without it, the library and the command line (scan, report,
+# hints, trash) build with no toolkit at all.
+gui = ["dep:aizome-kit", "dep:aizome-theme", "dep:env_logger"]
+
+[dependencies]
+aizome-kit = { workspace = true, optional = true }
+aizome-theme = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger = { workspace = true, optional = true }
+libc = "0.2"
+# Hashes for duplicate detection: xxh3-128, pure Rust.
+xxhash-rust = { version = "0.8", features = ["xxh3"] }

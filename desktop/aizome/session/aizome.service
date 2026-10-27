@@ -1,0 +1,47 @@
+# The compositor, started by aizome-session in the user's systemd manager.
+# It notifies readiness once its Wayland socket and IPC are up and its
+# environment is imported, then starts aizome-session.target (which binds
+# graphical-session.target, so session services follow it).
+#
+# It keeps systemd's watchdog fed from its main loop. If the loop stalls
+# for WatchdogSec, systemd stops it (SIGABRT, so a core dump shows where it
+# was; `coredumpctl info aizome`) and aizome-session starts it again,
+# rather than leaving a frozen screen. Apps lose their windows then; the
+# new compositor says what happened.
+[Unit]
+Description=Aizome compositor
+Documentation=https://github.com/bitemyapp/sekka/tree/main/desktop/aizome
+BindsTo=graphical-session.target
+Before=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=aizome-session.target
+Before=aizome-session.target
+
+[Service]
+Slice=session.slice
+Type=notify
+# Found on the manager's PATH (on NixOS, /run/current-system/sw/bin and
+# the user's profile).
+ExecStart=/usr/bin/env aizome --backend udev
+# A crashed compositor ends the session; the display manager takes over.
+# (aizome-session restarts one the watchdog stopped.)
+Restart=no
+TimeoutStartSec=60
+# Long enough that a machine too loaded to schedule the compositor for a
+# while (a big build, swapping) doesn't cost every app its windows; a
+# real wedge still ends within half a minute.
+WatchdogSec=30s
+# Don't wait long for the core dump: the screen is frozen meanwhile.
+TimeoutAbortSec=5s
+# Only the compositor gets the watchdog's SIGABRT (one core dump, not one
+# for the shell, Xwayland and every program it started); what is left of
+# the service is killed after it.
+KillMode=mixed
+# Ahead of the rest of the session (pipewire, portals) for CPU and disk
+# when the machine is loaded, so frames and input keep coming; the session
+# itself is ahead of apps (session.slice over app.slice: see the NixOS
+# module). Nice can't go below 0 here: a user manager without
+# CAP_SYS_NICE (or a raised RLIMIT_NICE) would fail to start the service.
+CPUWeight=1000
+IOWeight=1000

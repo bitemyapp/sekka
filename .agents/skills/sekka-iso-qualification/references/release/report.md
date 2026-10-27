@@ -23,7 +23,6 @@ cannot pass validation):
     "iso_bytes": 123,
     "sekka_revision": "full Git commit",
     "flake_lock_sha256": "64 lowercase hex characters",
-    "aizome_revision": "full locked Git commit",
     "sidestep_revision": "full locked Git commit",
     "iso_store_path": "/nix/store/...-sekka-....iso"
   },
@@ -48,7 +47,7 @@ HEAD is reachable from the fetched `origin/main`. Nix evaluates the ISO output
 at that exact Git revision; the chosen ISO must resolve inside that output's
 `iso/` directory. An ordinary `result/iso` symlink works. A copied arbitrary ISO
 does not establish source provenance. Keep the tested Nix output alive with a
-GC root; do not rebuild after testing. The source lock, Aizome/Sidestep pins,
+GC root; do not rebuild after testing. The source lock, Sidestep pin,
 image size/hash and output path must all match `candidate` exactly.
 
 The hostname must match the workstation performing publication. CI environment
@@ -111,17 +110,17 @@ Q7 records fixed defects/PRs and confirms a full reset/rerun on these final byte
 ## Dynamic desktop inventory
 
 `inventories` has exactly `Q4` and `Q5`. Each contains `source_revision` (the
-locked Aizome revision for Q4, Sekka revision for Q5), `evidence` (source/menu
-inventory snapshots), and a nonempty `features` list. Inventory all shell
-actions, applications, settings pages, menus, shortcuts and panels described by
-their leaf references and the actual pinned source. A single summary feature
+Sekka revision, which holds both Aizome's source and Tatami's), `evidence`
+(source/menu inventory snapshots), and a nonempty `features` list. Inventory
+all shell actions, applications, settings pages, menus, shortcuts and panels
+described by their leaf references and the actual pinned source. A single summary feature
 does not satisfy the skill even if its JSON shape is accepted.
 
 ```json
 {
   "id": "Q4.app.sumi.save",
   "name": "Sumi Save As",
-  "source_refs": ["docs/apps.md", "actual/pinned/source.rs:123"],
+  "source_refs": ["desktop/aizome/docs/apps.md", "actual/pinned/source.rs:123"],
   "cases": {
     "success": "Q4.app.sumi.save.success",
     "cancel": "Q4.app.sumi.save.cancel",
