@@ -1,6 +1,7 @@
 //! The system's own choices, as its distribution declares them
 //! (`programs.yukimi.choices`): on Sekka, which desktops it has, which one
-//! starts by default, and the login screen. Picking changes nothing until
+//! starts by default, the login screen, and the boot splash (which Settei's
+//! General → Startup proposes here). Picking changes nothing until
 //! Apply, which asks for an administrator password and builds the system
 //! once with every choice made.
 use aizome_kit::column;
@@ -36,7 +37,8 @@ pub fn tools(app: &Yukimi) -> Vec<Element<Msg>> {
 pub fn page(app: &Yukimi) -> Element<Msg> {
     let mut c = column![heading(
         "Desktops and login",
-        "Which desktops this computer has, which one starts when you sign in, and the screen you sign in at. \
+        "Which desktops this computer has, which one starts when you sign in, the screen you sign in at, and \
+         what it shows while it starts. \
          Choose here, then Apply: Yukimi builds your system with your choices, which asks for an administrator \
          password. The version you have now stays in History.",
     )]

@@ -31,6 +31,8 @@ pub enum Error {
     NotAList(String),
     #[error("`{0}` is not set to a plain string, so it is left alone")]
     NotAString(String),
+    #[error("`{0}` is not set to plain `true` or `false`, so it is left alone")]
+    NotABool(String),
     #[error("not a valid attribute name in Nixpkgs: {0:?}")]
     BadAttribute(String),
     #[error("flake.lock could not be read: {0}")]

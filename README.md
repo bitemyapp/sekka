@@ -30,7 +30,7 @@ Choose your disk, account, desktop, applications, and location. Review everythin
 
 You can enable **LUKS2 disk encryption** on the disk page and choose a separate passphrase to unlock the system at startup. The system, personal files and optional swap are encrypted; boot files remain unencrypted. It works with ext4, Btrfs or XFS, using UEFI or legacy BIOS. Encryption is off by default. Remember the disk passphrase: changing your login password does not change it, and Genkan cannot recover it. TRIM is enabled through encryption to let SSDs reclaim space; this reveals which disk blocks are unused. Encrypted installation has not been validated on physical hardware.
 
-Installed systems start behind Sekka's boot splash: the crest on the night ground, with a thin rail that fills as the computer starts, and "Restarting" or "Shutting down" when it stops. Press **Esc** at any time to see the boot messages, and **Esc** again to go back; after 15 seconds the splash reminds you. On an encrypted system you type the disk passphrase into the splash, which points out Caps Lock; one passphrase opens both the system and its swap. The splash has been tested in virtual machines, not yet on physical hardware.
+Installed systems start behind Sekka's boot splash: the crest on the night ground, with a thin rail that fills as the computer starts, and "Restarting" or "Shutting down" when it stops. Press **Esc** at any time to see the boot messages, and **Esc** again to go back; after 15 seconds the splash reminds you. On an encrypted system you type the disk passphrase into the splash, which points out Caps Lock; one passphrase opens both the system and its swap. A system installed before the splash came keeps starting without it, and updating doesn't change that: turn it on in Aizome's **Settei → General → Startup**, or with `sekka-update --choose calamares.bootSplash.enable=true`, and it shows from the next start. The splash has been tested in virtual machines, not yet on physical hardware.
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
@@ -210,9 +210,9 @@ follow Sekka's `main` branch as soon as changes are merged, before the
 nightly checks run, and anything the binary cache doesn't have yet builds on
 your computer. `sekka-update --nightly` goes back.
 
-Which desktops are installed, which one starts by default, and the login
-screen can be changed after installing too: in Aizome's **Yukimi →
-Desktops**, or with `sekka-update --choose`, such as
+Which desktops are installed, which one starts by default, the login
+screen and the boot splash can be changed after installing too: in Aizome's
+**Yukimi → Desktops**, or with `sekka-update --choose`, such as
 `sekka-update --choose calamares.loginScreen=aizome`. Yukimi asks for your
 password, builds the new system, and offers a restart when the change needs
 one, as an update does.

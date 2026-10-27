@@ -53,6 +53,15 @@ let
         default = false;
         description = "Whether it takes several values (a list of strings) rather than one (a string).";
       };
+      boolean = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Whether it is a boolean rather than a string: its options are
+          `true` and `false`, which Yukimi writes as Nix's `true` and
+          `false`. Its value is still given as one of those strings.
+        '';
+      };
       value = lib.mkOption {
         type = lib.types.either lib.types.str (lib.types.listOf lib.types.str);
         description = "What it is in this system.";

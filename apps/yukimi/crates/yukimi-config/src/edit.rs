@@ -272,6 +272,21 @@ pub fn set_string(text: &str, path: &[&str], value: &str) -> Result<String> {
     Ok(new)
 }
 
+/// Set a setting that is `true` or `false`, adding it (beside its siblings)
+/// if it is absent: `calamares.bootSplash.enable = true;`.
+pub fn set_bool(text: &str, path: &[&str], value: bool) -> Result<String> {
+    let root = parse(text)?;
+    let new = match find(&root, path)? {
+        Some(ast::Expr::Ident(ident)) if ident.ident_token().is_some_and(|t| matches!(t.text(), "true" | "false")) => {
+            replace(text, ident.syntax().text_range(), &value.to_string())
+        }
+        Some(_) => return Err(Error::NotABool(dotted(path))),
+        None => insert_beside(text, &root, path, &format!("{} = {value};", dotted(path)))?,
+    };
+    parse(&new)?;
+    Ok(new)
+}
+
 /// Set a list-of-strings setting, adding it if it is absent.
 pub fn set_string_list(text: &str, path: &[&str], values: &[String]) -> Result<String> {
     let root = parse(text)?;
@@ -535,6 +550,40 @@ mod tests {
             set_string("{ ... }: { calamares.loginScreen = x; }", &["calamares", "loginScreen"], "gdm"),
             Err(Error::NotAString("calamares.loginScreen".into()))
         );
+    }
+
+    #[test]
+    fn sets_a_boolean_choice_beside_its_siblings() {
+        let installed =
+            "{ ... }:\n{\n  calamares.loginScreen = \"aizome\";\n\n  networking.hostName = \"ganymede\";\n}\n";
+        // Absent: added after the last calamares.* setting.
+        let on = set_bool(installed, &["calamares", "bootSplash", "enable"], true).unwrap();
+        assert_eq!(
+            on,
+            installed.replace("\"aizome\";\n", "\"aizome\";\n  calamares.bootSplash.enable = true;\n"),
+            "{on}"
+        );
+        assert_eq!(bool_value(&on, &["calamares", "bootSplash", "enable"]).unwrap(), Some(true));
+        // Present: replaced in place, written as a path or nested.
+        let off = set_bool(&on, &["calamares", "bootSplash", "enable"], false).unwrap();
+        assert_eq!(off, on.replace("enable = true", "enable = false"));
+        let nested = "{ ... }: { calamares.bootSplash = { enable = false; }; }";
+        assert_eq!(
+            set_bool(nested, &["calamares", "bootSplash", "enable"], true).unwrap(),
+            nested.replace("false", "true")
+        );
+        // Anything but plain true or false: refused.
+        for other in ["lib.mkForce true", "x", "\"true\""] {
+            assert_eq!(
+                set_bool(
+                    &format!("{{ ... }}: {{ calamares.bootSplash.enable = {other}; }}"),
+                    &["calamares", "bootSplash", "enable"],
+                    true
+                ),
+                Err(Error::NotABool("calamares.bootSplash.enable".into())),
+                "{other}"
+            );
+        }
     }
 
     #[test]

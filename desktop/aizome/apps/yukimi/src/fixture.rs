@@ -391,6 +391,7 @@ pub fn choices() -> Vec<Choice> {
             setting: "calamares.desktops".into(),
             title: "Desktops".into(),
             many: true,
+            boolean: false,
             value: ChoiceValue::Many(vec!["aizome".into(), "tatami".into(), "gnome".into()]),
             options: desktops.clone(),
             within: None,
@@ -399,6 +400,7 @@ pub fn choices() -> Vec<Choice> {
             setting: "calamares.defaultDesktop".into(),
             title: "Default desktop".into(),
             many: false,
+            boolean: false,
             value: ChoiceValue::One("aizome".into()),
             options: desktops,
             within: Some("calamares.desktops".into()),
@@ -407,6 +409,7 @@ pub fn choices() -> Vec<Choice> {
             setting: "calamares.loginScreen".into(),
             title: "Login screen".into(),
             many: false,
+            boolean: false,
             value: ChoiceValue::One("auto".into()),
             options: vec![
                 option(
@@ -426,6 +429,23 @@ pub fn choices() -> Vec<Choice> {
                 ),
                 option("gdm", "GDM", Some("GNOME's."), None),
                 option("plasma-login", "Plasma Login", Some("KDE's."), None),
+            ],
+            within: None,
+        },
+        Choice {
+            setting: "calamares.bootSplash.enable".into(),
+            title: "Boot splash".into(),
+            many: false,
+            boolean: true,
+            value: ChoiceValue::One("false".into()),
+            options: vec![
+                option(
+                    "true",
+                    "On",
+                    Some("Sekka's crest while the computer starts and stops. Esc shows the messages."),
+                    None,
+                ),
+                option("false", "Off", Some("The computer's messages as it starts and stops."), None),
             ],
             within: None,
         },

@@ -1,7 +1,7 @@
 //! General: a list of pages, as macOS's General is. About (the mark, the
 //! machine's name and hardware), Software Update (Yukimi's Updates),
-//! Storage (what fills the disk, Kura), Date & Time, Language & Region,
-//! Default Apps and Login Items.
+//! Storage (what fills the disk, Kura), Startup (the boot splash, through
+//! Yukimi), Date & Time, Language & Region, Default Apps and Login Items.
 
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
@@ -16,6 +16,7 @@ pub use datetime::clock_text;
 mod defaults;
 mod language;
 mod login;
+mod startup;
 mod storage;
 mod update;
 
@@ -27,6 +28,7 @@ pub enum Page {
     About,
     SoftwareUpdate,
     Storage,
+    Startup,
     DateTime,
     Language,
     DefaultApps,
@@ -34,10 +36,11 @@ pub enum Page {
 }
 
 impl Page {
-    pub const PAGES: [Page; 7] = [
+    pub const PAGES: [Page; 8] = [
         Page::About,
         Page::SoftwareUpdate,
         Page::Storage,
+        Page::Startup,
         Page::DateTime,
         Page::Language,
         Page::DefaultApps,
@@ -50,6 +53,7 @@ impl Page {
             Page::About => "About",
             Page::SoftwareUpdate => "Software Update",
             Page::Storage => "Storage",
+            Page::Startup => "Startup",
             Page::DateTime => "Date & Time",
             Page::Language => "Language & Region",
             Page::DefaultApps => "Default Apps",
@@ -64,6 +68,7 @@ impl Page {
             Page::About => "about",
             Page::SoftwareUpdate => "software-update",
             Page::Storage => "storage",
+            Page::Startup => "startup",
             Page::DateTime => "datetime",
             Page::Language => "language",
             Page::DefaultApps => "default-apps",
@@ -77,6 +82,7 @@ impl Page {
             Page::About => (Icon::Info, Tile::Ai),
             Page::SoftwareUpdate => (Icon::Snowflake, Tile::Hanada),
             Page::Storage => (Icon::HardDrive, Tile::Slate),
+            Page::Startup => (Icon::Power, Tile::Kon),
             Page::DateTime => (Icon::Clock, Tile::Kohaku),
             Page::Language => (Icon::Languages, Tile::Cyan),
             Page::DefaultApps => (Icon::AppWindow, Tile::Violet),
@@ -89,6 +95,7 @@ impl Page {
             Page::About => "This computer, its name and what it's made of.",
             Page::SoftwareUpdate => "Keep the system and your apps current, with Yukimi.",
             Page::Storage => "What fills the disk, and what could go.",
+            Page::Startup => "What the computer shows while it starts and stops.",
             Page::DateTime => "The time zone, network time and the clock.",
             Page::Language => "The language and how dates, times and numbers look.",
             Page::DefaultApps => "Which app opens links, mail, pictures and the rest.",
@@ -104,6 +111,7 @@ pub struct General {
     about: about::State,
     update: update::State,
     storage: storage::State,
+    startup: startup::State,
     time: datetime::State,
     language: language::State,
     defaults: defaults::State,
@@ -116,6 +124,7 @@ pub enum Msg {
     About(about::Msg),
     Update(update::Msg),
     Storage(storage::Msg),
+    Startup(startup::Msg),
     Time(datetime::Msg),
     Language(language::Msg),
     Defaults(defaults::Msg),
@@ -129,6 +138,7 @@ impl General {
             Page::About => self.about.shown(cx),
             Page::SoftwareUpdate => self.update.shown(cx),
             Page::Storage => self.storage.shown(cx),
+            Page::Startup => self.startup.shown(cx),
             Page::DateTime => self.time.shown(cx),
             Page::Language => self.language.shown(cx),
             Page::DefaultApps => self.defaults.shown(cx),
@@ -212,6 +222,7 @@ impl Pane for General {
                 .keywords(&["computer", "hardware", "version", "sekka", "nixos", "specs"]),
             SettingEntry::new("software-update", "Software Update").keywords(&["upgrade", "yukimi", "nixos-rebuild"]),
             SettingEntry::new("storage", "Storage").keywords(&["disk space", "free space", "kura", "full"]),
+            SettingEntry::new("startup", "Startup").keywords(&["boot", "start up", "splash", "shut down"]),
             SettingEntry::new("datetime", "Date & Time").keywords(&["clock", "time zone", "timezone"]),
             SettingEntry::new("language", "Language & Region").keywords(&[
                 "locale",
@@ -225,6 +236,7 @@ impl Pane for General {
         v.extend(about::entries());
         v.extend(update::entries());
         v.extend(storage::entries());
+        v.extend(startup::entries());
         v.extend(datetime::entries());
         v.extend(language::entries());
         v.extend(defaults::entries());
@@ -278,6 +290,7 @@ impl Pane for General {
             Msg::About(m) => self.about.update(m, cx),
             Msg::Update(m) => self.update.update(m, cx),
             Msg::Storage(m) => self.storage.update(m, cx),
+            Msg::Startup(m) => self.startup.update(m, cx),
             Msg::Time(m) => self.time.update(m, cx),
             Msg::Language(m) => self.language.update(m, cx),
             Msg::Defaults(m) => self.defaults.update(m, cx),
@@ -302,6 +315,7 @@ impl Pane for General {
             Page::About => self.about.view(vcx).map(Msg::About),
             Page::SoftwareUpdate => self.update.view(vcx).map(Msg::Update),
             Page::Storage => self.storage.view(vcx).map(Msg::Storage),
+            Page::Startup => self.startup.view(vcx).map(Msg::Startup),
             Page::DateTime => self.time.view(vcx).map(Msg::Time),
             Page::Language => self.language.view(vcx).map(Msg::Language),
             Page::DefaultApps => self.defaults.view(vcx).map(Msg::Defaults),
