@@ -234,6 +234,26 @@ upstream fix first.
 
 ## Sources and installed-system updates
 
+Sekka backports IBus's upstream serial fix
+[`a8ff7559`](https://github.com/ibus/ibus/commit/a8ff755971509f09e1d0ea52a10be1bfc13af39b)
+to Aizome's Wayland input-method frontend. In 1.5.34 every newly announced
+Wayland global reset the input-method counter: plugging in a display made
+foot discard letters while Return, sent as a virtual keyboard event, still
+worked. The counter now resets only for an input-method interface. Aizome
+already tolerates the old frontend's counter, but fixing IBus also protects
+sessions running older local compositor builds. No compositor development
+or live-reload workflow changes are required.
+
+`nix build .#checks.x86_64-linux.ibus-wayland-serial` compiles the real IBus
+registry callback before and after the backport. It requires the original
+to exhibit the precise serial reset, then checks repeated output and other
+global announcements, including the maximum serial, and initialization of
+both input-method versions. This is a component test, not a physical docking
+test. The patch is confined to the existing Aizome frontend override; remove
+it once the pinned IBus contains the upstream fix. After activating the new
+system, `systemctl --user restart aizome-ibus.service` replaces that frontend
+without restarting the compositor or closing applications.
+
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
 Plasma Login Manager's generic X11 startup script bypasses NixOS's session
