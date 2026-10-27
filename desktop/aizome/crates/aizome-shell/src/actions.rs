@@ -123,6 +123,11 @@ pub enum Action {
         app_id: String,
         down: bool,
     },
+    /// Move the Deskbar to an edge, or make it a width (saved).
+    PlaceDeskbar {
+        side: Option<aizome_config::DeskbarSide>,
+        width: Option<f64>,
+    },
     /// Mount, unmount or eject a disk by its device path.
     Disk {
         device: String,

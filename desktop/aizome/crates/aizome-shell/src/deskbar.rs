@@ -1,7 +1,9 @@
-//! The Deskbar (C2-Desktop's aside): at the top right under the bar, each
-//! running app with its windows indented beneath, unread notifications
-//! filed under their app, and the Shelf of parked drags.
+//! The Deskbar (C2-Desktop's aside): at the top right under the bar (or the
+//! top left, `[deskbar] side`), each running app with its windows indented
+//! beneath, unread notifications filed under their app, and the Shelf of
+//! parked drags.
 
+use aizome_config::DeskbarSide;
 use aizome_ipc::WindowId;
 use aizome_kit::draw;
 use aizome_kit::element::Element;
@@ -14,9 +16,52 @@ use crate::look::{self, Hue};
 use crate::widgets::drawn::{DragPhase, Press, drawn};
 use crate::wm::WindowNote;
 
-/// The Deskbar's width, and its shadow's (to its left and under it).
+/// The Deskbar's default width, and its shadow's (away from the edge it
+/// stands against, and under it).
 pub const WIDTH: f64 = aizome_theme::metrics::DESKBAR_WIDTH;
 pub const SHADOW: f64 = aizome_theme::metrics::SHADOW;
+/// The full Deskbar's widths: narrower cuts its rows' text to nothing,
+/// wider takes too much of a small screen.
+pub const MIN_WIDTH: f64 = 200.0;
+pub const MAX_WIDTH: f64 = 400.0;
+/// Narrower than the full Deskbar: Slim from here, and the Rail (icons
+/// alone) below it, at its one width.
+pub const SLIM_WIDTH: f64 = 120.0;
+pub const RAIL_WIDTH: f64 = 48.0;
+/// The strip at the top to drag the Deskbar by.
+pub const GRIP: f64 = 10.0;
+/// The inner edge that takes a drag to resize.
+const EDGE: f64 = 5.0;
+
+/// How much the Deskbar shows, by its width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Density {
+    /// Icons alone: each app, a mark per window, unread counts.
+    Rail,
+    /// Everything, a size smaller.
+    Slim,
+    Full,
+}
+
+pub fn density(width: f64) -> Density {
+    if width < SLIM_WIDTH {
+        Density::Rail
+    } else if width < MIN_WIDTH {
+        Density::Slim
+    } else {
+        Density::Full
+    }
+}
+
+/// The width to draw for a configured one: whole points, in range, the
+/// Rail's below Slim's (half way down snaps to it).
+pub fn clamp_width(w: f64) -> f64 {
+    if !w.is_finite() {
+        return WIDTH;
+    }
+    let w = w.round();
+    if w < (SLIM_WIDTH + RAIL_WIDTH) / 2.0 { RAIL_WIDTH } else { w.clamp(SLIM_WIDTH, MAX_WIDTH) }
+}
 const APP_ROW: f64 = 26.0;
 const WINDOW_ROW: f64 = 22.0;
 const CARD: f64 = 62.0;
@@ -52,6 +97,13 @@ pub enum DeskbarMsg {
     ShelfMenu(usize, Point),
     /// Something dropped on "Drop to park": URLs and text.
     Park(Vec<String>, Option<String>),
+    /// The grip dragged: let go over the other half of the screen, the
+    /// Deskbar moves to that edge.
+    Grip(DragPhase),
+    /// The inner edge dragged: the width follows the pointer.
+    Edge(DragPhase),
+    /// The grip's menu: which edge, how wide.
+    PlaceMenu(Point),
 }
 
 /// A notification's card under its app.
@@ -110,7 +162,7 @@ pub struct ShelfRow {
     pub drag_text: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeskbarModel {
     pub apps: Vec<AppRow>,
     pub shelf: Vec<ShelfRow>,
@@ -118,9 +170,39 @@ pub struct DeskbarModel {
     pub hide_shelf: bool,
     /// Room below the menu bar on the owning output, including the shadow.
     pub max_height: Option<f64>,
+    /// `[deskbar] side`: the edge it stands against.
+    pub side: DeskbarSide,
+    /// `[deskbar] width`, clamped: the face's, without the shadow.
+    pub width: f64,
+}
+
+impl Default for DeskbarModel {
+    fn default() -> Self {
+        DeskbarModel {
+            apps: Vec::new(),
+            shelf: Vec::new(),
+            hide_shelf: false,
+            max_height: None,
+            side: DeskbarSide::Right,
+            width: WIDTH,
+        }
+    }
 }
 
 impl DeskbarModel {
+    /// Where the face starts across the surface: after the shadow when it
+    /// falls to the left (hanging from the right edge), at 0 otherwise.
+    pub fn face_x(&self) -> f64 {
+        match self.side {
+            DeskbarSide::Right => SHADOW,
+            DeskbarSide::Left => 0.0,
+        }
+    }
+
+    pub fn density(&self) -> Density {
+        density(self.width)
+    }
+
     /// Its height, shadow included: the surface's.
     pub fn height(&self) -> f64 {
         self.max_height.map_or(self.content_height(), |h| self.content_height().min(h.max(SHADOW + 1.0)))
@@ -128,6 +210,13 @@ impl DeskbarModel {
 
     /// Unclipped height: overflowing content stays reachable by scrolling.
     pub fn content_height(&self) -> f64 {
+        match self.density() {
+            Density::Full => GRIP + self.full_height(),
+            d => (GRIP + crate::deskbar_compact::height(self, d == Density::Rail)).ceil() + SHADOW,
+        }
+    }
+
+    fn full_height(&self) -> f64 {
         let mut h = 4.0 + 2.0;
         for a in &self.apps {
             h += a.height();
@@ -157,7 +246,7 @@ fn ui(t: &aizome_kit::Theme, size: f64, weight: f32, c: aizome_kit::Color) -> ai
     look::ui(size * t.metrics.factor, weight, c)
 }
 
-fn app_row(a: &AppRow, top: f64) -> Element<DeskbarMsg> {
+fn app_row(a: &AppRow, top: f64, width: f64) -> Element<DeskbarMsg> {
     let (name, glyph, hue, n, folded, unread) = (a.name.clone(), a.glyph, a.hue, a.windows.len(), a.folded, a.unread);
     let image = a.image.clone();
     let id = a.app_id.clone();
@@ -175,7 +264,7 @@ fn app_row(a: &AppRow, top: f64) -> Element<DeskbarMsg> {
     };
     let label = name.clone();
     drawn(
-        WIDTH,
+        width,
         APP_ROW,
         (name.clone(), glyph, hue, right.clone(), unread > 0, image.as_ref().map(|i| i.0.pixel_size())),
         move |cx| {
@@ -215,10 +304,10 @@ fn count_hit(a: &AppRow) -> Element<DeskbarMsg> {
     drawn(56.0, APP_ROW, "count", |_cx| {}).on_click(msg).key(("count", a.app_id.as_str())).into()
 }
 
-fn window_row(w: &WindowRow) -> Element<DeskbarMsg> {
+fn window_row(w: &WindowRow, width: f64) -> Element<DeskbarMsg> {
     let (title, focused, note, urgent) = (w.title.clone(), w.focused, w.note, w.urgent);
     let label = title.clone();
-    drawn(WIDTH, WINDOW_ROW, (title.clone(), focused, note, urgent), move |cx| {
+    drawn(width, WINDOW_ROW, (title.clone(), focused, note, urgent), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         if focused {
@@ -263,10 +352,10 @@ fn window_row(w: &WindowRow) -> Element<DeskbarMsg> {
 }
 
 /// A notification's card: the summary in 650, the body in two lines, a ×.
-fn card(c: &NoteCard) -> Element<DeskbarMsg> {
+fn card(c: &NoteCard, width: f64) -> Element<DeskbarMsg> {
     let (summary, body) = (c.summary.clone(), c.body.clone());
     let label = format!("{} {}", c.summary, c.body);
-    let card = drawn(WIDTH - 42.0, CARD, (summary.clone(), body.clone()), move |cx| {
+    let card = drawn(width - 42.0, CARD, (summary.clone(), body.clone()), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         cx.canvas.fill_rect(b, t.sunk());
@@ -289,7 +378,7 @@ fn card(c: &NoteCard) -> Element<DeskbarMsg> {
         drawn(18.0, 18.0, "x", |_| {}).on_click(DeskbarMsg::DismissNote(c.id)).text("Dismiss", SemanticRole::Button);
     let stacked: Element<DeskbarMsg> = aizome_kit::stack(vec![
         card.into(),
-        aizome_kit::container(close).padding([2.0, 2.0, 0.0, WIDTH - 42.0 - 20.0]).into(),
+        aizome_kit::container(close).padding([2.0, 2.0, 0.0, width - 42.0 - 20.0]).into(),
     ])
     .into();
     let mut parts = vec![stacked];
@@ -306,8 +395,8 @@ fn card(c: &NoteCard) -> Element<DeskbarMsg> {
     aizome_kit::container(column(parts)).padding([0.0, 10.0, CARD_GAP, 32.0]).key(("note", c.id)).into()
 }
 
-fn caption() -> Element<DeskbarMsg> {
-    drawn(WIDTH, 1.0 + CAPTION, "shelf-caption", |cx| {
+fn caption(width: f64) -> Element<DeskbarMsg> {
+    drawn(width, 1.0 + CAPTION, "shelf-caption", |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         cx.canvas.fill_rect(Rect::new(0.0, 0.0, b.x1, 1.0), t.bevel_lo());
@@ -319,11 +408,11 @@ fn caption() -> Element<DeskbarMsg> {
     .into()
 }
 
-fn shelf_row(i: usize, r: &ShelfRow) -> Element<DeskbarMsg> {
+fn shelf_row(i: usize, r: &ShelfRow, width: f64) -> Element<DeskbarMsg> {
     let (label, glyph, hue, dim) = (r.label.clone(), r.glyph, r.hue, r.dim);
     let (uri, drag_text) = (r.uri.clone(), r.drag_text.clone());
     let text = label.clone();
-    drawn(WIDTH - 20.0, SHELF_ROW, (label.clone(), glyph, hue, dim), move |cx| {
+    drawn(width - 20.0, SHELF_ROW, (label.clone(), glyph, hue, dim), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         let fill = if cx.is_hovered() { t.hover(t.surface()) } else { t.surface() };
@@ -342,8 +431,8 @@ fn shelf_row(i: usize, r: &ShelfRow) -> Element<DeskbarMsg> {
     .into()
 }
 
-fn drop_row() -> Element<DeskbarMsg> {
-    drawn(WIDTH - 20.0, SHELF_ROW, "drop", |cx| {
+fn drop_row(width: f64) -> Element<DeskbarMsg> {
+    drawn(width - 20.0, SHELF_ROW, "drop", |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         let style = aizome_kit::sidestep_ui::StrokeStyle::new(1.0).with_dash(vec![3.0, 2.0], 0.0);
@@ -357,25 +446,69 @@ fn drop_row() -> Element<DeskbarMsg> {
     .into()
 }
 
-/// The Deskbar.
-pub fn view(m: &DeskbarModel) -> Element<DeskbarMsg> {
+/// The strip to drag the Deskbar by: a row of dots, as Haiku's Deskbar
+/// knob, darker under the pointer. Right-click for where and how wide.
+fn grip(width: f64) -> Element<DeskbarMsg> {
+    let el = drawn(width, GRIP, ("grip", width.to_bits()), move |cx| {
+        let t = cx.theme();
+        let b = cx.bounds();
+        let hover = cx.is_hovered();
+        if hover {
+            cx.canvas.fill_rect(b, t.hover(t.chrome()));
+        }
+        let c = if hover { t.text2() } else { t.faint() };
+        let n = if width < SLIM_WIDTH { 3 } else { 5 };
+        let x0 = (b.width() - (n as f64 * 4.0 - 2.0)) / 2.0;
+        for i in 0..n {
+            let x = (x0 + i as f64 * 4.0).round();
+            cx.canvas.fill_rect(Rect::new(x, 4.0, x + 2.0, 6.0), c);
+        }
+    })
+    .on_drag(DeskbarMsg::Grip)
+    .on_right_click(|p: Press| DeskbarMsg::PlaceMenu(p.at))
+    .cursor(aizome_kit::sidestep_ui::Cursor::Move)
+    .text("Move the Deskbar", SemanticRole::Button)
+    .key("grip");
+    aizome_kit::tooltip(el, "Drag to move the Deskbar; drag its edge to resize; right-click for sizes")
+}
+
+/// The inner edge, a thin target over the rows: the resize cursor and the
+/// focus colour while the pointer's on it.
+fn edge(height: f64) -> Element<DeskbarMsg> {
+    drawn(EDGE, height, ("edge", height.to_bits()), |cx| {
+        if cx.is_hovered() {
+            let t = cx.theme();
+            let b = cx.bounds();
+            cx.canvas.fill_rect(Rect::new(1.0, 0.0, 3.0, b.y1), t.focus());
+        }
+    })
+    .on_drag(DeskbarMsg::Edge)
+    .cursor(aizome_kit::sidestep_ui::Cursor::EwResize)
+    .text("Resize the Deskbar", SemanticRole::Button)
+    .key("edge")
+    .into()
+}
+
+/// The full Deskbar's rows, under the grip.
+fn full_rows(m: &DeskbarModel) -> Vec<Element<DeskbarMsg>> {
+    let width = m.width;
     let mut rows: Vec<Element<DeskbarMsg>> = vec![aizome_kit::space(4.0)];
     let mut top = 4.0;
     for a in &m.apps {
         rows.push(
             aizome_kit::stack(vec![
-                app_row(a, top),
-                aizome_kit::container(count_hit(a)).padding([0.0, 0.0, 0.0, WIDTH - 56.0]).into(),
+                app_row(a, top, width),
+                aizome_kit::container(count_hit(a)).padding([0.0, 0.0, 0.0, width - 56.0]).into(),
             ])
             .into(),
         );
         if !a.folded {
             for w in &a.windows {
-                rows.push(window_row(w));
+                rows.push(window_row(w, width));
             }
         }
         for c in &a.cards {
-            rows.push(card(c));
+            rows.push(card(c, width));
         }
         top += a.height();
     }
@@ -383,39 +516,78 @@ pub fn view(m: &DeskbarModel) -> Element<DeskbarMsg> {
         rows.push(aizome_kit::space(4.0));
     } else {
         rows.push(aizome_kit::space(2.0));
-        rows.push(caption());
-        let mut shelf: Vec<Element<DeskbarMsg>> = m.shelf.iter().enumerate().map(|(i, r)| shelf_row(i, r)).collect();
-        shelf.push(drop_row());
+        rows.push(caption(width));
+        let mut shelf: Vec<Element<DeskbarMsg>> =
+            m.shelf.iter().enumerate().map(|(i, r)| shelf_row(i, r, width)).collect();
+        shelf.push(drop_row(width));
         rows.push(aizome_kit::container(column(shelf).spacing(SHELF_GAP)).padding([0.0, 10.0, 10.0, 10.0]).into());
     }
+    rows
+}
+
+/// The Deskbar: the grip, and under it the rows, scrolling when they
+/// overflow the room below the bar.
+pub fn view(m: &DeskbarModel) -> Element<DeskbarMsg> {
+    let width = m.width;
+    let rows = match m.density() {
+        Density::Full => full_rows(m),
+        d => crate::deskbar_compact::rows(m, d == Density::Rail),
+    };
     let h = m.height();
-    let content = aizome_kit::scroll(column(rows).width(WIDTH)).width(WIDTH).height((h - SHADOW).max(1.0));
-    // The ground: `chrome`, its left and bottom edges, the shadow left and
-    // down.
-    let ground = drawn(WIDTH + SHADOW, h, ("deskbar-ground", h.to_bits()), |cx| {
+    let list = aizome_kit::scroll(column(rows).width(width)).width(width).height((h - SHADOW - GRIP).max(1.0));
+    let content = column(vec![grip(width), list.into()]).width(width);
+    let side = m.side;
+    let face_x = m.face_x();
+    // The ground: `chrome`, its edges toward the screen and the bottom, the
+    // shadow away from the edge it hangs from, and down.
+    let ground = drawn(width + SHADOW, h, ("deskbar-ground", h.to_bits(), width.to_bits(), side), move |cx| {
         let t = cx.theme();
-        let b = cx.bounds();
         let s = SHADOW;
-        let face = Rect::new(s, 0.0, b.x1, b.y1 - s);
-        look::shadow_left(cx.canvas, t, face);
+        let face = Rect::new(face_x, 0.0, face_x + width, h - s);
+        let inner = match side {
+            DeskbarSide::Right => {
+                look::shadow_left(cx.canvas, t, face);
+                face.x0
+            }
+            // Hanging from the left edge, it casts the shadow every other
+            // floating thing does: right and down.
+            DeskbarSide::Left => {
+                look::shadow(cx.canvas, t, face);
+                face.x1 - 2.0
+            }
+        };
         aizome_kit::draw::frost(cx.canvas, t, face, t.chrome());
-        cx.canvas.fill_rect(Rect::new(face.x0, 0.0, face.x0 + 1.0, face.y1), t.bevel_lo());
-        cx.canvas.fill_rect(Rect::new(face.x0 + 1.0, 0.0, face.x0 + 2.0, face.y1 - 1.0), t.bevel_hi());
+        let (lo, hi) = match side {
+            DeskbarSide::Right => (inner, inner + 1.0),
+            DeskbarSide::Left => (inner + 1.0, inner),
+        };
+        cx.canvas.fill_rect(Rect::new(lo, 0.0, lo + 1.0, face.y1), t.bevel_lo());
+        cx.canvas.fill_rect(Rect::new(hi, 0.0, hi + 1.0, face.y1 - 1.0), t.bevel_hi());
         cx.canvas.fill_rect(Rect::new(face.x0, face.y1 - 1.0, face.x1, face.y1), t.bevel_lo());
     });
-    aizome_kit::stack(vec![ground.into(), aizome_kit::container(content).padding([0.0, 0.0, 0.0, SHADOW]).into()])
-        .width(WIDTH + SHADOW)
-        .height(h)
-        .into()
+    // The edge toward the screen, under the grip.
+    let edge_x = match side {
+        DeskbarSide::Right => face_x,
+        DeskbarSide::Left => face_x + width - EDGE,
+    };
+    aizome_kit::stack(vec![
+        ground.into(),
+        aizome_kit::container(content).padding([0.0, 0.0, 0.0, face_x]).into(),
+        aizome_kit::container(edge((h - SHADOW - GRIP).max(1.0))).padding([GRIP, 0.0, 0.0, edge_x]).into(),
+    ])
+    .width(width + SHADOW)
+    .height(h)
+    .into()
 }
 
 /// Where the Deskbar takes the pointer: not its shadow.
 pub fn input_region(m: &DeskbarModel) -> Vec<Rect> {
-    vec![Rect::new(SHADOW, 0.0, SHADOW + WIDTH, m.height() - SHADOW)]
+    let x = m.face_x();
+    vec![Rect::new(x, 0.0, x + m.width, m.height() - SHADOW)]
 }
 
 pub fn size(m: &DeskbarModel) -> Size {
-    Size::new(WIDTH + SHADOW, m.height())
+    Size::new(m.width + SHADOW, m.height())
 }
 
 #[cfg(test)]
@@ -447,7 +619,7 @@ mod tests {
             }],
             shelf: vec![],
             hide_shelf: false,
-            max_height: None,
+            ..DeskbarModel::default()
         };
         assert_eq!(one.height(), base + APP_ROW + WINDOW_ROW);
         let mut folded = one.clone();

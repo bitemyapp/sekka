@@ -1,6 +1,7 @@
 //! The Deskbar's part of the shell: its model from the window model, the
 //! notifications and the Shelf; its surface; what its rows do.
 
+use aizome_config::DeskbarSide;
 use aizome_ipc::{Request, WindowId};
 use aizome_kit::prelude::*;
 use aizome_kit::{Anchors, KeyboardInteractivity, Layer, LayerOptions, Margins, MenuStyle};
@@ -83,6 +84,21 @@ impl Shell {
             (catalog::glyph_by_category(&cats), Hue::Text2)
         });
         (name, glyph, hue)
+    }
+
+    /// The Deskbar's face width, as `[deskbar] width` asks (in range).
+    pub fn deskbar_width(&self) -> f64 {
+        crate::deskbar::clamp_width(self.deskbar_cfg.width)
+    }
+
+    /// The width the bar's systray header keeps: the full Deskbar's when it
+    /// hangs under it at the right, so their left edges line up.
+    pub fn header_width(&self) -> f64 {
+        let w = self.deskbar_width();
+        match self.deskbar_cfg.side {
+            DeskbarSide::Right if crate::deskbar::density(w) == crate::deskbar::Density::Full => w,
+            _ => crate::menubar::HEADER,
+        }
     }
 
     /// Whether an app's windows show folded under it.
@@ -182,6 +198,8 @@ impl Shell {
             shelf,
             hide_shelf: !self.deskbar_cfg.show_shelf,
             max_height: self.primary().map(|s| (s.output.frame.height() - crate::menubar::HEIGHT).max(1.0)),
+            side: self.deskbar_cfg.side,
+            width: self.deskbar_width(),
         }
     }
 
@@ -202,10 +220,11 @@ impl Shell {
                 self.arm_deskbar_hide(cx);
             }
         }
-        // The main display changed (or the Deskbar's kind did): it opens
-        // again, there.
+        // The main display changed, or the Deskbar's kind or edge did: it
+        // opens again, there (and the compositor refits windows the way it
+        // does for any Deskbar arriving).
         let moved = self.deskbar_output.is_some() && self.deskbar_output != self.primary().map(|s| s.output.id);
-        if (moved || self.deskbar_transient != self.deskbar_cfg.auto_hide)
+        if (moved || self.deskbar_transient != self.deskbar_cfg.auto_hide || self.deskbar_side != self.deskbar_cfg.side)
             && let Some(k) = self.deskbar.take()
         {
             cx.close_window(k);
@@ -237,8 +256,12 @@ impl Shell {
                 // A transient reveal overlays apps; only a persistent Deskbar
                 // participates in the compositor's automatic window layout.
                 let namespace = if self.deskbar_cfg.auto_hide { "aizome-deskbar-transient" } else { "aizome-deskbar" };
+                let side = match self.deskbar_cfg.side {
+                    DeskbarSide::Right => Anchors::RIGHT,
+                    DeskbarSide::Left => Anchors::LEFT,
+                };
                 let opts = LayerOptions::new(Layer::Top, namespace)
-                    .anchors(Anchors::TOP | Anchors::RIGHT)
+                    .anchors(Anchors::TOP | side)
                     // Placed by its margin from the output's top, whatever others'
                     // zones (the bar's) say.
                     .exclusive_zone(-1)
@@ -252,6 +275,7 @@ impl Shell {
                 self.deskbar_size = Some(size);
                 self.deskbar_transient = self.deskbar_cfg.auto_hide;
                 self.deskbar_output = Some(output);
+                self.deskbar_side = self.deskbar_cfg.side;
             }
             (true, Some(k)) => {
                 let model = self.deskbar_model();
@@ -304,7 +328,7 @@ impl Shell {
                     self.deskbar_visibility.dragging = None;
                     if let Some((source, from)) = self.deskbar_drag.take()
                         && source == app
-                        && (0.0..crate::deskbar::WIDTH).contains(&at.x)
+                        && (0.0..self.deskbar_width()).contains(&at.x)
                     {
                         let model = self.deskbar_model();
                         let before = model.insertion_at(center + at.y - from.y);
@@ -409,7 +433,63 @@ impl Shell {
                     self.arm_deskbar_hide(cx);
                 }
             }
+            DeskbarMsg::Grip(DragPhase::End(p)) => {
+                let Some((left, screen)) = self.deskbar_left() else { return };
+                let side = if left + p.x < screen / 2.0 { DeskbarSide::Left } else { DeskbarSide::Right };
+                if side != self.deskbar_cfg.side {
+                    self.run(Action::PlaceDeskbar { side: Some(side), width: None }, cx);
+                }
+            }
+            DeskbarMsg::Grip(_) => {}
+            DeskbarMsg::Edge(phase) => {
+                let (DragPhase::Move(p) | DragPhase::End(p)) = phase else { return };
+                let Some((left, screen)) = self.deskbar_left() else { return };
+                let x = left + p.x;
+                let w = match self.deskbar_cfg.side {
+                    DeskbarSide::Left => x,
+                    DeskbarSide::Right => screen - x,
+                };
+                // Live while dragging; saved when let go.
+                self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                if matches!(phase, DragPhase::End(_)) {
+                    self.run(Action::PlaceDeskbar { side: None, width: Some(w) }, cx);
+                }
+            }
+            DeskbarMsg::PlaceMenu(at) => {
+                let Some(k) = self.deskbar else { return };
+                let side = self.deskbar_cfg.side;
+                let width = self.deskbar_width();
+                let place = |s| Action::PlaceDeskbar { side: Some(s), width: None };
+                let size = |w| Action::PlaceDeskbar { side: None, width: Some(w) };
+                let mut entries = vec![
+                    Entry::action("At the Left", place(DeskbarSide::Left)).checked(side == DeskbarSide::Left),
+                    Entry::action("At the Right", place(DeskbarSide::Right)).checked(side == DeskbarSide::Right),
+                    Entry::separator(),
+                ];
+                for (label, w) in [
+                    ("Icons Only", crate::deskbar::RAIL_WIDTH),
+                    ("Slim", 150.0),
+                    ("Standard", crate::deskbar::WIDTH),
+                    ("Wide", 300.0),
+                ] {
+                    entries.push(Entry::action(label, size(w)).checked(width == w));
+                }
+                let menu = ShellMenu::new("Deskbar".to_owned(), entries);
+                let style = self.deskbar_menu_style();
+                self.show_menu(k, at_point(at), &menu, style, cx);
+            }
         }
+    }
+
+    /// The Deskbar surface's left edge in its output, and the output's
+    /// width.
+    fn deskbar_left(&self) -> Option<(f64, f64)> {
+        let screen = self.primary()?.output.frame.width();
+        let left = match self.deskbar_cfg.side {
+            DeskbarSide::Left => 0.0,
+            DeskbarSide::Right => screen - self.deskbar_width() - crate::deskbar::SHADOW,
+        };
+        Some((left, screen))
     }
 
     pub fn save_shelf(&self) {
@@ -463,8 +543,13 @@ impl Shell {
     /// dragged there).
     pub fn desk_at_deskbar_point(&self, p: Point) -> Option<u32> {
         let screen = self.primary()?;
-        let w = screen.output.frame.width();
-        let x = w - crate::deskbar::WIDTH - crate::deskbar::SHADOW + p.x;
+        // The surface's left edge in the output: flush with it at the left,
+        // its width (with the shadow) in from the right otherwise.
+        let left = match self.deskbar_cfg.side {
+            DeskbarSide::Left => 0.0,
+            DeskbarSide::Right => screen.output.frame.width() - self.deskbar_width() - crate::deskbar::SHADOW,
+        };
+        let x = left + p.x;
         let y = crate::menubar::HEIGHT + p.y;
         if y < 0.0 || y >= crate::menubar::HEIGHT {
             return None;

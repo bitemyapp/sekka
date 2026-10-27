@@ -351,3 +351,65 @@ fn auto_hide_resumes_when_a_dragged_app_or_window_disappears() {
         assert!(h.program().deskbar.is_none(), "the vanished {row} row cannot suspend auto-hide forever");
     }
 }
+
+/// The open Deskbar's layer options.
+fn deskbar_layer(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> aizome_kit::LayerOptions {
+    let w = h.platform.windows.values().rfind(|w| w.title == "Deskbar").expect("a Deskbar");
+    match &w.spec.kind {
+        aizome_kit::platform::OpenKind::Layer(o) => o.clone(),
+        other => panic!("the Deskbar isn't a layer: {other:?}"),
+    }
+}
+
+#[test]
+fn the_deskbar_moves_to_the_left_and_widens() {
+    use aizome_config::DeskbarSide;
+    use aizome_kit::Anchors;
+    use aizome_shell::deskbar::{SHADOW, WIDTH};
+
+    let mut h = scene(false);
+    assert!(deskbar_layer(&h).anchors.contains(Anchors::TOP | Anchors::RIGHT));
+    let mut d = h.program().settings.deskbar_settings();
+    assert_eq!((d.side, d.width), (DeskbarSide::Right, WIDTH), "the defaults are today's Deskbar");
+
+    d.side = DeskbarSide::Left;
+    d.width = 300.0;
+    h.program_mut().settings.set_shell_section("deskbar", &d);
+    h.send(Msg::SettingsChanged);
+
+    let o = deskbar_layer(&h);
+    assert!(o.anchors.contains(Anchors::TOP | Anchors::LEFT), "{:?}", o.anchors);
+    assert!(!o.anchors.contains(Anchors::RIGHT), "{:?}", o.anchors);
+    let m = h.program().deskbar_model();
+    assert_eq!(aizome_shell::deskbar::size(&m).width, 300.0 + SHADOW);
+    // The face starts at the surface's left edge; the shadow falls right.
+    assert_eq!(aizome_shell::deskbar::input_region(&m)[0].x0, 0.0);
+    assert_eq!(aizome_shell::deskbar::input_region(&m)[0].x1, 300.0);
+    // A window dragged up onto the strip still finds its Desk: the surface
+    // is flush with the output's left edge now.
+    let s = h.program();
+    let hits: Vec<Option<u32>> =
+        (0..300).map(|x| s.desk_at_deskbar_point(Point::new(900.0 + x as f64, -12.0))).collect();
+    assert!(hits.contains(&Some(1)) && hits.contains(&Some(2)) && hits.contains(&Some(3)), "{hits:?}");
+    // The systray header no longer follows a Deskbar that isn't under it.
+    assert_eq!(s.header_width(), aizome_shell::menubar::HEADER);
+
+    // Back at the right, wider: the header follows it.
+    let mut d = h.program().settings.deskbar_settings();
+    d.side = DeskbarSide::Right;
+    h.program_mut().settings.set_shell_section("deskbar", &d);
+    h.send(Msg::SettingsChanged);
+    assert!(deskbar_layer(&h).anchors.contains(Anchors::TOP | Anchors::RIGHT));
+    assert_eq!(h.program().header_width(), 300.0);
+}
+
+#[test]
+fn deskbar_widths_stay_in_range() {
+    use aizome_shell::deskbar::{Density, MAX_WIDTH, RAIL_WIDTH, SLIM_WIDTH, WIDTH, clamp_width, density};
+    assert_eq!(clamp_width(60.0), RAIL_WIDTH, "narrow snaps to the Rail");
+    assert_eq!(clamp_width(100.0), SLIM_WIDTH, "past half way, Slim");
+    assert_eq!((density(48.0), density(150.0), density(232.0)), (Density::Rail, Density::Slim, Density::Full));
+    assert_eq!(clamp_width(9000.0), MAX_WIDTH);
+    assert_eq!(clamp_width(301.4), 301.0);
+    assert_eq!(clamp_width(f64::NAN), WIDTH);
+}

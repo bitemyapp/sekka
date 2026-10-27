@@ -134,11 +134,24 @@ impl Shell {
         }
     }
 
+    /// How far in from the output's left the icons line up: past the
+    /// Deskbar when it stands there.
+    pub fn desktop_left(&self, output: u32) -> f64 {
+        let primary = self.primary().is_some_and(|s| s.output.id == output);
+        if primary && self.deskbar.is_some() && self.deskbar_cfg.side == aizome_config::DeskbarSide::Left {
+            self.deskbar_width() + crate::deskbar::SHADOW
+        } else {
+            0.0
+        }
+    }
+
     pub fn desktop_view(&self, output: u32) -> Element<Msg> {
         let Some(screen) = self.screens.iter().find(|s| s.output.id == output) else { return aizome_kit::space(0.0) };
         let size = screen.output.frame.size();
         let icons = self.desktop_icons();
-        desktop::view(&icons, &self.desktop, self.wallpaper_for(output), size).map(move |m| Msg::Desktop(output, m))
+        let left = self.desktop_left(output);
+        desktop::view(&icons, &self.desktop, self.wallpaper_for(output), size, left)
+            .map(move |m| Msg::Desktop(output, m))
     }
 
     fn icon(&self, key: &str) -> Option<DeskIcon> {
@@ -147,6 +160,7 @@ impl Shell {
 
     pub fn desktop_msg(&mut self, output: u32, m: DesktopMsg, cx: &mut Cx<Msg>) {
         let height = self.screens.iter().find(|s| s.output.id == output).map_or(900.0, |s| s.output.frame.height());
+        let left = self.desktop_left(output);
         match m {
             DesktopMsg::Select(key, add) => {
                 if add {
@@ -170,7 +184,7 @@ impl Shell {
             }
             DesktopMsg::IconDrag(key, phase) => {
                 let icons = self.desktop_icons();
-                let points = desktop::layout(&icons, &self.desktop.positions, height);
+                let points = desktop::layout(&icons, &self.desktop.positions, height, left);
                 let origin = icons.iter().zip(points).find(|(i, _)| i.key == key).map(|(_, p)| p).unwrap_or_default();
                 match phase {
                     DragPhase::Start(p) => {
@@ -180,7 +194,8 @@ impl Shell {
                     DragPhase::Move(p) => self.desktop.dragging = Some((key, p - self.drag_grab)),
                     DragPhase::End(p) => {
                         self.desktop.dragging = None;
-                        let target = desktop::icon_at(&icons, &self.desktop.positions, height, p).filter(|t| *t != key);
+                        let target =
+                            desktop::icon_at(&icons, &self.desktop.positions, height, left, p).filter(|t| *t != key);
                         let dragged = icons.iter().find(|i| i.key == key).cloned();
                         match (target.and_then(|t| icons.iter().find(|i| i.key == t).cloned()), dragged) {
                             (Some(t), Some(DeskIcon { kind: IconKind::Item { path, .. }, .. }))
@@ -207,7 +222,7 @@ impl Shell {
                     if let Some((a, _)) = self.desktop.band {
                         self.desktop.band = Some((a, p));
                         let icons = self.desktop_icons();
-                        self.desktop.selected = desktop::in_band(&icons, &self.desktop.positions, height, a, p);
+                        self.desktop.selected = desktop::in_band(&icons, &self.desktop.positions, height, left, a, p);
                     }
                 }
                 DragPhase::End(_) => self.desktop.band = None,

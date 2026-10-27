@@ -271,6 +271,9 @@ pub struct BarModel {
     pub sharing: Option<ShareBadge>,
     /// A screen recording going (the primary bar's systray shows it).
     pub recording: Option<RecordBadge>,
+    /// The systray header's least width: the Deskbar's when it hangs under
+    /// it at the right ([`HEADER`] otherwise).
+    pub header: f64,
 }
 
 fn ui_spec(t: &aizome_kit::Theme, size: f64, weight: f32, c: aizome_kit::Color) -> aizome_kit::text::TextSpec {
@@ -811,7 +814,7 @@ fn apps_control(n: usize, unread: usize, open: bool, visible: bool, auto_hide: b
     .into()
 }
 
-/// The systray region: the Deskbar's header, `HEADER` wide (more if its
+/// The systray region: the Deskbar's header, `model.header` wide (more if its
 /// widgets need it), its left edge in line with the Deskbar's.
 fn header(model: &BarModel) -> Element<BarMsg> {
     let open = |w: TrayWidget| model.open == Some(Slot::Tray(w));
@@ -902,7 +905,7 @@ fn header(model: &BarModel) -> Element<BarMsg> {
         );
     }
     let left = row(items).spacing(9.0).align(Align::Center).height(HEIGHT).into();
-    let content = split(left, clock(&model.clock, open(TrayWidget::Clock)), HEADER, 16.0, (11.0, 10.0));
+    let content = split(left, clock(&model.clock, open(TrayWidget::Clock)), model.header, 16.0, (11.0, 10.0));
     around(content, 0.0, aizome_kit::Size::ZERO, "header-edge", |cx| {
         let t = cx.theme();
         let b = cx.bounds();
@@ -1028,7 +1031,7 @@ pub fn header_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) ->
     }
     let row: f64 = items.iter().sum::<f64>() + 9.0 * (items.len().saturating_sub(1)) as f64;
     let clock = m(&model.clock, &look::digits(12.5 * t.metrics.factor, typeface::WEIGHT_SEMIBOLD, t.text())).ceil();
-    (11.0 + row + 16.0 + clock + 10.0).max(HEADER).ceil()
+    (11.0 + row + 16.0 + clock + 10.0).max(model.header).ceil()
 }
 
 /// Where each Desk of the strip is, across a bar `width` wide: (index,

@@ -113,8 +113,9 @@ impl Shell {
             (0, None) => {}
             (n, None) => {
                 let Some(output) = self.primary().map(|s| s.output.id) else { return };
-                let right =
-                    if self.deskbar.is_some() { crate::deskbar::WIDTH + crate::deskbar::SHADOW + 12.0 } else { 12.0 };
+                // Beside the Deskbar when it hangs at the right too.
+                let beside = self.deskbar.is_some() && self.deskbar_cfg.side == aizome_config::DeskbarSide::Right;
+                let right = if beside { self.deskbar_width() + crate::deskbar::SHADOW + 12.0 } else { 12.0 };
                 let opts = LayerOptions::new(Layer::Top, "aizome-notifications")
                     .anchors(Anchors::TOP | Anchors::RIGHT)
                     .exclusive_zone(-1)

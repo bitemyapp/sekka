@@ -312,6 +312,8 @@ pub struct Shell {
     /// The output the Deskbar was opened on: it opens again on the main
     /// display when that changes.
     pub(crate) deskbar_output: Option<u32>,
+    /// The edge the open Deskbar was anchored to.
+    pub(crate) deskbar_side: aizome_config::DeskbarSide,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -440,6 +442,7 @@ impl Shell {
             deskbar_visibility: Default::default(),
             deskbar_transient: false,
             deskbar_output: None,
+            deskbar_side: aizome_config::DeskbarSide::Right,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -644,6 +647,7 @@ impl Shell {
             output: screen.name(),
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
+            header: self.header_width(),
         }
     }
 
@@ -880,6 +884,15 @@ impl Shell {
                 self.save_section("deskbar");
             }
             Action::MoveDeskbarApp { app_id, down } => self.move_deskbar_app(&app_id, down),
+            Action::PlaceDeskbar { side, width } => {
+                if let Some(s) = side {
+                    self.deskbar_cfg.side = s;
+                }
+                if let Some(w) = width {
+                    self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                }
+                self.save_section("deskbar");
+            }
             Action::EmptyTrash => crate::launch::empty_trash(),
             Action::MoveToTrash { path } => {
                 if let Err(e) = crate::launch::move_to_trash(&path) {
