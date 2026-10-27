@@ -29,10 +29,11 @@ window come from the same engine.
 
 ## Sidestep
 
-Aizome builds against the `aizome` branch of Sidestep (worktree
-`~/work/sidestep-aizome`; development happens on `aizome-dev` in
-`~/work/sidestep-aizome-dev` and is fast-forwarded into `aizome` when its
-tests pass). That branch adds, without changing AppKit's behaviour:
+Aizome builds against a pinned revision from the `aizome` branch of
+Sidestep. Sekka's root flake owns that pin. `nix develop .#aizome` prepares
+`desktop/sidestep-aizome` with the pinned source, preserving an existing
+checkout or link for Sidestep development. That branch adds, without
+changing AppKit's behaviour:
 
 - layer-shell surfaces (`WindowOptions::layer(..)`), with popups;
 - session-lock surfaces (`Cx::lock_session`, `WindowOptions::lock(..)`);
@@ -198,6 +199,11 @@ sunrise and sunset: the shell writes what GeoClue says).
 - The lock screen uses PAM service `aizome`.
 
 ## Repository layout
+
+These paths are relative to Sekka's `desktop/aizome` component. Sekka's
+root flake owns the Nix inputs, package and development shell. Native
+Yukimi shares the backends in `apps/yukimi/crates` at Sekka's root with the
+GTK interface; the component keeps its own Cargo workspace and lock.
 
 ```
 Cargo.toml            workspace
