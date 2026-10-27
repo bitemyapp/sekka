@@ -5,6 +5,7 @@
 # every Plymouth theme.
 {
   config,
+  options,
   lib,
   pkgs,
   ...
@@ -58,56 +59,83 @@ in
       description = "The Plymouth theme named `sekka`.";
     };
   };
-  config = lib.mkIf cfg.enable {
-    boot.plymouth = {
-      enable = true;
-      package = plymouth;
-      theme = "sekka";
-      themePackages = [ cfg.package ];
-      # Everything the splash always shows is drawn ahead of time; this is
-      # for what it can't know, such as a disk's passphrase prompt.
-      inherit font;
-      # The theme chooses its own whole-number scale and has its pieces
-      # drawn for it; Plymouth's own scaling would stretch them.
-      #
-      # An encrypted disk asks for its passphrase in the initrd, which has
-      # no GPU driver on NixOS. Plymouth waits 8 seconds (DeviceTimeout) for
-      # one before it draws on the firmware's framebuffer, and the screen
-      # stays blank until then. UseSimpledrm=2 draws there at once, even at
-      # 640x480, 800x600 or 1024x768 (GRUB leaves 1024x768 on BIOS), which
-      # 1 would still pass over as modes a native driver will replace. The
-      # splash moves to the GPU when its driver loads after the disk is
-      # unlocked.
-      extraConfig = ''
-        DeviceScale=1
-      ''
-      + lib.optionalString (config.boot.initrd.luks.devices != { }) ''
-        UseSimpledrm=2
-      '';
-    };
-    environment.etc."plymouth/fonts".source = fonts;
-    # Plymouth started by the installed system, to shut down or restart,
-    # reads the same font rather than the system's.
-    systemd.services =
-      lib.genAttrs
-        [
-          "plymouth-start"
-          "plymouth-halt"
-          "plymouth-kexec"
-          "plymouth-poweroff"
-          "plymouth-reboot"
-        ]
-        (_: {
-          environment.FONTCONFIG_FILE = fontsConf;
-        });
-    # Kernel and udev messages only for errors, so the splash isn't drawn
-    # over text, and the initrd says nothing on the way.
-    boot.consoleLogLevel = lib.mkDefault 3;
-    boot.initrd.verbose = false;
-    boot.kernelParams = [
-      "quiet"
-      "udev.log_level=3"
-      "rd.udev.log_level=3"
-    ];
-  };
+  config = lib.mkMerge [
+    # Yukimi may turn the splash on or off after installing, as a system
+    # installed before Genkan turned it on needs to (Settei's General →
+    # Startup asks Yukimi). After Sekka's desktops and login screen.
+    (lib.optionalAttrs (options.programs ? yukimi) {
+      programs.yukimi.choices = lib.mkAfter [
+        {
+          setting = "calamares.bootSplash.enable";
+          title = "Boot splash";
+          boolean = true;
+          value = lib.boolToString cfg.enable;
+          options = [
+            {
+              id = "true";
+              title = "On";
+              detail = "Sekka's crest while the computer starts and stops. Esc shows the messages.";
+            }
+            {
+              id = "false";
+              title = "Off";
+              detail = "The computer's messages as it starts and stops.";
+            }
+          ];
+        }
+      ];
+    })
+    (lib.mkIf cfg.enable {
+      boot.plymouth = {
+        enable = true;
+        package = plymouth;
+        theme = "sekka";
+        themePackages = [ cfg.package ];
+        # Everything the splash always shows is drawn ahead of time; this is
+        # for what it can't know, such as a disk's passphrase prompt.
+        inherit font;
+        # The theme chooses its own whole-number scale and has its pieces
+        # drawn for it; Plymouth's own scaling would stretch them.
+        #
+        # An encrypted disk asks for its passphrase in the initrd, which has
+        # no GPU driver on NixOS. Plymouth waits 8 seconds (DeviceTimeout) for
+        # one before it draws on the firmware's framebuffer, and the screen
+        # stays blank until then. UseSimpledrm=2 draws there at once, even at
+        # 640x480, 800x600 or 1024x768 (GRUB leaves 1024x768 on BIOS), which
+        # 1 would still pass over as modes a native driver will replace. The
+        # splash moves to the GPU when its driver loads after the disk is
+        # unlocked.
+        extraConfig = ''
+          DeviceScale=1
+        ''
+        + lib.optionalString (config.boot.initrd.luks.devices != { }) ''
+          UseSimpledrm=2
+        '';
+      };
+      environment.etc."plymouth/fonts".source = fonts;
+      # Plymouth started by the installed system, to shut down or restart,
+      # reads the same font rather than the system's.
+      systemd.services =
+        lib.genAttrs
+          [
+            "plymouth-start"
+            "plymouth-halt"
+            "plymouth-kexec"
+            "plymouth-poweroff"
+            "plymouth-reboot"
+          ]
+          (_: {
+            environment.FONTCONFIG_FILE = fontsConf;
+          });
+      # Kernel and udev messages only for errors, so the splash isn't drawn
+      # over text, and the initrd says nothing on the way.
+      boot.consoleLogLevel = lib.mkDefault 3;
+      boot.initrd.verbose = false;
+      boot.kernelParams = [
+        "quiet"
+        "udev.log_level=3"
+        "rd.udev.log_level=3"
+      ];
+    })
+  ];
 }

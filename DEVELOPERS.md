@@ -718,10 +718,13 @@ The system's own choices travel with an update or go alone: the Nix module
 declares which settings of the main configuration file Yukimi may write, and
 to which values (`programs.yukimi.choices`, listed in `/etc/yukimi/system.json`;
 Sekka declares `calamares.desktops`, `calamares.defaultDesktop` and
-`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`).
+`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`, and
+`calamares.bootSplash.enable` in `installer/genkan/rust/system/boot-splash/`).
 `yukimi-helper change --choose SETTING=VALUE[,VALUE]` (and `sekka-update
---choose`) refuses any other setting or value, writes a string or a list of
-strings as declared, and builds once with the rest of the change, so choosing
+--choose`) refuses any other setting or value, writes a string, a list of
+strings or a boolean as declared (a `boolean` choice's options are `true` and
+`false`, given as strings so older readers of `system.json` still parse it),
+and builds once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
 for the next start.
@@ -1239,7 +1242,12 @@ held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.
 Genkan writes `calamares.bootSplash.enable = true;` into every installation; the
 installer has no choice to leave it out. The option turns on Plymouth with
 Sekka's theme, from `installer/genkan/rust/system/boot-splash/`. Systems
-installed before it keep booting without a splash until the option is set. The
+installed before it keep booting without a splash until the option is set, and
+an update doesn't set it. The module declares it as one of Yukimi's choices, so
+Aizome's Settei (General → Startup, which proposes it in Yukimi), Aizome's
+Yukimi Desktops page and `sekka-update --choose calamares.bootSplash.enable=true`
+turn it on or off; turning it changes the initrd and kernel parameters, so it
+stages for the next start. The
 splash shows the stacked lockup on the Night ground, with a 2px rail under it in
 the crest's blue that fills as the computer starts. When shutting down or
 restarting, the label "Shutting down" or "Restarting" takes the rail's place. A

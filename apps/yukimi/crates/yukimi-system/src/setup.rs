@@ -29,7 +29,8 @@ pub struct Facts {
     #[serde(default)]
     pub catalogs: Vec<CatalogSource>,
     /// The system's own choices Yukimi may change, as the distribution
-    /// declares them: Sekka's desktops, default desktop and login screen.
+    /// declares them: Sekka's desktops, default desktop, login screen and
+    /// boot splash.
     #[serde(default)]
     pub choices: Vec<Choice>,
 }
@@ -45,6 +46,10 @@ pub struct Choice {
     /// Several values (a list of strings), or one (a string).
     #[serde(default)]
     pub many: bool,
+    /// A boolean, written as Nix's `true` or `false`; its options and value
+    /// are the strings `"true"` and `"false"`.
+    #[serde(default)]
+    pub boolean: bool,
     /// What it is now, in the running system.
     pub value: ChoiceValue,
     pub options: Vec<ChoiceOption>,
@@ -92,11 +97,14 @@ impl ChoiceOption {
 }
 
 impl Choice {
-    /// Whether `values` may be written: declared ones, one for a string,
-    /// at least one and no repeats for a list.
+    /// Whether `values` may be written: declared ones, one for a string or
+    /// a boolean (`true` or `false`), at least one and no repeats for a list.
     pub fn allows(&self, values: &[String]) -> Result<(), String> {
         if let Some(bad) = values.iter().find(|v| !self.options.iter().any(|o| &o.id == *v)) {
             return Err(format!("{bad:?} isn't one of the choices for {}", self.setting));
+        }
+        if self.boolean && (self.many || values.iter().any(|v| v != "true" && v != "false")) {
+            return Err(format!("{} is true or false", self.setting));
         }
         match (self.many, values.len()) {
             (false, 1) => Ok(()),
@@ -365,5 +373,26 @@ mod tests {
         assert_eq!(login.options[1].needs(), Some(("calamares.desktops", "aizome")));
         assert_eq!((login.options[0].needs(), login.within.as_deref()), (None, None));
         assert_eq!(facts.choices[2].within.as_deref(), Some("calamares.desktops"));
+        assert!(!login.boolean);
+    }
+
+    #[test]
+    fn a_boolean_choice_is_true_or_false() {
+        let facts: Facts = serde_json::from_str(
+            r#"{"choices":[
+              {"setting":"calamares.bootSplash.enable","title":"Boot splash","boolean":true,"value":"false",
+               "options":[{"id":"true","title":"On"},{"id":"false","title":"Off"}]},
+              {"setting":"x.y","title":"Wrong","boolean":true,"value":"on",
+               "options":[{"id":"on","title":"On"},{"id":"off","title":"Off"}]}]}"#,
+        )
+        .unwrap();
+        let (splash, wrong) = (&facts.choices[0], &facts.choices[1]);
+        assert!(splash.boolean);
+        assert_eq!(splash.value, ChoiceValue::One("false".into()));
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert!(splash.allows(&v(&["true"])).is_ok());
+        assert!(splash.allows(&v(&["true", "false"])).is_err(), "one value");
+        assert!(splash.allows(&v(&["yes"])).is_err(), "not declared");
+        assert!(wrong.allows(&v(&["on"])).is_err(), "declared, but not true or false");
     }
 }
