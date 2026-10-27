@@ -1,6 +1,6 @@
 # Optional applications
 
-The installer presents 36 choices with checkboxes, categories, search and short
+The installer presents 37 choices with checkboxes, categories, search and short
 descriptions. Firefox starts selected. Empty selection is supported. The review
 screen lists the normalized selection, and the privileged helper validates it
 again. Unknown IDs, duplicate requests and proprietary selections without
@@ -24,6 +24,7 @@ pins were selected on 2026-10-04:
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
+| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00`, added 2026-10-27 | Uta for YouTube Music |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -84,6 +85,21 @@ Wayland. Its network protocol changes between releases, so a program must be
 built with the same Tracy client version as the installed profiler; Nixpkgs
 keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled
 from source, so `push-cache` publishes it.
+
+Uta, a YouTube Music client from [bitemyapp/uta](https://github.com/bitemyapp/uta),
+draws its windows with Aizome's widget kit. Sekka takes Uta's source and
+builds it with Uta's own package definition and the applications' Nixpkgs, but
+with the kit from `desktop/aizome` and Sekka's Sidestep rather than the
+Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
+revision, so the nightly's input update doesn't move it: a Uta built for a
+different Aizome would fail the nightly's checks and hold back every other
+input. To move it, put the new revision in `flake.nix`, run `nix flake lock`
+and build `.#uta`. Its music service uses ytmusicapi and yt-dlp from the
+applications' Nixpkgs, which the nightly keeps current as YouTube changes.
+Uta's windows are Wayland only, so it runs in every Sekka desktop but Xfce,
+whose session is X11. Connecting an account saves its session in the desktop
+keyring, which every Sekka desktop runs. Uta is free and compiled from source,
+so `push-cache` publishes it.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
