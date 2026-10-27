@@ -4,8 +4,8 @@ resolver = "3"
 # Cargo.toml would break an "apps/*" glob, and every build, for everyone.
 members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe"]
 # Sidestep's fork, reached through the `sidestep` link beside this file
-# (../sidestep-aizome on a developer's disk; the source itself in the Nix
-# package). Its crates are path dependencies, not members.
+# (to Sekka's vendor/sidestep submodule; the Nix package lays its pinned
+# source out the same way). Its crates are path dependencies, not members.
 exclude = ["sidestep"]
 
 [workspace.package]
@@ -24,9 +24,8 @@ aizome-kit = { path = "crates/aizome-kit" }
 aizome-sys = { path = "crates/aizome-sys" }
 aizome-search = { path = "crates/aizome-search" }
 # Sidestep's native toolkit, from the `aizome` branch of the Sidestep fork.
-# During development `sidestep` links to the worktree beside this
-# repository; the Nix package puts the revision it pins there (see
-# nix/package.nix). The path stays inside the workspace so Cargo hashes it
+# `sidestep` links to ../../vendor/sidestep, a Git submodule of Sekka;
+# the Nix package puts the revision it pins there (see nix/package.nix). The path stays inside the workspace so Cargo hashes it
 # relative to the workspace, and a build of this checkout gives the
 # compositor's core the same symbols as the package's: what makes a logic
 # library built here loadable into the running session (docs/reload.md).

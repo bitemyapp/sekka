@@ -2,10 +2,11 @@
 # checkout of the workspace.
 #
 # The workspace depends on Sidestep's crates by path, through the
-# `sidestep` link to ../sidestep-aizome, so the source here is a directory
-# retaining Sekka's desktop/aizome and apps/yukimi paths, with the pinned
-# Sidestep fork beside the desktop. Only Aizome and the shared Yukimi
-# backend are copied; unrelated Sekka components stay outside this source.
+# `sidestep` link to ../../vendor/sidestep, so the source here is a
+# directory retaining Sekka's desktop/aizome, apps/yukimi and
+# vendor/sidestep paths, with the flake's pinned Sidestep where the
+# submodule sits. Only Aizome, the shared Yukimi backend and Sidestep are
+# copied; unrelated Sekka components stay outside this source.
 #
 # Two builds: the compositor with `release` (its core and logic are Rust
 # dylibs, which can't take part in LTO; docs/reload.md), everything else
@@ -52,12 +53,12 @@
 }:
 let
   source = runCommand "aizome-source" { } ''
-    mkdir -p $out/desktop $out/apps
+    mkdir -p $out/desktop $out/apps $out/vendor
     cp -r ${src} $out/desktop/aizome
-    cp -r ${sidestep} $out/desktop/sidestep-aizome
+    cp -r ${sidestep} $out/vendor/sidestep
     cp -r ${yukimiSrc} $out/apps/yukimi
     chmod u+w $out/desktop/aizome
-    ln -sfn ../sidestep-aizome $out/desktop/aizome/sidestep
+    ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
@@ -98,7 +99,7 @@ let
     rustc_version = rustc.version;
     source_rev = rev;
     # The Sidestep the core was built against (the flake's `sidestep`
-    # input): a checkout's ../sidestep-aizome must be at it.
+    # input): a checkout's vendor/sidestep must be at it.
     sidestep_rev = sidestep.rev or null;
   };
 in

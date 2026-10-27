@@ -4,6 +4,7 @@ pkgs.runCommand "aizome-development"
     nativeBuildInputs = [
       pkgs.python3
       pkgs.bash
+      pkgs.git
     ];
     AIZOME_DEV_HOOK = ../desktop/aizome/scripts/dev-environment;
   }

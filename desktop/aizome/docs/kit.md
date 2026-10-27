@@ -588,7 +588,7 @@ are drawn with it; one that changes after that is a change of type, to
 bless with `AIZOME_UPDATE_GOLDENS=1`.
 
 To run an app's real windows without touching a live session, run it under
-the headless sway (`sidestep-aizome/scripts/headless-wayland`) with
+the headless sway (`sidestep/scripts/headless-wayland`) with
 `WAYLAND_DISPLAY` and `DISPLAY` unset first.
 
 ## Accessibility

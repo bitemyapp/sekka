@@ -12,7 +12,10 @@
   # Sidestep's native toolkit, the `aizome` branch of bitemyapp's fork,
   # which Aizome (desktop/aizome) builds against by path. Pinned by revision,
   # as Aizome's own lock pinned it, so the nightly's input update leaves it
-  # alone: moving Sidestep is a reviewed change here.
+  # alone: moving Sidestep is a reviewed change here. The vendor/sidestep
+  # submodule, which development builds use, records the same revision
+  # (tests/test_aizome_development.py); Nix can't use it, as GitHub's
+  # tarballs of Sekka leave submodules empty.
   inputs.sidestep = {
     url = "github:bitemyapp/sidestep/dae957e913376a26e642d6abee533eb755fb9092";
     flake = false;

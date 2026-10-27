@@ -30,9 +30,10 @@ window come from the same engine.
 ## Sidestep
 
 Aizome builds against a pinned revision from the `aizome` branch of
-Sidestep. Sekka's root flake owns that pin. `nix develop .#aizome` prepares
-`desktop/sidestep-aizome` with the pinned source, preserving an existing
-checkout or link for Sidestep development. That branch adds, without
+Sidestep. Sekka's root flake owns that pin, and the `vendor/sidestep`
+submodule at Sekka's root records the same revision for development;
+`nix develop .#aizome` checks the submodule out if it isn't yet, and
+otherwise leaves it as it is for Sidestep development. That branch adds, without
 changing AppKit's behaviour:
 
 - layer-shell surfaces (`WindowOptions::layer(..)`), with popups;

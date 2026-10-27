@@ -115,7 +115,7 @@ the core that's running, which for Rust means the same:
 The directory the build runs in doesn't matter: Cargo hashes a path
 dependency by its path relative to the workspace, which is why the
 workspace reaches Sidestep through a `sidestep` link inside it
-(`sidestep -> ../sidestep-aizome`), and registry crates by their source,
+(`sidestep -> ../../vendor/sidestep`), and registry crates by their source,
 not where they're unpacked. Neither do the linker and its arguments.
 
 The package records its side of this in
@@ -153,10 +153,11 @@ way nothing half-loads.
 
 ### Sidestep
 
-The checkout's `../sidestep-aizome` must be at the revision the
+The checkout's `vendor/sidestep` submodule must be at the revision the
 package was built from (the flake's `sidestep` input): Sidestep's crates
-are part of the core. The development shell links the pinned source there
-when no developer checkout or link already exists. The package records it (`sidestep_rev` in
+are part of the core. The development shell checks the submodule out when
+it isn't yet, and says when it is at another revision than the flake's.
+The package records it (`sidestep_rev` in
 `build-env.json`); `aizome-dev` says before building when the checkout's
 Sidestep is elsewhere or has changes, with the command that fixes it,
 and a refused reload names the packages whose sources differ.

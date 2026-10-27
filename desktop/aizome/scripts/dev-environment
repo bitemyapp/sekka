@@ -1,16 +1,37 @@
 #!/usr/bin/env bash
-# Prepare this worktree's path dependency without replacing a developer's
-# own Sidestep checkout or link. The root flake supplies the pinned source.
+# Prepare this worktree's Sidestep, the vendor/sidestep submodule that
+# desktop/aizome/sidestep links to: check it out at the revision Sekka
+# records if it isn't checked out yet, and say when it differs from the
+# revision the package builds against. A checkout is never moved, so
+# Sidestep work in it is kept. Messages go to standard error, because
+# aizome-dev reads the shell's environment from standard output.
 set -euo pipefail
 
 search_dir=$PWD
+root=
 while [[ $search_dir != / ]]; do
   if [[ -f $search_dir/desktop/aizome/Cargo.toml ]]; then
-    sidestep_link=$search_dir/desktop/sidestep-aizome
-    if [[ ! -e $sidestep_link && ! -L $sidestep_link ]]; then
-      ln -s -- "$AIZOME_SIDESTEP_SOURCE" "$sidestep_link"
-    fi
-    exit 0
+    root=$search_dir
+    break
   fi
   search_dir=$(dirname -- "$search_dir")
 done
+[[ -n $root ]] || exit 0
+
+sidestep=$root/vendor/sidestep
+if [[ ! -e $sidestep/.git ]]; then
+  echo "aizome: checking out the vendor/sidestep submodule" >&2
+  if ! git -C "$root" submodule update --init -- vendor/sidestep >&2; then
+    echo "aizome: vendor/sidestep isn't checked out; run" \
+      "\`git submodule update --init vendor/sidestep\` in $root" >&2
+    exit 0
+  fi
+fi
+
+pinned=${AIZOME_SIDESTEP_REV:-}
+have=$(git -C "$sidestep" rev-parse HEAD 2>/dev/null) || exit 0
+if [[ -n $pinned && $have != "$pinned" ]]; then
+  echo "aizome: vendor/sidestep is at $have, but the package builds against" \
+    "Sidestep $pinned; \`git submodule update vendor/sidestep\` checks out" \
+    "the revision Sekka records" >&2
+fi

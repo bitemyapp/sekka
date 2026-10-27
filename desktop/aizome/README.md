@@ -68,9 +68,9 @@ cd desktop/aizome
 cargo build
 ```
 
-The development shell links the exact pinned Sidestep source automatically.
-To work on Sidestep too, place a writable checkout or link at
-`desktop/sidestep-aizome`; an existing one is preserved.
+Sidestep is the `vendor/sidestep` submodule at Sekka's root. The
+development shell checks it out if it isn't yet, and leaves it where it is
+otherwise, so it is also where to work on Sidestep.
 
 To try one app from the current checkout or worktree in your running Aizome
 session:

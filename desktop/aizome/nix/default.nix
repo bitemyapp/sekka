@@ -146,7 +146,9 @@ let
         # Vulkan build makes its own; package.nix).
         WHISPER_DONT_GENERATE_BINDINGS = "1";
         AIZOME_DEV_SHELL = "1";
-        AIZOME_SIDESTEP_SOURCE = toString sidestep;
+        # The Sidestep the package builds against, which the hook compares
+        # with the vendor/sidestep submodule.
+        AIZOME_SIDESTEP_REV = sidestep.rev or "";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         shellHook = ''
           ${pkgs.bash}/bin/bash ${../scripts/dev-environment}

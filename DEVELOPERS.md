@@ -10,6 +10,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `installer/genkan/` | Rust installer, privileged helper, system modules, application catalog, storage tests |
 | `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
+| `vendor/sidestep/` | Git submodule: the Sidestep fork Aizome builds against in development |
 | `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
@@ -19,7 +20,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
 
-The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
+The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs; the one submodule, `vendor/sidestep`, is Sidestep's fork, which Aizome builds against ([Aizome](#aizome)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
 Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
@@ -937,16 +938,28 @@ to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
 would rebuild Aizome. The source hash already tells the builds apart.
 
 The workspace depends on Sidestep's crates by path, through the
-`desktop/aizome/sidestep` link to `../sidestep-aizome`. Entering
-`nix develop .#aizome` from this repository creates the ignored
-`desktop/sidestep-aizome` link to the exact pinned source. An existing
-checkout or link is preserved, so Sidestep development can use a writable
-checkout instead. `aizome-dev` warns when that checkout differs from the
-one the running session was built against; the ABI check always refuses
-an incompatible logic library. The
-`sidestep` input names its revision rather than the branch, so the nightly's
-`nix flake update` leaves it alone. To move Sidestep, change that revision,
-run `nix flake lock`, and build Aizome and run its checks against it.
+`desktop/aizome/sidestep` link to `../../vendor/sidestep`, a Git submodule
+of the fork's `aizome` branch. Clone with `--recurse-submodules`, or run
+`git submodule update --init vendor/sidestep`; entering
+`nix develop .#aizome` does the latter when the submodule isn't checked out
+yet. The hook never moves a checked-out submodule, so Sidestep work there is
+kept, and it says when the submodule differs from the revision the package
+builds against. `git pull` doesn't update submodules: after one that moves
+Sidestep, run `git submodule update vendor/sidestep`. `aizome-dev` warns
+when the submodule differs from the Sidestep the running session was built
+against; the ABI check always refuses an incompatible logic library.
+
+Nix builds take Sidestep from the flake's `sidestep` input, not the
+submodule: installed systems fetch Sekka as a GitHub tarball, which leaves
+submodules empty. The submodule and the input must name the same commit,
+which `tests/test_aizome_development.py` checks in a Git checkout
+(`python3 -m unittest tests/test_aizome_development.py`; the
+`aizome-development` Nix check runs the rest without Git metadata and skips
+it). The input names its
+revision rather than the branch, so the nightly's `nix flake update` leaves
+it alone. To move Sidestep, check out the new revision in `vendor/sidestep`
+and stage it, put the same revision in `flake.nix`, run `nix flake lock`,
+and build Aizome and run its checks against it.
 
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix

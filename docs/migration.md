@@ -102,7 +102,8 @@ keybinding/IPC launch patch is folded into the local source.
 - Sidestep, which the workspace builds against by path, remains a separate
   product. It is now Sekka's `sidestep` input, at the revision Aizome's lock
   pinned. `flake.nix` names that revision, so the nightly's input update
-  doesn't move it.
+  doesn't move it. The `vendor/sidestep` submodule records the same revision
+  for development, in place of the separate checkout beside Aizome's.
 - The installed flake's lock loses its nested `aizome` node and keeps
   `sidestep` beneath Sekka. The ISO qualification report no longer records
   an Aizome revision: the Sekka revision includes Aizome's source.
