@@ -138,7 +138,10 @@ palette. Search filters the sidebar and highlights options.
   address), remove, default, test page, queue.
 - **General**: About (the mark, Sekka version, hardware summary, hostname
   rename), Software Update (opens Yukimi's Updates), Storage (a bar of what
-  fills the disk, opening Kura), Date & Time (automatic, timezone map or
+  fills the disk, opening Kura), Startup (Sekka's boot splash, on or off
+  from the next start; the button proposes the change in Yukimi with
+  `--choose calamares.bootSplash.enable=…`, and "Not offered" where the
+  system doesn't declare it), Date & Time (automatic, timezone map or
   search, 24h), Language & Region (locale, formats preview), Default Apps
   (browser, mail, terminal, text editor, files, images, PDF, music, video),
   Login Items (autostart entries on and off).
@@ -257,7 +260,9 @@ Beyond the GTK Yukimi, it changes what used to take typing `sudo` commands:
   Sekka keeps that choice through later updates.
 - **Desktops**: the system's own choices, as Sekka declares them
   (`programs.yukimi.choices` in `/etc/yukimi/system.json`): which
-  desktops are installed, which starts by default, and the login screen.
+  desktops are installed, which starts by default, the login screen, and
+  the boot splash (a `boolean` choice, `true` or `false`, which the helper
+  writes as a Nix boolean).
   - Picking changes nothing. Apply asks, then builds once
     (`change --choose SETTING=VALUE[,VALUE]… --mode auto`).
   - A change the running system can't take now, such as another login

@@ -53,7 +53,7 @@ use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
-use yukimi_system::setup::{Kind, Setup};
+use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
 /// pkexec starts programs with an almost empty environment.
@@ -782,6 +782,19 @@ fn valid_setting(name: &str) -> bool {
         })
 }
 
+/// The main configuration file with one of the system's choices written as
+/// it is declared: a list of strings, a boolean, or a string.
+fn write_choice(text: &str, choice: &Choice, values: &[String]) -> Result<String> {
+    let path: Vec<&str> = choice.setting.split('.').collect();
+    Ok(if choice.many {
+        edit::set_string_list(text, &path, values)?
+    } else if choice.boolean {
+        edit::set_bool(text, &path, values[0] == "true")?
+    } else {
+        edit::set_string(text, &path, &values[0])?
+    })
+}
+
 /// The main configuration file with an entry taken out of a package list.
 fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
     edit::remove_package(text, path, attr)?
@@ -875,13 +888,11 @@ fn change(args: &[String]) -> Result<String> {
                 configuration = edit::set_string_list(&configuration, &path, list)?;
             }
             for (setting, values) in &change.choices {
-                let path: Vec<&str> = setting.split('.').collect();
-                let many = setup.facts.choices.iter().any(|c| &c.setting == setting && c.many);
-                configuration = if many {
-                    edit::set_string_list(&configuration, &path, values)?
-                } else {
-                    edit::set_string(&configuration, &path, &values[0])?
-                };
+                // Checked above: each is declared and allows its values.
+                let declared = setup.facts.choices.iter().find(|c| &c.setting == setting);
+                if let Some(choice) = declared {
+                    configuration = write_choice(&configuration, choice, values)?;
+                }
             }
             for attr in &change.unlist_system {
                 configuration = unlist(&configuration, &["environment", "systemPackages"], attr)?;
@@ -1279,6 +1290,35 @@ mod tests {
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn choices_are_written_as_declared() {
+        let choice = |json: &str| serde_json::from_str::<Choice>(json).unwrap();
+        let splash = choice(
+            r#"{"setting":"calamares.bootSplash.enable","title":"Boot splash","boolean":true,"value":"false",
+                "options":[{"id":"true","title":"On"},{"id":"false","title":"Off"}]}"#,
+        );
+        let login = choice(
+            r#"{"setting":"calamares.loginScreen","title":"Login screen","value":"auto",
+                "options":[{"id":"auto","title":"Automatic"},{"id":"aizome","title":"Aizome"}]}"#,
+        );
+        let desktops = choice(
+            r#"{"setting":"calamares.desktops","title":"Desktops","many":true,"value":["aizome"],
+                "options":[{"id":"aizome","title":"Aizome"},{"id":"gnome","title":"GNOME"}]}"#,
+        );
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let installed = "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" ];\n}\n";
+        let text = write_choice(installed, &splash, &v(&["true"])).unwrap();
+        let text = write_choice(&text, &login, &v(&["aizome"])).unwrap();
+        let text = write_choice(&text, &desktops, &v(&["aizome", "gnome"])).unwrap();
+        assert_eq!(
+            text,
+            "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" \"gnome\" ];\n  calamares.bootSplash.enable = true;\n  \
+             calamares.loginScreen = \"aizome\";\n}\n"
+        );
+        let off = write_choice(&text, &splash, &v(&["false"])).unwrap();
+        assert_eq!(off, text.replace("enable = true", "enable = false"));
     }
 
     #[test]
