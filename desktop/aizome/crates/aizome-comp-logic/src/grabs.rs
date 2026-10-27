@@ -231,6 +231,9 @@ impl PointerGrab<State> for MoveGrab {
             }
             if let Some(TabDrag { target: Some(target), .. }) = drop {
                 data.stack(target, self.win);
+            } else if self.moved {
+                // Dropped on another display: it joins the Desk there.
+                crate::actions::adopt_screen(data, self.win);
             }
         }
         data.az.cursor_override = None;
@@ -314,11 +317,13 @@ pub fn start_resize(
                 start: start_rect,
             });
         }
-        if let Some(w) = state.lg.m().wm.get_mut(m)
-            && w.placement != crate::wm::Placement::Free
-        {
-            w.placement = crate::wm::Placement::Free;
-            w.restore = None;
+        if let Some(w) = state.lg.m().wm.get_mut(m) {
+            // A size of its own now: where it was on another display goes.
+            w.home = None;
+            if w.placement != crate::wm::Placement::Free {
+                w.placement = crate::wm::Placement::Free;
+                w.restore = None;
+            }
         }
     }
     let grab = ResizeGrab { start: start_data(pos, button), win, edges, start_rect };

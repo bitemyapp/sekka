@@ -3,8 +3,6 @@
 //! keyboard, the keys each gets, and the menus the compositor dismissed.
 
 use std::collections::HashMap;
-use std::io::Write;
-use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -23,7 +21,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_l
 pub use zwlr_layer_shell_v1::Layer;
 pub use zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity};
 
-use super::Compositor;
+use super::{Compositor, dispatch_round, solid_buffer};
 
 #[derive(Clone, Debug)]
 pub struct LayerSpec {
@@ -194,17 +192,7 @@ impl Shell {
     fn draw(&mut self, name: &str, qh: &QueueHandle<Shell>) {
         let Some(s) = self.surfaces.get(name) else { return };
         let (w, h) = s.size;
-        let len = (w * h * 4) as usize;
-        // Safety: memfd_create with a static name.
-        let fd = unsafe { OwnedFd::from_raw_fd(libc::memfd_create(c"aizome-shell-test".as_ptr(), 0)) };
-        let mut file = std::fs::File::from(fd);
-        let c = s.color;
-        let px = [c as u8, (c >> 8) as u8, (c >> 16) as u8, 0xff];
-        let data: Vec<u8> = std::iter::repeat_n(px, (w * h) as usize).flatten().collect();
-        file.write_all(&data).unwrap();
-        let pool = self.shm.create_pool(file.as_fd(), len as i32, qh, ());
-        let buffer = pool.create_buffer(0, w, h, w * 4, wl_shm::Format::Argb8888, qh, ());
-        pool.destroy();
+        let buffer = solid_buffer(&self.shm, (w, h), s.color, qh);
         s.surface.attach(Some(&buffer), 0, 0);
         s.surface.damage_buffer(0, 0, w, h);
         s.surface.commit();
@@ -312,20 +300,7 @@ fn run(stream: UnixStream, rx: Receiver<ShellCmd>, seen: Arc<Mutex<ShellSeen>>) 
                 ShellCmd::Quit => quit = true,
             }
         }
-        let _ = conn.flush();
-        if let Some(guard) = queue.prepare_read() {
-            let fd = guard.connection_fd();
-            let mut pfd = libc::pollfd { fd: std::os::fd::AsRawFd::as_raw_fd(&fd), events: libc::POLLIN, revents: 0 };
-            // Safety: one valid pollfd.
-            if unsafe { libc::poll(&mut pfd, 1, 20) } > 0 {
-                if guard.read().is_err() {
-                    break;
-                }
-            } else {
-                drop(guard);
-            }
-        }
-        if queue.dispatch_pending(&mut shell).is_err() {
+        if !dispatch_round(&conn, &mut queue, &mut shell) {
             break;
         }
     }

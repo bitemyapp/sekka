@@ -260,7 +260,13 @@ pub mod wm {
     }
 
     pub fn set_desk(index: u32) -> Action {
-        Action::Wm(Request::SetDesk { desk: DeskSel::Index(index) })
+        Action::Wm(Request::SetDesk { desk: DeskSel::Index(index), output: None })
+    }
+
+    /// Shows a Desk on a display (from that display's bar).
+    pub fn set_desk_on(index: u32, output: String) -> Action {
+        let output = (!output.is_empty()).then_some(output);
+        Action::Wm(Request::SetDesk { desk: DeskSel::Index(index), output })
     }
 
     pub fn move_to_desk(id: Option<WindowId>, index: u32) -> Action {

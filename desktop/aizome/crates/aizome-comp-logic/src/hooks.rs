@@ -69,6 +69,7 @@ fn init(st: &mut State, saved: Option<&[u8]>) -> Result<(), String> {
     }
     install(&mut st.lg, logic);
     crate::actions::adopt_windows(st);
+    crate::actions::sync_screens(st);
     crate::slides::restore(st, &slides);
     publish(st);
     st.update_keyboard_focus();
@@ -107,6 +108,8 @@ fn release(st: &mut State) {
 /// Tells the core where windows are, what shows and what has focus, when
 /// any of it changed.
 pub fn publish(st: &mut State) {
+    // Windows the model fitted to a display hear about it first.
+    crate::actions::apply_relaid(st);
     let l = st.lg.m();
     let grabs = l.overlays.grabs_keyboard();
     let animating = l.anims.active() || l.overlays.animating() || l.slides.active();
@@ -184,11 +187,13 @@ fn toplevel_request(st: &mut State, id: WinId, req: ToplevelRequest) {
 }
 
 fn usable_area_changed(st: &mut State, output: &Output) {
+    crate::actions::sync_screens(st);
     crate::actions::refit_placed_windows(st, output);
     publish(st);
 }
 
 fn outputs_changed(st: &mut State) {
+    crate::actions::sync_screens(st);
     crate::actions::rescue_windows(st);
     if !st.shell_restart_holds_layout() {
         for output in st.az.outputs.clone() {

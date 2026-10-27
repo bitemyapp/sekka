@@ -26,11 +26,11 @@ Aizome's look.
 | Surface | Layer | Namespace | Per | Anchors / size | Keyboard |
 |---|---|---|---|---|---|
 | Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand |
-| Deskbar | top | `aizome-deskbar` | the primary output | top, right; 232pt wide, as tall as its content; margin-top 24 | on demand |
+| Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top, right; 232pt wide, as tall as its content; margin-top 24 | on demand |
 | Menus, systray panels | popups of the bar or Deskbar | — | — | — | grab |
-| Palette, Toolchest typed into | overlay | `aizome-palette` | the focused output | centred, 720 × up to 480pt | exclusive |
+| Palette, Toolchest typed into | overlay | `aizome-palette` | the output with the focus (the focused window's, else the one showing the current Desk) | centred, 720 × up to 480pt | exclusive |
 | Menu at the pointer, torn-off palettes | overlay / top | `aizome-menu` | — | positioned with margins | on demand |
-| Notifications banner | top | `aizome-notifications` | the primary output | in the bar's line | none |
+| Notifications banner | top | `aizome-notifications` | the main display | in the bar's line | none |
 | OSD | overlay | `aizome-osd` | the focused output | bottom centre | none |
 | Desktop | background | `aizome-desktop` | output | all four edges; exclusive -1 | on demand |
 | Lock | ext-session-lock surface | — | output | full | yes |
@@ -53,9 +53,12 @@ Aizome's look.
   Aizome, Settings…, Lock, Log Out; File ▸ New Folder on Desktop; Desks ▸;
   Help ▸).
 - **The Desks strip**, right of centre: `1 Mail  2 Build  3 Write  +`, the
-  current desk on `selection`, its number and name in Archivo 650; click to
-  switch, `+` adds a desk, double-click renames in place, right-click for
-  Rename, Set Folder…, Remove.
+  Desk this bar's display shows on `selection` (each display shows a Desk
+  of its own), its number and name in Archivo 650, and a Desk another
+  display shows underlined in `text3`; click to show a Desk on this
+  display (one another display shows swaps with it), `+` adds a desk,
+  double-click renames in place, right-click for Rename, Set Folder…,
+  Remove.
 - **The recording indicator**, first in the systray while a screen
   recording goes: a `red` dot (8pt) and the time recorded in IBM Plex Mono
   600 tabular digits (`0:42`, `1:02:09`), ticking once a second and

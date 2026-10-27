@@ -52,7 +52,7 @@ fn the_window_manager_survives_churn() {
                 _ => continue,
             },
             4 => Request::Unstack { id: pick(&mut rng) },
-            5 => Request::SetDesk { desk: DeskSel::Index(1 + rng.below(4) as u32) },
+            5 => Request::SetDesk { desk: DeskSel::Index(1 + rng.below(4) as u32), output: None },
             6 => match pick(&mut rng) {
                 Some(id) => Request::MoveToDesk {
                     id: Some(id),

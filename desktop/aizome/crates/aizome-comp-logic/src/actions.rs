@@ -15,7 +15,7 @@ use smithay::wayland::shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData};
 use tracing::info;
 
 use crate::prelude::*;
-use crate::wm::{DeskId, Placement, Refocus, Side};
+use crate::wm::{DeskId, DeskMove, Placement, Refocus, ScreenGeom, Side};
 
 /// One work area for initial bounds, restored geometry, fill/split and
 /// subsequent shell/output changes. The Deskbar does not use an exclusive
@@ -43,7 +43,13 @@ pub trait Actions {
     fn set_float(&mut self, id: WinId, on: Option<bool>);
     fn set_sticky(&mut self, id: WinId, on: Option<bool>);
     fn move_to_desk(&mut self, id: WinId, desk: DeskId, follow: bool);
+    /// Shows a Desk on the display with the focus (see [`Actions::show_desk`]).
     fn switch_desk(&mut self, desk: DeskId);
+    /// Shows a Desk on a display (the one with the focus by default) and
+    /// makes it current; one another display shows swaps places with it.
+    fn show_desk(&mut self, output: Option<&str>, desk: DeskId);
+    /// Gives the focus to a display (its Desk current).
+    fn focus_screen(&mut self, output: &str);
     /// Parks a Desk (its windows are told they're suspended) or unparks
     /// it; the current Desk isn't parked. True if that changed it.
     fn set_desk_parked(&mut self, desk: DeskId, park: bool) -> bool;
@@ -73,8 +79,14 @@ impl Actions for State {
     fn focus_window(&mut self, id: Option<WinId>) {
         let l = self.lg.m();
         let prev = l.wm.focused();
+        let desk = l.wm.current_desk();
         l.wm.focus(id);
         let now = l.wm.focused();
+        // A window on another display takes the focus there.
+        if l.wm.current_desk() != desk {
+            current_desk_changed(self);
+        }
+        let l = self.lg.m();
         // Selecting a tab also changes the previous active member's IPC
         // state, even when the previously focused window was outside it.
         if let Some(id) = now {
@@ -127,11 +139,8 @@ impl Actions for State {
     fn activate_window(&mut self, id: WinId) {
         let before = self.lg.r().wm.current_desk();
         let hidden_app = self.lg.r().wm.get(id).filter(|w| w.hidden).map(|w| w.app_id.clone());
-        let desk_changed = self.lg.m().wm.reveal(id);
-        if desk_changed {
-            let after = self.lg.r().wm.current_desk();
-            desk_switched(self, before, after);
-        }
+        let moves = self.lg.m().wm.reveal(id);
+        desks_moved(self, before, &moves, true);
         if let Some(app) = hidden_app {
             after_app_change(self, &app);
         }
@@ -301,7 +310,11 @@ impl Actions for State {
         self.az.window_outputs_dirty = true;
         self.az.queue_redraw_all();
         if follow {
-            self.switch_desk(desk);
+            // Along to its display, if one shows it.
+            let before = self.lg.r().wm.current_desk();
+            if let Some((_, moves)) = self.lg.m().wm.visit_desk(desk) {
+                desks_moved(self, before, &moves, true);
+            }
             self.focus_window(Some(id));
         } else {
             self.apply_refocus(r);
@@ -309,19 +322,23 @@ impl Actions for State {
         self.emit_desks();
     }
 
-    /// Switches to a Desk, sliding over the motion time. A parked Desk
-    /// wakes as it's arrived at.
     fn switch_desk(&mut self, desk: DeskId) {
-        let from = self.lg.r().wm.current_desk();
-        let was_parked = self.lg.r().wm.desk(desk).is_some_and(|d| d.parked.is_some());
-        let Some(r) = self.lg.m().wm.switch_desk(desk) else { return };
-        self.lg.m().wm.mark_left(from, now_secs());
-        if was_parked {
-            for id in self.lg.r().wm.desk_windows(desk) {
-                self.configure(id);
-            }
-        }
-        desk_switched(self, from, desk);
+        self.show_desk(None, desk);
+    }
+
+    /// Shows a Desk on a display, sliding over the motion time. A parked
+    /// Desk wakes as it's arrived at.
+    fn show_desk(&mut self, output: Option<&str>, desk: DeskId) {
+        let before = self.lg.r().wm.current_desk();
+        let Some((r, moves)) = self.lg.m().wm.show_desk(output, desk) else { return };
+        desks_moved(self, before, &moves, true);
+        self.apply_refocus(r);
+    }
+
+    fn focus_screen(&mut self, output: &str) {
+        let before = self.lg.r().wm.current_desk();
+        let Some(r) = self.lg.m().wm.focus_screen(output) else { return };
+        desks_moved(self, before, &[], false);
         self.apply_refocus(r);
     }
 
@@ -389,6 +406,7 @@ impl Actions for State {
         if let Some(w) = l.wm.get_mut(id) {
             w.rect = Rect::new(x, y, rect.w, rect.h);
             w.tab_offset = 0;
+            w.home = None;
         }
         let members = l.wm.group_members(rect_owner(&l.wm, id, rect));
         for m in members {
@@ -452,8 +470,9 @@ impl Actions for State {
     fn usable_for(&self, id: WinId) -> (Rect, crate::wm::Insets) {
         let l = self.lg.r();
         let rect = l.wm.get(id).map(|w| w.rect).unwrap_or_default();
-        // Filling and splitting leave the Deskbar clear.
-        let usable = self.az.output_for_rect(rect).map(|o| window_area(&self.az, &o)).unwrap_or(rect);
+        // Filling and splitting leave the Deskbar clear, on the window's
+        // display.
+        let usable = window_output(self, id).map(|o| window_area(&self.az, &o)).unwrap_or(rect);
         (usable, l.insets_for(id))
     }
 
@@ -567,7 +586,7 @@ fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect)
         let (area, insets) = st.usable_for(id);
         let fitted = crate::wm::fit_into(rect, area, insets);
         if fitted != rect {
-            st.lg.m().wm.set_rect(id, fitted);
+            st.lg.m().wm.fit_rect(id, fitted);
             rect = fitted;
         }
     }
@@ -584,24 +603,150 @@ fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect)
     st.az.window_outputs_dirty = true;
 }
 
-fn desk_switched(st: &mut State, from: DeskId, to: DeskId) {
-    let ms = st.az.motion_ms();
+/// Displays changed Desks, or the focus went to another display: the
+/// Desks arriving slide in (when `slide`), those no display shows now say
+/// when they were left, and the shell hears.
+fn desks_moved(st: &mut State, before: DeskId, moves: &[DeskMove], slide: bool) {
+    let ms = if slide { st.az.motion_ms() } else { 0 };
+    let now = now_secs();
     let l = st.lg.m();
-    let fi = l.wm.desk_index(from).unwrap_or(0);
-    let ti = l.wm.desk_index(to).unwrap_or(0);
-    let dir = if ti >= fi { 1.0 } else { -1.0 };
-    l.anims.start_desk(from, to, dir, ms);
+    for mv in moves {
+        let Some(from) = mv.from else { continue };
+        if !l.wm.is_visible(from) {
+            l.wm.mark_left(from, now);
+        }
+        let fi = l.wm.desk_index(from).unwrap_or(0);
+        let ti = l.wm.desk_index(mv.to).unwrap_or(0);
+        let dir = if ti >= fi { 1.0 } else { -1.0 };
+        l.anims.start_desk(&mv.output, from, mv.to, dir, ms);
+    }
+    if moves.is_empty() && l.wm.current_desk() == before {
+        return;
+    }
     let ids: Vec<WinId> = l.wm.windows().map(|w| w.id).collect();
     for id in ids {
         l.window_changed(id);
     }
-    let ev = l.wm.desk(to).map(|d| Event::DeskChanged { index: ti, id: d.id, name: d.name.clone() });
+    // A Desk arriving fits its display as it is now (its bar, the
+    // Deskbar), as one there all along does.
+    for mv in moves {
+        if let Some(o) = st.az.output_by_name(&mv.output) {
+            refit_placed_windows(st, &o);
+        }
+    }
     st.az.window_outputs_dirty = true;
     st.az.queue_redraw_all();
+    current_desk_changed(st);
+}
+
+/// The shell hears which Desk is current, and where every Desk shows.
+pub fn current_desk_changed(st: &mut State) {
+    let l = st.lg.r();
+    let current = l.wm.current_desk();
+    let ev = l.wm.desk(current).map(|d| Event::DeskChanged {
+        index: l.wm.desk_index(current).unwrap_or(0),
+        id: d.id,
+        name: d.name.clone(),
+    });
     if let Some(ev) = ev {
         st.az.ipc.emit(&ev);
     }
     st.emit_desks();
+}
+
+/// The output a window shows on: its Desk's display's (or, before the
+/// model knows displays, the one under most of it).
+pub fn window_output(st: &State, id: WinId) -> Option<Output> {
+    let l = st.lg.r();
+    l.wm.screen_of(id)
+        .and_then(|s| st.az.output_by_name(&s.output))
+        .or_else(|| l.wm.get(id).and_then(|w| st.az.output_for_rect(w.rect)))
+}
+
+/// The output showing a Desk, else (before the model knows displays) the
+/// one under the pointer.
+pub fn desk_output(st: &State, desk: DeskId) -> Option<Output> {
+    st.lg.r().wm.screen_showing(desk).and_then(|s| st.az.output_by_name(&s.output)).or_else(|| st.az.active_output())
+}
+
+/// The model takes in the outputs as they are (see
+/// [`crate::wm::Model::sync_screens`]): after outputs come, go or change,
+/// and when exclusive zones or the Deskbar move. While a new shell takes
+/// over from the old, outputs the model knows keep the areas they had, so
+/// windows don't move for the bars changing hands.
+pub fn sync_screens(st: &mut State) {
+    let hold = st.shell_restart_holds_layout();
+    let l = st.lg.r();
+    let geoms: Vec<ScreenGeom> = st
+        .az
+        .outputs
+        .iter()
+        .map(|o| {
+            let known = l.wm.screens().iter().find(|s| s.output == o.name()).filter(|_| hold);
+            ScreenGeom {
+                output: o.name(),
+                rect: st.az.output_rect(o),
+                usable: known.map_or_else(|| st.az.usable_area(o), |s| s.usable),
+                area: known.map_or_else(|| window_area(&st.az, o), |s| s.area),
+            }
+        })
+        .collect();
+    let primary = st.az.primary_output().map(|o| o.name());
+    let same = l.wm.screens().len() == geoms.len()
+        && l.wm
+            .screens()
+            .iter()
+            .zip(&geoms)
+            .all(|(s, g)| s.output == g.output && s.rect == g.rect && s.usable == g.usable && s.area == g.area);
+    if same {
+        return;
+    }
+    let removed = l.wm.screens().iter().any(|s| !geoms.iter().any(|g| g.output == s.output));
+    let before = l.wm.current_desk();
+    let moves = st.lg.m().wm.sync_screens(&geoms, primary.as_deref());
+    desks_moved(st, before, &moves, false);
+    if removed && moves.is_empty() && st.lg.r().wm.current_desk() == before {
+        // Losing an unfocused display moves no remaining Desk and leaves
+        // focus alone, but its Desk is no longer visible. The shell still
+        // needs that change to clear its "shown elsewhere" underline.
+        st.emit_desks();
+    }
+    apply_relaid(st);
+}
+
+/// Windows the model moved or resized to fit a display (a Desk came from
+/// another one, a parked Desk woke) hear their new state.
+pub fn apply_relaid(st: &mut State) {
+    let ids = st.lg.m().wm.take_relaid();
+    for id in ids {
+        let Some(rect) = st.lg.r().wm.get(id).map(|w| w.rect) else { continue };
+        let drawn = st.az.windows.get(&id).map(|m| m.window.geometry().size);
+        if drawn.is_some_and(|s| (s.w, s.h) != (rect.w, rect.h)) {
+            st.request_size(id, rect.w, rect.h);
+        }
+        st.configure(id);
+        st.lg.m().window_changed(id);
+        st.az.window_outputs_dirty = true;
+    }
+}
+
+/// A window moved (dragged, or over IPC) mostly onto another display joins
+/// its Desk there.
+pub fn adopt_screen(st: &mut State, id: WinId) {
+    let before = st.lg.r().wm.current_desk();
+    if !st.lg.m().wm.adopt_into_screen(id) {
+        return;
+    }
+    let family = st.lg.r().wm.family(id);
+    for m in family {
+        st.lg.m().window_changed(m);
+        st.configure(m);
+    }
+    if st.lg.r().wm.current_desk() != before {
+        current_desk_changed(st);
+    } else {
+        st.emit_desks();
+    }
 }
 
 /// Some member of the group the window was in (for change events).
@@ -653,59 +798,75 @@ pub fn desk_infos(l: &Logic) -> Vec<DeskInfo> {
             folder: d.folder.clone(),
             windows: l.wm.desk_window_count(d.id) as u32,
             current: d.id == l.wm.current_desk(),
+            output: l.wm.screen_showing(d.id).map(|s| s.output.clone()),
         })
         .collect()
 }
 
-/// Brings windows that ended up off every output back onto the main one.
+/// Brings windows that show but ended up off every output back onto their
+/// display (a sticky window onto the main one). Windows of Desks no
+/// display shows keep their places, for when one does again.
 pub fn rescue_windows(st: &mut State) {
-    let Some(first) = st.az.primary_output() else { return };
-    let usable = window_area(&st.az, &first);
+    let Some(primary) = st.az.primary_output() else { return };
     let rects: Vec<Rect> = st.az.outputs.iter().map(|o| st.az.output_rect(o)).collect();
     let l = st.lg.m();
-    let ids: Vec<WinId> = l.wm.windows().filter(|w| l.wm.is_group_active(w.id)).map(|w| w.id).collect();
+    let ids: Vec<WinId> =
+        l.wm.windows().filter(|w| l.wm.is_group_active(w.id) && l.wm.is_shown(w.id)).map(|w| w.id).collect();
     for id in ids {
-        let l = st.lg.m();
+        let l = st.lg.r();
         let Some(w) = l.wm.get(id) else { continue };
         let on_any = rects.iter().any(|r| r.intersects(w.rect));
         if !on_any {
+            let output = l.wm.screen_of(id).and_then(|s| st.az.output_by_name(&s.output)).unwrap_or(primary.clone());
+            let usable = window_area(&st.az, &output);
             let insets = l.insets_for(id);
             let old = w.rect;
             let r = crate::wm::fit_into(old, usable, insets);
-            l.wm.set_rect(id, r);
+            st.lg.m().wm.set_rect(id, r);
             after_placement(st, id, Some(old), r);
         }
     }
 }
 
-/// When a window first maps: where it goes.
+/// When a window first maps: where it goes, on its Desk's display (a new
+/// window's Desk is the current one), or a dialog on its parent's (a
+/// sticky parent's Desk can be on another display, or none).
 pub fn place_new_window(st: &mut State, id: WinId, size: (i32, i32), parent: Option<WinId>) {
     let l = st.lg.r();
-    let Some(output) = parent
-        .and_then(|p| l.wm.get(p).map(|w| w.rect))
-        .and_then(|r| st.az.output_for_rect(r))
-        .or_else(|| st.az.active_output())
-    else {
-        return;
+    let Some(desk) = l.wm.get(id).map(|w| w.desk) else { return };
+    let output = match parent.filter(|p| l.wm.contains(*p)) {
+        Some(p) => window_output(st, p),
+        None => desk_output(st, desk),
     };
+    let Some(output) = output else { return };
     let usable = window_area(&st.az, &output);
+    let frame = st.az.usable_area(&output);
     let insets = l.insets_for(id);
     let app_id = l.wm.get(id).map(|w| w.app_id.clone()).unwrap_or_default();
-    let usable_rects: Vec<Rect> = st.az.outputs.iter().map(|o| st.az.usable_area(o)).collect();
+    // Where the app was last, on this display; from another display, at the
+    // same place on this one in proportion.
     let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
         .then(|| l.remembered.get(&app_id))
         .flatten()
-        .filter(|r| usable_rects.iter().any(|u| u.intersects(*r)))
+        .and_then(|r| {
+            if frame.intersects(r) {
+                return Some(r);
+            }
+            let other = st.az.outputs.iter().map(|o| st.az.usable_area(o)).find(|u| u.intersects(r))?;
+            Some(crate::wm::scale_frame(r, other, frame, insets))
+        })
         .filter(|r| !l.wm.windows().any(|w| w.id != id && l.wm.is_shown(w.id) && w.rect.x == r.x && w.rect.y == r.y));
     let rect = match remembered {
         Some(r) => crate::wm::fit_into(Rect::new(r.x, r.y, size.0, size.1), usable, insets),
         None => l.wm.place(size, usable, &[], insets, parent),
     };
-    st.lg.m().wm.set_rect(id, rect);
+    let l = st.lg.m();
+    l.wm.set_rect(id, rect);
+    l.wm.set_frame(id, frame);
     if (rect.w, rect.h) != size {
         st.request_size(id, rect.w, rect.h);
     }
-    info!(id, app_id, ?rect, "placed");
+    info!(id, app_id, ?rect, output = output.name(), "placed");
 }
 
 // ---- windows coming and going ------------------------------------------------------
@@ -738,10 +899,11 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
     }
     let (app_id, _) = aizome_comp_core::shell::toplevel_ids(toplevel);
     let parent = toplevel.parent().and_then(|p| st.az.window_for_surface(&p));
-    let out = parent
-        .and_then(|p| st.lg.r().wm.get(p))
-        .and_then(|w| st.az.output_for_rect(w.rect))
-        .or_else(|| st.az.active_output());
+    // The display it will open on: its parent's, or the focused one.
+    let out = match parent.filter(|p| st.lg.r().wm.contains(*p)) {
+        Some(p) => window_output(st, p),
+        None => desk_output(st, st.lg.r().wm.current_desk()),
+    };
     let usable = out.as_ref().map(|o| window_area(&st.az, o));
     let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
         .then(|| st.lg.r().remembered.get(&app_id))
@@ -850,7 +1012,9 @@ pub fn window_committed(st: &mut State, id: WinId, is_root: bool) {
                 r.y = a.start.bottom() - size.1;
             }
         }
-        let members = l.wm.set_rect(id, r);
+        // The client's own size, as asked or its constraints allow: where
+        // it was on another display still holds.
+        let members = l.wm.fit_rect(id, r);
         for other in members.into_iter().filter(|o| *o != id) {
             st.request_size(other, size.0, size.1);
             st.configure(other);
@@ -948,16 +1112,22 @@ pub fn toplevel_request(st: &mut State, id: WinId, req: ToplevelRequest) {
     }
 }
 
-/// Refit each window/group once, on the output that owns it. Updating the
-/// rectangle directly preserves its placement and every tab's restore rect.
+/// Refit each window/group once, on the output that owns it: the windows
+/// of the Desk it shows and the sticky ones on it (other Desks' windows
+/// keep their places until a display shows them). Updating the rectangle
+/// directly preserves its placement and every tab's restore rect.
 pub fn refit_placed_windows(st: &mut State, output: &Output) {
     let usable = window_area(&st.az, output);
     let out_rect = st.az.output_rect(output);
     let l = st.lg.r();
+    let name = output.name();
     let ids: Vec<WinId> =
         l.wm.windows()
             .filter(|w| l.wm.is_group_active(w.id))
-            .filter(|w| st.az.output_for_rect(w.rect).as_ref() == Some(output))
+            .filter(|w| match l.wm.screens().is_empty() {
+                true => st.az.output_for_rect(w.rect).as_ref() == Some(output),
+                false => l.wm.screen_of(w.id).is_some_and(|s| s.output == name),
+            })
             .map(|w| w.id)
             .collect();
     for id in ids {
@@ -977,7 +1147,7 @@ pub fn refit_placed_windows(st: &mut State, output: &Output) {
             _ => area.inset(insets),
         };
         if r != old {
-            l.wm.set_rect(id, r);
+            l.wm.fit_rect(id, r);
             after_placement(st, id, Some(old), r);
         } else {
             // Bounds may change even when the window itself still fits.

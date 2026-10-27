@@ -6,6 +6,7 @@
 
 pub mod desktop;
 pub mod layer;
+pub mod text;
 
 use std::io::Write;
 use std::os::fd::{AsFd, FromRawFd, OwnedFd};
@@ -18,13 +19,14 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use aizome_ipc::{Client, Request, Response, WindowInfo};
+use aizome_ipc::{Client, Request, Response, Synthetic, WindowInfo};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{
     wl_buffer, wl_callback, wl_compositor, wl_keyboard, wl_output, wl_registry, wl_seat, wl_shm, wl_shm_pool,
     wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
+use wayland_protocols::wp::text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3};
 use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
@@ -219,6 +221,62 @@ impl Drop for Compositor {
     }
 }
 
+/// Presses a key and lets go of it, in one batch.
+pub fn tap(c: &Compositor, key: &str) {
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::Key { key: key.into(), pressed: true },
+            Synthetic::Key { key: key.into(), pressed: false },
+        ],
+    });
+}
+
+/// The middle of a window, in global points.
+pub fn centre(w: &WindowInfo) -> (f64, f64) {
+    ((w.geometry.x + w.geometry.w / 2) as f64, (w.geometry.y + w.geometry.h / 2) as f64)
+}
+
+/// A buffer of one opaque colour (0xRRGGBB), in shared memory.
+pub fn solid_buffer<S>(shm: &wl_shm::WlShm, (w, h): (i32, i32), color: u32, qh: &QueueHandle<S>) -> wl_buffer::WlBuffer
+where
+    S: Dispatch<wl_shm_pool::WlShmPool, ()> + Dispatch<wl_buffer::WlBuffer, ()> + 'static,
+{
+    let len = (w * h * 4) as usize;
+    // Safety: memfd_create with a static name.
+    let fd = unsafe { libc::memfd_create(c"aizome-test".as_ptr(), 0) };
+    assert!(fd >= 0);
+    // Safety: we own the new fd.
+    let mut file = std::fs::File::from(unsafe { OwnedFd::from_raw_fd(fd) });
+    // Copied in doubling runs: fast enough, unoptimised, for a fullscreen
+    // client drawing every frame.
+    let data = [color as u8, (color >> 8) as u8, (color >> 16) as u8, 0xff].repeat((w * h) as usize);
+    file.write_all(&data).unwrap();
+    let pool = shm.create_pool(file.as_fd(), len as i32, qh, ());
+    let buffer = pool.create_buffer(0, w, h, w * 4, wl_shm::Format::Argb8888, qh, ());
+    pool.destroy();
+    buffer
+}
+
+/// One round of a test client's loop: sends what it queued, reads what the
+/// compositor sends within 20 ms, and dispatches it. False once the
+/// connection is gone.
+pub fn dispatch_round<S>(conn: &Connection, queue: &mut EventQueue<S>, state: &mut S) -> bool {
+    let _ = conn.flush();
+    if let Some(guard) = queue.prepare_read() {
+        let fd = guard.connection_fd();
+        let mut pfd = libc::pollfd { fd: std::os::fd::AsRawFd::as_raw_fd(&fd), events: libc::POLLIN, revents: 0 };
+        // Safety: one valid pollfd.
+        if unsafe { libc::poll(&mut pfd, 1, 20) } > 0 {
+            if guard.read().is_err() {
+                return false;
+            }
+        } else {
+            drop(guard);
+        }
+    }
+    queue.dispatch_pending(state).is_ok()
+}
+
 /// A screenshot's pixels.
 pub struct Image {
     pub width: u32,
@@ -313,6 +371,10 @@ pub struct Spec {
     pub animated: bool,
     /// Hold the first buffer until `Cmd::Map`, even after acknowledging configure.
     pub defer_mapping: bool,
+    /// Take text from input methods over text-input-v3 as foot does: enabled
+    /// while the window has the keys, a commit applied only by a `done`
+    /// whose serial counts its own commits.
+    pub text_input: bool,
 }
 
 impl Spec {
@@ -329,7 +391,12 @@ impl Spec {
             fullscreen_output: None,
             animated: false,
             defer_mapping: false,
+            text_input: false,
         }
+    }
+    pub fn text_input(mut self) -> Spec {
+        self.text_input = true;
+        self
     }
     pub fn animated(mut self) -> Spec {
         self.animated = true;
@@ -387,6 +454,12 @@ pub struct Seen {
     pub scrolled: f64,
     /// Buttons: (code, pressed).
     pub buttons: Vec<(u32, bool)>,
+    /// Text input: enabled (its `enter` came), the text input methods
+    /// committed and it applied, and how many `done`s it dropped for a
+    /// serial not its own.
+    pub ime_enabled: bool,
+    pub ime_text: String,
+    pub ime_dropped: u32,
 }
 
 pub enum Cmd {
@@ -394,6 +467,9 @@ pub enum Cmd {
     Title(String),
     Color(u32),
     Fullscreen(bool, Option<usize>),
+    /// Opens a dialog: a 200×150 toplevel of this title and colour, with
+    /// the window as its parent.
+    Dialog(String, u32),
     Quit,
 }
 
@@ -456,11 +532,16 @@ struct App {
     surface: Option<wl_surface::WlSurface>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
     toplevel: Option<xdg_toplevel::XdgToplevel>,
+    dialog: Option<(wl_surface::WlSurface, xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
     pending_size: Option<(i32, i32)>,
     size: (i32, i32),
     needs_draw: bool,
     configured: bool,
     quit: bool,
+    /// Text input: commits made (what a `done` must say), and the string
+    /// committed since the last `done`.
+    ti_serial: u32,
+    ti_commit: Option<String>,
 }
 
 fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex<Seen>>) {
@@ -490,11 +571,19 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
         surface: None,
         xdg_surface: None,
         toplevel: None,
+        dialog: None,
         pending_size: None,
         needs_draw: false,
         configured: false,
         quit: false,
+        ti_serial: 0,
+        ti_commit: None,
     };
+    let _text_input = (spec.text_input)
+        .then(|| globals.bind::<zwp_text_input_manager_v3::ZwpTextInputManagerV3, _, _>(&qh, 1..=1, ()).ok())
+        .flatten()
+        .zip(seat.as_ref())
+        .map(|(m, s)| m.get_text_input(s, &qh, ()));
     let surface = app.compositor.create_surface(&qh, ());
     let xs = wm.get_xdg_surface(&surface, &qh, ());
     let tl = xs.get_toplevel(&qh, ());
@@ -534,29 +623,30 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                         tl.unset_fullscreen();
                     }
                 }
+                Cmd::Dialog(title, color) => {
+                    let s = app.compositor.create_surface(&qh, ());
+                    let xs = wm.get_xdg_surface(&s, &qh, DialogColor(color));
+                    let tl = xs.get_toplevel(&qh, DialogColor(color));
+                    tl.set_parent(app.toplevel.as_ref());
+                    tl.set_app_id(app.spec.app_id.clone());
+                    tl.set_title(title);
+                    s.commit();
+                    app.dialog = Some((s, xs, tl));
+                }
                 Cmd::Quit => app.quit = true,
             }
         }
         if app.needs_draw && app.configured {
             app.draw(&qh);
         }
-        let _ = conn.flush();
-        if let Some(guard) = queue.prepare_read() {
-            let fd = guard.connection_fd();
-            let mut pfd = libc::pollfd { fd: std::os::fd::AsRawFd::as_raw_fd(&fd), events: libc::POLLIN, revents: 0 };
-            // Safety: one valid pollfd.
-            let n = unsafe { libc::poll(&mut pfd, 1, 20) };
-            if n > 0 {
-                if guard.read().is_err() {
-                    break;
-                }
-            } else {
-                drop(guard);
-            }
-        }
-        if queue.dispatch_pending(&mut app).is_err() {
+        if !dispatch_round(&conn, &mut queue, &mut app) {
             break;
         }
+    }
+    if let Some((s, x, t)) = app.dialog.take() {
+        t.destroy();
+        x.destroy();
+        s.destroy();
     }
     if let Some(t) = app.toplevel.take() {
         t.destroy();
@@ -576,33 +666,20 @@ impl App {
             return;
         }
         self.needs_draw = false;
-        let (w, h) = self.size;
-        let stride = w * 4;
-        let len = (stride * h) as usize;
-        // Safety: memfd_create with a static name.
-        let fd = unsafe { libc::memfd_create(c"aizome-test".as_ptr(), 0) };
-        assert!(fd >= 0);
-        // Safety: we own the new fd.
-        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-        let mut file = std::fs::File::from(fd);
-        let c = self.spec.color;
-        let px = [c as u8, (c >> 8) as u8, (c >> 16) as u8, 0xff];
-        let mut data = Vec::with_capacity(len);
-        for _ in 0..(w * h) {
-            data.extend_from_slice(&px);
+        let s = self.surface.clone().unwrap();
+        if self.spec.animated {
+            s.frame(qh, ());
         }
-        file.write_all(&data).unwrap();
-        let pool = self.shm.create_pool(file.as_fd(), len as i32, qh, ());
-        let buffer = pool.create_buffer(0, w, h, stride, wl_shm::Format::Argb8888, qh, ());
-        pool.destroy();
-        let s = self.surface.as_ref().unwrap();
+        self.paint(qh, &s, self.size, self.spec.color);
+    }
+
+    /// Fills a surface with one colour, opaque, and commits it.
+    fn paint(&self, qh: &QueueHandle<App>, s: &wl_surface::WlSurface, (w, h): (i32, i32), c: u32) {
+        let buffer = solid_buffer(&self.shm, (w, h), c, qh);
         let opaque = self.compositor.create_region(qh, ());
         opaque.add(0, 0, w, h);
         s.set_opaque_region(Some(&opaque));
         opaque.destroy();
-        if self.spec.animated {
-            s.frame(qh, ());
-        }
         s.attach(Some(&buffer), 0, 0);
         s.damage_buffer(0, 0, w, h);
         s.commit();
@@ -636,8 +713,51 @@ ignore!(
     wl_shm_pool::WlShmPool,
     wl_surface::WlSurface,
     zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
-    wl_seat::WlSeat
+    wl_seat::WlSeat,
+    zwp_text_input_manager_v3::ZwpTextInputManagerV3
 );
+
+impl Dispatch<zwp_text_input_v3::ZwpTextInputV3, ()> for App {
+    fn event(
+        app: &mut Self,
+        ti: &zwp_text_input_v3::ZwpTextInputV3,
+        event: zwp_text_input_v3::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        use zwp_text_input_v3::{ContentHint, ContentPurpose, Event};
+        match event {
+            // As foot: enable on enter, with a content type and cursor.
+            Event::Enter { .. } => {
+                ti.enable();
+                ti.set_content_type(ContentHint::None, ContentPurpose::Terminal);
+                ti.set_cursor_rectangle(0, 0, 8, 16);
+                ti.commit();
+                app.ti_serial += 1;
+                app.seen.lock().unwrap().ime_enabled = true;
+            }
+            Event::Leave { .. } => {
+                ti.disable();
+                ti.commit();
+                app.ti_serial += 1;
+                app.seen.lock().unwrap().ime_enabled = false;
+            }
+            Event::CommitString { text } => app.ti_commit = text,
+            Event::Done { serial } => {
+                let commit = app.ti_commit.take();
+                let mut seen = app.seen.lock().unwrap();
+                // foot's ime.c: "IME serial mismatch" drops the lot.
+                if serial != app.ti_serial {
+                    seen.ime_dropped += 1;
+                } else if let Some(t) = commit {
+                    seen.ime_text.push_str(&t);
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 impl Dispatch<wl_callback::WlCallback, ()> for App {
     fn event(
@@ -766,6 +886,40 @@ impl Dispatch<xdg_surface::XdgSurface, ()> for App {
     }
 }
 
+/// A dialog's surface and toplevel, by the colour it draws.
+#[derive(Clone, Copy)]
+struct DialogColor(u32);
+
+impl Dispatch<xdg_surface::XdgSurface, DialogColor> for App {
+    fn event(
+        app: &mut Self,
+        xs: &xdg_surface::XdgSurface,
+        event: xdg_surface::Event,
+        color: &DialogColor,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let xdg_surface::Event::Configure { serial } = event {
+            xs.ack_configure(serial);
+            if let Some((s, ..)) = &app.dialog {
+                app.paint(qh, s, (200, 150), color.0);
+            }
+        }
+    }
+}
+
+impl Dispatch<xdg_toplevel::XdgToplevel, DialogColor> for App {
+    fn event(
+        _: &mut Self,
+        _: &xdg_toplevel::XdgToplevel,
+        _: xdg_toplevel::Event,
+        _: &DialogColor,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
 impl Dispatch<xdg_toplevel::XdgToplevel, ()> for App {
     fn event(
         app: &mut Self,
@@ -880,20 +1034,7 @@ fn run_lock(stream: UnixStream, color: u32, rx: Receiver<Cmd>, locked: Arc<Mutex
         if rx.try_iter().any(|c| matches!(c, Cmd::Quit)) {
             quit = true;
         }
-        let _ = conn.flush();
-        if let Some(guard) = queue.prepare_read() {
-            let fd = guard.connection_fd();
-            let mut pfd = libc::pollfd { fd: std::os::fd::AsRawFd::as_raw_fd(&fd), events: libc::POLLIN, revents: 0 };
-            // Safety: one valid pollfd.
-            if unsafe { libc::poll(&mut pfd, 1, 20) } > 0 {
-                if guard.read().is_err() {
-                    break;
-                }
-            } else {
-                drop(guard);
-            }
-        }
-        if queue.dispatch_pending(&mut state).is_err() {
+        if !dispatch_round(&conn, &mut queue, &mut state) {
             break;
         }
     }
@@ -964,17 +1105,7 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, ()> for Lock
         if let ext_session_lock_surface_v1::Event::Configure { serial, width, height } = event {
             ls.ack_configure(serial);
             let (w, h) = (width as i32, height as i32);
-            let len = (w * h * 4) as usize;
-            // Safety: memfd_create with a static name.
-            let fd = unsafe { OwnedFd::from_raw_fd(libc::memfd_create(c"aizome-lock".as_ptr(), 0)) };
-            let mut file = std::fs::File::from(fd);
-            let c = s.color;
-            let px = [c as u8, (c >> 8) as u8, (c >> 16) as u8, 0xff];
-            let data: Vec<u8> = std::iter::repeat_n(px, (w * h) as usize).flatten().collect();
-            file.write_all(&data).unwrap();
-            let pool = s.shm.create_pool(file.as_fd(), len as i32, qh, ());
-            let buffer = pool.create_buffer(0, w, h, w * 4, wl_shm::Format::Argb8888, qh, ());
-            pool.destroy();
+            let buffer = solid_buffer(&s.shm, (w, h), s.color, qh);
             s.surface.attach(Some(&buffer), 0, 0);
             s.surface.damage_buffer(0, 0, w, h);
             s.surface.commit();

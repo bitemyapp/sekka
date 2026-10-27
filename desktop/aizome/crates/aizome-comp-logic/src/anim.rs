@@ -8,8 +8,10 @@ use std::time::{Duration, Instant};
 
 use crate::wm::{DeskId, WinId};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct DeskSlide {
+    /// The display it slides on.
+    pub output: String,
     pub from: DeskId,
     pub to: DeskId,
     /// +1 when the new Desk comes in from the right.
@@ -50,7 +52,8 @@ impl Slide {
 
 #[derive(Debug, Default)]
 pub struct Animations {
-    pub desk: Option<DeskSlide>,
+    /// Desks sliding, a display each.
+    pub desks: Vec<DeskSlide>,
     /// Tabs sliding into place, by window.
     pub tabs: HashMap<WinId, Slide>,
     /// Overlays fading or growing in (switcher, overview), by name.
@@ -59,15 +62,13 @@ pub struct Animations {
 
 impl Animations {
     pub fn active(&self) -> bool {
-        self.desk.is_some() || !self.tabs.is_empty() || !self.overlays.is_empty()
+        !self.desks.is_empty() || !self.tabs.is_empty() || !self.overlays.is_empty()
     }
 
     /// Drops finished animations; returns whether any ran.
     pub fn tick(&mut self) -> bool {
         let was = self.active();
-        if self.desk.is_some_and(|d| d.done()) {
-            self.desk = None;
-        }
+        self.desks.retain(|d| !d.done());
         self.tabs.retain(|_, s| !s.done());
         self.overlays.retain(|_, s| !s.done());
         was
@@ -82,12 +83,20 @@ impl Animations {
         false
     }
 
-    pub fn start_desk(&mut self, from: DeskId, to: DeskId, dir: f64, ms: u32) {
+    /// A display's Desk slides from one to another (one sliding there
+    /// already gives way).
+    pub fn start_desk(&mut self, output: &str, from: DeskId, to: DeskId, dir: f64, ms: u32) {
+        self.desks.retain(|d| d.output != output);
         if ms == 0 {
-            self.desk = None;
             return;
         }
-        self.desk = Some(DeskSlide { from, to, dir, start: Instant::now(), dur: Duration::from_millis(ms as u64) });
+        let dur = Duration::from_millis(ms as u64);
+        self.desks.push(DeskSlide { output: output.into(), from, to, dir, start: Instant::now(), dur });
+    }
+
+    /// The slide on a display, if one runs.
+    pub fn desk_on(&self, output: &str) -> Option<&DeskSlide> {
+        self.desks.iter().find(|d| d.output == output)
     }
 
     pub fn start_tab(&mut self, win: WinId, dx: f64, dy: f64, ms: u32) {
@@ -126,7 +135,7 @@ mod tests {
     #[test]
     fn austere_means_no_motion() {
         let mut a = Animations::default();
-        a.start_desk(1, 2, 1.0, 0);
+        a.start_desk("HEADLESS-1", 1, 2, 1.0, 0);
         a.start_tab(1, 40.0, 0.0, 0);
         assert!(!a.active());
     }

@@ -18,7 +18,8 @@ state
   outputs                       displays, modes, scale and usable area
   windows                       every window, bottom of the stack first
   focused-window                the focused window
-  desks                         the Desks, the current one marked
+  desks                         the Desks, the current one marked, and the
+                                display showing each
   stats [--reset]               frame times per output (p50/p95/p99/max)
   events                        subscribe and print events until killed
 
@@ -40,7 +41,8 @@ windows (ID defaults to the focused window)
   unstack [ID]
 
 desks (DESK is a 1-based number or a name)
-  set-desk DESK                 switch to a Desk
+  set-desk DESK [--output NAME] show a Desk on a display (the focused one);
+                                one another display shows swaps with it
   move-to-desk DESK [ID] [--follow]
   add-desk NAME [--folder DIR] [--index N]
   rename-desk DESK NAME
@@ -313,8 +315,9 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
         }
         "unstack" => Request::Unstack { id: opt_id(&args, 0)? },
         "set-desk" | "desk" => {
+            let output = opt(&mut args, "--output")?;
             need(&args, 1, "a Desk")?;
-            Request::SetDesk { desk: args[0].parse().unwrap() }
+            Request::SetDesk { desk: args[0].parse().unwrap(), output }
         }
         "move-to-desk" => {
             let follow = flag(&mut args, "--follow");
@@ -606,12 +609,13 @@ fn print_response(r: &Response) -> ExitCode {
         Response::Desks { desks, .. } => {
             for d in desks {
                 println!(
-                    "{} {:>2}  {:<16} {:>2} window{}{}",
+                    "{} {:>2}  {:<16} {:>2} window{}{}{}",
                     if d.current { "▸" } else { " " },
                     d.index,
                     d.name,
                     d.windows,
                     if d.windows == 1 { " " } else { "s" },
+                    d.output.as_deref().map(|o| format!("  on {o}")).unwrap_or_default(),
                     d.folder.as_deref().map(|f| format!("  {f}")).unwrap_or_default()
                 );
             }

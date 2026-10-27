@@ -36,17 +36,26 @@ pub fn scene(st: &mut State, output: &Output, _purpose: Purpose) -> Scene {
     }
 
     // Windows' popups would be in the wrong place while Desks slide.
-    let sliding = st.lg.r().anims.desk.is_some();
+    let name = output.name();
+    let sliding = st.lg.r().anims.desk_on(&name).is_some();
     popup_items(&st.az, output, scale, sliding, &mut out);
     layer_items(output, Layer::Overlay, scale, &mut out);
 
     let l = st.lg.r();
     let shown = l.wm.shown_stacking();
-    let desk_slide = l.anims.desk;
+    let desk_slide = l.anims.desk_on(&name).cloned();
     let out_w = geo.size.w as f64;
-    // A focused full-screen window covers the top layer too.
-    let top_fullscreen =
-        shown.last().copied().filter(|id| l.wm.get(*id).is_some_and(|w| w.fullscreen()) && l.wm.focused() == Some(*id));
+    // A full-screen window in front on this display covers the top layer
+    // too: the focused one, or the one focused last on a Desk another
+    // display shows.
+    let here = |id: &WinId| l.wm.screens().is_empty() || l.wm.screen_of(*id).is_some_and(|s| s.output == name);
+    let top_fullscreen = shown.iter().rev().find(|id| here(id)).copied().filter(|id| {
+        l.wm.get(*id).is_some_and(|w| {
+            w.fullscreen()
+                && (l.wm.focused() == Some(*id)
+                    || (!w.sticky && w.desk != l.wm.current_desk() && l.wm.front_of(w.desk) == Some(*id)))
+        })
+    });
     if let Some(id) = top_fullscreen {
         window_items(st, id, origin, scale, (0.0, 0.0), 1.0, &mut out);
     }
@@ -57,21 +66,27 @@ pub fn scene(st: &mut State, output: &Output, _purpose: Purpose) -> Scene {
 
     match desk_slide {
         Some(slide) => {
-            // Both Desks' windows, sliding; sticky ones stay put.
+            // The Desk arriving on this display slides in; what else shows
+            // (sticky windows, another display's reaching over) stays put,
+            // and the Desk leaving slides out, unless it went to another
+            // display.
             let l = st.lg.r();
             let t = slide.progress();
-            let mut list: Vec<(WinId, f64)> = Vec::new();
-            for id in l.wm.shown_stacking_on(slide.to) {
-                let sticky = l.wm.get(id).is_some_and(|w| w.sticky);
-                list.push((id, if sticky { 0.0 } else { (1.0 - t) * out_w * slide.dir }));
-            }
-            let incoming: Vec<WinId> = list.iter().map(|(id, _)| *id).collect();
-            let mut outgoing: Vec<(WinId, f64)> =
+            let arriving = |id: &WinId| l.wm.get(*id).is_some_and(|w| !w.sticky && w.desk == slide.to);
+            let list: Vec<(WinId, f64)> = shown
+                .iter()
+                .filter(|id| Some(**id) != top_fullscreen)
+                .map(|id| (*id, if arriving(id) { (1.0 - t) * out_w * slide.dir } else { 0.0 }))
+                .collect();
+            let mut outgoing: Vec<(WinId, f64)> = if l.wm.is_visible(slide.from) {
+                Vec::new()
+            } else {
                 l.wm.shown_stacking_on(slide.from)
                     .into_iter()
-                    .filter(|id| !incoming.contains(id))
+                    .filter(|id| l.wm.get(*id).is_some_and(|w| !w.sticky))
                     .map(|id| (id, -t * out_w * slide.dir))
-                    .collect();
+                    .collect()
+            };
             outgoing.extend(list);
             for (id, dx) in outgoing.into_iter().rev() {
                 window_items(st, id, origin, scale, (dx, 0.0), 1.0, &mut out);

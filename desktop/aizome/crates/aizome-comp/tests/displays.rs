@@ -243,19 +243,19 @@ fn closing_the_lid_turns_the_laptops_panel_off_until_it_opens() {
     let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
     let w = c.wait_window("org.example.editor");
     c.wait_windows("on the panel", |ws| ws[0].output.as_deref() == Some("eDP-1"));
+    let original = output(&c, "eDP-1");
     assert!(output(&c, "eDP-1").powered && output(&c, "HEADLESS-2").powered);
 
     lid(&c, true);
     let panel = output(&c, "eDP-1");
     assert!(!panel.powered, "the panel stayed on behind the lid: {panel:?}");
-    assert!(panel.enabled, "the panel is dark, not out of the layout");
+    assert!(!panel.enabled, "the closed panel stayed in the layout");
     assert!(output(&c, "HEADLESS-2").powered, "a monitor went off with the lid");
-    // Dark: what changes on it isn't drawn.
+    c.wait_windows("the focused Desk moved to the external display", |ws| {
+        ws[0].focused && ws[0].output.as_deref() == Some("HEADLESS-2")
+    });
     c.settle();
-    let before = redraws(&c, "eDP-1");
-    c.ok(Request::Move { id: Some(w.id), x: w.geometry.x + 30, y: w.geometry.y });
-    c.settle();
-    assert_eq!(redraws(&c, "eDP-1"), before, "drew behind the closed lid");
+    assert_eq!(c.screenshot().width, 1280, "only the external display remains in the layout");
     // Turning the displays on doesn't light the panel behind it.
     c.ok(Request::PowerOffMonitors);
     assert!(!output(&c, "HEADLESS-2").powered);
@@ -265,8 +265,67 @@ fn closing_the_lid_turns_the_laptops_panel_off_until_it_opens() {
 
     lid(&c, false);
     assert!(output(&c, "eDP-1").powered, "the panel stayed off with the lid open");
+    assert_eq!(output(&c, "eDP-1").logical, original.logical);
+    c.wait_windows("the Desk returned to the panel", |ws| ws[0].id == w.id && ws[0].output.as_deref() == Some("eDP-1"));
     c.settle();
-    assert!(redraws(&c, "eDP-1") > before, "the panel didn't draw once on again");
+    assert!(redraws(&c, "eDP-1") > 0, "the panel didn't draw once on again");
+}
+
+#[test]
+fn docking_with_the_lid_closed_removes_the_panel_and_undocking_restores_it() {
+    let c = Compositor::start(laptop());
+    c.ok(config("HEADLESS-2", Some(false)));
+    lid(&c, true);
+    assert!(output(&c, "eDP-1").enabled, "alone, keep the dark panel's layout");
+    assert!(!output(&c, "eDP-1").powered);
+    c.ok(config("HEADLESS-2", Some(true)));
+    c.settle();
+    assert!(!output(&c, "eDP-1").enabled);
+    c.ok(config("HEADLESS-2", Some(false)));
+    c.settle();
+    assert!(output(&c, "eDP-1").enabled);
+    assert!(!output(&c, "eDP-1").powered, "still closed");
+    lid(&c, false);
+    assert!(output(&c, "eDP-1").powered);
+}
+
+#[test]
+fn opening_the_lid_preserves_an_explicitly_disabled_panel() {
+    let c = Compositor::start(laptop());
+    // Already off before closing.
+    c.ok(config("eDP-1", Some(false)));
+    lid(&c, true);
+    lid(&c, false);
+    assert!(!output(&c, "eDP-1").enabled);
+    // Turned off explicitly while the lid policy had it disabled.
+    c.ok(config("eDP-1", Some(true)));
+    lid(&c, true);
+    c.ok(config("eDP-1", Some(false)));
+    lid(&c, false);
+    assert!(!output(&c, "eDP-1").enabled);
+}
+
+#[test]
+fn opening_the_lid_restores_the_live_panel_configuration() {
+    let c = Compositor::start(laptop());
+    c.ok(Request::OutputConfig {
+        name: "eDP-1".into(),
+        mode: Some("1600x1000@60".into()),
+        scale: Some(1.25),
+        position: Some([-1280, 100]),
+        transform: None,
+        enabled: None,
+    });
+    let before = output(&c, "eDP-1");
+    for _ in 0..3 {
+        lid(&c, true);
+        assert!(!output(&c, "eDP-1").enabled);
+        lid(&c, false);
+        let after = output(&c, "eDP-1");
+        assert_eq!(after.logical, before.logical);
+        assert_eq!(after.current_mode, before.current_mode);
+        assert_eq!(after.scale, before.scale);
+    }
 }
 
 #[test]

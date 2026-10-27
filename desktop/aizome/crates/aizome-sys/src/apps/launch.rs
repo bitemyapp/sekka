@@ -17,12 +17,12 @@
 //!
 //! ```text
 //! systemd-run --user --scope --unit=… --description=<Name> --collect \
-//!     [--expand-environment=no] -- /bin/sh -c 'exec "$@" 2>&1' aizome-launch argv…
+//!     [--expand-environment=no] -- /bin/sh -c 'exec 2>&1; "$@" & wait "$!"' aizome-launch argv…
 //! ```
 //!
 //! With `--scope`, systemd-run asks the manager for a scope holding its own
 //! process, prints `Running as unit: <unit>` on stderr and then execs the
-//! command, so the launched program is our child and `systemd-run` never
+//! command, so the waiting shell is our child and `systemd-run` never
 //! "returns". [`launch`] therefore only waits for that line (milliseconds),
 //! then hands the child to a small thread that reaps it when it exits. The
 //! program's output goes to the journal (a journald stream tagged with the
@@ -32,6 +32,9 @@
 //! a pipe to the launcher and die of `SIGPIPE` when the launcher went away.
 //! systemd 254+ expands `$VAR` in scope command lines unless told not to,
 //! hence `--expand-environment=no` (when the version has it).
+//! The waiting shell stays until the app exits, including on the plain
+//! route. It gives sandboxes such as Bubblewrap with `--die-with-parent`
+//! a parent that survives restarting Aizome's shell.
 //!
 //! **Fallback**: a plain spawn when `systemd-run` isn't in `PATH`, the user
 //! manager isn't reachable (`$XDG_RUNTIME_DIR/systemd/private` missing), or
@@ -116,8 +119,7 @@ impl Default for LaunchOptions {
 /// A started process.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Launched {
-    /// Its process ID (with systemd-run, the same process: it execs the
-    /// program).
+    /// The waiting shell's process ID. The application is its child.
     pub pid: u32,
     /// The systemd scope it runs in, if launched through systemd.
     pub unit: Option<String>,
@@ -343,11 +345,11 @@ fn set_activation_env(command: &mut Command, token: Option<&str>) {
 }
 
 fn spawn_plain(argv: &[String], dir: &Path, options: &LaunchOptions) -> Result<Launched> {
-    let Some((program, args)) = argv.split_first() else {
+    let Some(program) = argv.first() else {
         return Err(Error::InvalidArgument("empty command line".into()));
     };
-    let mut command = Command::new(program);
-    command.args(args);
+    let mut command = Command::new(app_shell());
+    command.args(["-c", APP_WAIT, "aizome-launch"]).args(argv);
     let identifier = Path::new(program).file_name().map_or(program.clone(), |n| n.to_string_lossy().into_owned());
     prepare(&mut command, dir, options, &identifier);
     let child =
@@ -359,6 +361,14 @@ fn spawn_plain(argv: &[String], dir: &Path, options: &LaunchOptions) -> Result<L
 
 /// Why the systemd route didn't work; the caller falls back.
 struct Fallback(String);
+
+// Keep the sandbox's parent alive when the desktop shell is replaced.
+// Forward stderr before launching, closing systemd-run's handshake pipe.
+const APP_WAIT: &str = "exec 2>&1; \"$@\" & wait \"$!\"";
+
+fn app_shell() -> &'static str {
+    if Path::new("/bin/sh").exists() { "/bin/sh" } else { "sh" }
+}
 
 fn spawn_scope(
     systemd_run: &[String],
@@ -379,8 +389,7 @@ fn spawn_scope(
     if systemd_version(systemd_run).is_some_and(|version| version >= 254) {
         command.arg("--expand-environment=no");
     }
-    let shell = if Path::new("/bin/sh").exists() { "/bin/sh" } else { "sh" };
-    command.args(["--", shell, "-c", "exec \"$@\" 2>&1", "aizome-launch"]).args(argv);
+    command.args(["--", app_shell(), "-c", APP_WAIT, "aizome-launch"]).args(argv);
     prepare(&mut command, dir, options, entry.app_id());
     command.stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|error| Fallback(format!("{program}: {error}")))?;
@@ -689,13 +698,19 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
             ))
         }
 
-        /// What process `pid` recorded, once it has.
+        /// What the app in launch session `pid` recorded, once it has.
         fn report(&self, pid: u32) -> String {
-            let path = self.tmp.path().join(format!("out-{pid}"));
             let deadline = Instant::now() + Duration::from_secs(10);
             while Instant::now() < deadline {
-                if let Ok(text) = std::fs::read_to_string(&path) {
-                    return text;
+                for file in std::fs::read_dir(self.tmp.path()).unwrap().flatten() {
+                    let name = file.file_name().to_string_lossy().into_owned();
+                    if name.starts_with("out-")
+                        && !name.ends_with(".tmp")
+                        && let Ok(text) = std::fs::read_to_string(file.path())
+                        && session_of(field(&text, "stat")) == pid
+                    {
+                        return text;
+                    }
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -807,6 +822,78 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
             let report = probe.report(launched[0].pid);
             assert_eq!(field(&report, "args"), "/t");
             assert_reaped(launched[0].pid);
+        }
+    }
+
+    #[test]
+    fn sandbox_survives_launcher_exit() {
+        const TEST: &str = "apps::launch::tests::sandbox_survives_launcher_exit";
+        const ENV: &str = "AIZOME_TEST_LAUNCH_LIFETIME";
+        if let Some(dir) = std::env::var_os(ENV) {
+            let dir = PathBuf::from(dir);
+            if dir.join("launching").exists() {
+                // Bubblewrap's --die-with-parent uses this same contract.
+                // SAFETY: prctl changes only this disposable process.
+                assert_eq!(unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) }, 0);
+                std::fs::write(dir.join("ready"), "").unwrap();
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while !dir.join("continue").exists() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                assert!(dir.join("continue").exists());
+                std::fs::write(dir.join("survived"), "").unwrap();
+                return;
+            }
+            std::fs::write(dir.join("launching"), "").unwrap();
+            let argv =
+                vec![std::env::current_exe().unwrap().to_string_lossy().into_owned(), "--exact".into(), TEST.into()];
+            let options = LaunchOptions::default();
+            let launched = if dir.join("systemd-run").exists() {
+                let command = vec!["sh".into(), dir.join("systemd-run").to_string_lossy().into_owned()];
+                spawn_scope(
+                    &command,
+                    SYSTEMD_TIMEOUT,
+                    &entry("[Desktop Entry]\nType=Application\nName=Test\nExec=true\n"),
+                    &argv,
+                    &dir,
+                    &options,
+                )
+                .unwrap_or_else(|e| panic!("scope failed: {}", e.0))
+            } else {
+                spawn_plain(&argv, &dir, &options).unwrap()
+            };
+            std::fs::write(dir.join("supervisor"), launched.pid.to_string()).unwrap();
+            std::thread::sleep(Duration::from_secs(20));
+            panic!("the test launcher was not stopped");
+        }
+        for scoped in [false, true] {
+            let tmp = TempDir::new("launch-lifetime");
+            if scoped {
+                tmp.write("systemd-run", "if [ \"$1\" = --version ]; then echo 'systemd 256'; exit 0; fi\nwhile [ \"$1\" != -- ]; do\ncase $1 in --unit=*) echo \"Running as unit: ${1#--unit=}\" >&2;; esac\nshift\ndone\nshift\nexec \"$@\"\n");
+            }
+            let mut launcher = Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST])
+                .env(ENV, tmp.path())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while (!tmp.path().join("ready").exists() || !tmp.path().join("supervisor").exists())
+                && Instant::now() < deadline
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            launcher.kill().unwrap();
+            launcher.wait().unwrap();
+            assert!(tmp.path().join("ready").exists(), "sandbox did not start");
+            std::fs::write(tmp.path().join("continue"), "").unwrap();
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !tmp.path().join("survived").exists() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(tmp.path().join("survived").exists(), "sandbox died with its launcher (scoped={scoped})");
+            let pid = std::fs::read_to_string(tmp.path().join("supervisor")).unwrap().parse().unwrap();
+            assert_reaped(pid);
         }
     }
 

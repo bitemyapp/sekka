@@ -41,13 +41,6 @@ fn chord(c: &Compositor, keys: &str) {
     synth(c, vec![Synthetic::Chord { keys: keys.into() }]);
 }
 
-fn tap(c: &Compositor, key: &str) {
-    synth(
-        c,
-        vec![Synthetic::Key { key: key.into(), pressed: true }, Synthetic::Key { key: key.into(), pressed: false }],
-    );
-}
-
 fn motion(c: &Compositor, x: i32, y: i32) {
     synth(c, vec![Synthetic::PointerMotion { x: x as f64, y: y as f64 }]);
 }

@@ -81,7 +81,8 @@ pub fn toggle(state: &mut State) {
     // The switcher and marking menu give way.
     super::switcher::close(state, false);
     state.lg.m().overlays.marking = None;
-    let Some(output) = state.az.active_output() else { return };
+    // On the display with the focus, where the keys are.
+    let Some(output) = crate::actions::desk_output(state, state.lg.r().wm.current_desk()) else { return };
     state.lg.m().overlays.overview = Some(Overview {
         output: output.clone(),
         filter: String::new(),
@@ -144,9 +145,10 @@ pub fn key(state: &mut State, syms: &[Keysym], mods: Mods, pressed: bool, utf8: 
         && (keysyms::KEY_1..=keysyms::KEY_9).contains(&syms.first().map(|s| s.raw()).unwrap_or(0))
     {
         let n = syms[0].raw() - keysyms::KEY_1 + 1;
+        let here = state.lg.r().overlays.overview.as_ref().map(|o| o.output.name());
         close(state);
         if let Some(d) = state.lg.m().wm.desk_at(n) {
-            state.switch_desk(d);
+            state.show_desk(here.as_deref(), d);
         }
         return Some(KeyDecision::Swallow);
     } else if is(keysyms::KEY_Up) && mods.ctrl && mods.logo {
@@ -171,7 +173,7 @@ fn park_under_pointer(state: &mut State) -> bool {
     let (x, y) = ov.pointer;
     let Some(desk) = ov.cards.iter().find(|(_, b)| b.contains(x, y)).and_then(|(d, _)| *d) else { return false };
     let l = state.lg.r();
-    if desk == l.wm.current_desk() {
+    if l.wm.is_visible(desk) {
         return false;
     }
     let parked = l.wm.desk(desk).is_some_and(|d| d.parked.is_some());
@@ -202,10 +204,12 @@ pub fn pointer_button(state: &mut State, pressed: bool, x: f64, y: f64) -> bool 
             return true;
         }
         let card = ov.cards.iter().find(|(_, b)| b.contains(x, y)).map(|(d, _)| *d);
+        let here = ov.output.name();
         match card {
             Some(Some(desk)) => {
+                // To this display (another showing it swaps with it).
                 close(state);
-                state.switch_desk(desk);
+                state.show_desk(Some(&here), desk);
             }
             Some(None) => {
                 let n = state.lg.m().wm.desks().len() + 1;
@@ -261,6 +265,7 @@ pub fn items(st: &mut State, output: &Output, scale: f64) -> aizome_comp_core::s
     }
     let geo = az.output_geometry(output);
     let g = Box2::new(geo.loc.x as f64, geo.loc.y as f64, geo.size.w as f64, geo.size.h as f64);
+    let usable = az.usable_area(output);
     let origin = (g.x, g.y);
     let alpha = l.anims.overlay_progress("overview") as f32;
     let mut pt: Painter = Painter::new(origin, scale, 1.0);
@@ -378,7 +383,9 @@ pub fn items(st: &mut State, output: &Output, scale: f64) -> aizome_comp_core::s
         }
         rest.push_str(&if count == 1 { "1 window".to_string() } else { format!("{count} windows") });
         let (parked, left) = l.wm.desk(desk).map_or((None, None), |d| (d.parked, d.left));
-        if let Some(st) = status(desk == current, parked, left, now) {
+        // Another display shows it: which.
+        let elsewhere = l.wm.screen_showing(desk).filter(|_| desk != current).map(|s| format!("on {}", s.output));
+        if let Some(st) = elsewhere.or_else(|| status(desk == current, parked, left, now)) {
             rest.push_str(" · ");
             rest.push_str(&st);
         }
@@ -400,10 +407,15 @@ pub fn items(st: &mut State, output: &Output, scale: f64) -> aizome_comp_core::s
         }
         pt.fill(card, p.bevel_lo);
         pt.fill(card.inset(1.0), p.desktop);
-        // Its windows, bottom to top, where they are on this output.
+        // Its windows, bottom to top, where they are on this output (or,
+        // laid out on another display, where they would be on this one).
         for id in l.wm.shown_stacking_on(desk) {
             let Some(w) = l.wm.get(id) else { continue };
-            let r = w.rect;
+            let from = w.frame.or_else(|| l.wm.screen_at(w.rect).map(|s| s.usable));
+            let r = match from {
+                Some(f) if f != usable => crate::wm::scale_frame(w.rect, f, usable, Default::default()),
+                _ => w.rect,
+            };
             let wb = Box2::new(
                 card.x + (r.x as f64 - g.x) * k,
                 card.y + (r.y as f64 - g.y) * k,

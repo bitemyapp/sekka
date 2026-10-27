@@ -141,9 +141,14 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             st.move_to_desk(id, desk, follow);
             Response::Ok
         }
-        Request::SetDesk { desk } => {
+        Request::SetDesk { desk, output } => {
             let desk = desk_arg(st, &desk)?;
-            st.switch_desk(desk);
+            if let Some(o) = &output
+                && st.lg.r().wm.desk_on(o).is_none()
+            {
+                return Err(format!("no display {o} in the layout"));
+            }
+            st.show_desk(output.as_deref(), desk);
             Response::Ok
         }
         Request::AddDesk { name, folder, index } => {
@@ -167,8 +172,9 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             let desk = desk_arg(st, &desk)?;
             let l = st.lg.m();
             let before = l.wm.current_desk();
-            let r = l.wm.remove_desk(desk).ok_or("the last Desk stays")?;
-            let changed = l.wm.current_desk() != before;
+            let shown = l.wm.is_visible(desk);
+            let r = l.wm.remove_desk(desk).ok_or("every display keeps a Desk, and the last Desk stays")?;
+            let changed = shown || l.wm.current_desk() != before;
             let ids: Vec<WinId> = l.wm.windows().map(|w| w.id).collect();
             for id in ids {
                 l.window_changed(id);
@@ -178,7 +184,11 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
                 st.az.queue_redraw_all();
             }
             st.apply_refocus(r);
-            st.emit_desks();
+            if st.lg.r().wm.current_desk() != before {
+                crate::actions::current_desk_changed(st);
+            } else {
+                st.emit_desks();
+            }
             Response::Ok
         }
         Request::MoveDesk { desk, index } => {
@@ -205,6 +215,7 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
         Request::Move { id, x, y } => {
             let id = window_arg(st, id)?;
             st.move_window(id, x, y);
+            crate::actions::adopt_screen(st, id);
             Response::Ok
         }
         Request::Resize { id, rect } => {

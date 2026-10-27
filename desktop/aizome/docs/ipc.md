@@ -51,7 +51,7 @@ Protocol version: **1** (`version` reports it).
 | `float` | `id?`, `state?` | `ok`; keep above other windows |
 | `sticky` | `id?`, `state?` | `ok`; show on every Desk |
 | `move-to-desk` | `id?`, `desk`, `follow` (bool, default false) | `ok`; moves the window's tab group too |
-| `set-desk` | `desk` | `ok`; switches Desks |
+| `set-desk` | `desk`, `output?` | `ok`; shows the Desk on that display (the one with the focus by default) and makes it current; a Desk another display shows swaps places with it. An output not in the layout is an error |
 | `add-desk` | `name`, `folder?`, `index?` (1-based; default last) | `ok` |
 | `rename-desk` | `desk`, `name` | `ok` |
 | `set-desk-folder` | `desk`, `folder?` | `ok` |
@@ -67,7 +67,7 @@ Protocol version: **1** (`version` reports it).
 | `spawn` | `argv`, `cwd?`, `in_desk_folder` (default true) | `spawned {pid}`; with the session's environment, in `cwd`, else the current Desk's folder, else home |
 | `screenshot` | `output?`, `path?`, `window?`, `area? {x,y,w,h}`, `clipboard` (bool) | `screenshot {path}`; PNG of one output, a window (with its tab, frame and shadow), an area, or (none given) every output side by side; default path `~/Pictures/Screenshots/Screenshot YYYY-MM-DD at HH.MM.SS.png`; also emits `screenshot-taken` |
 | `reload-config` | | `ok`; re-reads `settings.toml`, applies it, emits `config-changed` |
-| `output-config` | `name`, `mode?` (`"WxH"` or `"WxH@Hz"`), `scale?`, `position? [x,y]`, `transform?`, `enabled?` | `ok`; for this session (Settings writes the file). `enabled: false` turns the output off (its CRTC disabled on udev; out of the layout, its windows moved to the main display); `true` turns it on again, at `position` or right of the others |
+| `output-config` | `name`, `mode?` (`"WxH"` or `"WxH@Hz"`), `scale?`, `position? [x,y]`, `transform?`, `enabled?` | `ok`; for this session (Settings writes the file). `enabled: false` turns the output off (its CRTC disabled on udev; out of the layout, its Desk out of sight, or on the main display when it had the focus); `true` turns it on again, at `position` or right of the others, with its Desk back |
 | `stats` | `reset` (bool) | `stats {stats}`: frame times per output, and `logic` (the build running, where from, reloads, rollbacks, the last error) |
 | `reload` | `logic`, `shell` (bools), `from?` (a logic library), `shell_from?` (a shell binary), `check` | `reload {report}`: `logic`, `shell`, `settings` and `core`, each an `action` (`reloaded`, `restarted`, `unchanged`, `would-reload`, `refused`, `failed`, `skipped`, and for `core` `same` or `needs-restart`) and a `detail`. With none of `logic`, `shell`, `from`, `shell_from`: whatever changed since it was loaded. Emits `reloaded` (`docs/reload.md`) |
 | `quit` | | `ok`; ends the session |
@@ -208,7 +208,9 @@ surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs).
 ### DeskInfo
 
 `index` (1-based), `id` (stable), `name`, `folder`, `windows` (count, not
-counting sticky ones), `current`.
+counting sticky ones), `current` (the Desk of the display with the focus),
+`output` (the display showing it, none while no display does: each display
+shows a Desk of its own).
 
 ### OutputInfo
 
@@ -254,8 +256,8 @@ and for wl_shm reading it back).
 | `window-closed` | `id` | |
 | `window-changed` | `window` | title, app_id, Desk, state, geometry or group changed (coalesced per loop iteration) |
 | `window-focused` | `id?` | |
-| `desk-changed` | `index`, `id`, `name` | the current Desk changed |
-| `desks-changed` | `desks` | added, removed, renamed, reordered or their window counts changed |
+| `desk-changed` | `index`, `id`, `name` | the current Desk changed (another Desk on the display with the focus, or the focus on another display) |
+| `desks-changed` | `desks` | added, removed, renamed, reordered, shown on other displays, or their window counts changed |
 | `outputs-changed` | `outputs` | plugged, unplugged, reconfigured, or their usable area changed |
 | `config-changed` | | settings were applied |
 | `binding` | `action`, `pointer? [x,y]`, `output?` | a key or pointer binding that belongs to the shell |
@@ -348,7 +350,17 @@ Keyboard focus, highest first:
    so a menu opened for a `binding` event (which carries no Wayland
    serial) can grab with the client's last serial, or 0. A press outside
    the client, or focus moving to another window, closes the menus (and
-   the press then does what it does there);
+   the press then does what it does there). An input method's grab of
+   the keyboard (`zwp_input_method_v2`, which ibus holds while a text
+   field has the keys) doesn't keep shut a menu of the client typed into
+   or pointed at (a field's context menu) or of a layer surface (the
+   shell's, for a binding); another client's menu is dismissed. The menu
+   opens over the input method's grab rather than in its place: the keys
+   go to its topmost popup, and the menu's own grab takes the keyboard
+   once the input method lets go (ibus does as the field loses the keys).
+   A field in the menu types through the input method with the keys
+   staying in the menu, and once the menu closes the input method grabs
+   them again for the field (or still has them, if it kept its grab);
 4. an OnDemand layer surface, once clicked, until a window is clicked or
    it unmaps;
 5. the focused window.

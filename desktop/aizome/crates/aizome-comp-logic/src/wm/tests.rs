@@ -56,7 +56,7 @@ fn minimise_and_hide_move_focus_on() {
     m.show_app("b");
     assert!(m.is_shown(b));
     assert!(!m.is_shown(b2), "still minimised");
-    assert!(!m.reveal(b2));
+    assert!(m.reveal(b2).is_empty());
     assert!(m.is_shown(b2));
     assert_eq!(m.hide_others("a"), Refocus::Same);
     assert!(!m.is_shown(b) && m.is_shown(a));
@@ -316,7 +316,7 @@ fn desks_show_their_own_windows() {
     assert_eq!(m.move_to_desk(b, d2), Refocus::To(Some(a)));
     m.focus(Some(a));
     assert!(!m.is_shown(b));
-    assert_eq!(m.switch_desk(d2), Some(Refocus::To(Some(b))));
+    assert_eq!(m.switch_desk(d2).map(|(r, _)| r), Some(Refocus::To(Some(b))));
     m.focus(Some(b));
     assert!(m.is_shown(b) && !m.is_shown(a));
     assert_eq!(m.switch_desk(d2), None);
@@ -455,4 +455,349 @@ fn a_desk_counts_the_windows_asking_for_attention() {
     m.move_to_desk(b, d2);
     m.get_mut(a).unwrap().urgent = true;
     assert_eq!(m.desk_urgent_count(d2), 1);
+}
+
+// ---- displays with Desks of their own -----------------------------------
+
+const LAPTOP: Rect = Rect::new(0, 0, 1440, 900);
+const MONITOR: Rect = Rect::new(1440, 0, 2560, 1440);
+
+/// A display with a 24pt menu bar.
+fn geom(output: &str, rect: Rect) -> ScreenGeom {
+    let usable = Rect::new(rect.x, rect.y + 24, rect.w, rect.h - 24);
+    ScreenGeom { output: output.into(), rect, usable, area: usable }
+}
+
+fn usable(rect: Rect) -> Rect {
+    geom("", rect).usable
+}
+
+fn both(m: &mut Model, primary: &str) -> Vec<DeskMove> {
+    m.sync_screens(&[geom("eDP-1", LAPTOP), geom("DP-1", MONITOR)], Some(primary))
+}
+
+/// A window at `rect`, laid out on the display it's on.
+fn put(m: &mut Model, app: &str, rect: Rect) -> WinId {
+    let id = m.insert(app, app, None, rect, None);
+    m.focus(Some(id));
+    let frame = m.screen_at(rect).unwrap().usable;
+    m.set_frame(id, frame);
+    id
+}
+
+fn ssd() -> Insets {
+    crate::decor::insets(true)
+}
+
+#[test]
+fn the_main_display_shows_the_current_desk_and_the_others_the_next() {
+    let mut m = model();
+    let (d1, d2) = (m.desks()[0].id, m.desks()[1].id);
+    let moves = both(&mut m, "DP-1");
+    assert_eq!(m.desk_on("DP-1"), Some(d1));
+    assert_eq!(m.desk_on("eDP-1"), Some(d2));
+    assert_eq!(m.current_desk(), d1);
+    assert_eq!(m.focused_screen().unwrap().output, "DP-1");
+    assert_eq!(moves.len(), 2);
+    assert!(moves.iter().all(|mv| mv.from.is_none()));
+    // Nothing changed, nothing moves.
+    assert!(both(&mut m, "DP-1").is_empty());
+}
+
+#[test]
+fn switching_desks_changes_only_the_display_with_the_focus() {
+    let mut m = model();
+    let (d1, d2, d3) = (m.desks()[0].id, m.desks()[1].id, m.desks()[2].id);
+    both(&mut m, "DP-1");
+    assert_eq!(m.focus_screen("eDP-1"), Some(Refocus::To(None)));
+    let l = put(&mut m, "laptop", Rect::new(100, 100, 400, 300));
+    assert_eq!(m.get(l).unwrap().desk, d2);
+    assert_eq!(m.focus_screen("DP-1"), Some(Refocus::To(None)), "the monitor's Desk is empty");
+    let a = put(&mut m, "monitor", Rect::new(1600, 100, 800, 600));
+    assert_eq!(m.get(a).unwrap().desk, d1);
+    assert!(m.is_shown(a) && m.is_shown(l), "both displays show their Desks");
+
+    let (r, moves) = m.switch_desk(d3).unwrap();
+    assert_eq!(moves, vec![DeskMove { output: "DP-1".into(), from: Some(d1), to: d3 }]);
+    assert_eq!(r, Refocus::To(None), "focus stays on its display, which shows an empty Desk");
+    assert!(!m.is_shown(a) && m.is_shown(l));
+    assert_eq!(m.desk_on("eDP-1"), Some(d2));
+    // Focusing the laptop's window takes the focus there.
+    m.focus(Some(l));
+    assert_eq!(m.current_desk(), d2);
+    assert_eq!(m.focused_screen().unwrap().output, "eDP-1");
+}
+
+#[test]
+fn a_desk_another_display_shows_swaps_and_scales_there_and_back_exactly() {
+    let mut m = model();
+    let (d1, d2) = (m.desks()[0].id, m.desks()[1].id);
+    both(&mut m, "DP-1");
+    m.focus_screen("eDP-1");
+    let l = put(&mut m, "laptop", Rect::new(100, 100, 400, 300));
+    m.set_fill(l, Some(true), usable(LAPTOP), ssd());
+    m.focus_screen("DP-1");
+    let r0 = Rect::new(1440 + 1, 24 + 25, 1280, 700);
+    let a = put(&mut m, "monitor", r0);
+    m.take_relaid();
+
+    // The laptop's Desk comes to the monitor (where the focus is), and the
+    // monitor's goes to the laptop.
+    let (_, moves) = m.switch_desk(d2).unwrap();
+    assert_eq!(moves.len(), 2);
+    assert_eq!((m.desk_on("DP-1"), m.desk_on("eDP-1")), (Some(d2), Some(d1)));
+    // The monitor's window, flush with the top left, is flush there on
+    // the laptop, at the laptop's proportions (1440/2560 wide, 876/1416
+    // tall, frames included).
+    let w = m.get(a).unwrap().rect;
+    let i = ssd();
+    assert_eq!((w.x - i.left, w.y - i.top), (0, 24), "{w:?}");
+    let fw = |r: Rect| r.w + i.left + i.right;
+    let fh = |r: Rect| r.h + i.top + i.bottom;
+    assert_eq!(fw(w), (fw(r0) as f64 * 1440.0 / 2560.0).round() as i32);
+    assert_eq!(fh(w), (fh(r0) as f64 * 876.0 / 1416.0).round() as i32);
+    // The laptop's filled window fills the monitor.
+    assert_eq!(m.get(l).unwrap().rect, usable(MONITOR).inset(i));
+    let mut relaid = m.take_relaid();
+    relaid.sort();
+    assert_eq!(relaid, vec![l, a]);
+
+    // And back: both exactly where they were.
+    m.switch_desk(d1).unwrap();
+    assert_eq!((m.desk_on("DP-1"), m.desk_on("eDP-1")), (Some(d1), Some(d2)));
+    assert_eq!(m.get(a).unwrap().rect, r0);
+    assert_eq!(m.get(l).unwrap().rect, usable(LAPTOP).inset(i));
+    assert!(m.get(a).unwrap().home.is_none());
+    // Unfilled on the laptop it goes back to its own place.
+    m.set_fill(l, Some(false), usable(LAPTOP), i);
+    assert_eq!(m.get(l).unwrap().rect, Rect::new(100, 100, 400, 300));
+}
+
+#[test]
+fn moving_a_window_on_another_display_forgets_where_it_was() {
+    let mut m = model();
+    let d2 = m.desks()[1].id;
+    both(&mut m, "DP-1");
+    let r0 = Rect::new(1700, 200, 900, 600);
+    let a = put(&mut m, "a", r0);
+    m.switch_desk(d2);
+    m.focus_screen("eDP-1");
+    let on_laptop = m.get(a).unwrap().rect;
+    assert!(LAPTOP.contains(on_laptop.x as f64, on_laptop.y as f64));
+    m.set_rect(a, Rect::new(50, 60, 500, 400));
+    m.focus_screen("DP-1");
+    m.switch_desk(m.desk_on("eDP-1").unwrap());
+    let back = m.get(a).unwrap().rect;
+    assert_ne!(back, r0, "moved since, it scales from its new place");
+    assert_eq!(back, scale_frame(Rect::new(50, 60, 500, 400), usable(LAPTOP), usable(MONITOR), ssd()));
+}
+
+#[test]
+fn a_display_that_goes_takes_its_desk_along_and_brings_it_back() {
+    let mut m = model();
+    let (d1, d2) = (m.desks()[0].id, m.desks()[1].id);
+    both(&mut m, "DP-1");
+    m.focus_screen("eDP-1");
+    let r1 = Rect::new(100, 100, 400, 300);
+    let l = put(&mut m, "laptop", r1);
+    m.focus_screen("DP-1");
+    let r0 = Rect::new(2000, 300, 1000, 800);
+    let a = put(&mut m, "monitor", r0);
+
+    // Unplugged with the focus on it: its Desk comes to the laptop, and
+    // the laptop's hides, its window where it was.
+    let moves = m.sync_screens(&[geom("eDP-1", LAPTOP)], Some("eDP-1"));
+    assert_eq!(moves, vec![DeskMove { output: "eDP-1".into(), from: Some(d2), to: d1 }]);
+    assert_eq!(m.current_desk(), d1);
+    assert!(m.is_shown(a) && !m.is_shown(l));
+    assert!(LAPTOP.contains(m.get(a).unwrap().rect.x as f64, m.get(a).unwrap().rect.y as f64));
+    assert_eq!(m.get(l).unwrap().rect, r1);
+
+    // Plugged back in: every Desk where it was, every window exactly.
+    let moves = both(&mut m, "DP-1");
+    assert_eq!(moves.len(), 2, "{moves:?}");
+    assert_eq!((m.desk_on("DP-1"), m.desk_on("eDP-1")), (Some(d1), Some(d2)));
+    assert_eq!(m.get(a).unwrap().rect, r0);
+    assert_eq!(m.get(l).unwrap().rect, r1);
+    assert!(m.is_shown(a) && m.is_shown(l));
+}
+
+#[test]
+fn a_display_without_the_focus_that_goes_hides_its_desk() {
+    let mut m = model();
+    let (d1, d2) = (m.desks()[0].id, m.desks()[1].id);
+    both(&mut m, "DP-1");
+    m.focus_screen("eDP-1");
+    let l = put(&mut m, "laptop", Rect::new(100, 100, 400, 300));
+    m.focus_screen("DP-1");
+    m.sync_screens(&[geom("DP-1", MONITOR)], Some("DP-1"));
+    assert_eq!(m.desk_on("DP-1"), Some(d1));
+    assert!(!m.is_shown(l));
+    assert_eq!(m.get(l).unwrap().rect, Rect::new(100, 100, 400, 300));
+    // Going to it brings it to the monitor, scaled.
+    m.switch_desk(d2);
+    assert!(m.is_shown(l));
+    assert!(MONITOR.contains(m.get(l).unwrap().rect.x as f64, m.get(l).unwrap().rect.y as f64));
+    // The laptop back: the monitor keeps what it was asked to show, and the
+    // laptop takes a hidden Desk.
+    both(&mut m, "DP-1");
+    assert_eq!((m.desk_on("DP-1"), m.desk_on("eDP-1")), (Some(d2), Some(d1)));
+    // Swapped back, the window is on the laptop exactly where it was.
+    m.switch_desk(d1);
+    assert_eq!(m.desk_on("eDP-1"), Some(d2));
+    assert_eq!(m.get(l).unwrap().rect, Rect::new(100, 100, 400, 300), "back on the laptop: {:?}", m.screens());
+}
+
+#[test]
+fn stepping_through_desks_passes_those_other_displays_show() {
+    let mut m = model();
+    let ids: Vec<DeskId> = m.desks().iter().map(|d| d.id).collect();
+    both(&mut m, "DP-1");
+    // The monitor shows 1 and has the focus; the laptop shows 2.
+    assert_eq!(m.neighbour_desk(true), ids[2]);
+    assert_eq!(m.neighbour_desk(false), ids[3]);
+    m.focus_screen("eDP-1");
+    assert_eq!(m.neighbour_desk(true), ids[2]);
+    assert_eq!(m.neighbour_desk(false), ids[3]);
+}
+
+#[test]
+fn a_window_dragged_to_another_display_joins_its_desk() {
+    let mut m = model();
+    let (d1, d2) = (m.desks()[0].id, m.desks()[1].id);
+    both(&mut m, "DP-1");
+    let a = put(&mut m, "a", Rect::new(1600, 100, 400, 300));
+    let d = m.insert("a", "Save?", None, Rect::new(1700, 150, 200, 100), Some(a));
+    assert_eq!(m.get(a).unwrap().desk, d1);
+    assert!(!m.adopt_into_screen(a), "still on its own display");
+    m.set_rect(a, Rect::new(200, 100, 400, 300));
+    assert!(m.adopt_into_screen(a));
+    assert_eq!(m.get(a).unwrap().desk, d2);
+    assert_eq!(m.get(d).unwrap().desk, d2, "its dialog goes along");
+    assert_eq!(m.get(a).unwrap().frame, Some(usable(LAPTOP)));
+    assert_eq!(m.current_desk(), d2, "the focus goes with it");
+}
+
+#[test]
+fn moving_a_window_to_a_desk_another_display_shows_puts_it_there() {
+    let mut m = model();
+    let d2 = m.desks()[1].id;
+    both(&mut m, "DP-1");
+    let a = put(&mut m, "a", Rect::new(1600, 100, 800, 600));
+    assert_eq!(m.move_to_desk(a, d2), Refocus::To(None));
+    assert!(m.is_shown(a));
+    let r = m.get(a).unwrap().rect;
+    assert!(LAPTOP.contains(r.x as f64, r.y as f64), "{r:?}");
+    assert_eq!(m.take_relaid(), vec![a]);
+}
+
+#[test]
+fn sticky_windows_show_on_their_own_display() {
+    let mut m = model();
+    let (d1, d2, d3) = (m.desks()[0].id, m.desks()[1].id, m.desks()[2].id);
+    both(&mut m, "DP-1");
+    let s = put(&mut m, "s", Rect::new(100, 100, 400, 300));
+    m.set_sticky(s, true);
+    m.focus_screen("eDP-1");
+    m.switch_desk(d3);
+    assert!(m.is_shown(s));
+    assert_eq!(m.desk_shown_with(s), Some(d3));
+    m.focus_screen("DP-1");
+    assert_eq!(m.current_desk(), d1);
+    assert_eq!(m.next_focus(None), None, "the laptop's sticky window isn't the monitor's to focus");
+    m.focus(Some(s));
+    assert_eq!(m.current_desk(), d3);
+    // Unstuck, it stays on the laptop's Desk.
+    m.set_sticky(s, false);
+    assert_eq!(m.get(s).unwrap().desk, d3);
+    assert_ne!(d2, d3);
+}
+
+#[test]
+fn removing_a_desk_a_display_shows_gives_it_another() {
+    let mut m = Model::new((1..=3).map(|n| (n.to_string(), None)));
+    let ids: Vec<DeskId> = m.desks().iter().map(|d| d.id).collect();
+    both(&mut m, "DP-1");
+    // DP-1 shows 1 and eDP-1 2; removing 2 sends its windows to 1, which
+    // the monitor shows, so the laptop gets 3.
+    m.focus_screen("eDP-1");
+    let l = put(&mut m, "laptop", Rect::new(100, 100, 400, 300));
+    m.remove_desk(ids[1]).unwrap();
+    assert_eq!(m.desk_on("eDP-1"), Some(ids[2]));
+    assert_eq!(m.get(l).unwrap().desk, ids[0]);
+    assert!(MONITOR.contains(m.get(l).unwrap().rect.x as f64, 200.0));
+    // Two displays keep two Desks.
+    assert_eq!(m.remove_desk(ids[2]), None);
+    assert!(!m.sync_desks(&[("1".into(), None)]) || m.desks().len() == 2);
+    assert_eq!(m.desks().len(), 2);
+}
+
+#[test]
+fn more_displays_than_desks_get_a_desk_each() {
+    let mut m = Model::new([("1".to_string(), None)]);
+    both(&mut m, "eDP-1");
+    assert_eq!(m.desks().len(), 2);
+    assert_ne!(m.desk_on("eDP-1"), m.desk_on("DP-1"));
+}
+
+#[test]
+fn a_model_from_before_brings_the_current_desks_windows_onto_the_main_display() {
+    let mut m = model();
+    // Desks used to span the displays: the current Desk had windows on both.
+    let a = m.insert("a", "a", None, Rect::new(100, 100, 400, 300), None);
+    let b = m.insert("b", "b", None, Rect::new(1600, 100, 400, 300), None);
+    both(&mut m, "DP-1");
+    assert!(m.is_shown(a) && m.is_shown(b));
+    let r = m.get(a).unwrap().rect;
+    assert!(MONITOR.contains(r.x as f64, r.y as f64), "from the laptop to the main display: {r:?}");
+    assert_eq!(m.get(b).unwrap().rect, Rect::new(1600, 100, 400, 300));
+}
+
+#[test]
+fn a_full_screen_window_on_another_display_stays_in_front_there() {
+    let mut m = model();
+    both(&mut m, "DP-1");
+    let v = put(&mut m, "video", Rect::new(1600, 100, 400, 300));
+    m.set_fullscreen(v, Some(true), MONITOR);
+    let o = put(&mut m, "other", Rect::new(1700, 200, 400, 300));
+    m.focus_screen("eDP-1");
+    put(&mut m, "laptop", Rect::new(100, 100, 400, 300));
+    // The monitor's last focus was "other", over the video.
+    let s = m.shown_stacking();
+    assert!(s.iter().position(|w| *w == o) > s.iter().position(|w| *w == v), "{s:?}");
+    m.focus(Some(v));
+    m.focus_screen("eDP-1");
+    let s = m.shown_stacking();
+    assert_eq!(s.last(), Some(&v), "focused last on its display, it covers it: {s:?}");
+}
+
+#[test]
+fn scaling_keeps_edges_and_the_same_area_gives_the_same_rect() {
+    let i = ssd();
+    let (from, to) = (usable(LAPTOP), usable(MONITOR));
+    for r in [Rect::new(1, 49, 1203, 850), Rect::new(333, 77, 640, 480), Rect::new(-50, 500, 300, 200)] {
+        assert_eq!(scale_frame(r, from, from, i), r);
+        assert_eq!(scale_frame(scale_frame(r, from, to, i), to, to, i), scale_frame(r, from, to, i));
+    }
+    // Flush with the right and bottom edges, it stays flush.
+    let r = Rect::new(800 + i.left, 400 + i.top, 640 - i.left - i.right, 500 - i.top - i.bottom);
+    let s = scale_frame(r, from, to, i).outset(i);
+    assert_eq!((s.right(), s.bottom()), (to.right(), to.bottom()));
+}
+
+#[test]
+fn a_bar_coming_to_a_display_fits_windows_rather_than_scaling_them() {
+    let mut m = model();
+    let bare = |output: &str, rect: Rect| ScreenGeom { output: output.into(), rect, usable: rect, area: rect };
+    m.sync_screens(&[bare("eDP-1", LAPTOP)], Some("eDP-1"));
+    let r = Rect::new(440, 262, 400, 300);
+    let a = put(&mut m, "a", r);
+    m.set_fill(a, Some(true), LAPTOP, ssd());
+    m.take_relaid();
+    // The shell's bar takes 24pt: the same display, its windows unscaled
+    // (the logic fits them to it), the free place to go back to as it was.
+    m.sync_screens(&[geom("eDP-1", LAPTOP)], Some("eDP-1"));
+    assert!(m.take_relaid().is_empty());
+    assert_eq!(m.get(a).unwrap().restore, Some(r));
+    assert_eq!(m.get(a).unwrap().frame, Some(usable(LAPTOP)));
 }

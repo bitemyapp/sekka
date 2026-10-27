@@ -8,9 +8,17 @@ use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::desktop::PopupKind;
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::reexports::wayland_protocols_misc::zwp_input_method_v2::server::{
+    zwp_input_method_keyboard_grab_v2::ZwpInputMethodKeyboardGrabV2,
+    zwp_input_method_manager_v2::ZwpInputMethodManagerV2,
+    zwp_input_method_v2::{self, ZwpInputMethodV2},
+    zwp_input_popup_surface_v2::ZwpInputPopupSurfaceV2,
+};
 use smithay::reexports::wayland_server::Resource;
+use smithay::reexports::wayland_server::backend::ClientId;
 use smithay::reexports::wayland_server::protocol::wl_data_source::WlDataSource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::{Client, DataInit, Dispatch, DisplayHandle};
 use smithay::utils::{Logical, Point, Rectangle};
 use smithay::wayland::compositor::{get_parent, with_states};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
@@ -18,7 +26,9 @@ use smithay::wayland::foreign_toplevel_list::{ForeignToplevelListHandler, Foreig
 use smithay::wayland::fractional_scale::{FractionalScaleHandler, with_fractional_scale};
 use smithay::wayland::idle_inhibit::IdleInhibitHandler;
 use smithay::wayland::idle_notify::{IdleNotifierHandler, IdleNotifierState};
-use smithay::wayland::input_method::{InputMethodHandler, PopupSurface as ImePopupSurface};
+use smithay::wayland::input_method::{
+    InputMethodHandler, InputMethodManagerState, InputMethodUserData, PopupSurface as ImePopupSurface,
+};
 use smithay::wayland::keyboard_shortcuts_inhibit::{
     KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState, KeyboardShortcutsInhibitor,
 };
@@ -36,6 +46,7 @@ use smithay::wayland::shell::xdg::ToplevelSurface;
 use smithay::wayland::shell::xdg::dialog::XdgDialogHandler;
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::tablet_manager::TabletSeatHandler;
+use smithay::wayland::text_input::TextInputSeat;
 use smithay::wayland::xdg_activation::{
     XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
 };
@@ -318,12 +329,50 @@ impl InputMethodHandler for State {
 
     fn popup_repositioned(&mut self, _surface: ImePopupSurface) {}
 
+    /// The window geometry of the surface with the text field: a window's,
+    /// or a menu's for a field in a menu (GTK's emoji search).
     fn parent_geometry(&self, parent: &WlSurface) -> Rectangle<i32, Logical> {
-        self.az
-            .window_for_surface(parent)
-            .and_then(|id| self.az.windows.get(&id))
-            .map(|m| m.window.geometry())
-            .unwrap_or_default()
+        if let Some(m) = self.az.window_for_surface(parent).and_then(|id| self.az.windows.get(&id)) {
+            return m.window.geometry();
+        }
+        self.az.popups.find_popup(parent).map(|p| p.geometry()).unwrap_or_default()
+    }
+}
+
+/// An input method's requests go to smithay, but for `commit`: what it
+/// committed reaches the text input whatever serial it gives, as under
+/// wlroots. smithay discards a commit whose serial isn't the number of
+/// `done` events the input method was sent (by sending the text input
+/// `done(0)`), and IBus 1.5's Wayland frontend counts from zero again on
+/// every global the registry announces: after a display is plugged in,
+/// every commit of it is stale. Foot drops a `done` whose serial isn't its
+/// own and so lost every letter typed through IBus (Return, which IBus
+/// passes through its virtual keyboard, still came); GTK applies them
+/// regardless.
+impl Dispatch<ZwpInputMethodV2, InputMethodUserData<State>> for State {
+    fn request(
+        state: &mut State,
+        client: &Client,
+        resource: &ZwpInputMethodV2,
+        request: zwp_input_method_v2::Request,
+        data: &InputMethodUserData<State>,
+        dh: &DisplayHandle,
+        data_init: &mut DataInit<'_, State>,
+    ) {
+        if let zwp_input_method_v2::Request::Commit { serial } = request {
+            tracing::trace!(serial, "input method commit");
+            state.az.seat.text_input().done(false);
+            return;
+        }
+        <InputMethodManagerState as Dispatch<ZwpInputMethodV2, InputMethodUserData<State>, State>>::request(
+            state, client, resource, request, data, dh, data_init,
+        )
+    }
+
+    fn destroyed(state: &mut State, client: ClientId, resource: &ZwpInputMethodV2, data: &InputMethodUserData<State>) {
+        <InputMethodManagerState as Dispatch<ZwpInputMethodV2, InputMethodUserData<State>, State>>::destroyed(
+            state, client, resource, data,
+        )
     }
 }
 
@@ -389,7 +438,18 @@ smithay::delegate_pointer_gestures!(State);
 smithay::delegate_cursor_shape!(State);
 smithay::delegate_single_pixel_buffer!(State);
 smithay::delegate_text_input_manager!(State);
-smithay::delegate_input_method_manager!(State);
+// smithay::delegate_input_method_manager! but for zwp_input_method_v2,
+// which State dispatches itself (above).
+smithay::reexports::wayland_server::delegate_global_dispatch!(State: [
+    ZwpInputMethodManagerV2: smithay::wayland::input_method::InputMethodManagerGlobalData
+] => InputMethodManagerState);
+smithay::reexports::wayland_server::delegate_dispatch!(State: [ZwpInputMethodManagerV2: ()] => InputMethodManagerState);
+smithay::reexports::wayland_server::delegate_dispatch!(State: [
+    ZwpInputMethodKeyboardGrabV2: smithay::wayland::input_method::InputMethodKeyboardUserData<State>
+] => InputMethodManagerState);
+smithay::reexports::wayland_server::delegate_dispatch!(State: [
+    ZwpInputPopupSurfaceV2: smithay::wayland::input_method::InputMethodPopupSurfaceUserData
+] => InputMethodManagerState);
 smithay::delegate_virtual_keyboard_manager!(State);
 smithay::delegate_security_context!(State);
 smithay::delegate_content_type!(State);

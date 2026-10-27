@@ -199,7 +199,7 @@ fn main() {
     if want("desk switches (12, sliding)") {
         stats(true);
         for i in 0..12 {
-            req(Request::SetDesk { desk: DeskSel::Index(if i % 2 == 0 { 2 } else { 1 }) });
+            req(Request::SetDesk { desk: DeskSel::Index(if i % 2 == 0 { 2 } else { 1 }), output: None });
             std::thread::sleep(Duration::from_millis(200));
         }
         report("desk switches (12, sliding)", &stats(true));

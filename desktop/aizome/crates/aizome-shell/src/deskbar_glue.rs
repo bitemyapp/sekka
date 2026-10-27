@@ -202,7 +202,10 @@ impl Shell {
                 self.arm_deskbar_hide(cx);
             }
         }
-        if self.deskbar_transient != self.deskbar_cfg.auto_hide
+        // The main display changed (or the Deskbar's kind did): it opens
+        // again, there.
+        let moved = self.deskbar_output.is_some() && self.deskbar_output != self.primary().map(|s| s.output.id);
+        if (moved || self.deskbar_transient != self.deskbar_cfg.auto_hide)
             && let Some(k) = self.deskbar.take()
         {
             cx.close_window(k);
@@ -248,6 +251,7 @@ impl Shell {
                 self.deskbar = Some(k);
                 self.deskbar_size = Some(size);
                 self.deskbar_transient = self.deskbar_cfg.auto_hide;
+                self.deskbar_output = Some(output);
             }
             (true, Some(k)) => {
                 let model = self.deskbar_model();

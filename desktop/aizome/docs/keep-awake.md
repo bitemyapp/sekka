@@ -30,7 +30,9 @@ it):
 - **Closing the lid** doesn't suspend the computer. The laptop's own
   screen still goes dark behind it (Aizome turns the panel off while the
   lid is closed, and on again when it opens), and monitors attached stay
-  on.
+  on. With an external display in the layout, the closed panel leaves
+  the layout and its focused Desk moves to that display. Opening the lid
+  restores the panel and its Desk.
 - **logind's idle action** (`IdleAction=` in logind.conf) doesn't run.
 - **Sleep asked for by anything else** is refused: other users' sessions,
   and the login screen's own suspend when it's left alone.
@@ -93,7 +95,10 @@ Awake. A headless or nested Aizome, or a test, leaves it alone.
 - `cargo test -p aizome-comp --test displays lid`: closing the lid turns
   the laptop's panel off and leaves other monitors on, turning the
   displays on doesn't light the panel behind it, and opening the lid
-  lights it again.
+  lights it again. Docked, the panel leaves the layout and its focused
+  Desk moves to the external display. Tests also cover docking while
+  closed, restoring live display settings, and keeping a manually
+  disabled panel disabled.
 - `cargo test -p aizome-shell --test panels`: the cup, its panel, the
   Battery panel's switch and the palette's command.
 - `nix build .#aizome-checks.settings` (*Keep Awake* part), against

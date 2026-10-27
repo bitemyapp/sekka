@@ -38,7 +38,7 @@
   },
   {
     "repository": "bitemyapp/aizome",
-    "revision": "2aa44dd7bf6467a7a2d557c1f6a93cb6f1deeba2",
+    "revision": "1a50f8ed25ee1f0e376fdb1ec52c8a74ab080d22",
     "destination": "desktop/aizome",
     "paths": [
       "."

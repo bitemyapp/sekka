@@ -156,16 +156,23 @@ impl InputExt for State {
                     }
                 }
                 Under::Surface(f, _, Owner::Layer) => {
-                    let interactive = self.az.outputs.iter().find_map(|o| {
+                    let layer = self.az.outputs.iter().find_map(|o| {
                         layer_map_for_output(o)
                             .layer_for_surface(&f.0, WindowSurfaceType::ALL)
-                            .map(|l| l.cached_state().keyboard_interactivity)
+                            .map(|l| (l.cached_state().keyboard_interactivity, l.layer()))
                     });
-                    if interactive == Some(KeyboardInteractivity::OnDemand) {
+                    // A click on another display's desktop gives it the
+                    // focus (not one on its bar: the bar shows the menus of
+                    // the app with the focus).
+                    if layer.is_some_and(|(_, l)| matches!(l, Layer::Background | Layer::Bottom)) {
+                        focus_screen_at(self, pos);
+                    }
+                    if layer.is_some_and(|(k, _)| k == KeyboardInteractivity::OnDemand) {
                         self.az.layer_focus = Some(f.0.clone());
                         self.update_keyboard_focus();
                     }
                 }
+                Under::Nothing => focus_screen_at(self, pos),
                 _ => {}
             }
         } else if !pressed
@@ -727,6 +734,13 @@ fn nearest_corner(r: crate::wm::Rect, p: Point<f64, Logical>) -> Edges {
     e |= if p.x < cx as f64 { Edges::LEFT } else { Edges::RIGHT };
     e |= if p.y < cy as f64 { Edges::TOP } else { Edges::BOTTOM };
     e
+}
+
+/// A press on a display's desktop: that display has the focus.
+fn focus_screen_at(st: &mut State, pos: Point<f64, Logical>) {
+    if let Some(o) = st.az.output_at(pos) {
+        st.focus_screen(&o.name());
+    }
 }
 
 /// A window closed: interactive state forgets it.

@@ -254,19 +254,34 @@ Notes for client authors:
 - **On and off**: `output-config` with `enabled` (or `enabled = false` in an
   `[[outputs]]` entry, or wlr-output-management) takes an output out of the
   layout and, on udev, disables its CRTC; it stays listed (`enabled:
-  false`) to be turned on again. Windows on it move to the main display.
+  false`) to be turned on again. Its Desk goes as a display's does when
+  unplugged (see Desks below), and comes back with it.
 - **Mirroring**: `mirror = "eDP-1"` in an `[[outputs]]` entry (or
   `mirror-output`) shows another output's picture, rendered afresh and
   scaled to fit with black bars, pointer included; the mirror has no place
   in the layout and no wl_output. It costs a second render of the source
   and a read-back per frame, and redraws when the source does.
 - **Main display**: `primary = true` (or `set-primary-output`); else the
-  first output. The pointer starts in its middle, and windows from outputs
-  that go move there; the IPC reports it for the shell's Deskbar.
+  first output. The pointer starts in its middle, it shows the first Desk
+  at login, and the current Desk comes there when its own display goes;
+  the IPC reports it, and the shell puts the Deskbar and banners there
+  (again, when it changes).
+- **Input methods**: IBus's Wayland frontend (and any other on
+  zwp_input_method_v2) types into text-input-v3 clients. Every commit an
+  input method makes reaches the text input with the text input's own
+  serial, whatever serial the input method gives, as under wlroots: IBus
+  1.5 counts its serial from zero again on every global the registry
+  announces (a display plugged in), and foot drops a `done` whose serial
+  isn't its own, so once smithay discarded such commits (sending
+  `done(0)`) nothing but Return reached foot.
 - **The lid**: while a laptop's lid is closed (libinput's lid switch), its
   own panel (`eDP-*`, `LVDS-*`, `DSI-*`) is off, its CRTC disabled as
   idleness does, and other monitors stay on. Opening the lid turns it on
-  again and counts as input. It stays in the layout, so nothing moves.
+  again and counts as input. With an external display in the layout,
+  the panel leaves the layout too: its focused Desk moves to the display
+  left. Opening the lid restores the panel's live mode, scale and position,
+  and its Desk returns. Undocking while closed restores its layout but
+  keeps it dark until opened. An explicitly disabled panel stays disabled.
   That matters when logind doesn't suspend on the lid (Keep Awake,
   docked); a panel another output mirrors stays on, since its frames
   drive the mirror's. `powered` in the IPC's outputs says which are off.
@@ -308,9 +323,36 @@ Notes for client authors:
   to show it, drag it away to tear it out (⌥-drag tears out the showing
   one); ⌥❖S stacks with the window behind; ⌥❖[ and ⌥❖] show the
   previous and next tab; IPC `stack`/`unstack`.
-- **Desks**: four by default (settings `[[desks]]`), global across
-  outputs; sticky windows show on all; switching slides over the motion
+- **Desks**: four by default (settings `[[desks]]`). Each display shows a
+  Desk of its own, as XMonad's screens show workspaces: the main display
+  starts on the first, the others on the next ones. The current Desk is
+  the one of the display with the focus, which moves with the focused
+  window and with a click on a display's desktop. ⌃❖N, a Desk clicked in
+  a bar's strip (on that display) or in the overview (on its display), and
+  `set-desk` (with `output`, on that display) show a Desk there; a Desk
+  another display shows swaps places with it (greedyView), and only those
+  two displays change. ⌃❖←/→ step past Desks other displays show. A new
+  window opens on the display with the focus (a dialog on its parent's),
+  and focus never leaves a display by itself: closing its last window
+  leaves it with none. A window dragged (or `move`d) mostly onto another
+  display joins the Desk there. Sticky windows show on every Desk, on
+  their display. Switching slides that display's Desk over the motion
   time (none in Austere or with reduced motion).
+- **Desks between displays**: a window remembers the usable area it was
+  laid out in. Shown on a display of another size or place, it scales to
+  it, its frame's edges keeping their places across the area (a window
+  flush with an edge stays flush; two side by side stay so), and fill,
+  split and full screen take that display's area; it keeps where it was
+  before (its home), so a display like the first puts it back exactly, to
+  the point, and others scale from there, without rounding piling up.
+  Moving or resizing it forgets its home. A display that goes takes its
+  Desk out of sight, unless it had the focus: then the Desk comes to the
+  main display, whose own hides. A display that comes back shows the
+  Desk it showed (taking it back from where it went, and giving that
+  display its own back); a new one shows the first Desk no display shows,
+  a Desk being added when there's none. Windows of Desks no display shows
+  keep their places for when one does. Every display keeps a Desk, so
+  removing Desks stops at one each.
 - **Overview** (⌃❖↑), **switcher** (❖Tab), **marking menu** (right press
   on a tab), **area screenshots** (❖⇧4; the shell borrows the picker with
   IPC `pick-area` to choose what to record, and `aizome-share-picker` to
@@ -391,6 +433,16 @@ nix develop .#aizome --command cargo test -p aizome-comp
   mirroring scaled and letterboxed, the main display, Night Light's IPC
   and schedule, the renderer setting, and a laptop's panel (a headless
   output named `eDP-1`) dark while its lid is closed.
+- `tests/screens.rs`: displays with Desks of their own: switching on one
+  leaves the other alone, a Desk another display shows swaps with it and
+  its window scales to the larger display and back exactly, a window
+  dragged by its tab to another display joins its Desk, and an unplugged
+  display's Desk comes along and goes back when it's plugged in again.
+  The model's rules (swaps, homes, hotplug, stepping, removing Desks) are
+  unit tests in `wm/tests.rs`.
+- `tests/input_method.rs`: an input method counting its serial as IBus
+  does types into a text input that checks serials as foot does, across a
+  display turned off and on.
 - `tests/protocols.rs`: wl_shm formats, shm buffers released after upload
   (GLES) or kept (pixman), drag and drop with an icon and actions.
 - `tests/chromium.rs`: a window opened the way Chromium and Electron
@@ -415,6 +467,14 @@ nix develop .#aizome --command cargo test -p aizome-comp
   popups): exclusive and on-demand keyboard interactivity, grabbing menus
   getting the keys and giving them back, menus closing for an exclusive
   surface or a click elsewhere, and the popup layer's stacking.
+- `tests/context_menus.rs`: an app with a text field and an input method
+  that grabs the keyboard while a field has it (as Telegram and ibus):
+  the field's context menu opening on a right-press, keeping the keys
+  once the input method lets go, and a field in the menu typing through
+  it; an input method that keeps its grab having the keys again after
+  the menu; another client's menu refused over the grab and the shell's
+  (serial 0, as for F10) opening; and a menu refused for a pointer grab
+  leaving the field and the input method be.
 - `tests/sidestep.rs`: a sidestep-ui client (`examples/sidestep_client`):
   server-side decorations, frame callbacks on the content subsurface, a
   layer-shell panel's exclusive zone, the session lock, a see-through

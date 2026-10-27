@@ -1,13 +1,15 @@
 //! Display power: every display off for idleness (`idle.rs`) or over IPC,
 //! and a laptop's own panel off while its lid is closed. Keep Awake blocks
 //! logind's lid handling, so without this a closed lid would leave the
-//! panel lit behind it all night; opening the lid lights it again. A
-//! display that's off is dark (on udev its CRTC is disabled, DPMS off) but
-//! keeps its place in the layout, and its next frame turns it back on.
+//! panel lit behind it all night; opening the lid lights it again.
+//! With another display in the layout, the closed panel leaves it, so
+//! neither focus nor a Desk is stranded behind the lid. Its configuration
+//! is restored when the lid opens or the last external display leaves.
 
 use smithay::output::Output;
-use tracing::info;
+use tracing::{info, warn};
 
+use crate::outputs::OutputChange;
 use crate::state::{Aizome, State};
 
 #[derive(Debug, Default)]
@@ -16,6 +18,8 @@ pub struct Power {
     pub monitors_off: bool,
     /// The laptop's lid is closed (libinput's lid switch).
     pub lid_closed: bool,
+    /// Panels temporarily disabled by docking, with their live settings.
+    pub lid_disabled: Vec<OutputChange>,
 }
 
 /// A laptop's own panel, by its connector's name (`eDP-1`, `LVDS-1`,
@@ -60,7 +64,43 @@ impl State {
     /// Turns each display off or on as it should be now: after a change
     /// to the power, and when outputs come, go or start mirroring.
     pub fn apply_power(&mut self) {
+        self.apply_lid_layout();
         self.backend.apply_power(&mut self.az);
+    }
+
+    fn apply_lid_layout(&mut self) {
+        let docked = self.az.outputs.iter().any(|o| !is_laptop_panel(&o.name()));
+        if !self.az.power.lid_closed || !docked {
+            for saved in std::mem::take(&mut self.az.power.lid_disabled) {
+                // The connector may have gone away while the lid was closed.
+                if self.az.known_output(&saved.name).is_some()
+                    && let Err(e) = self.configure_output(&saved)
+                {
+                    warn!(output = saved.name, "restoring the laptop panel: {e}");
+                }
+            }
+            return;
+        }
+        let panels: Vec<_> = self.az.outputs.iter().filter(|o| is_laptop_panel(&o.name())).cloned().collect();
+        for panel in panels {
+            // A mirror still needs its source's frames.
+            if self.az.mirrors.iter().any(|(_, source)| source == &panel) {
+                continue;
+            }
+            let saved = OutputChange {
+                name: panel.name(),
+                mode: panel.current_mode().map(|m| (m.size.w, m.size.h, Some(m.refresh))),
+                scale: Some(panel.current_scale().fractional_scale()),
+                position: Some(panel.current_location().into()),
+                transform: Some(panel.current_transform()),
+                enabled: Some(true),
+            };
+            let off = OutputChange { name: saved.name.clone(), enabled: Some(false), ..Default::default() };
+            match self.configure_output(&off) {
+                Ok(()) => self.az.power.lid_disabled.push(saved),
+                Err(e) => warn!(output = off.name, "disabling the closed laptop panel: {e}"),
+            }
+        }
     }
 }
 

@@ -264,6 +264,9 @@ pub struct BarModel {
     pub banner: Option<Banner>,
     /// This bar's output is the one the Deskbar hangs from.
     pub primary: bool,
+    /// This bar's output (its connector's name): the Desk it shows is the
+    /// one lit in its strip.
+    pub output: String,
     /// Something shared (the primary bar's systray shows it).
     pub sharing: Option<ShareBadge>,
     /// A screen recording going (the primary bar's systray shows it).
@@ -378,14 +381,20 @@ fn banner(b: &Banner) -> Element<BarMsg> {
     .into()
 }
 
-/// The Desks strip: `1 Mail  2 Build  3 Write  +`, bordered, the current
-/// Desk on `selection`.
+/// The Desks strip: `1 Mail  2 Build  3 Write  +`, bordered, the Desk this
+/// bar's display shows on `selection` (each display shows a Desk of its
+/// own), and one another display shows underlined. A click shows a Desk
+/// on this display.
 fn desks(model: &BarModel) -> Element<BarMsg> {
     let mut items: Vec<Element<BarMsg>> = Vec::new();
     let n = model.desks.len();
+    // A compositor that doesn't say where Desks show lights the current one.
+    let placed = model.desks.iter().any(|d| d.output.is_some());
     for (i, d) in model.desks.iter().enumerate() {
         let index = d.index;
-        let current = d.current;
+        let current = if placed { d.output.as_deref() == Some(model.output.as_str()) } else { d.current };
+        let elsewhere = placed && !current && d.output.is_some();
+        let output = model.output.clone();
         let renaming = model.renaming.as_ref().filter(|(r, _)| *r == index).map(|(_, s)| s.clone());
         if let Some(text) = &renaming {
             let num = index.to_string();
@@ -423,7 +432,7 @@ fn desks(model: &BarModel) -> Element<BarMsg> {
         let (num, nm) = (label_num.clone(), name.clone());
         let last = i + 1 == n;
         items.push(
-            drawn(0.0, 18.0, (&name, current, renaming.is_some(), last), move |cx| {
+            drawn(0.0, 18.0, (&name, current, elsewhere, renaming.is_some(), last), move |cx| {
                 let t = cx.theme();
                 let b = cx.bounds();
                 let (fg, numc) = if current {
@@ -432,6 +441,10 @@ fn desks(model: &BarModel) -> Element<BarMsg> {
                 } else {
                     if cx.is_hovered() {
                         cx.canvas.fill_rect(Rect::new(0.0, 0.0, b.x1, b.y1), t.hover(t.bar()));
+                    }
+                    if elsewhere {
+                        // Shown on another display: a click swaps it here.
+                        cx.canvas.fill_rect(Rect::new(5.0, b.y1 - 2.0, b.x1 - 6.0, b.y1 - 1.0), t.text3());
                     }
                     (t.text2(), t.text3())
                 };
@@ -467,7 +480,7 @@ fn desks(model: &BarModel) -> Element<BarMsg> {
                     w
                 }
             })
-            .on_click(BarMsg::Run(crate::actions::wm::set_desk(index)))
+            .on_click(BarMsg::Run(crate::actions::wm::set_desk_on(index, output)))
             .on_double_click(BarMsg::Run(Action::RenameDesk { index }))
             .on_right_click(move |p: Press| BarMsg::DeskMenu(index, p.at))
             .text(format!("{index} {name}"), SemanticRole::Tab)

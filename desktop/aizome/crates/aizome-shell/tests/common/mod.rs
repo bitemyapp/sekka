@@ -54,9 +54,17 @@ fn win(id: u64, app: &str, title: &str, pid: i32) -> WindowInfo {
 /// The boards' windows.
 pub fn snapshot() -> Snapshot {
     let desks = vec![
-        DeskInfo { index: 1, id: 1, name: "Mail".into(), windows: 1, current: false, folder: None },
-        DeskInfo { index: 2, id: 2, name: "Build".into(), windows: 2, current: false, folder: None },
-        DeskInfo { index: 3, id: 3, name: "Write".into(), windows: 4, current: true, folder: Some("~/work".into()) },
+        DeskInfo { index: 1, id: 1, name: "Mail".into(), windows: 1, current: false, folder: None, output: None },
+        DeskInfo { index: 2, id: 2, name: "Build".into(), windows: 2, current: false, folder: None, output: None },
+        DeskInfo {
+            index: 3,
+            id: 3,
+            name: "Write".into(),
+            windows: 4,
+            current: true,
+            folder: Some("~/work".into()),
+            output: None,
+        },
     ];
     let mut roadmap = win(2, "org.aizome.Sumi", "roadmap.md", 100);
     roadmap.minimised = true;

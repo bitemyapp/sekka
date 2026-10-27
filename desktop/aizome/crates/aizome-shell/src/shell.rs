@@ -309,6 +309,9 @@ pub struct Shell {
     pub(crate) deskbar_drag: Option<(String, Point)>,
     pub(crate) deskbar_visibility: crate::deskbar_glue::Visibility,
     pub(crate) deskbar_transient: bool,
+    /// The output the Deskbar was opened on: it opens again on the main
+    /// display when that changes.
+    pub(crate) deskbar_output: Option<u32>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -436,6 +439,7 @@ impl Shell {
             deskbar_drag: None,
             deskbar_visibility: Default::default(),
             deskbar_transient: false,
+            deskbar_output: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -496,16 +500,27 @@ impl Shell {
 
     // Outputs and surfaces.
 
-    /// The output the Deskbar and banners show on: the one at the layout's
-    /// origin, else the first.
+    /// The output the Deskbar and banners show on: the main display, as the
+    /// compositor says (`primary = true` in the settings, or the session's
+    /// choice); before it has said, the one at the layout's origin, else the
+    /// first.
     pub fn primary(&self) -> Option<&Screen> {
-        self.screens.iter().find(|s| s.output.frame.x0 == 0.0 && s.output.frame.y0 == 0.0).or(self.screens.first())
+        let main = self.wm.outputs.iter().find(|o| o.primary && o.enabled).map(|o| o.name.as_str());
+        main.and_then(|n| self.screen_named(n))
+            .or_else(|| self.screens.iter().find(|s| s.output.frame.x0 == 0.0 && s.output.frame.y0 == 0.0))
+            .or(self.screens.first())
     }
 
-    /// The output with the focused window, else the primary.
+    /// The output with the focus: the focused window's, else the one
+    /// showing the current Desk (each display shows a Desk of its own, and
+    /// the focus is on one of them), else the primary.
     pub fn focused_screen(&self) -> Option<&Screen> {
         let name = self.wm.focused_window().and_then(|w| w.output.clone());
-        name.and_then(|n| self.screens.iter().find(|s| s.name() == n)).or(self.primary())
+        name.and_then(|n| self.screen_named(&n))
+            .or_else(|| {
+                self.wm.current_desk_info().and_then(|d| d.output.as_deref()).and_then(|n| self.screen_named(n))
+            })
+            .or(self.primary())
     }
 
     pub fn screen_named(&self, name: &str) -> Option<&Screen> {
@@ -625,6 +640,7 @@ impl Shell {
             unread: self.notes.unread_count(),
             banner: if primary { self.banner_view() } else { None },
             primary,
+            output: screen.name(),
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
         }
@@ -1112,6 +1128,8 @@ impl Shell {
         match e {
             IpcEvent::Connected(s) => {
                 self.wm.reset(s.0);
+                // Which display is the main one: the Deskbar goes there.
+                self.sync_screens(cx.outputs(), cx);
                 // Also after a shell replacement: the desktop's theme may
                 // already be Day, so no theme-change event will arrive.
                 self.follow_foot(self.wm.windows.values().filter_map(|w| w.pid));
@@ -1139,6 +1157,8 @@ impl Shell {
                     Event::NightLightChanged { state } => self.night = Some(state),
                     Event::AreaPicked { tag, area, output, .. } => self.area_picked(&tag, area, output.as_deref(), cx),
                     Event::SharesChanged { shares } => self.shares_changed(shares),
+                    // Another main display: the Deskbar goes there.
+                    Event::OutputsChanged { .. } => self.sync_screens(cx.outputs(), cx),
                     _ => {}
                 }
             }
@@ -1155,9 +1175,11 @@ impl Shell {
 
     fn binding(&mut self, action: &str, pointer: Option<(f64, f64)>, output: Option<String>, cx: &mut Cx<Msg>) {
         match action {
-            "toolchest" => self.open_toolchest(output.as_deref(), cx),
+            // On the bar of the display with the focus, where the keys are
+            // (as the palette opens there), wherever the pointer is.
+            "toolchest" => self.open_toolchest(None, cx),
             "menu-bar" => {
-                self.focus_menu_bar(output.as_deref(), cx);
+                self.focus_menu_bar(None, cx);
             }
             "palette" => self.toggle_palette(None, String::new(), cx),
             "lock" => self.lock(cx),
@@ -2255,5 +2277,139 @@ mod tests {
         assert!(is_real_session(None, Some("foo:aizome")));
         assert!(!is_real_session(None, Some("Hyprland")));
         assert!(!is_real_session(None, None));
+    }
+
+    // ---- two displays, each showing a Desk of its own ------------------
+
+    /// The laptop's panel at the layout's origin, a monitor right of it.
+    fn two_displays() -> Vec<aizome_kit::Output> {
+        let out = |id: u32, name: &str, x: f64, w: f64, h: f64| aizome_kit::Output {
+            id,
+            name: name.into(),
+            connector: Some(name.into()),
+            description: None,
+            make: String::new(),
+            model: String::new(),
+            frame: Rect::new(x, 0.0, x + w, h),
+            scale: 2.0,
+            integer_scale: 2,
+            physical_size: None,
+            refresh_hz: 60.0,
+            work_area: None,
+        };
+        vec![out(1, "eDP-1", 0.0, 1440.0, 900.0), out(2, "DP-1", 1440.0, 2560.0, 1440.0)]
+    }
+
+    fn infos(primary: &str) -> Vec<OutputInfo> {
+        [("eDP-1", 0, 1440, 900), ("DP-1", 1440, 2560, 1440)]
+            .into_iter()
+            .map(|(name, x, w, h)| OutputInfo {
+                name: name.into(),
+                enabled: true,
+                primary: name == primary,
+                scale: 2.0,
+                logical: aizome_ipc::Rect::new(x, 0, w, h),
+                usable: aizome_ipc::Rect::new(x, 24, w, h - 24),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    /// Mail, Build and Write: the monitor shows `monitor`, the laptop
+    /// `laptop`, and `current` has the focus.
+    fn desks(monitor: u32, laptop: u32, current: u32) -> Vec<aizome_ipc::DeskInfo> {
+        ["Mail", "Build", "Write"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let index = i as u32 + 1;
+                aizome_ipc::DeskInfo {
+                    index,
+                    id: index as u64,
+                    name: name.into(),
+                    current: index == current,
+                    output: match index {
+                        i if i == monitor => Some("DP-1".into()),
+                        i if i == laptop => Some("eDP-1".into()),
+                        _ => None,
+                    },
+                    ..Default::default()
+                }
+            })
+            .collect()
+    }
+
+    fn connected(primary: &str, desks: Vec<aizome_ipc::DeskInfo>) -> Msg {
+        let current_desk = desks.iter().find(|d| d.current).map_or(1, |d| d.index);
+        let s = crate::wm::Snapshot { desks, current_desk, outputs: infos(primary), ..Default::default() };
+        Msg::Ipc(IpcEvent::Connected(Box::new(crate::ipc::SnapshotBox(s))))
+    }
+
+    fn two_displays_shell() -> (aizome_kit::testing::Harness<Shell>, std::sync::mpsc::Receiver<(Request, Option<u64>)>)
+    {
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(Options::default()));
+        let (ipc, requests) = Ipc::recording();
+        h.program_mut().ipc = ipc;
+        h.set_outputs(two_displays());
+        (h, requests)
+    }
+
+    #[test]
+    fn the_deskbar_shows_on_the_main_display_and_follows_it() {
+        let (mut h, _) = two_displays_shell();
+        // Before the compositor says, the display at the layout's origin.
+        assert_eq!(h.program().deskbar_output, Some(1));
+        let first = h.program().deskbar;
+        h.send(connected("DP-1", desks(1, 2, 1)));
+        assert_eq!(h.program().primary().map(|s| s.name()).as_deref(), Some("DP-1"));
+        assert_eq!(h.program().deskbar_output, Some(2), "on the main display, right of the origin");
+        assert!(h.program().deskbar.is_some() && h.program().deskbar != first, "opened again there");
+        // Another main display chosen (Settings, `aizomectl primary`).
+        h.send(Msg::Ipc(IpcEvent::Event(Event::OutputsChanged { outputs: infos("eDP-1") })));
+        assert_eq!(h.program().deskbar_output, Some(1));
+        let bars: Vec<bool> = h.program().screens.iter().map(|s| h.program().bar_model(s).primary).collect();
+        assert_eq!(bars, vec![true, false], "the laptop's bar is the main one now");
+    }
+
+    #[test]
+    fn with_no_window_focused_the_palette_opens_on_the_display_with_the_focus() {
+        let (mut h, _) = two_displays_shell();
+        // The focus is on the laptop (showing Build), the main display is
+        // the monitor.
+        h.send(connected("DP-1", desks(1, 2, 2)));
+        assert_eq!(h.program().focused_screen().map(|s| s.name()).as_deref(), Some("eDP-1"));
+        h.send(Msg::Ipc(IpcEvent::Event(Event::Binding {
+            action: "palette".into(),
+            pointer: None,
+            output: Some("DP-1".into()),
+        })));
+        assert!(h.program().palette.is_some());
+        assert_eq!(h.program().palette_ahead.output, 1, "on the laptop, where the keys are, not under the pointer");
+        // The focus goes to the monitor.
+        h.send(Msg::Ipc(IpcEvent::Event(Event::DesksChanged { desks: desks(1, 2, 1) })));
+        assert_eq!(h.program().focused_screen().map(|s| s.name()).as_deref(), Some("DP-1"));
+    }
+
+    #[test]
+    fn each_bar_lights_the_desk_its_display_shows_and_shows_desks_there() {
+        let (mut h, requests) = two_displays_shell();
+        h.send(connected("DP-1", desks(3, 1, 3)));
+        let models: Vec<BarModel> = h.program().screens.iter().map(|s| h.program().bar_model(s)).collect();
+        assert_eq!(models.iter().map(|m| m.output.as_str()).collect::<Vec<_>>(), ["eDP-1", "DP-1"]);
+        for m in &models {
+            let lit: Vec<&str> =
+                m.desks.iter().filter(|d| d.output.as_deref() == Some(&m.output)).map(|d| d.name.as_str()).collect();
+            assert_eq!(lit, [if m.output == "DP-1" { "Write" } else { "Mail" }]);
+        }
+        // Build, on no display, from the laptop's bar: shown there.
+        let laptop = h.program().screens[0].bar.unwrap();
+        h.resize(laptop, aizome_kit::Size::new(1440.0, crate::menubar::HEIGHT));
+        while requests.try_recv().is_ok() {}
+        assert!(h.click_text(laptop, "2 Build"), "{:?}", h.texts(laptop));
+        let sent: Vec<Request> = requests.try_iter().map(|(r, _)| r).collect();
+        assert!(
+            sent.contains(&Request::SetDesk { desk: aizome_ipc::DeskSel::Index(2), output: Some("eDP-1".into()) }),
+            "{sent:?}"
+        );
     }
 }

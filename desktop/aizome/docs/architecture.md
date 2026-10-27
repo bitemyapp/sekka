@@ -92,8 +92,8 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ❖Tab, ❖⇧Tab | Switcher: apps, then (↓ or keep holding) that app's windows |
 | ❖` | Next window of this app |
 | ❖H, ❖⌥H, ❖M | Hide app, hide others, minimise window |
-| ⌃❖1…9 | Go to Desk N; with ⇧, take the window along |
-| ⌃❖←, ⌃❖→ | Previous, next Desk; with ⇧, take the window along |
+| ⌃❖1…9 | Show Desk N on the display with the focus (one another display shows swaps with it); with ⇧, take the window along |
+| ⌃❖←, ⌃❖→ | Previous, next Desk on this display (past those other displays show); with ⇧, take the window along |
 | ⌃❖↑ | Desks overview |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | Fill, park (minimise), split left, split right: the marking menu's verbs |
 | ⌥❖S | Stack with the window behind |

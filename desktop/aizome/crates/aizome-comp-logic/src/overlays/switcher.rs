@@ -57,7 +57,8 @@ pub fn open(state: &mut State, reverse: bool, held: bool) {
         state.az.queue_redraw(&o);
         return;
     }
-    let Some(output) = state.az.active_output() else { return };
+    // On the display with the focus, where the keys are.
+    let Some(output) = crate::actions::desk_output(state, state.lg.r().wm.current_desk()) else { return };
     let l = state.lg.m();
     let apps: Vec<App> =
         l.wm.apps_mru()

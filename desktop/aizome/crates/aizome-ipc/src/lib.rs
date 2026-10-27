@@ -187,9 +187,12 @@ pub enum Request {
         #[serde(default)]
         follow: bool,
     },
-    /// Switches to a Desk.
+    /// Shows a Desk on a display (the one with the focus by default) and
+    /// makes it current; one another display shows swaps places with it.
     SetDesk {
         desk: DeskSel,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
     },
     AddDesk {
         name: String,
@@ -704,7 +707,12 @@ pub struct DeskInfo {
     pub name: String,
     pub folder: Option<String>,
     pub windows: u32,
+    /// The Desk of the display with the focus.
     pub current: bool,
+    /// The display showing it (none while it's hidden): each display
+    /// shows a Desk of its own.
+    #[serde(default)]
+    pub output: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -1048,7 +1056,7 @@ mod tests {
         let r: Request = serde_json::from_str(r#"{"request":"set-audible","pids":[42,7]}"#).unwrap();
         assert_eq!(r, Request::SetAudible { pids: vec![42, 7] });
         let r: Request = serde_json::from_str(r#"{"request":"set-desk","desk":"Mail"}"#).unwrap();
-        assert_eq!(r, Request::SetDesk { desk: DeskSel::Name("Mail".into()) });
+        assert_eq!(r, Request::SetDesk { desk: DeskSel::Name("Mail".into()), output: None });
         let r: Request = serde_json::from_str(r#"{"request":"hide-app","app_id":"foot"}"#).unwrap();
         assert_eq!(r, Request::HideApp { app: AppSel { app_id: Some("foot".into()), pid: None } });
         let r: Request = serde_json::from_str(r#"{"request":"spawn","argv":["foot"]}"#).unwrap();

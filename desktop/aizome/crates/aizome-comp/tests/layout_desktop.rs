@@ -111,7 +111,7 @@ fn palette_reveals_running_apps_on_their_desks() {
     assert!(matches!(c.request(Request::Desks), Response::Desks { current: 2, .. }));
     // A sticky window is brought forward without leaving the current Desk.
     c.ok(Request::Sticky { id: Some(wa.id), state: Some(true) });
-    c.ok(Request::SetDesk { desk: DeskSel::Index(1) });
+    c.ok(Request::SetDesk { desk: DeskSel::Index(1), output: None });
     c.ok(Request::Focus { id: wb.id });
     activate();
     assert!(matches!(c.request(Request::Desks), Response::Desks { current: 1, .. }));

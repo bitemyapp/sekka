@@ -7,22 +7,13 @@
 
 mod common;
 
-use aizome_ipc::{Request, Synthetic, WindowInfo};
+use aizome_ipc::{Request, Synthetic};
 use common::layer::*;
 use common::*;
 
 const KEY_ESC: u32 = 1;
 const KEY_F: u32 = 33;
 const KEY_O: u32 = 24;
-
-fn tap(c: &Compositor, key: &str) {
-    c.ok(Request::Synthesize {
-        events: vec![
-            Synthetic::Key { key: key.into(), pressed: true },
-            Synthetic::Key { key: key.into(), pressed: false },
-        ],
-    });
-}
 
 fn motion(c: &Compositor, x: f64, y: f64) {
     c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x, y }] });
@@ -32,10 +23,6 @@ fn click(c: &Compositor, x: f64, y: f64) {
     c.ok(Request::Synthesize {
         events: vec![Synthetic::PointerMotion { x, y }, Synthetic::Click { button: "left".into() }],
     });
-}
-
-fn centre(w: &WindowInfo) -> (f64, f64) {
-    ((w.geometry.x + w.geometry.w / 2) as f64, (w.geometry.y + w.geometry.h / 2) as f64)
 }
 
 /// A compositor with a focused window, and a shell client.

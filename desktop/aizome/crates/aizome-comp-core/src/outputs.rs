@@ -268,7 +268,7 @@ pub fn info(az: &Aizome, output: &Output) -> OutputInfo {
         logical,
         usable,
         physical_size_mm: (props.size.w, props.size.h),
-        powered: az.out.get(output).is_none_or(|o| o.powered),
+        powered: enabled && az.out.get(output).is_none_or(|o| o.powered),
         primary: az.primary_output().as_ref() == Some(output),
         mirror: mirror.map(|s| s.name()),
         gamma: az.out.get(output).is_some_and(|o| o.gamma),
@@ -341,6 +341,10 @@ impl crate::state::State {
             return self.backend.configure_output(&mut self.az, &rest);
         }
         self.backend.configure_output(&mut self.az, change)?;
+        if change.enabled == Some(false) {
+            // An explicit disable while docked stays disabled on lid-open.
+            self.az.power.lid_disabled.retain(|saved| saved.name != change.name);
+        }
         if change.enabled == Some(true) {
             self.update_night_light(true);
         }

@@ -27,12 +27,14 @@ use smithay::utils::{Logical, Point, Rectangle, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, add_blocker,
-    add_pre_commit_hook, get_parent, is_sync_subsurface, with_states,
+    add_pre_commit_hook, get_parent, get_role, is_sync_subsurface, with_states,
 };
 use smithay::wayland::dmabuf::get_dmabuf;
+use smithay::wayland::input_method::InputMethodSeat;
 use smithay::wayland::session_lock::{LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker};
 use smithay::wayland::shell::wlr_layer::{
-    Layer, LayerSurface as WlrLayerSurface, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState,
+    LAYER_SURFACE_ROLE, Layer, LayerSurface as WlrLayerSurface, LayerSurfaceData, WlrLayerShellHandler,
+    WlrLayerShellState,
 };
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::wayland::shell::xdg::{
@@ -456,9 +458,9 @@ impl XdgShellHandler for State {
         }
         // A grabbing popup of a toplevel or layer surface starts a new
         // chain of menus: one already open closes (rather than the client
-        // getting an error for not nesting it).
-        let parent_is_root = surface.get_parent_surface().as_ref() == Some(&root);
-        if parent_is_root && self.az.popup_grab.as_ref().is_some_and(|g| g.live()) {
+        // getting an error for not nesting it), and one smithay has closed
+        // lets go of the keyboard.
+        if surface.get_parent_surface().as_ref() == Some(&root) {
             self.dismiss_popup_grab();
         }
         let mut grab = match self.az.popups.grab_popup(Focus(root.clone()), kind, &seat, serial) {
@@ -469,24 +471,41 @@ impl XdgShellHandler for State {
             }
         };
         debug!(target: "aizome::focus", root = ?root.id(), "popup grab");
-        if let Some(keyboard) = seat.get_keyboard() {
-            if keyboard.is_grabbed()
-                && !(keyboard.has_grab(serial) || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
-            {
-                grab.ungrab(PopupUngrabStrategy::All);
-                return;
-            }
-            keyboard.set_focus(self, grab.current_grab(), serial);
-            keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+        // Refused or not, decided before anything changes: a refused grab
+        // leaves the keyboard and the pointer as they were.
+        let keyboard = seat.get_keyboard();
+        let pointer = seat.get_pointer();
+        let chain = [serial, grab.previous_serial().unwrap_or(serial)];
+        let keyboard_taken = keyboard.as_ref().is_some_and(|k| k.is_grabbed() && !chain.iter().any(|&s| k.has_grab(s)));
+        // An input method holds the keyboard while a text field has it
+        // (ibus does). A menu of the client typed into or pointed at (the
+        // field's context menu), or of a layer surface (the shell's, for a
+        // binding: it could take the keys outright anyway), opens over that
+        // grab and leaves it be; the menu takes the keyboard once the input
+        // method lets go (`check_popup_grab`).
+        let over_input_method = keyboard_taken && seat.input_method().keyboard_grabbed() && {
+            let same_client = |f: Option<Focus>| f.is_some_and(|f| f.0.id().same_client_as(&root.id()));
+            get_role(&root) == Some(LAYER_SURFACE_ROLE)
+                || same_client(keyboard.as_ref().and_then(|k| k.current_focus()))
+                || same_client(pointer.as_ref().and_then(|p| p.current_focus()))
+        };
+        if keyboard_taken && !over_input_method {
+            debug!(target: "aizome::focus", "popup grab refused: another grab has the keyboard");
+            grab.ungrab(PopupUngrabStrategy::All);
+            return;
         }
-        if let Some(pointer) = seat.get_pointer() {
-            if pointer.is_grabbed()
-                && !(pointer.has_grab(serial)
-                    || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
-            {
-                grab.ungrab(PopupUngrabStrategy::All);
-                return;
+        if pointer.as_ref().is_some_and(|p| p.is_grabbed() && !chain.iter().any(|&s| p.has_grab(s))) {
+            debug!(target: "aizome::focus", "popup grab refused: another grab has the pointer");
+            grab.ungrab(PopupUngrabStrategy::All);
+            return;
+        }
+        if let Some(keyboard) = keyboard {
+            keyboard.set_focus(self, grab.current_grab(), serial);
+            if !over_input_method {
+                keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
             }
+        }
+        if let Some(pointer) = pointer {
             pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, PointerFocusMode::Keep);
         }
         self.az.popup_grab = Some(crate::focus::PopupGrabbed { grab, root, dismissed: false });

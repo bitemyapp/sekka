@@ -208,7 +208,7 @@ fn desks_hide_and_show_windows() {
     let g = wa.geometry;
     let img = c.screenshot();
     assert_px(&img, g.x + 10, g.y + 10, rgb(0xcc2222), "on desk 1");
-    c.ok(Request::SetDesk { desk: DeskSel::Index(2) });
+    c.ok(Request::SetDesk { desk: DeskSel::Index(2), output: None });
     c.settle();
     let img = c.screenshot();
     assert_px(&img, g.x + 10, g.y + 10, rgb(DESKTOP), "gone on desk 2");
