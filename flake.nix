@@ -18,6 +18,15 @@
   inputs.superluminal.inputs.nixpkgs.follows = "applications";
   inputs.tracy.url = "github:bitemyapp/tracy-flake";
   inputs.tracy.inputs.nixpkgs.follows = "applications";
+  # Uta, the YouTube Music client, as source: Sekka builds it against
+  # Aizome's kit from this checkout (nix/uta.nix), not the Aizome its own
+  # lock names. Pinned by revision, as Sidestep is, so the nightly's input
+  # update doesn't move it: a Uta that needs a different Aizome would fail
+  # the nightly's checks and hold back every other input.
+  inputs.uta = {
+    url = "github:bitemyapp/uta/7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00";
+    flake = false;
+  };
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
@@ -44,7 +53,12 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) superluminal tracy;
+        inherit (externalInputs)
+          applications
+          superluminal
+          tracy
+          uta
+          ;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -179,8 +193,8 @@
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
-        # The catalog installs this same package (nix/components.nix).
-        inherit (inputs.kakehashi.packages.${system}) kakehashi;
+        # The catalog installs these same packages (nix/components.nix).
+        inherit (inputs.catalog.packages.${system}) kakehashi uta;
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
