@@ -760,7 +760,8 @@ esac
             }
             let record = f.root.join("record");
             let imports = f.root.join("imports");
-            let launcher = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../desktop/aizome/session/aizome-session");
+            let launcher =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../desktop/aizome/session/aizome-session");
             let result = std::process::Command::new("sh")
                 .arg(launcher)
                 .arg("--no-login-shell")
