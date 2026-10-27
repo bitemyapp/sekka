@@ -31,6 +31,7 @@ fn every_pane() {
         "general.about",
         "general.software-update",
         "general.storage",
+        "general.startup",
         "general.datetime",
         "general.language",
         "general.default-apps",

@@ -235,6 +235,8 @@ impl Model {
             let written = text.as_deref().and_then(|text| {
                 if choice.many {
                     edit::string_list(text, &path).ok().flatten()
+                } else if choice.boolean {
+                    edit::bool_value(text, &path).ok().flatten().map(|b| vec![b.to_string()])
                 } else {
                     edit::string_value(text, &path).ok().flatten().map(|v| vec![v])
                 }

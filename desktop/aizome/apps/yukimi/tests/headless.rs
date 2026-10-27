@@ -541,6 +541,37 @@ fn a_launch_proposes_and_changes_nothing_by_itself() {
 }
 
 #[test]
+fn settei_proposes_the_boot_splash_and_apply_writes_it() {
+    let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let (mut h, w, ran) = sample(WORKS);
+    // What Settei's General → Startup launches.
+    h.send(Msg::Launched(args(&["--choose", "calamares.bootSplash.enable=true"])));
+    assert_eq!(h.program().page, Page::Desktops);
+    assert_eq!(h.program().choice_changes(), [("calamares.bootSplash.enable".to_owned(), vec!["true".to_owned()])]);
+    for text in ["Boot splash", "On", "chosen", "Off", "current"] {
+        assert!(h.texts(w).iter().any(|t| t.eq_ignore_ascii_case(text)), "{text}: {:?}", h.texts(w));
+    }
+    assert!(ran.lock().unwrap().is_empty(), "proposing changes nothing");
+    h.send(Msg::ApplyChoices);
+    let body = h.texts(w).into_iter().find(|t| t.starts_with("Boot splash:")).expect("what changes");
+    assert!(body.contains("Boot splash: On, instead of Off."), "{body}");
+    assert!(click_last(&mut h, w, "Apply"));
+    let expected = Operation::Choose {
+        choices: vec![("calamares.bootSplash.enable".into(), vec!["true".into()])],
+        what: "the boot splash".into(),
+    };
+    assert_eq!(ran.lock().unwrap().as_slice(), std::slice::from_ref(&expected));
+    assert_eq!(
+        expected.helper_args(None),
+        ["change", "--choose", "calamares.bootSplash.enable=true", "--mode", "auto"]
+    );
+    // Only true or false.
+    h.send(Msg::Launched(args(&["--choose", "calamares.bootSplash.enable=yes"])));
+    let notes: Vec<&str> = h.program().notes.iter().map(|(_, n)| n.as_str()).collect();
+    assert!(notes.iter().any(|n| n.contains("\"yes\" isn't one of the choices")), "{notes:?}");
+}
+
+#[test]
 fn a_system_without_choices_offers_no_desktops_page() {
     let mut model = aizome_yukimi::fixture::model();
     model.setup.facts.choices.clear();

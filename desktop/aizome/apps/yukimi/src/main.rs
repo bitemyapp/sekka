@@ -13,7 +13,7 @@ const HELP: &str = "Usage: aizome-yukimi [--page PAGE] [--choose SETTING=VALUE[,
 Yukimi (雪見), Aizome's software manager for Sekka's NixOS: see what is
 installed and why, find what is available, install it for yourself or for
 everyone, update, go back to an earlier version, keep the store tidy, and
-choose the system's desktops and login screen.
+choose the system's desktops, login screen and boot splash.
 
   --page PAGE   overview, installed, discover, updates, history, storage or
                 desktops

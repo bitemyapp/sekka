@@ -41,7 +41,7 @@ pub enum Page {
     Updates,
     History,
     Storage,
-    /// The system's own choices: its desktops and login screen.
+    /// The system's own choices: its desktops, login screen and boot splash.
     Desktops,
 }
 
