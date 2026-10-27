@@ -136,6 +136,8 @@
             pkgs.nixfmt
             pkgs.python3
             pkgs.pkg-config
+            # Tatami's Sound window links libpulse for its level meter.
+            pkgs.libpulseaudio
           ];
         };
       };
@@ -198,6 +200,7 @@
           displays
           network
           bluetooth
+          sound
           activity
           wallpapers
           ;
@@ -545,6 +548,11 @@
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
         bluetooth = self.packages.${system}.bluetooth;
+        sound = self.packages.${system}.sound;
+        sound-integration = import ./nix/sound-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) sound;
+        };
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
@@ -645,6 +653,7 @@
                 ${./desktop/tatami/activity/data/org.tatami.Activity.desktop} \
                 ${./desktop/tatami/network/data/org.tatami.Network.desktop} \
                 ${./desktop/tatami/bluetooth/data/org.tatami.Bluetooth.desktop} \
+                ${./desktop/tatami/sound/data/org.tatami.Sound.desktop} \
                 ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
               touch $out
             '';

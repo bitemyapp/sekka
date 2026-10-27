@@ -29,7 +29,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#network .#bluetooth .#activity .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#bluetooth .#sound .#activity .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -66,6 +66,7 @@ cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/bluetooth/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/sound/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/activity/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
@@ -448,6 +449,74 @@ stand-ins for third-party ones, without a graphical session; stock Elephant
 with the same configuration is the negative control. The patch applies
 without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
 check, and review any patch failure rather than skipping it.
+
+Tatami's Sound window (`desktop/tatami/sound/`, `tatami-sound`) is a separate
+GTK 4/libadwaita Cargo workspace, laid out after Aizome's Sound settings
+(Settei's `panes/sound.rs`) on one page: each device list with the default
+checked and its controls beneath, then applications and card profiles.
+`tatami audio` (also `tatami sound`) opens it from the bar, menu or shortcut.
+It uses the session's PipeWire PulseAudio interface through `pactl`, packaged
+with the window. Moving an application's stream is the exception, through
+`pw-metadata`, also on the window's path. pipewire-pulse's move only sets
+the stream's `target.object` and `target.node` in PipeWire's default
+metadata for WirePlumber to follow (-1 for the default device, so the stream
+then follows the default), and PipeWire 1.6.9 acknowledges it before PipeWire
+has those writes (`reply_simple_ack` in `do_move_stream`, where volume, mute
+and default changes reply after a sync). `pactl` disconnects on the
+acknowledgement, and the writes can go with its connection: about one run in
+eight of the integration check, which makes five moves, left a stream where
+it was, and two in four with PipeWire's debug logging on. `pw-metadata` sets
+the same keys and syncs before it exits.
+A stream with `node.dont-reconnect`, which pipewire-pulse refuses to move,
+has its device menu disabled. Review this when PipeWire changes
+`do_move_stream`. All reads and changes run off the GTK thread, with a
+four-second deadline per command. Changes are sent one at a time in order, a
+slider's values coalesced to its latest, and a reading is not shown while a
+change waits. `pactl subscribe` prompts a reading after each change the
+service reports, ignoring client connections (each reading makes six), and a
+reading every four seconds catches anything else; the subscription restarts
+every two seconds while the service is away. A section is rebuilt only when
+what it lists changes; volumes, mute, balance, routing, defaults and active
+profiles update in place.
+
+A volume change keeps the balance: off center, it sets each channel as
+`pa_cvolume_set_balance` would. The input level comes from the window's own
+libpulse connection (`meter.rs`, after `aizome-sys`'s meter): a record stream
+on the default input with `PA_STREAM_PEAK_DETECT`, 25 peaks a second, which
+`pactl` cannot open. The package and the development shell link libpulse for
+it. The stream is named "Peak detect"; the backend leaves level meters out of
+Applications, with internal virtual-device streams, and an input counts as in
+use only when an application records from it. `pactl` 17 reports card-profile
+availability as a boolean and a monitor's sink as null, so monitors are
+recognized by `device.class` and the parser accepts the older strings too.
+Card profiles are ordered by priority, with Off last.
+
+The window shares Tatami's GTK stylesheet through `tatami-sound/style-dark.css`,
+which adds the tiles' and the level meter's Tokyo Night colors. Changing a
+default does not explicitly move existing streams; routing is a separate
+application control. It does not keep a second settings file: PipeWire and
+WirePlumber own persistence and device policy.
+
+```sh
+nix build .#sound .#checks.x86_64-linux.sound-integration --no-update-lock-file
+```
+
+The integration check runs the packaged window under Xvfb with private
+D-Bus, PipeWire and WirePlumber sessions and virtual audio devices. It checks
+the device lists and defaults (the controls follow a new default), volume and
+mute in both directions, balance and that a volume change keeps it, volume
+above 100%, the level meter rising with sound and falling back, that the
+meter is neither listed nor makes its input in use, that the window does not
+read in a loop while the meter runs, playback and recording volume, mute and
+routing (to the default device and to another), hotplug, service recovery, single-instance activation, and that
+Escape closes the window without leaving `pactl` behind. It chooses from
+popovers with the keyboard, as GTK reports a popover's items above where they
+are drawn. Hardware monitors are disabled. Card/port parsing is covered by
+unit fixtures shaped like `pactl` 17's output; physical ports and Bluetooth
+profile changes still need hardware validation. Its captures are development
+evidence using simulated devices, not screenshots of physical hardware. This
+is a component check, not a Tatami session, image build, VM installation or
+physical sound test.
 
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted

@@ -329,7 +329,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
     <ul class="facts">
       <li>Arch package management, Limine and snapper, Plymouth theming and the first-run script.</li>
       <li>Theme and font switching, web apps, the webcam overlay, sharing, reminders, dictation and AI agents.</li>
-      <li>A notification history panel and network statistics; audio uses the wiremix terminal program.</li>
+      <li>A notification history panel and network statistics.</li>
     </ul>
   </article>
   <article class="win">

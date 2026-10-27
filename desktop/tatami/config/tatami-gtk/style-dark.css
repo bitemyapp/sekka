@@ -1,10 +1,10 @@
-/* Tatami's look for its own GTK windows (Displays, Network, Activity):
+/* Tatami's look for its own GTK windows (Displays, Network, Sound, Activity):
  * Tokyo Night, as the menu, the bar and the notifications have it (walker,
  * waybar and mako here, and the authentication agent's polkit/kdeglobals),
  * with JetBrainsMono Nerd Font, square corners and a #7aa2f7 accent. It is
  * libadwaita's stylesheet with its colors replaced, so each window keeps its
  * layout. Each window's own stylesheet (tatami-displays/, tatami-network/,
- * tatami-activity/) imports this one, and is "-dark": the window is dark,
+ * tatami-sound/, tatami-activity/) imports this one, and is "-dark": the window is dark,
  * whatever the session's light or dark preference, as these colors are. */
 
 

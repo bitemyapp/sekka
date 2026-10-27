@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sound
+GenericName=Sound Settings
+Comment=Choose speakers and microphones, adjust volume and route application audio
+Exec=tatami-sound
+Icon=audio-speakers-symbolic
+Categories=Settings;HardwareSettings;
+Keywords=audio;volume;speakers;headphones;microphone;input;output;mixer;sound settings;
+StartupNotify=true
