@@ -39,7 +39,7 @@ const USAGE: &str = "usage: tatami <command>
   reload                          apply a rebuilt Tatami to the running session
   menu [learn|trigger|capture|screenrecord|toggle|hardware|setup|network|dns|system]
   apps | emoji | keybindings | about | power-profile | edit-config
-  network | bluetooth | audio             the bar's panels
+  network | bluetooth | audio             network, Bluetooth and Sound
   display                         the Displays window
   displays apply [--dry-run]      keep and apply display settings (JSON on stdin)
   displays watch                  closed-display mode, remembered displays, a screen always on
@@ -400,10 +400,9 @@ fn main() -> ExitCode {
                 }
             }
         }
-        Some("audio") => {
+        Some("audio" | "sound") => {
             menu::after_menu();
-            let wiremix = ["wiremix", "--tab", "output"].map(str::to_owned);
-            terminal::tui(&wiremix, terminal::Tui::Panel);
+            util::launch("tatami-sound", &[]);
             true
         }
         Some("apps") => {

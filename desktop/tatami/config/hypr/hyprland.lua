@@ -338,9 +338,10 @@ hl.window_rule({ match = { class = "xdg-desktop-portal-gtk" }, tag = "+floating-
 -- `tatami display` and the display watcher fit it to the logical workspace
 -- when opened or when the monitor layout/scale changes.
 hl.window_rule({ match = { class = "org.tatami.Displays" }, float = true, center = true, size = { 880, 800 } })
--- The Network and Bluetooth settings windows, likewise.
+-- The Network, Bluetooth and Sound settings windows, likewise.
 hl.window_rule({ match = { class = "org.tatami.Network" }, float = true, center = true, size = { 720, 760 } })
 hl.window_rule({ match = { class = "org.tatami.Bluetooth" }, float = true, center = true, size = { 720, 760 } })
+hl.window_rule({ match = { class = "org.tatami.Sound" }, float = true, center = true, size = { 720, 740 } })
 -- The Activity window (tatami-activity), wide enough for the list beside
 -- its inspector.
 hl.window_rule({ match = { class = "org.tatami.Activity" }, float = true, center = true, size = { 1160, 720 } })
@@ -350,16 +351,6 @@ hl.window_rule({
     title = "^(Open.*Files?|Open [F|f]older.*|Save.*Files?|Save.*As|Save|All Files|.*wants to [open|save].*|[C|c]hoose.*)",
   },
   tag = "+floating-window",
-})
-
--- Audio (wiremix) opens below the bar, 6px from the right edge.
--- window_w is still the terminal's own width when the move applies, so the
--- move uses the fixed width.
-hl.window_rule({
-  match = { class = "org.tatami.wiremix" },
-  float = true,
-  size = { 540, 360 },
-  move = { "(monitor_w-546)", "32" },
 })
 
 -- Authentication prompts (hyprpolkitagent) dim the screen around them and

@@ -143,6 +143,8 @@
             pkgs.nixfmt
             pkgs.python3
             pkgs.pkg-config
+            # Tatami's Sound window links libpulse for its level meter.
+            pkgs.libpulseaudio
           ];
         };
       };
@@ -212,6 +214,7 @@
           displays
           network
           bluetooth
+          sound
           activity
           wallpapers
           ;
@@ -301,6 +304,7 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
+        ibus-wayland-serial = import ./nix/ibus-wayland-serial-test.nix { inherit pkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
           inherit
@@ -342,6 +346,8 @@
         };
         native-installer = calamares;
         storage = calamares.storageTest;
+        encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
+        encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         application-cache = applicationCatalog.cache;
         live-profiles =
@@ -527,6 +533,7 @@
           aizomeSource = inputs.aizome.outPath;
         };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
+        boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
@@ -556,6 +563,11 @@
         displays = self.packages.${system}.displays;
         network = self.packages.${system}.network;
         bluetooth = self.packages.${system}.bluetooth;
+        sound = self.packages.${system}.sound;
+        sound-integration = import ./nix/sound-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) sound;
+        };
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
@@ -656,6 +668,7 @@
                 ${./desktop/tatami/activity/data/org.tatami.Activity.desktop} \
                 ${./desktop/tatami/network/data/org.tatami.Network.desktop} \
                 ${./desktop/tatami/bluetooth/data/org.tatami.Bluetooth.desktop} \
+                ${./desktop/tatami/sound/data/org.tatami.Sound.desktop} \
                 ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
               touch $out
             '';

@@ -17,7 +17,7 @@ Sekka is the source home for the ISO, Genkan installer, Tatami desktop, Yukimi s
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs. `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -30,7 +30,7 @@ Use x86_64 Linux with Nix and flakes enabled. The full image includes several de
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
-nix build .#genkan .#tatami .#displays .#network .#bluetooth .#activity .#yukimi .#tools
+nix build .#genkan .#tatami .#displays .#network .#bluetooth .#sound .#activity .#yukimi .#tools
 nix build .#checks.x86_64-linux.storage
 nix flake check --no-update-lock-file
 nix build .#iso --no-update-lock-file --out-link result-iso
@@ -67,6 +67,7 @@ cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/bluetooth/Cargo.toml
+cargo test --locked --manifest-path desktop/tatami/sound/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/activity/Cargo.toml
 cargo test --locked --manifest-path apps/yukimi/Cargo.toml
 cargo test --locked --manifest-path apps/kakehashi/Cargo.toml
@@ -233,6 +234,26 @@ test its native and GTK text paths; a keycode-zero engine needs the remaining
 upstream fix first.
 
 ## Sources and installed-system updates
+
+Sekka backports IBus's upstream serial fix
+[`a8ff7559`](https://github.com/ibus/ibus/commit/a8ff755971509f09e1d0ea52a10be1bfc13af39b)
+to Aizome's Wayland input-method frontend. In 1.5.34 every newly announced
+Wayland global reset the input-method counter: plugging in a display made
+foot discard letters while Return, sent as a virtual keyboard event, still
+worked. The counter now resets only for an input-method interface. Aizome
+already tolerates the old frontend's counter, but fixing IBus also protects
+sessions running older local compositor builds. No compositor development
+or live-reload workflow changes are required.
+
+`nix build .#checks.x86_64-linux.ibus-wayland-serial` compiles the real IBus
+registry callback before and after the backport. It requires the original
+to exhibit the precise serial reset, then checks repeated output and other
+global announcements, including the maximum serial, and initialization of
+both input-method versions. This is a component test, not a physical docking
+test. The patch is confined to the existing Aizome frontend override; remove
+it once the pinned IBus contains the upstream fix. After activating the new
+system, `systemctl --user restart aizome-ibus.service` replaces that frontend
+without restarting the compositor or closing applications.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
@@ -449,6 +470,74 @@ stand-ins for third-party ones, without a graphical session; stock Elephant
 with the same configuration is the negative control. The patch applies
 without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
 check, and review any patch failure rather than skipping it.
+
+Tatami's Sound window (`desktop/tatami/sound/`, `tatami-sound`) is a separate
+GTK 4/libadwaita Cargo workspace, laid out after Aizome's Sound settings
+(Settei's `panes/sound.rs`) on one page: each device list with the default
+checked and its controls beneath, then applications and card profiles.
+`tatami audio` (also `tatami sound`) opens it from the bar, menu or shortcut.
+It uses the session's PipeWire PulseAudio interface through `pactl`, packaged
+with the window. Moving an application's stream is the exception, through
+`pw-metadata`, also on the window's path. pipewire-pulse's move only sets
+the stream's `target.object` and `target.node` in PipeWire's default
+metadata for WirePlumber to follow (-1 for the default device, so the stream
+then follows the default), and PipeWire 1.6.9 acknowledges it before PipeWire
+has those writes (`reply_simple_ack` in `do_move_stream`, where volume, mute
+and default changes reply after a sync). `pactl` disconnects on the
+acknowledgement, and the writes can go with its connection: about one run in
+eight of the integration check, which makes five moves, left a stream where
+it was, and two in four with PipeWire's debug logging on. `pw-metadata` sets
+the same keys and syncs before it exits.
+A stream with `node.dont-reconnect`, which pipewire-pulse refuses to move,
+has its device menu disabled. Review this when PipeWire changes
+`do_move_stream`. All reads and changes run off the GTK thread, with a
+four-second deadline per command. Changes are sent one at a time in order, a
+slider's values coalesced to its latest, and a reading is not shown while a
+change waits. `pactl subscribe` prompts a reading after each change the
+service reports, ignoring client connections (each reading makes six), and a
+reading every four seconds catches anything else; the subscription restarts
+every two seconds while the service is away. A section is rebuilt only when
+what it lists changes; volumes, mute, balance, routing, defaults and active
+profiles update in place.
+
+A volume change keeps the balance: off center, it sets each channel as
+`pa_cvolume_set_balance` would. The input level comes from the window's own
+libpulse connection (`meter.rs`, after `aizome-sys`'s meter): a record stream
+on the default input with `PA_STREAM_PEAK_DETECT`, 25 peaks a second, which
+`pactl` cannot open. The package and the development shell link libpulse for
+it. The stream is named "Peak detect"; the backend leaves level meters out of
+Applications, with internal virtual-device streams, and an input counts as in
+use only when an application records from it. `pactl` 17 reports card-profile
+availability as a boolean and a monitor's sink as null, so monitors are
+recognized by `device.class` and the parser accepts the older strings too.
+Card profiles are ordered by priority, with Off last.
+
+The window shares Tatami's GTK stylesheet through `tatami-sound/style-dark.css`,
+which adds the tiles' and the level meter's Tokyo Night colors. Changing a
+default does not explicitly move existing streams; routing is a separate
+application control. It does not keep a second settings file: PipeWire and
+WirePlumber own persistence and device policy.
+
+```sh
+nix build .#sound .#checks.x86_64-linux.sound-integration --no-update-lock-file
+```
+
+The integration check runs the packaged window under Xvfb with private
+D-Bus, PipeWire and WirePlumber sessions and virtual audio devices. It checks
+the device lists and defaults (the controls follow a new default), volume and
+mute in both directions, balance and that a volume change keeps it, volume
+above 100%, the level meter rising with sound and falling back, that the
+meter is neither listed nor makes its input in use, that the window does not
+read in a loop while the meter runs, playback and recording volume, mute and
+routing (to the default device and to another), hotplug, service recovery, single-instance activation, and that
+Escape closes the window without leaving `pactl` behind. It chooses from
+popovers with the keyboard, as GTK reports a popover's items above where they
+are drawn. Hardware monitors are disabled. Card/port parsing is covered by
+unit fixtures shaped like `pactl` 17's output; physical ports and Bluetooth
+profile changes still need hardware validation. Its captures are development
+evidence using simulated devices, not screenshots of physical hardware. This
+is a component check, not a Tatami session, image build, VM installation or
+physical sound test.
 
 Tatami's Displays helper sends explicit `disabled = false` and `mirror = ""`
 when enabling an independent screen: Hyprland's Lua monitor API merges omitted
@@ -1063,10 +1152,49 @@ well inside the wait:
   systems keep NixOS's default, randomization on; whether they hit this on
   real hardware hasn't been checked.
 
-## Disk encryption must pass TRIM through
+## Disk encryption
 
-Genkan does not create encrypted disks yet. When it does, the configuration it
-writes must set `boot.initrd.luks.devices.<name>.allowDiscards = true`.
+Genkan offers opt-in LUKS2 encryption of root and the optional swap partition,
+with the same separate disk passphrase on both. Passphrases are validated in
+both processes, carried by the existing private stdin protocol, held in
+zeroizing Rust owners and passed to cryptsetup through an anonymous memfd on
+stdin. They never enter command arguments, the generated flake, or an installed
+key file. The GUI clears disk passphrase fields when encryption is disabled
+and when installation starts. GTK's own editable buffers are not guaranteed
+to be zeroized.
+
+The helper chooses outer LUKS UUIDs and inner filesystem UUIDs before erasure.
+It uses LUKS2 with Argon2id and a 16 MiB payload offset, reserves that overhead
+in the layout, verifies container and filesystem identities, and closes its
+own mappings after unmounting (including failure cleanup). UEFI keeps the
+unencrypted ESP; encrypted BIOS adds a 1 GiB ext4 `/boot` after the 2 MiB BIOS
+boot area. Root remains partition 2, swap partition 3 when selected; BIOS
+`/boot` is numbered 4 with swap or 3 without it. GRUB reads plain boot files,
+so it does not need to unlock LUKS2. Encrypted BIOS installations retain GRUB's
+framebuffer (`gfxpayloadBios = "keep"`): returning to VGA text hid the initrd
+unlock prompt when the VM's DRM driver took over. Swap stays RAM-sized after header overhead,
+and its inner UUID remains the resume device. Encrypted hibernation has been
+tried once by hand, on UEFI with Plasma (see the encrypted GUI installation
+record below). Early console setup uses the selected keyboard for unlock.
+
+Swap opens after root in the initrd: the configuration adds `After=` on
+`systemd-cryptsetup@cryptroot.service` to `systemd-cryptsetup@cryptswap` as a
+drop-in (crypttab has no ordering option). systemd-cryptsetup tries the
+passphrases already typed before it asks, so swap opens with root's and never
+asks. Opened at once, swap was also tried with a mistyped root passphrase, and
+then each disk asked again. Opening them in turn adds one Argon2id unlock, about
+two seconds, to each boot, and the two unlocks no longer need their memory at
+the same time.
+
+Root's filesystem appears only once someone types the passphrase, so the
+configuration gives root `x-systemd.device-timeout=0`, systemd's way to wait
+without limit for a device that needs user input. systemd-cryptsetup's
+generator does this only for `/dev/mapper/cryptroot`, and root is mounted by
+its filesystem UUID; without the option, the initrd gave up on that device
+after systemd's default 90 seconds and stopped at a locked emergency console
+with the prompt still showing.
+
+The configuration sets `boot.initrd.luks.devices.<name>.allowDiscards = true`.
 dm-crypt drops discard requests unless the mapping allows them, so the weekly
 `fstrim` and Btrfs's default `discard=async` never reach the SSD, and the drive
 keeps treating freed blocks as live data. `nixos-generate-config` emits only
@@ -1083,11 +1211,62 @@ interactive refresh to remove. Refreshing a passphrase-only mapping also needs
 the passphrase, so it fails without a terminal. If installed systems ever need
 this change, ship it as a configuration update that applies at the next boot.
 
-Discards reveal which blocks are unused to anyone holding the raw disk. Say so
-in the README's account of encryption. The encrypted-install VM check must show
-a non-zero `DISC-GRAN` in `lsblk --discard` for the opened mapping and a
-successful `fstrim -v /`; check that the virtual target disk itself advertises
-discard first, or the result proves nothing.
+Discards reveal which blocks are unused to anyone holding the raw disk; the
+README and disk page explain this tradeoff. The installer opens mappings with
+`--allow-discards` for formatting and testing, without a persistent header flag.
+
+```sh
+nix build .#genkan .#checks.x86_64-linux.storage .#checks.x86_64-linux.encrypted-storage --no-update-lock-file
+```
+
+The encrypted-storage component check runs the production partition/format/mount
+phase on a marked disposable virtual disk for ext4, Btrfs and XFS, with and
+without swap, and UEFI and BIOS layouts. It tests wrong passphrases, closing
+and reopening containers, data persistence, and cleanup. It then boots an
+encrypted root with Genkan's generated storage configuration and checks active
+encrypted swap, non-zero discard granularity on both the virtual disk and
+mapping, and `fstrim -v /`. The harness supplies the bootloader and Nix store:
+this is not a full ISO installation or disk-only reboot, and does not validate
+physical hardware or hibernation. The separate fixture accepts
+`CALAMARES_TEST_ENCRYPT=1` for full image installation runs, and
+`respin-tools qemu-test ISO --install` passes it through. On the installed boot
+the tool waits for the splash's passphrase field (its amber edge, in a
+screendump), keeps that frame as `unlock.png`, and types the fixture's public
+test passphrase before it waits for the guest agent; `boot-installed` does the
+same for an encrypted run. Genkan's test diagnostics add
+`plymouth.ignore-serial-consoles` to the serial console they set up, so the
+installed system shows the splash rather than Plymouth's text.
+
+The [2026-10-21 full GUI installation record](docs/test-results/luks-gui-uefi.json)
+covers an 8 GiB UEFI VM installed through Genkan with ext4, encrypted root and
+swap, Aizome and Plasma. It includes two disk-only boots without the ISO or a
+shared host store, wrong-passphrase rejection, graphical login to both desktops,
+application use, file persistence and working TRIM. Installation used the ISO's
+Xfce/X11 compatibility entry: Genkan's page rendering got stuck in the default
+Plasma live session. That rendering issue remains unresolved. This run also
+found and fixed Aizome's omission from `respin.referenceDesktops`; keeping its
+closure on the ISO avoids compiling the default desktop in the live tmpfs.
+It does not establish a full BIOS install, physical hardware support, encrypted
+hibernation or an installed-system update. The record separates these limits
+from the component checks above.
+
+The [2026-10-24 encrypted installation record](docs/test-results/encrypted-splash-install.json)
+covers installations from the ISO on UEFI and BIOS through `respin-tools
+qemu-test --install` (the fixture driving Genkan's backend, not its window):
+ext4, encrypted root and swap, then a disk-only boot that asked once for the
+passphrase on the boot splash and passed the fixture's installed-system checks.
+
+The [2026-10-24 encrypted GUI installation record](docs/test-results/encrypted-splash-gui.json)
+installs through Genkan's window, in the default Plasma live session, which
+rendered it on both firmwares: ext4 with Aizome and Plasma on UEFI, Btrfs with
+Aizome alone on BIOS, encrypted root and swap on both. The installed systems
+were then used through their own interfaces: the splash's prompt with a wrong
+passphrase, Caps Lock and Esc, both greeters' sessions, applications, restart
+and shutdown from Aizome's Toolchest and Plasma's launcher, and on UEFI a
+hibernation to the encrypted swap and a resume through the splash. The UEFI
+run found the 90-second device timeout described under "Disk encryption";
+the BIOS run, from an ISO with the fix, waited 130 seconds at the prompt and
+booted.
 
 ## System tuning and responsiveness
 
@@ -1119,6 +1298,98 @@ real machine's live session under build load for about 15 minutes.
 [docs/responsiveness.md](docs/responsiveness.md) describes it and records
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
+
+## Boot splash
+
+Genkan writes `calamares.bootSplash.enable = true;` into every installation; the
+installer has no choice to leave it out. The option turns on Plymouth with
+Sekka's theme, from `installer/genkan/rust/system/boot-splash/`. Systems
+installed before it keep booting without a splash until the option is set. The
+splash shows the stacked lockup on the Night ground, with a 2px rail under it in
+the crest's blue that fills as the computer starts. When shutting down or
+restarting, the label "Shutting down" or "Restarting" takes the rail's place. A
+passphrase request gets the Aizome lock screen's field. Esc shows the boot
+messages at any time, and after 15 seconds of starting, not counting time at a
+passphrase prompt, the splash says so. The live ISO shows boot messages instead
+(`modules/installer.nix`).
+
+On a disk Genkan encrypted, the splash asks for the passphrase in the initrd.
+Swap opens after root, with the passphrase root opened with, so one passphrase
+opens both and a mistyped one is asked for again only once (see "Disk
+encryption"). The initrd has no GPU driver on NixOS, and Plymouth waits
+8 seconds (`DeviceTimeout`) for one before it draws on the firmware's
+framebuffer, leaving the screen blank until then. It also passes over a
+framebuffer at 640×480, 800×600 or 1024×768, expecting a native driver to
+replace it, and GRUB leaves 1024×768 on BIOS. So the module sets
+`UseSimpledrm=2` when `boot.initrd.luks.devices` is set: the prompt appears at
+once at whatever mode the firmware set, and the splash moves to the GPU when
+its driver loads after unlocking. Unencrypted systems keep Plymouth's default.
+systemd's password agent doesn't pause Plymouth's clock or its progress
+estimate the way `plymouth ask-for-password` does, so the theme stops the rail
+and the hint's count while a prompt is up, then spreads what is left of the
+estimate over what is left of the rail. Esc swaps the theme for Plymouth's text
+view and back, which loads it again: the rail and the hint's count start over
+from Plymouth's figures.
+
+The module builds NixOS's Plymouth with three patches from `boot-splash/plymouth/`,
+for what went wrong in the encrypted-boot-splash check when the GPU's driver took
+over from the firmware's framebuffer or a passphrase was mistyped. None is in a
+Plymouth release yet. [docs/upstream/plymouth](docs/upstream/plymouth/README.md)
+has the first two as ported to Plymouth's `main` and sent upstream (plymouth!519
+and !520), and says where each of the three stands and when Sekka can drop it.
+
+- `keyboard-removal.patch`: Plymouth freed a display's keyboard without telling
+  plymouthd or the splash, and the script plugin's `Plymouth.GetCapslockState()`
+  went on reading it. plymouthd crashed in `ply_keyboard_get_capslock_state` in
+  3 of 11 test boots with a wrong passphrase and Esc.
+- `console-owner.patch`: Plymouth reads keys from the console terminal (NixOS's
+  `vconsole.conf` has no `XKBLAYOUT` for evdev input), and only one renderer
+  owns it. It was handed on only once no keyboards were left, so when the GPU's
+  framebuffer device got a renderer before its DRM device, no renderer read the
+  keyboard and nothing typed reached Plymouth, Esc included: 4 of 8 VM boots.
+- `abandoned-prompts.patch`: a question stayed on the splash after whoever asked
+  had hung up (`ply_boot_connection_on_hangup` only marked the connection). After
+  a mistyped passphrase, systemd's agent gave up the request for a disk that got
+  its passphrase another way, and the splash went on asking for an open disk.
+  Plymouth's `main` already fixes this its own way (f3461296, e7fb0732), in no
+  release yet.
+
+`generate.py` outlines the theme's text from IBM Plex Mono, and `package.nix`
+renders every piece at 1x, 2x and 3x. Plymouth's own scaling is off
+(`DeviceScale=1`). The script picks 2x from 1600 pixels on the display's
+shorter side and 3x from 3240, so nothing is stretched. Text it can't know
+ahead, such as a passphrase prompt or a message, is set at run time in IBM
+Plex Mono, the one font the initrd carries. Plymouth keeps the initrd's font
+configuration after the switch to the installed system, so the module puts
+the font at the same path there. Without it, that text comes out as empty
+boxes.
+
+```sh
+nix build .#checks.x86_64-linux.boot-splash --no-update-lock-file
+```
+
+The VM check boots at 1080p and at 4K (2x) and holds the splash until it has
+looked at it. It covers the rail, a message, and a passphrase typed into the
+field and handed back to whoever asked. It also covers Caps Lock, the Esc hint
+and the messages Esc shows, the handoff to the login prompt, the restart and
+shutdown labels, and a real power-off. Its screenshots are in the result.
+
+```sh
+nix build .#checks.x86_64-linux.encrypted-boot-splash --no-update-lock-file
+```
+
+The encrypted-boot-splash check runs Genkan's storage code on a disposable
+disk, for UEFI and for BIOS, as the encrypted-storage check does. It then boots
+the storage configuration Genkan generates, with the splash on and no GPU driver
+in the initrd. It covers the prompt in the initrd, one passphrase opening root
+and swap, the hint not counting time at the prompt, and the keyboard after the
+GPU takes over: Caps Lock, an answer typed into a new prompt, and Esc. It also
+covers a question going when whoever asked it does, the handoff to the login
+prompt, and a restart through the splash. On the restart it covers a wrong
+passphrase, asked for again for root alone, Caps Lock, Esc at the prompt, swap
+opening without asking, no question left up, and an encrypted root left clean.
+The harness supplies the bootloader and Nix store, so this isn't a full
+installation.
 
 ## Programs built for other distributions
 

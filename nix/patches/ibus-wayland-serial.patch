@@ -1,0 +1,26 @@
+Backport IBus a8ff755971509f09e1d0ea52a10be1bfc13af39b (2026-05-27).
+https://github.com/ibus/ibus/commit/a8ff755971509f09e1d0ea52a10be1bfc13af39b
+
+Keep the input-method serial when unrelated Wayland globals are announced.
+A new wl_output otherwise resets it to zero, so strict compositors reject
+subsequent text commits: foot loses letters while Return still works.
+Remove when the pinned IBus includes this upstream change.
+
+--- a/client/wayland/ibuswaylandim.c
++++ b/client/wayland/ibuswaylandim.c
+@@ -2431,13 +2431,14 @@ registry_handle_global (void               *data,
+                  interface, name, version);
+         fflush (priv->log);
+     }
+-    priv->im_serial = 0;
+     if (!g_strcmp0 (interface, zwp_input_method_manager_v2_interface.name)) {
++        priv->im_serial = 0;
+         priv->version = INPUT_METHOD_V2;
+         priv->input_method_manager_v2 =
+                 wl_registry_bind (registry, name,
+                                   &zwp_input_method_manager_v2_interface, 1);
+     } else if (!g_strcmp0 (interface, zwp_input_method_v1_interface.name)) {
++        priv->im_serial = 0;
+         if (version >= 4)
+             version = 4;
+         priv->version = INPUT_METHOD_V1;

@@ -28,6 +28,7 @@ assert not {'calamares', 'tatami', 'yukimi', 'aizome', 'sidestep'} & parsed['nod
 assert 'aizome' not in parsed['nodes']
 assert 'sidestep' in parsed['nodes']['sekka']['inputs']
 cases = json.loads(command(str(FIXTURE), 'desktop-configurations'))
+cases.update(json.loads(command(str(FIXTURE), 'storage-configurations')))
 with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as directory:
     target = Path(directory)
     (target / 'flake.lock').write_text(lock)
@@ -36,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as director
     # These devices are never opened: evaluation only, no builds or activation.
     (target / 'hardware-configuration.nix').write_text('{ ... }: {}\n')
     for name in ['aizome', 'aizome-tatami', 'aizome-plasma-gnome-xfce-hyprland-tatami',
-                 'plasma', 'tatami', 'gnome-xfce']:
+                 'plasma', 'tatami', 'gnome-xfce', 'encrypted-uefi', 'encrypted-bios']:
         (target / 'configuration.nix').write_text(cases[name])
         derivation = command('nix', 'eval', '--no-update-lock-file', '--raw',
                              f'path:{target}#nixosConfigurations.sekka-test.config.system.build.toplevel.drvPath')

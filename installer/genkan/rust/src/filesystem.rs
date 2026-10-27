@@ -75,10 +75,29 @@ pub struct Identities {
     /// FAT volume serial in blkid's display form, e.g. `1A2B-3C4D`.
     pub efi: Option<String>,
     pub swap: Option<String>,
+    pub encryption: Option<crate::encryption::Identities>,
+    /// Separate ext4 /boot on encrypted BIOS installations.
+    pub bios_boot: Option<String>,
 }
 impl Identities {
     pub fn generate(firmware: Firmware, swap: bool) -> Result<Self> {
+        Self::generate_for(firmware, swap, false)
+    }
+    pub fn generate_for(firmware: Firmware, swap: bool, encrypt: bool) -> Result<Self> {
         Ok(Self {
+            encryption: if encrypt {
+                Some(crate::encryption::Identities {
+                    root: uuid_v4(random()?),
+                    swap: if swap { Some(uuid_v4(random()?)) } else { None },
+                })
+            } else {
+                None
+            },
+            bios_boot: if encrypt && firmware == Firmware::Bios {
+                Some(uuid_v4(random()?))
+            } else {
+                None
+            },
             root: uuid_v4(random()?),
             efi: if firmware == Firmware::Uefi {
                 Some(vfat_serial(random()?))
@@ -231,7 +250,6 @@ fn uuid_from_probe(probe: &str, expected: &str) -> Result<String> {
     Ok(uuid.to_owned())
 }
 
-#[cfg(test)]
 pub(crate) fn probe_uuid(device: &str, expected: &str) -> Result<String> {
     // Old /dev/disk/by-uuid aliases can outlive a reformat even after udev
     // settles. Read the superblock itself, never select an alias by its rdev.

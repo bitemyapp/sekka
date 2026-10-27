@@ -25,6 +25,7 @@
   calamares.desktops = desktops;
   calamares.defaultDesktop = builtins.head desktops;
   calamares.tuning.enable = tuning;
+  calamares.bootSplash.enable = true;
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = lib.mkIf (kernel == "latest") pkgs.linuxPackages_latest;
