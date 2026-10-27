@@ -40,6 +40,56 @@ them.
 - **`aizomectl stats`** has a `logic:` line: the build running, where it
   came from, how many reloads and rollbacks, and the last error.
 
+### Yukimi's update advice
+
+Yukimi checks the running Aizome session before saying an update is
+applied. A different compositor core needs a new login; restarting only
+the shell does not replace it. Compatible logic or shell changes call for
+**Reload Aizome**, followed by refreshing Yukimi. Boot changes still take
+priority and call for a computer restart.
+
+The check compares the running core's ABI fingerprint with the package
+in the active system, independently of the compositor's PATH. ABI equality
+only establishes compatibility for loading logic. Yukimi also compares the
+executable and the core and Rust runtime libraries identified in the
+compositor's `/proc/PID/maps` with the active package's files, byte for byte.
+Their ELF search paths name immutable Nix native-library packages, so native
+dependency and packaging changes also require a new login. Identical files
+in another package generation still allow a logic/shell reload. Missing,
+ambiguous or mutable mapped libraries, or runtime loader overrides
+(`LD_LIBRARY_PATH`, `LD_PRELOAD`, `LD_AUDIT`), leave that check unverified.
+This covers the packaged runtime; externally selected GPU drivers are
+outside this comparison.
+
+Yukimi also checks the compositor's launch environment for profile/PATH and
+`AIZOME_SHELL_BIN` overrides. An override needs attention before a reload
+or new login can be relied on to select the system package. Missing build
+information, an unavailable IPC connection or an unsuccessful reload
+check remains unverified, rather than becoming an all-clear. The check
+only reads state; it never reloads or restarts the desktop automatically.
+IPC connection attempts and reads/writes have timeouts, including when a
+stalled compositor's socket accept queue is full.
+
+Startup environment values are compared with the active system's
+`etc/xdg/aizome/environment` and the user's environment file. Variables
+removed since this session started are checked too, including user-only
+settings and settings applied at a login after a live system switch. The
+launcher records the applied names in `AIZOME_ENVIRONMENT_KEYS` and the
+selected user file in `AIZOME_ENVIRONMENT_FILE`, in both its systemd and
+direct launch paths. Yukimi reads that record and the actual applied values
+from the compositor's initial environment, so later edits cannot rewrite
+the baseline. User overrides take precedence, except for the session type
+and desktop name the launcher always assigns. Sessions started by an older
+launcher have no record: they remain unverified until a new login with the
+updated launcher (a known core change still calls for sign-out).
+This checks Aizome's managed environment; it does not predict arbitrary
+changes in login scripts or custom service
+launchers. Ordinary applications still use their new versions when
+closed and reopened. The privileged system helper keeps its system-only
+completion check; session advice is added by the unprivileged frontend.
+For a read-only diagnosis from a checkout in `nix develop`, run
+`cargo run -p yukimi-system --example completion` inside the desktop session.
+
 ## Hacking on Aizome live
 
 From any checkout or worktree, replace one app in your current session:

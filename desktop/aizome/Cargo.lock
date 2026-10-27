@@ -193,6 +193,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "socket2",
 ]
 
 [[package]]
@@ -5754,6 +5755,7 @@ dependencies = [
 name = "yukimi-system"
 version = "0.1.0"
 dependencies = [
+ "aizome-ipc",
  "libc",
  "serde",
  "serde_json",

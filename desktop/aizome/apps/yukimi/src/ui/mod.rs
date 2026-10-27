@@ -123,6 +123,7 @@ fn place(app: &Yukimi, page: Page) -> Element<Msg> {
             } else if let Some(word) = match app.model.completion.action {
                 yukimi_system::completion::Action::Reboot => Some("restart"),
                 yukimi_system::completion::Action::Logout => Some("sign out"),
+                yukimi_system::completion::Action::Reload => Some("reload"),
                 yukimi_system::completion::Action::Unknown => Some("see why"),
                 yukimi_system::completion::Action::None => None,
             } {

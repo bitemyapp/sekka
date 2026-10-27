@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Update completion is a property of the running machine, not a source revision.
-//! No commands or mutations are performed while reading this state.
+//! Reading this state only inspects files, services and read-only desktop IPC.
+mod aizome;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ pub const SESSION_RECEIPT: &str = "tatami/update-session.json";
 pub enum Action {
     #[default]
     None,
+    Reload,
     Logout,
     Reboot,
     Unknown,
@@ -32,6 +34,7 @@ impl Completion {
     pub fn title(&self) -> &'static str {
         match self.action {
             Action::None => "Update applied",
+            Action::Reload => "Reload Aizome to finish the desktop update",
             Action::Logout => "Sign out to finish the desktop update",
             Action::Reboot => "Restart to finish updating",
             Action::Unknown => "Update needs attention",
@@ -40,6 +43,7 @@ impl Completion {
     pub fn description(&self) -> String {
         match self.action {
             Action::None => format!("System changes are active. No computer restart is needed. Open applications can keep running until you close them. {}", self.reasons.join(" ")).trim_end().into(),
+            Action::Reload => format!("{} Choose Reload Aizome in the command palette (Ctrl+Super+R by default), then refresh Yukimi to check again. No sign-out or computer restart is needed.", self.reasons.join(" ")),
             Action::Reboot => format!("{} Save your work, then restart when you are ready. Yukimi can be closed.", self.reasons.join(" ")),
             Action::Logout => format!("{} Save your work before signing out. No computer restart is needed.", self.reasons.join(" ")),
             _ => self.reasons.join(" "),
@@ -617,12 +621,31 @@ fn read_with_session(include_session: bool) -> Completion {
         );
     }
     let system = system_state(&booted, &active, &selected, receipt.as_ref().ok(), &boot_id());
-    // Reboot and activation failure take precedence over all session advice.
-    if system.action != Action::None || !include_session || !in_tatami() {
+    with_session(system, include_session, || {
+        if std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|s| s.split(':').any(|s| s.eq_ignore_ascii_case("aizome"))) {
+            aizome::read(&active)
+        } else if in_tatami() {
+            read_tatami(&active)
+        } else {
+            Completion::default()
+        }
+    })
+}
+
+fn with_session(system: Completion, include_session: bool, read: impl FnOnce() -> Completion) -> Completion {
+    // Reboot and activation failure take precedence. In particular the
+    // privileged helper's system-only check never enters session inspection.
+    if system.action != Action::None || !include_session {
         return system;
     }
+    let result = read();
+    // A current session keeps the system's note about the login screen.
+    if result == Completion::default() { system } else { result }
+}
+
+fn read_tatami(active: &Path) -> Completion {
     let session = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).map(|p| p.join(SESSION_RECEIPT));
-    let result = match (
+    match (
         session.and_then(|p| read_json::<SessionManifest>(&p).ok()),
         read_json::<SessionManifest>(&active.join(SESSION_MANIFEST)),
     ) {
@@ -643,9 +666,7 @@ fn read_with_session(include_session: bool) -> Completion {
             Action::Unknown,
             "The desktop's applied version could not be verified. A new Tatami session records it automatically.",
         ),
-    };
-    // A current session keeps the system's note about the login screen.
-    if result == Completion::default() { system } else { result }
+    }
 }
 
 /// Called after a successful live switch, by the unprivileged frontend only.
@@ -685,6 +706,27 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn system_only_and_incomplete_system_checks_never_inspect_the_session() {
+        for action in [Action::None, Action::Reboot, Action::Unknown] {
+            let system = Completion::new(action.clone(), "system status");
+            assert_eq!(with_session(system.clone(), false, || panic!("privileged helper read session")), system);
+            if action != Action::None {
+                assert_eq!(with_session(system.clone(), true, || panic!("system advice was overridden")), system);
+            }
+        }
+    }
+
+    #[test]
+    fn desktop_advice_replaces_the_all_clear_but_keeps_system_notes_when_current() {
+        let system = Completion::new(Action::None, LOGIN_SCREEN_LIST);
+        assert_eq!(with_session(system.clone(), true, Completion::default), system);
+        for action in [Action::Reload, Action::Logout, Action::Unknown] {
+            let desktop = Completion::new(action, "desktop status");
+            assert_eq!(with_session(system.clone(), true, || desktop.clone()), desktop);
+        }
+    }
     struct Fixture {
         root: PathBuf,
         old: PathBuf,

@@ -23,13 +23,15 @@ fi
 [ "$1" = --no-login-shell ] && shift
 
 vars="XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
-for file in /etc/xdg/aizome/environment "${XDG_CONFIG_HOME:-$HOME/.config}/aizome/environment"; do
+user_environment="${XDG_CONFIG_HOME:-$HOME/.config}/aizome/environment"
+for file in /etc/xdg/aizome/environment "$user_environment"; do
   [ -r "$file" ] || continue
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       '' | '#'*) continue ;;
       *=*)
         key=${line%%=*}
+        case "$key" in AIZOME_ENVIRONMENT_KEYS | AIZOME_ENVIRONMENT_FILE) continue ;; esac
         export "$key=${line#*=}"
         # Each name once: systemctl import-environment refuses the whole
         # list when a name repeats.
@@ -44,6 +46,14 @@ done
 export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Aizome}"
 export XDG_SESSION_DESKTOP=aizome
 export XDG_SESSION_TYPE=wayland
+# Keep the applied names in the compositor's initial environment, together
+# with the file selected before any settings changed HOME/XDG_CONFIG_HOME.
+# Yukimi reads these and their values from /proc/PID/environ, so the record
+# belongs to this exact process and survives later edits/removals and logins
+# under an intermediate system generation. Values need no separate copy.
+export AIZOME_ENVIRONMENT_KEYS="1 $vars"
+export AIZOME_ENVIRONMENT_FILE="$user_environment"
+vars="$vars AIZOME_ENVIRONMENT_KEYS AIZOME_ENVIRONMENT_FILE"
 
 state=$(systemctl --user is-system-running 2>/dev/null)
 case "$state" in

@@ -66,6 +66,28 @@ fn has(h: &Harness<Yukimi>, w: WindowKey, text: &str) -> bool {
 }
 
 #[test]
+fn completion_advice_only_offers_the_applicable_power_action() {
+    use yukimi_system::completion::{Action, Completion};
+    for action in [Action::None, Action::Reload, Action::Logout, Action::Reboot, Action::Unknown] {
+        let mut model = aizome_yukimi::fixture::model();
+        let completion = Completion::new(action.clone(), "The desktop's checked status.");
+        model.completion = completion.clone();
+        let app = Yukimi::with(
+            Source::Sample(Arc::new(model)),
+            Runner::Mock(Arc::new(|_| panic!("rendering advice must not perform an operation"))),
+            Clock::Fixed(aizome_yukimi::fixture::NOW, 21),
+        );
+        let mut h = Harness::new(app);
+        let w = h.window();
+        h.send(Msg::Show(Page::Updates));
+        assert!(has(&h, w, completion.title()), "{action:?}");
+        assert!(has(&h, w, &completion.description()), "{action:?}");
+        assert_eq!(has(&h, w, "Restart Now"), action == Action::Reboot);
+        assert_eq!(has(&h, w, "Sign Out"), action == Action::Logout);
+    }
+}
+
+#[test]
 fn the_sidebar_goes_to_each_page() {
     let (mut h, w, _) = sample(WORKS);
     assert_eq!(h.program().page, Page::Overview);
