@@ -171,6 +171,7 @@ impl FileIndex {
         found.sort_unstable_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
         let mut index = FileIndex { roots: roots.to_vec(), ..Default::default() };
         index.arena.reserve(found.iter().map(|f| f.1.len()).sum());
+        index.entries.reserve_exact(found.len());
         for (root, rel, modified, folder) in found {
             let name = rel.rfind('/').map_or(0, |i| i + 1) as u32;
             let start = index.arena.len() as u32;

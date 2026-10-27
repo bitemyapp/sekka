@@ -1,0 +1,4895 @@
+{
+  "schema_version": 1,
+  "date_local": "2026-10-20",
+  "evidence_root": "/home/callen/work/aizome-memory-results",
+  "evidence_uri_note": "evidence:/ paths resolve relative to evidence_root. Full raw traces and frozen binaries remain local outside the source repository.",
+  "provenance": {
+    "baseline_commit": "e75c905dd04535796792ff0862af0210ee175e01",
+    "production_code_commit": "f88ac0eb9e908f26f8e7201af2311d749c428851",
+    "helper_hardening_commit": "a0f0eab",
+    "rustc": "1.98.1 (48a229cea), LLVM 21.1.8",
+    "host": "AMD Ryzen 7 9800X3D, 16 logical CPUs, approximately 64 GiB RAM",
+    "compositor_revision": "fcdb02f",
+    "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+    "display": "headless Pixman, 2880x1800@2",
+    "memory_fonts": "Host Fontconfig; AIZOME_FONT_DIR explicitly unset",
+    "timing_fonts": "/nix/store/kwb3b47djzigp6s8nbqdama45f24yv0l-aizome-fonts",
+    "compiler_memory": "Each cell is the median across 3 independent runs; each run uses the median of 3 samples 2 s apart after a 5 s warmup. PSS increment includes clients and compositor minus the empty compositor.",
+    "allocator_app_memory": "Same per-run aggregation, early samples at 5/7/9 s and settled samples at 30/32/34 s after launch; 3 repetitions each.",
+    "cpu_timing": "Median of per-run p95 from 3 alternating one-test-thread runs, fixed fonts, no competing compiler processes. Offscreen event/layout/raster/damage allocation costs, not end-to-end input-to-display latency.",
+    "excluded_timing": "One dynamic-std Settei run with 44% host CPU, one jemalloc-background Soroban run overlapping rustc, and one wallpaper pair with 34% host CPU replaced; originals retained in raw evidence.",
+    "allocator_control": "Frozen intermediate image/JPEG fixes plus rejected index shrink, identical in allocator arms; 3 allocator packages added, 249 shared reachable features unchanged, 520 locked identities preserved.",
+    "limitations": [
+      "PSS excludes unmapped file cache, kernel allocations and GPU memory outside mappings; unrelated mappings affect apportioned shared pages.",
+      "Some memory samples overlapped builds; no CPU claims from those samples. No swap in compiler or app allocator sampled processes.",
+      "Shell decay curves and source memory ranges have small n explicitly recorded; no guaranteed long-session savings.",
+      "Original user report used older 35f3015 and different hardware; do not subtract old/new absolute totals."
+    ]
+  },
+  "source_findings": {
+    "status": "Complete accepted shell/source findings, including final quiet wallpaper confirmation.",
+    "units": "PSS/anonymous footprint MiB (2^20 bytes). Heaptrack live allocation figures MB decimal (10^6 bytes). Shell-only footprint; compositor excluded.",
+    "source_changes": [
+      {
+        "path": "crates/aizome-kit/src/app.rs",
+        "change": "Retain prepared Picture ownership until hide/replacement/close; consume first-frame reuse flag without dropping Image owners inside draw callback.",
+        "benefit": "Fixes ForgetImages queued before Paint, which left orphan image pixels live in renderer cache. Subsequent frames still repaint widgets."
+      },
+      {
+        "path": "crates/aizome-face/src/wallpaper.rs",
+        "change": "Resample JPEG Rgb8 directly; add opaque alpha only at output. Preserve existing path for all other formats.",
+        "benefit": "Same pixels with less transient memory and less filtering work."
+      },
+      {
+        "path": "crates/aizome-search/src/files.rs",
+        "change": "Reserve exact entry count during index construction when found.len() is already known.",
+        "benefit": "Avoid vector growth while constructing index; no load parser or shrink change retained."
+      }
+    ],
+    "heap_attribution": {
+      "workload": "8 palette open/dismiss cycles,2seconds apart; synthetic230772-entry index; headless2880x1800@2; raw Heaptrack and offline interpretation.",
+      "retained_offscreen_MB": {
+        "before": 44.7,
+        "after": 5.59,
+        "reduction": 39.11
+      },
+      "total_live_heap_at_forced_stop_MB": {
+        "before": 73.1,
+        "after": 34.02,
+        "reduction": 39.08
+      },
+      "peak_live_heap_MB": {
+        "before": 214.27,
+        "after": 188.89
+      },
+      "caveat": "Heaptrack calls live-at-exit allocations leaks, but forced termination captures live heap without normal teardown. Baseline trace grouped3apps; patched trace shell-only with now-removed index shrink. Allocation-site offscreen bytes directly establish ownership-fix effect; index is dropped before snapshot. Wholeprocess PSS uses later exactfeature/no-shrink controls below. Lifetime allocation call counts are not live block counts.",
+      "evidence": [
+        "evidence:/heap/before-raw/summary.txt",
+        "evidence:/heap/after-raw/summary.txt"
+      ]
+    },
+    "wallpaper": {
+      "workload": "Same prebuilt helper contains original and patched prepare paths, same counting allocator; installed nightJPEG resized2880x1800;7 alternating pairs.",
+      "peak_live_mib": {
+        "before": 198.729104,
+        "after": 174.505793,
+        "reduction": 24.223311
+      },
+      "initial_median_prepare_ms": {
+        "before": 394.191,
+        "after": 320.665
+      },
+      "timing_status": "Final timing is accepted quiet7pair repeat with alternating order; no builders. One briefly noisy original pair excluded and replaced. Earlier buildwindow timing retained only as supporting data.",
+      "quality": "Exact RGBA byte equality for both installed wallpapers at2880x1800; tests cover8 EXIF orientations, grayscaleJPEG and8/16-bit alphaPNG.",
+      "evidence": [
+        "evidence:/heap/helpers-final.txt",
+        "evidence:/heap/helpers-summary.json",
+        "evidence:/heap/helpers-wallpaper-quiet.json",
+        "evidence:/heap/helpers-wallpaper-quiet-summary.json"
+      ],
+      "quiet": {
+        "wallpaper-baseline": {
+          "n": 7,
+          "times_ms": [
+            267.241,
+            260.745,
+            262.783,
+            264.2,
+            266.387,
+            265.353,
+            258.208
+          ],
+          "median_prepare_ms": 264.2,
+          "range_prepare_ms": [
+            258.208,
+            267.241
+          ],
+          "peak_live_mib_range": [
+            198.72910404205322,
+            198.72910404205322
+          ]
+        },
+        "wallpaper": {
+          "n": 7,
+          "times_ms": [
+            202.745,
+            203.665,
+            203.884,
+            207.933,
+            206.845,
+            208.669,
+            203.99
+          ],
+          "median_prepare_ms": 203.99,
+          "range_prepare_ms": [
+            202.745,
+            208.669
+          ],
+          "peak_live_mib_range": [
+            174.50579261779785,
+            174.50579261779785
+          ]
+        },
+        "median_reduction_percent": 22.789553368660098,
+        "context": {
+          "accepted_runs": 14,
+          "raw_runs": 16,
+          "exclusion": "Both original pair4 samples excluded after brief34% hostCPU activity; replacement pair accepted.",
+          "builders_during_accepted_runs": false,
+          "cpu_busy_during_range": [
+            0.11531190926275992,
+            0.1563981042654028
+          ]
+        }
+      }
+    },
+    "footprint_method": {
+      "binaries": {
+        "before": "evidence:/baseline-shell-only/aizome-shell",
+        "after": "evidence:/patched-final-cgu4/aizome-shell"
+      },
+      "build": "Same Rust compiler,release-lto/thinLTO,cgu4,shell-only Cargo featureselection. Baseline frozen original source; final contains cache/JPEG changes and no load shrink.",
+      "workload": "8 palette open/dismiss cycles2seconds apart; private copied settings/cache/runtime; headlessPixman2880x1800@2. Per-run settled value is median of samples starting2seconds afterlastdismiss; n counts independent shell runs, not samples.",
+      "controls": "Exact pinned fixture bytes; identical settings/key hashes; sharedflock benchmark coordination. User desktop never restarted. Prior featuremismatched, changing-current-index, and shared-fixed-executable contaminated snapshots excluded/repeated.",
+      "timing_limit": "CLI IPC round-trip is request acknowledgement, not firstpixel latency; footprint runs may overlap compilation, so workload CPU observations are not a quiet responsiveness guarantee."
+    },
+    "current_index": {
+      "fixture": {
+        "entries": 24371,
+        "bytes": 2756095,
+        "path": "evidence:/heap/current-files.idx"
+      },
+      "before": {
+        "n": 1,
+        "settled_pss_mib_range": [
+          98.9052734375,
+          98.9052734375
+        ],
+        "settled_anon_mib_range": [
+          74.09765625,
+          74.09765625
+        ],
+        "cpu_seconds_at_last_dismiss_range": [
+          0.72,
+          0.72
+        ],
+        "evidence": [
+          "evidence:/heap/pin-current-base/measurement.json"
+        ]
+      },
+      "after": {
+        "n": 1,
+        "settled_pss_mib_range": [
+          96.80078125,
+          96.80078125
+        ],
+        "settled_anon_mib_range": [
+          71.57421875,
+          71.57421875
+        ],
+        "cpu_seconds_at_last_dismiss_range": [
+          0.65,
+          0.65
+        ],
+        "evidence": [
+          "evidence:/heap/pin-current-final/measurement.json"
+        ]
+      }
+    },
+    "scaled_index": {
+      "fixture": {
+        "entries": 230772,
+        "bytes": 21000272,
+        "path_bytes_each": 75,
+        "path": "evidence:/heap/scaled-files.idx",
+        "synthetic": true
+      },
+      "before": {
+        "n": 2,
+        "settled_pss_mib_range": [
+          155.939453125,
+          169.0166015625
+        ],
+        "settled_anon_mib_range": [
+          130.6484375,
+          143.72265625
+        ],
+        "cpu_seconds_at_last_dismiss_range": [
+          0.96,
+          0.96
+        ],
+        "evidence": [
+          "evidence:/heap/exact-base-1/measurement.json",
+          "evidence:/heap/exact-base-2/measurement.json"
+        ]
+      },
+      "after": {
+        "n": 2,
+        "settled_pss_mib_range": [
+          153.9912109375,
+          159.291015625
+        ],
+        "settled_anon_mib_range": [
+          128.90625,
+          134.03125
+        ],
+        "cpu_seconds_at_last_dismiss_range": [
+          0.64,
+          0.88
+        ],
+        "evidence": [
+          "evidence:/heap/exact-fixed-a/measurement.json",
+          "evidence:/heap/exact-fixed-b/measurement.json"
+        ]
+      },
+      "conclusion": "Default-glibc PSS ranges overlap. Freed logical cache bytes can remain resident in allocator arenas, so liveheap reduction is not an equal resident-memory reduction."
+    },
+    "glibc_mmap_experiment": {
+      "setting": "MALLOC_MMAP_THRESHOLD_=131072",
+      "default_changed": false,
+      "same_final_binary_and_scaled_fixture": true,
+      "result": {
+        "n": 1,
+        "settled_pss_mib_range": [
+          62.591796875,
+          62.591796875
+        ],
+        "settled_anon_mib_range": [
+          37.33984375,
+          37.33984375
+        ],
+        "cpu_seconds_at_last_dismiss_range": [
+          0.9,
+          0.9
+        ],
+        "evidence": [
+          "evidence:/heap/final-mmap128k/measurement.json"
+        ]
+      },
+      "decay": [
+        {
+          "seconds_after_last_dismiss": 6.4400010160170496e-06,
+          "pss_mib": 57.236328125,
+          "anon_mib": 31.984375,
+          "cpu_seconds": 0.9
+        },
+        {
+          "seconds_after_last_dismiss": 4.754763639000885,
+          "pss_mib": 62.576171875,
+          "anon_mib": 37.32421875,
+          "cpu_seconds": 0.91
+        },
+        {
+          "seconds_after_last_dismiss": 10.023644362998311,
+          "pss_mib": 62.576171875,
+          "anon_mib": 37.32421875,
+          "cpu_seconds": 0.91
+        },
+        {
+          "seconds_after_last_dismiss": 30.02843382699939,
+          "pss_mib": 62.5927734375,
+          "anon_mib": 37.33984375,
+          "cpu_seconds": 0.93
+        },
+        {
+          "seconds_after_last_dismiss": 59.800457402001484,
+          "pss_mib": 62.599609375,
+          "anon_mib": 37.34765625,
+          "cpu_seconds": 0.96
+        }
+      ],
+      "conclusion": "Resident memory reduction is substantial in this workload, but the separate matched-source offscreen CPU matrix shows material regressions; no default policy change adopted.",
+      "primary_reference": "https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html"
+    },
+    "validation": {
+      "face_unit_tests": {
+        "passed": 6,
+        "log": "evidence:/heap/tests.log"
+      },
+      "search_unit_tests": {
+        "passed": 23,
+        "log": "evidence:/heap/tests.log"
+      },
+      "picture_owner_unit_test": {
+        "passed": 1,
+        "log": "evidence:/heap/tests-picture.log"
+      },
+      "hidden_picture_integration": {
+        "passed": 1,
+        "log": "evidence:/heap/tests-hidden.log",
+        "checks": "Pixel equality, first-frame damage, hidden/show lifecycle, changed contents and caret behavior."
+      },
+      "review": "Independent review of wallpaper format/orientation/limits and Picture lifecycle by release_profiling; no blocker.",
+      "deployment": "Production changes committed on codex/memory-overhead. No deployment or real-session restart; isolated test processes cleaned."
+    },
+    "scope_caveat": "User report was older35f3015 on32GiB hardware; current installedfcdb02f on64GiB and current source snapshot differ. Synthetic matching-count fixture is not the original index; absolute old-report budgets cannot be directly compared."
+  },
+  "compiler_memory": {
+    "dynamic-kit-cgu1-nolto": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 72.99609375,
+        "min": 72.3818359375,
+        "max": 72.9970703125,
+        "runs": [
+          72.3818359375,
+          72.9970703125,
+          72.99609375
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 15.0498046875,
+          "anonymous_pss_mib": 4.66796875,
+          "file_pss_mib": 5.677734375,
+          "shmem_pss_mib": 4.703125
+        },
+        "aizome-sumi": {
+          "pss_mib": 19.54296875,
+          "anonymous_pss_mib": 4.6640625,
+          "file_pss_mib": 6.017578125,
+          "shmem_pss_mib": 8.8671875
+        },
+        "aizome-settei": {
+          "pss_mib": 33.29296875,
+          "anonymous_pss_mib": 5.75,
+          "file_pss_mib": 8.29296875,
+          "shmem_pss_mib": 19.25
+        }
+      }
+    },
+    "dynamic-std-cgu1-nolto": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 81.669921875,
+        "min": 81.5595703125,
+        "max": 82.2275390625,
+        "runs": [
+          81.5595703125,
+          81.669921875,
+          82.2275390625
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 17.7998046875,
+          "anonymous_pss_mib": 4.38671875,
+          "file_pss_mib": 8.7001953125,
+          "shmem_pss_mib": 4.701171875
+        },
+        "aizome-sumi": {
+          "pss_mib": 22.2490234375,
+          "anonymous_pss_mib": 4.3984375,
+          "file_pss_mib": 9.0322265625,
+          "shmem_pss_mib": 8.873046875
+        },
+        "aizome-settei": {
+          "pss_mib": 36.73046875,
+          "anonymous_pss_mib": 5.4765625,
+          "file_pss_mib": 12.00390625,
+          "shmem_pss_mib": 19.25
+        }
+      }
+    },
+    "static-cgu1-nolto": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 81.2763671875,
+        "min": 80.755859375,
+        "max": 81.6181640625,
+        "runs": [
+          81.2763671875,
+          80.755859375,
+          81.6181640625
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 17.6474609375,
+          "anonymous_pss_mib": 4.3671875,
+          "file_pss_mib": 8.5654296875,
+          "shmem_pss_mib": 4.697265625
+        },
+        "aizome-sumi": {
+          "pss_mib": 22.248046875,
+          "anonymous_pss_mib": 4.390625,
+          "file_pss_mib": 9.03515625,
+          "shmem_pss_mib": 8.880859375
+        },
+        "aizome-settei": {
+          "pss_mib": 36.3623046875,
+          "anonymous_pss_mib": 5.48046875,
+          "file_pss_mib": 11.6318359375,
+          "shmem_pss_mib": 19.25
+        }
+      }
+    },
+    "thin-cgu1": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 80.400390625,
+        "min": 79.4873046875,
+        "max": 82.75,
+        "runs": [
+          82.75,
+          79.4873046875,
+          80.400390625
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 17.412109375,
+          "anonymous_pss_mib": 4.3515625,
+          "file_pss_mib": 8.3359375,
+          "shmem_pss_mib": 4.701171875
+        },
+        "aizome-sumi": {
+          "pss_mib": 21.990234375,
+          "anonymous_pss_mib": 4.35546875,
+          "file_pss_mib": 8.751953125,
+          "shmem_pss_mib": 8.85546875
+        },
+        "aizome-settei": {
+          "pss_mib": 35.837890625,
+          "anonymous_pss_mib": 5.41796875,
+          "file_pss_mib": 11.162109375,
+          "shmem_pss_mib": 19.25
+        }
+      }
+    },
+    "thin-cgu4": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 81.806640625,
+        "min": 81.5498046875,
+        "max": 82.1025390625,
+        "runs": [
+          81.806640625,
+          82.1025390625,
+          81.5498046875
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 17.5068359375,
+          "anonymous_pss_mib": 4.34765625,
+          "file_pss_mib": 8.6220703125,
+          "shmem_pss_mib": 4.69921875
+        },
+        "aizome-sumi": {
+          "pss_mib": 22.2294921875,
+          "anonymous_pss_mib": 4.46875,
+          "file_pss_mib": 9.189453125,
+          "shmem_pss_mib": 8.8828125
+        },
+        "aizome-settei": {
+          "pss_mib": 36.7080078125,
+          "anonymous_pss_mib": 5.5,
+          "file_pss_mib": 11.9580078125,
+          "shmem_pss_mib": 19.25
+        }
+      }
+    },
+    "solo-dynamic-kit-cgu1-nolto": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 25.8701171875,
+        "min": 25.8662109375,
+        "max": 25.880859375,
+        "runs": [
+          25.880859375,
+          25.8662109375,
+          25.8701171875
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 23.6630859375,
+          "anonymous_pss_mib": 4.66015625,
+          "file_pss_mib": 14.2978515625,
+          "shmem_pss_mib": 4.69921875
+        }
+      }
+    },
+    "solo-static-cgu1-nolto": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 20.3037109375,
+        "min": 20.0146484375,
+        "max": 20.3251953125,
+        "runs": [
+          20.3251953125,
+          20.0146484375,
+          20.3037109375
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 18.0830078125,
+          "anonymous_pss_mib": 4.3671875,
+          "file_pss_mib": 9.0234375,
+          "shmem_pss_mib": 4.69921875
+        }
+      }
+    },
+    "solo-thin-cgu1": {
+      "runs": 3,
+      "increment_pss_mib": {
+        "median": 19.9345703125,
+        "min": 19.796875,
+        "max": 19.9375,
+        "runs": [
+          19.796875,
+          19.9375,
+          19.9345703125
+        ]
+      },
+      "app_mib": {
+        "aizome-soroban": {
+          "pss_mib": 17.7060546875,
+          "anonymous_pss_mib": 4.3515625,
+          "file_pss_mib": 8.6572265625,
+          "shmem_pss_mib": 4.69921875
+        }
+      }
+    }
+  },
+  "fresh_shell_codegen": {
+    "cgu4": {
+      "runs": [
+        {
+          "label": "shell-cgu4-1",
+          "pss_mib": 64.1064453125,
+          "anon_mib": 42.4921875,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        },
+        {
+          "label": "shell-cgu4-2",
+          "pss_mib": 65.208984375,
+          "anon_mib": 43.50390625,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        },
+        {
+          "label": "shell-cgu4-3",
+          "pss_mib": 62.28125,
+          "anon_mib": 40.453125,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        }
+      ],
+      "median_pss_mib": 64.1064453125,
+      "range_pss_mib": [
+        62.28125,
+        65.208984375
+      ]
+    },
+    "cgu1": {
+      "runs": [
+        {
+          "label": "shell-cgu1-1",
+          "pss_mib": 64.1728515625,
+          "anon_mib": 43.16015625,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        },
+        {
+          "label": "shell-cgu1-2",
+          "pss_mib": 65.580078125,
+          "anon_mib": 43.615234375,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        },
+        {
+          "label": "shell-cgu1-3",
+          "pss_mib": 65.130859375,
+          "anon_mib": 43.64453125,
+          "cache_sha256": "24caa6117e5840d029e513286c71dca4cd1dc538d14e67b1103cee2042aed5c0",
+          "cache_bytes": 3203769,
+          "settings_sha256": "02ac679f2f02c4b13cb4f4d40abcec7fe8dfc06abc75158f877b1010c8340ddb"
+        }
+      ],
+      "median_pss_mib": 65.130859375,
+      "range_pss_mib": [
+        64.1728515625,
+        65.580078125
+      ]
+    }
+  },
+  "compiler_frame_cpu_ms": [
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "(Offscreen buffer for a whole 2880 × 1800 frame: allocation and copy only)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.14,
+      "p50_ms_range": [
+        0.13,
+        0.17
+      ],
+      "p95_ms_median": 0.35,
+      "p95_ms_range": [
+        0.35,
+        0.37
+      ],
+      "max_ms_median": 3.17,
+      "max_ms_range": [
+        3.04,
+        3.29
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Hover a button (settings pane, ~200 widgets)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.01,
+      "p50_ms_range": [
+        0.01,
+        0.01
+      ],
+      "p95_ms_median": 0.01,
+      "p95_ms_range": [
+        0.01,
+        0.01
+      ],
+      "max_ms_median": 0.08,
+      "max_ms_range": [
+        0.08,
+        0.08
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Move a 10,000-row list's selection by a row",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.08,
+      "p50_ms_range": [
+        0.08,
+        0.08
+      ],
+      "p95_ms_median": 0.11,
+      "p95_ms_range": [
+        0.11,
+        0.12
+      ],
+      "max_ms_median": 0.13,
+      "max_ms_range": [
+        0.12,
+        0.17
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Scroll a 10,000-row list one notch (rows moved, the strip drawn)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.12,
+      "p50_ms_range": [
+        0.12,
+        0.12
+      ],
+      "p95_ms_median": 0.16,
+      "p95_ms_range": [
+        0.16,
+        0.16
+      ],
+      "max_ms_median": 0.31,
+      "max_ms_range": [
+        0.3,
+        0.31
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Toggle a switch (update, view, layout, diff)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.03,
+      "p95_ms_range": [
+        0.03,
+        0.03
+      ],
+      "max_ms_median": 0.07,
+      "max_ms_range": [
+        0.07,
+        0.07
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Type a character in a 2,000-line editor",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.22,
+      "p50_ms_range": [
+        0.22,
+        0.22
+      ],
+      "p95_ms_median": 0.36,
+      "p95_ms_range": [
+        0.36,
+        0.36
+      ],
+      "max_ms_median": 1.52,
+      "max_ms_range": [
+        1.5,
+        1.61
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "Type a character in a text field",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.05,
+      "p50_ms_range": [
+        0.05,
+        0.05
+      ],
+      "p95_ms_median": 0.07,
+      "p95_ms_range": [
+        0.07,
+        0.07
+      ],
+      "max_ms_median": 0.19,
+      "max_ms_range": [
+        0.16,
+        0.2
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "settei a key in search",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.162941,
+      "p50_ms_range": [
+        0.16266999999999998,
+        0.1653
+      ],
+      "p95_ms_median": 0.531463,
+      "p95_ms_range": [
+        0.5294030000000001,
+        0.534143
+      ],
+      "max_ms_median": 0.8058730000000001,
+      "max_ms_range": [
+        0.7991630000000001,
+        0.812883
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "settei a switch",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.130641,
+      "p50_ms_range": [
+        0.129591,
+        0.131661
+      ],
+      "p95_ms_median": 0.14302,
+      "p95_ms_range": [
+        0.142671,
+        0.14725100000000002
+      ],
+      "max_ms_median": 0.156901,
+      "max_ms_range": [
+        0.156351,
+        0.18000100000000002
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "settei another pane",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.680223,
+      "p50_ms_range": [
+        0.680063,
+        0.6848930000000001
+      ],
+      "p95_ms_median": 1.107905,
+      "p95_ms_range": [
+        1.106915,
+        1.112435
+      ],
+      "max_ms_median": 1.132545,
+      "max_ms_range": [
+        1.123096,
+        2.192151
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "soroban Basic",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.077061,
+      "p50_ms_range": [
+        0.077001,
+        0.07732
+      ],
+      "p95_ms_median": 0.219101,
+      "p95_ms_range": [
+        0.214781,
+        0.219621
+      ],
+      "max_ms_median": 0.32033100000000003,
+      "max_ms_range": [
+        0.254831,
+        0.39378199999999997
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "soroban Programmer",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.259421,
+      "p50_ms_range": [
+        0.25895100000000004,
+        0.26095100000000004
+      ],
+      "p95_ms_median": 0.45707200000000003,
+      "p95_ms_range": [
+        0.44728300000000004,
+        0.464463
+      ],
+      "max_ms_median": 0.630213,
+      "max_ms_range": [
+        0.48347300000000004,
+        0.754703
+      ]
+    },
+    {
+      "label": "dynamic-kit-cgu1-nolto",
+      "workload": "soroban Scientific",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.159081,
+      "p50_ms_range": [
+        0.159041,
+        0.160631
+      ],
+      "p95_ms_median": 0.328122,
+      "p95_ms_range": [
+        0.32536200000000004,
+        0.329042
+      ],
+      "max_ms_median": 0.439993,
+      "max_ms_range": [
+        0.337082,
+        0.723813
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "(Offscreen buffer for a whole 2880 × 1800 frame: allocation and copy only)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.14,
+      "p50_ms_range": [
+        0.14,
+        0.17
+      ],
+      "p95_ms_median": 0.32,
+      "p95_ms_range": [
+        0.31,
+        1.04
+      ],
+      "max_ms_median": 3.34,
+      "max_ms_range": [
+        3.05,
+        3.38
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Hover a button (settings pane, ~200 widgets)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.01,
+      "p50_ms_range": [
+        0.01,
+        0.01
+      ],
+      "p95_ms_median": 0.01,
+      "p95_ms_range": [
+        0.01,
+        0.01
+      ],
+      "max_ms_median": 0.07,
+      "max_ms_range": [
+        0.07,
+        0.08
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Move a 10,000-row list's selection by a row",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.08,
+      "p50_ms_range": [
+        0.08,
+        0.08
+      ],
+      "p95_ms_median": 0.11,
+      "p95_ms_range": [
+        0.11,
+        0.11
+      ],
+      "max_ms_median": 0.13,
+      "max_ms_range": [
+        0.12,
+        0.88
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Scroll a 10,000-row list one notch (rows moved, the strip drawn)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.12,
+      "p50_ms_range": [
+        0.12,
+        0.12
+      ],
+      "p95_ms_median": 0.16,
+      "p95_ms_range": [
+        0.16,
+        0.23
+      ],
+      "max_ms_median": 0.3,
+      "max_ms_range": [
+        0.3,
+        0.54
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Toggle a switch (update, view, layout, diff)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.03,
+      "p95_ms_range": [
+        0.03,
+        0.04
+      ],
+      "max_ms_median": 0.07,
+      "max_ms_range": [
+        0.06,
+        0.07
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Type a character in a 2,000-line editor",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.22,
+      "p50_ms_range": [
+        0.22,
+        0.27
+      ],
+      "p95_ms_median": 0.36,
+      "p95_ms_range": [
+        0.36,
+        0.36
+      ],
+      "max_ms_median": 1.59,
+      "max_ms_range": [
+        1.54,
+        1.59
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "Type a character in a text field",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.05,
+      "p50_ms_range": [
+        0.05,
+        0.05
+      ],
+      "p95_ms_median": 0.07,
+      "p95_ms_range": [
+        0.07,
+        0.07
+      ],
+      "max_ms_median": 0.19,
+      "max_ms_range": [
+        0.18,
+        0.23
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "settei a key in search",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.16423,
+      "p50_ms_range": [
+        0.162531,
+        0.16821100000000003
+      ],
+      "p95_ms_median": 0.5358630000000001,
+      "p95_ms_range": [
+        0.528563,
+        0.538122
+      ],
+      "max_ms_median": 0.8250940000000001,
+      "max_ms_range": [
+        0.810334,
+        0.828523
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "settei a switch",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.129021,
+      "p50_ms_range": [
+        0.12692,
+        0.13044
+      ],
+      "p95_ms_median": 0.13942,
+      "p95_ms_range": [
+        0.137501,
+        0.14627099999999998
+      ],
+      "max_ms_median": 0.1467,
+      "max_ms_range": [
+        0.145461,
+        0.16833099999999998
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "settei another pane",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.682333,
+      "p50_ms_range": [
+        0.672063,
+        0.695142
+      ],
+      "p95_ms_median": 1.113175,
+      "p95_ms_range": [
+        1.091805,
+        1.120675
+      ],
+      "max_ms_median": 1.122585,
+      "max_ms_range": [
+        1.118945,
+        1.218865
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "soroban Basic",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.07723000000000001,
+      "p50_ms_range": [
+        0.07711,
+        0.07767
+      ],
+      "p95_ms_median": 0.215251,
+      "p95_ms_range": [
+        0.215001,
+        0.219601
+      ],
+      "max_ms_median": 0.265651,
+      "max_ms_range": [
+        0.23236099999999998,
+        0.311661
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "soroban Programmer",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.259421,
+      "p50_ms_range": [
+        0.258601,
+        0.263801
+      ],
+      "p95_ms_median": 0.444972,
+      "p95_ms_range": [
+        0.433942,
+        0.470782
+      ],
+      "max_ms_median": 0.502452,
+      "max_ms_range": [
+        0.483263,
+        0.569703
+      ]
+    },
+    {
+      "label": "dynamic-std-cgu1-nolto",
+      "workload": "soroban Scientific",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.161441,
+      "p50_ms_range": [
+        0.161421,
+        0.16309
+      ],
+      "p95_ms_median": 0.32886200000000004,
+      "p95_ms_range": [
+        0.327042,
+        0.331591
+      ],
+      "max_ms_median": 0.506592,
+      "max_ms_range": [
+        0.41544200000000003,
+        0.517972
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "(Offscreen buffer for a whole 2880 × 1800 frame: allocation and copy only)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.14,
+      "p50_ms_range": [
+        0.13,
+        0.17
+      ],
+      "p95_ms_median": 0.31,
+      "p95_ms_range": [
+        0.26,
+        0.35
+      ],
+      "max_ms_median": 3.48,
+      "max_ms_range": [
+        3.16,
+        3.5
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Hover a button (settings pane, ~200 widgets)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.01,
+      "p50_ms_range": [
+        0.01,
+        0.01
+      ],
+      "p95_ms_median": 0.01,
+      "p95_ms_range": [
+        0.01,
+        0.01
+      ],
+      "max_ms_median": 0.07,
+      "max_ms_range": [
+        0.07,
+        0.07
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Move a 10,000-row list's selection by a row",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.08,
+      "p50_ms_range": [
+        0.08,
+        0.08
+      ],
+      "p95_ms_median": 0.11,
+      "p95_ms_range": [
+        0.11,
+        0.11
+      ],
+      "max_ms_median": 0.12,
+      "max_ms_range": [
+        0.12,
+        0.15
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Scroll a 10,000-row list one notch (rows moved, the strip drawn)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.12,
+      "p50_ms_range": [
+        0.12,
+        0.12
+      ],
+      "p95_ms_median": 0.16,
+      "p95_ms_range": [
+        0.16,
+        0.16
+      ],
+      "max_ms_median": 0.3,
+      "max_ms_range": [
+        0.29,
+        0.31
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Toggle a switch (update, view, layout, diff)",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.03,
+      "p95_ms_range": [
+        0.03,
+        0.03
+      ],
+      "max_ms_median": 0.06,
+      "max_ms_range": [
+        0.06,
+        0.07
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Type a character in a 2,000-line editor",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.23,
+      "p50_ms_range": [
+        0.22,
+        0.23
+      ],
+      "p95_ms_median": 0.36,
+      "p95_ms_range": [
+        0.36,
+        0.36
+      ],
+      "max_ms_median": 1.53,
+      "max_ms_range": [
+        1.52,
+        1.6
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "Type a character in a text field",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.05,
+      "p50_ms_range": [
+        0.05,
+        0.05
+      ],
+      "p95_ms_median": 0.07,
+      "p95_ms_range": [
+        0.07,
+        0.07
+      ],
+      "max_ms_median": 0.19,
+      "max_ms_range": [
+        0.16,
+        0.19
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "settei a key in search",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.160941,
+      "p50_ms_range": [
+        0.160081,
+        0.164381
+      ],
+      "p95_ms_median": 0.530223,
+      "p95_ms_range": [
+        0.5269020000000001,
+        0.536972
+      ],
+      "max_ms_median": 0.808524,
+      "max_ms_range": [
+        0.798663,
+        0.827954
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "settei a switch",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.130521,
+      "p50_ms_range": [
+        0.13018000000000002,
+        0.13272
+      ],
+      "p95_ms_median": 0.140721,
+      "p95_ms_range": [
+        0.14055,
+        0.143331
+      ],
+      "max_ms_median": 0.14575100000000002,
+      "max_ms_range": [
+        0.14377,
+        0.152071
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "settei another pane",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.670333,
+      "p50_ms_range": [
+        0.669443,
+        0.6853640000000001
+      ],
+      "p95_ms_median": 1.103426,
+      "p95_ms_range": [
+        1.100916,
+        1.113796
+      ],
+      "max_ms_median": 1.156926,
+      "max_ms_range": [
+        1.151645,
+        2.474911
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "soroban Basic",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.07718000000000001,
+      "p50_ms_range": [
+        0.076431,
+        0.07739
+      ],
+      "p95_ms_median": 0.215031,
+      "p95_ms_range": [
+        0.214391,
+        0.218111
+      ],
+      "max_ms_median": 0.23665100000000003,
+      "max_ms_range": [
+        0.22909100000000002,
+        0.27236200000000005
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "soroban Programmer",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.25783100000000003,
+      "p50_ms_range": [
+        0.246721,
+        0.26133100000000004
+      ],
+      "p95_ms_median": 0.442712,
+      "p95_ms_range": [
+        0.433102,
+        0.464252
+      ],
+      "max_ms_median": 0.532832,
+      "max_ms_range": [
+        0.49849200000000005,
+        0.554802
+      ]
+    },
+    {
+      "label": "static-cgu1-nolto",
+      "workload": "soroban Scientific",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.159841,
+      "p50_ms_range": [
+        0.157361,
+        0.16432
+      ],
+      "p95_ms_median": 0.328322,
+      "p95_ms_range": [
+        0.325031,
+        0.33598200000000006
+      ],
+      "max_ms_median": 0.5162519999999999,
+      "max_ms_range": [
+        0.36853199999999997,
+        0.5176130000000001
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "settei a key in search",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.156011,
+      "p50_ms_range": [
+        0.15544,
+        0.156611
+      ],
+      "p95_ms_median": 0.523512,
+      "p95_ms_range": [
+        0.505763,
+        0.626773
+      ],
+      "max_ms_median": 0.7909640000000001,
+      "max_ms_range": [
+        0.7889640000000001,
+        0.804023
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "settei a switch",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.122741,
+      "p50_ms_range": [
+        0.121051,
+        0.12384099999999999
+      ],
+      "p95_ms_median": 0.13299000000000002,
+      "p95_ms_range": [
+        0.13241,
+        0.13489099999999998
+      ],
+      "max_ms_median": 0.143211,
+      "max_ms_range": [
+        0.13759100000000002,
+        0.157561
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "settei another pane",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.660474,
+      "p50_ms_range": [
+        0.658353,
+        0.665203
+      ],
+      "p95_ms_median": 1.092215,
+      "p95_ms_range": [
+        1.084536,
+        1.099915
+      ],
+      "max_ms_median": 1.106745,
+      "max_ms_range": [
+        1.103885,
+        1.108515
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "soroban Basic",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.07517,
+      "p50_ms_range": [
+        0.07475,
+        0.07596
+      ],
+      "p95_ms_median": 0.214231,
+      "p95_ms_range": [
+        0.211821,
+        0.21621100000000001
+      ],
+      "max_ms_median": 0.230441,
+      "max_ms_range": [
+        0.227821,
+        0.38322100000000003
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "soroban Programmer",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.256111,
+      "p50_ms_range": [
+        0.252651,
+        0.257581
+      ],
+      "p95_ms_median": 0.438183,
+      "p95_ms_range": [
+        0.43247199999999997,
+        0.440442
+      ],
+      "max_ms_median": 0.475932,
+      "max_ms_range": [
+        0.471852,
+        0.47700200000000004
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "soroban Scientific",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.157131,
+      "p50_ms_range": [
+        0.15596100000000002,
+        0.16221000000000002
+      ],
+      "p95_ms_median": 0.326201,
+      "p95_ms_range": [
+        0.325462,
+        0.330841
+      ],
+      "max_ms_median": 0.518283,
+      "max_ms_range": [
+        0.338272,
+        0.525522
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "sumi scrolling",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.315262,
+      "p50_ms_range": [
+        0.310791,
+        0.31784100000000004
+      ],
+      "p95_ms_median": 0.38892200000000005,
+      "p95_ms_range": [
+        0.376532,
+        0.396592
+      ],
+      "max_ms_median": 0.747573,
+      "max_ms_range": [
+        0.5356219999999999,
+        1.098135
+      ]
+    },
+    {
+      "label": "static-cgu1-thinlto",
+      "workload": "sumi typing",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.368171,
+      "p50_ms_range": [
+        0.36632200000000004,
+        0.368871
+      ],
+      "p95_ms_median": 0.417602,
+      "p95_ms_range": [
+        0.415752,
+        0.44023300000000004
+      ],
+      "max_ms_median": 0.7524930000000001,
+      "max_ms_range": [
+        0.7039529999999999,
+        0.9143840000000001
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "settei a key in search",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.158,
+      "p50_ms_range": [
+        0.15725,
+        0.159051
+      ],
+      "p95_ms_median": 0.514732,
+      "p95_ms_range": [
+        0.511853,
+        0.528343
+      ],
+      "max_ms_median": 0.768993,
+      "max_ms_range": [
+        0.767804,
+        0.7972039999999999
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "settei a switch",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.12769,
+      "p50_ms_range": [
+        0.125991,
+        0.13299000000000002
+      ],
+      "p95_ms_median": 0.148281,
+      "p95_ms_range": [
+        0.13643100000000002,
+        0.213501
+      ],
+      "max_ms_median": 0.16421000000000002,
+      "max_ms_range": [
+        0.146951,
+        0.244101
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "settei another pane",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.660723,
+      "p50_ms_range": [
+        0.6581130000000001,
+        0.6632530000000001
+      ],
+      "p95_ms_median": 1.095255,
+      "p95_ms_range": [
+        1.093585,
+        1.103325
+      ],
+      "max_ms_median": 1.125625,
+      "max_ms_range": [
+        1.112986,
+        1.257096
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "soroban Basic",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.0765,
+      "p50_ms_range": [
+        0.07563,
+        0.07664
+      ],
+      "p95_ms_median": 0.21566100000000002,
+      "p95_ms_range": [
+        0.214771,
+        0.220671
+      ],
+      "max_ms_median": 0.350832,
+      "max_ms_range": [
+        0.22774100000000003,
+        0.431832
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "soroban Programmer",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.260041,
+      "p50_ms_range": [
+        0.257941,
+        0.262151
+      ],
+      "p95_ms_median": 0.45986200000000005,
+      "p95_ms_range": [
+        0.446502,
+        0.465402
+      ],
+      "max_ms_median": 0.5441130000000001,
+      "max_ms_range": [
+        0.492313,
+        1.153826
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "soroban Scientific",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.15899100000000002,
+      "p50_ms_range": [
+        0.157721,
+        0.15909
+      ],
+      "p95_ms_median": 0.330052,
+      "p95_ms_range": [
+        0.321551,
+        0.333262
+      ],
+      "max_ms_median": 0.504412,
+      "max_ms_range": [
+        0.484902,
+        0.522593
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "sumi scrolling",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.319492,
+      "p50_ms_range": [
+        0.311191,
+        0.321732
+      ],
+      "p95_ms_median": 0.395611,
+      "p95_ms_range": [
+        0.38930200000000004,
+        0.42543200000000003
+      ],
+      "max_ms_median": 0.531462,
+      "max_ms_range": [
+        0.5240119999999999,
+        0.910674
+      ]
+    },
+    {
+      "label": "static-cgu4-thinlto",
+      "workload": "sumi typing",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.375402,
+      "p50_ms_range": [
+        0.370221,
+        0.381622
+      ],
+      "p95_ms_median": 0.457442,
+      "p95_ms_range": [
+        0.439072,
+        0.46351200000000004
+      ],
+      "max_ms_median": 0.753074,
+      "max_ms_range": [
+        0.7005330000000001,
+        0.914084
+      ]
+    }
+  ],
+  "allocator_app_memory": {
+    "alloc-glibc": {
+      "repetitions": 3,
+      "samples_per_stage_per_run": 3,
+      "stages": {
+        "early": {
+          "increment_pss_mib": {
+            "median": 81.99609375,
+            "min": 80.90625,
+            "max": 82.3779296875,
+            "runs": [
+              80.90625,
+              82.3779296875,
+              81.99609375
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 17.673828125,
+                "min": 17.267578125,
+                "max": 18.00390625,
+                "runs": [
+                  17.267578125,
+                  18.00390625,
+                  17.673828125
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 4.0546875,
+                "min": 4.015625,
+                "max": 4.37109375,
+                "runs": [
+                  4.015625,
+                  4.37109375,
+                  4.0546875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 8.90625,
+                "min": 8.55078125,
+                "max": 8.91796875,
+                "runs": [
+                  8.55078125,
+                  8.91796875,
+                  8.90625
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.712890625,
+                "min": 4.701171875,
+                "max": 4.71484375,
+                "runs": [
+                  4.701171875,
+                  4.71484375,
+                  4.712890625
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 22.7978515625,
+                "min": 22.326171875,
+                "max": 22.830078125,
+                "runs": [
+                  22.326171875,
+                  22.7978515625,
+                  22.830078125
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 4.4765625,
+                "min": 4.45703125,
+                "max": 4.48046875,
+                "runs": [
+                  4.45703125,
+                  4.4765625,
+                  4.48046875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.4404296875,
+                "min": 8.990234375,
+                "max": 9.482421875,
+                "runs": [
+                  8.990234375,
+                  9.4404296875,
+                  9.482421875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.87890625,
+                "min": 8.8671875,
+                "max": 8.880859375,
+                "runs": [
+                  8.87890625,
+                  8.880859375,
+                  8.8671875
+                ]
+              },
+              "threads": {
+                "median": 9,
+                "min": 9,
+                "max": 9,
+                "runs": [
+                  9,
+                  9,
+                  9
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 36.69140625,
+                "min": 36.349609375,
+                "max": 36.798828125,
+                "runs": [
+                  36.349609375,
+                  36.798828125,
+                  36.69140625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 5.49609375,
+                "min": 5.44921875,
+                "max": 5.5,
+                "runs": [
+                  5.44921875,
+                  5.5,
+                  5.49609375
+                ]
+              },
+              "file_pss_mib": {
+                "median": 11.9453125,
+                "min": 11.650390625,
+                "max": 12.048828125,
+                "runs": [
+                  11.650390625,
+                  12.048828125,
+                  11.9453125
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        },
+        "settled": {
+          "increment_pss_mib": {
+            "median": 82.009765625,
+            "min": 80.8466796875,
+            "max": 82.2421875,
+            "runs": [
+              80.8466796875,
+              82.2421875,
+              82.009765625
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 17.6728515625,
+                "min": 17.2568359375,
+                "max": 18.00390625,
+                "runs": [
+                  17.2568359375,
+                  18.00390625,
+                  17.6728515625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 4.0546875,
+                "min": 4.015625,
+                "max": 4.37109375,
+                "runs": [
+                  4.015625,
+                  4.37109375,
+                  4.0546875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 8.9052734375,
+                "min": 8.5400390625,
+                "max": 8.91796875,
+                "runs": [
+                  8.5400390625,
+                  8.91796875,
+                  8.9052734375
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.712890625,
+                "min": 4.701171875,
+                "max": 4.71484375,
+                "runs": [
+                  4.701171875,
+                  4.71484375,
+                  4.712890625
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 22.7822265625,
+                "min": 22.314453125,
+                "max": 22.830078125,
+                "runs": [
+                  22.314453125,
+                  22.7822265625,
+                  22.830078125
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 4.4765625,
+                "min": 4.45703125,
+                "max": 4.48046875,
+                "runs": [
+                  4.45703125,
+                  4.4765625,
+                  4.48046875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.4248046875,
+                "min": 8.978515625,
+                "max": 9.482421875,
+                "runs": [
+                  8.978515625,
+                  9.4248046875,
+                  9.482421875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.87890625,
+                "min": 8.8671875,
+                "max": 8.880859375,
+                "runs": [
+                  8.87890625,
+                  8.880859375,
+                  8.8671875
+                ]
+              },
+              "threads": {
+                "median": 9,
+                "min": 9,
+                "max": 9,
+                "runs": [
+                  9,
+                  9,
+                  9
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 36.7060546875,
+                "min": 36.3515625,
+                "max": 36.7373046875,
+                "runs": [
+                  36.3515625,
+                  36.7373046875,
+                  36.7060546875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 5.51171875,
+                "min": 5.46484375,
+                "max": 5.515625,
+                "runs": [
+                  5.46484375,
+                  5.515625,
+                  5.51171875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 11.9443359375,
+                "min": 11.63671875,
+                "max": 11.9716796875,
+                "runs": [
+                  11.63671875,
+                  11.9716796875,
+                  11.9443359375
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        }
+      }
+    },
+    "alloc-jemalloc": {
+      "repetitions": 3,
+      "samples_per_stage_per_run": 3,
+      "stages": {
+        "early": {
+          "increment_pss_mib": {
+            "median": 90.177734375,
+            "min": 88.9072265625,
+            "max": 90.255859375,
+            "runs": [
+              88.9072265625,
+              90.177734375,
+              90.255859375
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 20.42578125,
+                "min": 20.2900390625,
+                "max": 20.5263671875,
+                "runs": [
+                  20.2900390625,
+                  20.42578125,
+                  20.5263671875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.41015625,
+                "min": 6.390625,
+                "max": 6.41796875,
+                "runs": [
+                  6.390625,
+                  6.41015625,
+                  6.41796875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.31640625,
+                "min": 9.2021484375,
+                "max": 9.3935546875,
+                "runs": [
+                  9.2021484375,
+                  9.31640625,
+                  9.3935546875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.69921875,
+                "min": 4.697265625,
+                "max": 4.71484375,
+                "runs": [
+                  4.697265625,
+                  4.69921875,
+                  4.71484375
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 25.17578125,
+                "min": 24.9248046875,
+                "max": 25.294921875,
+                "runs": [
+                  24.9248046875,
+                  25.17578125,
+                  25.294921875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.5234375,
+                "min": 6.5234375,
+                "max": 6.52734375,
+                "runs": [
+                  6.5234375,
+                  6.52734375,
+                  6.5234375
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.794921875,
+                "min": 9.5185546875,
+                "max": 9.90234375,
+                "runs": [
+                  9.5185546875,
+                  9.794921875,
+                  9.90234375
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.869140625,
+                "min": 8.853515625,
+                "max": 8.8828125,
+                "runs": [
+                  8.8828125,
+                  8.853515625,
+                  8.869140625
+                ]
+              },
+              "threads": {
+                "median": 9,
+                "min": 9,
+                "max": 9,
+                "runs": [
+                  9,
+                  9,
+                  9
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 39.6513671875,
+                "min": 38.8935546875,
+                "max": 39.7373046875,
+                "runs": [
+                  38.8935546875,
+                  39.7373046875,
+                  39.6513671875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 7.84765625,
+                "min": 7.51171875,
+                "max": 7.92578125,
+                "runs": [
+                  7.51171875,
+                  7.84765625,
+                  7.92578125
+                ]
+              },
+              "file_pss_mib": {
+                "median": 12.4755859375,
+                "min": 12.1318359375,
+                "max": 12.6396484375,
+                "runs": [
+                  12.1318359375,
+                  12.6396484375,
+                  12.4755859375
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        },
+        "settled": {
+          "increment_pss_mib": {
+            "median": 90.0576171875,
+            "min": 87.7392578125,
+            "max": 90.2490234375,
+            "runs": [
+              87.7392578125,
+              90.0576171875,
+              90.2490234375
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 20.427734375,
+                "min": 20.291015625,
+                "max": 20.525390625,
+                "runs": [
+                  20.291015625,
+                  20.427734375,
+                  20.525390625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.41015625,
+                "min": 6.390625,
+                "max": 6.41796875,
+                "runs": [
+                  6.390625,
+                  6.41015625,
+                  6.41796875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.318359375,
+                "min": 9.203125,
+                "max": 9.392578125,
+                "runs": [
+                  9.203125,
+                  9.318359375,
+                  9.392578125
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.69921875,
+                "min": 4.697265625,
+                "max": 4.71484375,
+                "runs": [
+                  4.697265625,
+                  4.69921875,
+                  4.71484375
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 25.201171875,
+                "min": 24.94921875,
+                "max": 25.3173828125,
+                "runs": [
+                  24.94921875,
+                  25.201171875,
+                  25.3173828125
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.546875,
+                "min": 6.546875,
+                "max": 6.55078125,
+                "runs": [
+                  6.546875,
+                  6.55078125,
+                  6.546875
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.796875,
+                "min": 9.51953125,
+                "max": 9.9013671875,
+                "runs": [
+                  9.51953125,
+                  9.796875,
+                  9.9013671875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.869140625,
+                "min": 8.853515625,
+                "max": 8.8828125,
+                "runs": [
+                  8.8828125,
+                  8.853515625,
+                  8.869140625
+                ]
+              },
+              "threads": {
+                "median": 9,
+                "min": 9,
+                "max": 9,
+                "runs": [
+                  9,
+                  9,
+                  9
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 39.5908203125,
+                "min": 37.6796875,
+                "max": 39.6279296875,
+                "runs": [
+                  37.6796875,
+                  39.5908203125,
+                  39.6279296875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 7.69921875,
+                "min": 6.296875,
+                "max": 7.90234375,
+                "runs": [
+                  6.296875,
+                  7.69921875,
+                  7.90234375
+                ]
+              },
+              "file_pss_mib": {
+                "median": 12.4755859375,
+                "min": 12.1328125,
+                "max": 12.6416015625,
+                "runs": [
+                  12.1328125,
+                  12.6416015625,
+                  12.4755859375
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 8,
+                "min": 8,
+                "max": 8,
+                "runs": [
+                  8,
+                  8,
+                  8
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        }
+      }
+    },
+    "alloc-jemalloc-bg": {
+      "repetitions": 3,
+      "samples_per_stage_per_run": 3,
+      "stages": {
+        "early": {
+          "increment_pss_mib": {
+            "median": 89.3837890625,
+            "min": 89.248046875,
+            "max": 89.462890625,
+            "runs": [
+              89.248046875,
+              89.3837890625,
+              89.462890625
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 20.2685546875,
+                "min": 20.203125,
+                "max": 20.283203125,
+                "runs": [
+                  20.203125,
+                  20.283203125,
+                  20.2685546875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.20703125,
+                "min": 6.1953125,
+                "max": 6.21484375,
+                "runs": [
+                  6.1953125,
+                  6.21484375,
+                  6.20703125
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.35546875,
+                "min": 9.294921875,
+                "max": 9.3623046875,
+                "runs": [
+                  9.294921875,
+                  9.35546875,
+                  9.3623046875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.712890625,
+                "min": 4.69921875,
+                "max": 4.712890625,
+                "runs": [
+                  4.712890625,
+                  4.712890625,
+                  4.69921875
+                ]
+              },
+              "threads": {
+                "median": 12,
+                "min": 12,
+                "max": 12,
+                "runs": [
+                  12,
+                  12,
+                  12
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 24.771484375,
+                "min": 24.7041015625,
+                "max": 24.84765625,
+                "runs": [
+                  24.771484375,
+                  24.84765625,
+                  24.7041015625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.11328125,
+                "min": 6.11328125,
+                "max": 6.1640625,
+                "runs": [
+                  6.11328125,
+                  6.1640625,
+                  6.11328125
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.791015625,
+                "min": 9.7373046875,
+                "max": 9.80078125,
+                "runs": [
+                  9.791015625,
+                  9.80078125,
+                  9.7373046875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.8671875,
+                "min": 8.853515625,
+                "max": 8.8828125,
+                "runs": [
+                  8.8671875,
+                  8.8828125,
+                  8.853515625
+                ]
+              },
+              "threads": {
+                "median": 13,
+                "min": 13,
+                "max": 13,
+                "runs": [
+                  13,
+                  13,
+                  13
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 39.4951171875,
+                "min": 39.4755859375,
+                "max": 39.640625,
+                "runs": [
+                  39.4951171875,
+                  39.4755859375,
+                  39.640625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 7.83984375,
+                "min": 7.828125,
+                "max": 7.83984375,
+                "runs": [
+                  7.828125,
+                  7.83984375,
+                  7.83984375
+                ]
+              },
+              "file_pss_mib": {
+                "median": 12.4169921875,
+                "min": 12.3857421875,
+                "max": 12.55078125,
+                "runs": [
+                  12.4169921875,
+                  12.3857421875,
+                  12.55078125
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 12,
+                "min": 12,
+                "max": 12,
+                "runs": [
+                  12,
+                  12,
+                  12
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        },
+        "settled": {
+          "increment_pss_mib": {
+            "median": 86.044921875,
+            "min": 85.916015625,
+            "max": 86.1171875,
+            "runs": [
+              85.916015625,
+              86.1171875,
+              86.044921875
+            ]
+          },
+          "apps": {
+            "aizome-soroban": {
+              "pss_mib": {
+                "median": 19.462890625,
+                "min": 19.4296875,
+                "max": 19.4970703125,
+                "runs": [
+                  19.4296875,
+                  19.4970703125,
+                  19.462890625
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 5.421875,
+                "min": 5.40234375,
+                "max": 5.4296875,
+                "runs": [
+                  5.421875,
+                  5.4296875,
+                  5.40234375
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.3544921875,
+                "min": 9.294921875,
+                "max": 9.361328125,
+                "runs": [
+                  9.294921875,
+                  9.3544921875,
+                  9.361328125
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 4.712890625,
+                "min": 4.69921875,
+                "max": 4.712890625,
+                "runs": [
+                  4.712890625,
+                  4.712890625,
+                  4.69921875
+                ]
+              },
+              "threads": {
+                "median": 12,
+                "min": 12,
+                "max": 12,
+                "runs": [
+                  12,
+                  12,
+                  12
+                ]
+              }
+            },
+            "aizome-sumi": {
+              "pss_mib": {
+                "median": 23.779296875,
+                "min": 23.6904296875,
+                "max": 23.84375,
+                "runs": [
+                  23.779296875,
+                  23.84375,
+                  23.6904296875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 5.12109375,
+                "min": 5.1015625,
+                "max": 5.16015625,
+                "runs": [
+                  5.12109375,
+                  5.16015625,
+                  5.1015625
+                ]
+              },
+              "file_pss_mib": {
+                "median": 9.791015625,
+                "min": 9.7353515625,
+                "max": 9.80078125,
+                "runs": [
+                  9.791015625,
+                  9.80078125,
+                  9.7353515625
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 8.8671875,
+                "min": 8.853515625,
+                "max": 8.8828125,
+                "runs": [
+                  8.8671875,
+                  8.8828125,
+                  8.853515625
+                ]
+              },
+              "threads": {
+                "median": 13,
+                "min": 13,
+                "max": 13,
+                "runs": [
+                  13,
+                  13,
+                  13
+                ]
+              }
+            },
+            "aizome-settei": {
+              "pss_mib": {
+                "median": 37.998046875,
+                "min": 37.9287109375,
+                "max": 38.0498046875,
+                "runs": [
+                  37.9287109375,
+                  37.998046875,
+                  38.0498046875
+                ]
+              },
+              "anonymous_pss_mib": {
+                "median": 6.265625,
+                "min": 6.26171875,
+                "max": 6.36328125,
+                "runs": [
+                  6.26171875,
+                  6.36328125,
+                  6.265625
+                ]
+              },
+              "file_pss_mib": {
+                "median": 12.4169921875,
+                "min": 12.384765625,
+                "max": 12.5341796875,
+                "runs": [
+                  12.4169921875,
+                  12.384765625,
+                  12.5341796875
+                ]
+              },
+              "shmem_pss_mib": {
+                "median": 19.25,
+                "min": 19.25,
+                "max": 19.25,
+                "runs": [
+                  19.25,
+                  19.25,
+                  19.25
+                ]
+              },
+              "threads": {
+                "median": 12,
+                "min": 12,
+                "max": 12,
+                "runs": [
+                  12,
+                  12,
+                  12
+                ]
+              }
+            }
+          },
+          "max_swap_pss_kib": 0
+        }
+      }
+    }
+  },
+  "allocator_shell_decay": {
+    "replicates_per_policy": 1,
+    "initial_sampled_peak_excluded": true,
+    "curves": {
+      "alloc-glibc-match": {
+        "shell": "evidence:/allocator-controls/glibc/aizome-shell",
+        "compositor": "/nix/store/njxcd9ssn8qqw54y7r23imb4z89lpnz4-aizome-0.1.0-fcdb02f/bin/aizome",
+        "compositor_preload": null,
+        "malloc_conf": "",
+        "points": [
+          {
+            "after_dismiss_seconds": 1.0619995009619743e-05,
+            "target_seconds": 0,
+            "shell_pss_mib": 215.48046875,
+            "shell_anon_mib": 190.78125,
+            "shell_shmem_mib": 7.625,
+            "compositor_pss_mib": 65.40625,
+            "cpu_seconds": 0.89
+          },
+          {
+            "after_dismiss_seconds": 5.261114232998807,
+            "target_seconds": 5,
+            "shell_pss_mib": 215.48046875,
+            "shell_anon_mib": 190.78125,
+            "shell_shmem_mib": 7.625,
+            "compositor_pss_mib": 65.40625,
+            "cpu_seconds": 0.9
+          },
+          {
+            "after_dismiss_seconds": 9.984743575994798,
+            "target_seconds": 10,
+            "shell_pss_mib": 215.890625,
+            "shell_anon_mib": 190.78125,
+            "shell_shmem_mib": 8.03515625,
+            "compositor_pss_mib": 65.55859375,
+            "cpu_seconds": 0.9
+          },
+          {
+            "after_dismiss_seconds": 29.8584845699952,
+            "target_seconds": 30,
+            "shell_pss_mib": 215.890625,
+            "shell_anon_mib": 190.78125,
+            "shell_shmem_mib": 8.03515625,
+            "compositor_pss_mib": 65.55859375,
+            "cpu_seconds": 0.92
+          },
+          {
+            "after_dismiss_seconds": 60.25998798499495,
+            "target_seconds": 60,
+            "shell_pss_mib": 215.8955078125,
+            "shell_anon_mib": 190.78515625,
+            "shell_shmem_mib": 8.03515625,
+            "compositor_pss_mib": 65.55859375,
+            "cpu_seconds": 0.95
+          }
+        ]
+      },
+      "jem-default": {
+        "shell": "evidence:/jemalloc-bin/aizome-shell",
+        "compositor": "/nix/store/njxcd9ssn8qqw54y7r23imb4z89lpnz4-aizome-0.1.0-fcdb02f/bin/aizome",
+        "compositor_preload": null,
+        "malloc_conf": "",
+        "points": [
+          {
+            "after_dismiss_seconds": 8.600000001024455e-06,
+            "target_seconds": 0,
+            "shell_pss_mib": 173.8515625,
+            "shell_anon_mib": 146.83984375,
+            "shell_shmem_mib": 8.02734375,
+            "compositor_pss_mib": 65.8046875,
+            "cpu_seconds": 0.67
+          },
+          {
+            "after_dismiss_seconds": 5.139104918001976,
+            "target_seconds": 5,
+            "shell_pss_mib": 176.833984375,
+            "shell_anon_mib": 149.96484375,
+            "shell_shmem_mib": 8.02734375,
+            "compositor_pss_mib": 65.529296875,
+            "cpu_seconds": 0.69
+          },
+          {
+            "after_dismiss_seconds": 9.756636372003413,
+            "target_seconds": 10,
+            "shell_pss_mib": 176.111328125,
+            "shell_anon_mib": 149.96484375,
+            "shell_shmem_mib": 8.02734375,
+            "compositor_pss_mib": 65.365234375,
+            "cpu_seconds": 0.69
+          },
+          {
+            "after_dismiss_seconds": 29.764029398000275,
+            "target_seconds": 30,
+            "shell_pss_mib": 176.5703125,
+            "shell_anon_mib": 150.00390625,
+            "shell_shmem_mib": 8.02734375,
+            "compositor_pss_mib": 65.8017578125,
+            "cpu_seconds": 0.71
+          },
+          {
+            "after_dismiss_seconds": 60.01631666000321,
+            "target_seconds": 60,
+            "shell_pss_mib": 176.66015625,
+            "shell_anon_mib": 150.03125,
+            "shell_shmem_mib": 8.02734375,
+            "compositor_pss_mib": 65.802734375,
+            "cpu_seconds": 0.73
+          }
+        ]
+      },
+      "jem-background": {
+        "shell": "evidence:/jemalloc-bin/aizome-shell",
+        "compositor": "/nix/store/njxcd9ssn8qqw54y7r23imb4z89lpnz4-aizome-0.1.0-fcdb02f/bin/aizome",
+        "compositor_preload": null,
+        "malloc_conf": "background_thread:true",
+        "points": [
+          {
+            "after_dismiss_seconds": 8.520000847056508e-06,
+            "target_seconds": 0,
+            "shell_pss_mib": 111.6494140625,
+            "shell_anon_mib": 85.05078125,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 65.81640625,
+            "cpu_seconds": 0.58
+          },
+          {
+            "after_dismiss_seconds": 5.122805058999802,
+            "target_seconds": 5,
+            "shell_pss_mib": 81.4970703125,
+            "shell_anon_mib": 54.8984375,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 65.81640625,
+            "cpu_seconds": 0.6
+          },
+          {
+            "after_dismiss_seconds": 10.235419386997819,
+            "target_seconds": 10,
+            "shell_pss_mib": 71.908203125,
+            "shell_anon_mib": 45.30859375,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 65.81640625,
+            "cpu_seconds": 0.6
+          },
+          {
+            "after_dismiss_seconds": 30.188600624001992,
+            "target_seconds": 30,
+            "shell_pss_mib": 71.4775390625,
+            "shell_anon_mib": 44.87890625,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 65.8154296875,
+            "cpu_seconds": 0.61
+          },
+          {
+            "after_dismiss_seconds": 59.863358597001934,
+            "target_seconds": 60,
+            "shell_pss_mib": 71.4921875,
+            "shell_anon_mib": 44.89453125,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 65.8271484375,
+            "cpu_seconds": 0.62
+          }
+        ]
+      },
+      "jem-full-background": {
+        "shell": "evidence:/jemalloc-bin/aizome-shell",
+        "compositor": "/nix/store/njxcd9ssn8qqw54y7r23imb4z89lpnz4-aizome-0.1.0-fcdb02f/bin/aizome",
+        "compositor_preload": "evidence:/jemalloc-bin/lib/libjemalloc.so",
+        "malloc_conf": "background_thread:true",
+        "points": [
+          {
+            "after_dismiss_seconds": 1.1099997209385037e-05,
+            "target_seconds": 0,
+            "shell_pss_mib": 106.359375,
+            "shell_anon_mib": 79.4296875,
+            "shell_shmem_mib": 7.98828125,
+            "compositor_pss_mib": 67.201171875,
+            "cpu_seconds": 0.6
+          },
+          {
+            "after_dismiss_seconds": 5.112840982998023,
+            "target_seconds": 5,
+            "shell_pss_mib": 98.55859375,
+            "shell_anon_mib": 71.62890625,
+            "shell_shmem_mib": 7.98828125,
+            "compositor_pss_mib": 67.197265625,
+            "cpu_seconds": 0.61
+          },
+          {
+            "after_dismiss_seconds": 10.216495753993513,
+            "target_seconds": 10,
+            "shell_pss_mib": 71.9609375,
+            "shell_anon_mib": 45.03125,
+            "shell_shmem_mib": 7.98828125,
+            "compositor_pss_mib": 67.197265625,
+            "cpu_seconds": 0.61
+          },
+          {
+            "after_dismiss_seconds": 30.146632728996337,
+            "target_seconds": 30,
+            "shell_pss_mib": 71.9189453125,
+            "shell_anon_mib": 44.97265625,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 67.1796875,
+            "cpu_seconds": 0.63
+          },
+          {
+            "after_dismiss_seconds": 59.766332887993485,
+            "target_seconds": 60,
+            "shell_pss_mib": 71.8115234375,
+            "shell_anon_mib": 44.86328125,
+            "shell_shmem_mib": 8.005859375,
+            "compositor_pss_mib": 67.1533203125,
+            "cpu_seconds": 0.65
+          }
+        ]
+      }
+    }
+  },
+  "allocator_frame_cpu_ms": [
+    {
+      "label": "glibc",
+      "workload": "settei a key in search",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.15871000000000002,
+      "p50_ms_range": [
+        0.156051,
+        0.160521
+      ],
+      "p95_ms_median": 0.524422,
+      "p95_ms_range": [
+        0.523572,
+        0.5445720000000001
+      ],
+      "max_ms_median": 0.810504,
+      "max_ms_range": [
+        0.8004439999999999,
+        0.830404
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "settei a switch",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.1271,
+      "p50_ms_range": [
+        0.126871,
+        0.12778
+      ],
+      "p95_ms_median": 0.138161,
+      "p95_ms_range": [
+        0.13603,
+        0.144291
+      ],
+      "max_ms_median": 0.14732,
+      "max_ms_range": [
+        0.144131,
+        0.149671
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "settei another pane",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.653753,
+      "p50_ms_range": [
+        0.648443,
+        0.6712530000000001
+      ],
+      "p95_ms_median": 1.098415,
+      "p95_ms_range": [
+        1.096324,
+        1.105075
+      ],
+      "max_ms_median": 1.128245,
+      "max_ms_range": [
+        1.116954,
+        1.133995
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell clock tick",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.06,
+      "p50_ms_range": [
+        0.06,
+        0.06
+      ],
+      "p95_ms_median": 0.07,
+      "p95_ms_range": [
+        0.07,
+        0.08
+      ],
+      "max_ms_median": 0.12,
+      "max_ms_range": [
+        0.11,
+        0.13
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell meter",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.04,
+      "p95_ms_range": [
+        0.04,
+        0.04
+      ],
+      "max_ms_median": 0.04,
+      "max_ms_range": [
+        0.04,
+        0.05
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette arrow",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.15,
+      "p50_ms_range": [
+        0.14,
+        0.15
+      ],
+      "p95_ms_median": 0.2,
+      "p95_ms_range": [
+        0.2,
+        0.2
+      ],
+      "max_ms_median": 0.23,
+      "max_ms_range": [
+        0.22,
+        0.24
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette key",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.41,
+      "p50_ms_range": [
+        0.41,
+        0.41
+      ],
+      "p95_ms_median": 0.94,
+      "p95_ms_range": [
+        0.89,
+        0.96
+      ],
+      "max_ms_median": 1.11,
+      "max_ms_range": [
+        1.1,
+        1.12
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell window opens and closes",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.23,
+      "p50_ms_range": [
+        0.22,
+        0.23
+      ],
+      "p95_ms_median": 0.66,
+      "p95_ms_range": [
+        0.66,
+        0.72
+      ],
+      "max_ms_median": 2.33,
+      "max_ms_range": [
+        2.32,
+        2.52
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "soroban Basic",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.07581,
+      "p50_ms_range": [
+        0.075281,
+        0.07676999999999999
+      ],
+      "p95_ms_median": 0.215891,
+      "p95_ms_range": [
+        0.21424100000000001,
+        0.217401
+      ],
+      "max_ms_median": 0.327881,
+      "max_ms_range": [
+        0.296481,
+        0.36653199999999997
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "soroban Programmer",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.25607100000000005,
+      "p50_ms_range": [
+        0.255101,
+        0.257921
+      ],
+      "p95_ms_median": 0.436682,
+      "p95_ms_range": [
+        0.427832,
+        0.464892
+      ],
+      "max_ms_median": 0.48573200000000005,
+      "max_ms_range": [
+        0.479293,
+        0.510992
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "soroban Scientific",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.156551,
+      "p50_ms_range": [
+        0.15618100000000001,
+        0.157481
+      ],
+      "p95_ms_median": 0.322421,
+      "p95_ms_range": [
+        0.317351,
+        0.327642
+      ],
+      "max_ms_median": 0.506692,
+      "max_ms_range": [
+        0.476982,
+        0.5485420000000001
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "sumi scrolling",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.323501,
+      "p50_ms_range": [
+        0.319552,
+        0.327502
+      ],
+      "p95_ms_median": 0.386101,
+      "p95_ms_range": [
+        0.376981,
+        0.419032
+      ],
+      "max_ms_median": 0.5452319999999999,
+      "max_ms_range": [
+        0.532103,
+        0.9564840000000001
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "sumi typing",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.373182,
+      "p50_ms_range": [
+        0.37292200000000003,
+        0.377952
+      ],
+      "p95_ms_median": 0.458112,
+      "p95_ms_range": [
+        0.430062,
+        0.478902
+      ],
+      "max_ms_median": 0.922494,
+      "max_ms_range": [
+        0.6042329999999999,
+        1.532317
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "settei a key in search",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.245571,
+      "p50_ms_range": [
+        0.224031,
+        0.247231
+      ],
+      "p95_ms_median": 1.033675,
+      "p95_ms_range": [
+        0.900784,
+        1.053004
+      ],
+      "max_ms_median": 2.068009,
+      "max_ms_range": [
+        1.807308,
+        2.41924
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "settei a switch",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.128371,
+      "p50_ms_range": [
+        0.12704000000000001,
+        0.12971100000000002
+      ],
+      "p95_ms_median": 0.141131,
+      "p95_ms_range": [
+        0.14090100000000003,
+        0.142881
+      ],
+      "max_ms_median": 0.14892,
+      "max_ms_range": [
+        0.14635,
+        0.15495
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "settei another pane",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 2.012519,
+      "p50_ms_range": [
+        1.996528,
+        2.33553
+      ],
+      "p95_ms_median": 2.889713,
+      "p95_ms_range": [
+        2.496771,
+        2.891422
+      ],
+      "max_ms_median": 3.019323,
+      "max_ms_range": [
+        2.722572,
+        3.033104
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell clock tick",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.06,
+      "p50_ms_range": [
+        0.06,
+        0.07
+      ],
+      "p95_ms_median": 0.08,
+      "p95_ms_range": [
+        0.07,
+        0.13
+      ],
+      "max_ms_median": 0.13,
+      "max_ms_range": [
+        0.12,
+        0.15
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell meter",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.04,
+      "p95_ms_range": [
+        0.04,
+        0.04
+      ],
+      "max_ms_median": 0.04,
+      "max_ms_range": [
+        0.04,
+        0.07
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette arrow",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.4,
+      "p50_ms_range": [
+        0.39,
+        0.43
+      ],
+      "p95_ms_median": 0.47,
+      "p95_ms_range": [
+        0.47,
+        0.47
+      ],
+      "max_ms_median": 0.48,
+      "max_ms_range": [
+        0.48,
+        0.52
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette key",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.96,
+      "p50_ms_range": [
+        0.89,
+        0.99
+      ],
+      "p95_ms_median": 1.39,
+      "p95_ms_range": [
+        1.33,
+        1.77
+      ],
+      "max_ms_median": 1.66,
+      "max_ms_range": [
+        1.59,
+        1.94
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell window opens and closes",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.59,
+      "p50_ms_range": [
+        0.54,
+        0.59
+      ],
+      "p95_ms_median": 0.76,
+      "p95_ms_range": [
+        0.74,
+        0.77
+      ],
+      "max_ms_median": 2.45,
+      "max_ms_range": [
+        2.44,
+        2.45
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "soroban Basic",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.217501,
+      "p50_ms_range": [
+        0.182891,
+        0.222821
+      ],
+      "p95_ms_median": 0.548922,
+      "p95_ms_range": [
+        0.431392,
+        0.566932
+      ],
+      "max_ms_median": 0.658203,
+      "max_ms_range": [
+        0.5477029999999999,
+        0.663563
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "soroban Programmer",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.815624,
+      "p50_ms_range": [
+        0.778464,
+        0.865574
+      ],
+      "p95_ms_median": 1.232926,
+      "p95_ms_range": [
+        1.203185,
+        1.470677
+      ],
+      "max_ms_median": 1.597627,
+      "max_ms_range": [
+        1.499317,
+        1.696428
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "soroban Scientific",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.44519200000000003,
+      "p50_ms_range": [
+        0.428722,
+        0.494402
+      ],
+      "p95_ms_median": 0.7433540000000001,
+      "p95_ms_range": [
+        0.699874,
+        0.786774
+      ],
+      "max_ms_median": 1.054144,
+      "max_ms_range": [
+        1.031815,
+        1.064645
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "sumi scrolling",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 1.142975,
+      "p50_ms_range": [
+        1.013394,
+        1.285325
+      ],
+      "p95_ms_median": 1.276355,
+      "p95_ms_range": [
+        1.136925,
+        1.481957
+      ],
+      "max_ms_median": 1.436746,
+      "max_ms_range": [
+        1.319606,
+        1.674738
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "sumi typing",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.8916430000000001,
+      "p50_ms_range": [
+        0.7558830000000001,
+        0.961324
+      ],
+      "p95_ms_median": 1.040904,
+      "p95_ms_range": [
+        0.945144,
+        1.184385
+      ],
+      "max_ms_median": 1.303376,
+      "max_ms_range": [
+        1.117675,
+        1.306796
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "settei a key in search",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.14579,
+      "p50_ms_range": [
+        0.145201,
+        0.147311
+      ],
+      "p95_ms_median": 0.6123730000000001,
+      "p95_ms_range": [
+        0.611713,
+        0.614962
+      ],
+      "max_ms_median": 1.699778,
+      "max_ms_range": [
+        1.655737,
+        1.797087
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "settei a switch",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.10746,
+      "p50_ms_range": [
+        0.107151,
+        0.10993000000000001
+      ],
+      "p95_ms_median": 0.11792100000000001,
+      "p95_ms_range": [
+        0.11342,
+        0.16877099999999998
+      ],
+      "max_ms_median": 0.13418100000000002,
+      "max_ms_range": [
+        0.11614100000000001,
+        0.182061
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "settei another pane",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 1.580067,
+      "p50_ms_range": [
+        1.540247,
+        1.599287
+      ],
+      "p95_ms_median": 2.030638,
+      "p95_ms_range": [
+        1.955109,
+        2.033229
+      ],
+      "max_ms_median": 2.046159,
+      "max_ms_range": [
+        1.987659,
+        2.076638
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell clock tick",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.06,
+      "p50_ms_range": [
+        0.06,
+        0.06
+      ],
+      "p95_ms_median": 0.08,
+      "p95_ms_range": [
+        0.07,
+        0.08
+      ],
+      "max_ms_median": 0.12,
+      "max_ms_range": [
+        0.11,
+        0.13
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell meter",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.03,
+      "p95_ms_range": [
+        0.03,
+        0.03
+      ],
+      "max_ms_median": 0.03,
+      "max_ms_range": [
+        0.03,
+        0.04
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette arrow",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.13,
+      "p50_ms_range": [
+        0.13,
+        0.13
+      ],
+      "p95_ms_median": 0.2,
+      "p95_ms_range": [
+        0.18,
+        0.2
+      ],
+      "max_ms_median": 0.23,
+      "max_ms_range": [
+        0.2,
+        0.31
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette key",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.4,
+      "p50_ms_range": [
+        0.39,
+        0.41
+      ],
+      "p95_ms_median": 0.9,
+      "p95_ms_range": [
+        0.86,
+        1.0
+      ],
+      "max_ms_median": 1.09,
+      "max_ms_range": [
+        1.08,
+        1.17
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell window opens and closes",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.22,
+      "p50_ms_range": [
+        0.22,
+        0.22
+      ],
+      "p95_ms_median": 0.33,
+      "p95_ms_range": [
+        0.33,
+        0.76
+      ],
+      "max_ms_median": 2.39,
+      "max_ms_range": [
+        2.36,
+        2.43
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "soroban Basic",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.07095,
+      "p50_ms_range": [
+        0.07089100000000001,
+        0.07241
+      ],
+      "p95_ms_median": 0.203951,
+      "p95_ms_range": [
+        0.20357,
+        0.205961
+      ],
+      "max_ms_median": 0.249591,
+      "max_ms_range": [
+        0.219661,
+        0.287661
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "soroban Programmer",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.246721,
+      "p50_ms_range": [
+        0.242981,
+        0.247232
+      ],
+      "p95_ms_median": 0.438062,
+      "p95_ms_range": [
+        0.416271,
+        0.450662
+      ],
+      "max_ms_median": 0.48835300000000004,
+      "max_ms_range": [
+        0.457392,
+        0.506003
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "soroban Scientific",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.146581,
+      "p50_ms_range": [
+        0.145931,
+        0.151791
+      ],
+      "p95_ms_median": 0.302321,
+      "p95_ms_range": [
+        0.300631,
+        0.30987200000000004
+      ],
+      "max_ms_median": 0.319211,
+      "max_ms_range": [
+        0.314012,
+        0.579573
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "sumi scrolling",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.319611,
+      "p50_ms_range": [
+        0.318102,
+        0.327141
+      ],
+      "p95_ms_median": 0.406712,
+      "p95_ms_range": [
+        0.385291,
+        0.417362
+      ],
+      "max_ms_median": 0.993754,
+      "max_ms_range": [
+        0.905904,
+        1.181286
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "sumi typing",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.365481,
+      "p50_ms_range": [
+        0.36267200000000005,
+        0.370802
+      ],
+      "p95_ms_median": 0.416862,
+      "p95_ms_range": [
+        0.412862,
+        0.436652
+      ],
+      "max_ms_median": 0.490272,
+      "max_ms_range": [
+        0.45907200000000004,
+        0.500182
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "settei a key in search",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.148131,
+      "p50_ms_range": [
+        0.146651,
+        0.148801
+      ],
+      "p95_ms_median": 0.618163,
+      "p95_ms_range": [
+        0.609082,
+        0.622453
+      ],
+      "max_ms_median": 2.134219,
+      "max_ms_range": [
+        2.014269,
+        2.53345
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "settei a switch",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.107521,
+      "p50_ms_range": [
+        0.10674,
+        0.109391
+      ],
+      "p95_ms_median": 0.115491,
+      "p95_ms_range": [
+        0.11417000000000001,
+        0.222251
+      ],
+      "max_ms_median": 0.125691,
+      "max_ms_range": [
+        0.12134099999999999,
+        0.329931
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "settei another pane",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 1.741077,
+      "p50_ms_range": [
+        1.728158,
+        2.041979
+      ],
+      "p95_ms_median": 2.240169,
+      "p95_ms_range": [
+        1.970809,
+        2.473591
+      ],
+      "max_ms_median": 2.522111,
+      "max_ms_range": [
+        2.29451,
+        2.604101
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell clock tick",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.06,
+      "p50_ms_range": [
+        0.06,
+        0.06
+      ],
+      "p95_ms_median": 0.07,
+      "p95_ms_range": [
+        0.07,
+        0.12
+      ],
+      "max_ms_median": 0.13,
+      "max_ms_range": [
+        0.1,
+        0.13
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell meter",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.03,
+      "p50_ms_range": [
+        0.03,
+        0.03
+      ],
+      "p95_ms_median": 0.03,
+      "p95_ms_range": [
+        0.03,
+        0.03
+      ],
+      "max_ms_median": 0.04,
+      "max_ms_range": [
+        0.03,
+        0.04
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette arrow",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.13,
+      "p50_ms_range": [
+        0.13,
+        0.13
+      ],
+      "p95_ms_median": 0.18,
+      "p95_ms_range": [
+        0.18,
+        0.22
+      ],
+      "max_ms_median": 0.22,
+      "max_ms_range": [
+        0.22,
+        0.23
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette key",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.37,
+      "p50_ms_range": [
+        0.37,
+        0.38
+      ],
+      "p95_ms_median": 0.87,
+      "p95_ms_range": [
+        0.84,
+        0.91
+      ],
+      "max_ms_median": 1.1,
+      "max_ms_range": [
+        1.1,
+        1.11
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell window opens and closes",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.22,
+      "p50_ms_range": [
+        0.21,
+        0.22
+      ],
+      "p95_ms_median": 0.35,
+      "p95_ms_range": [
+        0.33,
+        0.42
+      ],
+      "max_ms_median": 2.39,
+      "max_ms_range": [
+        2.25,
+        2.42
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "soroban Basic",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.0714,
+      "p50_ms_range": [
+        0.07122,
+        0.071491
+      ],
+      "p95_ms_median": 0.20572100000000001,
+      "p95_ms_range": [
+        0.20325000000000001,
+        0.206391
+      ],
+      "max_ms_median": 0.242431,
+      "max_ms_range": [
+        0.224351,
+        0.298302
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "soroban Programmer",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.244292,
+      "p50_ms_range": [
+        0.23299100000000003,
+        0.244731
+      ],
+      "p95_ms_median": 0.418352,
+      "p95_ms_range": [
+        0.408642,
+        0.419482
+      ],
+      "max_ms_median": 0.606953,
+      "max_ms_range": [
+        0.452112,
+        1.382116
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "soroban Scientific",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.148461,
+      "p50_ms_range": [
+        0.148421,
+        0.15084
+      ],
+      "p95_ms_median": 0.305551,
+      "p95_ms_range": [
+        0.303632,
+        0.307101
+      ],
+      "max_ms_median": 0.33962200000000003,
+      "max_ms_range": [
+        0.331542,
+        0.36426200000000003
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "sumi scrolling",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.318181,
+      "p50_ms_range": [
+        0.316671,
+        0.322001
+      ],
+      "p95_ms_median": 0.384442,
+      "p95_ms_range": [
+        0.38192200000000004,
+        0.415032
+      ],
+      "max_ms_median": 1.076985,
+      "max_ms_range": [
+        0.903184,
+        1.112645
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "sumi typing",
+      "kind": "percentiles",
+      "replicates": 3,
+      "failed_runs": 0,
+      "p50_ms_median": 0.362031,
+      "p50_ms_range": [
+        0.358991,
+        0.36498200000000003
+      ],
+      "p95_ms_median": 0.41803100000000004,
+      "p95_ms_range": [
+        0.411132,
+        0.420022
+      ],
+      "max_ms_median": 0.506092,
+      "max_ms_range": [
+        0.464142,
+        0.510652
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette drawing ahead",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.6,
+      "duration_ms_range": [
+        2.56,
+        2.65
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette first opening",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.95,
+      "duration_ms_range": [
+        0.91,
+        0.97
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette opening again",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.33,
+      "duration_ms_range": [
+        0.32,
+        0.35
+      ]
+    },
+    {
+      "label": "glibc",
+      "workload": "shell palette warm request (join excluded)",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.94,
+      "duration_ms_range": [
+        2.91,
+        3.0
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette drawing ahead",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.51,
+      "duration_ms_range": [
+        2.5,
+        2.55
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette first opening",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 1.02,
+      "duration_ms_range": [
+        0.98,
+        1.21
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette opening again",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.3,
+      "duration_ms_range": [
+        0.3,
+        0.42
+      ]
+    },
+    {
+      "label": "glibc-mmap128k",
+      "workload": "shell palette warm request (join excluded)",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 3.16,
+      "duration_ms_range": [
+        3.16,
+        3.49
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette drawing ahead",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.62,
+      "duration_ms_range": [
+        2.51,
+        2.76
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette first opening",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.49,
+      "duration_ms_range": [
+        0.48,
+        0.56
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette opening again",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.27,
+      "duration_ms_range": [
+        0.27,
+        0.29
+      ]
+    },
+    {
+      "label": "jemalloc-background",
+      "workload": "shell palette warm request (join excluded)",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.92,
+      "duration_ms_range": [
+        2.84,
+        3.05
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette drawing ahead",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.63,
+      "duration_ms_range": [
+        2.5,
+        2.65
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette first opening",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.57,
+      "duration_ms_range": [
+        0.49,
+        0.6
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette opening again",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 0.28,
+      "duration_ms_range": [
+        0.27,
+        0.29
+      ]
+    },
+    {
+      "label": "jemalloc-default",
+      "workload": "shell palette warm request (join excluded)",
+      "kind": "single",
+      "replicates": 3,
+      "failed_runs": 0,
+      "duration_ms_median": 2.94,
+      "duration_ms_range": [
+        2.94,
+        2.95
+      ]
+    }
+  ],
+  "allocator_source_identity": {
+    "identical_package_version_source_checksum_sets": true,
+    "package_count": 520,
+    "dependency_edges_changed": {
+      "('aizome-comp-core', '0.1.0')": {
+        "glibc": [
+          "aizome-config",
+          "aizome-ipc",
+          "aizome-theme",
+          "bitflags 2.13.2",
+          "libc",
+          "libloading",
+          "png 0.18.1",
+          "resvg",
+          "serde",
+          "serde_json",
+          "sha2",
+          "sidestep-ui",
+          "smithay",
+          "toml",
+          "tracing",
+          "tracing-subscriber",
+          "x11rb",
+          "xcursor"
+        ],
+        "jemalloc": [
+          "aizome-allocator-experiment",
+          "aizome-config",
+          "aizome-ipc",
+          "aizome-theme",
+          "bitflags 2.13.2",
+          "libc",
+          "libloading",
+          "png 0.18.1",
+          "resvg",
+          "serde",
+          "serde_json",
+          "sha2",
+          "sidestep-ui",
+          "smithay",
+          "toml",
+          "tracing",
+          "tracing-subscriber",
+          "x11rb",
+          "xcursor"
+        ]
+      },
+      "('aizome-kit', '0.1.0')": {
+        "glibc": [
+          "aizome-config",
+          "aizome-shell-proto",
+          "aizome-theme",
+          "libc",
+          "log",
+          "png 0.18.1",
+          "ropey",
+          "serde",
+          "serde_json",
+          "sidestep-ui",
+          "toml",
+          "unicode-segmentation"
+        ],
+        "jemalloc": [
+          "aizome-allocator-experiment",
+          "aizome-config",
+          "aizome-shell-proto",
+          "aizome-theme",
+          "libc",
+          "log",
+          "png 0.18.1",
+          "ropey",
+          "serde",
+          "serde_json",
+          "sidestep-ui",
+          "toml",
+          "unicode-segmentation"
+        ]
+      }
+    }
+  },
+  "allocator_shared_features": {
+    "normal,build": {
+      "glibc_only": [],
+      "jemalloc_only": [
+        "aizome-allocator-experiment v0.1.0|",
+        "tikv-jemalloc-sys v0.7.1+5.3.1-0-g81034ce1f1373e37dc865038e1bc8eeecf559ce8|background_threads_runtime_support,override_allocator_on_supported_platforms,unprefixed_malloc_on_supported_platforms",
+        "tikv-jemallocator v0.7.0|background_threads_runtime_support,default,override_allocator_on_supported_platforms,unprefixed_malloc_on_supported_platforms"
+      ],
+      "unchanged_entries": 249
+    },
+    "normal,build,dev": {
+      "glibc_only": [],
+      "jemalloc_only": [
+        "aizome-allocator-experiment v0.1.0|",
+        "tikv-jemalloc-sys v0.7.1+5.3.1-0-g81034ce1f1373e37dc865038e1bc8eeecf559ce8|background_threads_runtime_support,override_allocator_on_supported_platforms,unprefixed_malloc_on_supported_platforms",
+        "tikv-jemallocator v0.7.0|background_threads_runtime_support,default,override_allocator_on_supported_platforms,unprefixed_malloc_on_supported_platforms"
+      ],
+      "unchanged_entries": 249
+    }
+  },
+  "allocator_reopen": {
+    "jem-reopen-default": {
+      "competing_processes_seen": [],
+      "cpu_context_recorded": false,
+      "shell": "evidence:/jemalloc-bin/aizome-shell",
+      "environment": {},
+      "last_dismiss_seconds": 33.9293967870035,
+      "reopen_seconds": 93.96026549900125,
+      "reopen_request_ms": 7.523956002842169,
+      "points": [
+        {
+          "after_dismiss_seconds": 1.3819997548125684e-05,
+          "target_seconds": 0,
+          "shell_pss_mib": 155.6630859375,
+          "shell_anon_mib": 129.7109375
+        },
+        {
+          "after_dismiss_seconds": 5.12380849699548,
+          "target_seconds": 5,
+          "shell_pss_mib": 158.1591796875,
+          "shell_anon_mib": 132.20703125
+        },
+        {
+          "after_dismiss_seconds": 9.746775884996168,
+          "target_seconds": 10,
+          "shell_pss_mib": 158.162109375,
+          "shell_anon_mib": 132.2109375
+        },
+        {
+          "after_dismiss_seconds": 30.251306409998506,
+          "target_seconds": 30,
+          "shell_pss_mib": 157.013671875,
+          "shell_anon_mib": 131.0625
+        },
+        {
+          "after_dismiss_seconds": 59.5105895539964,
+          "target_seconds": 60,
+          "shell_pss_mib": 157.0185546875,
+          "shell_anon_mib": 131.06640625
+        }
+      ],
+      "palette_frame_cpu_summaries_after_reopen": [
+        {
+          "window": 2147483655,
+          "frames": 9,
+          "cpu_p50_us": 461,
+          "cpu_p95_us": 988,
+          "cpu_max_us": 988
+        }
+      ],
+      "note": "SIDESTEP_FRAME_STATS records summed CPU stage time; summaries include palette frames during 8s after reopen, not input-to-display latency. Nearest sample before reopening used for idle60s.",
+      "latency_validity": "Excluded from strict latency conclusions: unrelated inference benchmark overlapped this first pass. Memory observations retained; no quiet end-to-end or first-frame guarantee."
+    },
+    "jem-reopen-bg": {
+      "competing_processes_seen": [],
+      "cpu_context_recorded": false,
+      "shell": "evidence:/jemalloc-bin/aizome-shell",
+      "environment": {
+        "MALLOC_CONF": "background_thread:true"
+      },
+      "last_dismiss_seconds": 33.95425614299893,
+      "reopen_seconds": 94.38114320200111,
+      "reopen_request_ms": 3.4573399971122853,
+      "points": [
+        {
+          "after_dismiss_seconds": 8.251001418102533e-06,
+          "target_seconds": 0,
+          "shell_pss_mib": 119.3076171875,
+          "shell_anon_mib": 93.63671875
+        },
+        {
+          "after_dismiss_seconds": 5.1240822990002926,
+          "target_seconds": 5,
+          "shell_pss_mib": 96.4443359375,
+          "shell_anon_mib": 70.7734375
+        },
+        {
+          "after_dismiss_seconds": 10.246740905997285,
+          "target_seconds": 10,
+          "shell_pss_mib": 70.4365234375,
+          "shell_anon_mib": 44.765625
+        },
+        {
+          "after_dismiss_seconds": 30.21925084599934,
+          "target_seconds": 30,
+          "shell_pss_mib": 70.5126953125,
+          "shell_anon_mib": 44.82421875
+        },
+        {
+          "after_dismiss_seconds": 59.91080887299904,
+          "target_seconds": 60,
+          "shell_pss_mib": 70.458984375,
+          "shell_anon_mib": 44.75390625
+        }
+      ],
+      "palette_frame_cpu_summaries_after_reopen": [
+        {
+          "window": 2147483655,
+          "frames": 8,
+          "cpu_p50_us": 465,
+          "cpu_p95_us": 685,
+          "cpu_max_us": 685
+        }
+      ],
+      "note": "SIDESTEP_FRAME_STATS records summed CPU stage time; summaries include palette frames during 8s after reopen, not input-to-display latency. Nearest sample before reopening used for idle60s.",
+      "latency_validity": "Excluded from strict latency conclusions: unrelated inference benchmark overlapped this first pass. Memory observations retained; no quiet end-to-end or first-frame guarantee."
+    },
+    "glibc-reopen-mmap": {
+      "competing_processes_seen": [],
+      "cpu_context_recorded": false,
+      "shell": "evidence:/allocator-controls/glibc/aizome-shell",
+      "environment": {
+        "MALLOC_MMAP_THRESHOLD_": "131072"
+      },
+      "last_dismiss_seconds": 33.90387486599502,
+      "reopen_seconds": 94.10006594799779,
+      "reopen_request_ms": 3.3780790035962127,
+      "points": [
+        {
+          "after_dismiss_seconds": 8.100003469735384e-06,
+          "target_seconds": 0,
+          "shell_pss_mib": 57.75390625,
+          "shell_anon_mib": 32.34765625
+        },
+        {
+          "after_dismiss_seconds": 5.104432034000638,
+          "target_seconds": 5,
+          "shell_pss_mib": 63.2890625,
+          "shell_anon_mib": 37.8828125
+        },
+        {
+          "after_dismiss_seconds": 10.198408229000052,
+          "target_seconds": 10,
+          "shell_pss_mib": 63.29296875,
+          "shell_anon_mib": 37.88671875
+        },
+        {
+          "after_dismiss_seconds": 30.08549869000126,
+          "target_seconds": 30,
+          "shell_pss_mib": 63.29296875,
+          "shell_anon_mib": 37.88671875
+        },
+        {
+          "after_dismiss_seconds": 59.6824773430053,
+          "target_seconds": 60,
+          "shell_pss_mib": 63.306640625,
+          "shell_anon_mib": 37.90234375
+        }
+      ],
+      "palette_frame_cpu_summaries_after_reopen": [
+        {
+          "window": 2147483655,
+          "frames": 9,
+          "cpu_p50_us": 425,
+          "cpu_p95_us": 593,
+          "cpu_max_us": 593
+        }
+      ],
+      "note": "SIDESTEP_FRAME_STATS records summed CPU stage time; summaries include palette frames during 8s after reopen, not input-to-display latency. Nearest sample before reopening used for idle60s.",
+      "latency_validity": "Excluded from strict latency conclusions: unrelated inference benchmark overlapped this first pass. Memory observations retained; no quiet end-to-end or first-frame guarantee."
+    }
+  },
+  "nix_package_validation": {
+    "out": "/nix/store/yj2697z1yf2p8hq0rppbi1r14w7f78pq-aizome-0.1.0-f88ac0e",
+    "debug": "/nix/store/cs6ibbgdk012axf5yj5p46qvcv924bz2-aizome-0.1.0-f88ac0e-debug",
+    "elfs": [
+      {
+        "elf": "bin/aizome",
+        "build_id": "d5ca21272d7fab2617533db35f68643e8080909d",
+        "runtime_bytes": 22448,
+        "split_bytes": 10720,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-annai",
+        "build_id": "fdd4b953d427f8dc458dd8a17026f26dd08315b6",
+        "runtime_bytes": 12554992,
+        "split_bytes": 11981224,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-awake",
+        "build_id": "ca0c287752041b08351b801f840e9e999c995406",
+        "runtime_bytes": 3268904,
+        "split_bytes": 2863392,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-dev",
+        "build_id": "6b7e34321acca8bbe98bdee36f3583c09f607c8d",
+        "runtime_bytes": 1421104,
+        "split_bytes": 1029336,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-fusen",
+        "build_id": "5b32df83837579a8e759d2f7e014d9973cf49e0a",
+        "runtime_bytes": 13951888,
+        "split_bytes": 13348832,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-greeter",
+        "build_id": "95bd3c616eaad48f085676eabb8682074c81251a",
+        "runtime_bytes": 13091552,
+        "split_bytes": 12546888,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-hako",
+        "build_id": "43af860bbdabfef67d905cfa4613582605a2a68b",
+        "runtime_bytes": 20899272,
+        "split_bytes": 19841896,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-koyomi",
+        "build_id": "4b1a4ac6c0ff06d0cccbc2d0fa89f97feaeb2280",
+        "runtime_bytes": 17888224,
+        "split_bytes": 17149504,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-kura",
+        "build_id": "9379de911c1ba415cfb7e5d7556828e21327f4b5",
+        "runtime_bytes": 13956008,
+        "split_bytes": 13378776,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-myaku",
+        "build_id": "851748c820cfc5078fc9730927ebd0bc294682a4",
+        "runtime_bytes": 13882272,
+        "split_bytes": 13397648,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-settei",
+        "build_id": "448c06a218f50b5e1224ccce9b0910e8710509c8",
+        "runtime_bytes": 24653584,
+        "split_bytes": 23084088,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-share-picker",
+        "build_id": "7f72744957eb5994b0dfa8839b341ec21fc09063",
+        "runtime_bytes": 1251992,
+        "split_bytes": 832792,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-shashin",
+        "build_id": "2713d973b4efa8df077a3db7497c5cd0b9173842",
+        "runtime_bytes": 17474392,
+        "split_bytes": 16813520,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-shell",
+        "build_id": "f259b2ce3496be3758e68cc51ac71744686194db",
+        "runtime_bytes": 27168464,
+        "split_bytes": 25465784,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-soroban",
+        "build_id": "952564b39973ed60b48645bf4350459869a7461a",
+        "runtime_bytes": 12792704,
+        "split_bytes": 12251704,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-sumi",
+        "build_id": "0e0377e35f2e3eb1212c9f94e9782b8da4d73669",
+        "runtime_bytes": 15516520,
+        "split_bytes": 14528648,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-tansu",
+        "build_id": "6f77a74e03de55460e509870f13e896fe305aec6",
+        "runtime_bytes": 17138712,
+        "split_bytes": 16342552,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-tenki",
+        "build_id": "0c240af0b752f7ffda4b5d0a6e9d8483ca30e91f",
+        "runtime_bytes": 18449464,
+        "split_bytes": 17957888,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-tokei",
+        "build_id": "71a16af6c817b53fdee8400c34786ad257318d63",
+        "runtime_bytes": 16491488,
+        "split_bytes": 15707808,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizome-yukimi",
+        "build_id": "daaca6b3d34c36b5f2891d47e3ac0a25229ac903",
+        "runtime_bytes": 19945272,
+        "split_bytes": 21359232,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "bin/aizomectl",
+        "build_id": "2f498721bca25097b7947555383f4cee1e15c662",
+        "runtime_bytes": 1551976,
+        "split_bytes": 1095736,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "lib/aizome/libaizome_comp_core.so",
+        "build_id": "d92d3099be2466f33fa61e8d4c9519da74a6470b",
+        "runtime_bytes": 67295056,
+        "split_bytes": 41917824,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      },
+      {
+        "elf": "lib/aizome/libaizome_comp_logic.so",
+        "build_id": "53eed702cbda63c9f5d827948a96d3407d725d27",
+        "runtime_bytes": 2666752,
+        "split_bytes": 2351312,
+        "has_line_tables": true,
+        "has_unwind_tables": true
+      }
+    ],
+    "prebuilt_without_dwarf": [
+      {
+        "elf": "lib/aizome/libstd-7021dd34e318c803.so",
+        "build_id": null,
+        "has_line_tables": false,
+        "runtime_bytes": 2208144,
+        "has_unwind_tables": true,
+        "note": "Copied prebuilt Rust standard library has no build ID or DWARF; no split symbols can be extracted."
+      }
+    ],
+    "runtime_closure_paths": 81,
+    "debug_in_runtime_closure": false,
+    "rustc_in_runtime_closure": false,
+    "status": "passed",
+    "source_revision": "f88ac0eb9e908f26f8e7201af2311d749c428851",
+    "nix_build_cores": 2,
+    "nix_max_jobs": 1,
+    "aizome_elf_pairs_verified": 23,
+    "source_symbolization": {
+      "binary": "/nix/store/yj2697z1yf2p8hq0rppbi1r14w7f78pq-aizome-0.1.0-f88ac0e/bin/aizome-soroban",
+      "build_id": "952564b39973ed60b48645bf4350459869a7461a",
+      "symbol": "aizome_soroban::main",
+      "address": "0x00000000001e8f20",
+      "symbol_file": "/nix/store/cs6ibbgdk012axf5yj5p46qvcv924bz2-aizome-0.1.0-f88ac0e-debug/lib/debug/.build-id/95/2564b39973ed60b48645bf4350459869a7461a.debug",
+      "source_store_path": "/nix/store/v2284sxk89pc88ak0f9drvbhxr6njqvq-aizome-source",
+      "compiler_source_prefix": "/build/aizome-source",
+      "workspace_source_prefix": "/build/aizome-source/aizome",
+      "source_in_debug_closure": true,
+      "debug_closure_paths": 83,
+      "gdb_source_listing": "evidence:/nix-gdb-source-lines.txt"
+    },
+    "source_in_runtime_closure": false,
+    "runtime_output_nar_bytes": 355595560,
+    "debug_output_nar_bytes": 315314720,
+    "runtime_closure_nar_bytes": 533762352,
+    "additional_debug_closure_nar_bytes": 362291032,
+    "isolated_smoke": {
+      "headless_pixman": true,
+      "private_dbus_and_xdg_directories": true,
+      "ld_library_path_unset": true,
+      "soroban_window_mapped_and_closed": true,
+      "aizome_profile_help": true,
+      "aizome_dev_logic_profile": "release",
+      "aizome_dev_standalone_profile": "release-lto",
+      "optimised_compatibility_flag_identical": true,
+      "installed_logic_abi_check": "would reload; core unchanged",
+      "note": "Validated installed package and recorded build environment; did not rebuild logic from a checkout and reload that separate build."
+    },
+    "profiling_shell_tools": [
+      "/nix/store/lb41b0anx1f98y9y5s9mdv97gjgsq740-python3-3.14.7/bin/python3",
+      "/nix/store/qwz05rf0796f54m6rs5kghq7q64sz6g1-heaptrack-1.5.0-unstable-2025-07-21/bin/heaptrack",
+      "/nix/store/qwz05rf0796f54m6rs5kghq7q64sz6g1-heaptrack-1.5.0-unstable-2025-07-21/bin/heaptrack_print",
+      "/nix/store/mvfz8qyy2nklpdfpjny285j8d3yswf7w-gdb-17.2/bin/gdb",
+      "/nix/store/2msw5nclhpsm80z65dqmjiv8kkras989-clang-wrapper-21.1.8/bin/readelf"
+    ],
+    "retained_outputs": [
+      "evidence:/nix-package-out",
+      "evidence:/nix-package-debug"
+    ]
+  }
+}
