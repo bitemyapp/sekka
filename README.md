@@ -66,9 +66,9 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
-(Activity), Shashin (Images) and Koe (Dictation). Aizome is new, and so far it
-has run only in virtual machines. See [its README](desktop/aizome/README.md)
-for what is done and what isn't.
+(Activity), Shashin (Images), Shiori (Documents, a PDF reader) and Koe
+(Dictation). Aizome is new, and so far it has run only in virtual machines.
+See [its README](desktop/aizome/README.md) for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

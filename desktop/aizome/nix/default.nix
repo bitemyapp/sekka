@@ -37,6 +37,8 @@ let
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
       libsecret
+      # Shiori's worker loads it (nixpkgs builds it from source).
+      pdfium
     ];
   # Only what the build reads: the workspace and the files the package
   # installs.

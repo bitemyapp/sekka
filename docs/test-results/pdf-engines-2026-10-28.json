@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-28",
+  "scope": "Choosing the PDF engine for Aizome's reader (Shiori): PDFium against hayro, the permissively licensed candidates, over the pdf.js test corpus; then Shiori's own worker over the same corpus. Component evidence on one laptop; not VM, ISO or hardware qualification.",
+  "workstation": "ganymede (8 threads, 30 GiB RAM); other agents' builds shared it (one-minute load average 6-11)",
+  "corpus": {
+    "source": "https://github.com/mozilla/pdf.js test/pdfs (the PDFs in the repository, not the linked ones)",
+    "revision": "279175b948b23077808d744435c07b32d23aa5bc",
+    "files": 1012,
+    "note": "Deliberately hostile: many files are reduced bug reports, fuzzer output and broken on purpose. Rates here are not real-world failure rates."
+  },
+  "license_screen": {
+    "excluded": {
+      "MuPDF (mupdf crate 0.8.0)": "AGPL-3.0",
+      "Poppler (nixpkgs 26.10.0)": "GPL-2.0-or-later",
+      "Ghostscript, xpdf": "AGPL-3.0 and GPL",
+      "pdf.js": "Apache-2.0, but JavaScript: it needs a web engine, not a native renderer",
+      "lopdf": "MIT; reads and writes PDF syntax, does not draw pages"
+    },
+    "compared": {
+      "PDFium": "BSD-3-Clause and Apache-2.0 (nixpkgs meta: asl20, bsd3, mit); nixpkgs `pdfium` 8066 built from source with gn, system FreeType, libjpeg, OpenJPEG, lcms2, libpng, libtiff, zlib, HarfBuzz and ICU; V8, XFA and PartitionAlloc off; libpdfium.so 4.8 MiB; substituted from cache.nixos.org",
+      "pdfium-render 0.9.4": "MIT OR Apache-2.0; bindings to PDFium's API up to build 7881, loaded at run time",
+      "hayro 0.8.0": "Apache-2.0 OR MIT; pure Rust, forbids unsafe code in the rasterizer; default features (embedded standard fonts and CMaps)"
+    }
+  },
+  "method": {
+    "program": "a scratch benchmark (not in the tree): each file in a process of its own under `timeout 30`, four at a time, release build; up to the first 5 pages rendered at 2x (144 dpi) on white, PDFium with forms and annotations; time per page includes loading (parsing) the page",
+    "comparison": "per page, the largest per-channel difference of each pixel; a pixel differs when that exceeds 48 of 255; renders compared where both engines drew the page at the same size (within 2 px)"
+  },
+  "engines": {
+    "pdfium": {
+      "pages_drawn": 1193,
+      "refused_to_open": {"password": 11, "format": 7},
+      "page_errors": 5,
+      "timeouts_over_30s": ["tiling-pattern-tiny-steps.pdf", "tiling-pattern-tiny-steps-large.pdf"],
+      "crashes": {"jpx_numcomps.pdf": "exit 133 (SIGTRAP): one of PDFium's own checks stopping the process"},
+      "ms_per_page": {"p50": 4.5, "p90": 18.4, "p99": 160.9, "max": 1770.1, "mean": 14.1}
+    },
+    "hayro": {
+      "pages_drawn": 1204,
+      "refused_to_open": {"password": 9, "invalid": 9},
+      "timeouts_over_30s": ["bug1978317.pdf"],
+      "crashes": {"tiling-pattern-large-steps.pdf": "exit 101 (a Rust panic)"},
+      "ms_per_page": {"p50": 4.8, "p90": 21.6, "p99": 203.1, "max": 14223.9, "mean": 41.7}
+    },
+    "both_drew": {
+      "pages": 1188,
+      "total_ms": {"pdfium": 16389, "hayro": 35970},
+      "hayro_slower_on": "530 pages (45%)",
+      "hayro_over_pdfium_time_ratio": {"p10": 0.47, "p50": 0.93, "p90": 2.49, "p99": 13.87}
+    },
+    "agreement": {
+      "compared": 1185,
+      "size_mismatch": 3,
+      "pixels_differing": {"under_0.1%": 485, "0.1-1%": 415, "1-5%": 237, "over_5%": 48},
+      "examined_by_eye": {
+        "pdfium_right": ["knockout_blend_multiply (hayro has no knockout groups or this blend)", "transfer_maps (hayro ignores transfer functions)", "non-embedded-NuptialScript (PDFium substitutes an italic face)"],
+        "hayro_right": ["jpx_subsampling (PDFium drew one of several JPEG 2000 images)", "calgray (hayro converts CalGray colorimetrically; PDFium treats it as DeviceGray)", "type3_glyph_error (PDFium drew nothing)"],
+        "same_but_antialiasing": ["tracemonkey page 5 (5.2% of pixels differ, indistinguishable by eye)", "copy_paste_ligatures", "issue16316"],
+        "undecided": ["recursiveCompositGlyf (PDFium white, hayro red)"]
+      }
+    }
+  },
+  "features_a_reader_needs": {
+    "pdfium": "text with character boxes, search with result rectangles, links and destinations, the outline, AcroForm drawing (and filling), annotations, metadata and permissions, passwords (RC4 and AES)",
+    "hayro": "drawing, and passwords; text, search, links and the outline would be built on its syntax and interpreter crates"
+  },
+  "decision": "PDFium, in a worker process of its own per document: equal speed on the median page, a far shorter tail, the reader's features, and the failures above contained to a page. hayro is the alternative to watch: memory-safe and already close on compatibility.",
+  "shiori_worker_over_the_corpus": {
+    "tested_source": "branch aizome-pdf-reader (Shiori's first version), release build",
+    "method": "apps/shiori/examples/corpus.rs, four files at a time: open; draw a 1024 px tile of each of the first 3 pages at 1.5x the 868-point width; their text and links; search 'the' over the first 10 pages",
+    "files": 1012,
+    "completed": 987,
+    "refused_to_open": {"password": 11, "format": 7},
+    "opened_with_no_pages": ["Brotli-Prototype-FileA.pdf", "issue19484_1.pdf", "issue19484_2.pdf", "poppler-395-0-fuzzed.pdf"],
+    "page_not_drawn": ["Pages-tree-refs.pdf page 2", "poppler-937-0-fuzzed.pdf page 1"],
+    "worker_stopped_over_20s": ["tiling-pattern-tiny-steps.pdf", "tiling-pattern-tiny-steps-large.pdf"],
+    "worker_crashed": ["jpx_numcomps.pdf"],
+    "recovery": "in each stopped or crashed case a new worker opened the document again; the harness doesn't ask again after that (the app does, which tests/shiori.rs covers)",
+    "ms_per_completed_file": {"p50": 44, "p90": 97, "p99": 200, "max": 1583}
+  }
+}

@@ -1,0 +1,34 @@
+[package]
+name = "aizome-shiori"
+description = "Shiori 栞 (Documents), Aizome's PDF reader: pages drawn by PDFium in a worker process of their own, find, text selection, links, the outline, and your place kept"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_shiori"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-shiori"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+# fontconfig, asked where fonts are (worker.rs).
+libloading.workspace = true
+# PDFium (BSD-3-Clause and Apache-2.0; nixpkgs builds it from source),
+# loaded at run time by the worker process alone, so a document that
+# crashes or hangs it takes no window with it (docs/apps.md). The bindings
+# for the newest API the crate knows; nixpkgs' build is newer still, and
+# PDFium only adds to its API. No `image` crate: pixels are copied as
+# they are. No `thread_safe` mutex: one thread calls PDFium.
+pdfium-render = { version = "0.9.4", default-features = false, features = ["pdfium_latest"] }

@@ -45,6 +45,7 @@
   openblas,
   vulkan-headers,
   vulkan-loader,
+  pdfium,
   src,
   yukimiSrc,
   fonts,
@@ -64,8 +65,10 @@ let
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
-  # fontconfig for the text engine, and xkbcommon for smithay's keymaps.
+  # fontconfig for the text engine, xkbcommon for smithay's keymaps, and
+  # PDFium for Shiori's worker (apps/shiori/src/worker.rs).
   runtimeLibs = [
+    pdfium
     libglvnd
     libpulseaudio
     libsecret

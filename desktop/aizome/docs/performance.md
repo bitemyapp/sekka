@@ -128,6 +128,9 @@ noise (`docs/reload.md`). Two kinds of number:
 | | Pinching † | 2.81–2.84 | 3.22–3.65 | within (10) |
 | | A zoom step, ❖+ ❖− (live, 6000 × 4000 JPEG) | 1.2–1.5 | 1.6–2.2 | within (10) |
 | | The next picture † | 2.48–3.25 | 2.70–3.73 | within |
+| Shiori ‡ | Scrolling a wheel's notch | 0.23 | 0.27 | within |
+| | Moving the pointer over text | 0.01 | 0.01 | within |
+| | Page Down, a window of new tiles | 5.74 | 7.96 | over (11) |
 | Annai | A frame of a scene | 0.43 | 0.57 | within |
 | | Turning a page | 1.00 | 1.09 | within |
 | Greeter (login screen) | Typing a password | 0.06 | 0.07 | within |
@@ -212,6 +215,17 @@ summary of six or seven frames is in effect its largest frame.
     photo used to free its 24 MB of pixels on the window's thread). One
     frame of forty, the first pinch step below 100%, takes about 22 ms, not
     yet explained.
+
+11. **Shiori's Page Down** (measured 28 October 2026, not with the rest:
+    release, not thin LTO, load average 10.5, `apps/shiori/tests/budget.rs`):
+    p50 5.74 ms, p95 7.96 ms. It shows a 2880 × 1800 window of tiles never
+    drawn before, so all of it is drawn: Shiori's own part is 0.07 ms, the
+    rest Sidestep copying 21 MB of new pixels one to one. Scrolling, which
+    moves what was drawn, is 0.23 ms; a canvas that drew everything took
+    9.9 ms a notch. See `docs/shiori.md`.
+
+‡ Measured on 28 October 2026 under the conditions of (11), not in the
+18 October run.
 
 Within the budget now, though written up below as exceptions earlier:
 Hako's preview column (↓ p95 2.44 ms), Tenki's choosing a place (p95

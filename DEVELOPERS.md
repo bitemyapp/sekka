@@ -1138,6 +1138,28 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
+Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages with
+nixpkgs' `pdfium`, which builds PDFium from source (BSD-3-Clause and
+Apache-2.0; system FreeType, libjpeg, OpenJPEG, lcms2 and ICU; no V8 or
+XFA). It isn't linked: the package adds it to the run path with the other
+libraries opened at run time, the development shell to `LD_LIBRARY_PATH`,
+and `AIZOME_PDFIUM_LIBRARY` names another build. Only the worker process,
+`aizome-shiori --pdfium-worker`, one for each open document, loads it; the
+reader restarts a worker that crashes or spends too long on a page and
+marks that page unreadable. Its tests start real workers over generated
+documents and a qpdf-encrypted fixture, so run them where PDFium is found
+(the Aizome shell, or with `AIZOME_PDFIUM_LIBRARY` set):
+
+```sh
+cargo test -p aizome-shiori
+cargo test -p aizome-shiori --release --test budget -- --nocapture
+cargo run --release -p aizome-shiori --example corpus -- DIR
+```
+
+The engine evaluation (PDFium against hayro over the pdf.js corpus, and
+why MuPDF and Poppler were ruled out by licence) and the reader's design
+are in [Shiori's notes](desktop/aizome/docs/shiori.md).
+
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
 one authentication state; mirrors show their source's prompt and explicitly

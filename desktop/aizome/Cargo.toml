@@ -2,7 +2,7 @@
 resolver = "3"
 # Apps join by name once they have a manifest: an app directory without
 # Cargo.toml would break an "apps/*" glob, and every build, for everyone.
-members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe"]
+members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/shiori", "apps/annai", "apps/fusen", "apps/koe"]
 # Sukumo, the toolkit (sukumo/), is a workspace of its own: its crates are
 # path dependencies, not members.
 exclude = ["sukumo"]

@@ -20,6 +20,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Kura 蔵 | Disk Usage | `apps/kura` | `aizome-kura` | `org.aizome.Kura` | storehouse |
 | Myaku 脈 | Activity | `apps/myaku` | `aizome-myaku` | `org.aizome.Myaku` | pulse |
 | Shashin 写真 | Images | `apps/shashin` | `aizome-shashin` | `org.aizome.Shashin` | photograph |
+| Shiori 栞 | Documents | `apps/shiori` | `aizome-shiori` | `org.aizome.Shiori` | bookmark (the slip that keeps your place in a book) |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
 
@@ -660,6 +661,51 @@ reads with, and SVG through resvg, rendered at the zoom.
   to one (see `docs/performance.md` for what that costs).
 - One instance: a second launch hands its files over
   (`aizome-app.shashin.sock`).
+
+### Shiori (Documents)
+
+The PDF reader the desktop opens documents with. PDFium (Chrome's PDF
+engine; BSD-3-Clause and Apache-2.0, built from source by nixpkgs) reads
+and draws them, in a process of its own for each document; why PDFium,
+and how the reader is put together, is in `docs/shiori.md`.
+
+- **The window**: the pages in one column on `sunk`, each on a hard
+  shadow, fitted to the window's width at first. Zoom with ❖+/❖−,
+  ❖-scroll and pinches about the pointer, ❖0 for 100% (a page point to a
+  screen point), ❖8 to fit the width, ❖9 the page. The toolbar has the
+  sidebar, the previous and next page, the zoom and Find, with
+  `Page 12 of 340 · 125%` at its right.
+- **Moving about**: scrolling, Space and ⇧Space, Page Up and Down, the
+  arrows (← and → turn pages when the page fits across), Home and End;
+  Go ▸ First, Last, Previous and Next Page, and Go to Page… (⌥❖G). The
+  sidebar (⌥❖S) shows each page small, or the document's contents (its
+  outline), which it opens with when it has one.
+- **Text**: drag to select (across pages), double-click a word,
+  triple-click a line, ⇧-click to extend; ❖C copies (unless the author
+  forbade it), ❖A selects the page's text. Find (❖F) searches the whole
+  document from the page being read, case-sensitively if asked, and
+  shows each hit; ❖G and ⇧❖G go through them.
+- **Links** within the document go to their place; web and mail links
+  open in their apps (no others: a document can't start programs).
+- **Locked documents** ask for their password; Get Info (❖I) shows the
+  title, author, pages, page size, PDF version, what made it and whether
+  it's encrypted.
+- **Your place**: each document opens where you left it, at the zoom
+  you left it at (`$XDG_STATE_HOME/aizome/shiori/places.json`, the newest
+  400). A file that changes while open (a LaTeX build, a download
+  finishing) is read again where you are; one that's half written leaves
+  the last version showing.
+- **Robustness**: a document that crashes PDFium, or keeps it busy over
+  20 seconds on one page, costs that page ("This page couldn't be
+  drawn"), not the window: Shiori starts another worker and carries on.
+- **Speed**: tiles of 1024 device pixels, drawn for exactly the zoom and
+  the screen's scale and copied one to one; the page above and the page
+  below drawn ahead and kept; scrolling moves what was drawn and draws
+  the strip that came into view.
+- One instance: a second launch hands its files over
+  (`aizome-app.shiori.sock`); each document has its window.
+- Not yet: printing, filling in forms (they're drawn), making
+  annotations, two pages side by side, and turning pages.
 
 ### Annai (Welcome)
 
