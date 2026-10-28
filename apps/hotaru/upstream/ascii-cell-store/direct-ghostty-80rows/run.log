@@ -1,0 +1,9 @@
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-ascii.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8561293884714367}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-unicode.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 1.085934059103769}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-styled.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8437040489956865}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-cursor.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.12192592792245519}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-ascii.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8487937312371859}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-unicode.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 1.0708687131341386}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-styled.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8302546160503504}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-cursor.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.12219855008723214}
+{"status": "completed", "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/summary.json"}

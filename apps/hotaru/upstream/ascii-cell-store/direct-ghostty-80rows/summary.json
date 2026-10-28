@@ -1,0 +1,323 @@
+{
+  "schema": 1,
+  "status": "completed",
+  "cpu": 8,
+  "observed_siblings": [
+    8,
+    72
+  ],
+  "scope": "direct native zero-history feed comparison, 80x120, exact prior ~8MiB reviewed corpora; not GUI or universal parity",
+  "results": [
+    {
+      "mode": "legacy",
+      "workload": "ascii",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 6509328.0,
+          "p95": 7091322,
+          "maximum": 7324395
+        },
+        "hotaru": {
+          "median": 5572827.0,
+          "p95": 5948027,
+          "maximum": 5973185
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8561293884714367,
+        "p95": 0.8387754779715263,
+        "maximum": 0.8155192340118194
+      },
+      "per_round_median_ratios": [
+        0.8470171848388671,
+        0.8545703314309478,
+        0.8937547271138916,
+        0.8424862234610214,
+        0.8679958601952804,
+        0.8481529955763061
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-ascii.json",
+      "report_sha256": "99f5b0ec58cf30a312c05c92357956478426632832526b2ed966db46816b6cd9"
+    },
+    {
+      "mode": "legacy",
+      "workload": "unicode",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 30777546.5,
+          "p95": 32588696,
+          "maximum": 33113873
+        },
+        "hotaru": {
+          "median": 33422386.0,
+          "p95": 34460075,
+          "maximum": 36030288
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 1.085934059103769,
+        "p95": 1.0574241755484786,
+        "maximum": 1.088072301298009
+      },
+      "per_round_median_ratios": [
+        1.097344246228485,
+        1.0542494525583312,
+        1.0935407031310949,
+        1.0663497713516907,
+        1.094302290530833,
+        1.0681003318551874
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-unicode.json",
+      "report_sha256": "bfa484bc75a6f121e694ec07a5c3465551eab4b23fb9e052af576429a4a949ed"
+    },
+    {
+      "mode": "legacy",
+      "workload": "styled",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 32375176.5,
+          "p95": 33194435,
+          "maximum": 34525816
+        },
+        "hotaru": {
+          "median": 27315067.5,
+          "p95": 28522786,
+          "maximum": 29181025
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8437040489956865,
+        "p95": 0.859264090501917,
+        "maximum": 0.8451943612281314
+      },
+      "per_round_median_ratios": [
+        0.8089290549027587,
+        0.8467632895136403,
+        0.882324160324675,
+        0.8342636252891203,
+        0.8408716258875965,
+        0.8448085835145949
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-styled.json",
+      "report_sha256": "f8f3156ff1e71b92494c1c7cb8abcfb73ff07231e0cd9a43e39bc1ef33b81252"
+    },
+    {
+      "mode": "legacy",
+      "workload": "cursor",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 751786109.5,
+          "p95": 760627788,
+          "maximum": 762399557
+        },
+        "hotaru": {
+          "median": 91662219.0,
+          "p95": 96393013,
+          "maximum": 98388832
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.12192592792245519,
+        "p95": 0.12672822965547506,
+        "maximum": 0.12905153353860094
+      },
+      "per_round_median_ratios": [
+        0.12213509872697406,
+        0.12108120514696806,
+        0.12101484244650829,
+        0.12271203338310516,
+        0.12044873125661193,
+        0.12261938792242884
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/legacy-cursor.json",
+      "report_sha256": "5ef36a366a33532d2c4d2bc14aeafe6765056410be9e908287a644fa5bcf9d11"
+    },
+    {
+      "mode": "unicode",
+      "workload": "ascii",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 6524541.0,
+          "p95": 6953963,
+          "maximum": 7090420
+        },
+        "hotaru": {
+          "median": 5537989.5,
+          "p95": 5949659,
+          "maximum": 5961207
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8487937312371859,
+        "p95": 0.8555781789463073,
+        "maximum": 0.8407410280350106
+      },
+      "per_round_median_ratios": [
+        0.8391711898158417,
+        0.8648771486779915,
+        0.8512570836566707,
+        0.8475928954185221,
+        0.89831433607092,
+        0.8549525923227917
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-ascii.json",
+      "report_sha256": "7bc9a1c7bc598bdb605d6c73a1292c43a4a13a33f9f6d05f635abb44bd93cb7e"
+    },
+    {
+      "mode": "unicode",
+      "workload": "unicode",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 41746278.0,
+          "p95": 42412004,
+          "maximum": 44604641
+        },
+        "hotaru": {
+          "median": 44704783.0,
+          "p95": 47964349,
+          "maximum": 48703611
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 1.0708687131341386,
+        "p95": 1.1309144694035207,
+        "maximum": 1.0918955944517075
+      },
+      "per_round_median_ratios": [
+        1.0722269448355546,
+        1.0671200317877567,
+        1.0925931180208683,
+        1.0549063237779843,
+        1.0701315837197287,
+        1.0700302901464744
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-unicode.json",
+      "report_sha256": "4d6d718396a07afbe5c63dd4d6849619571b3a036ba9bf80d08e1b440cd25549"
+    },
+    {
+      "mode": "unicode",
+      "workload": "styled",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 32213091.0,
+          "p95": 34807022,
+          "maximum": 35478451
+        },
+        "hotaru": {
+          "median": 26745067.5,
+          "p95": 28606473,
+          "maximum": 28866036
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8302546160503504,
+        "p95": 0.8218592501248743,
+        "maximum": 0.8136216544515994
+      },
+      "per_round_median_ratios": [
+        0.8188141236718599,
+        0.85136785608789,
+        0.8314538106987902,
+        0.7895460302823765,
+        0.8483040136853495,
+        0.831336054039979
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-styled.json",
+      "report_sha256": "235c8071f1f07a9d47e169e9002937fa8fcdd2fda1cae2e6368d385050b8794a"
+    },
+    {
+      "mode": "unicode",
+      "workload": "cursor",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 751477071.0,
+          "p95": 759404701,
+          "maximum": 761218804
+        },
+        "hotaru": {
+          "median": 91829408.5,
+          "p95": 94583257,
+          "maximum": 98384375
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.12219855008723214,
+        "p95": 0.1245492118701014,
+        "maximum": 0.1292458547831669
+      },
+      "per_round_median_ratios": [
+        0.12235977611759082,
+        0.12211469491888503,
+        0.12231910763134543,
+        0.12113836475539574,
+        0.12183802935397078,
+        0.12180730191156479
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty-80rows/unicode-cursor.json",
+      "report_sha256": "3bee447f8dba17e90f3b3ac01cc08c9026f760b93ef1d11cce85eb945e60c014"
+    }
+  ],
+  "expected_data_sha256": {
+    "unicode": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+    "cursor": "29f1b479c32f187c63d7e044aab7d8a2b61169c15022e03c4cafc720c237b954",
+    "ascii": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+    "styled": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff"
+  },
+  "runner_sha256": "74cc723ef93f9fe611caec21c1b4d8c36ef41f3cc10f6c9b08e113fa8df9cbbb",
+  "benchmark_helper_sha256": "e458ed885787af66892ae78e8d00bff48e869eb986cc47921c33928bb8aa6244",
+  "observations": 244,
+  "observed_frequency_khz": {
+    "cpu8": [
+      4689004,
+      5047282
+    ],
+    "cpu72": [
+      1220619,
+      1220619
+    ]
+  },
+  "raw_summary": "summary.json.gz",
+  "raw_summary_sha256": "ee423e7840e275fc0a0599cb7877410f9e41247efcc76009abb2c68f61958bd9",
+  "candidate_source_sha256": "7e36bc3139a9d6ee0617c30b602aa95f21bd732fba389c73ae176cfe49c74d6d",
+  "candidate_binary_sha256": "5755bcf3479b184ff8b05bcf68a22196d386a63258f99754caf380d90c576728",
+  "reference_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "reference_binaries": {
+    "ghostty-bench": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench",
+      "sha256": "bcdaba094ab3900bb247c445e9bf7b1038662ed886a96d68bb783b5d6f72669a"
+    },
+    "ghostty-gen": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-gen",
+      "sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362"
+    },
+    "libghostty-vt": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so",
+      "sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639"
+    },
+    "ghostty-reference-replay": {
+      "path": "/home/callen/work/hotaru-unicode-mode-20261028/ghostty-reference-replay",
+      "sha256": "dc687741377b3058f7b06bcdf287df9990c183eadd571a1fbe835fb3869625cd"
+    }
+  },
+  "preflight_active_percent": {
+    "cpu8": 2.912621359223301,
+    "cpu72": 0.0
+  },
+  "sample_protocol": {
+    "rows": 80,
+    "cols": 120,
+    "scrollback": 0,
+    "chunk_bytes": 65536,
+    "warmups_per_engine": 3,
+    "rounds": 6,
+    "samples_per_round_per_engine": 10,
+    "same_exact_data_hashes_as_prior_grapheme_charge": true
+  },
+  "prior_protocol_note": "This run matches the old 80-row / ~8 MiB geometry and exact corpus hashes. It uses 60 samples per engine instead of 20 and a new observed host window. Cross-window differences do not establish causal code changes.",
+  "observer_interval_seconds": {
+    "minimum": 0.526810313,
+    "median": 0.528428238,
+    "maximum": 0.546975004,
+    "limitation": "Periodic observations cannot prove absence of all short external work between samples."
+  }
+}

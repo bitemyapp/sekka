@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "Root approved and applied byte-identical qualified source; bounded core result, not full application or universal Ghostty parity",
+  "status": "Integrated in commit 842d1e2 with byte-identical qualified source; bounded core result, not full application or universal Ghostty parity",
   "candidate_source_sha256": "7e36bc3139a9d6ee0617c30b602aa95f21bd732fba389c73ae176cfe49c74d6d",
   "baseline_source_sha256": "b9fcaa0ced20a2212e21685002a6da7b1fda89d3443394fe9afe82507c66ec3b",
   "native_binary_sha256": "5755bcf3479b184ff8b05bcf68a22196d386a63258f99754caf380d90c576728",
@@ -583,5 +583,22 @@
     "tools/corpus.py": "a95a3f1d77f55a9a304ac86a23838aa0ed41b2f8756e902aa3365a96eeab2455",
     "tools/native-paired.py": "d31f64680ea181b014e484d16089dbb4ec71c9854c8237da7e181f1b5feabf1f",
     "tools/profile-ascii-cells.py": "90a86e93fa424909bad770424e62d5f2318a62604ba90b614a2862e0de6e47a1"
+  },
+  "direct_ghostty": {
+    "primary_protocol": "80 rows \u00d7 120 columns, exact prior ~8 MiB corpora",
+    "primary_report": "direct-ghostty-80rows/summary.json",
+    "separate_small_grid_report": "direct-ghostty-12rows/summary.json",
+    "primary_median_ratios": {
+      "legacy-ascii": 0.8561293884714367,
+      "legacy-unicode": 1.085934059103769,
+      "legacy-styled": 0.8437040489956865,
+      "legacy-cursor": 0.12192592792245519,
+      "unicode-ascii": 0.8487937312371859,
+      "unicode-unicode": 1.0708687131341386,
+      "unicode-styled": 0.8302546160503504,
+      "unicode-cursor": 0.12219855008723214
+    },
+    "comparison_audit": "direct-ghostty-80rows/prior-comparison.json",
+    "limitation": "Mixed Unicode remains slower in both width modes; zero-history feed only, no GUI/startup/history/overall parity claim."
   }
 }

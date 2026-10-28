@@ -37,6 +37,27 @@ Candidate/baseline feed-time ratios are shown below. Lower is faster.
 
 ASCII improved in every paired round: median-ratio ranges were 0.7079–0.7314 for legacy width and 0.6937–0.7203 for Unicode width. Other workloads had varying medians and tails; they are not blanket improvement claims. For example, the legacy malformed-leading-byte maximum ratio was 1.1314, and the Unicode cursor maximum was 1.0892. All raw samples, maxima and per-round ratios are retained without outlier trimming. Observed CPU 8 frequencies ranged from 4.687 to 5.047 GHz. A direct latest-candidate comparison against Ghostty is a separate measurement; older ratios must not be multiplied to infer parity.
 
+## Direct comparison with pinned Ghostty
+
+The [matched 80-row run](../upstream/ascii-cell-store/direct-ghostty-80rows/summary.json) compares this exact native candidate with unchanged Ghostty revision `6ba144158577d033ccb6ed4b574e4013957c9161`, adapter `dc687741377b3058f7b06bcdf287df9990c183eadd571a1fbe835fb3869625cd` and library `70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639`. It uses the exact roughly 8 MiB corpus hashes and 120×80 dimensions from the earlier grapheme-charge report. Both width modes pass all four declared state/effect gates before timing.
+
+Hotaru/Ghostty feed-time ratios follow; lower is faster.
+
+| Workload | Legacy median | Legacy p95 | Unicode median | Unicode p95 |
+| --- | ---: | ---: | ---: | ---: |
+| ASCII | 0.8561 | 0.8388 | 0.8488 | 0.8556 |
+| Mixed Unicode | 1.0859 | 1.0574 | 1.0709 | 1.1309 |
+| Styled text | 0.8437 | 0.8593 | 0.8303 | 0.8219 |
+| Cursor controls | 0.1219 | 0.1267 | 0.1222 | 0.1245 |
+
+ASCII, styled text and cursor controls are faster in this bounded workload. Mixed Unicode remains **7.1–8.6% slower by median**, and every mixed-Unicode round remains slower. Its maximum ratios are 1.0881 and 1.0919. This does not satisfy the broader performance goal across all workloads.
+
+The run used CPU 8, zero history, 64 KiB chunks, three warmups and six alternating rounds of ten samples per engine. Preflight activity on CPU 8 and sibling 72 was 2.91% and 0%; no compiler was detected in 244 observations. CPU 8 frequencies ranged from 4.689 to 5.047 GHz. Observation intervals ranged from 0.527 to 0.547 seconds; short external work between observations cannot be excluded. All raw samples, maxima and round ratios remain available without trimming.
+
+The [protocol audit](../upstream/ascii-cell-store/direct-ghostty-80rows/prior-comparison.json) confirms identical adapter/library hashes, data, dimensions, chunking, zero-history policy, CPU, native Rust 1.95 release flags and feed timing boundaries against the older table. Rust replay timing source is byte-identical: input reads, setup, width configuration and teardown remain outside the feed clock. The new run has 60 samples per engine instead of 20, a different candidate core and a new observed host window; older Uta compilation was present. Differences between those windows are not a controlled causal estimate for the code changes.
+
+A [separate smaller-grid run](../upstream/ascii-cell-store/direct-ghostty-12rows/summary.json) used 120×12 and roughly 2 MiB. Its legacy/Unicode median ratios were ASCII 0.9330/0.9454, mixed Unicode 1.2765/1.2062, styled text 0.8375/0.8487 and cursor controls 0.3589/0.3568. Those figures are retained as a distinct workload. Repeated full-screen erases depend on the grid height; the smaller-grid ratios must not be presented as a code regression from the older 80-row table. Both comparisons measure zero-history terminal feed only, excluding rendering, startup and retained-history costs.
+
 ## Local setup
 
 Fresh local baseline and candidate binaries were built with the same Rust 1.99 and native flags for the Intel Core Ultra 7 365. Its P-cores are CPUs 0–3, and the attempted benchmark was pinned to CPU 3. Native CPU-model and feature probes agreed between P- and E-cores. These binaries and their fingerprints are separate from the workstation's Rust 1.95 artifacts.
