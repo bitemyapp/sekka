@@ -299,6 +299,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-portal"
+version = "0.1.0"
+dependencies = [
+ "aizome-hako",
+ "aizome-ipc",
+ "aizome-kit",
+ "aizome-search",
+ "async-channel",
+ "env_logger",
+ "libc",
+ "log",
+ "serde",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "aizome-search"
 version = "0.1.0"
 dependencies = [

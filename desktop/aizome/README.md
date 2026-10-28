@@ -16,6 +16,9 @@ Rust on Sidestep's native toolkit, from the compositor to the calculator.
   focused app, with its shortcut taught back to you, plus windows, files,
   apps, settings and arithmetic.
 - **Super is the command key** (❖C, ❖V, ❖Z), in every app.
+- **One file chooser**: apps that open and save through the desktop
+  portal (browsers, Electron apps, Zed, Flatpaks) get Files in miniature,
+  over their window, with their filters and options.
 - **Fast by construction**: integer scaling, opaque surfaces, damage-only
   redraws, and a 4 ms budget for every frame of the desktop and its apps; GPU
   compositing with a software fallback.

@@ -124,6 +124,10 @@ let
     MOZ_ENABLE_WAYLAND = "1";
     QT_QPA_PLATFORM = "wayland;xcb";
     QT_QPA_PLATFORMTHEME = "gtk3";
+    # GTK 3 apps and Firefox open and save through the portal, so in
+    # Aizome's own chooser (Chromium, Electron apps and sandboxed apps
+    # always ask the portal).
+    GTK_USE_PORTAL = "1";
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AIZOME_WALLPAPER_NIGHT = toString cfg.wallpapers.night;
     AIZOME_WALLPAPER_DAY = toString cfg.wallpapers.day;
@@ -386,12 +390,16 @@ in
         "${cfg.package}/share/applications/org.aizome.Annai.Welcome.desktop";
     };
 
-    # Screenshots and screencasts (browsers' screen and window sharing)
-    # through the compositor's ext-image-copy-capture; files, settings
-    # and the rest through GTK's portal.
+    # File choosers through Aizome's own backend (aizome-portal, which D-Bus
+    # starts when one is asked for); screenshots and screencasts
+    # (browsers' screen and window sharing) through the compositor's
+    # ext-image-copy-capture; settings and the rest through GTK's portal.
     xdg.portal = {
       enable = true;
-      extraPortals = lib.optional (!wlr.enable) xdg-desktop-portal-wlr ++ [ pkgs.xdg-desktop-portal-gtk ];
+      extraPortals = lib.optional (!wlr.enable) xdg-desktop-portal-wlr ++ [
+        pkgs.xdg-desktop-portal-gtk
+        cfg.package
+      ];
       configPackages = [ cfg.package ];
     };
     # Terminal applications open in foot in Aizome sessions.

@@ -20,6 +20,7 @@ boards' exact CSS. This document is the contract between the parts.
 | Kit | `crates/aizome-kit` | — | Widget kit on sidestep-ui in Aizome's look: layout, controls, lists, text fields, menus (published to the global menu bar), sidebars, sheets, icons |
 | System | `crates/aizome-sys` | — | System services over D-Bus and the kernel: NetworkManager, BlueZ, PipeWire volume, UPower, brightness, power profiles, timedate/locale/hostname, AccountsService, CUPS, logind, MPRIS, disks (UDisks2) |
 | Search | `crates/aizome-search` | — | Fuzzy matching and the file index behind the palette and Find |
+| Portal | `crates/aizome-portal` | `aizome-portal` | The xdg-desktop-portal backend `org.freedesktop.impl.portal.desktop.aizome`: file choosers (Open and Save) for every app that asks the portal, each a window of its own over the app that asked (`docs/apps.md`, "The file chooser") |
 | Apps | `apps/*` | one each | Settei (Settings), Yukimi, Soroban, Koyomi, Tokei, Fusen, Sumi, Tenki, Tansu, Kura, Hako, Myaku |
 
 Everything draws with Sidestep: the shell and apps are sidestep-ui programs,
@@ -192,10 +193,11 @@ sunrise and sunset: the shell writes what GeoClue says).
   its notifications and the apps' menus; `aizome-dev watch` does it on
   every save of a checkout. Changes to the compositor's core need a new
   session; after `nixos-rebuild switch` a notification offers the rest.
-- Portals: xdg-desktop-portal-wlr for screenshots and screencasts (over
+- Portals: Aizome's own (`aizome-portal`) for file choosers;
+  xdg-desktop-portal-wlr for screenshots and screencasts (over
   ext-image-copy-capture, for outputs and windows, chosen with
-  `aizome-share-picker`), xdg-desktop-portal-gtk
-  for the rest (`aizome-portals.conf`).
+  `aizome-share-picker`); xdg-desktop-portal-gtk for the rest
+  (`aizome-portals.conf`).
 - Terminal: foot. Shell: Sekka's fish (set up as Omarchy sets it up).
 - The lock screen uses PAM service `aizome`.
 

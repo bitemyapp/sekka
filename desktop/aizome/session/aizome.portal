@@ -1,0 +1,6 @@
+# Aizome's portal backend (aizome-portal): file choosers. Which interfaces
+# Aizome sessions take from it is aizome-portals.conf's to say.
+[portal]
+DBusName=org.freedesktop.impl.portal.desktop.aizome
+Interfaces=org.freedesktop.impl.portal.FileChooser
+UseIn=Aizome

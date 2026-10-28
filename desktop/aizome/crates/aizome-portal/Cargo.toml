@@ -1,0 +1,27 @@
+[package]
+name = "aizome-portal"
+description = "Aizome's xdg-desktop-portal backend: Open and Save in Aizome's look, for every app that asks through the portal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "aizome-portal"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-ipc.workspace = true
+aizome-search.workspace = true
+# Files' model (folders, MIME types, places, names, URIs) and the look of
+# its sidebar and path bar, so a chooser is Hako in miniature.
+aizome-hako = { path = "../../apps/hako" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+async-channel = "2.5"

@@ -1057,6 +1057,32 @@ prompt has the keyboard. `aizomectl input-state` names the lock surface with
 the keyboard (`the lock screen on <output>`). These are component checks,
 not physical suspend/resume or ISO qualification.
 
+Aizome's portal backend, `crates/aizome-portal`, answers
+`org.freedesktop.impl.portal.FileChooser` in Aizome sessions
+(`session/aizome-portals.conf`); D-Bus starts it as
+`aizome-portal.service`, and the module adds the package to
+`xdg.portal.extraPortals` so its activation file and `aizome.portal` are
+found. Each request runs a chooser process built from Hako's library
+(model, sidebar rows, path bar, icons), which the frontend's
+`Request.Close` ends. It opens over the asking app's window through
+xdg-foreign v2: Sidestep's `WindowOptions::foreign_parent`, which the
+kit takes as `WindowSpec::foreign_parent`, so Aizome needs a Sidestep
+revision that has it. The behaviour and its limits are in
+[Aizome's apps](desktop/aizome/docs/apps.md#the-file-chooser-portal).
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-portal
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-portal
+nix develop .#aizome -c env AIZOME_PORTAL_TEST_BIN="$PWD/desktop/aizome/target/debug/aizome-portal" \
+  cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test portal -- --include-ignored
+```
+
+The first covers the bus (a private D-Bus with a stand-in chooser), the
+chooser in each mode on the kit's stand-in platform, and its goldens. The
+last runs the real chooser under a headless compositor over a test window
+that exported itself, and checks that it is that window's dialog and takes
+the keys. Neither runs a browser or the installed session.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

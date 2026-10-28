@@ -1,0 +1,14 @@
+[Unit]
+Description=Aizome portal backend (file choosers)
+PartOf=graphical-session.target
+# Its choosers are windows: the compositor imports WAYLAND_DISPLAY before
+# reporting readiness.
+After=graphical-session.target aizome.service
+
+[Service]
+Slice=session.slice
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.aizome
+ExecStart=@bindir@/aizome-portal
+Restart=on-failure
+RestartSec=2

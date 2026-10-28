@@ -59,6 +59,10 @@ its ideas from Haiku, NeXTSTEP and IRIX:
   apart (**Super + Ctrl + ↑** shows them all).
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
   and foot opens in fish.
+- Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's
+  own chooser: Files' sidebar and path bar over the app's window, with its
+  filters and options. Qt apps, and GTK 4 apps that don't ask the desktop
+  portal, still show their own dialogs.
 
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
