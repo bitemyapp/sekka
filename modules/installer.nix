@@ -12,7 +12,6 @@
 let
   calamares = import ../nix/calamares.nix {
     inherit pkgs;
-    inherit (inputs) sidestep;
     source = inputs.calamares;
     fonts = inputs.aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
   };

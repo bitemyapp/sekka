@@ -28,14 +28,12 @@ and the compositor renders its tab labels, overview captions and switcher
 text with sidestep-ui's offscreen `Canvas`, so text in a tab and text in a
 window come from the same engine.
 
-## Sidestep
+## Sukumo
 
-Aizome builds against a pinned revision from the `aizome` branch of
-Sidestep. Sekka's root flake owns that pin, and the `vendor/sidestep`
-submodule at Sekka's root records the same revision for development;
-`nix develop .#aizome` checks the submodule out if it isn't yet, and
-otherwise leaves it as it is for Sidestep development. That branch adds, without
-changing AppKit's behaviour:
+Aizome builds against Sukumo, its toolkit: `sukumo/`, a workspace of its
+own inside this one's directory ([its README](../sukumo/README.md)).
+Sukumo is the engine and native toolkit of Sidestep's `aizome` branch,
+which added, without changing AppKit's behaviour:
 
 - layer-shell surfaces (`WindowOptions::layer(..)`), with popups;
 - session-lock surfaces (`Cx::lock_session`, `WindowOptions::lock(..)`);

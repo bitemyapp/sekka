@@ -1,9 +1,8 @@
-# First-party source is always taken from this checkout, Aizome's with
-# Sekka's `sidestep` input, and the catalog's applications from other flakes
-# from Sekka's own inputs of those names.
+# First-party source is always taken from this checkout, Aizome's with its
+# toolkit, Sukumo (desktop/aizome/sukumo), and the catalog's applications
+# from other flakes from Sekka's own inputs of those names.
 {
   nixpkgs,
-  sidestep,
   superluminal,
   tracy,
 }:
@@ -12,7 +11,7 @@ let
   pkgs = nixpkgs.legacyPackages.${system};
 in
 rec {
-  aizome = import ../desktop/aizome/nix { inherit nixpkgs sidestep; };
+  aizome = import ../desktop/aizome/nix { inherit nixpkgs; };
   tatami = {
     outPath = ../desktop/tatami;
     nixosModules.default = ../desktop/tatami/module.nix;

@@ -2,7 +2,7 @@
 
 *Aizome* is indigo dyeing: cloth dipped again and again, each dip adding
 depth. It is also Sekka's desktop: a Wayland desktop environment written in
-Rust on Sidestep's native toolkit, from the compositor to the calculator.
+Rust on Sukumo 蒅, its native toolkit, from the compositor to the calculator.
 
 - **Haiku's tabs.** Every window wears a tab only as wide as its title,
   amber when focused. Tabs slide along the top edge, and dropping one tab on
@@ -71,9 +71,8 @@ cd desktop/aizome
 cargo build
 ```
 
-Sidestep is the `vendor/sidestep` submodule at Sekka's root. The
-development shell checks it out if it isn't yet, and leaves it where it is
-otherwise, so it is also where to work on Sidestep.
+Sukumo, the toolkit, is in `sukumo/`: a workspace of its own, whose crates
+this one takes by path ([its README](sukumo/README.md)).
 
 To try one app from the current checkout or worktree in your running Aizome
 session:

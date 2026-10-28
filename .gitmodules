@@ -1,4 +1,0 @@
-[submodule "vendor/sidestep"]
-	path = vendor/sidestep
-	url = https://github.com/bitemyapp/sidestep.git
-	branch = aizome

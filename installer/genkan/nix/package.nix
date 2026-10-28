@@ -1,11 +1,10 @@
-# Genkan: its window (ui/, on Aizome's kit and Sidestep) and its privileged
+# Genkan: its window (ui/, on Aizome's kit and Sukumo) and its privileged
 # helper (rust/), from two Cargo workspaces with their own locks. The
 # helper is built from the backend alone; the window links the same
-# backend, Aizome's kit crates and the pinned Sidestep, and the package puts
-# the helper beside it, where the window and the Polkit policy look for it.
+# backend, Aizome's kit crates and Sukumo, and the package puts the
+# helper beside it, where the window and the Polkit policy look for it.
 {
   pkgs,
-  sidestep,
   fonts,
 }:
 let
@@ -74,6 +73,9 @@ let
       (aizome + "/crates/aizome-theme")
       (aizome + "/crates/aizome-config")
       (aizome + "/crates/aizome-shell-proto")
+      # Sukumo, which the kit draws with: its workspace manifest and crates.
+      (aizome + "/sukumo/Cargo.toml")
+      (aizome + "/sukumo/crates")
     ];
   };
   ui = lib.fileset.toSource {
@@ -87,15 +89,12 @@ let
   };
   # Sekka's paths, as the crates' path dependencies name them.
   source = pkgs.runCommand "genkan-source" { } ''
-    mkdir -p $out/installer/genkan $out/desktop $out/vendor
+    mkdir -p $out/installer/genkan $out/desktop
     cp -r ${ui} $out/installer/genkan/ui
     cp -r ${backend} $out/installer/genkan/rust
     cp -r ${kit} $out/desktop/aizome
-    cp -r ${sidestep} $out/vendor/sidestep
-    chmod u+w $out/desktop/aizome
-    ln -s ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
-  # Opened at run time rather than linked (Sidestep's text and windows).
+  # Opened at run time rather than linked (Sukumo's text and windows).
   runtimeLibs = [
     pkgs.fontconfig
     pkgs.libxkbcommon

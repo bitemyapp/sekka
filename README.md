@@ -41,9 +41,8 @@ Programs built for other Linux distributions start as they would there. Editors 
 ### Aizome: Sekka's own desktop
 
 Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
-choice. It is written from the compositor up in Rust, on
-[Sidestep](https://github.com/bitemyapp/sidestep)'s native toolkit, and takes
-its ideas from Haiku, NeXTSTEP and IRIX:
+choice. It is written from the compositor up in Rust, on its own native
+toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 
 - Every window wears a tab only as wide as its title. Drop one tab on another
   and the windows stack into a group, from any apps; slide a tab along the

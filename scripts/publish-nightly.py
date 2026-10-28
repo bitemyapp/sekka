@@ -123,14 +123,12 @@ def local_candidate(source):
     lock_path = Path('flake.lock')
     lock_bytes = subprocess.check_output(['git', 'show', f'{revision}:flake.lock'])
     require(lock_path.read_bytes() == lock_bytes, 'lock changed during source validation')
-    lock = json.loads(lock_bytes)
-    # Aizome is Sekka's own source (desktop/aizome); Sidestep, which it builds
-    # against, is the input it pins.
-    sidestep = lock['nodes'][lock['nodes'][lock['root']]['inputs']['sidestep']]
+    # Aizome and its toolkit, Sukumo, are Sekka's own source (desktop/aizome):
+    # the Sekka revision names them.
     candidate = {
         'iso_sha256': digest(iso), 'iso_bytes': iso.stat().st_size,
         'sekka_revision': revision, 'flake_lock_sha256': digest(lock_path),
-        'sidestep_revision': sidestep['locked']['rev'], 'iso_store_path': str(output),
+        'iso_store_path': str(output),
     }
     require(candidate['iso_bytes'] > 0, 'empty ISO')
     return iso, candidate

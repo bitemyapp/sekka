@@ -5,9 +5,9 @@
    or snapshot before diagnostic changes. Verify a failure against current
    `main` in the affected repository before attributing it there.
 2. Isolate ISO packaging/boot/Genkan/Tatami defects in Sekka, Aizome shell/app/
-   greeter defects in Aizome, and toolkit defects in Sidestep. Check the actual
-   dependency branch and revision; do not assume the three repositories share
-   a lock or release schedule.
+   greeter defects in Aizome, and toolkit defects in Sukumo
+   (`desktop/aizome/sukumo`). All three share Sekka's revision and lock; check
+   the external inputs' actual revisions in `flake.lock`.
 3. Create focused topic branches and PRs with the reproduction, root cause,
    change, meaningful regression check and limits of validation. User
    authorization to fix bugs includes creating the requested PRs; follow the

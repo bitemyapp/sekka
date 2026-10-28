@@ -1,0 +1,24 @@
+# Sukumo: Aizome's toolkit, the engine and native toolkit of Sidestep's
+# `aizome` branch without Sidestep's Objective-C runtime and frameworks
+# (README.md). A workspace of its own, as Sidestep's was: Aizome's
+# workspace excludes this directory and takes the crates by path.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bitemyapp/sekka"
+
+[workspace.dependencies]
+sidestep-engine = { path = "crates/sidestep-engine" }
+sidestep-ui = { path = "crates/sidestep-ui" }
+
+# tiny-skia's portable SIMD (every target but aarch64 with NEON) multiplies
+# 16-bit lanes expecting them to wrap, as the NEON path does; overflow checks
+# in debug builds turn some blend modes into panics on x86_64.
+[profile.dev.package.tiny-skia]
+overflow-checks = false

@@ -3,10 +3,9 @@ resolver = "3"
 # Apps join by name once they have a manifest: an app directory without
 # Cargo.toml would break an "apps/*" glob, and every build, for everyone.
 members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe"]
-# Sidestep's fork, reached through the `sidestep` link beside this file
-# (to Sekka's vendor/sidestep submodule; the Nix package lays its pinned
-# source out the same way). Its crates are path dependencies, not members.
-exclude = ["sidestep"]
+# Sukumo, the toolkit (sukumo/), is a workspace of its own: its crates are
+# path dependencies, not members.
+exclude = ["sukumo"]
 
 [workspace.package]
 version = "0.1.0"
@@ -23,14 +22,14 @@ aizome-face = { path = "crates/aizome-face" }
 aizome-kit = { path = "crates/aizome-kit" }
 aizome-sys = { path = "crates/aizome-sys" }
 aizome-search = { path = "crates/aizome-search" }
-# Sidestep's native toolkit, from the `aizome` branch of the Sidestep fork.
-# `sidestep` links to ../../vendor/sidestep, a Git submodule of Sekka;
-# the Nix package puts the revision it pins there (see nix/package.nix). The path stays inside the workspace so Cargo hashes it
-# relative to the workspace, and a build of this checkout gives the
-# compositor's core the same symbols as the package's: what makes a logic
-# library built here loadable into the running session (docs/reload.md).
-sidestep-ui = { path = "sidestep/crates/sidestep-ui" }
-sidestep-engine = { path = "sidestep/crates/sidestep-engine" }
+# Sukumo's crates, which keep the names they had in Sidestep, the
+# toolkit Sukumo came from (sukumo/README.md). The path stays inside the
+# workspace so Cargo hashes it relative to the workspace, and a build of
+# this checkout gives the compositor's core the same symbols as the
+# package's: what makes a logic library built here loadable into the
+# running session (docs/reload.md).
+sidestep-ui = { path = "sukumo/crates/sidestep-ui" }
+sidestep-engine = { path = "sukumo/crates/sidestep-engine" }
 # The compositor: its core (a Rust dylib that owns the Wayland display and
 # every client) and the logic it loads and reloads at run time.
 aizome-comp-core = { path = "crates/aizome-comp-core" }

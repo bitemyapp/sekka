@@ -1,10 +1,9 @@
 # Genkan's package retains its existing executable and policy IDs for compatibility.
-# Its window builds against Aizome's kit with Sekka's `sidestep` input, and
-# its tests draw with Aizome's fonts.
+# Its window builds against Aizome's kit and Sukumo, and its tests draw
+# with Aizome's fonts.
 {
   pkgs,
   source,
-  sidestep,
   fonts,
 }:
 let
@@ -15,5 +14,5 @@ let
   root = source.outPath or source;
 in
 import (if builtins.isPath root then root + "/nix/package.nix" else "${root}/nix/package.nix") {
-  inherit pkgs sidestep fonts;
+  inherit pkgs fonts;
 }

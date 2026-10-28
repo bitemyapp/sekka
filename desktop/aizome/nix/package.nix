@@ -1,12 +1,11 @@
 # Aizome: the compositor, the shell, aizomectl and the apps, from one
 # checkout of the workspace.
 #
-# The workspace depends on Sidestep's crates by path, through the
-# `sidestep` link to ../../vendor/sidestep, so the source here is a
-# directory retaining Sekka's desktop/aizome, apps/yukimi and
-# vendor/sidestep paths, with the flake's pinned Sidestep where the
-# submodule sits. Only Aizome, the shared Yukimi backend and Sidestep are
-# copied; unrelated Sekka components stay outside this source.
+# The workspace depends on the shared Yukimi backend by path, so the
+# source here is a directory retaining Sekka's desktop/aizome and
+# apps/yukimi paths. Sukumo, the toolkit, is inside desktop/aizome. Only
+# Aizome, Sukumo and the shared Yukimi backend are copied; unrelated Sekka
+# components stay outside this source.
 #
 # Two builds: the compositor with `release` (its core and logic are Rust
 # dylibs, which can't take part in LTO; docs/reload.md), everything else
@@ -47,7 +46,6 @@
   vulkan-loader,
   src,
   yukimiSrc,
-  sidestep,
   fonts,
   bash,
   weston,
@@ -59,12 +57,9 @@
 }:
 let
   source = runCommand "aizome-source" { } ''
-    mkdir -p $out/desktop $out/apps $out/vendor
+    mkdir -p $out/desktop $out/apps
     cp -r ${src} $out/desktop/aizome
-    cp -r ${sidestep} $out/vendor/sidestep
     cp -r ${yukimiSrc} $out/apps/yukimi
-    chmod u+w $out/desktop/aizome
-    ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
@@ -104,9 +99,6 @@ let
     cargo_store_path = split cargo;
     rustc_version = rustc.version;
     source_rev = rev;
-    # The Sidestep the core was built against (the flake's `sidestep`
-    # input): a checkout's vendor/sidestep must be at it.
-    sidestep_rev = sidestep.rev or null;
   };
 in
 rustPlatform.buildRustPackage {
@@ -301,7 +293,7 @@ rustPlatform.buildRustPackage {
   };
 
   meta = {
-    description = "Aizome, Sekka's desktop environment, on Sidestep's native Rust toolkit";
+    description = "Aizome, Sekka's desktop environment, on Sukumo, its native Rust toolkit";
     homepage = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
     license = with lib.licenses; [
       mit

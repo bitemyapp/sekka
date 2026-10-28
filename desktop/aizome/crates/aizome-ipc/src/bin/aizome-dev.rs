@@ -43,7 +43,7 @@ usage: aizome-dev [COMMAND] [WHAT...] [--checkout PATH] [--optimised]
 
 It talks to the session at $AIZOME_SOCKET (or the one for $WAYLAND_DISPLAY).
 Changes to the compositor's core (aizome-comp-core, aizome-ipc,
-aizome-config, aizome-theme, Sidestep) can't reload: they run at the next
+aizome-config, aizome-theme, Sukumo) can't reload: they run at the next
 login.
 ";
 
@@ -454,9 +454,6 @@ impl Dev {
             w => w.package(),
         });
         let before = mtime(&out);
-        if *what == What::Logic {
-            self.check_sidestep();
-        }
         let args = self.cargo_args(what);
         say(format!("building {}", what.package()));
         let started = Instant::now();
@@ -516,7 +513,7 @@ impl Dev {
             }
             return Err(format!(
                 "the logic was built against another compositor core than the session's \
-                 (session: {}; this build: {parts}).{what} The core changed (its sources, Sidestep, \
+                 (session: {}; this build: {parts}).{what} The core changed (its sources, Sukumo, \
                  the lock file, the toolchain or the flags): that runs at the next login",
                 self.core_str("abi_parts"),
             ));
@@ -544,35 +541,6 @@ impl Dev {
             .output()
             .ok()?;
         serde_json::from_slice(&out.stdout).ok()
-    }
-
-    /// Whether the checkout's Sidestep is the session's: a word when it
-    /// isn't, as a logic built against it wouldn't load.
-    fn check_sidestep(&self) {
-        let Some(want) = self.env.as_ref().and_then(|e| e["sidestep_rev"].as_str()) else { return };
-        let dir = self.checkout.join("sidestep");
-        let git = |args: &[&str]| {
-            Command::new("git")
-                .arg("-C")
-                .arg(&dir)
-                .args(args)
-                .stderr(Stdio::null())
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        };
-        let Some(have) = git(&["rev-parse", "HEAD"]) else { return };
-        let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-        if have != want || dirty {
-            say(format!(
-                "the session was built against Sidestep {want}, but {} is at {have}{}: the logic \
-                 won't load until they match (`git -C {} switch --detach {want}`, or a worktree there)",
-                dir.display(),
-                if dirty { " with changes" } else { "" },
-                dir.display()
-            ));
-        }
     }
 
     /// Rebuilds and reloads on every save.
@@ -658,7 +626,7 @@ fn plan(changed: &[PathBuf], checkout: &Path) -> BTreeSet<What> {
             }
             Some("aizome-comp") if s.contains("/tests/") || s.contains("/examples/") => {}
             _ => {
-                // Shared: the core, the kit, Sidestep, the lock file. The
+                // Shared: the core, the kit, Sukumo, the lock file. The
                 // logic (a core change is refused, and says so), the shell,
                 // and the apps that run from this checkout.
                 out.insert(What::Logic);
@@ -820,7 +788,7 @@ fn mtime(p: &Path) -> Option<SystemTime> {
 /// Every source file's modification time, relative to the checkout.
 fn snapshot(checkout: &Path) -> BTreeMap<PathBuf, SystemTime> {
     let mut out = BTreeMap::new();
-    for top in ["crates", "apps", "sidestep/crates", "Cargo.toml", "Cargo.lock"] {
+    for top in ["crates", "apps", "sukumo/crates", "Cargo.toml", "Cargo.lock"] {
         walk(checkout, &checkout.join(top), &mut out);
     }
     if checkout.parent().and_then(Path::parent).is_some_and(|root| root.join("desktop/aizome") == checkout) {
