@@ -22,6 +22,7 @@ use crate::settings::Bindings;
 
 const PAD: f64 = 10.0;
 const CURSOR_TIMER: u32 = 0;
+const SCROLL_FRAME_BYTES: usize = 8 * 1024 * 1024;
 const CURSOR_INTERVAL: Duration = Duration::from_millis(600);
 
 #[derive(Default)]
@@ -165,6 +166,7 @@ struct ViewState {
     // Keep the preceding rows alive until layout has compared them. Raw address
     // caches can mistake allocator reuse for unchanged content between frames.
     snapshot: Option<Arc<Snapshot>>,
+    rendered: Option<Arc<crate::font::Frame>>,
     cursor: Option<hotaru_core::Cursor>,
     blink: Blink,
     input_activity: u64,
@@ -191,6 +193,59 @@ struct ViewState {
     pointer: Option<Point>,
     link_modifier: bool,
     hover_clear_pending: bool,
+}
+
+fn retained_frame(frame: Option<&Arc<crate::font::Frame>>) -> Option<Arc<crate::font::Frame>> {
+    frame.filter(|frame| frame.retention_bytes <= SCROLL_FRAME_BYTES).cloned()
+}
+
+// Position metadata proposes a translation. Owned row and shaped-run identity
+// prove each retained row; anything unproven is rasterized after the copy.
+fn scroll_reuse(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<(isize, Vec<bool>)> {
+    if std::ptr::eq(old, new) {
+        return None;
+    }
+    let (a, b) = (&old.snapshot, &new.snapshot);
+    if old.retention_bytes > SCROLL_FRAME_BYTES
+        || new.retention_bytes > SCROLL_FRAME_BYTES
+        || a.position.epoch != b.position.epoch
+        || a.cols != b.cols
+        || a.rows != b.rows
+        || old.epoch != new.epoch
+        || old.metrics != new.metrics
+        || a.palette != b.palette
+        || a.default_foreground != b.default_foreground
+        || a.default_background != b.default_background
+        || old.rows.len() != a.rows
+        || new.rows.len() != b.rows
+        || a.lines.len() != a.rows
+        || b.lines.len() != b.rows
+    {
+        return None;
+    }
+    let before = u128::from(a.position.origin) + a.position.first_row as u128;
+    let after = u128::from(b.position.origin) + b.position.first_row as u128;
+    let delta = i128::try_from(before).ok()? - i128::try_from(after).ok()?;
+    let delta = isize::try_from(delta).ok()?;
+    if delta == 0 || delta.unsigned_abs() >= b.rows {
+        return None;
+    }
+    if old.rows.iter().chain(&new.rows).flat_map(|r| r.iter()).any(|s| s.selected || s.matched || s.current_match) {
+        return None;
+    }
+    let clean: Vec<_> = (0..b.rows)
+        .map(|y| {
+            let Some(source) = y.checked_add_signed(-delta).filter(|source| *source < a.rows) else {
+                return false;
+            };
+            hotaru_core::RowRef::ptr_eq(&a.lines[source], &b.lines[y]) && Arc::ptr_eq(&old.rows[source], &new.rows[y])
+        })
+        .collect();
+    (clean.iter().filter(|clean| **clean).count() >= 2).then_some((delta, clean))
+}
+fn pixel_aligned(value: f64, scale: f64) -> bool {
+    let physical = value * scale;
+    physical.is_finite() && (physical - physical.round()).abs() < 1e-7
 }
 
 fn emit(cx: &mut EventCx, msg: Msg) {
@@ -334,6 +389,9 @@ impl Widget for TerminalView {
         let now = cx.now();
         let theme = (cx.theme().is_dark(), rgb(cx.theme().text()), rgb(cx.theme().surface()));
         let st = cx.state::<ViewState>();
+        let old_rendered = std::mem::replace(&mut st.rendered, retained_frame(self.rendered.as_ref()));
+        let overlays = !st.preedit.is_empty() || st.hovered.is_some() || self.selection.is_some();
+        let old_scale = st.scale;
         let metrics = self.rendered.as_ref().map(|frame| frame.metrics);
         st.resize_pending |= st.font_metrics != metrics;
         st.font_metrics = metrics;
@@ -369,6 +427,31 @@ impl Widget for TerminalView {
         st.line_height = line_height;
         st.resize_pending |= resized;
         st.theme_pending |= st.theme.replace(theme) != Some(theme);
+        let content = Rect::new(
+            pad,
+            pad,
+            pad + self.snapshot.cols as f64 * cell_width,
+            pad + self.snapshot.rows as f64 * line_height,
+        );
+        let reuse = if !resized
+            && !font_changed
+            && !overlays
+            && !st.theme_pending
+            && old_scale == scale
+            && content.x1 <= size.width - pad + 1e-7
+            && content.y1 <= size.height - pad + 1e-7
+            && st.window_rect.size() == size
+            && pixel_aligned(st.window_rect.x0 + pad, scale)
+            && pixel_aligned(st.window_rect.y0 + pad, scale)
+            && pixel_aligned(content.width(), scale)
+            && pixel_aligned(content.height(), scale)
+            && pixel_aligned(line_height, scale)
+        {
+            old_rendered.as_ref().zip(self.rendered.as_ref()).and_then(|(old, new)| scroll_reuse(old, new))
+        } else {
+            None
+        };
+
         if st.resize_pending
             || old_cursor != Some(cursor)
             || st.theme_pending
@@ -388,13 +471,45 @@ impl Widget for TerminalView {
             let rect = self.cursor_rect(cx.state::<ViewState>());
             cx.invalidate_rect(rect);
         }
-        for (y, row) in self.snapshot.lines.iter().enumerate() {
-            if font_changed
-                || !old_snapshot
-                    .as_ref()
-                    .and_then(|s| s.lines.get(y))
-                    .is_some_and(|old| hotaru_core::RowRef::ptr_eq(old, row))
+        if let Some((delta, _)) = &reuse {
+            let dy = *delta as f64 * line_height;
+            let mut fixed = Vec::with_capacity(3);
+            // Repaint the old cursor AND where its old pixels were copied.
+            // Full rows include wide tails, hollow borders and changed glyph
+            // shaping boundaries. This is safe for every previous blink phase.
+            for y in old_cursor.into_iter().map(|c| c.row).chain([cursor.row]) {
+                if y < self.snapshot.rows {
+                    fixed.push(Rect::new(
+                        pad,
+                        pad + y as f64 * line_height,
+                        content.x1,
+                        pad + (y + 1) as f64 * line_height,
+                    ));
+                }
+            }
+            if let Some(y) =
+                old_cursor.and_then(|c| c.row.checked_add_signed(*delta)).filter(|y| *y < self.snapshot.rows)
             {
+                fixed.push(Rect::new(
+                    pad,
+                    pad + y as f64 * line_height,
+                    content.x1,
+                    pad + (y + 1) as f64 * line_height,
+                ));
+            }
+            cx.scrolled(content, Vec2::new(0.0, dy), &fixed);
+        }
+        for (y, row) in self.snapshot.lines.iter().enumerate() {
+            let unchanged = reuse.as_ref().map_or_else(
+                || {
+                    old_snapshot
+                        .as_ref()
+                        .and_then(|s| s.lines.get(y))
+                        .is_some_and(|old| hotaru_core::RowRef::ptr_eq(old, row))
+                },
+                |(_, clean)| clean[y],
+            );
+            if font_changed || !unchanged {
                 cx.invalidate_rect(Rect::new(
                     0.0,
                     pad + y as f64 * line_height,
@@ -907,5 +1022,106 @@ mod cursor_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod scroll_retention_tests {
+    use super::*;
+    use crate::app::Hotaru;
+    use aizome_kit::testing::Harness;
+    use std::cell::Cell;
+
+    struct HiddenFixture {
+        app: Hotaru,
+        window: Cell<Option<WindowKey>>,
+    }
+    impl Program for HiddenFixture {
+        type Msg = Msg;
+        fn info(&self) -> AppInfo {
+            self.app.info()
+        }
+        fn launched(&mut self, cx: &mut Cx<Msg>) {
+            self.app.launched(cx);
+        }
+        fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+            match msg {
+                Msg::Notice(_, ref text) if text == "fixture-hide" => cx.hide_window(self.window.get().unwrap()),
+                Msg::Notice(_, ref text) if text == "fixture-show" => cx.show_window(self.window.get().unwrap()),
+                other => self.app.update(other, cx),
+            }
+        }
+        fn view(&self, window: WindowKey) -> Element<Msg> {
+            self.window.set(Some(window));
+            self.app.view(window)
+        }
+    }
+    fn frame(charge: usize) -> Arc<crate::font::Frame> {
+        let fonts = aizome_kit::sidestep_ui::grid::FontSet::new(Default::default()).unwrap();
+        Arc::new(crate::font::Frame {
+            retention_bytes: charge,
+            epoch: 0,
+            snapshot: Arc::new(hotaru_core::Terminal::new(2, 2, 0).snapshot()),
+            selection: None,
+            metrics: fonts.metrics(1.).unwrap(),
+            rows: Vec::new(),
+            primary_family: String::new(),
+            missing_families: Vec::new(),
+            links: Vec::new(),
+        })
+    }
+    #[test]
+    fn prior_frame_admission_is_bounded_and_preserves_snapshot_identity() {
+        let normal = frame(SCROLL_FRAME_BYTES);
+        let retained = retained_frame(Some(&normal)).unwrap();
+        assert!(Arc::ptr_eq(&normal, &retained));
+        assert!(Arc::ptr_eq(&normal.snapshot, &retained.snapshot));
+        assert_eq!(normal.snapshot.cursor, retained.snapshot.cursor);
+        assert!(retained_frame(Some(&frame(SCROLL_FRAME_BYTES + 1))).is_none());
+        assert!(retained_frame(Some(&frame(usize::MAX))).is_none());
+        let weak = Arc::downgrade(&normal);
+        let mut state = ViewState { rendered: Some(retained), ..Default::default() };
+        drop(normal);
+        assert!(weak.upgrade().is_some());
+        state.rendered = retained_frame(Some(&frame(usize::MAX)));
+        assert!(weak.upgrade().is_none(), "oversize replacement drops previous owned frame");
+        state.rendered = retained_frame(Some(&frame(1024)));
+        let weak = Arc::downgrade(state.rendered.as_ref().unwrap());
+        drop(state);
+        assert!(weak.upgrade().is_none(), "widget teardown releases retained frame");
+    }
+
+    #[test]
+    fn hidden_window_retains_only_its_last_admitted_view_and_releases_it_on_show() {
+        let mut h = Harness::new(HiddenFixture { app: Hotaru::preview(), window: Cell::new(None) });
+        let window = h.window();
+        assert!(h.settle(Duration::from_secs(5), |app| app.app.active_pane().unwrap().rendered.is_some()));
+        h.advance(Duration::ZERO);
+        let pane = h.program().app.active_pane().unwrap();
+        let id = pane.id;
+        let original = Arc::downgrade(pane.rendered.as_ref().unwrap());
+        assert!(original.upgrade().unwrap().retention_bytes <= SCROLL_FRAME_BYTES);
+        h.send(Msg::Notice(id, "fixture-hide".into()));
+        assert!(!h.is_shown(window));
+        let mut terminal = hotaru_core::Terminal::new(70, 16, 64);
+        let mut frames = Vec::new();
+        for n in 0..12 {
+            terminal.feed(format!("hidden output {n}\r\n").as_bytes());
+            h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
+            assert!(h.settle(Duration::from_secs(5), |app| {
+                let pane = app.app.active_pane().unwrap();
+                pane.rendered.as_ref().is_some_and(|frame| Arc::ptr_eq(&frame.snapshot, &pane.snapshot))
+            }));
+            frames.push(Arc::downgrade(h.program().app.active_pane().unwrap().rendered.as_ref().unwrap()));
+        }
+        assert!(original.upgrade().is_some(), "hidden tree retains only the last displayed frame");
+        assert!(frames[..frames.len() - 1].iter().all(|frame| frame.upgrade().is_none()));
+        h.send(Msg::Notice(id, "fixture-show".into()));
+        h.advance(Duration::ZERO);
+        assert!(h.is_shown(window));
+        assert!(original.upgrade().is_none(), "show replaces the old retained view");
+        h.send(Msg::CloseTab);
+        h.advance(Duration::ZERO);
+        assert!(frames.iter().all(|frame| frame.upgrade().is_none()), "closing releases the final displayed frame");
     }
 }

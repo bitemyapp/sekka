@@ -23,6 +23,9 @@ pub struct Span {
 }
 
 pub struct Frame {
+    /// Conservative logical ownership charge for optional previous-frame
+    /// retention. Computed on the font worker; this is not an RSS estimate.
+    pub retention_bytes: usize,
     pub epoch: u64,
     pub snapshot: Arc<Snapshot>,
     pub selection: Option<Selection>,
@@ -211,17 +214,29 @@ fn selection_range(selection: Option<Selection>, row: usize, cols: usize) -> Opt
     (start_col < end_col).then_some((start_col, end_col))
 }
 
+fn retention_total(parts: impl IntoIterator<Item = usize>) -> usize {
+    parts.into_iter().fold(0, usize::saturating_add)
+}
 fn layout_bytes(layout: &grid::Layout) -> usize {
     // Deliberately count a shared layout once per span: an admission estimate,
-    // not a report of unique process allocations. Font data is registered in
-    // the toolkit independently and is not owned by this row cache.
-    std::mem::size_of::<grid::Layout>()
-        + 32
-        + layout.runs.len() * std::mem::size_of::<grid::Run>()
-        + 32
-        + layout.clusters.len() * std::mem::size_of::<grid::Cluster>()
-        + 32
-        + layout.runs.iter().map(|run| std::mem::size_of_val(run.glyphs.as_ref()) + 32).sum::<usize>()
+    // not unique process allocations. Toolkit font data has separate ownership.
+    retention_total([
+        std::mem::size_of::<grid::Layout>() + 32,
+        layout.runs.len().saturating_mul(std::mem::size_of::<grid::Run>()).saturating_add(32),
+        layout.clusters.len().saturating_mul(std::mem::size_of::<grid::Cluster>()).saturating_add(32),
+        retention_total(layout.runs.iter().map(|run| std::mem::size_of_val(run.glyphs.as_ref()).saturating_add(32))),
+    ])
+}
+fn frame_auxiliary_bytes(frame: &Frame) -> usize {
+    retention_total([
+        std::mem::size_of::<Frame>() + std::mem::size_of::<Snapshot>() + 64,
+        frame.snapshot.lines.capacity().saturating_mul(std::mem::size_of::<hotaru_core::RowRef>()),
+        frame.rows.capacity().saturating_mul(std::mem::size_of::<Arc<[Span]>>()),
+        frame.links.capacity().saturating_mul(std::mem::size_of::<LinkSpan>()),
+        frame.primary_family.capacity(),
+        frame.missing_families.capacity().saturating_mul(std::mem::size_of::<String>()),
+        retention_total(frame.missing_families.iter().map(String::capacity)),
+    ])
 }
 
 fn shape(
@@ -242,6 +257,7 @@ fn shape(
     let previous_bytes = std::mem::take(&mut cache.bytes);
     let mut next = HashMap::new();
     let mut next_bytes = 0usize;
+    let mut retained_rows = 0usize;
     let mut rows = Vec::with_capacity(job.snapshot.rows);
     let mut links: Vec<LinkSpan> = Vec::new();
     let projected = job.search.as_ref().map_or_else(Vec::new, |cache| cache.results.project(&job.snapshot));
@@ -274,6 +290,7 @@ fn shape(
         if let Some(hit) = previous.get(&key) {
             debug_assert!(hotaru_core::RowRef::ptr_eq(&hit.source, row));
             cache.work.reused += 1;
+            retained_rows = retained_rows.saturating_add(hit.bytes);
             rows.push(hit.spans.clone());
             links.extend(hit.links.iter().map(|&(start, end)| LinkSpan { row: y, start, end }));
             // A previous admitted entry can still fail admission when another
@@ -371,10 +388,11 @@ fn shape(
         let bytes = row
             .storage_bytes_estimate()
             .saturating_add(4 * (std::mem::size_of::<CachedRow>() + std::mem::size_of::<RowKey>()) + 128)
-            .saturating_add(key.highlights.capacity() * std::mem::size_of::<(usize, usize, u8)>())
-            .saturating_add(local_links.len() * std::mem::size_of::<(usize, usize)>() + 32)
-            .saturating_add(spans.len() * std::mem::size_of::<Span>() + 32)
-            .saturating_add(spans.iter().map(|span| layout_bytes(&span.layout)).sum::<usize>());
+            .saturating_add(key.highlights.capacity().saturating_mul(std::mem::size_of::<(usize, usize, u8)>()))
+            .saturating_add(local_links.len().saturating_mul(std::mem::size_of::<(usize, usize)>()).saturating_add(32))
+            .saturating_add(spans.len().saturating_mul(std::mem::size_of::<Span>()).saturating_add(32))
+            .saturating_add(retention_total(spans.iter().map(|span| layout_bytes(&span.layout))));
+        retained_rows = retained_rows.saturating_add(bytes);
         if next_bytes.saturating_add(bytes) <= cache.limit {
             next_bytes += bytes;
             next.insert(key, CachedRow { source: row.clone(), spans: spans.clone(), links: local_links, bytes });
@@ -385,7 +403,8 @@ fn shape(
     cache.work.retained_after = next_bytes;
     cache.rows = next;
     cache.bytes = next_bytes;
-    Ok(Frame {
+    let mut frame = Frame {
+        retention_bytes: retained_rows,
         epoch: job.epoch,
         snapshot: job.snapshot.clone(),
         selection: job.selection,
@@ -394,7 +413,9 @@ fn shape(
         primary_family: fonts.primary_family().into(),
         missing_families: fonts.missing_families.clone(),
         links,
-    })
+    };
+    frame.retention_bytes = frame.retention_bytes.saturating_add(frame_auxiliary_bytes(&frame));
+    Ok(frame)
 }
 
 #[cfg(test)]
@@ -412,6 +433,9 @@ struct UncachedFrame {
 impl UncachedFrame {
     fn into_frame(self) -> Frame {
         Frame {
+            // The preserved uncached benchmark does not participate in pixel
+            // retention and must not acquire extra timed accounting work.
+            retention_bytes: usize::MAX,
             epoch: self.epoch,
             snapshot: self.snapshot,
             selection: self.selection,
@@ -535,6 +559,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn frame_retention_charge_saturates_instead_of_admitting_wrapped_sizes() {
+        assert_eq!(retention_total([usize::MAX - 8, 8, 1]), usize::MAX);
+        assert_eq!(retention_total([100, 200, 300]), 600);
+    }
+
+    #[test]
     fn whole_content_search_projects_wide_and_soft_wrapped_highlights_on_worker() {
         let mut terminal = hotaru_core::Terminal::new(6, 4, 8);
         terminal.feed("ab界cDE".as_bytes());
@@ -626,7 +656,10 @@ mod tests {
         let held = compared(&work, &mut fonts, &mut cache);
         let held_text = fingerprint(&held);
         assert_eq!(cache.work.prepared, 8);
-        compared(&work, &mut fonts, &mut cache);
+        let reused = compared(&work, &mut fonts, &mut cache);
+        assert_eq!(reused.retention_bytes, held.retention_bytes);
+        assert!(Arc::ptr_eq(&reused.snapshot, &held.snapshot));
+        assert_eq!(reused.snapshot.cursor, held.snapshot.cursor);
         assert_eq!(cache.work.reused, 8);
         assert_eq!(cache.work.prepared_cells, 0);
         terminal.feed(b"\x1b[8;1H\r\nnew row");

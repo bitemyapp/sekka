@@ -84,6 +84,7 @@ pub struct TestPlatform {
     frames: HashMap<WinId, (u32, u32, Vec<u8>)>,
     /// Each window's pixels as [`Harness::render_damage`] keeps them.
     kept: HashMap<WinId, Vec<u32>>,
+    exact_frames: HashMap<WinId, (u32, u32, f64, Vec<u32>)>,
     /// Windows hidden (opened hidden, or hidden since).
     pub hidden: std::collections::HashSet<WinId>,
     /// Hidden windows' pictures drawn ahead, kept for their next showing.
@@ -127,6 +128,7 @@ impl TestPlatform {
             reject_drags: false,
             frames: HashMap::new(),
             kept: HashMap::new(),
+            exact_frames: HashMap::new(),
             hidden: Default::default(),
             pictures: HashMap::new(),
             first: HashMap::new(),
@@ -172,6 +174,7 @@ impl Platform for TestPlatform {
     }
 
     fn close_window(&mut self, id: WinId) {
+        self.exact_frames.remove(&id);
         self.windows.remove(&id);
         self.damage.remove(&id);
         self.hidden.remove(&id);
@@ -1046,6 +1049,83 @@ impl<P: Program> Harness<P> {
         sidestep_ui::offscreen::render(size, scale, look, |c| core.paint(win, c))
     }
 
+    /// Test-only exact software oracle: move the preceding buffer's pixels,
+    /// actually rasterize only accumulated damage, and compare every channel
+    /// with a full redraw. Unlike `check_frame`, this accepts no tolerance.
+    pub fn check_frame_exact(&mut self, key: WindowKey, scale: f64) -> ExactFrameCheck {
+        let win = self.win(key);
+        let size = self.size(key);
+        let width = ((size.width * scale - 1e-6).ceil() as u32).clamp(1, 16384);
+        let height = ((size.height * scale - 1e-6).ceil() as u32).clamp(1, 16384);
+        let whole = Rect::from_origin_size(Point::ZERO, size);
+        let mut damage = self.platform.damage.remove(&win).unwrap_or_default();
+        let scrolls = self.platform.scrolls.remove(&win).unwrap_or_default();
+        let previous =
+            self.platform.exact_frames.remove(&win).filter(|(w, h, s, _)| (*w, *h, *s) == (width, height, scale));
+        let mut px = if let Some((_, _, _, pixels)) = previous {
+            pixels
+        } else {
+            damage = vec![whole];
+            vec![0; width as usize * height as usize]
+        };
+        let bounds = |r: Rect| {
+            (
+                (r.x0 * scale).floor().max(0.0).min(width as f64) as usize,
+                (r.y0 * scale).floor().max(0.0).min(height as f64) as usize,
+                (r.x1 * scale).ceil().max(0.0).min(width as f64) as usize,
+                (r.y1 * scale).ceil().max(0.0).min(height as f64) as usize,
+            )
+        };
+        let mut copied = 0;
+        for (rect, delta) in &scrolls {
+            let (x0, y0, x1, y1) = bounds(*rect);
+            let (dx, dy) = ((delta.x * scale).round() as isize, (delta.y * scale).round() as isize);
+            let source = px.clone();
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let sx = x.checked_add_signed(-dx);
+                    let sy = y.checked_add_signed(-dy);
+                    if let (Some(sx), Some(sy)) = (sx, sy)
+                        && sx >= x0
+                        && sx < x1
+                        && sy >= y0
+                        && sy < y1
+                    {
+                        px[y * width as usize + x] = source[sy * width as usize + sx];
+                        copied += 1;
+                    }
+                }
+            }
+        }
+        let damage = sidestep_ui::gather_damage(size, &damage);
+        let mut mask = vec![false; px.len()];
+        for rect in &damage {
+            let (x0, y0, x1, y1) = bounds(*rect);
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    mask[y * width as usize + x] = true;
+                }
+            }
+        }
+        let look = self.look();
+        let core = &mut self.rt.core;
+        sidestep_ui::offscreen::paint_damage(&mut px, size, scale, look, &damage, |c| core.paint(win, c));
+        let mut fresh = Vec::new();
+        sidestep_ui::offscreen::paint_damage(&mut fresh, size, scale, look, &[whole], |c| core.paint(win, c));
+        let differing_pixels = px.iter().zip(&fresh).filter(|(a, b)| a != b).count();
+        let result = ExactFrameCheck {
+            differing_pixels,
+            copied_pixels: copied,
+            rasterized_pixels: mask.iter().filter(|m| **m).count(),
+            moves: scrolls.len(),
+            total_pixels: px.len(),
+        };
+        // Keep the actual partial frame, including any defect, so later checks
+        // cannot accidentally repair stale state by substituting the oracle.
+        self.platform.exact_frames.insert(win, (width, height, scale, px));
+        result
+    }
+
     /// Make the window's next frame as a buffer the compositor shows gets
     /// it (the last frame's pixels moved as scrolls asked, then the damage
     /// drawn), taking the damage, and compare it with the window drawn
@@ -1228,6 +1308,16 @@ fn blend(d: &mut [u8], s: &[u8]) {
         d[i] = c.round().clamp(0.0, 255.0) as u8;
     }
     d[3] = (oa * 255.0).round() as u8;
+}
+
+/// Work and exact comparison from `Harness::check_frame_exact`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExactFrameCheck {
+    pub differing_pixels: usize,
+    pub copied_pixels: usize,
+    pub rasterized_pixels: usize,
+    pub total_pixels: usize,
+    pub moves: usize,
 }
 
 /// Write straight RGBA pixels to a PNG.

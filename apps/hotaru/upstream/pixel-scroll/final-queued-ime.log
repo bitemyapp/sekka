@@ -1,0 +1,21 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-pixel-scroll-isolated/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests/pixel_scroll.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/pixel_scroll-a44adb0226254ac7)
+
+running 4 tests
+offset=1: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+offset=3: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 92160, total_pixels: 614400, moves: 1 }
+offset=2: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+offset=4: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 92160, total_pixels: 614400, moves: 1 }
+offset=0: ExactFrameCheck { differing_pixels: 0, copied_pixels: 337920, rasterized_pixels: 115200, total_pixels: 614400, moves: 1 }
+offset=5: ExactFrameCheck { differing_pixels: 0, copied_pixels: 316800, rasterized_pixels: 161280, total_pixels: 614400, moves: 1 }
+offset=7: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+test selection_find_and_link_hover_never_leave_copied_overlays ... ok
+offset=6: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 23040, total_pixels: 614400, moves: 1 }
+offset=0: ExactFrameCheck { differing_pixels: 0, copied_pixels: 295680, rasterized_pixels: 138240, total_pixels: 614400, moves: 1 }
+test clipped_negative_origins_and_covering_siblings_are_exact ... ok
+test row_scroll_preserves_exact_pixels_and_reduces_raster_work ... ok
+test scale_resize_palette_and_ime_choose_safe_repaint_paths ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
