@@ -265,20 +265,14 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
 
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
-        if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {
-            log::warn!("xdg-open {url}: {e}");
-        }
+        self.platform.open_url(url);
     }
 
     /// Post a desktop notification (through `notify-send`, which speaks
     /// org.freedesktop.Notifications; the shell is that server).
     pub fn notify(&mut self, summary: &str, body: &str) {
         let app = self.core.info.name.clone();
-        let spawned =
-            std::process::Command::new("notify-send").arg("--app-name").arg(app).arg(summary).arg(body).spawn();
-        if let Err(e) = spawned {
-            log::info!("notification ({e}): {summary}: {body}");
-        }
+        self.platform.notify(&app, summary, body);
     }
 
     /// Where the element given `.id(name)` is in `window`, in the window's

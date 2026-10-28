@@ -46,7 +46,10 @@ impl Program for Reader {
         match msg {
             Msg::More => self.lines += 40,
             Msg::ToEnd => self.to_end += 1,
-            Msg::Open(target) => self.opened.push(target),
+            Msg::Open(target) => {
+                cx.open_url(&target);
+                self.opened.push(target);
+            }
             Msg::Edit(action) => {
                 self.editor.perform(action);
             }
@@ -133,6 +136,7 @@ fn a_link_in_text_opens_with_a_click() {
     let at = h.find(w, "Read the docs first.").expect("the line");
     h.click(w, Point::new(at.x0 + at.width() * 0.45, at.center().y));
     assert_eq!(h.program().opened, ["https://example.test/docs"]);
+    assert_eq!(h.platform.opened, ["https://example.test/docs"], "handed to the desktop");
 }
 
 #[test]

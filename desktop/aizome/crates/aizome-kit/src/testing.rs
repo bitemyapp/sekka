@@ -55,6 +55,10 @@ pub struct TestPlatform {
     /// What the clipboard offers besides text, by MIME type (a picture, a
     /// file list), as a test puts it there.
     pub offer: Vec<(String, Vec<u8>)>,
+    /// Links and files handed to the desktop to open, in order.
+    pub opened: Vec<String>,
+    /// Desktop notifications posted: summary and body, in order.
+    pub notifications: Vec<(String, String)>,
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
@@ -104,6 +108,8 @@ impl TestPlatform {
             clock: Duration::ZERO,
             clipboard: None,
             offer: Vec::new(),
+            opened: Vec::new(),
+            notifications: Vec::new(),
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
@@ -213,6 +219,14 @@ impl Platform for TestPlatform {
             types.push("text/plain;charset=utf-8".into());
         }
         types
+    }
+
+    fn open_url(&mut self, url: &str) {
+        self.opened.push(url.to_owned());
+    }
+
+    fn notify(&mut self, _app: &str, summary: &str, body: &str) {
+        self.notifications.push((summary.to_owned(), body.to_owned()));
     }
 
     fn clipboard_reader(&mut self) -> crate::platform::ClipboardReader {

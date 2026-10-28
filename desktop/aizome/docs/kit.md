@@ -91,7 +91,7 @@ What `launched` and `update` act with:
 | `after(d, msg)`, `every(d, msg) -> TimerHandle`, `cancel(h)`, `send(msg)` | Timers; a message to the next update. |
 | `clipboard_text()`, `set_clipboard_text(s)` | |
 | `clipboard_types()`, `read_clipboard(mime, f)` | What the clipboard offers (`image/png`, `text/uri-list`, …), and its bytes as one of them, read on a worker as another program's can take a while: a paste of a picture or of files. |
-| `open_url(url)`, `notify(summary, body)` | xdg-open; a desktop notification. |
+| `open_url(url)`, `notify(summary, body)` | xdg-open; a desktop notification (`notify-send`). Each runs on a thread of its own, which waits for it, never on the thread that draws. |
 | `focus(name)` | Focus the element given `.id(name)` (now, or once it shows). |
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
@@ -525,8 +525,10 @@ The numbers measured on this laptop are at the end of this document.
 `aizome_kit::testing::Harness` runs a program on a stand-in platform: windows
 open at the size asked for, timers run on a clock the test moves, the
 clipboard is kept (`h.platform.clipboard`, and `h.platform.offer` for what it
-offers besides text), and pictures come from Sidestep's offscreen renderer (the
-same rasterizer and text engine windows use).
+offers besides text), links and files handed to the desktop are kept rather
+than opened (`h.platform.opened`, and notifications in
+`h.platform.notifications`), and pictures come from Sidestep's offscreen
+renderer (the same rasterizer and text engine windows use).
 
 ```rust
 use aizome_kit::testing::{Harness, assert_golden};
