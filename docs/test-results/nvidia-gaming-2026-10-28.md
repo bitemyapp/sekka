@@ -150,6 +150,67 @@ the geometry backup is `~/.local/state/aizome/windows.before-steam-window-fix-20
 This hot reload applies the window fix to the current session only. No system
 generation was activated; future logins need the updated packaged logic.
 
+## X11 fullscreen startup and Turok
+
+After the user activated `162eff1` and rebooted, both current and booted
+generations were `/nix/store/0mnrp8d2avbhf2g82r3arbfcbzccs50v-nixos-system-runnymede-26.11.20261020.02c087f`.
+The running Aizome was `/nix/store/np92v2p3i29yl1l6flpnbbd4hcdrg7y8-aizome-0.1.0`.
+The user reported Turok's fullscreen setting sometimes opening inside the
+desktop while its windowed, borderless setting covered the monitor.
+
+The pinned xwayland-satellite ignored the initial `_NET_WM_STATE` property,
+dropped fullscreen messages received before creating a Wayland toplevel,
+and guessed fullscreen for any window matching a monitor's size. The scoped
+Aizome patch reads initial state on mapping, queues early requests, clears
+cached intent on withdrawal, and gives explicit windowed state precedence
+over a fallback limited to undecorated/unmanaged legacy windows. This follows
+the [EWMH initial-state requirement](https://specifications.freedesktop.org/wm/latest/ar01s05.html).
+
+Validation:
+
+- The package builds with all 85 upstream unit tests (including the new
+  early-request regression) and 29 upstream Xwayland integration tests.
+- `checks.x86_64-linux.xwayland-fullscreen` passes 16 real X11 scenarios
+  across 1× and 2× displays. It verifies initial fullscreen/windowed hints,
+  requests and cancellation before mapping, toggling, withdrawal/remapping,
+  clearing old intent, decorated monitor-sized windows, legacy borderless
+  and unmanaged windows, and ordinary smaller windows. Both Aizome's geometry
+  and X11's reported state are checked. These use private software-rendered
+  headless sessions, not the user's display.
+- The same integration test fails with the unpatched package: a small window
+  with an initial fullscreen property remains windowed. Negative-control log:
+  `/tmp/sekka-xwayland-fullscreen-negative.log`; passing check log:
+  `/tmp/sekka-xwayland-fullscreen-passed.log`.
+- Evaluating this workstation's actual configuration with the worktree input
+  selects `/nix/store/gkg8ki04a6p4yjamc4z80fm30srkbfxg-xwayland-satellite-0.8.3`.
+  No system generation or lock file was changed by that evaluation.
+- On the physical RTX 5090/DP-4 output at 3840×2160, 240 Hz and scale 2,
+  Turok's `v_windowed=0` and `v_windowed=1, v_borderless=1` runs both
+  covered all 1920×1080 logical points, without the Deskbar. X11 reported
+  `_NET_WM_STATE_FULLSCREEN` and Aizome reported `vrr_enabled=true` during
+  each run; it returned to false after closing the game. This verifies the
+  physical session's fullscreen/VRR policy transition, not the panel's actual
+  refresh range or direct scanout.
+  The test used a separate patched bridge on `:158`, a copied executable
+  and configuration, and the installed game assets. Only those test
+  launches used `SDL_VIDEODRIVER=x11` (to exercise the bridge with
+  `steam-run`'s SDL) and null audio. No Steam launch option was changed;
+  the original game configuration was restored after the initial diagnosis.
+  Focus returned to the original terminal. Original 3840×2160 captures of
+  the title scene are retained locally as
+  `/tmp/sekka-turok-fullscreen/physical-0.png` and `physical-1.png`;
+  the run log is `physical-final-results.log` in the same directory.
+
+The exact Turok inversion was intermittent: initial reruns through the old
+bridge also successfully entered fullscreen. This is a deterministic protocol
+fix with a failing control, not proof that every cause of the original game
+symptom has been eliminated. At 3840×2160, `v_windowed=1` plus
+`v_borderless=1` legitimately produces a monitor-sized borderless window.
+
+The new bridge was tested separately from the desktop's existing X11 server;
+it was not substituted underneath running Steam or other X11 apps. Install
+the branch update and log out/in (or reboot) to use it for ordinary launches.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.
@@ -165,8 +226,10 @@ builds pass; this record does not claim a green repository-wide check.
 ## Remaining validation and limits
 
 Aizome now implements explicit sync and VRR policy with KMS integration,
-plus more useful scanout format feedback. Direct scanout and VRR transitions
-still need a physical session test. Native HDR colour management and
+plus more useful scanout format feedback. Turok's fullscreen/VRR policy
+transition was observed on the physical desktop as described above. Direct
+scanout and the panel's variable-refresh range still need measurement.
+Native HDR colour management and
 `tearing-control-v1` remain absent from Aizome; the configured Gamescope
 login session supplies a separate route that also needs physical testing.
 Do not infer working HDR from a 10-bit framebuffer or an advertised

@@ -189,7 +189,7 @@ in
     environment.systemPackages = [
       cfg.package
       pkgs.foot
-      pkgs.xwayland-satellite
+      (pkgs.callPackage ./xwayland-satellite.nix { })
       pkgs.wl-clipboard
       pkgs.xdg-utils
       pkgs.adwaita-icon-theme

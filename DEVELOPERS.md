@@ -242,6 +242,16 @@ lets Smithay retire release points. `gaming.rs` selects VRR per output;
 allows compatible 8-bit client buffers on a 10-bit SDR compositor. The IPC
 and Settings expose Off/Fullscreen/Always with preview and rollback. The
 pinned xwayland-satellite 0.8.3 already forwards `linux-drm-syncobj-v1`.
+Aizome's scoped satellite package also reads initial `_NET_WM_STATE`
+fullscreen hints and retains requests until the Wayland role exists. Explicit
+windowed state overrides the old monitor-size heuristic; that fallback is
+limited to undecorated or unmanaged legacy windows. This prevents startup
+requests disappearing and ordinary decorated windows being promoted to
+fullscreen just because their dimensions match a display. The package runs
+its upstream tests; `nix build .#checks.x86_64-linux.xwayland-fullscreen`
+tests real X11 requests through the packaged bridge and Aizome at 1×/2×,
+including startup, cancellation, toggling and remapping. Updating the bridge
+requires a fresh login, since restarting it disconnects its X11 clients.
 Native `tearing-control-v1` and HDR colour management remain unimplemented
 in Aizome; adding protocol globals alone would misrepresent its renderer.
 See [rendering](desktop/aizome/docs/rendering.md) for lifetime and pacing

@@ -1,0 +1,216 @@
+diff --git a/src/server/event.rs b/src/server/event.rs
+index acf51d9..167a5c4 100644
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -390,6 +390,10 @@ impl SurfaceEvents {
+                     let prev_fs = toplevel.fullscreen;
+                     toplevel.fullscreen =
+                         states.contains(&(u32::from(xdg_toplevel::State::Fullscreen) as u8));
++                    data.get::<&mut WindowData>()
++                        .unwrap()
++                        .attrs
++                        .requested_fullscreen = Some(toplevel.fullscreen);
+                     if toplevel.fullscreen != prev_fs {
+                         state.connection.set_fullscreen(
+                             *data.get::<&x::Window>().unwrap(),
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index a436331..1c02e6e 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -112,6 +112,9 @@ struct WindowAttributes {
+     group: Option<x::Window>,
+     decorations: Option<Decorations>,
+     transient_for: Option<x::Window>,
++    // None permits the legacy size heuristic. Explicit EWMH state, including
++    // an empty initial property, always wins and survives role creation.
++    requested_fullscreen: Option<bool>,
+ }
+ 
+ impl WindowAttributes {
+@@ -1180,6 +1183,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+                 self.last_hovered.take();
+             }
+             win.mapped = false;
++            win.attrs.requested_fullscreen = None;
+         }
+ 
+         if let Ok(mut role) = self.world.remove_one::<SurfaceRole>(entity.unwrap()) {
+@@ -1204,26 +1208,27 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+             return;
+         };
+ 
+-        let Some(role) = data.get::<&SurfaceRole>() else {
+-            warn!("Tried to set window without role fullscreen: {window:?}");
+-            return;
+-        };
+-
+-        let SurfaceRole::Toplevel(Some(toplevel)) = &*role else {
+-            warn!("Tried to set an unmapped toplevel or non toplevel fullscreen: {window:?}");
+-            return;
+-        };
+-
++        let role = data.get::<&SurfaceRole>();
++        let toplevel = role.as_deref().and_then(|role| match role {
++            SurfaceRole::Toplevel(Some(toplevel)) => Some(toplevel),
++            _ => None,
++        });
++        let mut win = data.get::<&mut WindowData>().unwrap();
+         use crate::xstate::SetState;
+-        match state {
+-            SetState::Add => toplevel.toplevel.set_fullscreen(None),
+-            SetState::Remove => toplevel.toplevel.unset_fullscreen(),
+-            SetState::Toggle => {
+-                if toplevel.fullscreen {
+-                    toplevel.toplevel.unset_fullscreen()
+-                } else {
+-                    toplevel.toplevel.set_fullscreen(None)
+-                }
++        let fullscreen = match state {
++            SetState::Add => true,
++            SetState::Remove => false,
++            SetState::Toggle => !win
++                .attrs
++                .requested_fullscreen
++                .unwrap_or_else(|| toplevel.is_some_and(|t| t.fullscreen)),
++        };
++        win.attrs.requested_fullscreen = Some(fullscreen);
++        if let Some(toplevel) = toplevel {
++            if fullscreen {
++                toplevel.toplevel.set_fullscreen(None);
++            } else {
++                toplevel.toplevel.unset_fullscreen();
+             }
+         }
+     }
+@@ -1401,7 +1406,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+     fn create_role_window(&mut self, window: x::Window, entity: Entity) -> bool {
+         let xdg_surface;
+         let mut popup_for = None;
+-        let mut fullscreen = false;
++        let fullscreen;
+         let splash;
+ 
+         {
+@@ -1419,12 +1424,26 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+             splash = window_data.attrs.role == WindowRole::Splash;
+ 
+             let (width, height) = (window_data.attrs.dims.width, window_data.attrs.dims.height);
+-            for (_, dimensions) in self.world.query::<&OutputDimensions>().iter() {
+-                if dimensions.width == width as i32 && dimensions.height == height as i32 {
+-                    fullscreen = true;
+-                    popup_for = None;
+-                    break;
+-                }
++            fullscreen = window_data.attrs.requested_fullscreen.unwrap_or_else(|| {
++                // Older games use an unmanaged or undecorated monitor-sized
++                // window. A normal decorated window of that size is not a
++                // fullscreen request.
++                let legacy = window_data.attrs.override_redirect
++                    || window_data
++                        .attrs
++                        .decorations
++                        .is_some_and(|d| d.is_clientside());
++                legacy
++                    && self
++                        .world
++                        .query::<&OutputDimensions>()
++                        .iter()
++                        .any(|(_, dimensions)| {
++                            dimensions.width == width as i32 && dimensions.height == height as i32
++                        })
++            });
++            if fullscreen {
++                popup_for = None;
+             }
+         }
+ 
+diff --git a/src/server/tests.rs b/src/server/tests.rs
+index fa70c7d..df3de99 100644
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -1334,6 +1334,37 @@ fn fullscreen() {
+     );
+ }
+ 
++#[test]
++fn fullscreen_requests_before_role_creation() {
++    for (requests, expected) in [
++        (vec![SetState::Add], true),
++        (vec![SetState::Remove], false),
++        (vec![SetState::Add, SetState::Remove], false),
++        (vec![SetState::Toggle], true),
++        (vec![SetState::Toggle, SetState::Toggle], false),
++    ] {
++        let (mut f, comp) = TestFixture::new_with_compositor();
++        let win = Window::new(1);
++        let (buffer, surface) = comp.create_surface();
++        f.new_window(win, false, WindowData::default());
++        for request in requests {
++            f.satellite.set_fullscreen(win, request);
++        }
++        f.map_window(&comp, win, &surface.obj, &buffer);
++        f.run();
++        let id = f.check_new_surface();
++        assert_eq!(
++            f.testwl
++                .get_surface_data(id)
++                .unwrap()
++                .toplevel()
++                .states
++                .contains(&xdg_toplevel::State::Fullscreen),
++            expected
++        );
++    }
++}
++
+ #[test]
+ fn window_title_and_class() {
+     let (mut f, comp) = TestFixture::new_with_compositor();
+@@ -2399,6 +2430,8 @@ fn fullscreen_heuristic() {
+             fullscreen: false,
+         };
+         f.new_window(window, override_redirect, data);
++        f.satellite
++            .set_win_decorations(window, crate::xstate::Decorations::empty());
+         f.map_window(&comp, window, &surface.obj, &buffer);
+         f.run();
+         let id = f.check_new_surface();
+diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
+index 6f08eb9..6f1336f 100644
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -414,6 +414,21 @@ impl XState {
+                     unwrap_or_skip_bad_window_cont!(
+                         self.handle_window_properties(server_state, e.window())
+                     );
++                    // Clients publish their initial state before mapping;
++                    // later changes arrive as ClientMessage requests. Reading
++                    // only messages loses fullscreen on startup/remapping.
++                    if let Some(fullscreen) =
++                        unwrap_or_skip_bad_window_cont!(self.get_initial_fullscreen(e.window()))
++                    {
++                        server_state.set_fullscreen(
++                            e.window(),
++                            if fullscreen {
++                                SetState::Add
++                            } else {
++                                SetState::Remove
++                            },
++                        );
++                    }
+                     server_state.map_window(e.window());
+                     unwrap_or_skip_bad_window_cont!(self.connection.send_and_check_request(
+                         &x::ChangeProperty {
+@@ -701,6 +716,12 @@ impl XState {
+         })
+     }
+ 
++    fn get_initial_fullscreen(&self, window: x::Window) -> XResult<Option<bool>> {
++        let cookie = self.get_property_cookie(window, self.atoms.net_wm_state, x::ATOM_ATOM, 1024);
++        PropertyCookieWrapper::new(&self.connection, cookie)
++            .resolve(|reply| reply.value::<x::Atom>().contains(&self.atoms.wm_fullscreen))
++    }
++
+     fn get_wm_class(&self, window: x::Window) -> XResult<Option<String>> {
+         let cookie = self.get_property_cookie(window, x::ATOM_WM_CLASS, x::ATOM_STRING, 256);
+         let resolver = move |reply: x::GetPropertyReply| {
