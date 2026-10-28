@@ -131,35 +131,17 @@ same mandatory gate and rejects changed contents, executable bits, symlinks,
 missing directories/paths and altered registration. Neither check certifies
 a complete release image or physical hardware.
 
-The October 24 investigation of the October 22 download is recorded in
-`docs/test-results/installer-integrity-2026-10-24.json`. The public ISO and its
-Firefox passed verification; injecting corruption into that exact ISO's live
-store reproduced the post-format copy failure. This establishes the missing
-installer integrity boundary, not what damaged the reporting Mac's bytes.
 Checks cannot guarantee against RAM faults, media changes or I/O failures
 after verification. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
-or build failures at that point.
-
-Additional RAM stress evidence is recorded in
-`docs/test-results/installer-memory-2026-10-24.json`. With the same diagnostic
-image, a 4 GiB VM completed the normal GUI installation while a background
-process held 1.5 GiB of random data resident and could not swap. The installer
-selected the deferred route, built the 8.31 GiB system on disk, and subsequently
-booted, accepted a normal login and opened Firefox with its expected hash.
-Available RAM fell to 56 MiB and zram swap use reached 3.23 GiB without OOM kills.
-This demonstrates that the complete system need not fit in physical RAM; it
-does not establish a universal minimum memory requirement.
-
-The 2 GiB clean-install case failed during Nix evaluation on both the unmodified
-public ISO and the diagnostic image: live-store space ran out and the kernel
-OOM-killed desktop processes before any target writes. The evaluations were
-then interrupted; these are failed tests, not graceful automatic refusals.
-The separate corrupt-file case at 2 GiB did refuse installation before erasure
-and preserved the entire target. Deferring downloads does not eliminate the
-RAM and temporary live-store space needed to evaluate the configuration first.
-Do not describe the deferred route as immune to memory exhaustion or these
-focused VM results as physical-hardware or full-release qualification.
+or build failures at that point. The deferred route builds the system on the
+target, so the complete system need not fit in physical RAM, but it does not
+eliminate the RAM and temporary live-store space needed to evaluate the
+configuration first. Do not describe the deferred route as immune to memory
+exhaustion, or focused VM results as physical-hardware or full-release
+qualification. The
+[installer incident](docs/incidents/2026-10-24-installer-hash-mismatch-after-erase.md)
+records the failure that led to this boundary and its memory-pressure tests.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
 offered by Genkan, including default Aizome, and one more prebuilt system with
@@ -1868,17 +1850,14 @@ host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
 and the daemon collects garbage when free space runs low.
 
 The runner's Nix client comes from Sekka's pinned Determinate input, matching
-the host daemon's implementation. The builder step prints the client version
-and only the daemon endpoint, version and trust status; it does not print
-environment variables or configuration. On October 20, an upstream Nix 2.34.8
-client hid a template-lock failure behind `Invalid BuildResult status ^P`.
-Determinate 3.15.0 encodes a cancelled build as
-[status 16](https://github.com/DeterminateSystems/nix-src/blob/v3.15.0/src/libstore/include/nix/store/build-result.hh),
-while the upstream client's
-[decoder accepts only 0–14](https://github.com/NixOS/nix/blob/2.34.8/src/libstore/common-protocol.cc).
-The template failure was fixed separately; changing the client preserves the
-original error when sibling builds are cancelled. `checks.x86_64-linux.runner-protocol`
-tests that path through a real daemon as an untrusted user, with the upstream
+the host daemon's implementation. An upstream client cannot decode every build
+status a Determinate daemon sends, and loses the original error when sibling
+builds are cancelled
+([incident](docs/incidents/2026-10-20-nightly-build-status-decode.md)). The
+builder step prints the client version and only the daemon endpoint, version
+and trust status; it does not print environment variables or configuration.
+`checks.x86_64-linux.runner-protocol`
+tests a cancelled sibling build through a real daemon as an untrusted user, with the upstream
 client as a negative control. It does not certify an existing runner deployment.
 
 After reviewing a runner change, rebuild and deploy its images using the steps
