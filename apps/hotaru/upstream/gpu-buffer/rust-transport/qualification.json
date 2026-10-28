@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "tests": {
+    "safe_lifecycle": 15,
+    "surface_feedback": 2,
+    "strict_clippy": "all targets, -D warnings",
+    "commands": [
+      "cargo +1.95.0 test",
+      "cargo +1.95.0 clippy --all-targets -- -D warnings",
+      "cargo +1.95.0 build --release --bins"
+    ],
+    "execution_host": "wx-workstation under hotaru-workstation.lock",
+    "result_source": "captured command output in task transcript; exact final compiler and binaries archived"
+  },
+  "runtime": {
+    "host": "ganymede",
+    "worker_thread": "ThreadId(2)",
+    "event_thread": "ThreadId(1), separately observed offscreen owner",
+    "producer_rgba_bytes": 4096,
+    "fence_before_readback": true,
+    "compositor_rgb_bytes": 3072,
+    "hardware_renderer": "Intel PTL GLES / Mesa26.2.5",
+    "format": "AB24 / linear / one plane",
+    "feedback": "validated tranche references only",
+    "release": "retained-until-detach fixture observed; earlier release is protocol-valid",
+    "physical_scanout": false,
+    "performance": false,
+    "native_app_renderer": false
+  },
+  "review": {
+    "linux_io": "safe lifecycle and EGL ABI/ownership; panic cleanup and tranche fixes reviewed",
+    "parent": "EGL ABI/bounds; dedicated single-current-context limitation recorded"
+  },
+  "raw_path": "/home/callen/work/hotaru-local-gui-20261028/rust-transport",
+  "raw_sha256": {
+    "sway.log": "75076c5ef2ff4fc9cad41a0f89fc694ce1658e8880277ed1b696f27d59b83c01",
+    "result.json": "eaa383801035c653be5c117fe8fbef6f4078f8b4a471d222b742ce3806b9d91d",
+    "offscreen.log": "eff71150d94440cccc5eb3b2147bc5012f1d6064e0f438efceba73c0c7763d71",
+    "wayland.log": "89dc4faba7153a519e0226237df07e95d2fb114beb0a9039bd9f678daa331ece",
+    "wayland-worker-probe": "d3b47ad946daed14edb50ab9521a10e9bb168f4f5fe0a4c78518e6e9e2af1f88",
+    "egl-worker-probe": "0de17dd58a57561fd36976ce5c7d8dd739a02188413a0c3a1279baf8d65554fa",
+    "capture.ppm": "1a46ab04d763761712511555e24088b9772ad68a60d5e815232c5b7d5ec82470",
+    "run.py": "1b378d58cae086a7a9c1938f3f8ddc374e5ea96cef2bc72dac8192a4af23490e",
+    "build-identity.txt": "b7a9e504f7bae3192292d3db6ea62dfa6857c5faf483754fcae89ebe52651bd1"
+  }
+}

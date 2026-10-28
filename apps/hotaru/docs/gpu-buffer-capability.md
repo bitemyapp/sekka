@@ -175,3 +175,33 @@ rendering and fence waits on a dedicated worker, preserve committed buffer lease
 until release, and bound pending frames and retained bytes. The Wayland owner also
 services clipboard transfers and must never wait synchronously for that worker.
 A renderer or performance claim requires further implementation and qualification.
+
+
+## Rust worker and SCTK transport
+
+The [isolated Rust prototype](../upstream/gpu-buffer/rust-transport/README.md)
+passes the private Intel transport check. Its safe lifecycle module has 15 tests
+covering blocked drivers, lease accounting, cancellation, identity exhaustion,
+stale imports and panic containment. Two feedback tests reject unreferenced table
+entries and excessive work. Strict all-target Clippy passes; exact source and
+lock are archived.
+
+A dedicated worker creates one EGL context, draws a fixed 32×32 pattern, waits for
+a fence in bounded slices, then verifies all 4,096 RGBA bytes. This check does not
+rely on readback having already finished the producer before synchronization.
+The event owner receives descriptors and immutable frame identity through bounded
+state and a coalesced calloop wake. It makes no EGL calls and never joins a blocked
+worker.
+
+The SCTK client accepts validated surface-feedback tranche references and uses
+asynchronous buffer creation. Private Sway's Intel GLES output matches all 3,072
+captured RGB bytes. Detach, release and worker destruction succeed. The runner
+requires each fence/resource/context cleanup record to report success, records
+exact loaded-library hashes and confirms owned process cleanup. Earlier release
+is valid protocol behavior, outside this fixture's retained-buffer expectation.
+
+This supplies a real Rust transport boundary, not a terminal scene renderer. The
+fixed scene, single-current-context constraint and diagnostic-only teardown wait
+remain explicit. Production work must add complete immutable scene preparation,
+GPU drawing and whole-frame software fallback. No speed or physical scanout
+claim is made here.

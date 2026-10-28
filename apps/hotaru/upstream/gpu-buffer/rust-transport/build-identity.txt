@@ -1,0 +1,9 @@
+rustc 1.95.0 (59807616e 2026-04-14)
+binary: rustc
+commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860
+commit-date: 2026-04-14
+host: x86_64-unknown-linux-gnu
+release: 1.95.0
+LLVM version: 22.1.2
+0de17dd58a57561fd36976ce5c7d8dd739a02188413a0c3a1279baf8d65554fa  target/release/egl-worker-probe
+d3b47ad946daed14edb50ab9521a10e9bb168f4f5fe0a4c78518e6e9e2af1f88  target/release/wayland-worker-probe

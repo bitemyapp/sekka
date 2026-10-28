@@ -1,0 +1,33 @@
+[package]
+name = "hotaru-gpu-transport-prototype"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[workspace]
+
+[dependencies]
+libloading = "0.8"
+serde_json = "1"
+
+[[bin]]
+name = "egl-worker-probe"
+path = "src/egl_probe.rs"
+
+[dependencies.sctk]
+package = "smithay-client-toolkit"
+version = "0.19.2"
+default-features = false
+features = ["calloop"]
+
+[dependencies.wayland-client]
+version = "0.31"
+
+[dependencies.wayland-protocols]
+version = "0.32"
+features = ["client"]
+
+[[bin]]
+name = "wayland-worker-probe"
+path = "src/wayland_probe.rs"
