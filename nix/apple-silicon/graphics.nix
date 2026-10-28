@@ -50,11 +50,57 @@ let
     ''} $out/10-m3-pro.conf
   '';
 
+  # The exact matched stack, shared by uwsm and Aizome (including its greeter).
+  nativeEnvironment = {
+    # Explicitly override the login environment: uwsm can reintroduce its
+    # inherited software default after the gate unsets it.
+    LIBGL_ALWAYS_SOFTWARE = "0";
+    MESA_M3_FALLBACK = "none";
+    LD_LIBRARY_PATH = "${mesa.native}/lib:${mesa.vulkan}/lib";
+    LIBGL_DRIVERS_PATH = "${mesa.native}/lib/dri";
+    GBM_BACKENDS_PATH = "${mesa.native}/lib/gbm";
+    DRIRC_CONFIGDIR = "${drirc}";
+    __EGL_VENDOR_LIBRARY_FILENAMES = "${mesa.native}/share/glvnd/egl_vendor.d/50_mesa.json";
+    VK_DRIVER_FILES = "${mesa.vulkan}/share/vulkan/icd.d/asahi_icd.aarch64.json";
+    VK_ICD_FILENAMES = "${mesa.vulkan}/share/vulkan/icd.d/asahi_icd.aarch64.json";
+    VK_LOADER_LAYERS_DISABLE = "~implicit~";
+    ASAHI_M3_EXPERIMENTAL = "1";
+    AGX_MESA_DEBUG = "nopromote";
+    HK_DEBUG_LOG = "0";
+    HK_M3_COMPRESSED_RGBA16F = "1";
+    HK_M3_COMPRESSED_R8 = "1";
+    HK_M3_COMPRESSED_SPLIT_DEPTH = "1";
+    HK_M3_COMPRESSED_DEPTH = "0";
+    HK_M4_COMPRESSED_2D = "0";
+    HK_M3_EARLY_TILING = "0";
+    HK_M3_CROSS_CB_TILING = "0";
+    HK_M4_NATIVE_PREAMBLE = "0";
+    AGX_NATIVE_MEMORY_PREAMBLE = "0";
+    HK_M3_PREFETCH_TEXTURE_INDICES = "0";
+    HK_M3_FRAGMENT_READ_SCHEDULE = "0";
+    HK_M4_PREFETCH_DESCRIPTORS = "0";
+    HK_M3_BRANCH_RGBA16F_COMPRESSION = "0";
+    HK_NATIVE_BRANCH_SCALED = "0";
+    HK_M3_DIRECT_TEXTURE_UNIFORMS = "0";
+    HK_M3_DIRECT_TEXEL_UNIFORMS = "0";
+    HK_M3_TILE_CLEANUP = "0";
+    HK_M3_NATIVE_INPUT_ATTACHMENTS = "0";
+    HK_M4_SHADER_PROFILE = "0";
+    HK_M4_PROGRAM_PROFILE = "0";
+    HK_ARCHITECTURE_PROFILE = "0";
+    QSG_RHI_BACKEND = "opengl";
+  };
+  nativeExports = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (
+      name: value:
+      "export ${name}=${lib.escapeShellArg value}"
+      + lib.optionalString (name == "LD_LIBRARY_PATH") ''"''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"''
+    ) nativeEnvironment
+  );
+
   sessionEnv = replaceVars ./m3-gpu/session-env.sh {
     abiCheck = lib.getExe abiCheck;
-    native = mesa.native;
-    vulkan = mesa.vulkan;
-    inherit drirc;
+    inherit nativeExports;
   };
 
   # Run by the session as sekka-m3-gpu-confirm.service once the graphical
@@ -121,6 +167,7 @@ let
 in
 {
   inherit
+    nativeEnvironment
     abiCheck
     drirc
     sessionEnv

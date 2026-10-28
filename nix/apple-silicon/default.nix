@@ -35,7 +35,10 @@ let
     modules = [
       inputs.determinate.nixosModules.default
       (import ../../installer/genkan/rust/reference.nix {
-        desktops = [ "tatami" ];
+        desktops = [
+          "aizome"
+          "tatami"
+        ];
         kernel = "linux-aurora";
       })
       # The reference lists a PC's storage drivers, ahci among them, which
@@ -46,9 +49,10 @@ let
           boot.initrd.availableKernelModules = lib.mkForce config.calamares.appleSilicon.initrdModules;
         }
       )
+      inputs.aizome.nixosModules.default
       inputs.tatami.nixosModules.default
       inputs.yukimi.nixosModules.default
-      { _module.args.sekkaPackages = inputs.kakehashi.packages.${system}; }
+      { _module.args.sekkaPackages = inputs.catalog.packages.${system}; }
       {
         calamares.appleSilicon = {
           enable = true;
@@ -62,7 +66,10 @@ in
   genkan = import ../calamares.nix {
     inherit pkgs;
     source = inputs.calamares;
+    fonts = inputs.aizome.packages.${system}.fonts;
   };
+  inherit (inputs.aizome.packages.${system}) aizome;
+  aizome-fonts = inputs.aizome.packages.${system}.fonts;
   tools = import ../tools.nix { inherit pkgs; };
   inherit (inputs.tatami.packages.${system})
     tatami

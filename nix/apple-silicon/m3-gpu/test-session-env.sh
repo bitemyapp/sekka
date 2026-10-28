@@ -57,7 +57,7 @@ check() {
 	ok=1
 	[ "$got" = "$want" ] || ok=0
 	if [ "$gpu" = yes ]; then
-		grep -q '^LIBGL_ALWAYS_SOFTWARE=' <<<"$env" && ok=0
+		grep -qx 'LIBGL_ALWAYS_SOFTWARE=0' <<<"$env" || ok=0
 		grep -q '^LD_LIBRARY_PATH=/nix/store/[^:]*-mesa-m3-native-pro-' <<<"$env" || ok=0
 		grep -qx 'ASAHI_M3_EXPERIMENTAL=1' <<<"$env" || ok=0
 		grep -q '^VK_DRIVER_FILES=/nix/store/.*-mesa-m3-pro-vulkan-.*/asahi_icd.aarch64.json$' <<<"$env" || ok=0
