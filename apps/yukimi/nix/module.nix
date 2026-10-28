@@ -11,6 +11,15 @@ self:
 }:
 let
   cfg = config.programs.yukimi;
+  ownCatalog = import ./catalog.nix {
+    inherit lib;
+    inherit (pkgs.stdenv) hostPlatform;
+    packagesFor =
+      app:
+      map (name: lib.attrByPath (lib.splitString "." name) null pkgs) (
+        (app.packages or [ ]) ++ lib.optional (app ? program) app.program
+      );
+  } (builtins.fromJSON (builtins.readFile ../crates/yukimi-system/data/applications.json));
   catalog = lib.types.submodule {
     options = {
       file = lib.mkOption {
@@ -191,6 +200,7 @@ in
         in
         if source != null then toString source else toString pkgs.path;
       allowUnfree = pkgs.config.allowUnfree or false;
+      ownCatalog = builtins.toFile "yukimi-applications.json" (builtins.toJSON ownCatalog);
       inherit (cfg) configuration;
       catalogs = map (catalog: {
         file = "${catalog.file}";

@@ -42,8 +42,10 @@ rec {
   # The catalog's applications from this flake (source "sekka"): its own, and
   # those other repositories package, built with the applications' Nixpkgs.
   catalog.packages.${system} = kakehashi.packages.${system} // {
-    superluminal = superluminal.packages.${system}.default;
-    tracy = tracy.packages.${system}.tracy;
+    # Some upstream flakes have no output for a target (Superluminal on ARM).
+    # Let the catalog report that absence without evaluating a missing attribute.
+    superluminal = superluminal.packages.${system}.default or null;
+    tracy = tracy.packages.${system}.tracy or null;
     # With the session's fonts, which it draws with too.
     uta = import ./uta.nix {
       pkgs = applications.legacyPackages.${system};
