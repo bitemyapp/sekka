@@ -1,0 +1,103 @@
+{
+  "description": "Real 2026-10-27 QMP screenshots of public ISO ed92471. Deliberately retains known misleading wording and spatial false negatives; failures are model findings, not reasons to relabel the ground truth. Original pixels preserved; see fixture-provenance.json. This is a tuning set, not held-out evaluation.",
+  "min_probability": 0.9,
+  "min_confidence": 0.6,
+  "cases": [
+    {
+      "id": "github",
+      "image": "fixtures/github.png",
+      "questions": {
+        "generic": {
+          "type": "noul",
+          "instructions": "Does the installer show its GitHub page in `screen`?"
+        },
+        "field": {
+          "type": "noul",
+          "instructions": "Is a GitHub username input field visible in `screen`?"
+        },
+        "title": {
+          "type": "noul",
+          "instructions": "Does the heading at the top of `screen` read GitHub, SSH and Git?"
+        },
+        "empty": {
+          "type": "noul",
+          "instructions": "Is the GitHub username field empty in `screen`?"
+        }
+      },
+      "expected": {
+        "generic": true,
+        "field": true,
+        "title": true,
+        "empty": true
+      },
+      "click_rect": null
+    },
+    {
+      "id": "maximized",
+      "image": "fixtures/maximized.png",
+      "questions": {
+        "maximized": {
+          "type": "noul",
+          "instructions": "Is the installer window maximized, spanning the available screen width in `screen`?"
+        },
+        "button": {
+          "type": "noul",
+          "instructions": "Is the whole Get Started button visible above the desktop panel in `screen`?"
+        },
+        "leftedge": {
+          "type": "noul",
+          "instructions": "Does the installer sidebar touch the left edge of `screen`?"
+        }
+      },
+      "expected": {
+        "maximized": true,
+        "button": true,
+        "leftedge": true
+      },
+      "click_rect": null
+    },
+    {
+      "id": "clipped",
+      "image": "fixtures/clipped.png",
+      "questions": {
+        "maximized": {
+          "type": "noul",
+          "instructions": "Is the installer window maximized, spanning the available screen width in `screen`?"
+        },
+        "button": {
+          "type": "noul",
+          "instructions": "Is the whole Get Started button visible above the desktop panel in `screen`?"
+        },
+        "leftedge": {
+          "type": "noul",
+          "instructions": "Does the installer sidebar touch the left edge of `screen`?"
+        }
+      },
+      "expected": {
+        "maximized": false,
+        "button": false,
+        "leftedge": false
+      },
+      "click_rect": null
+    },
+    {
+      "id": "firmware-resolution",
+      "image": "fixtures/boot-menu.png",
+      "questions": {
+        "menu": {
+          "type": "noul",
+          "instructions": "Does `screen` show a NixOS boot menu?"
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` report installation complete?"
+        }
+      },
+      "expected": {
+        "menu": true,
+        "complete": false
+      },
+      "click_rect": null
+    }
+  ]
+}

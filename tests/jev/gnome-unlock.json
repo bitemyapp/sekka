@@ -1,0 +1,33 @@
+{
+  "id": "gnome-unlock",
+  "description": "Recover with the synthetic correct password after the retained wrong-password attempt.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-unlock-type",
+      "precondition": "Is a Password field visible below Jev Test?",
+      "action": {
+        "kind": "type",
+        "text": "sekka-test-2026"
+      },
+      "expected": "Does the password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.gnome-unlock",
+      "precondition": "Does the password field contain masked characters?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Does the browser page show JEV_BROWSER_OK?",
+      "timeout_seconds": 45
+    }
+  ]
+}

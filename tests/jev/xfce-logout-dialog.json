@@ -1,0 +1,25 @@
+{
+  "id": "xfce-logout-dialog",
+  "description": "Normal Xfce logout keyboard shortcut.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 90,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.xfce-logout-dialog",
+      "precondition": "Does the browser page show JEV_BROWSER_OK?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ctrl",
+          "alt",
+          "delete"
+        ]
+      },
+      "expected": "Is a logout dialog visible offering Log Out?",
+      "timeout_seconds": 30
+    }
+  ]
+}

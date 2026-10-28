@@ -1,0 +1,35 @@
+{
+  "id": "gnome-logout-confirm",
+  "description": "Move from the focused Cancel button to Log Out and activate it.",
+  "max_calls": 35,
+  "max_input_tokens": 250000,
+  "max_seconds": 90,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-logout-focus",
+      "precondition": "Is a Log Out Jev Test dialog visible with Cancel focused?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "tab"
+        ]
+      },
+      "expected": "Is the Log Out button focused or outlined?",
+      "timeout_seconds": 15
+    },
+    {
+      "id": "Q3.gnome-logout-confirm",
+      "precondition": "Is the Log Out button focused or outlined?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a user tile labeled Jev Test visible on the login screen?",
+      "timeout_seconds": 40
+    }
+  ]
+}

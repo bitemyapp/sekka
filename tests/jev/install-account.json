@@ -1,0 +1,86 @@
+{
+  "id": "install-disposable-account",
+  "description": "Only synthetic VM credentials. Never use this recipe with a real account or password.",
+  "max_calls": 80,
+  "max_input_tokens": 500000,
+  "max_seconds": 240,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q2.full-name",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "fill",
+        "target": "Full name text field",
+        "text": "Jev Test"
+      },
+      "expected": "Does the Full name field contain Jev Test?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.username",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "fill",
+        "target": "Username text field",
+        "text": "jev"
+      },
+      "expected": "Does the Username field contain jev?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.password",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "fill",
+        "target": "Password text field above Confirm password",
+        "text": "sekka-test-2026"
+      },
+      "expected": "Does the Password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.confirm-password",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "fill",
+        "target": "Confirm password text field",
+        "text": "sekka-test-2026"
+      },
+      "expected": "Does the Confirm password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.hostname",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "fill",
+        "target": "Computer name text field",
+        "text": "jev-vm"
+      },
+      "expected": "Does the Computer name field contain jev-vm?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.account-next",
+      "precondition": "Is the Create Your Account page displayed?",
+      "action": {
+        "kind": "click",
+        "target": "Next button in the bottom right"
+      },
+      "expected": "Is a GitHub username input field visible?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.github-skip",
+      "precondition": "Is a GitHub username input field visible?",
+      "action": {
+        "kind": "click",
+        "target": "Next button in the bottom right"
+      },
+      "expected": "Does the installer show Choose Your Desktops?",
+      "timeout_seconds": 20
+    }
+  ]
+}

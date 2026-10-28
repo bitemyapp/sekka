@@ -1,0 +1,71 @@
+{
+  "id": "install-six-desktops",
+  "description": "All-six coexistence experiment. GNOME causes the normal installer to choose GDM; this is not Aizome-greeter qualification.",
+  "max_calls": 80,
+  "max_input_tokens": 500000,
+  "max_seconds": 240,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q2.select-plasma",
+      "precondition": "Does the title read Choose Your Desktops?",
+      "action": {
+        "kind": "click",
+        "target": "KDE Plasma selection card"
+      },
+      "expected": "Is the KDE Plasma card selected, indicated by a blue outline and a check mark?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.select-gnome",
+      "precondition": "Does the title read Choose Your Desktops?",
+      "action": {
+        "kind": "click",
+        "target": "GNOME selection card"
+      },
+      "expected": "Is the GNOME card selected, indicated by a blue outline and a check mark?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.select-xfce",
+      "precondition": "Does the title read Choose Your Desktops?",
+      "action": {
+        "kind": "click",
+        "target": "Xfce selection card"
+      },
+      "expected": "Is the Xfce card selected, indicated by a blue outline and a check mark?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.select-hyprland",
+      "precondition": "Does the title read Choose Your Desktops?",
+      "action": {
+        "kind": "click",
+        "target": "Hyprland selection card"
+      },
+      "expected": "Is the Hyprland card selected, indicated by a blue outline and a check mark?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.select-tatami",
+      "precondition": "Does the title read Choose Your Desktops?",
+      "action": {
+        "kind": "click",
+        "target": "Tatami selection card"
+      },
+      "expected": "Is the Tatami card selected, indicated by a blue outline and a check mark?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q2.desktops-next",
+      "precondition": "Are all six desktop cards selected with check marks?",
+      "action": {
+        "kind": "click",
+        "target": "Next button at the bottom right"
+      },
+      "expected": "Is there an application search field?",
+      "timeout_seconds": 20
+    }
+  ]
+}

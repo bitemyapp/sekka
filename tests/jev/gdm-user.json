@@ -1,0 +1,23 @@
+{
+  "id": "gdm-select-synthetic-user",
+  "description": "Normal GDM entry in the all-six desktop installation. Does not count as Aizome-greeter coverage. Use the normal focused user tile keyboard activation; a dark-background disabled-style classifier abstained on the mouse route.",
+  "max_calls": 80,
+  "max_input_tokens": 400000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gdm-user",
+      "precondition": "Is a user tile labeled Jev Test visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a Password input field visible?",
+      "timeout_seconds": 120
+    }
+  ]
+}

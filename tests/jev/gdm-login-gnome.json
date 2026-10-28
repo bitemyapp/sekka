@@ -1,0 +1,43 @@
+{
+  "id": "gdm-login-gnome",
+  "description": "Select GNOME in the already open GDM session chooser, then use synthetic credentials. Gear opening is a separately recorded assisted step.",
+  "max_calls": 70,
+  "max_input_tokens": 450000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-select",
+      "precondition": "Is a session selection menu listing GNOME visible?",
+      "action": {
+        "kind": "click",
+        "target": "GNOME session row in the session selection menu"
+      },
+      "expected": "Is the Password input field visible with the session menu closed?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.gnome-password",
+      "precondition": "Is an empty Password input field visible below Jev Test?",
+      "action": {
+        "kind": "type",
+        "text": "sekka-test-2026"
+      },
+      "expected": "Does the password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.gnome-login",
+      "precondition": "Does the password field contain masked characters?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a GNOME desktop visible with an Activities overview or a top bar clock?",
+      "timeout_seconds": 100
+    }
+  ]
+}

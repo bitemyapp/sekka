@@ -1,0 +1,25 @@
+{
+  "id": "tatami-browser-launch",
+  "description": "Normal Tatami browser keyboard shortcut.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q5.browser-shortcut",
+      "precondition": "Is a terminal window visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "shift",
+          "ret"
+        ]
+      },
+      "expected": "Is a Firefox browser window visible?",
+      "timeout_seconds": 80
+    }
+  ]
+}

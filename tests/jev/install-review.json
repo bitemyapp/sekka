@@ -1,0 +1,31 @@
+{
+  "id": "install-default-apps-and-location",
+  "description": "Keep the visible default Firefox selection and detected location, then inspect Review. No erasure in this scenario.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q2.apps-next",
+      "precondition": "Is Firefox selected with a check mark?",
+      "action": {
+        "kind": "click",
+        "target": "Next button at the bottom right"
+      },
+      "expected": "Is a time zone selection field visible?",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q2.location-next",
+      "precondition": "Is a time zone selection field visible?",
+      "action": {
+        "kind": "click",
+        "target": "Review button at the bottom right"
+      },
+      "expected": "Does the title read Review and Confirm?",
+      "timeout_seconds": 30
+    }
+  ]
+}

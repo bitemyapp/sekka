@@ -1,0 +1,46 @@
+{
+  "id": "hyprland-browser",
+  "description": "Vanilla Hyprland Super+R opens hyprlauncher. Binding was read from the installed /etc/xdg/hypr/hyprland.lua before this run. Requires an already opened terminal; the experiment used a recorded assisted Super+Q.",
+  "max_calls": 60,
+  "max_input_tokens": 400000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q6.hyprland-launcher",
+      "precondition": "Is a terminal window visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "r"
+        ]
+      },
+      "expected": "Is an application launcher search field visible?",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q6.hyprland-firefox-search",
+      "precondition": "Is an application launcher search field visible?",
+      "action": {
+        "kind": "type",
+        "text": "firefox"
+      },
+      "expected": "Does the application launcher show Firefox?",
+      "timeout_seconds": 25
+    },
+    {
+      "id": "Q6.hyprland-firefox-launch",
+      "precondition": "Does the application launcher show Firefox?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a Firefox browser window visible?",
+      "timeout_seconds": 40
+    }
+  ]
+}

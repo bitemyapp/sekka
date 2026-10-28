@@ -1,0 +1,21 @@
+{
+  "id": "maximize-installer",
+  "description": "Maximize the live installer before locating its bottom navigation controls.",
+  "max_calls": 20,
+  "max_input_tokens": 200000,
+  "max_seconds": 60,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q1.maximize-installer",
+      "precondition": "Is the foreground window the Genkan installer?",
+      "action": {
+        "kind": "click",
+        "target": "square maximize window button between the minus and X buttons in the top-right title bar"
+      },
+      "expected": "Is the whole Get Started button visible above the desktop panel?",
+      "timeout_seconds": 30
+    }
+  ]
+}

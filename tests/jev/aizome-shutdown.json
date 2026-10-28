@@ -1,0 +1,57 @@
+{
+  "id": "aizome-normal-shutdown",
+  "description": "Normal installed-system shutdown through Aizome's palette and confirmation, after the browser input test.",
+  "max_calls": 60,
+  "max_input_tokens": 400000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.aizome-shutdown-palette",
+      "precondition": "Does the browser page show a large JEV_BROWSER_OK heading?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "spc"
+        ]
+      },
+      "expected": "Is a command search palette visible?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.aizome-shutdown-search",
+      "precondition": "Is a command search palette visible?",
+      "action": {
+        "kind": "type",
+        "text": "Shut Down"
+      },
+      "expected": "Does the command palette show a Shut Down action?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.aizome-shutdown-request",
+      "precondition": "Does the command palette show a Shut Down action?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a confirmation dialog asking to shut down visible?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.aizome-shutdown-confirm",
+      "precondition": "Is a confirmation dialog asking to shut down visible?",
+      "action": {
+        "kind": "click",
+        "target": "Shut Down confirmation button in the shutdown dialog"
+      },
+      "expected": "The owned QEMU process exits after the normal shutdown action.",
+      "expect_exit": true,
+      "timeout_seconds": 80
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "install-select-disposable-disk",
+  "description": "Select only the harness-created 100 GiB NVMe disk, keeping ext4 defaults; proceed to Account.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q2.select-disk",
+      "precondition": "Is a disk with serial SEKKA_JEV_TEST listed?",
+      "action": {
+        "kind": "click",
+        "target": "empty checkbox immediately left of QEMU NVMe Ctrl"
+      },
+      "expected": "Is the QEMU NVMe Ctrl disk selected, with a check mark in its checkbox?",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q2.disk-next",
+      "precondition": "Is the QEMU NVMe Ctrl disk selected?",
+      "action": {
+        "kind": "click",
+        "target": "Next button at the bottom right"
+      },
+      "expected": "Does the installer show account creation fields including username and password?",
+      "timeout_seconds": 30
+    }
+  ]
+}

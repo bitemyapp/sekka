@@ -1,0 +1,43 @@
+{
+  "id": "gdm-login-plasma",
+  "description": "Select Plasma (Wayland) in the already open GDM session chooser, then use synthetic credentials. Gear opening is a separately recorded assisted step.",
+  "max_calls": 70,
+  "max_input_tokens": 450000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.plasma-select",
+      "precondition": "Is a session selection menu listing Plasma (Wayland) visible?",
+      "action": {
+        "kind": "click",
+        "target": "Plasma (Wayland) session row in the session selection menu"
+      },
+      "expected": "Is the Password input field visible with the session menu closed?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.plasma-password",
+      "precondition": "Is an empty Password input field visible below Jev Test?",
+      "action": {
+        "kind": "type",
+        "text": "sekka-test-2026"
+      },
+      "expected": "Does the password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.plasma-login",
+      "precondition": "Does the password field contain masked characters?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a KDE Plasma desktop visible with a panel along the bottom?",
+      "timeout_seconds": 100
+    }
+  ]
+}

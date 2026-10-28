@@ -1,0 +1,57 @@
+{
+  "id": "firefox-local-page",
+  "description": "Offline synthetic HTML data URL; tests browser rendering and text input without contacting a test server. Not network, codec, portal or browser-suite qualification.",
+  "max_calls": 60,
+  "max_input_tokens": 400000,
+  "max_seconds": 150,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q6.browser-address-focus",
+      "precondition": "Is a Firefox browser window visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ctrl",
+          "l"
+        ]
+      },
+      "expected": "Is the Firefox address bar focused for text entry?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.browser-address",
+      "precondition": "Is the Firefox address bar focused for text entry?",
+      "action": {
+        "kind": "type",
+        "text": "data:text/html,<title>Jev Browser Test</title><h1>JEV_BROWSER_OK</h1><p>Name</p><input style=\"font-size:24px\" placeholder=\"Test name\">"
+      },
+      "expected": "Does the Firefox address bar contain data:text/html?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.browser-render",
+      "precondition": "Does the Firefox address bar contain data:text/html?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Does the browser page show a large JEV_BROWSER_OK heading and a Name input?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.browser-input",
+      "precondition": "Does the browser page show a large JEV_BROWSER_OK heading and a Name input?",
+      "action": {
+        "kind": "fill",
+        "target": "Name text input below the JEV_BROWSER_OK heading",
+        "text": "Sekka vision test"
+      },
+      "expected": "Does the Name text input display Sekka vision test?",
+      "timeout_seconds": 20
+    }
+  ]
+}

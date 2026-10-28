@@ -1,0 +1,8 @@
+{
+  "id":"installer-ui-shutdown",
+  "description":"Use the completed installer's real Shut Down button and confirm the owned QEMU process exits.",
+  "max_calls":10,"max_input_tokens":100000,"max_seconds":90,"min_probability":0.90,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q2.ui-shutdown","precondition":"Does the installer explicitly report Installation Complete?","action":{"kind":"click","target":"Shut Down button beside Restart Now"},"expected":"The QEMU process exits following the installer shutdown action.","expect_exit":true,"timeout_seconds":60}
+  ]
+}

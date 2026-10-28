@@ -1,0 +1,8 @@
+{
+  "id":"gdm-session-inventory",
+  "description":"Inspect the normal session chooser after selecting the synthetic user.",
+  "max_calls":20,"max_input_tokens":200000,"max_seconds":60,"min_probability":0.90,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q3.gdm-session-menu","precondition":"Is the Password field visible?","action":{"kind":"click","target":"gear icon button near the bottom right, left of the accessibility icon"},"expected":"Does the session selection menu list Aizome?","timeout_seconds":30}
+  ]
+}

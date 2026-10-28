@@ -1,0 +1,21 @@
+{
+  "id": "live-welcome-to-disk",
+  "description": "Unmodified public ISO, Jev observes live welcome then locates Get Started. Experimental UI evidence only.",
+  "max_calls": 120,
+  "max_input_tokens": 1000000,
+  "max_seconds": 360,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q1.live-welcome",
+      "precondition": "Does the installer show its Welcome page with a Get Started button?",
+      "action": {
+        "kind": "click",
+        "target": "Get Started button in the bottom right of the installer"
+      },
+      "expected": "Does the installer show its disk selection page, with a list of disks?",
+      "timeout_seconds": 300
+    }
+  ]
+}

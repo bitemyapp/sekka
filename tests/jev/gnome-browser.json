@@ -1,0 +1,45 @@
+{
+  "id": "gnome-browser",
+  "description": "Dismiss the first-login tour using its focused Skip button, then launch Firefox through the GNOME overview.",
+  "max_calls": 70,
+  "max_input_tokens": 450000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-tour-skip",
+      "precondition": "Is the welcome tour dialog visible with Skip focused?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is the GNOME overview visible with a Type to search field?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.gnome-firefox-search",
+      "precondition": "Is the GNOME overview visible with a Type to search field?",
+      "action": {
+        "kind": "type",
+        "text": "Firefox"
+      },
+      "expected": "Does the overview show a Firefox application search result?",
+      "timeout_seconds": 25
+    },
+    {
+      "id": "Q6.gnome-firefox-launch",
+      "precondition": "Does the overview show a Firefox application search result?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a Firefox browser window visible?",
+      "timeout_seconds": 40
+    }
+  ]
+}

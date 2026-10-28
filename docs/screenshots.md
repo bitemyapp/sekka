@@ -124,3 +124,19 @@ crops of it to the window with its tab and shadow, unscaled. Genkan is the
 debug build's welcome preview (`CALAMARES_UI_PREVIEW=welcome`), with the
 pointer moved off its window; its sample data are fixed, and production builds
 leave the preview out.
+
+The four PNGs in [tests/jev/fixtures](../tests/jev/fixtures) are calibration
+evidence from the October 27, 2026 Jev harness experiment. They were captured
+with QEMU `screendump` from an unmodified public `20261022-ed92471` ISO in a
+disposable UEFI USB VM. They preserve the original bytes and resolution:
+1920 × 1200 for the firmware menu and 1280 × 800 for the installer. Their
+[provenance manifest](../tests/jev/fixture-provenance.json) records the exact
+ISO and image hashes. The test account is synthetic. These are historical
+testing inputs, including known model failures; they do not certify the ISO.
+The harness keeps any resized API input separately from the original.
+
+The PNGs in [the Jev experiment report](test-results/jev-2026-10-27/README.md)
+are original, unscaled QMP captures of the same ISO's real installation and
+disk-only desktop sessions. Its [screenshot manifest](test-results/jev-2026-10-27/screenshots.json)
+binds each file to its source capture and SHA-256. Codex inspected these frames;
+they have not received independent human qualification review.

@@ -1,0 +1,46 @@
+{
+  "id": "run-dialog-firefox",
+  "description": "Normal Alt+F2 application launcher route on Plasma or Xfce. Inspect which desktop is active separately.",
+  "max_calls": 60,
+  "max_input_tokens": 400000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q6.run-dialog",
+      "precondition": "Is a desktop visible with a panel along the bottom?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "alt",
+          "f2"
+        ]
+      },
+      "expected": "Is an application launcher search or command field visible?",
+      "timeout_seconds": 25
+    },
+    {
+      "id": "Q6.run-firefox-type",
+      "precondition": "Is an application launcher search or command field visible?",
+      "action": {
+        "kind": "type",
+        "text": "firefox"
+      },
+      "expected": "Does the launcher contain the text firefox?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.run-firefox-launch",
+      "precondition": "Does the launcher contain the text firefox?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a Firefox browser window visible?",
+      "timeout_seconds": 40
+    }
+  ]
+}

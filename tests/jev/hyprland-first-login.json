@@ -1,0 +1,34 @@
+{
+  "id": "hyprland-first-login",
+  "description": "Dismiss the upstream welcome dialog and open the configured Kitty terminal for fixed diagnostics. Login postcondition had abstained at 0.89 on this unchanged screen.",
+  "max_calls": 50,
+  "max_input_tokens": 350000,
+  "max_seconds": 150,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.hyprland-welcome",
+      "precondition": "Is a window saying Hyprland updated to 0.56.2 visible?",
+      "action": {
+        "kind": "click",
+        "target": "Thanks! button in the lower right of the Hyprland updated window"
+      },
+      "expected": "Is the Hyprland updated window absent?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.hyprland-terminal",
+      "precondition": "Is the Hyprland updated window absent?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "q"
+        ]
+      },
+      "expected": "Is a terminal window visible?",
+      "timeout_seconds": 30
+    }
+  ]
+}

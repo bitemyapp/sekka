@@ -1,0 +1,9 @@
+{
+  "id":"gdm-login-aizome",
+  "description":"Synthetic account only. Requires Aizome selected and the GDM password field focused. Session selection is a separate recorded step.",
+  "max_calls":60,"max_input_tokens":400000,"max_seconds":180,"min_probability":0.9,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q3.aizome-password","precondition":"Is an empty Password field visible below Jev Test?","action":{"kind":"type","text":"sekka-test-2026"},"expected":"Does the password field below Jev Test contain masked characters?","timeout_seconds":20},
+    {"id":"Q3.aizome-login","precondition":"Does the password field below Jev Test contain masked characters?","action":{"kind":"key","keys":["ret"]},"expected":"Is the Aizome desktop visible with a Toolchest button?","timeout_seconds":120}
+  ]
+}
