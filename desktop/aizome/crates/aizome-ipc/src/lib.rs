@@ -650,7 +650,8 @@ pub struct InputState {
     /// The effective named cursor, or `None` for a client surface or hidden cursor.
     #[serde(default)]
     pub cursor_name: Option<String>,
-    /// The app whose surface has the pointer, and the keyboard.
+    /// The app whose surface has the pointer, and the keyboard (`the lock
+    /// screen on <output>` for a lock surface).
     pub pointer_focus: Option<String>,
     pub keyboard_focus: Option<String>,
 }

@@ -57,6 +57,36 @@ fn lock_surface_refits_mode_scale_and_rotation() {
     }
 }
 
+fn keyboard_focus(c: &Compositor) -> Option<String> {
+    let Response::InputState { state } = c.request(Request::InputState) else { panic!("input state") };
+    state.keyboard_focus
+}
+
+fn pointer_moves_keyboard_to(c: &Compositor, pointer_x: f64, output: &str) {
+    c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: pointer_x, y: 30.0 }] });
+    let prompt = format!("the lock screen on {output}");
+    wait("the keyboard follows the pointer", || keyboard_focus(c).as_deref() == Some(prompt.as_str()));
+}
+
+#[test]
+fn keyboard_follows_the_pointer_between_lock_surfaces() {
+    let c = Compositor::start(Options {
+        outputs: &["1280x800@1", "1280x800@1"],
+        renderer: Some("pixman"),
+        ..Default::default()
+    });
+    let lock = LockClient::spawn(&c, 0x7e2553);
+    wait("locked", || *lock.locked.lock().unwrap() == Some(true));
+    wait("both lock surfaces drawn", || {
+        ["HEADLESS-1", "HEADLESS-2"].iter().all(|o| near(capture(&c, o).px(1278, 798), rgb(0x7e2553)))
+    });
+    // Only the motion selects a lock surface here: no output changes and
+    // no surface arrives, and the lock client never commits again.
+    pointer_moves_keyboard_to(&c, 30.0, "HEADLESS-1");
+    pointer_moves_keyboard_to(&c, 1300.0, "HEADLESS-2");
+    pointer_moves_keyboard_to(&c, 30.0, "HEADLESS-1");
+}
+
 fn lock_count(c: &Compositor, shell: &str) -> Option<usize> {
     let state = shell_state(c, shell)?;
     Some(state["surfaces"].as_array()?.iter().filter(|s| s.as_str().is_some_and(|s| s.starts_with("Lock {"))).count())
@@ -75,7 +105,8 @@ fn field_pixels(img: &Image) -> Option<Vec<[u8; 3]>> {
 fn can_type(c: &Compositor, output: &str, pointer_x: f64) {
     wait("visible password field", || field_pixels(&capture(c, output)).is_some());
     // Switch displays by moving the pointer; no click to focus the field.
-    c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: pointer_x, y: 30.0 }] });
+    // Every prompt shows the shared password, so ask which one has the keys.
+    pointer_moves_keyboard_to(c, pointer_x, output);
     key(c, "escape");
     c.settle();
     let before = field_pixels(&capture(c, output)).unwrap();

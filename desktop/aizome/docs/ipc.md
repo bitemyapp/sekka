@@ -185,7 +185,8 @@ the notice after a restart), `panel` (its rectangle while open).
 `pressed_buttons` and `pressed_keys` (evdev codes the seat holds),
 `keyboard_grab`, `pointer_constraint` (`locked`, `confined`),
 `cursor_hidden`, `cursor_name` (the effective named cursor, or null for a client
-surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs).
+surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs;
+`the lock screen on <output>` for a lock surface; else `a surface`).
 
 ### WindowInfo
 

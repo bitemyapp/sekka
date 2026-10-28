@@ -18,7 +18,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs; the one submodule, `vendor/sidestep`, is Sidestep's fork, which Aizome builds against ([Aizome](#aizome)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -1052,14 +1052,9 @@ disabled displays stay off. Output removal destroys obsolete lock surfaces,
 returning outputs get new ones, and mode/scale/rotation changes reconfigure
 existing ones. The compositor also retargets the keyboard when displays
 change or the pointer moves between prompts. It keeps the session locked
-while outputs are absent.
-
-The October 27 blank-screen report followed a locked external display being
-removed and the laptop panel being restored. Previously the shell created
-lock surfaces only at lock initiation and put the password on only the
-then-focused output. The regression checks also caught a surviving prompt
-losing keyboard input after the focused display departed, and lock surfaces
-retaining their old dimensions after a display change.
+while outputs are absent. The
+[lock-screen display-change incident](docs/incidents/2026-10-27-lock-screen-display-change.md)
+records the failure that led to this.
 
 ```sh
 nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell -p aizome-kit
@@ -1070,11 +1065,15 @@ nix develop .#aizome -c env AIZOME_LOCK_TEST_SHELL="$PWD/desktop/aizome/target/d
 
 The shell tests cover authentication, every display's field, output loss
 during lock acquisition, no-output intervals, surface replacement and view
-updates. `lock_displays` uses the real shell and compositor over private
+updates. `lock_displays` uses a test lock client to check that lock surfaces
+refit mode/scale/rotation changes and that the keyboard follows the pointer
+between displays' lock surfaces. Its desktop cases, ignored unless explicitly
+run with the built shell, use the real shell and compositor over private
 Wayland sockets to check repeated output removal/restoration, disabled
-outputs, lid-close/undock/lid-open, DPMS, mirrors, resizing and input isolation.
-Its desktop cases are ignored unless explicitly run with the built shell.
-These are component checks, not physical suspend/resume or ISO qualification.
+outputs, lid-close/undock/lid-open, DPMS, mirrors, input isolation and which
+prompt has the keyboard. `aizomectl input-state` names the lock surface with
+the keyboard (`the lock screen on <output>`). These are component checks,
+not physical suspend/resume or ISO qualification.
 
 ## Tatami Bluetooth
 
