@@ -1,20 +1,21 @@
 # Offscreen GPU buffer and Nix loader probe
 
-The workstation can render with its NVIDIA driver under the same Nix libc
-loader used by the current Hotaru package. **DMA-BUF export does not work under
-the current SSH user's device access.** This is a partial capability result,
-not a GPU renderer, Wayland presentation result or performance comparison.
+The local Intel machine passes a complete offscreen DMA-BUF round trip between
+two unshared EGL contexts. The workstation NVIDIA diagnostic verifies drawing
+under the package Nix loader, but **export fails under that SSH user's device
+access**. These are device-specific capability results, not a GPU terminal
+renderer, Wayland presentation qualification or performance comparison.
 
 The Linux-only diagnostic [`gpu-buffer-probe.c`](../tools/gpu-buffer-probe.c)
 creates two unshared surfaceless EGL/GLES contexts through the device platform.
 It draws four opaque quadrants into a 32×32 RGBA texture and verifies every
 producer pixel. It then attempts to export a single-plane DMA-BUF, wait for a
 producer fence, import into the other context and verify that texture's pixels.
-The planned consumer path closes the exported descriptor after successful
+The consumer path closes the exported descriptor after successful
 import and explicitly destroys images, textures and contexts. Failed attempts
 exit the diagnostic process, whose resources are reclaimed by the OS.
 
-## Observed result
+## Workstation NVIDIA result
 
 Both the host and explicitly selected Nix loader runs in
 [`check-5/result.json`](../upstream/gpu-buffer/check-5/result.json) report:
@@ -66,11 +67,12 @@ preservation rules are the Khronos
 [DMA-BUF export](https://registry.khronos.org/EGL/extensions/MESA/EGL_MESA_image_dma_buf_export.txt),
 and [DMA-BUF import](https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_image_dma_buf_import.txt)
 specifications. Review found no concrete descriptor/bounds/context-lifetime
-defect in the intended success path, which still requires actual execution.
+defect in the intended success path. The later local Intel run below executes
+that path successfully; the NVIDIA result remains unchanged.
 
-The producer readback completes its prior draw before the later fence. Even a
-future passing round trip would therefore establish a CPU-waited transfer,
-not independent validation of outstanding GPU work or asynchronous cross-process
+The producer readback completes its prior draw before the later fence. The
+passing local round trip therefore establishes a CPU-waited transfer, not
+independent validation of outstanding GPU work or asynchronous cross-process
 synchronization. No timing is reported by this probe.
 
 ## Reproduction and next work
@@ -92,3 +94,44 @@ Offscreen GPU component work can continue with the demonstrated context path.
 Hardware Wayland qualification still needs a working import/export path under
 the intended runtime account, then compositor/client synchronization and
 presentation checks. No native toolkit GPU path is added by this diagnostic.
+
+## Local Intel success
+
+The unchanged C probe passes on ganymede with Intel Graphics (PTL), PCI
+`8086:b090`, the `xe` kernel driver, and OpenGL ES 3.2 Mesa 26.2.5. The existing
+`/dev/dri/renderD128` is accessible to the user. The run uses a **task-owned
+rooted Nix store in an unprivileged user/mount namespace**, exposing only that
+render node; it changes no host permissions, trust policy, configuration or
+desktop session. The private namespace preserves the exact `/nix/store` paths.
+
+The local Nix daemon rejected unsigned package imports, including an explicit
+per-command signature-check override. The fallback imports only selected exact
+closures into the task-owned store. Wrapper/ELF identities, ten font hashes and
+five package NAR identities match the workstation records. This portability
+check uses the historical Hotaru `e2b1ff7` package `26jmmbq…` and pinned Ghostty
+`6ba144158577d033ccb6ed4b574e4013957c9161`, not the subsequently integrated
+ASCII/pixel-scroll product. The diagnostic selects the exact Ghostty-package
+GLVND loader `ww5pck…` and qualified Mesa `457mqa…`; file-backed mappings are
+recorded in the [local result](../upstream/gpu-buffer/local-intel/result.json).
+
+The producer verifies all 4,096 RGBA bytes of the 32×32 image. Export reports
+one-plane ABGR8888 (`AB24`), linear modifier `0`, stride `256`, and offset `0`.
+After a bounded CPU EGL fence wait, an unshared consumer context imports the
+DMA-BUF and independently verifies all 4,096 bytes. The probe reports success
+only after fence/image/context destruction and EGL termination succeed.
+
+[Cleanup evidence](../upstream/gpu-buffer/local-intel/qualification.json) and
+[numbered syscall excerpts](../upstream/gpu-buffer/local-intel/cleanup-trace-excerpt.txt)
+confirm exported descriptor 8 and driver backing descriptor 7 close successfully,
+render-node descriptors 3–6 close, and kernel synchronization objects are
+destroyed. The process exits zero. Full raw artifacts remain in
+`/home/callen/work/hotaru-local-gui-20261028/gpu-capability/`; compact reports,
+runner and namespace scripts are frozen under
+[`upstream/gpu-buffer/local-intel`](../upstream/gpu-buffer/local-intel/README.md).
+
+This result qualifies one device, one small image, one process and two unshared
+contexts. It does not yet qualify native Wayland DMA-BUF import, buffer-release
+ownership, frame callbacks, hardware presentation or a Rust GPU renderer. The
+local matched GUI pilot remains rejected for saturated CPUs and is not timing
+evidence. The next transport experiment must use a disposable compositor and
+preserve the same explicit ownership and bounded cleanup rules.

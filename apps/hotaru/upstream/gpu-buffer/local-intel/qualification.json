@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "source_unchanged": true,
+  "source_sha256": "9ae5753f7a6d316607009c127e0e991f6c0919772328e912c523c2c2abcf4102",
+  "namespace": "task-owned Nix store mapped read-only at /nix/store in an unprivileged user/mount namespace; only existing renderD128 exposed; no host configuration, permissions or desktop interaction",
+  "same_package_egl_loader": "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0",
+  "same_qualified_mesa": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "hardware_vendor": "Intel",
+  "pci_vendor": "0x8086",
+  "pci_device": "0xb090",
+  "driver": "xe",
+  "producer_rgba_bytes": 4096,
+  "consumer_rgba_bytes": 4096,
+  "contexts_shared": false,
+  "format": "ABGR8888 (fourcc AB24)",
+  "modifier": "linear 0",
+  "stride": 256,
+  "offset": 0,
+  "cleanup": {
+    "exported_fd8_closed": true,
+    "driver_backing_fd7_closed": true,
+    "render_fds3_4_5_6_closed": true,
+    "kernel_sync_objects_destroyed": true,
+    "egl_fence_wait_and_destroy_succeeded": true,
+    "egl_images_contexts_terminated": true,
+    "process_exit_code": 0
+  },
+  "limits": [
+    "32x32 single-plane image, one device, one process, two unshared EGL contexts",
+    "Producer readback precedes export; does not stress in-flight asynchronous handoff",
+    "Synchronization is a bounded CPU EGL fence wait, not cross-process explicit-sync protocol",
+    "No compositor, Wayland buffer lifetime, presentation, renderer integration, or timing qualification"
+  ],
+  "files_sha256": {
+    "gpu-buffer-probe.c": "9ae5753f7a6d316607009c127e0e991f6c0919772328e912c523c2c2abcf4102",
+    "run.py": "055377787585a5df7013786a706cf5393d3994801a8babfb04f2fc90edcd3bd7",
+    "result.json": "6061d7bb6d6a491f69566577171cef44df3dd49b7b9ba11f0fecbf4cbd5a4c43",
+    "probe.jsonl": "8689eff786554d91ecbfa3abc4dff4d339c6577240b32ee6d875ca10634ebeaa",
+    "probe.strace": "524a59fec8975cfae258552f7c95e54005265644dab56a71c5cd491d9acbf35b",
+    "probe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
