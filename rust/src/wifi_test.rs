@@ -90,13 +90,9 @@ pub fn main(args: Vec<String>) -> Result<()> {
             Duration::from_secs(15),
         )?)?;
         ensure!(settings["kernel"] == profile.kernel(), "Wrong boot profile");
-        let desktop = if profile == Profile::Compatibility {
-            "xfce4-session"
-        } else {
-            "plasmashell"
-        };
-        vm.execute(&format!("for i in $(seq 1 90); do pgrep -u 1000 -f '(^|/)[.]?{desktop}(-wrapped)?( |$)' && exit 0; sleep 1; done; exit 1"), Duration::from_secs(100))?;
-        result["desktop"] = json!(desktop);
+        // Aizome's compositor, in every profile.
+        vm.execute("for i in $(seq 1 90); do pgrep -u 1000 -f '(^|/)[.]?aizome(-wrapped)? ' && exit 0; sleep 1; done; exit 1", Duration::from_secs(100))?;
+        result["desktop"] = json!("aizome");
         result["kernel"] = json!(vm.execute("uname -r", Duration::from_secs(15))?.trim());
         vm.execute("mkdir -p /workspace; mount -t 9p -o ro,trans=virtio,version=9p2000.L project /workspace", Duration::from_secs(20))?;
         // The tools are imported only into this guest's temporary store. The

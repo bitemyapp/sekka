@@ -517,6 +517,7 @@ fn fixture_options() -> Result<String> {
         "CALAMARES_TEST_SWAP",
         "CALAMARES_TEST_TUNING",
         "CALAMARES_TEST_SESSION",
+        "CALAMARES_TEST_GITHUB",
     ] {
         if let Ok(value) = std::env::var(name) {
             ensure!(
@@ -681,7 +682,9 @@ fn verify_installed(
     )?;
     let output = vm.execute(
         &format!(
-            "CALAMARES_TEST_FILESYSTEM={} CALAMARES_TEST_APPLICATIONS={} {} verify",
+            "{}CALAMARES_TEST_FILESYSTEM={} CALAMARES_TEST_APPLICATIONS={} {} verify",
+            // The same choices the installation was asked for.
+            fixture_options()?,
             shell_quote(filesystem),
             shell_quote(applications),
             shell_quote(fixture)
@@ -708,6 +711,7 @@ fn verify_installed(
             .find_map(|line| line.strip_prefix("DESKTOP_SESSION="))
             .context("Fixture did not report the default session")?;
         let process = match session {
+            "aizome" => "aizome",
             "plasma" => "plasmashell",
             "xfce" => "xfce4-session",
             "gnome" => "gnome-shell",
@@ -721,6 +725,8 @@ fn verify_installed(
         };
         // Session managers can use a bare argv[0], a bin/libexec path, or a
         // Nix wrapper. Match the exact program token, not a hard-coded path.
+        // Aizome's compositor is `aizome --backend udev`; its session script,
+        // shell and greeter don't match.
         vm.execute(&format!("for i in $(seq 1 90); do pgrep -u 1000 -f '(^|/)[.]?{process}(-wrapped)?( |$)' && exit 0; sleep 1; done; exit 1"), SHORT)?;
         pause(Duration::from_secs(10))?;
     }
@@ -854,7 +860,7 @@ pub fn main(args: Vec<String>) -> Result<()> {
         vm.wait_agent()?;
         let end = Instant::now() + Duration::from_secs(180);
         let live = loop {
-            match vm.execute("set -e; systemctl is-active display-manager; pgrep -u 1000 -f '^/[^ ]+/bin/[.]?plasmashell'; pgrep -u 1000 -f '^/[^ ]+/bin/[.]?calamares-nixos(-wrapped)?( |$)'; nix --version; fh --version; systemctl is-active determinate-nixd.socket; test -s /etc/calamares-nixos/flake.lock; test ! -e /run/current-system/sw/bin/calamares; test ! -e /run/current-system/sw/bin/respin-tools; test ! -e /etc/nixos-generate-config.conf; cat /etc/calamares-nixos/settings.json; lsblk -o NAME,TRAN,FSTYPE,LABEL", SHORT) {
+            match vm.execute("set -e; systemctl is-active display-manager; pgrep -u 1000 -f '(^|/)[.]?aizome(-wrapped)? '; pgrep -u 1000 -f '^/[^ ]+/bin/[.]?calamares-nixos(-wrapped)?( |$)'; nix --version; fh --version; systemctl is-active determinate-nixd.socket; test -s /etc/calamares-nixos/flake.lock; test ! -e /run/current-system/sw/bin/calamares; test ! -e /run/current-system/sw/bin/respin-tools; test ! -e /etc/nixos-generate-config.conf; cat /etc/calamares-nixos/settings.json; lsblk -o NAME,TRAN,FSTYPE,LABEL", SHORT) {
                 Ok(text) => break text, Err(e) if Instant::now() >= end => return Err(e), Err(_) => pause(Duration::from_secs(3))?,
             }
         };

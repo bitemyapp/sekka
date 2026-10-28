@@ -83,7 +83,9 @@
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
+        inherit (inputs) sidestep;
         source = inputs.calamares;
+        fonts = inputs.aizome.packages.${system}.fonts;
       };
       applicationCatalog = import ./nix/applications.nix { inherit inputs; };
       installer = nixpkgs.lib.nixosSystem {
@@ -198,12 +200,12 @@
         };
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
-          genkan = calamares;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         # Aizome's README captures (docs/screenshots.md).
         screenshots-aizome = import ./nix/screenshots-aizome.nix {
           inherit pkgs;
+          genkan = calamares;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         # A development check of Yukimi's Discover; not run with the others.
@@ -362,12 +364,15 @@
           assert normal.boot.kernelPackages.kernel.version == pkgs.linuxPackages_latest.kernel.version;
           assert lts.boot.kernelPackages.kernel.version == pkgs.linuxPackages.kernel.version;
           assert recovery.boot.kernelPackages.kernel.version == normal.boot.kernelPackages.kernel.version;
-          assert normal.services.displayManager.defaultSession == "plasma";
-          assert recovery.services.displayManager.defaultSession == "xfce";
-          assert recovery.services.xserver.displayManager.lightdm.enable;
-          assert !recovery.services.desktopManager.plasma6.enable;
-          assert !recovery.services.displayManager.plasma-login-manager.enable;
+          assert normal.services.displayManager.defaultSession == "aizome";
+          assert recovery.services.displayManager.defaultSession == "aizome";
+          # Pixman and software GL in the recovery entry alone.
+          assert recovery.environment.sessionVariables.AIZOME_RENDERER == "pixman";
           assert recovery.environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE == "1";
+          assert pkgs.lib.hasInfix "AIZOME_RENDERER=pixman"
+            recovery.environment.etc."xdg/aizome/environment".text;
+          assert !(normal.environment.sessionVariables ? AIZOME_RENDERER);
+          assert !(lts.environment.sessionVariables ? AIZOME_RENDERER);
           # NVIDIA's driver, never nouveau; the fallback uses neither.
           assert builtins.all
             (
@@ -382,13 +387,11 @@
               normal
               lts
             ];
-          # The Plasma live session never sleeps, blanks or locks on its own.
-          assert pkgs.lib.hasInfix "[AC][SuspendAndShutdown]\nAutoSuspendAction=0"
-            etc."xdg/powerdevilrc".text;
-          assert pkgs.lib.hasInfix
-            "[Battery][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false"
-            etc."xdg/powerdevilrc".text;
-          assert pkgs.lib.hasInfix "Autolock=false" etc."xdg/kscreenlockerrc".text;
+          # The live session never locks or turns its displays off on its own,
+          # and opens on Genkan rather than Aizome's welcome tour.
+          assert pkgs.lib.hasInfix "lock_after_minutes = 0\nmonitors_off_after_minutes = 0"
+            normal.systemd.tmpfiles.settings."10-installer-desktop"."/home/nixos/.config/aizome/settings.toml".f.argument;
+          assert !etc."xdg/autostart/org.aizome.Annai.Welcome.desktop".enable;
           assert !(builtins.elem "nvidia" recovery.services.xserver.videoDrivers);
           assert builtins.elem "nouveau" recovery.boot.blacklistedKernelModules;
           assert
@@ -413,7 +416,17 @@
             && c.hardware.cpu.intel.updateMicrocode
             && c.hardware.cpu.amd.updateMicrocode
             && c.nixpkgs.config.allowUnfree
-            && !c.boot.plymouth.enable
+            # Aizome, logged in automatically, behind Sekka's boot splash.
+            && c.programs.aizome.enable
+            && c.programs.aizome.greeter.enable
+            && c.services.greetd.enable
+            && c.services.displayManager.autoLogin.enable
+            && c.services.displayManager.autoLogin.user == "nixos"
+            && !c.services.desktopManager.plasma6.enable
+            && c.boot.plymouth.enable
+            && c.boot.plymouth.theme == "sekka"
+            # A serial console would otherwise turn the splash into text.
+            && builtins.elem "plymouth.ignore-serial-consoles" c.boot.kernelParams
             && !(c.environment.etc ? "nixos-generate-config.conf")
           ) liveConfigs;
           pkgs.writeText "live-profile-checks.json" (

@@ -13,7 +13,6 @@
 # rectangle, in the display's own pixels; nothing is scaled.
 {
   pkgs,
-  genkan,
   desktopsModule,
 }:
 let
@@ -51,12 +50,6 @@ let
         password = "loud-guitars";
       }
     ];
-  };
-  # Genkan's welcome page with sample data; preview mode exists only in
-  # debug builds.
-  preview = genkan.overrideAttrs {
-    cargoBuildType = "debug";
-    doCheck = false;
   };
   sekka =
     desktop:
@@ -118,22 +111,11 @@ pkgs.testers.runNixOSTest {
         networking.networkmanager.unmanaged = [ "interface-name:eth*" ];
         users.users.demo.extraGroups = [ "networkmanager" ];
       };
-    plasma =
-      { ... }:
-      {
-        imports = [ (sekka "plasma") ];
-        # kdotool asks KWin where Genkan's window is, and reads the answer
-        # from KWin's journal.
-        environment.systemPackages = [
-          preview
-          pkgs.kdotool
-        ];
-        users.users.demo.extraGroups = [ "systemd-journal" ];
-      };
+    plasma = sekka "plasma";
     gnome = sekka "gnome";
   };
   testScript = ''
-    import json, re, shlex, struct, subprocess, time
+    import json, shlex, struct, subprocess, time
 
     ${wifi.script}
 
@@ -310,8 +292,7 @@ pkgs.testers.runNixOSTest {
     capture(tatami, "network", settle=10, window=alone("org.tatami.Network"))
     tatami.shutdown()
 
-    # Plasma: the live session's desktop, and Genkan's welcome page on its
-    # own.
+    # Plasma.
     plasma.start()
     plasma.wait_until_succeeds("pgrep -u demo -f bin/.?plasmashell", timeout=240)
     time.sleep(10)
@@ -326,20 +307,6 @@ pkgs.testers.runNixOSTest {
     launch(plasma, "konsole --hold -e fastfetch")
     plasma.wait_until_succeeds("pgrep -u demo -f '[k]onsole'", timeout=30)
     capture(plasma, "plasma", settle=15)
-    user(plasma, "pkill -u demo -f '[k]onsole' || true; pkill -u demo -f '[d]olphin' || true")
-    plasma.wait_until_fails("pgrep -u demo -f '[k]onsole|[d]olphin'", timeout=30)
-    launch(plasma, "env CALAMARES_UI_PREVIEW=welcome calamares-nixos")
-    plasma.wait_until_succeeds("pgrep -u demo -f calamares-nixos", timeout=30)
-    def genkan_window():
-        # KWin's frame geometry: the window without its client-side shadow.
-        reply = user(plasma, "KDE_SESSION_VERSION=6 kdotool search --class "
-                     "'^org\\.calamares\\.NixOSRust$' getwindowgeometry")
-        position = re.search(r"Position: ([-\d.]+),([-\d.]+)", reply)
-        geometry = re.search(r"Geometry: ([\d.]+)x([\d.]+)", reply)
-        if not (position and geometry):
-            raise Exception("no Genkan window from kdotool:\n" + reply)
-        return (*map(float, position.groups()), *map(float, geometry.groups()))
-    capture(plasma, "genkan", settle=12, window=genkan_window)
     plasma.shutdown()
 
     # GNOME, after closing its first-login tour.

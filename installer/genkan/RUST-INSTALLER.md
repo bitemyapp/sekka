@@ -1,10 +1,10 @@
 # NixOS-focused Rust Calamares
 
-This branch contains a new native Rust/GTK4 installer for the Determinate NixOS
-graphical respin. It is **not** a translation of every upstream Calamares module,
+This branch contains a new native Rust installer for the Determinate NixOS
+graphical respin, its window an Aizome app on Aizome's kit (`ui/`). It is **not** a translation of every upstream Calamares module,
 and it is not compatible with Calamares's Python/C++ plugin API. The original
 upstream source and licenses remain in the repository for provenance; the Nix
-package builds only `rust/`.
+package builds only `rust/` and `ui/`.
 
 The GitHub fork preserves Calamares history. Rust development starts at upstream
 Codeberg tag `v3.4.2`, commit `36d30c492e5c7b5d6d32fed5c5d9790522e1eea3`.
@@ -12,9 +12,9 @@ The new implementation is GPL-3.0-or-later. It has no upstream endorsement.
 
 ## Supported first-release workflow
 
-- x86_64 NixOS live ISO; network connection required. The live desktop is Plasma.
-- Multi-select installed desktops: the Wayland desktops Plasma (default),
-  GNOME, vanilla Hyprland and Tatami (a Hyprland desktop inspired by Omarchy),
+- x86_64 NixOS live ISO; network connection required. The live desktop is Aizome.
+- Multi-select installed desktops: the Wayland desktops Aizome (default),
+  Plasma, GNOME, vanilla Hyprland and Tatami (a Hyprland desktop inspired by Omarchy),
   and Xfce as the one X11 desktop, with an explicit default login session.
   MATE, LXQt and Cinnamon are no longer offered; the NixOS module still
   accepts them, so systems installed with them keep working.
@@ -185,7 +185,7 @@ broken connection: unlock/save the live connection or disable transfer and
 configure that enterprise network afterwards. No actual host Wi-Fi profiles
 are accessed by the tests; they use public synthetic credentials in guests.
 
-The time zone is chosen on a world map (`src/zonemap.rs`, `src/ui/zonemap.rs`)
+The time zone is chosen on a world map (`src/zonemap.rs`, `../ui/src/view/map.rs`)
 or from a searchable city list. A click resolves to a zone from the live
 tzdata's `zone.tab`. Within the clicked country, only zones in the clicked
 standard-time band are considered, and the nearest of those is chosen. So
@@ -214,11 +214,11 @@ change the live OS.
 
 ## Architecture and safeguards
 
-`calamares-nixos` runs as the live user. GTK callbacks only handle widgets and
-bounded channel messages. Disk discovery, filesystem reads, validation,
+`calamares-nixos` runs as the live user. Its window (`../ui`) only updates its
+state from messages and draws it. Disk discovery, filesystem reads, validation,
 authorization and helper communication run on workers; hashing, downloads,
-partitioning and installation run in the privileged Rust helper. The UI shows
-an active spinner throughout work. No shell command is assembled from user
+partitioning and installation run in the privileged Rust helper. The window
+shows a moving progress bar throughout work. No shell command is assembled from user
 input by the installer.
 
 ### Preparation before confirmation
@@ -290,15 +290,15 @@ transition binds the exact phrase to the plan's disk and returns
 IPC deliberately returns to raw data: the privileged helper independently
 parses and confirms it using its own root-owned settings. Neither plan type
 implements `Deserialize`, `Debug`, or `Clone`; password/profile owners zeroize
-their Rust buffers when dropped. External GTK/libnm allocations are not claimed
-to be zeroized.
+their Rust buffers when dropped. External libnm allocations, and the copies the window's
+text fields and messages make, are not claimed to be zeroized.
 
 This is intentionally not a type for every string or process step. Full names
 remain strings; locale/keyboard choices resolve to allowed static values;
 cross-field rules belong in aggregate constructors. Runtime checks still guard
 live/root status, current firmware, mount state and disk identity immediately
 before writes. A parsed plan describes intent, not permanently safe hardware.
-Parsing that reads tzdata or calls libnm runs on workers, not the GTK thread.
+Parsing that reads tzdata or calls libnm runs on workers, not the interface thread.
 
 No target is selected automatically. The review page requires both a destructive
 checkbox and typing `ERASE /dev/<device>`. Before writing, the helper rechecks
@@ -361,12 +361,17 @@ Do not delete local modules until their settings have been accounted for.
 cargo test --manifest-path installer/genkan/rust/Cargo.toml --locked
 cargo clippy --manifest-path installer/genkan/rust/Cargo.toml --all-targets --all-features -- -D warnings
 cargo fmt --manifest-path installer/genkan/rust/Cargo.toml --check
+cargo test --manifest-path installer/genkan/ui/Cargo.toml --locked
+cargo clippy --manifest-path installer/genkan/ui/Cargo.toml --all-targets -- -D warnings
+cargo fmt --manifest-path installer/genkan/ui/Cargo.toml --check
 nix build .#genkan --no-update-lock-file
 ```
 
-Local GUI builds need GTK4 and libnm development libraries. Nix supplies them. The Nix
-package includes the GUI, helper, desktop entry and Polkit policy; it deliberately
-does not contain the separate `tests/vm-fixture` crate.
+Local window builds need Wayland, xkbcommon, fontconfig and libnm development
+libraries; Nix supplies them. The window's crate (`ui/`) builds against
+Aizome's kit by path (DEVELOPERS.md, "Genkan"). The Nix package includes the
+window, helper, desktop entry and Polkit policy; it deliberately does not
+contain the separate `tests/vm-fixture` crate.
 
 Root-owned `/etc/calamares-nixos/settings.json` supplies `template_dir`,
 `zoneinfo`, `state_version` (`26.11` or `26.05`), and `kernel` (`lts` or `latest`).

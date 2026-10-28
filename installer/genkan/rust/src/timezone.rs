@@ -61,6 +61,7 @@ pub enum Source {
     Fallback,
 }
 
+#[derive(Clone, Debug)]
 pub struct Detection {
     pub zone: TimeZone,
     pub source: Source,

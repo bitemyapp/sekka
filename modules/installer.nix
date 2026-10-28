@@ -1,5 +1,5 @@
 # Live media only; never imported by the installed machine.
-# Plasma setup follows the official NixOS graphical installer module (MIT).
+# The live session is Aizome, logged in automatically, with Genkan open in it.
 {
   config,
   lib,
@@ -12,27 +12,16 @@
 let
   calamares = import ../nix/calamares.nix {
     inherit pkgs;
+    inherit (inputs) sidestep;
     source = inputs.calamares;
+    fonts = inputs.aizome.packages.${pkgs.stdenv.hostPlatform.system}.fonts;
   };
   diagnostics = import ../nix/live-diagnostics.nix { inherit pkgs; };
   copytoram = import ../nix/iso-copytoram.nix { inherit pkgs; };
-  copytoramNotice = pkgs.writeShellApplication {
-    name = "sekka-copytoram-notice";
-    runtimeInputs = [
-      pkgs.gnugrep
-      pkgs.util-linux
-      pkgs.kdePackages.kdialog
-    ];
-    text = ''
-      if grep -Eq '(^|[[:space:]])copytoram(=[^[:space:]]*)?([[:space:]]|$)' /proc/cmdline &&
-         [[ "$(findmnt -n -o FSTYPE --mountpoint /iso)" != tmpfs ]]; then
-        exec kdialog --title "Keep installation media connected" --sorry \
-          "Copy to RAM was unavailable or failed. Sekka started from the installation media instead.
-
-      Keep your USB drive or DVD connected while this live session is running."
-      fi
-    '';
-  };
+  # Installed systems' Aizome wallpapers (installer/genkan/rust/system/desktops.nix),
+  # by store path: the media already carry them for the prebuilt systems.
+  wallpapers = inputs.tatami.packages.${pkgs.stdenv.hostPlatform.system}.wallpapers;
+  wallpaper = file: "${wallpapers}/share/backgrounds/tatami/${file}";
   applicationCatalog = import ../nix/applications.nix { inherit inputs; };
   references = import ../nix/reference-systems.nix {
     inherit inputs applicationCatalog;
@@ -51,6 +40,9 @@ in
 {
   imports = [
     ./portal-fixes.nix
+    inputs.aizome.nixosModules.default
+    # Sekka's boot splash, as on installed systems.
+    ../installer/genkan/rust/system/boot-splash
     # Deferred installations build the system from the live session's store.
     ../installer/genkan/rust/system/binary-cache.nix
     # The live session joins Wi-Fi with installed systems' wpa_supplicant.
@@ -86,54 +78,49 @@ in
     boot.initrd.systemd.services.copytoram.script = lib.mkForce ''
       exec ${copytoram}/bin/sekka-copy-iso-to-ram
     '';
-    environment.etc."xdg/autostart/sekka-copytoram-notice.desktop".text = ''
-      [Desktop Entry]
-      Type=Application
-      Name=Installation media notice
-      Exec=${copytoramNotice}/bin/sekka-copytoram-notice
-      NoDisplay=true
-      X-GNOME-Autostart-enabled=true
-    '';
-    services.desktopManager.plasma6 = {
+    # Aizome, logged in automatically: greetd starts the session at boot
+    # (programs.aizome.greeter's initial session), and Genkan opens in it.
+    # Logging out shows Aizome's login screen.
+    programs.aizome = {
       enable = true;
-      enableQt5Integration = false;
+      wallpapers.night = wallpaper "da-nang-at-night.jpg";
+      wallpapers.day = wallpaper "tokyo-at-dusk.jpg";
+      greeter.enable = true;
     };
     services.displayManager = {
-      plasma-login-manager.enable = true;
+      defaultSession = "aizome";
       autoLogin = {
         enable = true;
         user = "nixos";
       };
     };
-    environment.plasma6.excludePackages = [ pkgs.kdePackages.plasma-workspace-wallpapers ];
-    programs.kde-pim.enable = false;
-    # The live session never dims, blanks, locks or sleeps on its own, like
-    # Ubuntu's. Plasma's laptop defaults lock after 5 minutes, turn the screen
-    # off after 10 and sleep after 15 on AC (5 on battery): an unattended Acer
-    # with an NVIDIA GPU slept and never lit its screen again. While
-    # installing, the helper also holds a logind lock against sleep.
-    environment.etc."xdg/powerdevilrc".text =
-      lib.concatMapStrings
-        (profile: ''
-          [${profile}][Display]
-          DimDisplayWhenIdle=false
-          TurnOffDisplayWhenIdle=false
-          LockBeforeTurnOffDisplay=false
-
-          [${profile}][SuspendAndShutdown]
-          AutoSuspendAction=0
-
-        '')
-        [
-          "AC"
-          "Battery"
-          "LowBattery"
-        ];
-    environment.etc."xdg/kscreenlockerrc".text = ''
-      [Daemon]
-      Autolock=false
-      LockOnResume=false
-    '';
+    # Aizome's welcome tour is for an installed system; the live session
+    # starts with the installer.
+    environment.etc."xdg/autostart/org.aizome.Annai.Welcome.desktop".enable = lib.mkForce false;
+    # The live session never locks or turns its displays off on its own, like
+    # Ubuntu's: Aizome locks after 10 minutes and turns displays off after 15
+    # by default, and an unattended Acer with an NVIDIA GPU that slept never
+    # lit its screen again. Aizome doesn't sleep by itself. While installing,
+    # the helper also holds a logind lock against sleep. Settings writes the
+    # same file if the live user changes them.
+    systemd.tmpfiles.settings."10-installer-desktop" = {
+      "/home/nixos/.config".d = {
+        user = "nixos";
+        group = "users";
+        mode = "0755";
+      };
+      "/home/nixos/.config/aizome".d = {
+        user = "nixos";
+        group = "users";
+        mode = "0755";
+      };
+      "/home/nixos/.config/aizome/settings.toml".f = {
+        user = "nixos";
+        group = "users";
+        mode = "0644";
+        argument = "[idle]\nlock_after_minutes = 0\nmonitors_off_after_minutes = 0";
+      };
+    };
     environment.systemPackages = [
       pkgs.file
       inputs.fh.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -221,8 +208,16 @@ in
       vfat = true;
       zfs = lib.mkForce false;
     };
-    # Keep boot progress and the text-console recovery route visible.
-    boot.plymouth.enable = lib.mkForce false;
+    # Sekka's boot splash, as installed systems show it (DEVELOPERS.md, "Boot
+    # splash"); Esc shows the boot messages. The media's initrd has no GPU
+    # driver, and may be copying the image to memory: draw on the firmware's
+    # framebuffer at once, as encrypted installations do, rather than leave
+    # the screen blank for DeviceTimeout's 8 seconds. The splash moves to the
+    # GPU when its driver loads.
+    calamares.bootSplash.enable = true;
+    boot.plymouth.extraConfig = ''
+      UseSimpledrm=2
+    '';
 
     # The native backend writes the target flake and explicitly selects it.
     # No Python patch, global-storage bridge or nixos-generate-config override.
@@ -237,26 +232,12 @@ in
     # Store path lists of the prebuilt reference systems and applications, read
     # by the installer to warm the page cache for the current selection.
     isoImage.contents = references.lists;
-    systemd.tmpfiles.settings."10-installer-desktop" = {
-      "/home/nixos/Desktop".d = {
-        user = "nixos";
-        group = "users";
-        mode = "0755";
-      };
-      "/home/nixos/Desktop/nixos-manual.desktop"."L+".argument =
-        "/run/current-system/sw/share/applications/nixos-manual.desktop";
-      "/home/nixos/Desktop/gparted.desktop"."L+".argument =
-        "${pkgs.gparted}/share/applications/gparted.desktop";
-      "/home/nixos/Desktop/org.calamares.NixOSRust.desktop"."L+".argument =
-        "${calamares}/share/applications/org.calamares.NixOSRust.desktop";
-    };
-
-    isoImage.edition = lib.mkForce "plasma-determinate-rust";
+    isoImage.edition = lib.mkForce "aizome-determinate-rust";
     isoImage.volumeID = "nixos-determinate-x86_64";
     image.baseName = lib.mkForce "sekka-${config.system.nixos.label}-x86_64-linux";
     # Put the distinguishing information FIRST. The upstream menu appends the
     # distro/revision; our old long branding hid kernel versions on small screens.
-    isoImage.prependToMenuLabel = "${config.boot.kernelPackages.kernel.version} Plasma (default) | ";
+    isoImage.prependToMenuLabel = "${config.boot.kernelPackages.kernel.version} Aizome (default) | ";
     isoImage.appendToMenuLabel = lib.mkForce "";
     isoImage.configurationName = lib.mkForce null;
     specialisation.lts_kernel.configuration =
@@ -268,43 +249,30 @@ in
       }:
       {
         boot.kernelPackages = lib.mkForce pkgs.linuxPackages;
-        isoImage.prependToMenuLabel = lib.mkForce "${config.boot.kernelPackages.kernel.version} Plasma (LTS) | ";
+        isoImage.prependToMenuLabel = lib.mkForce "${config.boot.kernelPackages.kernel.version} Aizome (LTS) | ";
         environment.etc."calamares-nixos/settings.json".text = lib.mkForce (settings "lts");
       };
+    # The recovery entry: the same Aizome session, drawn in software. Aizome's
+    # compositor composites with pixman instead of GLES, its apps draw on the
+    # CPU as they always do, and other programs get Mesa's software GL. There
+    # is no GPU driver for NVIDIA GPUs: neither NVIDIA's nor nouveau.
     specialisation.compatibility.configuration = { config, lib, ... }: {
-      isoImage.prependToMenuLabel = lib.mkForce "${config.boot.kernelPackages.kernel.version} Xfce/X11 (software) | ";
-      services.desktopManager.plasma6.enable = lib.mkForce false;
-      services.displayManager.plasma-login-manager.enable = lib.mkForce false;
-      services.xserver.displayManager.lightdm.enable = true;
-      services.xserver.desktopManager.xfce = {
-        enable = true;
-        enableScreensaver = false;
-      };
-      services.displayManager.defaultSession = lib.mkForce "xfce";
-      # The fallback uses no GPU driver for NVIDIA GPUs: neither NVIDIA's
-      # nor nouveau.
+      isoImage.prependToMenuLabel = lib.mkForce "${config.boot.kernelPackages.kernel.version} Aizome (software) | ";
       services.xserver.videoDrivers = lib.mkForce [
         "modesetting"
         "fbdev"
       ];
       boot.blacklistedKernelModules = [ "nouveau" ];
+      # Through PAM, for the login screen's compositor and the session alike;
+      # aizome-session also hands its environment file to the compositor's
+      # service.
       environment.sessionVariables = {
+        AIZOME_RENDERER = "pixman";
         LIBGL_ALWAYS_SOFTWARE = "1";
-        GSK_RENDERER = "cairo";
       };
-      # Retain native kernel modesetting: nomodeset is a separate upstream boot
-      # menu option, not a blanket workaround for all graphics hardware.
-      services.xserver.deviceSection = ''
-        Option "AccelMethod" "none"
-        Option "SWcursor" "true"
-      '';
-      environment.etc."xdg/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml".text = ''
-        <?xml version="1.0" encoding="UTF-8"?>
-        <channel name="xfwm4" version="1.0">
-          <property name="general" type="empty">
-            <property name="use_compositing" type="bool" value="false"/>
-          </property>
-        </channel>
+      environment.etc."xdg/aizome/environment".text = lib.mkAfter ''
+        AIZOME_RENDERER=pixman
+        LIBGL_ALWAYS_SOFTWARE=1
       '';
     };
     isoImage.squashfsCompression = "zstd -Xcompression-level 6";
@@ -313,9 +281,13 @@ in
     # installation then copies from the media instead of downloading into RAM.
     isoImage.storeContents =
       lib.optional config.respin.cacheApplications applicationCatalog.cache ++ references.toplevels;
+    # The serial console keeps boot logs for VM tests and serial-attached
+    # machines. Plymouth would show only text with one named; the splash
+    # stays on the display.
     boot.kernelParams = [
       "console=ttyS0,115200n8"
       "console=tty0"
+      "plymouth.ignore-serial-consoles"
     ];
 
   };

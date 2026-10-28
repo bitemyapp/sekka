@@ -8,8 +8,11 @@ For every ISO being considered for retention or publication:
 - Q1.2 Boot UEFI USB mass storage and BIOS USB mass storage. Separately boot
   UEFI optical media. Select the actual default menu entry using keys. Check
   the kernel version and the complete boot path, not merely the boot menu.
-- Q1.3 Exercise the advertised LTS and compatibility boot entries. Capture
-  each selected entry, live desktop, kernel, graphics driver and boot errors.
+  Sekka's boot splash shows from the initrd, Esc shows the boot messages, and
+  the splash hands over to the automatically logged-in Aizome session.
+- Q1.3 Exercise the advertised LTS and compatibility boot entries (the
+  compatibility entry draws Aizome with pixman). Capture each selected entry,
+  live desktop, renderer, kernel, graphics driver and boot errors.
 - Q1.4 Confirm `/iso`, `/nix/.ro-store`, writable overlay and `/nix/store` are
   mounted as intended. In the initrd, inspect `/sysroot/nix/.ro-store`, its
   mount unit, source loop device and backing `/iso/nix-store.squashfs`.

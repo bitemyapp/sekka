@@ -7,7 +7,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | Path | Responsibility |
 | --- | --- |
 | `flake.nix`, `flake.lock` | Public outputs and the authoritative external dependency lock |
-| `installer/genkan/` | Rust installer, privileged helper, system modules, application catalog, storage tests |
+| `installer/genkan/` | Genkan: backend and privileged helper (`rust/`), window on Aizome's kit (`ui/`), system modules, application catalog, storage tests |
 | `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
 | `vendor/sidestep/` | Git submodule: the Sidestep fork Aizome builds against in development |
@@ -64,6 +64,7 @@ For focused Rust work, run Cargo inside the development shell:
 
 ```sh
 cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
+cargo test --locked --manifest-path installer/genkan/ui/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
@@ -184,7 +185,7 @@ path for an unmodified graphical installation and disk-only boot.
 The live image's copy-to-RAM path checks available memory against the media size
 plus 4 GiB for the desktop and installer. It keeps the original media mounted
 until the copy is complete and preserves it on copy failure. A fallback boots
-from the media and warns in the live desktop to keep the USB drive or DVD
+from the media, and Genkan warns when it opens to keep the USB drive or DVD
 connected. `nix build .#checks.x86_64-linux.iso-copytoram` tests insufficient
 memory, a real read error, and a successful switch to RAM in a disposable VM;
 `nix build .#checks.x86_64-linux.iso-copytoram-initrd` separately unpacks the
@@ -911,6 +912,59 @@ Nothing removes old paths from the bucket. Do not use R2 lifecycle rules for
 that: unchanged paths keep their first upload date while still in use. R2
 bills storage beyond its free 10 GB a month; downloads are free.
 
+## Genkan
+
+Genkan is two Cargo workspaces in `installer/genkan`:
+
+- `rust/` (`calamares-nixos`): the backend (discovery, validation, the plan,
+  the Wi-Fi snapshot, the helper's session protocol) and the privileged
+  helper, `calamares-nixos-helper`. It has no interface dependencies; the
+  helper, the VM fixture and the storage tests build from it alone.
+- `ui/` (`genkan`, executable `calamares-nixos`): the window, an Aizome app
+  on `aizome-kit`. It depends on the backend and on
+  `desktop/aizome/crates/aizome-kit` by path, and Cargo reads Aizome's
+  workspace manifest for the versions the kit inherits. It isn't a member of
+  Aizome's workspace, so Aizome's package doesn't carry the installer and
+  neither rebuilds the other except through the kit's crates and Sidestep.
+  Its lock was seeded from Aizome's, giving the kit and Sidestep the
+  versions Aizome builds them with; when Aizome's lock moves their
+  dependencies, move Genkan's to match.
+
+`installer/genkan/nix/package.nix` builds the helper from `rust/`'s lock and
+the window from `ui/`'s with the flake's `sidestep` input, then installs the
+helper beside the window: the window starts it through pkexec from its own
+directory, and the Polkit policy names that path. The package keeps the GTK
+interface's executable, desktop entry, application id and policy names.
+
+The window is a kit program (`ui/src/app.rs`): Genkan's state and the
+messages that change it. Disk discovery, memory, time zone detection and
+GitHub run on the kit's workers; page cache warming, review (validation, the
+Wi-Fi snapshot, starting the helper) and the helper's events come from
+threads of their own as messages. Answers to a superseded request are
+dropped, and a superseded helper session with them, which cancels it. The
+views are in `ui/src/view/`; the world map and the partition bar are
+canvases. On the live media the window opens with the Aizome session, and
+says so when copy-to-RAM fell back to the media.
+
+```sh
+nix build .#genkan
+nix develop
+cargo test --locked --manifest-path installer/genkan/ui/Cargo.toml
+```
+
+The tests in `ui/tests/pages.rs` drive the program headlessly with the kit's
+harness, on sample data: every page draws and says what it should, and the
+checks between steps, the review's confirmation and the rule against closing
+while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
+Aizome's type and `TZDIR` for the map; the package's check phase sets both.
+`GENKAN_PICTURES=dir` also writes each page in Night and Day.
+
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|review|ready|prepfail|install|done|failed`
+opens the window on that page with sample data, touching no disks, network or
+helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
+neither. Outside the live media only previews are useful: reviewing reads the
+media's root-owned settings and starts the helper through Polkit.
+
 ## Aizome
 
 Aizome's source is in `desktop/aizome`, a Cargo workspace of its own with its
@@ -1274,9 +1328,11 @@ swap, Aizome and Plasma. It includes two disk-only boots without the ISO or a
 shared host store, wrong-passphrase rejection, graphical login to both desktops,
 application use, file persistence and working TRIM. Installation used the ISO's
 Xfce/X11 compatibility entry: Genkan's page rendering got stuck in the default
-Plasma live session. That rendering issue remains unresolved. This run also
-found and fixed Aizome's omission from `respin.referenceDesktops`; keeping its
-closure on the ISO avoids compiling the default desktop in the live tmpfs.
+Plasma live session. That was GTK's rendering in Plasma; Genkan's window is now
+Aizome's kit in an Aizome live session (see "Genkan"), which this record
+predates. This run also found and fixed Aizome's omission from
+`respin.referenceDesktops`; keeping its closure on the ISO avoids compiling the
+default desktop in the live tmpfs.
 It does not establish a full BIOS install, physical hardware support, encrypted
 hibernation or an installed-system update. The record separates these limits
 from the component checks above.
@@ -1346,8 +1402,12 @@ starts. When shutting down or
 restarting, the label "Shutting down" or "Restarting" takes the rail's place. A
 passphrase request gets the Aizome lock screen's field. Esc shows the boot
 messages at any time, and after 15 seconds of starting, not counting time at a
-passphrase prompt, the splash says so. The live ISO shows boot messages instead
-(`modules/installer.nix`).
+passphrase prompt, the splash says so. The live media show the same splash
+(`modules/installer.nix`), with `UseSimpledrm=2` as on encrypted systems: their
+initrd has no GPU driver and may be copying the image to memory, so the splash
+draws on the firmware's framebuffer at once and moves to the GPU when its
+driver loads. They also name a serial console for boot logs, so they pass
+`plymouth.ignore-serial-consoles`, without which Plymouth shows only text.
 
 On a disk Genkan encrypted, the splash asks for the passphrase in the initrd.
 Swap opens after root, with the passphrase root opened with, so one passphrase

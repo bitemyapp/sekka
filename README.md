@@ -22,11 +22,11 @@ Images below link to their original, full-resolution PNGs, captured with a scale
 
 ### Genkan: welcome home
 
-Choose your disk, account, desktop, applications, and location. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk.
+Choose your disk, account, desktop, applications, and location. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk. Genkan opens when the live session starts, and it is an Aizome app: it shares Aizome's look and menu bar, and follows its Night and Day themes.
 
 [![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
 
-*Genkan's window in preview mode, with sample data, on Sekka's Plasma session.*
+*Genkan's window in preview mode, with sample data, in Aizome.*
 
 You can enable **LUKS2 disk encryption** on the disk page and choose a separate passphrase to unlock the system at startup. The system, personal files and optional swap are encrypted; boot files remain unencrypted. It works with ext4, Btrfs or XFS, using UEFI or legacy BIOS. Encryption is off by default. Remember the disk passphrase: changing your login password does not change it, and Genkan cannot recover it. TRIM is enabled through encryption to let SSDs reclaim space; this reveals which disk blocks are unused. Encrypted installation has not been validated on physical hardware.
 
@@ -138,7 +138,7 @@ See what's installed and why, find software, check for updates, return to an ear
 
 ### Prefer a familiar desktop?
 
-Plasma is the default live desktop. GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen: Aizome's own when Aizome is installed, listing every desktop you chose, and GDM when GNOME is, since GNOME locks its screen only under GDM (`calamares.loginScreen` chooses otherwise).
+Plasma, GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen: Aizome's own when Aizome is installed, listing every desktop you chose, and GDM when GNOME is, since GNOME locks its screen only under GDM (`calamares.loginScreen` chooses otherwise).
 
 [![Plasma with Konsole and Dolphin](docs/images/sekka/plasma.png)](docs/images/sekka/plasma.png)
 
@@ -150,7 +150,7 @@ Plasma is the default live desktop. GNOME and Xfce are available too. Multiple i
 
 To put a nightly on a USB drive, [Kakehashi](apps/kakehashi/README.md) lists them, downloads and checks the one you pick, writes it, and reads every byte back, on Linux, macOS or Windows. On Sekka, install it from **Yukimi → Discover**. Kakehashi is new: so far it has written only virtual drives, and its macOS and Windows builds are GitHub workflow artifacts. Any tool that writes a raw disk image also works.
 
-To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image starts a live Plasma session with Genkan. The boot menu also offers an older kernel and an Xfce software-rendering recovery session. Check the live desktop on your hardware before considering installation.
+To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image shows Sekka's boot splash (Esc shows the boot messages), then starts a live Aizome session with Genkan open. The boot menu also offers an older kernel and a recovery entry that draws the same Aizome session in software, without a GPU driver for NVIDIA graphics. Check the live desktop on your hardware before considering installation.
 
 Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
 

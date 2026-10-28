@@ -207,7 +207,7 @@ Both repositories use the branch `claude/fast-install-hyprland`, created from
 | Installed-system modules (desktops, tuning, Hyprland, Tatami and its Rust tool, NVIDIA) | calamares `rust/system/`, exported as `nixosModules` by calamares `flake.nix` |
 | GPU detection (NVIDIA, integrated GPU, which one drives the displays) | calamares `rust/src/graphics.rs`; probe with `cargo run --example detect-graphics` |
 | Reference system for prebuilt media closures | calamares `rust/reference.nix` (sync test in `config.rs`) |
-| libadwaita GUI | calamares `rust/src/ui.rs`, `rust/src/ui/`, `rust/data/style.css` |
+| Genkan's window, on Aizome's kit (the libadwaita GUI it replaced was calamares `rust/src/ui.rs`) | `installer/genkan/ui/` |
 | Media integration (reference systems, closure lists, zram, options) | graphical `modules/installer.nix`, `nix/reference-systems.nix`, `nix/calamares.nix` |
 | VM harness changes (local fixture, sizing, USB throttle, timing) | graphical `rust/src/vm.rs`, `rust/src/builder.rs` |
 | User-facing docs | graphical `README.md`, `docs/fast-install.md`, `docs/tuning.md`, `docs/hyprland.md` |
