@@ -48,6 +48,12 @@
   src,
   yukimiSrc,
   sidestep,
+  fonts,
+  bash,
+  weston,
+  tzdata,
+  makeFontsConf,
+  noto-fonts-cjk-sans,
   version ? "0.1.0",
   rev ? null,
 }:
@@ -106,6 +112,11 @@ in
 rustPlatform.buildRustPackage {
   pname = "aizome";
   inherit version;
+  # Share the native app without retaining the compositor and other apps.
+  outputs = [
+    "out"
+    "yukimi"
+  ];
   src = source;
   sourceRoot = "aizome-source/desktop/aizome";
   cargoLock.lockFile = "${src}/Cargo.lock";
@@ -180,9 +191,28 @@ rustPlatform.buildRustPackage {
     runHook postBuild
   '';
 
-  # The tests need a Wayland display, D-Bus services or a GPU; they run in
-  # the VM test and in development, not in the sandbox.
-  doCheck = false;
+  # Yukimi's headless interactions and rendering run without a desktop.
+  # Session, D-Bus and GPU coverage remain in the component VMs.
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+    export AIZOME_FONT_DIR=${fonts}
+    # Tests run before postFixup adds the libraries opened with dlopen.
+    export LD_LIBRARY_PATH=${lib.makeLibraryPath runtimeLibs}
+    # The brand's Japanese glyphs use the same fallback as the desktops.
+    # A sandbox has no system font directories of its own.
+    export FONTCONFIG_FILE=${
+      makeFontsConf {
+        fontDirectories = [
+          fonts
+          noto-fonts-cjk-sans
+        ];
+      }
+    }
+    export TZDIR=${tzdata}/share/zoneinfo
+    cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
+    runHook postCheck
+  '';
 
   installPhase = ''
     runHook preInstall
@@ -229,15 +259,29 @@ rustPlatform.buildRustPackage {
     done
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
+    mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps
+    mv $out/bin/aizome-yukimi $yukimi/libexec/
+    substitute apps/yukimi/data/yukimi-launch $yukimi/bin/aizome-yukimi \
+      --subst-var-by bash ${bash}/bin/bash \
+      --subst-var-by app "$yukimi/libexec/aizome-yukimi" \
+      --subst-var-by weston ${weston}/bin/weston
+    chmod +x $yukimi/bin/aizome-yukimi
+    ln -s aizome-yukimi $yukimi/bin/yukimi
+    mv $out/share/applications/org.aizome.Yukimi.desktop $yukimi/share/applications/
+    mv $out/share/icons/hicolor/scalable/apps/org.aizome.Yukimi.svg $yukimi/share/icons/hicolor/scalable/apps/
+    ln -s $yukimi/bin/aizome-yukimi $out/bin/aizome-yukimi
+    ln -s $yukimi/share/applications/org.aizome.Yukimi.desktop $out/share/applications/
+    ln -s $yukimi/share/icons/hicolor/scalable/apps/org.aizome.Yukimi.svg $out/share/icons/hicolor/scalable/apps/
     runHook postInstall
   '';
 
   postFixup = ''
-    for bin in $out/bin/*; do
-      if isELF "$bin"; then
+    for bin in $out/bin/* $yukimi/libexec/*; do
+      if [ ! -L "$bin" ] && isELF "$bin"; then
         patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} "$bin"
       fi
     done
+    wrapProgram $yukimi/libexec/aizome-yukimi --set-default AIZOME_FONT_DIR ${fonts}
     # The compositor finds its core and std beside it (its own rpath says
     # $ORIGIN/../lib/aizome); they and the logic find each other there.
     for so in $out/lib/aizome/*.so; do

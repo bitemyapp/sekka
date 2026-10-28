@@ -11,7 +11,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
 | `vendor/sidestep/` | Git submodule: the Sidestep fork Aizome builds against in development |
-| `apps/yukimi/` | GTK application, privileged helper, store/configuration/system libraries |
+| `apps/yukimi/` | Privileged helper, CLI, and store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
@@ -1007,21 +1007,62 @@ current Sekka worktree, then `~/work/sekka/desktop/aizome`. `--checkout`
 accepts either the Sekka root or its Aizome component. `CARGO_BUILD_JOBS`
 can limit build concurrency without changing the core's ABI.
 
-The native Yukimi interface stays in `desktop/aizome/apps/yukimi`; both it
-and the GTK interface use the canonical backend libraries under
-`apps/yukimi/crates`. Their Cargo workspaces and locks remain separate.
-Aizome's package copies only its component, those shared libraries and their
-workspace manifest, plus the pinned Sidestep source. Editing unrelated
-Sekka components or Yukimi's GTK interface does not rebuild Aizome.
-`aizome-dev watch` includes the shared backend and rebuilds native Yukimi
-when it changes. Aizome retains bundled SQLite through `yukimi-store`'s
-`bundled` feature; GTK keeps its system SQLite dependency.
+Yukimi has one native interface in `desktop/aizome/apps/yukimi`, used by
+Aizome, Tatami and the other desktops. `apps/yukimi` keeps the privileged
+helper, CLI and canonical backend libraries in its separate Cargo workspace.
+Aizome's build exposes a `yukimi` runtime output containing only the window,
+launcher, desktop entry and icon; the main output links to it. The root
+`yukimi` package combines that output with the independently built helper.
+Tatami therefore does not retain Aizome's compositor, shell or other apps.
+The `yukimi` and `aizome-yukimi` commands launch the same app, with Aizome's
+Archivo and IBM Plex Mono fonts available even outside its session.
+
+Wayland sessions launch directly. On X11, the launcher opens a private Weston
+X11 window with its kiosk shell and software renderer. Weston follows the
+app's lifetime; closing either window ends the nested session. This adds
+another process and buffers only on X11. `programs.yukimi.*`, `sekka-update`
+and the helper's Polkit action remain compatible. The app uses bundled SQLite;
+the helper workspace uses system SQLite. Slow reads and changes stay off the
+interface thread, and only the authenticated helper changes the system.
+
+Aizome's package still copies only its component, shared backend and workspace
+manifest, and pinned Sidestep. Helper-only changes do not rebuild the window.
+`aizome-dev watch` includes the shared backend. Component GUI checks run with
+`nix build .#checks.x86_64-linux.yukimi-tatami` and
+`nix build .#checks.x86_64-linux.yukimi-x11`; these are not ISO qualification.
+
+The [October 2026 resource comparison](docs/test-results/yukimi-unified-2026-10-27.json)
+records three trials of each frontend in a private GPU-backed Tatami compositor
+on Intel integrated graphics, plus a Tatami-only software-rendered VM with no
+Aizome session. At 2560 × 1600, scale 2, the animated Overview's median app PSS
+was 87.3 MiB for GTK and 64.9 MiB for native Yukimi. App CPU was 7.3% and 3.9%
+of one logical core; compositor CPU was 1.5% and 2.7%. Render-engine activity
+was 2.7%/1.8% for GTK/the compositor and 0%/3.3% for native/the compositor.
+The native app draws into shared-memory buffers; the compositor still uses
+the GPU. On Installed, app PSS was 93.2/65.7 MiB and app CPU 0.4%/0.0%.
+Including compositor changes and subtracting each trial's empty compositor,
+Overview added a median 84.2 MiB PSS for GTK and 66.7 MiB for native Yukimi.
+
+This GPU has no dedicated VRAM. Overview's resident GTT buffers were
+123.0/202.3 MiB for GTK/the compositor and 0/158.4 MiB for native/the compositor.
+Shared buffers overlap between processes: these are not additive private
+allocations or extra amounts to add to PSS. The isolated VM's app PSS was
+306.3/28.3 MiB on Overview, confirming that native Yukimi does not require
+another Aizome app to keep its RAM cost low; software rendering accounts for
+much of GTK's higher VM cost. Startup, cold package indexing, discrete GPUs
+and a physical Tatami login are outside these measurements.
+
+The standalone uncompressed runtime closure grew from 896.2 to 1058.4 MiB,
+including Weston for X11. Copying only the eight bundled font files avoids
+retaining 382.3 MiB of unused font families. These are store sizes, not RAM or
+the incremental size of an already installed Tatami system. Builds and VM
+checks ran on `wx-workstation`; hardware sampling used the exact built ELFs.
 
 The shared backend's Aizome completion check uses the local
-`desktop/aizome/crates/aizome-ipc` protocol crate. GTK's package includes only
+`desktop/aizome/crates/aizome-ipc` protocol crate. The helper package includes only
 that crate and its workspace manifest from Aizome, plus the session launcher
 used by its environment-record regression. Keep these inputs narrow rather
-than copying the whole desktop into the GTK build. Both frontends perform
+than copying the whole desktop into the helper build. The frontend performs
 session inspection without helper privileges; the helper's system-only check
 never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
@@ -2206,7 +2247,9 @@ is not included in the ISO or the normal component checks.
 Discover the same way, on a Tatami VM with Genkan's application catalog and
 unfree software allowed. Yukimi makes its package list from the VM's Nixpkgs,
 searches for `steam`, opens the package's details and asks to install Steam
-for everyone; the confirmation is cancelled, and the test checks that nothing
-changed. It reads the expected text from part of each capture with Tesseract.
-The pointer positions and those parts assume Yukimi's current layout. Its
-captures are for review, not for `docs/screenshots.md`.
+for everyone. It cancels both the confirmation and the real Polkit prompt,
+checking that neither changes the configuration. The same check covers the
+application launcher, single-instance page requests, clipboard commands,
+fractional scaling and a smaller display. Tesseract reads the full captures
+and locates clickable labels. Captures are component-test evidence; record
+that provenance if using one in the gallery.

@@ -54,8 +54,8 @@ let
       (lib.fileset.maybeMissing ../session)
     ];
   };
-  # Only the shared backend and its workspace metadata, not Yukimi's GTK
-  # interface or privileged helper. Their edits must not rebuild Aizome.
+  # Only the shared backend and its workspace metadata, not the privileged
+  # helper. Helper-only edits must not rebuild Aizome.
   yukimiSrc = lib.fileset.toSource {
     root = ../../../apps/yukimi;
     fileset = lib.fileset.unions [
@@ -76,6 +76,7 @@ let
           sidestep
           version
           rev
+          fonts
           ;
       };
       archivo = pkgs.callPackage ./fonts.nix { };

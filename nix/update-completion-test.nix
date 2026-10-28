@@ -70,7 +70,8 @@ pkgs.testers.runNixOSTest {
     environment.etc."icewm/winoptions".text = ".startMaximized: 1\n";
     specialisation.live.configuration.environment.etc."update-test".text = "live";
     specialisation.restart.configuration.boot.kernelParams = [ "sekka-update-test=1" ];
-    specialisation.loginChange.configuration.systemd.services.display-manager.environment.YUKIMI_TEST = "changed";
+    specialisation.loginChange.configuration.systemd.services.display-manager.environment.YUKIMI_TEST =
+      "changed";
     # Only the login screen's list of sessions differs, in the display
     # manager's XDG_DATA_DIRS: another entry beside the same one. NixOS
     # doesn't restart it for that.
@@ -151,7 +152,7 @@ pkgs.testers.runNixOSTest {
     # The status survives closing and reopening Yukimi; no background GUI.
     assert status()["action"] == "reboot", status()
     machine.wait_for_x()
-    machine.succeed("su - demo -c 'DISPLAY=:0 GSK_RENDERER=cairo yukimi > /tmp/yukimi.log 2>&1 &' ")
+    machine.succeed("su - demo -c 'DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 yukimi > /tmp/yukimi.log 2>&1 &' ")
     try:
         machine.wait_until_succeeds("pgrep -u demo -f yukimi", timeout=20)
     except Exception:

@@ -59,7 +59,7 @@ The mark is a *yukiwa* 雪輪, the snow ring of Japanese family crests: six circ
 
 - Bar and menu glyphs come from JetBrainsMono Nerd Font (Material Design Icons, such as U+F0343 for Logout) at `bar-glyph`.
 - Component icons sit on a square `surface` tile in flat Tokyo Night fills. `genkan.svg` is a noren, an entrance curtain, in `indigo`, with the crest in `text-strong` dyed across it and split by the slits as on real cloth. `tatami.svg` is a four-and-a-half-mat room: four mats around a half mat, which also reads as tiled windows with the focused one in `accent`.
-- Yukimi's shipping icon is a shōji frame round a snowy night. It still uses NixOS blues and a cream frame and does not follow this system yet.
+- Yukimi ships Aizome's square shōji icon, with falling snow below the paper panes. The same icon and native interface are used across Sekka's desktops.
 - The bar's menu button shows the NixOS logo today, and Genkan's welcome page shows the `nix-snowflake` icon. Adopting this system replaces both with the crest (`sekka-symbolic.svg` in the bar).
 
 ## Motion
@@ -70,6 +70,6 @@ The mark is a *yukiwa* 雪輪, the snow ring of Japanese family crests: six circ
 ## Files
 
 - `logos/`: the crests, the symbolic glyph, the application icon, and Night and Day versions of the horizontal and stacked lockups and the wordmark. Every file names its ink; none uses `currentColor`.
-- `family/`: proposed icons for Genkan (`genkan.svg`) and Tatami (`tatami.svg`). Yukimi's icon stays at `apps/yukimi/yukimi/data/io.github.bitemyapp.Yukimi.svg`.
+- `family/`: proposed icons for Genkan (`genkan.svg`) and Tatami (`tatami.svg`). Yukimi's icon is at `desktop/aizome/icons/apps/org.aizome.Yukimi.svg`.
 - `tokens.json`: every colour with its Night and Day value and where it is used, and the type, spacing, radius, size and border tokens. Night values are Tatami's own, from `desktop/tatami/config`.
 - `generate.py`: draws every SVG above. Change the script and regenerate rather than editing an SVG by hand; its header has the command, which takes the fonts from the root flake's Nixpkgs.

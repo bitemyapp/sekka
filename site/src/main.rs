@@ -69,7 +69,7 @@ const BRAND_FILES: [(&str, &str); 8] = [
     ("tatami.svg", "docs/brand/family/tatami.svg"),
     (
         "yukimi.svg",
-        "apps/yukimi/yukimi/data/io.github.bitemyapp.Yukimi.svg",
+        "desktop/aizome/icons/apps/org.aizome.Yukimi.svg",
     ),
 ];
 

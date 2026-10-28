@@ -1,0 +1,1848 @@
+{
+  "date": "2026-10-28",
+  "scope": "Yukimi component integration and resource comparison; not ISO qualification",
+  "baseline_revision": "74316b96fbe736f3a4c9c7264dc649ca52d947f1",
+  "branch": "deduplicate-yukimi",
+  "flake_lock_sha256": "e9d393a66c690410e699b9da17760648d95a09375cdba91e785185a7e550f981",
+  "hardware": {
+    "gpu": "Intel integrated graphics, PCI 8086:b090, xe driver",
+    "kernel": "7.3.0",
+    "cpu": "Intel(R) Core(TM) Ultra 7 365",
+    "dedicated_vram": "Not present on this integrated GPU. DRM resident GTT buffers use system RAM.",
+    "session": "Private GPU-backed nested Hyprland with the shipped Tatami Lua configuration, headless 2560x1600 output at scale 2 and 60 Hz. The host session was Aizome; no physical monitor or host system configuration was changed.",
+    "method": "Three fresh compositor instances per frontend. Measure 30 seconds each on settled Overview and Installed. CPU is percent of one logical core from /proc/PID/stat; PSS and private RAM from smaps_rollup; DRM fdinfo clients deduplicated by PCI device/client ID. GPU engine percentages use cycle deltas divided by total-cycle deltas. Font and system page caches were warm. Startup and cold Nixpkgs indexing are outside these intervals.",
+    "limitations": [
+      "PSS can share pages with the outer Aizome session; separate Tatami-only VM measurements establish isolated RAM costs.",
+      "Graphics buffers shared by clients and the compositor are reported separately; do not add them as private VRAM or add them to PSS.",
+      "Only this Intel GPU was measured, not discrete NVIDIA/AMD VRAM or a physical Tatami login.",
+      "The native app rasterizes into shared-memory buffers; its zero direct DRM use does not mean zero compositor GPU cost."
+    ],
+    "execution": "Exact remote package ELFs were extracted locally because this host cannot import unsigned remote store paths. Runtime dependencies were the same Nix store libraries. Launcher environment was reproduced, Aizome shell sockets unset, and the packaged font bundle copied byte-for-byte. The final package and hardware benchmark use identical ELF and font bytes.",
+    "trials": {
+      "gtk": {
+        "empty": [
+          {
+            "file": "gtk-trial1-empty.json",
+            "sha256": "c088338f31d3e75e86736a0525fe88708044734d6dcbf127ef683d73489296c8",
+            "seconds": 10.000290474003123,
+            "processes": [
+              {
+                "pid": 886045,
+                "cpu_percent_one_core": 2.099939002231171,
+                "mean_pss_mib": 87.69353693181819,
+                "peak_rss_mib": 142.390625,
+                "mean_private_mib": 70.65234375,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.138581016962874,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.0859375,
+                    "peak_mib": 138.0859375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial2-empty.json",
+            "sha256": "83088284dab1e319d93c5de26c0412ec601cb17adde4e64ba7daa4e1a7222990",
+            "seconds": 9.99973476100422,
+            "processes": [
+              {
+                "pid": 902682,
+                "cpu_percent_one_core": 2.1000557016665393,
+                "mean_pss_mib": 86.14177911931819,
+                "peak_rss_mib": 142.90625,
+                "mean_private_mib": 70.35369318181819,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.1217017963169065,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.21484375,
+                    "peak_mib": 138.21484375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial3-empty.json",
+            "sha256": "bba419fde50919e7a660cd716a897b67185551321aea64cf88f94f605ed037e1",
+            "seconds": 9.99823754299723,
+            "processes": [
+              {
+                "pid": 919524,
+                "cpu_percent_one_core": 1.600282042829279,
+                "mean_pss_mib": 95.67116477272727,
+                "peak_rss_mib": 142.98046875,
+                "mean_private_mib": 70.3057528409091,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.555772644950664,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.21484375,
+                    "peak_mib": 138.21484375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "overview": [
+          {
+            "file": "gtk-trial1-overview.json",
+            "sha256": "63184958b05bcbcdbbfe81e92108d6ba7e6543b39b0151ba4536f07684a8550f",
+            "seconds": 30.00077726499876,
+            "processes": [
+              {
+                "pid": 889142,
+                "cpu_percent_one_core": 7.799797916336074,
+                "mean_pss_mib": 87.2614037298387,
+                "peak_rss_mib": 135.65234375,
+                "mean_private_mib": 79.30380544354838,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 2.6661682411416243,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 122.98815524193549,
+                    "peak_mib": 122.98828125
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 886045,
+                "cpu_percent_one_core": 1.5332238468919828,
+                "mean_pss_mib": 84.61469884072581,
+                "peak_rss_mib": 143.55859375,
+                "mean_private_mib": 68.65524193548387,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 1.7219565354856325,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 206.37449596774192,
+                    "peak_mib": 266.15234375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial2-overview.json",
+            "sha256": "be0ed7d87fa515df488e93ecf9d8657f46599830d07c8dcb8d2273db263bae12",
+            "seconds": 29.99977412599401,
+            "processes": [
+              {
+                "pid": 906736,
+                "cpu_percent_one_core": 7.300054963088615,
+                "mean_pss_mib": 86.88545866935483,
+                "peak_rss_mib": 135.78125,
+                "mean_private_mib": 80.08291330645162,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 2.7473975737108596,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 122.90952620967742,
+                    "peak_mib": 122.98828125
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 902682,
+                "cpu_percent_one_core": 1.466594809045198,
+                "mean_pss_mib": 83.56713079637096,
+                "peak_rss_mib": 143.8046875,
+                "mean_private_mib": 68.0234375,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 1.80543117169193,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 202.1946824596774,
+                    "peak_mib": 202.21484375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial3-overview.json",
+            "sha256": "52aeb70738488758b58ffcca1d9ee7c34243fb3a19e4930edbeb212fca7ceea7",
+            "seconds": 29.999675416998798,
+            "processes": [
+              {
+                "pid": 920000,
+                "cpu_percent_one_core": 6.400069245122783,
+                "mean_pss_mib": 91.24461315524194,
+                "peak_rss_mib": 135.68359375,
+                "mean_private_mib": 79.89566532258064,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 3.4122569085361323,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 122.98828125,
+                    "peak_mib": 122.98828125
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 919524,
+                "cpu_percent_one_core": 1.4000128936987832,
+                "mean_pss_mib": 87.63687626008064,
+                "peak_rss_mib": 143.76953125,
+                "mean_private_mib": 67.84677419354838,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.041472056034251,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 202.3156502016129,
+                    "peak_mib": 202.33984375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "installed": [
+          {
+            "file": "gtk-trial1-installed.json",
+            "sha256": "aa4a8671ad416f0c36610cff247c0d85f6bf78c401d4b2c9dfbac6b1425444e8",
+            "seconds": 29.99767481600429,
+            "processes": [
+              {
+                "pid": 889142,
+                "cpu_percent_one_core": 0.43336692192770454,
+                "mean_pss_mib": 89.05755418346774,
+                "peak_rss_mib": 138.29296875,
+                "mean_private_mib": 81.85660282258064,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 126.10546875,
+                    "peak_mib": 126.10546875
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 886045,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 84.28692036290323,
+                "peak_rss_mib": 144.34765625,
+                "mean_private_mib": 68.75541834677419,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 266.0234375,
+                    "peak_mib": 266.0234375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial2-installed.json",
+            "sha256": "74fb8868cedf26d61bca68ae8218f1b110d64c6b289a36f907104c7b28437c36",
+            "seconds": 29.999113384001248,
+            "processes": [
+              {
+                "pid": 906736,
+                "cpu_percent_one_core": 0.40001182189603274,
+                "mean_pss_mib": 93.19168976814517,
+                "peak_rss_mib": 140.0859375,
+                "mean_private_mib": 84.47857862903226,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 126.10546875,
+                    "peak_mib": 126.10546875
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 902682,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 85.41245589717742,
+                "peak_rss_mib": 143.80859375,
+                "mean_private_mib": 68.02734375,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 202.16796875,
+                    "peak_mib": 202.16796875
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "gtk-trial3-installed.json",
+            "sha256": "7a701ba1c495809efd03ef67993dd279acb1d167d232e9e1ffb52042dcbae0db",
+            "seconds": 30.001198696998472,
+            "processes": [
+              {
+                "pid": 920000,
+                "cpu_percent_one_core": 0.433316019512934,
+                "mean_pss_mib": 93.69915574596774,
+                "peak_rss_mib": 137.94921875,
+                "mean_private_mib": 82.29574092741936,
+                "drm_clients": 2,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 126.10546875,
+                    "peak_mib": 126.10546875
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 64.0,
+                    "peak_mib": 64.0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              },
+              {
+                "pid": 919524,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 87.81810735887096,
+                "peak_rss_mib": 143.83203125,
+                "mean_private_mib": 67.94871471774194,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 202.29296875,
+                    "peak_mib": 202.29296875
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 124.0078125,
+                    "peak_mib": 124.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "native": {
+        "empty": [
+          {
+            "file": "native-trial1-empty.json",
+            "sha256": "f5b731d11da0bf3b69ed41ac3865fcd4614e44997ade5d9cae12a748b3af2ed1",
+            "seconds": 9.999289892999514,
+            "processes": [
+              {
+                "pid": 931292,
+                "cpu_percent_one_core": 1.90013492991156,
+                "mean_pss_mib": 96.36168323863636,
+                "peak_rss_mib": 143.29296875,
+                "mean_private_mib": 70.68714488636364,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.1203242247957044,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.0859375,
+                    "peak_mib": 138.0859375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial2-empty.json",
+            "sha256": "19e005bf2ced62ce6db5bdd3616143d34b585dbde917ffa7453febf36171eb6b",
+            "seconds": 10.000757872003305,
+            "processes": [
+              {
+                "pid": 934575,
+                "cpu_percent_one_core": 1.8998560152315744,
+                "mean_pss_mib": 96.35289417613636,
+                "peak_rss_mib": 143.37109375,
+                "mean_private_mib": 70.78480113636364,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 3.0184839666892955,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.27734375,
+                    "peak_mib": 138.27734375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial3-empty.json",
+            "sha256": "154ee0c4a963251e0a871f9c2a0e6bf2beca444835e1dd8c6eef8d306914e864",
+            "seconds": 10.006467215003795,
+            "processes": [
+              {
+                "pid": 936006,
+                "cpu_percent_one_core": 1.8987720233082075,
+                "mean_pss_mib": 95.7696200284091,
+                "peak_rss_mib": 143.171875,
+                "mean_private_mib": 70.390625,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.9553896159540747,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 138.27734375,
+                    "peak_mib": 138.27734375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "overview": [
+          {
+            "file": "native-trial1-overview.json",
+            "sha256": "727181ee40869e29ab86b7942c6fb3bb70ca7c609ef3e387059c04fe2337b353",
+            "seconds": 30.000176793997525,
+            "processes": [
+              {
+                "pid": 931636,
+                "cpu_percent_one_core": 3.9666432907091957,
+                "mean_pss_mib": 72.65328881048387,
+                "peak_rss_mib": 94.9296875,
+                "mean_private_mib": 56.871975806451616,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 931292,
+                "cpu_percent_one_core": 2.6666061325747217,
+                "mean_pss_mib": 106.18516885080645,
+                "peak_rss_mib": 174.8046875,
+                "mean_private_mib": 69.4241431451613,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 3.3069833692366677,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 162.39667338709677,
+                    "peak_mib": 222.21484375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial2-overview.json",
+            "sha256": "5ee203247fda4340df09ffec3185741ab45c5b4e5b2550cc7f1b73abce597aa3",
+            "seconds": 30.00011128400365,
+            "processes": [
+              {
+                "pid": 935168,
+                "cpu_percent_one_core": 3.8999855331331896,
+                "mean_pss_mib": 63.82154107862903,
+                "peak_rss_mib": 78.71484375,
+                "mean_private_mib": 55.5234375,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 934575,
+                "cpu_percent_one_core": 2.666603965296459,
+                "mean_pss_mib": 97.88492313508064,
+                "peak_rss_mib": 159.0,
+                "mean_private_mib": 68.63961693548387,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 3.655740047042365,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 158.40032762096774,
+                    "peak_mib": 158.40234375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial3-overview.json",
+            "sha256": "d97790a21cca8a229cfb6efea9b7c706f568ee8541c5051cd02474b4f13c43bf",
+            "seconds": 29.999515441995754,
+            "processes": [
+              {
+                "pid": 936223,
+                "cpu_percent_one_core": 3.833395250078395,
+                "mean_pss_mib": 64.94380040322581,
+                "peak_rss_mib": 79.9296875,
+                "mean_private_mib": 56.79296875,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 936006,
+                "cpu_percent_one_core": 2.6006096364719227,
+                "mean_pss_mib": 97.51420740927419,
+                "peak_rss_mib": 158.82421875,
+                "mean_private_mib": 68.40599798387096,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 2.3862279984594954,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 158.38621471774192,
+                    "peak_mib": 158.40234375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "installed": [
+          {
+            "file": "native-trial1-installed.json",
+            "sha256": "712cb6064e660c2ac0fa161118cd9842dce88f9b1a64060fdfd5f691328dc282",
+            "seconds": 29.99997039700247,
+            "processes": [
+              {
+                "pid": 931636,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 73.22104964717742,
+                "peak_rss_mib": 95.4609375,
+                "mean_private_mib": 57.48689516129032,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 931292,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 106.29501638104838,
+                "peak_rss_mib": 174.8671875,
+                "mean_private_mib": 69.49848790322581,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 218.0234375,
+                    "peak_mib": 218.0234375
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial2-installed.json",
+            "sha256": "0f88ae0cd2636f493968bc26b87a5f3ef9ecb7cf75799f31e1eb2a12148b30b7",
+            "seconds": 30.000155209003424,
+            "processes": [
+              {
+                "pid": 935168,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 64.41094380040323,
+                "peak_rss_mib": 79.25,
+                "mean_private_mib": 56.1796875,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 934575,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 97.87314138104838,
+                "peak_rss_mib": 159.0625,
+                "mean_private_mib": 68.69921875,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 172.73828125,
+                    "peak_mib": 172.73828125
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "native-trial3-installed.json",
+            "sha256": "c1d023b354766412718073ada9a321841b028a670b27d0cbc7789cf27e7f166e",
+            "seconds": 30.00001553999755,
+            "processes": [
+              {
+                "pid": 936223,
+                "cpu_percent_one_core": 0.0,
+                "mean_pss_mib": 65.70797631048387,
+                "peak_rss_mib": 80.51171875,
+                "mean_private_mib": 57.5,
+                "drm_clients": 0,
+                "engine_percent": {},
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0,
+                    "peak_mib": 0
+                  }
+                }
+              },
+              {
+                "pid": 936006,
+                "cpu_percent_one_core": 0.03333781519142415,
+                "mean_pss_mib": 97.6839087701613,
+                "peak_rss_mib": 158.88671875,
+                "mean_private_mib": 68.46975806451613,
+                "drm_clients": 3,
+                "engine_percent": {
+                  "rcs": 0.0,
+                  "vcs": 0.0,
+                  "vecs": 0.0,
+                  "bcs": 0.0,
+                  "ccs": 0.0
+                },
+                "graphics_buffers": {
+                  "drm-resident-gtt": {
+                    "mean_mib": 172.67578125,
+                    "peak_mib": 172.67578125
+                  },
+                  "drm-shared-gtt": {
+                    "mean_mib": 60.0078125,
+                    "peak_mib": 60.0078125
+                  },
+                  "drm-resident-system": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-resident-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  },
+                  "drm-shared-vram": {
+                    "mean_mib": 0.0,
+                    "peak_mib": 0.0
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "medians": {
+      "gtk": {
+        "empty": [
+          {
+            "mean_pss_mib": 87.69353693181819,
+            "mean_private_mib": 70.35369318181819,
+            "peak_rss_mib": 142.90625,
+            "cpu_percent_one_core": 2.099939002231171,
+            "render_engine_percent": 2.138581016962874,
+            "pss_trial_range_mib": [
+              86.14177911931819,
+              95.67116477272727
+            ],
+            "drm-resident-gtt_mib": 138.21484375,
+            "drm-shared-gtt_mib": 60.0078125
+          }
+        ],
+        "overview": [
+          {
+            "mean_pss_mib": 87.2614037298387,
+            "mean_private_mib": 79.89566532258064,
+            "peak_rss_mib": 135.68359375,
+            "cpu_percent_one_core": 7.300054963088615,
+            "render_engine_percent": 2.7473975737108596,
+            "pss_trial_range_mib": [
+              86.88545866935483,
+              91.24461315524194
+            ],
+            "drm-resident-gtt_mib": 122.98815524193549,
+            "drm-shared-gtt_mib": 64.0
+          },
+          {
+            "mean_pss_mib": 84.61469884072581,
+            "mean_private_mib": 68.0234375,
+            "peak_rss_mib": 143.76953125,
+            "cpu_percent_one_core": 1.466594809045198,
+            "render_engine_percent": 1.80543117169193,
+            "pss_trial_range_mib": [
+              83.56713079637096,
+              87.63687626008064
+            ],
+            "drm-resident-gtt_mib": 202.3156502016129,
+            "drm-shared-gtt_mib": 124.0078125
+          }
+        ],
+        "installed": [
+          {
+            "mean_pss_mib": 93.19168976814517,
+            "mean_private_mib": 82.29574092741936,
+            "peak_rss_mib": 138.29296875,
+            "cpu_percent_one_core": 0.433316019512934,
+            "render_engine_percent": 0.0,
+            "pss_trial_range_mib": [
+              89.05755418346774,
+              93.69915574596774
+            ],
+            "drm-resident-gtt_mib": 126.10546875,
+            "drm-shared-gtt_mib": 64.0
+          },
+          {
+            "mean_pss_mib": 85.41245589717742,
+            "mean_private_mib": 68.02734375,
+            "peak_rss_mib": 143.83203125,
+            "cpu_percent_one_core": 0.0,
+            "render_engine_percent": 0.0,
+            "pss_trial_range_mib": [
+              84.28692036290323,
+              87.81810735887096
+            ],
+            "drm-resident-gtt_mib": 202.29296875,
+            "drm-shared-gtt_mib": 124.0078125
+          }
+        ]
+      },
+      "native": {
+        "empty": [
+          {
+            "mean_pss_mib": 96.35289417613636,
+            "mean_private_mib": 70.68714488636364,
+            "peak_rss_mib": 143.29296875,
+            "cpu_percent_one_core": 1.8998560152315744,
+            "render_engine_percent": 2.9553896159540747,
+            "pss_trial_range_mib": [
+              95.7696200284091,
+              96.36168323863636
+            ],
+            "drm-resident-gtt_mib": 138.27734375,
+            "drm-shared-gtt_mib": 60.0078125
+          }
+        ],
+        "overview": [
+          {
+            "mean_pss_mib": 64.94380040322581,
+            "mean_private_mib": 56.79296875,
+            "peak_rss_mib": 79.9296875,
+            "cpu_percent_one_core": 3.8999855331331896,
+            "render_engine_percent": 0,
+            "pss_trial_range_mib": [
+              63.82154107862903,
+              72.65328881048387
+            ],
+            "drm-resident-gtt_mib": 0,
+            "drm-shared-gtt_mib": 0
+          },
+          {
+            "mean_pss_mib": 97.88492313508064,
+            "mean_private_mib": 68.63961693548387,
+            "peak_rss_mib": 159.0,
+            "cpu_percent_one_core": 2.666603965296459,
+            "render_engine_percent": 3.3069833692366677,
+            "pss_trial_range_mib": [
+              97.51420740927419,
+              106.18516885080645
+            ],
+            "drm-resident-gtt_mib": 158.40032762096774,
+            "drm-shared-gtt_mib": 60.0078125
+          }
+        ],
+        "installed": [
+          {
+            "mean_pss_mib": 65.70797631048387,
+            "mean_private_mib": 57.48689516129032,
+            "peak_rss_mib": 80.51171875,
+            "cpu_percent_one_core": 0.0,
+            "render_engine_percent": 0,
+            "pss_trial_range_mib": [
+              64.41094380040323,
+              73.22104964717742
+            ],
+            "drm-resident-gtt_mib": 0,
+            "drm-shared-gtt_mib": 0
+          },
+          {
+            "mean_pss_mib": 97.87314138104838,
+            "mean_private_mib": 68.69921875,
+            "peak_rss_mib": 159.0625,
+            "cpu_percent_one_core": 0.0,
+            "render_engine_percent": 0.0,
+            "pss_trial_range_mib": [
+              97.6839087701613,
+              106.29501638104838
+            ],
+            "drm-resident-gtt_mib": 172.73828125,
+            "drm-shared-gtt_mib": 60.0078125
+          }
+        ]
+      }
+    },
+    "median_order": "Each page lists app then compositor; empty lists only compositor. Each field is the median across three trials.",
+    "incremental_pss_mib": {
+      "gtk": {
+        "overview": 84.18256563874633,
+        "installed": 85.84609833211145
+      },
+      "native": {
+        "overview": 66.6883877840909,
+        "installed": 67.62226505223609
+      }
+    },
+    "incremental_pss_method": "Median of each paired trial: app plus compositor PSS minus that fresh compositor's empty baseline. Global sharing and transient buffer counts can affect PSS; raw trials and ranges are retained.",
+    "elf_sha256": {
+      "gtk": "098a984b1cc3d650db523cafc792118503e6dc3679e9d3202b6013d6a7fc3aed",
+      "native": "6f4d98f583e3e4c98b1bd328a7ef3c6d0196616ef0191667b5f5984106a6eff1"
+    }
+  },
+  "evidence_local": "/home/callen/work/sekka-yukimi-evidence-20261027",
+  "evidence_builder": "wx-workstation:/home/callen/work/sekka-yukimi-20261027/evidence",
+  "validation": {
+    "native_package": "Passed: 28 kit tests, 41 Yukimi unit tests (one ignored), 24 headless interactions, four layout tests, two golden suites; reference images unchanged.",
+    "helper": "125 backend/helper tests passed, one ignored",
+    "launcher_search": "9 tests passed, including unpatched negative controls",
+    "update_completion": "Passed 45.19s disposable VM: live activation, interrupted client, restart selection, disk boot, native frontend launch.",
+    "site": "Passed final site build with the shared native icon and original Tatami capture; output /nix/store/71cz2q2b2ln895gmmnalriwr1xkgbxlz-sekka-site.",
+    "tatami": "Passed 261.83s disposable VM: real Apps menu, native Wayland window, all pages, real Nixpkgs search, Super+C/V clipboard forwarding, single-instance page requests, disabled Steam actions, cancelled install confirmation, real Polkit prompt and dismissal, unchanged configuration, 1920x1080 at 1.25x and 1280x800 at 1x, Ctrl+Q, socket cleanup, no coredumps. Original captures visually reviewed.",
+    "x11": "Passed 40.15s disposable Xfce VM: Run dialog launch, Ctrl navigation, single-instance relaunch, Ctrl+Q and outer Alt+F4 close, compositor/socket cleanup, no coredumps; original 1280x800 screenshot reviewed.",
+    "isolated_memory": "Passed 753.72s: three complete trials each of native and GTK on Overview and Installed, using the final frontend packages and a Tatami-only VM; original captures reviewed.",
+    "flake_evaluation": "Full evaluation not passed: xapp-packages asserts the legacy services.xserver.desktopManager.xfce.enable option; reproduced unchanged on current base 74316b9 as well as original base 4dc8857. Full local evaluation also encountered an invalid cached source path for iso-store-integrity; targeted evaluation passed for both original base and candidate on wx-workstation (identical derivation).",
+    "authentication_note": "Tatami's authentication agent reports Escape dismissal as Not authorized; Yukimi shows Permission denied / Nothing was changed. Enter activates Close on the finished operation sheet. Both application and helper remain unprivileged/privileged across the same Polkit boundary.",
+    "standalone_nix": "Passed non-flake callPackage evaluation; same Yukimi derivation as the root flake.",
+    "formatting": "Changed Nix and Rust files pass formatting; Python scripts parse; git diff --check passes. Whole Aizome cargo fmt --check also reports two untouched pre-existing files: compositor session.rs and shell menus/build.rs."
+  },
+  "packages": {
+    "baseline": "/nix/store/ywqc14v6p3bdcawgxf9jh7l46dqdwglb-yukimi-0.1.0",
+    "native": "/nix/store/gpj9jc9cb8isk69lb0gpsr4ki3gjyq2s-yukimi-0.1.0",
+    "native_runtime": "/nix/store/b6qcqzac8vlg4fyaw51hk1jwvadrwg70-aizome-0.1.0-yukimi",
+    "font_bundle": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts",
+    "standalone_closure_nar_mib": {
+      "gtk": 896.18359375,
+      "native": 1058.4480285644531
+    },
+    "closure_notes": "Standalone uncompressed NAR sizes, not incremental Tatami installation sizes and not RAM. Native includes Weston for X11. No Aizome compositor/shell/other-app output in the native runtime closure. The copied font bundle has no store references; files retain their embedded metadata.",
+    "font_trimming_saved_mib": 382.2998504638672,
+    "font_trimming_validation": "The eight font faces and Archivo license retain identical bytes; the copied output has no store references. Compared on the same pre-rebase build, trimming removed 382.3 MiB of unused families."
+  },
+  "isolated_tatami_vm": {
+    "method": "Three alternating native/GTK runs in one disposable Tatami-only NixOS VM, 2560x1600 at scale 2, 12 GiB RAM, four vCPUs, software-rendered virtio graphics. The GTK baseline is an additional store path; only the selected frontend process runs. Each page gets 30 seconds of sampling. No Aizome session or native sibling apps run. Report app PSS separately from compositor caches that persist between runs. Software rendering makes guest CPU and graphics costs unsuitable for predicting physical GPU performance.",
+    "result": "passed",
+    "output": "/nix/store/iarnnisbypg1rj28kqc79wi5wbzdcyqs-vm-test-run-yukimi-resources",
+    "trials": {
+      "vm-gtk-1-empty.json": {
+        "sha256": "5c698451420639e361f231f20d54172db44d2b662a2935aaa7de060b94383375",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.2999780044428001,
+            "mean_pss_mib": 261.0556640625,
+            "peak_rss_mib": 307.96875,
+            "mean_private_mib": 242.6953125
+          }
+        ]
+      },
+      "vm-gtk-1-installed.json": {
+        "sha256": "62fc631a7adbfbb24a500c4ffd94fce1441ab242e5bd331f6b0d3a6e92dba098",
+        "summary": [
+          {
+            "pid": 1846,
+            "cpu_percent_one_core": 1.63334045175769,
+            "mean_pss_mib": 320.9784211189516,
+            "peak_rss_mib": 421.3984375,
+            "mean_private_mib": 264.8680695564516
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.40000661180262126,
+            "mean_pss_mib": 291.92137096774195,
+            "peak_rss_mib": 379.87109375,
+            "mean_private_mib": 238.1796875
+          }
+        ]
+      },
+      "vm-gtk-1-overview.json": {
+        "sha256": "c2fba06c54791086d4d73236a93aa1ed911258c0a3f536e371098b2e89b2b404",
+        "summary": [
+          {
+            "pid": 1846,
+            "cpu_percent_one_core": 74.78243295589151,
+            "mean_pss_mib": 324.5756363407258,
+            "peak_rss_mib": 425.0,
+            "mean_private_mib": 268.52557963709677
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 104.50519801893488,
+            "mean_pss_mib": 291.90625,
+            "peak_rss_mib": 379.85546875,
+            "mean_private_mib": 238.1640625
+          }
+        ]
+      },
+      "vm-gtk-2-empty.json": {
+        "sha256": "b5ca83114c179bffe9510766767dd035019789dbc5a87516eac679fbcfd45d92",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.3333438688774273,
+            "mean_pss_mib": 277.73160282258067,
+            "peak_rss_mib": 324.63671875,
+            "mean_private_mib": 259.375
+          }
+        ]
+      },
+      "vm-gtk-2-installed.json": {
+        "sha256": "815f0d66cbe13fa31d0dee380c92ca5aa293d78e12d0151b29e925b5f8a1866c",
+        "summary": [
+          {
+            "pid": 2706,
+            "cpu_percent_one_core": 1.5666394295435346,
+            "mean_pss_mib": 299.3338898689516,
+            "peak_rss_mib": 397.6640625,
+            "mean_private_mib": 245.12588205645162
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.333328537668996,
+            "mean_pss_mib": 311.51915322580646,
+            "peak_rss_mib": 397.515625,
+            "mean_private_mib": 259.6640625
+          }
+        ]
+      },
+      "vm-gtk-2-overview.json": {
+        "sha256": "903f31114188aaa6612347cc564c62f617078edfa4f8df093156023b513e03d5",
+        "summary": [
+          {
+            "pid": 2706,
+            "cpu_percent_one_core": 74.03189043204692,
+            "mean_pss_mib": 304.26858618951616,
+            "peak_rss_mib": 402.71484375,
+            "mean_private_mib": 250.11920362903226
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 103.93437324180816,
+            "mean_pss_mib": 311.521484375,
+            "peak_rss_mib": 397.515625,
+            "mean_private_mib": 259.6640625
+          }
+        ]
+      },
+      "vm-gtk-3-empty.json": {
+        "sha256": "b778edd6130843a2e5312ff4452f1e064418f09743bd4bac6fa00f4e622f09f0",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.36666488777974143,
+            "mean_pss_mib": 308.986328125,
+            "peak_rss_mib": 355.89453125,
+            "mean_private_mib": 290.6328125
+          }
+        ]
+      },
+      "vm-gtk-3-installed.json": {
+        "sha256": "33282cb0781ab592dbd47502f999205b0a322a54989dbf6e18c4fac9acc5d5a1",
+        "summary": [
+          {
+            "pid": 3551,
+            "cpu_percent_one_core": 1.5999668346074798,
+            "mean_pss_mib": 301.67420614919354,
+            "peak_rss_mib": 400.0234375,
+            "mean_private_mib": 247.47353830645162
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.33333048076885585,
+            "mean_pss_mib": 341.77293346774195,
+            "peak_rss_mib": 427.76953125,
+            "mean_private_mib": 289.91015625
+          }
+        ]
+      },
+      "vm-gtk-3-overview.json": {
+        "sha256": "01b244a7e995311192586992978f37b507ecd903abccb333d08acd115792a71e",
+        "summary": [
+          {
+            "pid": 3551,
+            "cpu_percent_one_core": 72.47896696135061,
+            "mean_pss_mib": 306.33852066532256,
+            "peak_rss_mib": 404.8046875,
+            "mean_private_mib": 252.19317036290323
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 101.19839284421808,
+            "mean_pss_mib": 341.7689642137097,
+            "peak_rss_mib": 427.76953125,
+            "mean_private_mib": 289.91015625
+          }
+        ]
+      },
+      "vm-native-1-empty.json": {
+        "sha256": "c4f29e41f9bcbab54bea29f18cf56cd2cc56575a43f1258378f6f10c2c3e842e",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 8.300893813129543,
+            "mean_pss_mib": 235.56051537298387,
+            "peak_rss_mib": 292.3203125,
+            "mean_private_mib": 217.65763608870967
+          }
+        ]
+      },
+      "vm-native-1-installed.json": {
+        "sha256": "f9badb19fd860fa64d08b76d2b4d7cfa537cf2bd459745b5100f4f6a7254e53b",
+        "summary": [
+          {
+            "pid": 1448,
+            "cpu_percent_one_core": 0.03333272867763513,
+            "mean_pss_mib": 28.176348286290324,
+            "peak_rss_mib": 39.5703125,
+            "mean_private_mib": 20.65234375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.2999886247113403,
+            "mean_pss_mib": 266.45195942540323,
+            "peak_rss_mib": 320.5859375,
+            "mean_private_mib": 240.9453125
+          }
+        ]
+      },
+      "vm-native-1-overview.json": {
+        "sha256": "d4a8344ab5b32db9cadb7386b5da7a1728bbdadb0bd529302781d37957b91c9f",
+        "summary": [
+          {
+            "pid": 1448,
+            "cpu_percent_one_core": 4.866657059561189,
+            "mean_pss_mib": 27.904296875,
+            "peak_rss_mib": 39.33984375,
+            "mean_private_mib": 20.359375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 124.77674583759178,
+            "mean_pss_mib": 265.4881867439516,
+            "peak_rss_mib": 320.55078125,
+            "mean_private_mib": 240.00730846774192
+          }
+        ]
+      },
+      "vm-native-2-empty.json": {
+        "sha256": "8ed2a7419523d620adf789e20bcec31f451bcc9df8fdf92360c4c9a2fb414732",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.30000455933929104,
+            "mean_pss_mib": 275.4736328125,
+            "peak_rss_mib": 322.37890625,
+            "mean_private_mib": 257.1171875
+          }
+        ]
+      },
+      "vm-native-2-installed.json": {
+        "sha256": "0916e060bae98e6639b0a94e0c8314feff54ef601a84921c3374c60d73d3d7e9",
+        "summary": [
+          {
+            "pid": 2296,
+            "cpu_percent_one_core": 0.03333286245887402,
+            "mean_pss_mib": 28.49735383064516,
+            "peak_rss_mib": 40.03515625,
+            "mean_private_mib": 20.984375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.3666691490412503,
+            "mean_pss_mib": 297.998046875,
+            "peak_rss_mib": 352.1328125,
+            "mean_private_mib": 272.49609375
+          }
+        ]
+      },
+      "vm-native-2-overview.json": {
+        "sha256": "50b4000ca9882c9eec93a29ef30ee75662012425bb52d0b65c89f90abc25a99d",
+        "summary": [
+          {
+            "pid": 2296,
+            "cpu_percent_one_core": 4.799965627606137,
+            "mean_pss_mib": 28.2744140625,
+            "peak_rss_mib": 39.83984375,
+            "mean_private_mib": 20.74609375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 112.79696168232617,
+            "mean_pss_mib": 297.9818548387097,
+            "peak_rss_mib": 352.1328125,
+            "mean_private_mib": 272.48828125
+          }
+        ]
+      },
+      "vm-native-3-empty.json": {
+        "sha256": "bf518ebc0cf73242909e8d1f0b7dd29cd62495cd98d9f2b85a77bcf27232c175",
+        "summary": [
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.36666602479334554,
+            "mean_pss_mib": 307.732421875,
+            "peak_rss_mib": 354.640625,
+            "mean_private_mib": 289.37890625
+          }
+        ]
+      },
+      "vm-native-3-installed.json": {
+        "sha256": "8e6d2f52b6be08ca7de4ca556ad4f1858dbb290f4a76ca2e16d7220a8412c914",
+        "summary": [
+          {
+            "pid": 3144,
+            "cpu_percent_one_core": 0.03333288139279425,
+            "mean_pss_mib": 28.492092993951612,
+            "peak_rss_mib": 39.93359375,
+            "mean_private_mib": 20.96484375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 0.3000139298267699,
+            "mean_pss_mib": 329.25245715725805,
+            "peak_rss_mib": 383.390625,
+            "mean_private_mib": 303.75390625
+          }
+        ]
+      },
+      "vm-native-3-overview.json": {
+        "sha256": "9000a4513a96cd57749af6c132bf2555445b380ff4e3c1a8bae84f3c6b9a29e5",
+        "summary": [
+          {
+            "pid": 3144,
+            "cpu_percent_one_core": 4.799972645275889,
+            "mean_pss_mib": 28.259986139112904,
+            "peak_rss_mib": 39.734375,
+            "mean_private_mib": 20.71484375
+          },
+          {
+            "pid": 1089,
+            "cpu_percent_one_core": 117.75925276279466,
+            "mean_pss_mib": 329.2356665826613,
+            "peak_rss_mib": 383.390625,
+            "mean_private_mib": 303.74609375
+          }
+        ]
+      }
+    },
+    "median_app_pss_mib": {
+      "gtk": {
+        "overview": 306.33852066532256,
+        "installed": 301.67420614919354
+      },
+      "native": {
+        "overview": 28.259986139112904,
+        "installed": 28.492092993951612
+      }
+    },
+    "local_evidence": "/home/callen/work/sekka-yukimi-evidence-20261027/vm-benchmark-current"
+  },
+  "completed_date": "2026-10-28",
+  "outputs": {
+    "tatami": "/nix/store/y42z0cf10fnvkgp6q67g1pydl2ll1xjc-vm-test-run-yukimi-discover",
+    "x11": "/nix/store/d46k54gpknxn1fl5rzscrvzcdd4cv2xz-vm-test-run-yukimi-x11",
+    "update_completion": "/nix/store/vzhk1lmmy7l0b1zxbkj2i01mrf52p3x4-vm-test-run-yukimi-update-completion"
+  },
+  "tatami_gui_resource_samples": {
+    "native-discover-resources.json": {
+      "sha256": "e1e9437ff80315f656878f155d6c9b4ef5bbf2fccd21518183b5cac3c020eb22",
+      "summary": [
+        {
+          "pid": 1384,
+          "cpu_percent_one_core": 0.0666646491010605,
+          "mean_pss_mib": 48.8369140625,
+          "peak_rss_mib": 60.359375,
+          "mean_private_mib": 41.296875
+        }
+      ]
+    },
+    "native-installed-resources.json": {
+      "sha256": "7f5d8b061aed38a8acaca1c5f071c1e990c78ea382cd878c740d02fb9609a0e1",
+      "summary": [
+        {
+          "pid": 1384,
+          "cpu_percent_one_core": 0.0,
+          "mean_pss_mib": 28.271484375,
+          "peak_rss_mib": 39.79296875,
+          "mean_private_mib": 20.73046875
+        }
+      ]
+    },
+    "native-overview-resources.json": {
+      "sha256": "364a43d6384a64edbbeb4735621beeab3ad003822674b9201bc376c56655ca49",
+      "summary": [
+        {
+          "pid": 1384,
+          "cpu_percent_one_core": 4.796845651222324,
+          "mean_pss_mib": 27.9541015625,
+          "peak_rss_mib": 39.515625,
+          "mean_private_mib": 20.390625
+        }
+      ]
+    }
+  },
+  "tatami_gui_resource_notes": "Single 15-second intervals in the software-rendered interaction VM. Discover is sampled after the real 25,375-package index is built. Excludes the cold index subprocess; hardware comparison uses separate repeated trials.",
+  "screenshots": {
+    "docs/images/sekka/yukimi.png": {
+      "sha256": "cdb8c5810c5fa4925ad34ff90e6334f7d3c6e49127efa1c40d872b3a3d369dd5",
+      "resolution": [
+        2560,
+        1600
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    },
+    "docs/test-results/yukimi-unified/authentication.png": {
+      "sha256": "dad6835813ae91c04a4d3f045d4540cdbd3a5bb749e1ac54f3a19078a13fc27f",
+      "resolution": [
+        2560,
+        1600
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    },
+    "docs/test-results/yukimi-unified/steam-details.png": {
+      "sha256": "c995c3c64f46d0487afca9cbfd2fb1275625cdfbc8328bae5e4c84eeef08104b",
+      "resolution": [
+        2560,
+        1600
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    },
+    "docs/test-results/yukimi-unified/tatami-fractional.png": {
+      "sha256": "dc7e604cbd6607e4a40ec83ee712947e54c28ff538594d65fcc13127938b2446",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    },
+    "docs/test-results/yukimi-unified/tatami-small.png": {
+      "sha256": "d6ea554a3031aa1ffcc5e6e12c7c0662f0d8f3dcb9a1937e0ab14020594e6f79",
+      "resolution": [
+        1280,
+        800
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    },
+    "docs/test-results/yukimi-unified/xfce.png": {
+      "sha256": "518823c7feac39826abc9b59adf59ff0fa217181c796eacf88a5fb58528c6392",
+      "resolution": [
+        1280,
+        800
+      ],
+      "provenance": "Original unscaled, uncropped QEMU display capture from the component VM. Test-only automatic login; no ISO installation or physical-hardware qualification."
+    }
+  },
+  "code_patch_sha256": "c95f2a29d175df8e8e89f33a0e2eb55aa45f5c5eed29d8de34417693715adab3",
+  "code_patch_scope": "git diff --binary BASE -- apps desktop flake.nix nix site tests; BASE is baseline_revision. Excludes this report and gallery so its hash is reproducible without a self-reference."
+}

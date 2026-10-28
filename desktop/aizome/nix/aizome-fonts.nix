@@ -20,12 +20,14 @@ runCommand "aizome-fonts"
   }
   ''
     mkdir -p $out
-    link() { [ -e "$1" ] || { echo "missing: $1" >&2; exit 1; }; ln -s "$1" $out/; }
-    link ${archivo}/share/fonts/truetype/Archivo-VF.ttf
-    link ${archivo}/share/fonts/truetype/Archivo-Italic-VF.ttf
+    # Copy these unmodified faces: symlinks would retain all of IBM Plex's
+    # CJK families and Noto's other fonts in a standalone app's closure.
+    face() { install -m444 "$1" $out/; }
+    face ${archivo}/share/fonts/truetype/Archivo-VF.ttf
+    face ${archivo}/share/fonts/truetype/Archivo-Italic-VF.ttf
     for face in Regular Medium SemiBold Bold Italic; do
-      link ${ibm-plex}/share/fonts/truetype/IBMPlexMono-$face.ttf
+      install -m444 ${ibm-plex}/share/fonts/truetype/IBMPlexMono-$face.ttf $out/
     done
-    link ${noto-fonts}/share/fonts/noto/NotoSansSymbols2-Regular.otf
-    ln -s ${archivo}/share/licenses/archivo/OFL.txt $out/OFL-Archivo.txt
+    face ${noto-fonts}/share/fonts/noto/NotoSansSymbols2-Regular.otf
+    install -m444 ${archivo}/share/licenses/archivo/OFL.txt $out/OFL-Archivo.txt
   ''

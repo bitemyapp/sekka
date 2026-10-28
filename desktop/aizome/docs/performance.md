@@ -475,8 +475,7 @@ repeated under the hand, so it is left at that rather than made to draw
 less than the page that's new.
 
 `YUKIMI_STALLS=50` prints, on standard error, every update or view that
-takes longer than that many milliseconds (as the GTK Yukimi does for its
-interface thread).
+takes longer than that many milliseconds, as the former GTK interface did.
 
 ## Tenki (Weather)
 

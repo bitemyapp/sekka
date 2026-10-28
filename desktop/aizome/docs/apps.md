@@ -62,7 +62,8 @@ palette, notifications, the lock screen and the polkit dialog (all in
 
 Sources to port from are in the Sekka repository (`~/work/sekka`, or
 `git -C ~/work/sekka show origin/main:<path>` for what's only on main):
-Tatami's GTK apps under `desktop/tatami/` and Yukimi under `apps/yukimi/`.
+Tatami's GTK apps are under `desktop/tatami/`. Yukimi already shares its native
+interface across desktops; its backend libraries remain under `apps/yukimi/`.
 They are MIT OR Apache-2.0 by the same author: copy what helps and rewrite
 the UI with the kit. Keep their behaviour and their care for edge cases.
 
@@ -219,23 +220,23 @@ As built, beyond the above:
 
 ### Yukimi (Software)
 
-Yukimi, Sekka's Nix software manager, made native: the same Overview,
-Installed, Discover, Updates, History and Storage views and the same
-behaviour (read Sekka's `apps/yukimi/README.md`), rebuilt with the kit.
+Yukimi is Sekka's Nix software manager on every desktop: Overview,
+Installed, Discover, Updates, History, Storage and Desktops
+(read Sekka's `apps/yukimi/README.md`), built with the kit.
 It shares the canonical UI-independent crates (`yukimi-config`,
 `yukimi-store`, `yukimi-system`) under Sekka's `apps/yukimi/crates/`
-with the GTK interface, and uses Sekka's installed privileged
+with the helper and CLI, and uses Sekka's installed privileged
 helper (`yukimi-helper`, with its polkit policy) for system changes, found
 where Sekka's Yukimi package installs it.
 
 As built: the helper is the program Sekka's polkit action
 `io.github.bitemyapp.Yukimi.change-system` names (its
 `org.freedesktop.policykit.exec.path`, read from the installed policy), run
-through `/run/wrappers/bin/pkexec --disable-internal-agent` with the GTK
-Yukimi's helper arguments, so it needs `programs.yukimi.enable` (Sekka sets
+through `/run/wrappers/bin/pkexec --disable-internal-agent`, so it needs
+`programs.yukimi.enable` (Sekka sets
 it on every desktop) and nothing
-of Aizome's. Its cache is `~/.cache/aizome/yukimi`, reading the GTK
-Yukimi's package index and last check from `~/.cache/yukimi` until it has
+of Aizome's session. Its cache is `~/.cache/aizome/yukimi`, reading the former GTK
+interface's package index and last check from `~/.cache/yukimi` until it has
 its own. `aizome-yukimi --sample` shows a sample system;
 `AIZOME_YUKIMI_ETC=/some/etc` looks at another system's configuration
 without changing anything.
@@ -253,7 +254,7 @@ package profile, then shell replacement, an interrupted password dialog,
 and retrying after a sustained agent outage. The fixture substitutes
 prebuilt profiles for Nix evaluation/building.
 
-Beyond the GTK Yukimi, it changes what used to take typing `sudo` commands:
+It also changes what used to take typing `sudo` commands:
 
 - **Early updates** (Updates): a switch to update Sekka from its `main`
   branch as soon as changes are merged, before the nightly checks

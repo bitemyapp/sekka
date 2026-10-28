@@ -206,7 +206,7 @@ sunrise and sunset: the shell writes what GeoClue says).
 These paths are relative to Sekka's `desktop/aizome` component. Sekka's
 root flake owns the Nix inputs, package and development shell. Native
 Yukimi shares the backends in `apps/yukimi/crates` at Sekka's root with the
-GTK interface; the component keeps its own Cargo workspace and lock.
+privileged helper and CLI; the component keeps its own Cargo workspace and lock.
 
 ```
 Cargo.toml            workspace

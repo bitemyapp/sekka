@@ -1,0 +1,32 @@
+#!@bash@
+# The native app speaks Wayland. On X11, give it a private, single-window
+# compositor; Weston exits with the app and closing the outer window ends both.
+set -eu
+if [ -n "${WAYLAND_DISPLAY:-}" ] || [ -z "${DISPLAY:-}" ]; then
+    exec @app@ "$@"
+fi
+case " ${*} " in
+    *" --help "*|*" -h "*) exec @app@ "$@" ;;
+esac
+run=$(mktemp -d "${XDG_RUNTIME_DIR:?}/yukimi-x11.XXXXXXXX")
+weston_pid=
+cleanup() {
+    if [ -n "$weston_pid" ]; then
+        kill "$weston_pid" 2>/dev/null || true
+        wait "$weston_pid" 2>/dev/null || true
+    fi
+    rm -f "${run}.sock" "${run}.sock.lock"
+    rmdir "$run"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+socket="${run##*/}.sock"
+@weston@ --backend=x11 --renderer=pixman --width=1000 --height=700 \
+    --shell=kiosk-shell.so --idle-time=0 --no-config --socket="$socket" \
+    -- @app@ "$@" &
+weston_pid=$!
+status=0
+wait "$weston_pid" || status=$?
+weston_pid=
+exit "$status"

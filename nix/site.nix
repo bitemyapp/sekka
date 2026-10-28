@@ -108,7 +108,7 @@ let
       ../docs/brand/logos
       ../docs/brand/family
       ../docs/images/sekka
-      ../apps/yukimi/yukimi/data/io.github.bitemyapp.Yukimi.svg
+      ../desktop/aizome/icons/apps/org.aizome.Yukimi.svg
     ];
   };
   mono = pkgs.jetbrains-mono;

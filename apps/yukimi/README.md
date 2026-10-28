@@ -14,6 +14,10 @@ can sit in a warm room and watch the snow fall in the garden. Yukimi is that
 window onto a NixOS system. You can see what is installed and why, find what
 is available, and change it without opening a text editor.
 
+Every Sekka desktop uses the same interface. It opens directly on Wayland;
+on X11 it opens inside a nested Wayland window. Keyboard commands use Ctrl
+in Tatami, Xfce, GNOME and Plasma, and Super in Aizome.
+
 Nix can do far more than any GUI can show. Yukimi doesn't try to show all of
 it. It covers the everyday 80%: installing and removing software, updating,
 going back to an earlier version and freeing disk space. Along the way it
@@ -133,7 +137,7 @@ Everything is Rust, including the parts that read Nix's own data:
 | `yukimi-store` | Reads the Nix store database (`/nix/var/nix/db/db.sqlite`) read-only. Handles store paths and name/version splitting, follows Nix's own `compareVersions`, builds the reference graph (closures, sizes, *why is this here*) and finds GC roots the same way the garbage collector does. |
 | `yukimi-config` | Edits Nix files without disturbing them, using a lossless [rnix](https://github.com/nix-community/rnix-parser) syntax tree: string lists, imports, entries of package lists, and `flake.lock`, including checking that a new lock file changes only what it should. |
 | `yukimi-system` | Finds how the system is configured, and reads its generations, profiles, channels and catalogs. Asks sources for their newest versions, builds the package index, diffs closures, and turns Nix's `internal-json` log into progress. |
-| `yukimi` | The GTK 4 and libadwaita app. |
+| `desktop/aizome/apps/yukimi` | The native interface shared by every desktop. Wayland sessions open it directly; X11 sessions use a nested Wayland window. |
 | `yukimi-helper` | The only part that runs as root, started through `pkexec`. It changes the configuration, updates inputs or channels, builds, switches, rolls back and collects garbage, with arguments it checks itself, on the configuration it finds itself. If anything fails, or you press Stop, it puts the configuration back as it was. Once the new system starts switching it finishes, so the switch is never cut off halfway. |
 
 ## Installing
