@@ -1,0 +1,17 @@
+{
+  "cc": {
+    "path": "/nix/store/r5ri78axx1qggkjq3vawywlzglg70b5w-gcc-wrapper-16.2.0/bin/gcc",
+    "sha256": "ee2cfe951efb809fe157bc860b4ee52b8b4be17904109b2bf8f7d02f9576358e",
+    "version": "gcc (GCC) 16.2.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "wayland-scanner": {
+    "path": "/nix/store/hdqa5pkvhfz2j48psb2d5axr81xc5gnq-wayland-scanner-1.26.0-bin/bin/wayland-scanner",
+    "sha256": "e0698e6c27464b1bb75f402cce971596a8abb4f2b24e6609ce5f154ee1c5e4ad",
+    "version": "wayland-scanner 1.26.0"
+  },
+  "sway": {
+    "path": "/nix/store/lfsm41mwy4d234xrccp4i0hfgl4z871k-sway-unwrapped-1.12/bin/sway",
+    "sha256": "dfe4806a3f5271ffe551937fdcd8bd2db7bf41f89cf8739d9d75776c9870ad91",
+    "version": "sway version 1.12"
+  }
+}

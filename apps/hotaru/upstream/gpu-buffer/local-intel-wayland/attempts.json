@@ -1,0 +1,761 @@
+{
+  "attempt-gbm-path": {
+    "status": "failed",
+    "returncode": null,
+    "error": "RuntimeError('private compositor exited')",
+    "source_sha256": {
+      "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+      "wayland-transport.c": "70010a0a8176fcfdbd96854a8969555d590a8ecdcbfbc0bab8600b8195490953",
+      "run.py": "9ede8702310afe895978fe0f3325ebb689b4ca12b0da1d434c42784fef3a49b7"
+    },
+    "binary_sha256": "33c9b0f117200fc5d9a7a7c89bd830cd9b312bb4250928be0de607da10bb3096",
+    "events": null,
+    "raw_result_sha256": "a114e574f1de0ad2ece31d7c9a4b69244da4aa17d5a6723ce7b2f2114e5dfa80",
+    "raw_path": "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/attempt-gbm-path"
+  },
+  "attempt-y-invert": {
+    "status": "failed",
+    "returncode": 2,
+    "error": null,
+    "source_sha256": {
+      "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+      "wayland-transport.c": "70010a0a8176fcfdbd96854a8969555d590a8ecdcbfbc0bab8600b8195490953",
+      "run.py": "1b7ed1e54a0257abf5189c2e49575b4a5263c41da4ad609562431d5f8726f6df"
+    },
+    "binary_sha256": "33c9b0f117200fc5d9a7a7c89bd830cd9b312bb4250928be0de607da10bb3096",
+    "events": [
+      {
+        "event": "device",
+        "index": 0,
+        "enumerated": 2,
+        "name": "Mesa Intel(R) Graphics (PTL)",
+        "drm_render_node": "/dev/dri/renderD128"
+      },
+      {
+        "event": "context",
+        "vendor": "Intel",
+        "renderer": "Mesa Intel(R) Graphics (PTL)",
+        "version": "OpenGL ES 3.2 Mesa 26.2.5"
+      },
+      {
+        "event": "producer_readback",
+        "matched_rgba_bytes": 4096
+      },
+      {
+        "event": "export_query",
+        "fourcc": 875708993,
+        "planes": 1,
+        "modifier": "0x0000000000000000"
+      },
+      {
+        "event": "export",
+        "fd": 8,
+        "stride": 256,
+        "offset": 0
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_fixes",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_shm",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_linux_dmabuf_v1",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_linux_drm_syncobj_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_compositor",
+        "version": 6
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_subcompositor",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_data_device_manager",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_gamma_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_output_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_idle_notifier_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_idle_inhibit_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_layer_shell_v1",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_wm_base",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_tablet_manager_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "org_kde_kwin_server_decoration_manager",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_decoration_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_relative_pointer_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_pointer_constraints_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_presentation",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_alpha_modifier_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_output_manager_v1",
+        "version": 4
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_output_power_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_input_method_manager_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_text_input_manager_v3",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_foreign_toplevel_list_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_foreign_toplevel_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_session_lock_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_workspace_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_export_dmabuf_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_screencopy_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_image_copy_capture_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_output_image_capture_source_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_data_control_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_data_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_security_context_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_viewporter",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_single_pixel_buffer_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_content_type_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_fractional_scale_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_foreign_toplevel_image_capture_source_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_tearing_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_exporter_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_importer_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_exporter_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_importer_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_activation_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_toplevel_tag_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_cursor_shape_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_color_representation_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_virtual_keyboard_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_virtual_pointer_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_keyboard_shortcuts_inhibit_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_pointer_gestures_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_transient_seat_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_seat",
+        "version": 9
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_primary_selection_device_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_output",
+        "version": 4
+      },
+      {
+        "event": "format_modifier_check",
+        "advertised_pairs": 287,
+        "exact_match": true,
+        "fourcc": 875708993,
+        "modifier": "0x0000000000000000"
+      },
+      {
+        "event": "wayland_failure",
+        "stage": "asynchronous dmabuf import failed",
+        "errno": 11
+      }
+    ],
+    "raw_result_sha256": "b4f063acdb65a37dadba3b95c09c19475b5a2aad74ad018eebabffa1613090c0",
+    "raw_path": "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/attempt-y-invert"
+  },
+  "attempt-before-review": {
+    "status": "passed",
+    "returncode": 0,
+    "error": null,
+    "source_sha256": {
+      "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+      "wayland-transport.c": "ec1b038e48122fde7dfd5089371dcdf3f3bc27c9d2bca94ab7de486b23c23162",
+      "run.py": "1b7ed1e54a0257abf5189c2e49575b4a5263c41da4ad609562431d5f8726f6df"
+    },
+    "binary_sha256": "f50a4aa413b291ee44a82eec897bc1515bd13760c2af2c0d820513d7a9e6d133",
+    "events": [
+      {
+        "event": "device",
+        "index": 0,
+        "enumerated": 2,
+        "name": "Mesa Intel(R) Graphics (PTL)",
+        "drm_render_node": "/dev/dri/renderD128"
+      },
+      {
+        "event": "context",
+        "vendor": "Intel",
+        "renderer": "Mesa Intel(R) Graphics (PTL)",
+        "version": "OpenGL ES 3.2 Mesa 26.2.5"
+      },
+      {
+        "event": "producer_readback",
+        "matched_rgba_bytes": 4096
+      },
+      {
+        "event": "export_query",
+        "fourcc": 875708993,
+        "planes": 1,
+        "modifier": "0x0000000000000000"
+      },
+      {
+        "event": "export",
+        "fd": 8,
+        "stride": 256,
+        "offset": 0
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_fixes",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_shm",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_linux_dmabuf_v1",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_linux_drm_syncobj_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_compositor",
+        "version": 6
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_subcompositor",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_data_device_manager",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_gamma_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_output_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_idle_notifier_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_idle_inhibit_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_layer_shell_v1",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_wm_base",
+        "version": 5
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_tablet_manager_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "org_kde_kwin_server_decoration_manager",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_decoration_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_relative_pointer_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_pointer_constraints_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_presentation",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_alpha_modifier_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_output_manager_v1",
+        "version": 4
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_output_power_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_input_method_manager_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_text_input_manager_v3",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_foreign_toplevel_list_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_foreign_toplevel_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_session_lock_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_workspace_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_export_dmabuf_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_screencopy_manager_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_image_copy_capture_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_output_image_capture_source_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_data_control_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_data_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_security_context_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_viewporter",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_single_pixel_buffer_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_content_type_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_fractional_scale_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_foreign_toplevel_image_capture_source_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_tearing_control_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_exporter_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_importer_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_exporter_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zxdg_importer_v2",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_activation_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "xdg_toplevel_tag_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_cursor_shape_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "wp_color_representation_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_virtual_keyboard_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwlr_virtual_pointer_manager_v1",
+        "version": 2
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_keyboard_shortcuts_inhibit_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_pointer_gestures_v1",
+        "version": 3
+      },
+      {
+        "event": "wayland_global",
+        "name": "ext_transient_seat_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_seat",
+        "version": 9
+      },
+      {
+        "event": "wayland_global",
+        "name": "zwp_primary_selection_device_manager_v1",
+        "version": 1
+      },
+      {
+        "event": "wayland_global",
+        "name": "wl_output",
+        "version": 4
+      },
+      {
+        "event": "format_modifier_check",
+        "advertised_pairs": 287,
+        "exact_match": true,
+        "fourcc": 875708993,
+        "modifier": "0x0000000000000000"
+      },
+      {
+        "event": "params_created"
+      },
+      {
+        "event": "transport_fd_closed_after_created",
+        "y_invert": false,
+        "orientation": "producer_readback_row0_to_surface_top"
+      },
+      {
+        "event": "layer_configure",
+        "width": 32,
+        "height": 32
+      },
+      {
+        "event": "layer_configure",
+        "width": 32,
+        "height": 32
+      },
+      {
+        "event": "surface_frame",
+        "callback_ms_unspecified_epoch": 109675104,
+        "received_monotonic_ns": 109675104840512
+      },
+      {
+        "event": "presentation_feedback",
+        "clock_id": 1,
+        "seconds_hi": 0,
+        "seconds_lo": 109675,
+        "nanoseconds": 104793177,
+        "refresh_ns": 0,
+        "sequence_hi": 0,
+        "sequence_lo": 0,
+        "flags": 0,
+        "physical_scanout": false
+      },
+      {
+        "event": "capture_verified",
+        "checked_rgb_bytes": 3072,
+        "alpha_defined": false,
+        "format": 875709016,
+        "width": 128,
+        "height": 128,
+        "stride": 512,
+        "flags": 0,
+        "x": 48,
+        "y": 48,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 109675,
+        "compositor_nsec": 121186690,
+        "received_monotonic_ns": 109675143137189
+      },
+      {
+        "event": "buffer_release",
+        "after_detach": true,
+        "received_monotonic_ns": 109675143471517
+      },
+      {
+        "event": "wayland_transport_passed",
+        "after_detach_release": true,
+        "presentation_protocol": true
+      },
+      {
+        "event": "passed",
+        "matched_rgba_bytes": 4096,
+        "contexts_shared": false,
+        "synchronization": "bounded CPU fence wait",
+        "presentation": false
+      }
+    ],
+    "raw_result_sha256": "a4d99f2685dc4460a3f30ca335fc360f556799977346272a77714246d146332a",
+    "raw_path": "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/attempt-before-review"
+  }
+}

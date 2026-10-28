@@ -4,7 +4,8 @@ The local Intel machine passes a complete offscreen DMA-BUF round trip between
 two unshared EGL contexts. The workstation NVIDIA diagnostic verifies drawing
 under the package Nix loader, but **export fails under that SSH user's device
 access**. These are device-specific capability results, not a GPU terminal
-renderer, Wayland presentation qualification or performance comparison.
+renderer or performance comparison. A separate private Intel Wayland transport
+probe below qualifies import, captured pixels and release for one small buffer.
 
 The Linux-only diagnostic [`gpu-buffer-probe.c`](../tools/gpu-buffer-probe.c)
 creates two unshared surfaceless EGL/GLES contexts through the device platform.
@@ -129,9 +130,48 @@ destroyed. The process exits zero. Full raw artifacts remain in
 runner and namespace scripts are frozen under
 [`upstream/gpu-buffer/local-intel`](../upstream/gpu-buffer/local-intel/README.md).
 
-This result qualifies one device, one small image, one process and two unshared
-contexts. It does not yet qualify native Wayland DMA-BUF import, buffer-release
-ownership, frame callbacks, hardware presentation or a Rust GPU renderer. The
-local matched GUI pilot remains rejected for saturated CPUs and is not timing
-evidence. The next transport experiment must use a disposable compositor and
-preserve the same explicit ownership and bounded cleanup rules.
+This offscreen result qualifies one device, one small image, one process and two
+unshared contexts. The separate transport experiment below exercises Wayland.
+The local matched GUI pilot remains rejected for saturated CPUs and is not timing
+evidence.
+
+
+## Private Intel Wayland transport
+
+The subsequent [transport diagnostic](../upstream/gpu-buffer/local-intel-wayland/README.md)
+passes on a disposable headless Sway 1.12/wlroots 0.20.2 compositor using the Intel
+hardware GLES renderer. It uses the same task-owned store and render-node access,
+without connecting to the live desktop. The compositor exposes 287 format/modifier
+pairs; the producer's AB24, linear pair is present. The client uses asynchronous
+DMA-BUF parameters creation and handles failure separately from buffer creation.
+
+The producer texture, EGL image and original descriptor remain alive and immutable
+through commit, capture and deliberate detach. The duplicate transport descriptor
+closes after successful creation. The client observes `wl_buffer.release` after
+null attach and commit; only then does the original EGL consumer continue. All
+3,072 RGB bytes in the 32×32 captured region match. XB24 padding has undefined
+alpha, so this comparison does not count 4,096 RGBA bytes. The subsequent EGL
+consumer independently verifies all 4,096 RGBA bytes.
+
+The tested orientation uses flags zero and maps producer readback row zero to
+the surface top. wlroots rejected the earlier Y_INVERT attempt; that failed
+result remains archived. Future scene projection must preserve the tested
+orientation rather than assume a GL coordinate convention. Frame callbacks and
+presentation feedback are recorded separately: the former has an unspecified
+millisecond epoch; the latter reports CLOCK_MONOTONIC, zero refresh and zero
+presentation flags. This is headless composition, not physical scanout.
+
+Independent review checked descriptor/image/source lifetimes and capture bounds.
+It found two diagnostic robustness gaps: repeated pending events could bypass an
+inner-loop deadline, and checking only direct process leaders could miss an
+orphan. Both were fixed before the final passing run. The pump now checks the
+absolute deadline on each retry. Process-local subreaping and stable pidfd
+ownership checks confirm all owned descendants exited; no forced cleanup was
+needed. [Qualification](../upstream/gpu-buffer/local-intel-wayland/qualification.json)
+records source, executable, capture and full raw-log hashes.
+
+This remains test-only C code. The next isolated Rust boundary must put EGL calls,
+rendering and fence waits on a dedicated worker, preserve committed buffer leases
+until release, and bound pending frames and retained bytes. The Wayland owner also
+services clipboard transfers and must never wait synchronously for that worker.
+A renderer or performance claim requires further implementation and qualification.
