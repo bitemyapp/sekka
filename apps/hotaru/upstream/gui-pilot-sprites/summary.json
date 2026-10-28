@@ -1,0 +1,912 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "scope": "four alternating startup pairs and one sustained pair in private Sway/pixman; pilot only",
+  "product_commit": "73ea25d",
+  "startup": {
+    "hotaru": {
+      "executable": "/nix/store/k8hj5hzc316icb0g64fbglrh6gpjfwh6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "elf_sha256": "64e7975b8d52e7c825544751640589eb7e44ed48165e88bce47c91865d241e86",
+      "wrapper_sha256": "3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774",
+      "launch_to_pty_ready_ms": {
+        "samples": [
+          55.373894,
+          52.571351,
+          52.487073,
+          52.654781
+        ],
+        "median": 52.613066,
+        "min": 52.487073,
+        "max": 55.373894
+      },
+      "launch_to_matching_capture_ms": {
+        "samples": [
+          74.170479,
+          74.734595,
+          74.074333,
+          73.453961
+        ],
+        "median": 74.122406,
+        "min": 73.453961,
+        "max": 74.734595
+      }
+    },
+    "ghostty": {
+      "executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "elf_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "wrapper_sha256": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+      "launch_to_pty_ready_ms": {
+        "samples": [
+          461.693243,
+          467.922697,
+          471.39721,
+          469.457407
+        ],
+        "median": 468.69005200000004,
+        "min": 461.693243,
+        "max": 471.39721
+      },
+      "launch_to_matching_capture_ms": {
+        "samples": [
+          678.539914,
+          679.197402,
+          678.332289,
+          679.15267
+        ],
+        "median": 678.846292,
+        "min": 678.332289,
+        "max": 679.197402
+      }
+    }
+  },
+  "steady": {
+    "hotaru": {
+      "executable": "/nix/store/k8hj5hzc316icb0g64fbglrh6gpjfwh6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "elf_sha256": "64e7975b8d52e7c825544751640589eb7e44ed48165e88bce47c91865d241e86",
+      "wrapper_sha256": "3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774",
+      "keyboard_samples": 500,
+      "keyboard_injection_to_capture_ms": {
+        "p50": 25.935519,
+        "p95": 34.473804,
+        "p99": 35.011406,
+        "max": 35.305998
+      },
+      "static_controls": [
+        {
+          "observer_active": false,
+          "duration_seconds": 30.000033249,
+          "captures": 0,
+          "resources": {
+            "application": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 62760,
+              "rss_kib_after": 62760
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23252,
+              "rss_kib_after": 23252
+            }
+          }
+        },
+        {
+          "observer_active": true,
+          "duration_seconds": 30.000074785,
+          "captures": 1873,
+          "resources": {
+            "application": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 62760,
+              "rss_kib_after": 62760
+            },
+            "compositor": {
+              "cpu_ms": 510.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23252,
+              "rss_kib_after": 23252
+            }
+          }
+        },
+        {
+          "observer_active": false,
+          "duration_seconds": 30.000072024,
+          "captures": 0,
+          "resources": {
+            "application": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 62760,
+              "rss_kib_after": 62760
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23252,
+              "rss_kib_after": 23252
+            }
+          }
+        },
+        {
+          "observer_active": true,
+          "duration_seconds": 30.000070133,
+          "captures": 1873,
+          "resources": {
+            "application": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 62760,
+              "rss_kib_after": 62760
+            },
+            "compositor": {
+              "cpu_ms": 510.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23252,
+              "rss_kib_after": 23252
+            }
+          }
+        }
+      ],
+      "streams": [
+        {
+          "kind": "marker",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 15.442204,
+          "observed_unique_per_second": 30.134288295291096,
+          "resources": {
+            "application": {
+              "cpu_ms": 40.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65088
+            },
+            "compositor": {
+              "cpu_ms": 100.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24780,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "marker",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 8.447577,
+          "observed_unique_per_second": 60.24549862967371,
+          "resources": {
+            "application": {
+              "cpu_ms": 40.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65088
+            },
+            "compositor": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "marker",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 1,
+          "unobserved_or_coalesced": 119,
+          "final_write_to_capture_ms": 6.96163,
+          "observed_unique_per_second": 106.8296630934281,
+          "resources": {
+            "application": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65088
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 7.922722,
+          "observed_unique_per_second": 30.191281551465774,
+          "resources": {
+            "application": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65088
+            },
+            "compositor": {
+              "cpu_ms": 90.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 20.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 14.364067,
+          "observed_unique_per_second": 60.06699770810466,
+          "resources": {
+            "application": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65088
+            },
+            "compositor": {
+              "cpu_ms": 60.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 1,
+          "unobserved_or_coalesced": 119,
+          "final_write_to_capture_ms": 8.839139,
+          "observed_unique_per_second": 90.57919325279214,
+          "resources": {
+            "application": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 65088,
+              "rss_kib_after": 65112
+            },
+            "compositor": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 3.826088,
+          "observed_unique_per_second": 30.222437837600815,
+          "resources": {
+            "application": {
+              "cpu_ms": 300.0,
+              "rss_kib_before": 65112,
+              "rss_kib_after": 65112
+            },
+            "compositor": {
+              "cpu_ms": 270.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 114,
+          "unobserved_or_coalesced": 6,
+          "final_write_to_capture_ms": 33.409217,
+          "observed_unique_per_second": 56.52486602264287,
+          "resources": {
+            "application": {
+              "cpu_ms": 240.0,
+              "rss_kib_before": 65112,
+              "rss_kib_after": 65112
+            },
+            "compositor": {
+              "cpu_ms": 240.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 1,
+          "unobserved_or_coalesced": 119,
+          "final_write_to_capture_ms": 8.501332,
+          "observed_unique_per_second": 92.38654493445961,
+          "resources": {
+            "application": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 65112,
+              "rss_kib_after": 65112
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 52640,
+              "rss_kib_after": 52640
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13576,
+              "rss_kib_after": 13576
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24372,
+              "rss_kib_after": 24372
+            }
+          }
+        }
+      ]
+    },
+    "ghostty": {
+      "executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "elf_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "wrapper_sha256": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+      "keyboard_samples": 500,
+      "keyboard_injection_to_capture_ms": {
+        "p50": 46.172289,
+        "p95": 54.689817,
+        "p99": 56.608058,
+        "max": 85.096655
+      },
+      "static_controls": [
+        {
+          "observer_active": false,
+          "duration_seconds": 30.000072173,
+          "captures": 0,
+          "resources": {
+            "application": {
+              "cpu_ms": 1860.0,
+              "rss_kib_before": 327048,
+              "rss_kib_after": 332108
+            },
+            "compositor": {
+              "cpu_ms": 30.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23336,
+              "rss_kib_after": 23336
+            }
+          }
+        },
+        {
+          "observer_active": true,
+          "duration_seconds": 30.000073226,
+          "captures": 1871,
+          "resources": {
+            "application": {
+              "cpu_ms": 1880.0,
+              "rss_kib_before": 332108,
+              "rss_kib_after": 332108
+            },
+            "compositor": {
+              "cpu_ms": 560.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23336,
+              "rss_kib_after": 23336
+            }
+          }
+        },
+        {
+          "observer_active": false,
+          "duration_seconds": 30.000054766,
+          "captures": 0,
+          "resources": {
+            "application": {
+              "cpu_ms": 1850.0,
+              "rss_kib_before": 332108,
+              "rss_kib_after": 332108
+            },
+            "compositor": {
+              "cpu_ms": 30.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23336,
+              "rss_kib_after": 23336
+            }
+          }
+        },
+        {
+          "observer_active": true,
+          "duration_seconds": 30.000070762,
+          "captures": 1871,
+          "resources": {
+            "application": {
+              "cpu_ms": 1890.0,
+              "rss_kib_before": 322112,
+              "rss_kib_after": 332068
+            },
+            "compositor": {
+              "cpu_ms": 570.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 50.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 23336,
+              "rss_kib_after": 23336
+            }
+          }
+        }
+      ],
+      "streams": [
+        {
+          "kind": "marker",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 18.77509,
+          "observed_unique_per_second": 30.109096525039593,
+          "resources": {
+            "application": {
+              "cpu_ms": 4500.0,
+              "rss_kib_before": 347252,
+              "rss_kib_after": 337092
+            },
+            "compositor": {
+              "cpu_ms": 190.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 20.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24860,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "marker",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 30.7479,
+          "observed_unique_per_second": 59.57846159135805,
+          "resources": {
+            "application": {
+              "cpu_ms": 4550.0,
+              "rss_kib_before": 337092,
+              "rss_kib_after": 352316
+            },
+            "compositor": {
+              "cpu_ms": 120.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "marker",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 2,
+          "unobserved_or_coalesced": 118,
+          "final_write_to_capture_ms": 41.205975,
+          "observed_unique_per_second": 47.09521206055634,
+          "resources": {
+            "application": {
+              "cpu_ms": 80.0,
+              "rss_kib_before": 352316,
+              "rss_kib_after": 332200
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 16.906635,
+          "observed_unique_per_second": 30.12319512480306,
+          "resources": {
+            "application": {
+              "cpu_ms": 4480.0,
+              "rss_kib_before": 332200,
+              "rss_kib_after": 347252
+            },
+            "compositor": {
+              "cpu_ms": 190.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 20.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 30.161576,
+          "observed_unique_per_second": 59.596243111039946,
+          "resources": {
+            "application": {
+              "cpu_ms": 4520.0,
+              "rss_kib_before": 347252,
+              "rss_kib_after": 332200
+            },
+            "compositor": {
+              "cpu_ms": 120.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "sparse",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 2,
+          "unobserved_or_coalesced": 118,
+          "final_write_to_capture_ms": 40.61068,
+          "observed_unique_per_second": 47.84861044166254,
+          "resources": {
+            "application": {
+              "cpu_ms": 80.0,
+              "rss_kib_before": 332200,
+              "rss_kib_after": 342192
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 30,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 31.799299,
+          "observed_unique_per_second": 30.010998265583883,
+          "resources": {
+            "application": {
+              "cpu_ms": 4600.0,
+              "rss_kib_before": 342192,
+              "rss_kib_after": 342200
+            },
+            "compositor": {
+              "cpu_ms": 190.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 20.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 20.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 60,
+          "produced": 120,
+          "observed_unique": 120,
+          "unobserved_or_coalesced": 0,
+          "final_write_to_capture_ms": 29.446779,
+          "observed_unique_per_second": 59.617283036044,
+          "resources": {
+            "application": {
+              "cpu_ms": 4610.0,
+              "rss_kib_before": 342200,
+              "rss_kib_after": 352352
+            },
+            "compositor": {
+              "cpu_ms": 120.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        },
+        {
+          "kind": "scroll",
+          "producer_hz": 0,
+          "produced": 120,
+          "observed_unique": 2,
+          "unobserved_or_coalesced": 118,
+          "final_write_to_capture_ms": 40.50281,
+          "observed_unique_per_second": 47.862634239731975,
+          "resources": {
+            "application": {
+              "cpu_ms": 80.0,
+              "rss_kib_before": 352352,
+              "rss_kib_after": 332236
+            },
+            "compositor": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 51312,
+              "rss_kib_after": 51312
+            },
+            "observer": {
+              "cpu_ms": 0.0,
+              "rss_kib_before": 13584,
+              "rss_kib_after": 13584
+            },
+            "fixture": {
+              "cpu_ms": 10.0,
+              "rss_kib_before": 24456,
+              "rss_kib_after": 24456
+            }
+          }
+        }
+      ]
+    }
+  },
+  "measurement_gates": {
+    "startup": {
+      "trials": 8,
+      "cpu_sets": {
+        "app": "8-11",
+        "compositor": "12-13",
+        "observer": "14",
+        "controller": "15",
+        "fixture": "16"
+      },
+      "compiler_overlap_samples": 0,
+      "matrix_sources": {
+        "frame-benchmark.py": "a6ad849512939b5552be8ff103013bd0e84601c8a05f3f646cf27055d9bc978e",
+        "frame-observer.c": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+        "frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93"
+      }
+    },
+    "steady": {
+      "trials": 2,
+      "cpu_sets": {
+        "app": "8-11",
+        "compositor": "12-13",
+        "observer": "14",
+        "controller": "15",
+        "fixture": "16"
+      },
+      "compiler_overlap_samples": 0,
+      "matrix_sources": {
+        "frame-benchmark.py": "a6ad849512939b5552be8ff103013bd0e84601c8a05f3f646cf27055d9bc978e",
+        "frame-observer.c": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+        "frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93"
+      }
+    }
+  },
+  "limits": [
+    "No physical scanout or hardware-rendered app comparison",
+    "Ghostty uses Mesa llvmpipe; Hotaru uses native CPU rasterization and SHM",
+    "Fresh isolated application configuration/cache per trial; kernel page cache is not cleared",
+    "One sustained pair cannot establish statistical parity or a causal optimization effect",
+    "Captured sequence/CRC markers are not a checksum of all text pixels",
+    "Process RSS in this zero-history GUI fixture does not measure retained-history efficiency"
+  ]
+}

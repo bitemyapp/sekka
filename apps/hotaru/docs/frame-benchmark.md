@@ -8,6 +8,11 @@ functional calibration used the combined packaged candidate and exact reference
 binary; unrelated Uta builds were active, so all its timestamps are excluded
 from comparative conclusions.
 
+The subsequent [sprite-package GUI pilot](gui-pilot-sprites.md) records the first
+accepted matched timing window: four startup pairs and one sustained pair. Its
+software-rendering scope, raw observations and remaining scrolling gap are
+separate from this earlier harness/calibration qualification.
+
 ## What the timestamp means
 
 A persistent C client uses `zwlr_screencopy_manager_v1` to copy the private
