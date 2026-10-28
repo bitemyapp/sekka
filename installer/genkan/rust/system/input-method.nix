@@ -15,11 +15,15 @@ let
   wayland = aizome && im.ibus.panel == null;
   # Only Aizome's frontend needs these backports. Keep the distribution's
   # daemon, configured engines and GTK/Qt modules for the other desktops.
-  # Remove once pinned IBus includes upstream 58b74bd76d79 and a8ff75597150.
+  # See DEVELOPERS.md#aizome-and-ibus for upstream commits and removal gates.
+  # 1.5.35-rc1 contains the feature but regresses Hangul keycode forwarding;
+  # do not drop this override based on version alone.
   frontend = pkgs.ibus.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [
       ../../../../nix/patches/ibus-wayland-forward-keycode.patch
       ../../../../nix/patches/ibus-wayland-serial.patch
+      ../../../../nix/patches/ibus-wayland-system-keymap-dependencies.patch
+      ../../../../nix/patches/ibus-wayland-system-keymap.patch
     ];
   });
   startFrontend = pkgs.writeShellScript "sekka-aizome-ibus" ''
@@ -70,6 +74,16 @@ in
         QT_IM_MODULE=wayland
       '';
     };
+
+    # Aizome owns the ordinary keyboard layout; IBus still handles composition.
+    # Forward unhandled keys as key events so browser shortcuts and shortcuts
+    # without modifiers work. A profile default preserves user overrides and
+    # does not change GNOME/Xfce's defaults or write shared user preferences.
+    programs.dconf.profiles.aizome.databases = lib.mkIf wayland [
+      {
+        settings."desktop/ibus/general".use-system-keyboard-layout = true;
+      }
+    ];
 
     systemd.user.services.aizome-ibus = lib.mkIf wayland {
       description = "IBus Wayland input method for Aizome";

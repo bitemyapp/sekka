@@ -137,6 +137,11 @@ with subtest("native Sumi composes with the real Hangul engine"):
     machine.screenshot("02-native-committed")
     key("meta_l-q")
 
+with subtest("Chrome keeps typing after tab shortcuts and preserves composition"):
+    session("env SEKKA_IBUS_TEST=1 ibus-chrome-probe /tmp/ibus-chrome")
+    machine.copy_from_machine("/tmp/ibus-chrome/results.json")
+    machine.copy_from_machine("/tmp/ibus-chrome/chrome.log")
+
 with subtest("GTK composes through the Wayland frontend"):
     session("aizomectl spawn ibus-gtk-probe /tmp/gtk-text")
     focus("ibus-gtk-probe")
@@ -268,6 +273,10 @@ with subtest("Xfce keeps the legacy IBus frontend and composition"):
     )
     env = user("systemctl --user show-environment")
     assert "GTK_IM_MODULE=wayland" not in env and "QT_IM_MODULE=wayland" not in env, env
+    assert (
+        session("dconf read /desktop/ibus/general/use-system-keyboard-layout").strip()
+        != "true"
+    )
     gtk_composition("xfce")
     user(
         "busctl --user call org.xfce.SessionManager /org/xfce/SessionManager org.xfce.Session.Manager Logout bb false false"
@@ -294,6 +303,10 @@ with subtest("GNOME keeps its own IBus service and composition"):
     assert (
         user("systemctl --user show -p ActiveState --value aizome-ibus.service").strip()
         == "inactive"
+    )
+    assert (
+        session("dconf read /desktop/ibus/general/use-system-keyboard-layout").strip()
+        != "true"
     )
     session(
         "gsettings set org.gnome.desktop.input-sources sources \"[('ibus', 'hangul')]\""
@@ -322,6 +335,10 @@ with subtest("returning to Aizome starts one fresh Wayland frontend"):
     assert daemon_count() == 1
     env = user("systemctl --user show-environment")
     assert "GTK_IM_MODULE=wayland" in env and "QT_IM_MODULE=wayland" in env, env
+    assert (
+        session("dconf read /desktop/ibus/general/use-system-keyboard-layout").strip()
+        == "true"
+    )
     assert (
         machine.succeed("systemctl show user@1000.service -p MainPID --value")
         == manager_pid

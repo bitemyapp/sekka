@@ -1,6 +1,12 @@
 # Instrumented component test, separate from exact ISO qualification.
 { pkgs, inputs }:
 let
+  chromeProbe =
+    browserPkgs:
+    browserPkgs.writeShellScriptBin "ibus-chrome-probe" ''
+      exec ${browserPkgs.python3.withPackages (ps: [ ps.websockets ])}/bin/python3 \
+        ${../tests/ibus-chrome.py} --chrome ${browserPkgs.google-chrome}/bin/google-chrome-stable "$@"
+    '';
   gtkProbe = pkgs.stdenv.mkDerivation {
     name = "ibus-gtk-probe";
     dontUnpack = true;
@@ -19,8 +25,10 @@ pkgs.testers.runNixOSTest {
   name = "sekka-aizome-ibus";
   globalTimeout = 900;
   node.pkgsReadOnly = false;
-  nodes.machine = { lib, ... }: {
+  nodes.machine = { lib, pkgs, ... }: {
     imports = [ inputs.calamares.nixosModules.desktops ];
+    # Exercise the affected browser itself, only in this disposable VM.
+    nixpkgs.config.allowUnfreePredicate = pkg: lib.getName pkg == "google-chrome";
     calamares.desktops = [
       "aizome"
       "gnome"
@@ -54,6 +62,7 @@ pkgs.testers.runNixOSTest {
     '';
     i18n.inputMethod.ibus.engines = [ pkgs.ibus-engines.hangul ];
     environment.systemPackages = [
+      (chromeProbe pkgs)
       gtkProbe
       pkgs.wl-clipboard
       pkgs.xdotool

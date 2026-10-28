@@ -1,0 +1,223 @@
+Prerequisites for the system-keymap backport: guard removed seats, validate
+modifier-mask shifts, and release the old keymap/state resources.
+
+Applies after Sekka's physical-keycode and serial backports to IBus 1.5.34.
+The commits below are retained in upstream order, without functional changes.
+See DEVELOPERS.md#aizome-and-ibus for scope, tests, known limits, and the
+criteria for returning to the vanilla package. Do not replace this series
+with 1.5.35-rc1 without checking Hangul physical-keycode forwarding.
+
+From 18d8e37e112a155f3f80d36e4d6a845cc2e23bd8
+client/wayland: Guard against NULL seat in IMv2 code paths
+https://github.com/ibus/ibus/commit/18d8e37e112a155f3f80d36e4d6a845cc2e23bd8
+
+diff --git a/client/wayland/ibuswaylandim.c b/client/wayland/ibuswaylandim.c
+--- a/client/wayland/ibuswaylandim.c
++++ b/client/wayland/ibuswaylandim.c
+@@ -334,6 +334,8 @@ ibus_wayland_im_commit_text (IBusWaylandIM *wlim,
+                                                    str);
+         break;
+     case INPUT_METHOD_V2:
++        if (!priv->seat)
++            break;
+         zwp_input_method_v2_commit_string (priv->seat->input_method_v2, str);
+         zwp_input_method_v2_commit (priv->seat->input_method_v2,
+                                     priv->im_serial);
+@@ -367,6 +369,8 @@ ibus_wayland_im_key (IBusWaylandIM *wlim,
+          * returns "Cannot send a keypress before defining a keymap"
+          * if `has_keymap` is %FALSE.
+          */
++        if (!priv->seat)
++            break;
+         if (priv->seat->has_keymap) {
+             zwp_virtual_keyboard_v1_key (priv->seat->virtual_keyboard,
+                                          time, key, state);
+@@ -663,6 +667,8 @@ _context_show_preedit_text_cb (IBusInputContext *context,
+                                                     commit);
+         break;
+     case INPUT_METHOD_V2:
++        if (!priv->seat)
++            break;
+         zwp_input_method_v2_set_preedit_string  (
+                 priv->seat->input_method_v2,
+                 priv->preedit_text->text,
+@@ -693,6 +699,8 @@ _context_hide_preedit_text_cb (IBusInputContext *context,
+                                                     "");
+         break;
+     case INPUT_METHOD_V2:
++        if (!priv->seat)
++            break;
+         zwp_input_method_v2_set_preedit_string  (priv->seat->input_method_v2,
+                                                  "", 0, 0);
+         zwp_input_method_v2_commit (priv->seat->input_method_v2,
+@@ -771,6 +779,8 @@ _context_delete_surrounding_text_cb (IBusInputContext *context,
+                 before_length + after_length);
+         break;
+     case INPUT_METHOD_V2:
++        if (!priv->seat)
++            break;
+         zwp_input_method_v2_delete_surrounding_text (
+                 priv->seat->input_method_v2,
+                 before_length,
+@@ -1201,7 +1211,7 @@ ibus_wayland_im_post_key (IBusWaylandIM *wlim,
+             return FALSE;
+         break;
+     case INPUT_METHOD_V2:
+-        if (!priv->seat->active)
++        if (!priv->seat || !priv->seat->active)
+             return FALSE;
+         break;
+     default:
+@@ -1760,6 +1770,8 @@ input_method_keyboard_modifiers (void                      *data,
+          * returns "Cannot send a modifier state before defining a keymap"
+          * if `has_keymap` is %FALSE.
+          */
++        if (!priv->seat)
++            break;
+         if (priv->seat->has_keymap) {
+             zwp_virtual_keyboard_v1_modifiers (priv->seat->virtual_keyboard,
+                                                mods_depressed, mods_latched,
+
+From a32d034f27c5f89813405e0a0f780b851b2cf893
+client/wayland: Guard against XKB_MOD_INVALID in modifier mask computation
+https://github.com/ibus/ibus/commit/a32d034f27c5f89813405e0a0f780b851b2cf893
+
+diff --git a/client/wayland/ibuswaylandim.c b/client/wayland/ibuswaylandim.c
+--- a/client/wayland/ibuswaylandim.c
++++ b/client/wayland/ibuswaylandim.c
+@@ -27,6 +27,7 @@
+ #include <glib-object.h>
+ #include <ibus.h>
+ #include <ibusinternal.h>
++#include <limits.h>
+ #include <string.h>
+ #include <sys/time.h>
+ #include <wayland-client.h>
+@@ -1069,28 +1070,26 @@ ibus_wayland_im_update_xkb_state (IBusWaylandIM     *wlim,
+     g_return_val_if_fail (keymap, FALSE);
+     g_return_val_if_fail ((state = xkb_state_new (keymap)), FALSE);
+ 
+-    priv->shift_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Shift");
+-    priv->lock_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Lock");
+-    priv->control_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Control");
+-    priv->mod1_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Mod1");
+-    priv->mod2_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Mod2");
+-    priv->mod3_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Mod3");
+-    priv->mod4_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Mod4");
+-    priv->mod5_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Mod5");
+-    priv->super_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Super");
+-    priv->hyper_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Hyper");
+-    priv->meta_mask =
+-        1 << xkb_map_mod_get_index (keymap, "Meta");
++    /* xkb_map_mod_get_index() can return any xkb_mod_index_t value, including
++     * values wider than xkb_mod_mask_t can represent.  Shifting by those values
++     * is undefined behavior in C.
++     */
++#define _WL_MOD_MASK(keymap, name) \
++    ({ xkb_mod_index_t idx = xkb_map_mod_get_index (keymap, name); \
++       (idx < sizeof (xkb_mod_mask_t) * CHAR_BIT) \
++               ? ((xkb_mod_mask_t) 1 << idx) : 0; })
++    priv->shift_mask   = _WL_MOD_MASK (keymap, "Shift");
++    priv->lock_mask    = _WL_MOD_MASK (keymap, "Lock");
++    priv->control_mask = _WL_MOD_MASK (keymap, "Control");
++    priv->mod1_mask    = _WL_MOD_MASK (keymap, "Mod1");
++    priv->mod2_mask    = _WL_MOD_MASK (keymap, "Mod2");
++    priv->mod3_mask    = _WL_MOD_MASK (keymap, "Mod3");
++    priv->mod4_mask    = _WL_MOD_MASK (keymap, "Mod4");
++    priv->mod5_mask    = _WL_MOD_MASK (keymap, "Mod5");
++    priv->super_mask   = _WL_MOD_MASK (keymap, "Super");
++    priv->hyper_mask   = _WL_MOD_MASK (keymap, "Hyper");
++    priv->meta_mask    = _WL_MOD_MASK (keymap, "Meta");
++#undef _WL_MOD_MASK
+ 
+     if (priv->state)
+         xkb_state_unref (priv->state);
+
+From ad28e5e42f4c89a4cbf546660db858f7ddd130b6
+client/wayland: Free leaked resources in ibus_wayland_im_destroy
+https://github.com/ibus/ibus/commit/ad28e5e42f4c89a4cbf546660db858f7ddd130b6
+
+diff --git a/client/wayland/ibuswaylandim.c b/client/wayland/ibuswaylandim.c
+--- a/client/wayland/ibuswaylandim.c
++++ b/client/wayland/ibuswaylandim.c
+@@ -2159,6 +2159,7 @@ input_method_deactivate (void                               *data,
+ 
+     switch (priv->version) {
+     case INPUT_METHOD_V1:
++        g_clear_pointer (&priv->keyboard_v1, wl_keyboard_destroy);
+         if (priv->context) {
+             g_clear_pointer (&priv->context,
+                              zwp_input_method_context_v1_destroy);
+@@ -2774,6 +2775,43 @@ ibus_wayland_im_destroy (IBusObject *object)
+     g_debug ("IBusWaylandIM is destroyed.");
+     g_return_if_fail (IBUS_IS_WAYLAND_IM (object));
+     priv = ibus_wayland_im_get_instance_private (wlim);
++    if (priv->cancellable) {
++        g_cancellable_cancel (priv->cancellable);
++        g_clear_object (&priv->cancellable);
++    }
++    if (priv->ibuscontext) {
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_commit_text_cb),
++                wlim);
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_forward_key_event_cb),
++                wlim);
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_update_preedit_text_cb),
++                wlim);
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_show_preedit_text_cb),
++                wlim);
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_hide_preedit_text_cb),
++                wlim);
++#ifdef ENABLE_SURROUNDING
++        g_signal_handlers_disconnect_by_func (
++                priv->ibuscontext,
++                G_CALLBACK (_context_delete_surrounding_text_cb),
++                wlim);
++#endif
++        g_clear_object (&priv->ibuscontext);
++    }
++    g_clear_pointer (&priv->panel_surface,
++                     zwp_input_panel_surface_v1_destroy);
++    g_clear_pointer (&priv->keyboard_v1, wl_keyboard_destroy);
++    g_clear_pointer (&priv->context, zwp_input_method_context_v1_destroy);
+     if (priv->panel)
+         g_clear_pointer (&priv->panel, zwp_input_panel_v1_destroy);
+     if (priv->input_method_v1)
+@@ -2786,6 +2824,18 @@ ibus_wayland_im_destroy (IBusObject *object)
+         g_clear_pointer (&priv->input_method_manager_v2,
+                          zwp_input_method_manager_v2_destroy);
+     }
++    g_clear_pointer (&priv->state_system, xkb_state_unref);
++    g_clear_pointer (&priv->state, xkb_state_unref);
++    g_clear_pointer (&priv->keymap, xkb_keymap_unref);
++    g_clear_pointer (&priv->xkb_context, xkb_context_unref);
++    if (priv->log) {
++        fclose (priv->log);
++        priv->log = NULL;
++    }
++    g_clear_object (&priv->preedit_text);
++#if ENABLE_SURROUNDING
++    g_clear_object (&priv->surrounding_text);
++#endif
+ 
+ 
+     IBUS_OBJECT_CLASS (ibus_wayland_im_parent_class)->destroy (object);
