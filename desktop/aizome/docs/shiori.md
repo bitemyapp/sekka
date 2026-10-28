@@ -48,6 +48,31 @@ destinations, the outline, forms, annotations, metadata and permissions.
 With hayro each of those would be written on its parsing crates. hayro is
 the one to watch: memory-safe, and already close.
 
+### Other Rust renderers, and a faster hayro
+
+A second pass the same day
+([`rust-pdf-renderers-2026-10-28.json`](../../../docs/test-results/rust-pdf-renderers-2026-10-28.json))
+drew the corpus with every permissively licensed Rust renderer that draws
+pages: stet, pdfrum (a port of PDFium), pdfboss, pdf_oxide and zpdf. Each
+took 2.3 to 6.9 times PDFium's time over the pages both drew; pdfrum
+matches PDFium's pixels most closely and is four times slower. None is a
+fast renderer waiting to be made complete. hayro's current master takes 1.28
+times PDFium's time, and seconds on a few pathological pages.
+
+A branch of hayro master (local, not yet published or proposed upstream)
+caches glyph coverage, decoded images and mesh samples, looks gradients up
+in a table, and refuses JBIG2 pages too large to decode before allocating
+for them. Over the 1,189 pages all three drew in under 5 seconds each, it
+takes 10.4 seconds against PDFium's 11.8 and master's 15.1, with no
+crashes or timeouts where PDFium has three. It is still slower than PDFium
+on tiling patterns, complex shadings and soft-mask groups. Its pages differ
+from hayro's own references on under 0.02% of pixels by more than 48
+levels.
+
+Shiori still draws with PDFium. To move to hayro it would need character
+boxes (hayro hands each glyph's Unicode and transform to a drawing device),
+search, links and the outline read from hayro's parser, and forms.
+
 ## A worker per document
 
 PDFium is a large C++ library reading files from anywhere, and it stops

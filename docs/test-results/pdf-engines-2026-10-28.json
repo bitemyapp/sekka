@@ -65,6 +65,7 @@
     "pdfium": "text with character boxes, search with result rectangles, links and destinations, the outline, AcroForm drawing (and filling), annotations, metadata and permissions, passwords (RC4 and AES)",
     "hayro": "drawing, and passwords; text, search, links and the outline would be built on its syntax and interpreter crates"
   },
+  "followed_by": "rust-pdf-renderers-2026-10-28.json: other Rust renderers, hayro master, and a faster hayro branch, against PDFium",
   "decision": "PDFium, in a worker process of its own per document: equal speed on the median page, a far shorter tail, the reader's features, and the failures above contained to a page. hayro is the alternative to watch: memory-safe and already close on compatibility.",
   "shiori_worker_over_the_corpus": {
     "tested_source": "branch aizome-pdf-reader (Shiori's first version), release build",
