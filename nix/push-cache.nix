@@ -32,8 +32,11 @@ pkgs.writeShellApplication {
     # refuses unfree packages, so nothing unfree is published.
     # installed-systems is an installed system for every desktop, refusing
     # unfree packages too: everything they need that cache.nixos.org lacks.
-    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools installed-systems)
-    mapfile -t outputs < <(nix build --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+    # Uta is an explicit publication root even though it is not preloaded on
+    # the ISO. Keep a failed build from being hidden by process substitution.
+    packages=(genkan tatami displays wallpapers yukimi kakehashi uta aquamarine hyprland tools installed-systems)
+    build_outputs=$(nix build --no-update-lock-file --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+    mapfile -t outputs <<< "$build_outputs"
 
     # Nix only adds a path to a binary cache that already holds its
     # references, so sign and compress the complete closure locally first.

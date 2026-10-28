@@ -918,7 +918,7 @@ hand, from a clean checkout of reviewed `main`:
 nix run .#push-cache
 ```
 
-It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
+It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
@@ -1986,9 +1986,14 @@ on. One run builds at a time; while it does, GitHub keeps only the newest
 waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
-It runs `nix flake check` on the revision as merged, without updating inputs,
-then `nix run .#push-cache` and `scripts/check_cache_coverage.py`, as the
-nightly does. A failed check publishes nothing. It builds no ISO, moves no
+It explicitly builds `.#uta` and checks that RustyPipe is enabled, then runs
+`nix flake check` on the revision as merged, without updating inputs.
+`nix run .#push-cache` signs and uploads the packages, including Uta, to the
+`sekka-cache` R2 bucket. `scripts/check_cache_coverage.py .#uta .#installed-systems`
+then verifies that a fresh store can download Uta and the installed systems
+without compiling them. The nightly uses the same build, upload and coverage
+checks. Uta remains excluded from the ISO preload list. A failed build or check
+stops the job. It builds no ISO, moves no
 branch and publishes no download; machines following `main` substitute its
 packages instead of building them, and the next nightly finds them already
 built. It uses the `nightly` environment's three cache secrets, and fails

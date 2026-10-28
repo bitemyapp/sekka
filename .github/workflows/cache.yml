@@ -65,6 +65,12 @@ jobs:
             echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
             exit 1
           }
+      - name: Build and check Uta
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix build --no-update-lock-file --print-build-logs .#uta --out-link result-uta
+          ./result-uta/bin/aizome-uta --version | grep -F '(RustyPipe: true)'
       - name: Check components
         shell: bash
         run: |
@@ -89,4 +95,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#installed-systems
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#installed-systems
