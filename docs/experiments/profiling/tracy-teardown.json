@@ -1,0 +1,39 @@
+{
+  "scope": "two disconnected startup/shutdown cycles, no connected capture",
+  "command": [
+    "g++",
+    "-std=c++17",
+    "-O2",
+    "-pthread",
+    "-I/home/callen/work/sekka-profiling-research-20261027/tracy/public",
+    "-DTRACY_ENABLE",
+    "-DTRACY_ON_DEMAND",
+    "-DTRACY_NO_BROADCAST",
+    "-DTRACY_ONLY_LOCALHOST",
+    "-DTRACY_NO_SYSTEM_TRACING",
+    "-DTRACY_NO_SAMPLING",
+    "-DTRACY_DELAYED_INIT",
+    "-DTRACY_MANUAL_LIFETIME",
+    "/home/callen/work/sekka-profiling-research-20261027/probes/tracy-lifecycle.cpp",
+    "/home/callen/work/sekka-profiling-research-20261027/tracy/public/TracyClient.cpp",
+    "-ldl",
+    "-o",
+    "/home/callen/work/sekka-profiling-research-20261027/tracy-lifecycle-results/manual-lifetime"
+  ],
+  "before": {
+    "pss_kib": 3485,
+    "rss_kib": 6504,
+    "threads": 1,
+    "cpu_ticks": 1,
+    "context_switches": 10
+  },
+  "after": {
+    "pss_kib": 3485,
+    "rss_kib": 6504,
+    "threads": 1,
+    "cpu_ticks": 1,
+    "context_switches": 10
+  },
+  "seconds": 8.000633446965367,
+  "ticks_per_second": 100
+}

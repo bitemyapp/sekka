@@ -1,0 +1,44 @@
+{
+  "kernel": "6.17.0-1032-oem",
+  "perf_event_paranoid": "4",
+  "kptr_restrict": "1",
+  "attempts": [
+    {
+      "command": [
+        "/usr/bin/perf",
+        "record",
+        "-e",
+        "cpu-clock:u",
+        "-F",
+        "99",
+        "-o",
+        "/home/callen/work/sekka-profiling-research-20261027/preflight-final.perf",
+        "--",
+        "sleep",
+        "0.2"
+      ],
+      "exit_code": 2,
+      "stdout": "",
+      "stderr": "WARNING: perf not found for kernel 6.17.0-1032\n\n  You may need to install the following packages for this specific kernel:\n    linux-tools-6.17.0-1032-oem\n    linux-cloud-tools-6.17.0-1032-oem\n\n  You may also want to install one of the following packages to keep up to date:\n    linux-tools-oem\n    linux-cloud-tools-oem\n"
+    },
+    {
+      "command": [
+        "/usr/lib/linux-tools/7.0.0-38-generic/perf",
+        "record",
+        "-e",
+        "cpu-clock:u",
+        "-F",
+        "99",
+        "-o",
+        "/home/callen/work/sekka-profiling-research-20261027/preflight-final.perf",
+        "--",
+        "sleep",
+        "0.2"
+      ],
+      "exit_code": 255,
+      "stdout": "",
+      "stderr": "Missing support for build id in kernel mmap events.\nDisable this warning with --no-buildid-mmap\nError:\nFailure to open event 'cpu-clock:u' on PMU 'software' which will be removed.\nAccess to performance monitoring and observability operations is limited.\nConsider adjusting /proc/sys/kernel/perf_event_paranoid setting to open\naccess to performance monitoring and observability operations for processes\nwithout CAP_PERFMON, CAP_SYS_PTRACE or CAP_SYS_ADMIN Linux capability.\nMore information can be found at 'Perf events and tool security' document:\nhttps://www.kernel.org/doc/html/latest/admin-guide/perf-security.html\nperf_event_paranoid setting is 4:\n  -1: Allow use of (almost) all events by all users\n      Ignore mlock limit after perf_event_mlock_kb without CAP_IPC_LOCK\n>= 0: Disallow raw and ftrace function tracepoint access\n>= 1: Disallow CPU event access\n>= 2: Disallow kernel profiling\nTo make the adjusted perf_event_paranoid setting permanent preserve it\nin /etc/sysctl.conf (e.g. kernel.perf_event_paranoid = <setting>)\nError:\nFailure to open any events for recording.\n"
+    }
+  ],
+  "successful_capture": false
+}

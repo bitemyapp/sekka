@@ -1,0 +1,488 @@
+{
+  "scope": "synthetic, unprivileged workstation fixtures; no desktop or energy claim",
+  "utc": "2026-10-28T01:23:47Z",
+  "kernel": "6.17.0-1032-oem",
+  "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)\nbinary: rustc\ncommit-hash: e408947bfd200af42db322daf0fadfe7e26d3bd1\ncommit-date: 2026-03-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.94.1\nLLVM version: 21.1.8\n",
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "clock_ticks_per_second": 100,
+  "load_start": [
+    10.771484375,
+    4.9091796875,
+    2.39501953125
+  ],
+  "commands": [
+    [
+      "rustc",
+      "/home/callen/work/sekka-profiling-research-20261027/probes/probe.rs",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "debuginfo=line-tables-only",
+      "-C",
+      "codegen-units=4",
+      "-C",
+      "link-arg=-Wl,--build-id=sha1",
+      "-o",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "objcopy",
+      "--only-keep-debug",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.debug"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "--add-gnu-debuglink=/home/callen/work/sekka-profiling-research-20261027/results/probe.debug",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime"
+    ],
+    [
+      "readelf",
+      "-n",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "objcopy",
+      "--dump-section",
+      ".text=/home/callen/work/sekka-profiling-research-20261027/results/probe.text",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "objcopy",
+      "--dump-section",
+      ".eh_frame=/home/callen/work/sekka-profiling-research-20261027/results/probe.eh_frame",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "readelf",
+      "-n",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime"
+    ],
+    [
+      "objcopy",
+      "--dump-section",
+      ".text=/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime.text",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime"
+    ],
+    [
+      "objcopy",
+      "--dump-section",
+      ".eh_frame=/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime.eh_frame",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime"
+    ],
+    [
+      "nm",
+      "-n",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "addr2line",
+      "-f",
+      "-C",
+      "-e",
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.debug",
+      "0000000000014570"
+    ],
+    [
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe"
+    ],
+    [
+      "/home/callen/work/sekka-profiling-research-20261027/results/probe.runtime"
+    ],
+    [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-pthread",
+      "-I/home/callen/work/sekka-profiling-research-20261027/tracy/public",
+      "/home/callen/work/sekka-profiling-research-20261027/probes/tracy-probe.cpp",
+      "-ldl",
+      "-o",
+      "/home/callen/work/sekka-profiling-research-20261027/results/compiled_out"
+    ],
+    [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-pthread",
+      "-I/home/callen/work/sekka-profiling-research-20261027/tracy/public",
+      "-DTRACY_ENABLE",
+      "-DTRACY_ON_DEMAND",
+      "-DTRACY_NO_BROADCAST",
+      "-DTRACY_ONLY_LOCALHOST",
+      "/home/callen/work/sekka-profiling-research-20261027/probes/tracy-probe.cpp",
+      "/home/callen/work/sekka-profiling-research-20261027/tracy/public/TracyClient.cpp",
+      "-ldl",
+      "-o",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand"
+    ],
+    [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-pthread",
+      "-I/home/callen/work/sekka-profiling-research-20261027/tracy/public",
+      "-DTRACY_ENABLE",
+      "-DTRACY_ON_DEMAND",
+      "-DTRACY_NO_BROADCAST",
+      "-DTRACY_ONLY_LOCALHOST",
+      "-DTRACY_NO_SYSTEM_TRACING",
+      "-DTRACY_NO_SAMPLING",
+      "/home/callen/work/sekka-profiling-research-20261027/probes/tracy-probe.cpp",
+      "/home/callen/work/sekka-profiling-research-20261027/tracy/public/TracyClient.cpp",
+      "-ldl",
+      "-o",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand_no_system"
+    ],
+    [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-pthread",
+      "-I/home/callen/work/sekka-profiling-research-20261027/tracy/public",
+      "-DTRACY_ENABLE",
+      "-DTRACY_ON_DEMAND",
+      "-DTRACY_NO_BROADCAST",
+      "-DTRACY_ONLY_LOCALHOST",
+      "-DTRACY_NO_SYSTEM_TRACING",
+      "-DTRACY_NO_SAMPLING",
+      "-DTRACY_DELAYED_INIT",
+      "-DTRACY_MANUAL_LIFETIME",
+      "/home/callen/work/sekka-profiling-research-20261027/probes/tracy-probe.cpp",
+      "/home/callen/work/sekka-profiling-research-20261027/tracy/public/TracyClient.cpp",
+      "-ldl",
+      "-o",
+      "/home/callen/work/sekka-profiling-research-20261027/results/manual_not_started"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/manual_not_started"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand_no_system"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/compiled_out"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand_no_system"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/manual_not_started"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/manual_not_started"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/compiled_out"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/compiled_out"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand"
+    ],
+    [
+      "taskset",
+      "-c",
+      "0",
+      "/home/callen/work/sekka-profiling-research-20261027/results/on_demand_no_system"
+    ]
+  ],
+  "split_debug": {
+    "sizes_bytes": {
+      "probe": 3957776,
+      "probe.runtime": 435152,
+      "probe.debug": 3609992
+    },
+    "build_ids": {
+      "probe": "2364fb1b04df4a9eee350a583912a454f33adb15",
+      "probe.runtime": "2364fb1b04df4a9eee350a583912a454f33adb15"
+    },
+    "section_sha256": {
+      "probe": {
+        ".text": "65f6f507dfc8a2b94aa1012dea7df1bf1ac1c77be53d3117304b579fc0de908e",
+        ".eh_frame": "e2a5ee73e404d09753e849b0483c08dcfd13a0c92107988844571cb18d6df26d"
+      },
+      "probe.runtime": {
+        ".text": "65f6f507dfc8a2b94aa1012dea7df1bf1ac1c77be53d3117304b579fc0de908e",
+        ".eh_frame": "e2a5ee73e404d09753e849b0483c08dcfd13a0c92107988844571cb18d6df26d"
+      }
+    },
+    "source_resolution": "probe::interaction_stage\n/home/callen/work/sekka-profiling-research-20261027/probes/probe.rs:5\n"
+  },
+  "tracy": {
+    "compiled_out": {
+      "defines": [],
+      "binary_bytes": 16376,
+      "before": {
+        "pss_kib": 957,
+        "rss_kib": 3404,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "after": {
+        "pss_kib": 957,
+        "rss_kib": 3404,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "seconds": 8.000619834754616,
+      "cpu_seconds": 0.0,
+      "context_switches_delta": 0,
+      "ns_per_zone_runs": [
+        0.849997,
+        0.849525,
+        0.854005,
+        0.849272,
+        0.850589,
+        0.851705,
+        0.85005,
+        0.850509,
+        0.849151,
+        0.862865,
+        0.858402,
+        0.862899,
+        0.857528,
+        0.856442,
+        0.856562,
+        0.855972,
+        0.856526,
+        0.856243,
+        0.862582,
+        0.862192,
+        0.858299,
+        0.882938,
+        0.858839,
+        0.857293,
+        0.876501,
+        0.887196,
+        0.859038
+      ],
+      "ns_per_zone_median": 0.856562
+    },
+    "on_demand": {
+      "defines": [
+        "TRACY_ENABLE",
+        "TRACY_ON_DEMAND",
+        "TRACY_NO_BROADCAST",
+        "TRACY_ONLY_LOCALHOST"
+      ],
+      "binary_bytes": 400000,
+      "before": {
+        "pss_kib": 2664,
+        "rss_kib": 5644,
+        "threads": 4,
+        "cpu_ticks": 5,
+        "context_switches": 398
+      },
+      "after": {
+        "pss_kib": 2664,
+        "rss_kib": 5644,
+        "threads": 4,
+        "cpu_ticks": 5,
+        "context_switches": 1992
+      },
+      "seconds": 8.000854771118611,
+      "cpu_seconds": 0.0,
+      "context_switches_delta": 1594,
+      "ns_per_zone_runs": [
+        1.920341,
+        2.164501,
+        1.959583,
+        2.249451,
+        2.07207,
+        1.932287,
+        1.06237,
+        1.06187,
+        1.061776,
+        1.68526,
+        2.164839,
+        2.063519,
+        2.164498,
+        2.165455,
+        1.870918,
+        1.061646,
+        1.061131,
+        1.062878,
+        1.722975,
+        2.262828,
+        1.962109,
+        2.163218,
+        2.165717,
+        1.908897,
+        1.063514,
+        1.062992,
+        1.062381
+      ],
+      "ns_per_zone_median": 1.920341
+    },
+    "on_demand_no_system": {
+      "defines": [
+        "TRACY_ENABLE",
+        "TRACY_ON_DEMAND",
+        "TRACY_NO_BROADCAST",
+        "TRACY_ONLY_LOCALHOST",
+        "TRACY_NO_SYSTEM_TRACING",
+        "TRACY_NO_SAMPLING"
+      ],
+      "binary_bytes": 361392,
+      "before": {
+        "pss_kib": 2484,
+        "rss_kib": 5464,
+        "threads": 4,
+        "cpu_ticks": 5,
+        "context_switches": 399
+      },
+      "after": {
+        "pss_kib": 2484,
+        "rss_kib": 5464,
+        "threads": 4,
+        "cpu_ticks": 6,
+        "context_switches": 1992
+      },
+      "seconds": 8.000954437069595,
+      "cpu_seconds": 0.01,
+      "context_switches_delta": 1593,
+      "ns_per_zone_runs": [
+        1.671816,
+        2.16568,
+        2.123874,
+        2.112545,
+        2.172873,
+        1.894364,
+        1.065005,
+        1.063199,
+        1.062838,
+        1.680251,
+        2.163633,
+        2.062884,
+        2.23692,
+        2.098275,
+        1.889296,
+        1.061891,
+        1.059906,
+        1.05916,
+        1.709495,
+        2.162835,
+        2.061952,
+        2.163855,
+        2.06019,
+        1.97152,
+        1.063872,
+        1.063511,
+        1.06285
+      ],
+      "ns_per_zone_median": 1.894364
+    },
+    "manual_not_started": {
+      "defines": [
+        "TRACY_ENABLE",
+        "TRACY_ON_DEMAND",
+        "TRACY_NO_BROADCAST",
+        "TRACY_ONLY_LOCALHOST",
+        "TRACY_NO_SYSTEM_TRACING",
+        "TRACY_NO_SAMPLING",
+        "TRACY_DELAYED_INIT",
+        "TRACY_MANUAL_LIFETIME"
+      ],
+      "binary_bytes": 364776,
+      "before": {
+        "pss_kib": 2054,
+        "rss_kib": 4624,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "after": {
+        "pss_kib": 2054,
+        "rss_kib": 4624,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "seconds": 8.00072410190478,
+      "cpu_seconds": 0.0,
+      "context_switches_delta": 0,
+      "ns_per_zone_runs": [
+        1.621966,
+        1.064137,
+        1.062535,
+        1.059917,
+        1.061404,
+        1.061247,
+        1.061287,
+        1.060774,
+        1.066079,
+        1.061239,
+        1.101122,
+        1.6483,
+        1.639978,
+        1.651369,
+        1.662113,
+        1.653885,
+        1.620129,
+        1.652235,
+        1.648489,
+        1.655853,
+        1.636446,
+        1.626583,
+        1.63313,
+        1.651768,
+        1.635809,
+        1.644858,
+        1.633188
+      ],
+      "ns_per_zone_median": 1.63313
+    }
+  },
+  "affinity_cpu": 0,
+  "load_end": [
+    16.00634765625,
+    7.4931640625,
+    3.4423828125
+  ]
+}

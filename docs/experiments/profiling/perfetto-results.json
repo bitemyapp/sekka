@@ -1,0 +1,91 @@
+{
+  "scope": "synthetic in-process SDK; not Aizome integration or system tracing",
+  "sdk_version": "v56.1",
+  "build_command": [
+    "g++",
+    "-std=c++17",
+    "-O2",
+    "-pthread",
+    "-I/home/callen/work/sekka-profiling-research-20261027/perfetto",
+    "/home/callen/work/sekka-profiling-research-20261027/probes/perfetto-probe.cpp",
+    "/home/callen/work/sekka-profiling-research-20261027/perfetto/perfetto.cc",
+    "-ldl",
+    "-o",
+    "/home/callen/work/sekka-profiling-research-20261027/perfetto-results/perfetto-probe"
+  ],
+  "modes": {
+    "lazy-idle": {
+      "before": {
+        "pss_kib": 1313,
+        "rss_kib": 3816,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "after": {
+        "pss_kib": 1313,
+        "rss_kib": 3816,
+        "threads": 1,
+        "cpu_ticks": 0,
+        "context_switches": 1
+      },
+      "seconds": 8.000653122086078,
+      "stdout": []
+    },
+    "initialized-idle": {
+      "before": {
+        "pss_kib": 2824,
+        "rss_kib": 5620,
+        "threads": 2,
+        "cpu_ticks": 0,
+        "context_switches": 4
+      },
+      "after": {
+        "pss_kib": 2822,
+        "rss_kib": 5620,
+        "threads": 2,
+        "cpu_ticks": 0,
+        "context_switches": 4
+      },
+      "seconds": 8.000591886229813,
+      "stdout": []
+    },
+    "record-then-idle": {
+      "before": {
+        "pss_kib": 3727,
+        "rss_kib": 6584,
+        "threads": 2,
+        "cpu_ticks": 0,
+        "context_switches": 2032
+      },
+      "after": {
+        "pss_kib": 3730,
+        "rss_kib": 6584,
+        "threads": 2,
+        "cpu_ticks": 0,
+        "context_switches": 2035
+      },
+      "seconds": 8.000710010062903,
+      "stdout": [
+        "round=0 bytes=41419",
+        "round=1 bytes=41398"
+      ]
+    }
+  },
+  "source_sha256": {
+    "perfetto.h": "5c9e62e6156a13f2ee85abef7cf53f363a2da04de30da499316835d9a99a921a",
+    "perfetto.cc": "7d151b8923c66a5345dedf39cfae51d0d0f80bc95c8c2f06e9894a55009d2f89"
+  },
+  "traces": {
+    "capture-0.pftrace": {
+      "bytes": 41419,
+      "sha256": "851cc78c50c7463c1bf2a989eb536f545932c0124ab749c0d5492f2a408f4bab",
+      "slice_query": "\"name\",\"n\"\n\"synthetic-stage\",1000\n"
+    },
+    "capture-1.pftrace": {
+      "bytes": 41398,
+      "sha256": "2b8ae680c3a18ed07a73b3ead0873e93c6ded9695c15acdcda69668b766f369e",
+      "slice_query": "\"name\",\"n\"\n\"synthetic-stage\",1000\n"
+    }
+  }
+}
