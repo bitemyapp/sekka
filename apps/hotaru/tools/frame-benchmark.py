@@ -318,7 +318,8 @@ def run(args):
                XDG_CACHE_HOME=str(runtime / "cache"), XDG_DATA_HOME=str(runtime / "data"), XDG_CURRENT_DESKTOP="sway",
                XDG_SESSION_TYPE="wayland", WLR_BACKENDS="headless", WLR_RENDERER="pixman", WLR_LIBINPUT_NO_DEVICES="1",
                LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", AIZOME_FONT_DIR=str(args.font_dir), HOTARU_FONT_DIR=str(args.fallback_dir),
-               HOTARU_BENCH_FIXTURE_CPUS=args.fixture_cpus, RUST_LOG="warn", LP_NUM_THREADS="4", SIDESTEP_RASTER_THREADS="4")
+               HOTARU_BENCH_FIXTURE_CPUS=args.fixture_cpus, RUST_LOG="warn", LP_NUM_THREADS="4", SIDESTEP_RASTER_THREADS="4",
+               AIZOME_NO_PIXEL_SCROLL=args.no_pixel_scroll)
     fonts = runtime / "fonts.conf"
     fonts.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>' +
                      ''.join('<dir>' + escape(str(p)) + '</dir>' for p in (args.font_dir, args.fallback_dir)) +
@@ -337,7 +338,7 @@ def run(args):
               "host": os.uname().nodename, "kernel": os.uname().release, "clock_ticks_per_second": os.sysconf("SC_CLK_TCK"),
               "load_average": os.getloadavg(), "tool_sha256": source_hash(__file__), "binary_sha256": source_hash(args.binary),
               "environment": {name: env.get(name) for name in ["WLR_BACKENDS", "WLR_RENDERER", "LIBGL_ALWAYS_SOFTWARE", "GALLIUM_DRIVER",
-                  "LP_NUM_THREADS", "SIDESTEP_RASTER_THREADS", "__EGL_VENDOR_LIBRARY_FILENAMES", "LIBGL_DRIVERS_PATH", "RUST_LOG"]},
+                  "LP_NUM_THREADS", "SIDESTEP_RASTER_THREADS", "AIZOME_NO_PIXEL_SCROLL", "__EGL_VENDOR_LIBRARY_FILENAMES", "LIBGL_DRIVERS_PATH", "RUST_LOG"]},
               "fonts": {str(p): source_hash(p) for d in (args.font_dir, args.fallback_dir) for p in d.rglob('*') if p.is_file() and p.suffix in {'.ttf', '.otf', '.ttc'}}}
     result["unrelated_uta_builds"] = unrelated_uta_builds()
 
@@ -540,6 +541,7 @@ def main():
     parser.add_argument("--cell-width", type=int); parser.add_argument("--cell-height", type=int)
     parser.add_argument("--keys", type=int, default=32); parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--capture-us", type=int, default=1000); parser.add_argument("--control-seconds", type=float, default=3)
+    parser.add_argument("--no-pixel-scroll", choices=("0", "1"), default="0", help="explicit Hotaru pixel-copy control, recorded after environment sanitization")
     parser.add_argument("--nonce", type=lambda value: int(value, 0), default=0x29312982)
     parser.add_argument("--app-cpus", default="8-11"); parser.add_argument("--compositor-cpus", default="12-13"); parser.add_argument("--observer-cpus", default="14")
     parser.add_argument("--controller-cpus", default="15"); parser.add_argument("--fixture-cpus", default="16")
