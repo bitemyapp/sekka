@@ -1,0 +1,18 @@
+{
+  "apps/hotaru/crates/hotaru-sprites/Cargo.toml": "e97cb08a4c93d6f92de1ff2b9c8e7ba3fa11fdbe168c0870659c62cb5093ea00",
+  "apps/hotaru/crates/hotaru-sprites/LICENSE.MPL-2.0": "d8d2562a7cb68ffdfe91fc66af1ed4a8a4e272aa4ab59bea7451ba34b9aba3d4",
+  "apps/hotaru/crates/hotaru-sprites/LICENSE.z2d": "c3c0b845181a67c2f926485299855769afa675bc90b18904c3087ae884cb1873",
+  "apps/hotaru/crates/hotaru-sprites/src/lib.rs": "949200eef505b2659c6ee9c10a984d6ceea922b152c9683ff5be60e57c63a1f3",
+  "apps/hotaru/crates/hotaru-sprites/src/vector.rs": "300d0223bcca8ecc2a911530efed1b441faab7f98fbf1444a077b9049bb402c1",
+  "apps/hotaru/crates/hotaru-sprites/src/curves.rs": "2568bc4a17011662d0ce4690bbe693beef076180e7a7e1e4cdb5a635a0b230d4",
+  "apps/hotaru/crates/hotaru-sprites/src/powerline.rs": "b35733253fe5527abd72716b14ab503026ea06b526e592d0e6783b880bd40368",
+  "apps/hotaru/crates/hotaru-sprites/tests/golden.rs": "cdbcfe46d4c32f96876fc557f246da73d68b64e5dddca4a35a57a0087219a939",
+  "apps/hotaru/crates/hotaru-sprites/tests/raster.rs": "f66dcf9acabd889e0cf94bdc0d13ad070e81128ba7b396ad35a4eef166ae4ea8",
+  "apps/hotaru/crates/hotaru-sprites/tests/fixtures/curves-powerline.json": "56796d683378bee9612acbdf0948c1aa57b427b3106e53abde5525e03ecf6a31",
+  "apps/hotaru/crates/hotaru-sprites/tests/fixtures/curves-powerline.rle": "2e4a3d5003e9c3de6f8cbc98c602e2fba93459a6c296cba9545d695614e66350",
+  "desktop/aizome/apps/hotaru/src/font.rs": "3f82f8c2767eddc800e4c2b078c748d0921d5723d50dbc13bfca0914d9a74b9d",
+  "desktop/aizome/apps/hotaru/src/sprites.rs": "a006d16c4567517d1a9afca6b5bb80a2c9d5654f06aa90abdd1a4124477cf15a",
+  "desktop/aizome/apps/hotaru/tests/wayland/sprites.py": "be5a9def2a0cd7fab0334bba40f861c13ca94c8d93a31b1cd8bf49818536fa15",
+  "desktop/aizome/nix/hotaru.nix": "fe8cb8b2965991520313cef20819dd408018278053bcb5c1e01486d9046d154d",
+  "desktop/aizome/nix/package.nix": "f4a83944a6af86b0af5f84cbac5e85d5b49520173bfd141221a949abe45f712f"
+}

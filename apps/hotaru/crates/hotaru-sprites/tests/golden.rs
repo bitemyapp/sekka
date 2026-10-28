@@ -2,8 +2,14 @@
 use hotaru_sprites::{Metrics, rasterize};
 
 #[test]
-fn every_supported_sprite_matches_four_committed_upstream_atlases() {
-    let bytes = include_bytes!("fixtures/ghostty.rle");
+fn existing_rectilinear_sprites_match_four_committed_upstream_atlases() {
+    check(include_bytes!("fixtures/ghostty.rle"), 612);
+}
+#[test]
+fn curves_powerline_match_upstream_pngs_and_translation_regressions() {
+    check(include_bytes!("fixtures/curves-powerline.rle"), 123);
+}
+fn check(bytes: &[u8], expected_count: usize) {
     assert_eq!(&bytes[..4], b"HSP1");
     let mut at = 4;
     let mut cases = 0;
@@ -38,6 +44,6 @@ fn every_supported_sprite_matches_four_committed_upstream_atlases() {
         );
         cases += 1;
     }
-    assert_eq!(cases, 612);
+    assert_eq!(cases, expected_count);
     assert_eq!(at, bytes.len());
 }

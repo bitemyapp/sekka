@@ -904,6 +904,8 @@ mod sprite_tests {
         let mut terminal = hotaru_core::Terminal::new(32, 8, 0);
         terminal.feed(b"\x1b[?25l\x1b]8;id=box;https://example.test/box\x1b\\");
         let text: String = (0x2500..=0x259f)
+            .chain(0xe0b0..=0xe0bf)
+            .chain([0xe0d2, 0xe0d4])
             .filter(|cp| hotaru_sprites::supports(*cp))
             .map(|cp| char::from_u32(cp).unwrap())
             .collect();
@@ -924,7 +926,7 @@ mod sprite_tests {
             };
             let frame = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
             let count: usize = frame.rows.iter().flat_map(|r| r.iter()).map(|s| s.sprites.len()).sum();
-            assert_eq!(count, 154);
+            assert_eq!(count, 180);
             assert!(Arc::ptr_eq(&frame.snapshot, &job.snapshot));
             assert!(!frame.links.is_empty());
             let masks = frame
@@ -941,7 +943,7 @@ mod sprite_tests {
                 box_span.style.attrs & (attrs::BOLD | attrs::ITALIC | attrs::INVERSE | attrs::STRIKE),
                 attrs::BOLD | attrs::ITALIC | attrs::INVERSE | attrs::STRIKE
             );
-            assert!(style_row.iter().any(|s| s.start <= 5 && s.end > 5 && s.sprites.is_empty()));
+            assert!(style_row.iter().any(|s| s.start <= 6 && s.end > 6 && s.sprites.is_empty()));
             let before = frame.rows.clone();
             let next = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
             for (a, b) in before.iter().zip(&next.rows) {

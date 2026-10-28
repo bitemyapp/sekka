@@ -20,7 +20,7 @@ import time
 from PIL import Image
 from smoke import wait
 
-CPS = [cp for cp in range(0x2500, 0x25a0) if not 0x256d <= cp <= 0x2573]
+CPS = [*range(0x2500, 0x25a0), *range(0xe0b0, 0xe0c0), 0xe0d2, 0xe0d4]
 
 
 def sha(path):
@@ -78,15 +78,15 @@ def run(binary, library, evidence):
 path=pathlib.Path(sys.argv[1])
 while True:
     rows,cols,_,_=struct.unpack('HHHH',fcntl.ioctl(0,termios.TIOCGWINSZ,bytes(8)))
-    if rows>=31 and cols>=52:break
+    if rows>=34 and cols>=80:break
     time.sleep(.02)
-cp=[c for c in range(0x2500,0x25a0) if not 0x256d<=c<=0x2573]
+cp=[*range(0x2500,0x25a0),*range(0xe0b0,0xe0c0),0xe0d2,0xe0d4]
 payload='\\x1b[?25l\\x1b]11;#000000\\x07\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255m█'
 payload+='\\x1b[38;2;255;255;255m\\x1b]8;id=sprite-fixture;https://example.test/sprites\\x1b\\\\'
 for i,c in enumerate(cp):
     payload+=f'\\x1b[{3+3*(i//17)};{3+3*(i%17)}H'+chr(c)
 payload+='\\x1b]8;;\\x1b\\\\'
-payload+='\\x1b[31;1H\\x1b[1;3;4;9;38;2;0;255;0mAB┼CD╭─\\u0301\\x1b[0m'
+payload+='\\x1b[1;60H\\x1b[1;3;4;9;38;2;0;255;0mAB┼CD╭─\\u0301\\x1b[0m'
 os.write(1,payload.encode())
 while True:
     size=struct.unpack('HHHH',fcntl.ioctl(0,termios.TIOCGWINSZ,bytes(8)))
@@ -97,7 +97,7 @@ while True:
     result = {'schema': 1, 'binary': str(binary), 'binary_sha256': sha(binary),
               'oracle_library': str(library), 'oracle_sha256': sha(library),
               'upstream_pin': '6ba144158577d033ccb6ed4b574e4013957c9161',
-              'scope': 'exact actual private Wayland software capture of 153 qualified sprites; no GPU or timing claim',
+              'scope': 'exact actual private Wayland software capture of 178 qualified sprites; no GPU or timing claim',
               'fixture_sha256': sha(fixture), 'compositor_config': config.read_text(), 'scales': []}
     try:
         log = open(evidence / 'sway.log', 'wb'); files.append(log)
@@ -122,7 +122,7 @@ while True:
                     rows, cols, width, height = json.loads((evidence / 'pty.json').read_text())
                 except (OSError, json.JSONDecodeError):
                     return None
-                if rows < 31 or cols < 52 or width != cols * int(cw) or height != rows * int(ch):
+                if rows < 34 or cols < 80 or width != cols * int(cw) or height != rows * int(ch):
                     return None
                 return dict(scale=scale, family=family, cell_width_px=int(cw), cell_height_px=int(ch),
                             box_thickness_px=int(thickness), thickness_estimated=estimated == 'true',

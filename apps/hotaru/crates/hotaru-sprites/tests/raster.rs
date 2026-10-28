@@ -8,11 +8,19 @@ fn metrics(w: u32, h: u32, t: u32) -> Metrics {
 }
 #[test]
 fn complete_explicit_ranges_and_exclusions() {
-    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 153);
-    for cp in 0x256d..=0x2573 {
-        assert_eq!(rasterize(cp, metrics(11, 24, 1)), Err(Error::Unsupported));
-    }
-    for cp in [0, 0x24ff, 0x25a0, 0x2800, 0x10ffff, u32::MAX] {
+    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 178);
+
+    for cp in [
+        0,
+        0x24ff,
+        0x25a0,
+        0x2800,
+        0xe0c0,
+        0xe0d3,
+        0xe0d5,
+        0x10ffff,
+        u32::MAX,
+    ] {
         assert_eq!(rasterize(cp, metrics(11, 24, 1)), Err(Error::Unsupported));
     }
 }

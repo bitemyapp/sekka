@@ -1,7 +1,10 @@
-//! Rectilinear terminal sprites, adapted from Ghostty commit
+//! Terminal sprites, adapted from Ghostty commit
 //! 6ba144158577d033ccb6ed4b574e4013957c9161. See LICENSE.ghostty.
 //! The pure raster has no font, graphics API, or terminal-state dependencies.
+mod curves;
 mod lines;
+mod powerline;
+mod vector;
 
 /// Final physical-pixel metrics. Perform font/scale rounding before calling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +47,7 @@ pub struct Raster {
 pub const MAX_MASK_BYTES: usize = 4 * 1024 * 1024;
 
 pub const fn supports(cp: u32) -> bool {
-    matches!(cp, 0x2500..=0x256c | 0x2574..=0x259f)
+    matches!(cp, 0x2500..=0x259f | 0xe0b0..=0xe0bf | 0xe0d2 | 0xe0d4)
 }
 
 /// Check metrics without allocating. Native integrations may select ordinary
@@ -94,8 +97,12 @@ pub fn rasterize(cp: u32, m: Metrics) -> Result<Raster, Error> {
         alpha,
         ink: None,
     };
-    if cp >= 0x2580 {
+    if cp >= 0xe000 {
+        powerline::draw(&mut result, m, cp)?;
+    } else if cp >= 0x2580 {
         blocks(&mut result, m, cp);
+    } else if (0x256d..=0x2573).contains(&cp) {
+        curves::draw(&mut result, m, cp)?;
     } else if let Some(lines) = lines::definition(cp) {
         lines::draw(&mut result, m, lines);
     } else {

@@ -1,14 +1,14 @@
 # Native terminal sprites
 
-Hotaru now ports 153 rectilinear Ghostty sprites to a safe Rust raster and
-uses them in Hotaru's existing Aizome/Sidestep software drawing path. It has no
+The initial integrated slice ports 153 rectilinear Ghostty sprites to a safe
+Rust raster and uses them in Hotaru's existing Aizome/Sidestep software drawing path. It has no
 Ghostty runtime or Zig dependency. It does not establish whole-application or
 GPU performance parity.
 
 ## Qualified raster scope
 
-The port covers U+2500–U+256C, U+2574–U+257F and all U+2580–U+259F. Rounded
-corners and diagonal strokes U+256D–U+2573, braille, powerline, geometric,
+The port covers U+2500–U+256C, U+2574–U+257F and all U+2580–U+259F. The separately qualified expansion below adds rounded corners, diagonal
+strokes and the pinned geometric Powerline family. Braille, geometric,
 legacy-computing and branch sprites remain unported. Those codepoints use the
 ordinary native font path. Supported characters with additional combining or
 presentation-selector scalars also retain ordinary font shaping pending an
@@ -118,3 +118,37 @@ canvas, with explicit half±epsilon, negative-origin and x/y tile tests. No
 expected raster pixels or comparison tolerance were changed. The passing
 probe waits for complete image equality rather than treating a PTY response or
 an elapsed delay as proof of a rendered frame.
+
+## Qualified rounded, diagonal and Powerline expansion
+
+The candidate based on `2364746` adds U+256D–2573 and all 18 pinned geometric
+Powerline functions (U+E0B0–E0BF, U+E0D2, U+E0D4), bringing the character count
+to 178. Its safe Rust vector subset ports the actual pinned z2d stroke/offset/
+coverage algorithms. Ghostty definitions remain MIT; the vector adaptation is
+MPL-2.0 with complete source notices and two new installed license files. No
+runtime dependency or Zig code is added to the application.
+
+The new component passes 57,700 complete-mask and placement checks across 2,308
+metrics, including maximum accepted dimensions: 2,454,494,850 Alpha8 bytes exact.
+Its permanent fixture retains 100 new upstream PNG crops and 23 actual-library
+translation-order regressions in addition to the earlier 612 expectations.
+Native private Wayland checks compare all 178 glyphs at scales 1, 1.25, 2 and
+back to 1: 712 glyphs and 2,294,064 RGB bytes exact. The native candidate passes
+57 ordinary tests and strict Clippy, with seven pure raster tests and standalone
+locked metadata. The subsequent [178-sprite package checkpoint](curves-checkpoint.md)
+passed the release Nix build and all eight native runtime suites, with exact
+source and installed-license verification. The old 153-sprite reports above
+retain their historical source identities.
+
+The adapter and ownership limits are unchanged. Some new diagonals/open
+Powerline strokes have overhang at ordinary metrics, so they use the correct
+full-terminal damage path and disable pixel-scroll reuse. Thus exact rendering
+does not establish an efficiency improvement. A candidate-only cold raster
+measurement is recorded separately and is not a comparative benchmark.
+
+`upstream/sprites/curves/README.md` gives exact sources, evidence, bounds,
+reproduction commands and the preserved initial failing mask report.
+`upstream/sprites/curves/remaining-inventory.json` lists all 54 registered ranges:
+907 of 1,085 character slots and 11 internal sprite rasters still lack this port's
+exact-raster qualification. Registered slots may include intentional blanks;
+ordinary font fallback and native decorations do not prove sprite equivalence.

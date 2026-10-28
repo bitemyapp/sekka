@@ -116,7 +116,7 @@ mod tests {
             let mut m = metrics;
             m.cell_width_px = i * 3;
             m.cell_height_px = i * 5;
-            for cp in 0x2500..=0x259f {
+            for cp in (0x2500..=0x259f).chain(0xe0b0..=0xe0bf).chain([0xe0d2, 0xe0d4]) {
                 if !supports(cp) {
                     continue;
                 }
