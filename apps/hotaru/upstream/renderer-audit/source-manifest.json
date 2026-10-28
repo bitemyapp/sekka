@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "scope": "read-only source audit and tiny EGL capability probe; not an application benchmark",
+  "created_utc": "2026-10-28T19:29:32.343553+00:00",
+  "sekka_base_commit": "9d95e9e31da13543ea9a0beac29b650288b82583",
+  "working_tree_note": "The source has qualified but uncommitted VT/native changes. Exact audited file hashes below identify this source; this is not a built-package manifest.",
+  "sidestep_base_commit": "7bfacbbbc9cd70cf3442def70368e254f3c3712d",
+  "files": {
+    "desktop/aizome/apps/hotaru/src/font.rs": "677df2b032bab2e30766b600fbb6783d7a4247fe70799b1757f1325bbb758e99",
+    "desktop/aizome/apps/hotaru/src/terminal_view.rs": "1ffcd739ed8ffb9211f965746ae20304baa727ac2138cc223a7e8c4ec2366e24",
+    "desktop/aizome/apps/hotaru/src/session.rs": "491c661d074b364c4d47ac286a268570fce234b9cf9c87aa483e2a40283194ed",
+    "desktop/aizome/apps/hotaru/src/app.rs": "d75ae06a87fddfff9e7a40b4b9698bf079fbc968a039508c4dd9fec773e6976e",
+    "desktop/aizome/crates/aizome-kit/src/widget.rs": "ccb57718a9b55b0929214026c50a0f94642f086e5b48491e3fe602627639ac47",
+    "desktop/aizome/crates/aizome-kit/src/platform.rs": "fec445a8a6c8d9d277660245474b2cc1e4b679c4d1d25928b2d1f3d3457b94a8",
+    "desktop/aizome/crates/aizome-comp-core/src/backend/headless.rs": "0dacc391534284a15de7231ff264477ab25552db1deaa875225ae09f46fb0d96",
+    "desktop/aizome/nix/hotaru.nix": "21ea3bedb89c3fcaff30154038871b40e4da33de1fbb8701bd2ec2ee7e06d8e2",
+    "vendor/sidestep/crates/sidestep-engine/src/backend/mod.rs": "c8bfc49d4ab66b3b30150bd23a56c221219b0d094f1ea220aea06235c28681f0",
+    "vendor/sidestep/crates/sidestep-engine/src/text/grid.rs": "1119c19008720851db1ac104641b7309261ab0c419c7eab735a4a94c68cf5122",
+    "vendor/sidestep/crates/sidestep-engine/src/text/raster.rs": "80d37473cfa31b6e9313f77e07e2ff8cc7dac61a065ce0d573f73955a31815ee",
+    "vendor/sidestep/crates/sidestep-engine/src/raster.rs": "f12e295f4f179005ccc66cd45285de7054b059eebf1d761194042d12020c7359",
+    "vendor/sidestep/crates/sidestep-engine/src/raster/bands.rs": "6f920219444cb0428c65267bf9de67db0a6528c7cb76f4ae8bce9b1cd9a642f3",
+    "vendor/sidestep/crates/sidestep-engine/src/stats.rs": "d4516711958a6806b54fea749f134738144ea4b958f5b5004f01eb9125f65378",
+    "vendor/sidestep/crates/sidestep-engine/src/protocol.rs": "f5cd3eb36e8d94052edd0c0cc57f60b4481344f5c302b3b5f73e50a16ab8f7b8",
+    "vendor/sidestep/crates/sidestep-ui/src/canvas.rs": "251b35abad37f7df41074e2114c552006c64cf4033fca80e3176be6069a126fc",
+    "vendor/sidestep/crates/sidestep-ui/src/window.rs": "540e0ab4f5d7a79a06d3ad0eba5739bd03333d4ca2360cc374f5fe3471113fea"
+  },
+  "ghostty": {
+    "revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+    "files": {
+      "src/renderer/Thread.zig": "8f6e43a2a89e17078348a7c30d6057859ec1a7459859e7cc5c44b14baadbf32a",
+      "src/renderer/OpenGL.zig": "982be46ee1ac32c02211152e72b60eeb8ee3bf199eb9bf4289c68caff127a6ae",
+      "src/renderer/generic.zig": "07796ed3c5852e834442d64b1b2f79d35868b469b81c69f82bd390dad3896b1e",
+      "src/renderer/opengl/Device.zig": "ec30e18169b8b655b5342cbaabbf7ee67f96346bdfec0c92078ddc21f8354a96",
+      "src/renderer/opengl/Frame.zig": "2c1e2f35bc8e32fae2ee292e422b8c1e6be6dd6f72a5b7dccce1679475033a01",
+      "src/renderer/opengl/Target.zig": "6eb29c8087e38824be711704ee0547393f40e6a5c38651edaca41e7e80774ec5",
+      "src/apprt/gtk/class/render_surface.zig": "db69b12b4db444743ff67fb629a18eb60ed2dad76fb6f64c76c3c39c9dac7b2e",
+      "src/apprt/gtk/class/surface.zig": "e720716fd20d92fa753d29788aa3c0c0490d9d57095b2afcf9255e218c72751e",
+      "src/font/sprite/Face.zig": "b8030bad5a7ba807364d67a5929eab14bf080a8095a31bbd6a4277cbdb5b49ac",
+      "src/config/Config.zig": "ceadf4ffc601dfd2cc831f4083b5d70ba2ccdc6e6e3cade736bd4583134e8c9f"
+    }
+  },
+  "probe_files": {
+    "hardware.json": "a4f7531213b782c8254e2cb2d8892ae1bb89ed9bcb574c57948bc11f4f9b7230",
+    "hardware.log": "5bc1b0a28060926fd1df293d86634697faa6f7920fa8c720757c42d4355ea9b8"
+  },
+  "tool_sha256": "a06d8419bd5586323c0294b6153e33ee26a1427e88ae7575ef28cb909653a766",
+  "gpu_rendering_proven": true,
+  "hardware_wayland_presentation_proven": false,
+  "host_permissions_changed": false
+}

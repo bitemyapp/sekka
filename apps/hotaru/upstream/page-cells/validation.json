@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "tests_passed": 107,
+  "commands": [
+    "cargo +1.95.0 test -p hotaru-core --tests",
+    "cargo +1.95.0 clippy -p hotaru-core --all-targets -- -D warnings"
+  ],
+  "source_sha256": "d499ac0df01842a89572db2e98c2f436d2fd5ddb77094c26684b8bf76817c554",
+  "log_sha256": "d9142997a819b4a43b5c18099e32b7c79b5c5f5c023b12c0396ac2161db0de1a",
+  "patch_sha256": "22222a2f1c9348379308e2eee6618a0265453a1fbfec37f350aaea23a6b59336",
+  "tests": "existing regression/oracle suites plus mapped-range ownership,layout bounds,capacity/codec/charge preservation and whole-page prefix-retention estimates",
+  "production_integrated": false,
+  "recommendation": "Do not integrate: real RSS improvement but measurable history-ingestion and cold-read regressions."
+}
