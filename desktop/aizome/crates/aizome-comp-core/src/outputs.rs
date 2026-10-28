@@ -322,6 +322,15 @@ pub fn all_info(az: &Aizome) -> Vec<OutputInfo> {
 }
 
 pub fn outputs_changed(az: &mut Aizome) {
+    // Existing lock surfaces must follow mode, scale and rotation changes
+    // too. Smithay suppresses unchanged/pending duplicate configures.
+    for output in &az.outputs {
+        if let Some(lock) = az.out.get(output).and_then(|o| o.lock_surface.as_ref()).filter(|l| l.alive()) {
+            let size = az.output_geometry(output).size;
+            lock.with_pending_state(|s| s.size = Some((size.w as u32, size.h as u32).into()));
+            lock.send_configure();
+        }
+    }
     // The logic hears before the next frame (windows off every output
     // come back, filled ones refit).
     az.outputs_dirty = true;

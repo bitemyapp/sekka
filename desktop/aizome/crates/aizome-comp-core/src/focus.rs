@@ -359,7 +359,10 @@ impl Aizome {
                 .as_ref()
                 .and_then(|o| self.out.get(o))
                 .and_then(|o| o.lock_surface.clone())
-                .or_else(|| self.out.values().find_map(|o| o.lock_surface.clone()));
+                .filter(|l| l.alive())
+                .or_else(|| {
+                    self.outputs.iter().find_map(|o| self.out.get(o)?.lock_surface.clone().filter(|l| l.alive()))
+                });
             return Some(lock.map(|l| l.wl_surface().clone()));
         }
         // The active output's first, then the others.

@@ -1045,6 +1045,37 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
+The lock screen follows enabled Wayland outputs throughout lock acquisition
+and the confirmed lock. Every display has a focused password field sharing
+one authentication state; mirrors show their source's prompt and explicitly
+disabled displays stay off. Output removal destroys obsolete lock surfaces,
+returning outputs get new ones, and mode/scale/rotation changes reconfigure
+existing ones. The compositor also retargets the keyboard when displays
+change or the pointer moves between prompts. It keeps the session locked
+while outputs are absent.
+
+The October 27 blank-screen report followed a locked external display being
+removed and the laptop panel being restored. Previously the shell created
+lock surfaces only at lock initiation and put the password on only the
+then-focused output. The regression checks also caught a surviving prompt
+losing keyboard input after the focused display departed, and lock surfaces
+retaining their old dimensions after a display change.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell -p aizome-kit
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell
+nix develop .#aizome -c env AIZOME_LOCK_TEST_SHELL="$PWD/desktop/aizome/target/debug/aizome-shell" \
+  cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test lock_displays -- --include-ignored
+```
+
+The shell tests cover authentication, every display's field, output loss
+during lock acquisition, no-output intervals, surface replacement and view
+updates. `lock_displays` uses the real shell and compositor over private
+Wayland sockets to check repeated output removal/restoration, disabled
+outputs, lid-close/undock/lid-open, DPMS, mirrors, resizing and input isolation.
+Its desktop cases are ignored unless explicitly run with the built shell.
+These are component checks, not physical suspend/resume or ISO qualification.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

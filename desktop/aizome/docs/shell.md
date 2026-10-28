@@ -419,14 +419,23 @@ a lock surface shows: the session stays locked, black, without one.
 Locks on ⌃❖Q, on the compositor's `idle` event (config
 `idle.lock_after_minutes`), before sleep (logind PrepareForSleep, holding a
 delay inhibitor until locked), and on logind's Lock signal (`loginctl
-lock-session`). Each output gets a lock surface: the wallpaper under a
-`kachi` scrim at 70%, the time in IBM Plex Mono 64pt and the date, and on
-the focused output the user's picture or initial, their name, a password
+lock-session`). Each enabled output gets the complete lock screen: the
+wallpaper under a `kachi` scrim at 70%, the time in IBM Plex Mono 64pt and
+the date, the user's picture or initial, their name, a password
 field (a 2pt `focus` rail when focused) and the mark. Caps Lock shows a
 warning. Authentication runs PAM (service `aizome`, through the `pam`
 crate or a small FFI) on a thread; a failure shakes the field (motion moves
 the layer; none in Austere/reduced motion) and says so. Notifications and
 media controls are not shown while locked. Unlocking restores everything.
+
+Display changes reconcile the lock surfaces during both lock acquisition
+and the confirmed lock. A returning laptop panel or newly connected
+monitor gets a focused password field without restarting the shell; a
+departing output's surface is destroyed. Password entry and authentication
+state are shared across displays. Explicitly disabled outputs stay off,
+mirrors show their source's prompt, and resolution, scale and rotation
+changes reconfigure existing lock surfaces. The compositor keeps the
+session locked even while no outputs are available.
 
 ## Authentication dialog
 

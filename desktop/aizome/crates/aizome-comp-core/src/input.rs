@@ -297,6 +297,9 @@ impl State {
         } else {
             crate::fallback::pointer_motion(self, pos, time);
         }
+        if self.az.lock.is_locked() {
+            self.update_keyboard_focus();
+        }
         // Activate a pointer constraint the client asked for.
         if let Some(pointer) = self.az.seat.get_pointer()
             && let Some(f) = pointer.current_focus()
