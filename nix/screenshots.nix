@@ -168,8 +168,7 @@ pkgs.testers.runNixOSTest {
             check=True)
         print(f"{name}.png: {w} × {h} at {x},{y} of {whole}.png")
 
-    # Tatami: Activity, the menu, Displays, Yukimi in the session's GTK
-    # theme, and the Network window, each on its own.
+    # Tatami: Activity, the menu, Displays, native Yukimi, and the Network window, each on its own.
     tatami.start()
     start_access_points(tatami)
     tatami.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -267,8 +266,7 @@ pkgs.testers.runNixOSTest {
     capture(tatami, "displays", settle=10, window=alone("org.tatami.Displays"))
     tatami.send_key("meta_l-w")
     wait_window("org.tatami.Displays", gone=True)
-    # No GPU in the VM: Cairo, rather than GTK trying Vulkan first.
-    launch(tatami, "env GSK_RENDERER=cairo yukimi")
+    launch(tatami, "yukimi")
     wait_window("yukimi")
     capture(tatami, "yukimi", settle=30, window=alone("yukimi"))
     user(tatami, "pkill -u demo -f '[y]ukimi' || true")
@@ -319,7 +317,7 @@ pkgs.testers.runNixOSTest {
     time.sleep(3)
     user(gnome, "${pkgs.mutter}/bin/gdctl set --logical-monitor --primary --monitor Virtual-1 --scale 2")
     # Yukimi, then Files over it, as GNOME places them.
-    launch(gnome, "env GSK_RENDERER=cairo yukimi")
+    launch(gnome, "yukimi")
     gnome.wait_until_succeeds("pgrep -u demo -f '[y]ukimi'", timeout=30)
     time.sleep(20)
     launch(gnome, "nautilus --new-window")

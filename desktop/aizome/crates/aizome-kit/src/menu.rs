@@ -523,6 +523,33 @@ impl<Msg> MenuBar<Msg> {
         MenuBar::default()
     }
 
+    /// Use Control for command shortcuts when embedding an app in a desktop
+    /// that reserves Super. This updates both matching and the visible labels,
+    /// including nested menus. Explicit Control+Super combinations stay intact.
+    pub fn control_commands(mut self) -> Self {
+        fn convert(menu: &mut MenuSpec) {
+            for item in &mut menu.items {
+                match item {
+                    ItemSpec::Action(action) => {
+                        if let Some(shortcut) = &mut action.shortcut
+                            && shortcut.command
+                            && !shortcut.ctrl
+                        {
+                            shortcut.command = false;
+                            shortcut.ctrl = true;
+                        }
+                    }
+                    ItemSpec::Submenu(menu) => convert(menu),
+                    _ => {}
+                }
+            }
+        }
+        for menu in &mut self.menus {
+            convert(menu);
+        }
+        self
+    }
+
     /// The app menu, Edit, Window and Help, as every Aizome app has them.
     /// Apps with settings add their own Settings action to the app menu;
     /// there is no default settings dialog for this menu to open.
@@ -636,6 +663,26 @@ mod tests {
 
     fn ch(s: &str) -> Key {
         Key::Character(s.into())
+    }
+
+    #[test]
+    fn control_commands_match_and_label_nested_menus() {
+        let info = AppInfo::new("test", "Test", "Test");
+        let standard = MenuBar::<()>::standard(&info);
+        let external = standard.clone().control_commands();
+        let find = |bar: &MenuBar<()>, key, modifiers| {
+            bar.menus().iter().find_map(|menu| menu.find_shortcut(&press(ch(key), modifiers)).cloned())
+        };
+        assert!(find(&standard, "c", Modifiers::SUPER).is_some());
+        assert!(find(&standard, "c", Modifiers::CONTROL).is_none());
+        for key in ["c", "v", "x", "a", "f", "q"] {
+            let action = find(&external, key, Modifiers::CONTROL).expect(key);
+            let shortcut = action.shortcut.unwrap();
+            assert!(shortcut.ctrl && !shortcut.command);
+            assert!(!shortcut.label().contains(aizome_theme::glyphs::SUPER));
+            assert!(find(&external, key, Modifiers::SUPER).is_none());
+        }
+        assert!(find(&external, "g", Modifiers::CONTROL | Modifiers::SHIFT).is_some());
     }
 
     #[test]

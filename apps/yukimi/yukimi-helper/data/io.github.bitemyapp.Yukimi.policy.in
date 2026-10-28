@@ -5,7 +5,7 @@
 <policyconfig>
   <vendor>Yukimi</vendor>
   <vendor_url>https://github.com/bitemyapp/yukimi</vendor_url>
-  <icon_name>io.github.bitemyapp.Yukimi</icon_name>
+  <icon_name>org.aizome.Yukimi</icon_name>
   <action id="io.github.bitemyapp.Yukimi.change-system">
     <description>Change the system's packages, version or storage</description>
     <message>Yukimi needs an administrator's password to change the system</message>

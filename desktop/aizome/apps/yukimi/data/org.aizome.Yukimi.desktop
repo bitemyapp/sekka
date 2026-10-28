@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Yukimi
-GenericName=Software
+GenericName=Package Manager
 Comment=See what's installed, find what's available, update and go back, on Sekka's NixOS
-Keywords=software;packages;install;uninstall;remove;update;upgrade;app store;nix;nixos;nixpkgs;flake;generations;rollback;store;garbage;
+Keywords=nix;nixos;nixpkgs;packages;software;apps;applications;programs;install;uninstall;remove;update;upgrade;store;app store;software center;generations;rollback;flake;configuration;garbage;
 Categories=System;PackageManager;
 Icon=org.aizome.Yukimi
 Exec=aizome-yukimi %U

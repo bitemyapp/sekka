@@ -4,7 +4,6 @@ members = [
     "crates/yukimi-store",
     "crates/yukimi-config",
     "crates/yukimi-system",
-    "yukimi",
     "yukimi-helper",
 ]
 
@@ -28,13 +27,7 @@ rnix = "0.14"
 # rnix's syntax trees; the version rnix itself uses, for its `AstNode` trait.
 rowan = "0.16"
 libc = "0.2"
-async-channel = "2"
 # Asking GitHub and FlakeHub for the newest version of a source.
 ureq = "3"
-gtk = { package = "gtk4", version = "0.10", features = ["v4_18"] }
-adw = { package = "libadwaita", version = "0.8", features = ["v1_7"] }
-glib = "0.21"
-gio = "0.21"
-
 [profile.release]
 lto = "thin"

@@ -37,7 +37,8 @@ Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of
 the capture, unscaled, with the window's own edges; the bar and the desktop
-around it are left out.
+around it are left out. The shared native Yukimi capture below is an exception:
+it keeps the whole Tatami display, including its bar and window edges.
 
 | Image | Original resolution | What it shows |
 | --- | --- | --- |
@@ -46,9 +47,9 @@ around it are left out.
 | [Tatami menu](images/sekka/tatami-menu.png) | 2880 × 1800 | The whole Tatami desktop, with nothing open but the Tatami menu (Super+Space) |
 | [Displays](images/sekka/displays.png) | 1760 × 1600 | Tatami's Displays window, opened with Super+Ctrl+D, showing the VM's one virtual display |
 | [Network](images/sekka/network.png) | 1440 × 1520 | Tatami's Network window, joined to a simulated network, with made-up network names |
-| [Yukimi](images/sekka/yukimi.png) | 2832 × 1700 | Yukimi's window in Tatami, reading the test VM `sekka-demo` |
+| [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Shared native Yukimi in Tatami, reading the test VM `sekka-demo`; whole display, scale 2 |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
-| [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Sekka's GNOME session with Files over Yukimi |
+| [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Historical capture of Sekka's GNOME session with Files over the former GTK Yukimi |
 | [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file, Files and a terminal (running fastfetch) stacked in one tab group, a notification filed under Tenki in the Deskbar |
 | [Aizome's menu at the pointer](images/sekka/aizome-menu.png) | 2880 × 1800 | The same desktop with Super + right-click's whole menu of Sumi at the pointer |
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
@@ -56,7 +57,15 @@ around it are left out.
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
 | [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window |
 
-They come from [nix/screenshots.nix](../nix/screenshots.nix):
+The shared native Yukimi image was captured on 2026-10-28 by
+[`yukimi-tatami`](../nix/yukimi-discover.nix), a disposable component-test VM
+using the shipped Tatami module with test-only automatic login. It is the
+unaltered `native-overview.png` capture, with software-rendered graphics and
+the VM's real configuration and store. The [comparison report](test-results/yukimi-unified-2026-10-27.json)
+also records the scaling and Xfce captures under `test-results/yukimi-unified/`.
+These checks do not qualify an ISO or an installed physical system.
+
+The other Tatami, Plasma and GNOME images come from [nix/screenshots.nix](../nix/screenshots.nix):
 
 ```sh
 nix build .#screenshots --out-link result-screenshots

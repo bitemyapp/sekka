@@ -85,7 +85,34 @@ pub fn menus(app: &Yukimi) -> MenuBar<Msg> {
         .separator()
         .item(MenuItem::new("Search Packages", Msg::Show(Page::Discover)).shortcut(Shortcut::cmd('F').shift()))
         .item(MenuItem::new("Clean Up the Store…", Msg::CleanUp).enabled(app.model.store.is_some()));
-    MenuBar::standard(&app.info()).with_menu(go).with_menu(system)
+    let menus = MenuBar::standard(&app.info()).with_menu(go).with_menu(system);
+    // Tatami reserves Super for its desktop, forwarding clipboard commands as
+    // Ctrl+C/V/X. Other non-Aizome desktops conventionally use Control too.
+    // An unset desktop preserves the toolkit's defaults for development/tests.
+    if uses_control_commands(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()) {
+        menus.control_commands()
+    } else {
+        menus
+    }
+}
+
+fn uses_control_commands(desktop: &str) -> bool {
+    !desktop.is_empty() && !desktop.split(':').any(|name| name.eq_ignore_ascii_case("aizome"))
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::uses_control_commands;
+
+    #[test]
+    fn commands_follow_the_session() {
+        for desktop in ["Hyprland:Tatami", "XFCE", "GNOME", "KDE"] {
+            assert!(uses_control_commands(desktop));
+        }
+        for desktop in ["", "Aizome", "Aizome:Wayland", "aizome"] {
+            assert!(!uses_control_commands(desktop));
+        }
+    }
 }
 
 // The frame.

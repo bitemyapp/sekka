@@ -14,7 +14,7 @@ path = "src/main.rs"
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true
-# Both interfaces use Sekka's canonical UI-independent Yukimi libraries.
+# The interface and privileged helper share these UI-independent libraries.
 yukimi-config = { path = "../../../../apps/yukimi/crates/yukimi-config" }
 yukimi-store = { path = "../../../../apps/yukimi/crates/yukimi-store", features = ["bundled"] }
 yukimi-system = { path = "../../../../apps/yukimi/crates/yukimi-system" }

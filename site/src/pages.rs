@@ -94,7 +94,7 @@ pub fn home(site: &Site) -> Result<Page> {
         )?,
         yukimi_shot = site.shot(
             "yukimi.png",
-            "Yukimi's overview of a test machine named sekka-demo in Tatami's dark theme: package count, freshness and store size.",
+            "Native Yukimi's overview of a test machine named sekka-demo in Tatami: package count, freshness and store size.",
             "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release.",
             "",
         )?,
@@ -106,8 +106,8 @@ pub fn home(site: &Site) -> Result<Page> {
         )?,
         gnome = site.shot(
             "gnome.png",
-            "Sekka's GNOME session with Files open over Yukimi.",
-            "GNOME, in a test VM.",
+            "Historical capture of Sekka's GNOME session with Files over the former GTK Yukimi.",
+            "GNOME in a test VM, before Yukimi moved to the shared native interface.",
             "",
         )?,
     )?;
@@ -145,7 +145,6 @@ pub fn home(site: &Site) -> Result<Page> {
       <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
       <li><strong>No release.</strong> Only experimental <a href="/download/">nightly builds</a>, published after testing the exact ISO in virtual machines.</li>
-      <li><strong>Not all of it looks like Sekka yet.</strong> Outside Aizome, Yukimi still uses libadwaita's light theme and NixOS blues.</li>
     </ul>
     <p><a href="/status/">The full status, and how each part is tested</a></p>
   </div>
@@ -623,12 +622,12 @@ pub fn design(site: &Site) -> Result<Page> {
     <p class="step-n">6</p>
     <h2 id="family">The family</h2>
     <p>Genkan's icon is a noren, the split curtain that hangs in a Japanese entrance, dyed indigo with the crest across its slits as real cloth would have it. Tatami's is a four-and-a-half-mat room that also reads as tiled windows. Both are proposals; neither ships yet.</p>
-    <p>Yukimi's icon is the one it ships today: a round window onto a snowy night. It still uses NixOS blues and a cream frame, so it doesn't belong to this family yet.</p>
+    <p>Yukimi ships Aizome's icon: a square shōji window with falling snow below the paper panes. Its interface and icon are shared across Sekka's desktops.</p>
   </div>
   <div class="win step-figure family">
     <figure><img src="{genkan}" width="128" height="128" alt="Genkan: an indigo noren with the crest across its slits."><figcaption>Genkan, proposed</figcaption></figure>
     <figure><img src="{tatami}" width="128" height="128" alt="Tatami: four mats around a lit half mat."><figcaption>Tatami, proposed</figcaption></figure>
-    <figure><img src="{yukimi}" width="128" height="128" alt="Yukimi: a round window onto falling snow."><figcaption>Yukimi, as shipped</figcaption></figure>
+    <figure><img src="{yukimi}" width="128" height="128" alt="Yukimi: a square shōji window onto falling snow."><figcaption>Yukimi, as shipped</figcaption></figure>
   </div>
 </section>
 
@@ -637,7 +636,6 @@ pub fn design(site: &Site) -> Result<Page> {
   <h2 id="unfinished">What isn't finished</h2>
   <ul class="facts">
     <li><strong>The desktop doesn't use the crest yet.</strong> Tatami's bar shows the NixOS logo.</li>
-    <li><strong>Yukimi's GTK window is still light libadwaita with NixOS blues</strong>, not Tokyo Night, and Yukimi's icon is outside the family.</li>
     <li><strong>Tatami is dark only.</strong> Day and High contrast exist in the tokens and on this site, not in the desktop.</li>
     <li><strong>The week-number grey fails contrast in Night and Day</strong>, kept because it is Tatami's real value and only decorative.</li>
     <li><strong>Pages share no raster image</strong>, so links posted elsewhere show no picture.</li>
@@ -666,6 +664,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
     <p class="eyebrow">Yukimi {kanji}</p>
     <h1>Your system, seen from somewhere warm.</h1>
     <p class="lead">A yukimi-shōji is a paper screen with a pane of glass set low in it, so you can sit in a warm room and watch the snow fall in the garden. Yukimi is that window onto a NixOS system: see what is installed and why, find what is available, and change it without opening a text editor.</p>
+  <p>Every Sekka desktop uses the same native interface. It opens directly on Wayland; on X11 it opens inside a nested Wayland window. Keyboard commands use Ctrl outside Aizome and Super in Aizome.</p>
   </div>
 </section>
 {shot}
@@ -674,7 +673,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
         icon = site.asset("brand/yukimi.svg")?,
         shot = site.shot(
             "yukimi.png",
-            "Yukimi's overview in Tatami's dark theme: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
+            "Native Yukimi's overview in Tatami: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
             "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release. The dash and the badge come from the test VM too: Yukimi can't date its Nixpkgs or verify its last update there, and says so rather than guessing.",
             "win wide-shot",
         )?,
@@ -762,15 +761,14 @@ pub fn yukimi(site: &Site) -> Result<Page> {
     <ul class="facts gaps">
       <li><strong>It covers the everyday, not all of Nix.</strong> Installing and removing software, updating, going back and freeing space. Nix can do far more than any window can show, and Yukimi doesn't try to.</li>
       <li><strong>It asks for your password every time.</strong> NixOS restarts polkit whenever the installed packages change, so each change asks again.</li>
-      <li><strong>It doesn't look like Sekka yet.</strong> It is libadwaita with NixOS blues, not Tokyo Night: dark in Tatami, light on GNOME. Its icon is outside the Sekka family.</li>
     </ul>
   </article>
 </section>
 "#,
         gnome = site.shot(
             "gnome.png",
-            "Files open over Yukimi on GNOME, both in libadwaita's light theme.",
-            "Yukimi on Sekka's GNOME session, behind Files, in a disposable test VM.",
+            "Historical capture of Files over the former GTK Yukimi on GNOME.",
+            "A disposable GNOME test VM before Yukimi moved to the shared native interface.",
             "win",
         )?,
     )?;
