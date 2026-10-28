@@ -779,17 +779,17 @@
     "uta": {
       "flake": false,
       "locked": {
-        "lastModified": 1792996982,
-        "narHash": "sha256-rMKSM8QJTIxpFefX8z1WZ/YNqbnA6x0Ykp5aL260sPg=",
+        "lastModified": 1793218122,
+        "narHash": "sha256-Fpo56bPvO23p0DuJkLOiuCA+PNRMyZ5y3SwUqDixz74=",
         "owner": "bitemyapp",
         "repo": "uta",
-        "rev": "7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00",
+        "rev": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
         "type": "github"
       },
       "original": {
         "owner": "bitemyapp",
         "repo": "uta",
-        "rev": "7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00",
+        "rev": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
         "type": "github"
       }
     }

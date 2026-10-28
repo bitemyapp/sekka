@@ -25,6 +25,7 @@ let
 in
 pkgs.callPackage "${uta}/nix/package.nix" {
   src = uta;
+  enableRustyPipe = true;
   inherit aizome sidestep fonts;
   # The music service's Python, as Uta's flake.nix makes it.
   python = pkgs.python3.withPackages (ps: [

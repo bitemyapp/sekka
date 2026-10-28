@@ -1078,6 +1078,16 @@ to the kit's interface or its dependencies, or a new Sidestep, must keep
 source holds only the kit's crates, so a crate the kit comes to depend on
 joins the list in `nix/uta.nix`.
 
+Uta is an optional download in Genkan and Yukimi, with RustyPipe enabled. Its
+catalog `preload: false` excludes it from `application-cache` and the ISO's
+application closure lists; it remains in the free-application systems published
+to the binary cache. New catalog entries preload by default. Keep the two
+policies separate: catalog availability does not require offline media inclusion.
+Run `nix build .#uta .#checks.x86_64-linux.uta-installation` after changing the pin
+or preload policy. This checks package selection and evaluated ISO contents;
+it does not certify an ISO boot or installation. Binary cache distribution of
+the GPL-3.0-only build still requires its corresponding source and notices.
+
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix
 shell. Without `--checkout`, `aizome-dev` uses `$AIZOME_CHECKOUT`, then the

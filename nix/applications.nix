@@ -41,6 +41,9 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
+  # Catalog visibility and offline media contents are separate policies.
+  # Download-only apps remain selectable and eligible for the binary cache.
+  preloaded = builtins.filter (app: app.preload or true) catalog;
   withKeyring = import (genkan + "/rust/src/keyring.nix") {
     inherit (inputs.nixpkgs) lib;
     pkgs = specialArgs.applicationPkgs;
@@ -60,8 +63,9 @@ in
     specialArgs
     evaluate
     packageList
+    preloaded
     ;
-  cache = all.config.system.build.installerApplications;
+  cache = (evaluate (map (app: app.id) preloaded)).config.system.build.installerApplications;
   # The generated per-choice matrix runs in separate evaluator processes.
   # Retaining all those complete NixOS systems here exhausts small builders.
   check =

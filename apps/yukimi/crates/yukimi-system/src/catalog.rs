@@ -185,12 +185,17 @@ mod tests {
             "installer",
             r#"[{"id":"firefox","name":"Firefox","description":"Browse.","category":"Browsers","packages":["firefox"]},
                 {"id":"rustup","name":"Rustup","description":"Toolchains.","category":"Development tools","packages":["rustup"],"requires":["build-tools"]},
+                {"id":"uta","name":"Uta for YouTube Music","description":"Downloads when selected.","category":"Media & creativity","source":"sekka","packages":["uta"],"preload":false},
                 {"id":"Bad Id","name":"Bad","description":"","category":"x"}]"#,
         );
         let firefoxes: Vec<&Application> = apps.iter().filter(|a| a.name == "Firefox").collect();
         assert_eq!(firefoxes.len(), 1);
         assert_eq!(firefoxes[0].setting.as_deref(), Some("calamares.applications"));
         assert_eq!(apps[1].requires, vec!["build-tools"]);
+        let uta = apps.iter().find(|app| app.id == "uta").unwrap();
+        assert_eq!(uta.setting.as_deref(), Some("calamares.applications"));
+        assert!(uta.matches("uta") && uta.matches("youtube"));
+        assert!(!uta.unfree);
         assert!(!apps.iter().any(|a| a.id == "Bad Id"));
         assert!(apps.iter().any(|a| a.id == "steam" && a.program.as_deref() == Some("steam")));
         assert!(valid_setting("calamares.applications") && !valid_setting("x") && !valid_setting("a.${b}"));

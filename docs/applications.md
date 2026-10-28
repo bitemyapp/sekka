@@ -24,7 +24,7 @@ pins were selected on 2026-10-04:
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
-| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00`, added 2026-10-27 | Uta for YouTube Music |
+| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `a70e8f6fda8f4744ee8bfc27d93657176d9860ff`, updated 2026-10-28 | Uta for YouTube Music, with RustyPipe |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -94,12 +94,27 @@ Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
 revision, so the nightly's input update doesn't move it: a Uta built for a
 different Aizome would fail the nightly's checks and hold back every other
 input. To move it, put the new revision in `flake.nix`, run `nix flake lock`
-and build `.#uta`. Its music service uses ytmusicapi and yt-dlp from the
-applications' Nixpkgs, which the nightly keeps current as YouTube changes.
+and build `.#uta`. RustyPipe handles public browsing and anonymous or Premium
+playback; ytmusicapi and yt-dlp from the applications' Nixpkgs handle account
+operations and playback fallback.
 Uta's windows are Wayland only, so it runs in every Sekka desktop but Xfce,
 whose session is X11. Connecting an account saves its session in the desktop
-keyring, which every Sekka desktop runs. Uta is free and compiled from source,
-so `push-cache` publishes it.
+keyring, which every Sekka desktop runs.
+
+Uta appears in Genkan and Yukimi's Discover but is not selected by default.
+Its catalog entry has `preload: false`: neither its package nor its precache
+path list is added to the ISO. Selecting it requires a download; if the binary
+cache lacks the build, Nix builds it from the pinned sources. The free-application
+binary cache still includes Uta independently of the ISO's preload list.
+
+The RustyPipe build is GPL-3.0-only, with its notices included in the package;
+it is free software and does not require proprietary-software consent.
+Listing a separate application does not link its code into Genkan or Yukimi.
+Optional downloads still require the corresponding source and notices when
+distributing binaries; excluding the package from an ISO does not waive those
+requirements. See [GPLv3 section 6](https://www.gnu.org/licenses/gpl-3.0.html#section6).
+The Uta pin, its vendored RustyPipe sources, Sekka's `nix/uta.nix`, the local
+Aizome kit and locked Sidestep identify the sources and build recipe used here.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
@@ -128,15 +143,17 @@ and logins, and what they sealed with the fixed key still opens.
 
 ## Preparation and regression checks
 
-The ISO includes a read-only store closure of all offered application packages.
+The ISO includes a read-only store closure of application packages whose catalog
+entries permit preloading (the default when `preload` is absent).
 They become installed applications only when selected. Before changing the
 target disk, the helper resolves the selected closure against the immutable
 lock, keeps it rooted, and checks target capacity against that closure plus a
 24 GiB reserve for the base system and installation workspace. Package-resolution
 failures stop before erasure.
 
-`nix flake check` evaluates all choices and none, and builds the complete package
-cache. The rootless builder's additional configuration matrix evaluates
+`nix flake check` evaluates all choices and none, builds the offline package
+cache, and checks that Uta is selectable while absent from that cache, the live
+session and ISO precache lists (`uta-installation`). The rootless builder's additional configuration matrix evaluates
 actual Rust-generated configurations for every choice, all, none and free-only,
 including dependency normalization, rootless Docker, Firefox/Steam integration
 and freshly probed filesystem UUID overrides. It can also be run separately:

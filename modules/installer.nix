@@ -63,7 +63,7 @@ in
     cacheApplications = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Store every optional application on the media. Development images may omit it.";
+      description = "Store optional applications marked for preload on the media. Development images may omit them.";
     };
   };
   config = {
@@ -275,7 +275,7 @@ in
       '';
     };
     isoImage.squashfsCompression = "zstd -Xcompression-level 6";
-    # Keep optional packages and a prebuilt installed system for every desktop
+    # Keep preload-eligible packages and a prebuilt installed system for every desktop
     # in the read-only store, without adding them to the live session. An
     # installation then copies from the media instead of downloading into RAM.
     isoImage.storeContents =

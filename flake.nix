@@ -24,7 +24,7 @@
   # update doesn't move it: a Uta that needs a different Aizome would fail
   # the nightly's checks and hold back every other input.
   inputs.uta = {
-    url = "github:bitemyapp/uta/7cdb1d62ecc53fbf0b37a6d86eaa695fa4ecde00";
+    url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
     flake = false;
   };
 
@@ -363,6 +363,10 @@
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
+        uta-installation = import ./nix/uta-installation-test.nix {
+          inherit pkgs applicationCatalog installer;
+          uta = self.packages.${system}.uta;
+        };
         application-cache = applicationCatalog.cache;
         live-profiles =
           let

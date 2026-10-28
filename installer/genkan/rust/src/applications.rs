@@ -22,6 +22,13 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Whether the ISO carries the app for offline installation.
+    #[serde(default = "preload_by_default")]
+    pub preload: bool,
+}
+
+fn preload_by_default() -> bool {
+    true
 }
 
 pub fn catalog() -> &'static [Application] {
@@ -92,6 +99,21 @@ impl ApplicationSelection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn download_only_uta_is_selectable_without_proprietary_consent() {
+        let selection = ApplicationSelection::parse(vec!["uta".into()], false).unwrap();
+        assert_eq!(selection.ids(), ["uta"]);
+        assert!(!selection.selected()[0].preload);
+        assert!(!default_selection().contains(&"uta".to_string()));
+        assert!(
+            catalog()
+                .iter()
+                .find(|app| app.id == "firefox")
+                .unwrap()
+                .preload
+        );
+    }
+
     #[test]
     fn catalog_has_unique_ids_and_valid_dependencies() {
         let ids: BTreeSet<_> = catalog().iter().map(|app| app.id.as_str()).collect();
