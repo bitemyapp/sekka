@@ -391,7 +391,7 @@ fn full_screen_and_the_slideshow() {
     let w = r.h.window();
     r.h.key(w, aizome_kit::sidestep_ui::Key::Character("F".into()), Modifiers::SUPER | Modifiers::SHIFT);
     assert_eq!(r.h.fullscreen_asked(w), Some(true));
-    r.h.window_state(w, WindowState { fullscreen: true, maximized: false });
+    r.h.window_state(w, WindowState { fullscreen: true, maximized: false, suspended: false });
     assert!(r.h.program().fullscreen);
     // No toolbar in full screen.
     assert!(!r.h.texts(w).iter().any(|t| t.contains(" of 9")));
@@ -405,7 +405,7 @@ fn full_screen_and_the_slideshow() {
     r.h.window_state(w, WindowState::default());
     assert!(!r.h.program().fullscreen);
     // The desktop's ⌃❖F, heard as the window's state.
-    r.h.window_state(w, WindowState { fullscreen: true, maximized: false });
+    r.h.window_state(w, WindowState { fullscreen: true, maximized: false, suspended: false });
     assert!(r.h.program().fullscreen);
 }
 

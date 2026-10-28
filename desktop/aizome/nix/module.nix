@@ -378,6 +378,35 @@ in
           "application/json"
           "application/x-yaml"
         ]
+        + entry "Utsushi" [
+          "video/mp4"
+          "video/x-matroska"
+          "video/webm"
+          "video/quicktime"
+          "video/x-msvideo"
+          "video/vnd.avi"
+          "video/mpeg"
+          "video/ogg"
+          "video/3gpp"
+          "video/mp2t"
+          "video/x-flv"
+          "video/x-m4v"
+          "video/av1"
+          "audio/mpeg"
+          "audio/mp4"
+          "audio/x-m4a"
+          "audio/aac"
+          "audio/flac"
+          "audio/x-flac"
+          "audio/ogg"
+          "audio/x-vorbis+ogg"
+          "audio/opus"
+          "audio/x-opus+ogg"
+          "audio/wav"
+          "audio/x-wav"
+          "audio/webm"
+          "audio/x-matroska"
+        ]
         + entry "Hako" [ "inode/directory" ]
         + entry "Koyomi" [ "text/calendar" ]
         + entry "Tansu" [
@@ -478,6 +507,14 @@ in
       enable = lib.mkDefault true;
       pulse.enable = lib.mkDefault true;
       wireplumber.enable = lib.mkDefault true;
+      # Streams that ask for long graph cycles get them: Utsushi's music
+      # asks for 8192 frames (170 ms), so with nothing else playing the
+      # sound card, PipeWire and the player wake about six times a second
+      # rather than twenty-three at PipeWire's usual cap of 2048. Streams
+      # asking for short cycles (calls, games) still get theirs, and the
+      # usual cycle (1024) is unchanged for those that don't ask.
+      extraConfig.pipewire."90-aizome-long-cycles"."context.properties"."default.clock.max-quantum" =
+        lib.mkDefault 8192;
     };
     security.rtkit.enable = lib.mkDefault true;
 

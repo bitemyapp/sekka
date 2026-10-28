@@ -20,6 +20,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Kura 蔵 | Disk Usage | `apps/kura` | `aizome-kura` | `org.aizome.Kura` | storehouse |
 | Myaku 脈 | Activity | `apps/myaku` | `aizome-myaku` | `org.aizome.Myaku` | pulse |
 | Shashin 写真 | Images | `apps/shashin` | `aizome-shashin` | `org.aizome.Shashin` | photograph |
+| Utsushi 映し | Media Player | `apps/utsushi` | `aizome-utsushi` | `org.aizome.Utsushi` | projecting, as onto a screen (the 映 of 映画, film) |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
 
@@ -660,6 +661,114 @@ reads with, and SVG through resvg, rendered at the zoom.
   to one (see `docs/performance.md` for what that costs).
 - One instance: a second launch hands its files over
   (`aizome-app.shashin.sock`).
+
+### Utsushi (Media Player)
+
+Films, clips and music, played with as little work as the machine can
+do them with. It opens what FFmpeg reads (MP4, Matroska, WebM, QuickTime,
+AVI, MPEG transport streams, MP3, AAC, FLAC, Ogg, Opus, WAV and the
+rest); folders play their files in Hako's natural order.
+
+- **The window**: the picture fitted in it (letterboxed in black) over a
+  bar of controls: previous and next (or chapters), play, the time, the
+  timeline (chapters part it; under the pointer it says the time there
+  and its chapter), what's left (or the length: click it), volume,
+  Subtitles and Audio, speed (while it isn't 1×), full screen. Opening a
+  video sizes the window to its picture, up to most of the screen. In
+  full screen the bar floats over the picture's foot until the pointer
+  rests for 2.5 seconds, and the pointer hides with it; it stays while
+  paused. A song shows its cover (its own, or a tile in the dye), its
+  title, and who made it on what album when; with several queued, the
+  queue beside it.
+- **Keys**: Space or K plays and pauses; ←/→ five seconds (⇧ one, ⌥ a
+  minute), J/L ten; ↑/↓ volume, M mute; Home the start; Page Up/Down
+  chapters; , and . a frame (paused); [ and ] slower and faster (½× to
+  2×, the pitch kept); 0–9 a tenth of the way along per digit; C the next
+  subtitles, Z and X them a tenth of a second earlier and later; F full
+  screen; ⇧N and ⇧P the next and previous item; S the picture to
+  Pictures/Screenshots, ❖C to the clipboard. A click
+  on the picture plays and pauses, a double click is full screen, the
+  wheel is volume. Files dropped on the window play.
+- **Subtitles**: embedded text (SubRip, ASS/SSA, WebVTT, MP4's) and
+  pictures (Blu-ray PGS, DVD, DVB), and files beside the video with its
+  name (`Film.srt`, `Film.en.srt`), which show by themselves, as do
+  tracks marked default or forced; Add Subtitle File… for others. Text
+  is set in Archivo on a dark box, sized to the picture; ASS styling is
+  reduced to italics and top placement. Subtitles ▸ Show Earlier and
+  Show Later move them for a file timed to another cut, until Original
+  Timing or the next item.
+- **Where it was**: a film over five minutes long opens where it was
+  left (with Start Over for a few seconds), unless that was in its first
+  or last thirty seconds. Open Recent keeps twenty items.
+- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`) for the menu
+  bar's media widget and the media keys; one instance, later launches
+  handing their files over; Media Info (❖I) says what the file is and how
+  it's being played.
+
+**Why it's light.** The engine is `crates/aizome-media` (FFmpeg through
+`ffmpeg-sys-next`, PipeWire through `pipewire-rs`); the window shows its
+frames through the kit's video element (`docs/kit.md`, Video).
+
+- Video decodes on the GPU through VA-API where the codec and driver
+  allow (H.264, HEVC, VP9 and AV1 on recent Intel and AMD), on the
+  compositor's own GPU, and each frame goes to the compositor as the
+  decoder left it: a dmabuf on a subsurface of the window, imported once
+  per decoder surface. Nothing copies or converts a frame. While nothing
+  covers the picture, the video is the window's topmost surface, which
+  a compositor scanning out on KMS planes (Aizome's on its DRM backend)
+  can show without composing it. Subtitles set in a letterbox's bar
+  leave it so; only what really overlaps the picture (subtitles over
+  it, the full-screen controls) puts it under the window's drawing.
+  Frames carry their time (wp_commit_timing_v1) and are shown half a
+  refresh early, so each lands on the nearest refresh.
+- Out of sight, nothing decodes: a run of frames the compositor didn't
+  show (minimised, another Desk, covered by a full-screen window), or
+  the window saying it's suspended, stops the video and drops its
+  packets; audio plays on. Back in sight, it goes back to the keyframe
+  before now and catches up before showing (a moment's still frame).
+- Audio decodes ahead in bursts into a four-second ring, and the
+  demuxer sleeps until the ring is down to a second: about one wakeup a
+  second. PipeWire takes it in long graph cycles (170 ms for music,
+  40 ms with a picture). Pausing drops what the graph held and steps the
+  ring back to what was being heard, so pause and seek are immediate
+  whatever the cycle. Aizome's module raises PipeWire's cycle limit to
+  8192 frames so the long cycles are granted (`default.clock.max-quantum`;
+  streams asking for short cycles still get theirs).
+- The window redraws a digit a second, and nothing in full screen with
+  the controls gone, or while paused, except for subtitles.
+- Software decoding (no VA-API, or a codec the GPU lacks) runs on
+  several threads and converts each frame once, with swscale, into
+  shared memory; so does a compositor without dmabufs (pixman).
+
+Measured on an Intel Core Ultra 7 365 laptop with Aizome's compositor
+running headless on its GPU (GLES; headless can't use planes, so the
+compositor composes every frame for every player), a 1080p24 H.264 file,
+over 30 seconds with sound off: Utsushi 1.2% CPU and 115 context switches
+a second; mpv `--hwdec=vaapi --vo=dmabuf-wayland` 2.2% and 405; mpv
+`--hwdec=vaapi --vo=gpu-next` 3.5% and 376; mpv with Sekka's `mpv.conf`
+11.3% and 401. Music (a 3-minute MP3, muted): Utsushi 0.4% and 46, with
+PipeWire's daemon at 50 a second; `mpv --no-video` 1.0% and 246, the
+daemon at 99. That machine's PipeWire was capped at 2048-frame cycles
+(before the module's change); see `docs/performance.md`.
+
+As built, the limits: no gapless playback between songs; colours are
+the compositor's YUV conversion, which Aizome doesn't yet tell BT.709
+from BT.601 (no wp_color_representation), so HD video's colours can be
+slightly off; HDR shows as standard range; no playlists or streaming
+services; ASS subtitles lose their styling. Addresses
+FFmpeg reads (http, https, rtsp) open from the command line and through
+MPRIS, but the window has no Open Location yet, and a stream that can't
+seek plays without stopping its video out of sight.
+
+`cargo test -p aizome-media` plays the fixtures in
+`crates/aizome-media/tests/fixtures` (made by `make.sh` there) in
+software with no sound server and no window: opening, playing to the
+end, pausing, seeking, subtitles, chapters, tags and covers, speed, and
+video stopping out of sight while audio plays on. `cargo test -p
+aizome-utsushi` drives the window through the kit's harness with the
+real engine: the picture's place, subtitles in the letterbox or over the
+picture, full screen's controls, keys, a song, Media Info, and folders.
+`UTSUSHI_STATS=1` logs the pipeline and frame counts every five seconds.
 
 ### Annai (Welcome)
 

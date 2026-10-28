@@ -164,6 +164,10 @@ pub(crate) struct Win {
     pub refocus: Option<NodeId>,
     /// To be viewed (and drawn) while hidden: it's drawn ahead.
     pub refresh: bool,
+    /// Its videos where they were last placed (see `widgets::video`), and
+    /// the opaque region last given a see-through window that shows them.
+    pub videos: Vec<(crate::widgets::video::VideoId, sidestep_ui::video::VideoPlace)>,
+    pub opaque: Option<Vec<Rect>>,
 }
 
 impl Win {
@@ -203,6 +207,8 @@ impl Win {
             held: Vec::new(),
             refocus: None,
             refresh: false,
+            videos: Vec::new(),
+            opaque: None,
         }
     }
 
@@ -327,6 +333,8 @@ impl Core {
             WindowKind::Dialog { parent } => {
                 (OpenKind::Toplevel { parent: self.window_of(*parent), utility: false }, Some(self.theme.surface()))
             }
+            // A window showing video under its drawing is see-through.
+            WindowKind::Normal if spec.video => (OpenKind::Toplevel { parent: None, utility: false }, None),
             WindowKind::Normal => (OpenKind::Toplevel { parent: None, utility: false }, Some(self.theme.surface())),
             WindowKind::Utility => (OpenKind::Toplevel { parent: None, utility: true }, Some(self.theme.surface())),
             // Desktop surfaces draw what they like, shadows and all.
@@ -726,6 +734,85 @@ impl Core {
         if ahead {
             self.restart_ahead(win, platform);
         }
+        self.sync_videos(win, platform);
+    }
+
+    /// Place the window's videos where its video elements were laid out
+    /// (the first element of each video, clipped by what's around it, on
+    /// whole points), and take away those no element shows; in a window
+    /// that shows video under its drawing, tell the compositor it's
+    /// opaque but there.
+    fn sync_videos(&mut self, win: WinId, platform: &mut dyn Platform) {
+        use sidestep_ui::video::VideoPlace;
+        let Some(w) = self.wins.get_mut(&win) else { return };
+        // What's drawn over videos, where it was laid out.
+        let over: Vec<Rect> = w
+            .tree
+            .nodes
+            .iter()
+            .filter(|n| !n.dead && n.widget.over_video())
+            .map(|n| n.rect.intersect(n.clip))
+            .filter(|r| r.width() > 0.0 && r.height() > 0.0)
+            .collect();
+        let mut now: Vec<(crate::widgets::video::VideoId, VideoPlace)> = Vec::new();
+        let mut redraw = Vec::new();
+        for n in w.tree.nodes.iter().filter(|n| !n.dead) {
+            let Some(v) = n.widget.video() else { continue };
+            if now.iter().any(|(id, _)| *id == v.id) {
+                continue;
+            }
+            let r = (v.rect + n.rect.origin().to_vec2()).intersect(n.clip);
+            let r = Rect::new(r.x0.round(), r.y0.round(), r.x1.round(), r.y1.round());
+            if r.width() < 1.0 || r.height() < 1.0 {
+                continue;
+            }
+            let covered = over.iter().any(|o| {
+                let i = o.intersect(r);
+                i.width() > 0.0 && i.height() > 0.0
+            });
+            // The element draws the picture clear while it's under.
+            let placed = crate::widget::state_of::<crate::widgets::video::Placed>(&mut w.states, n.id);
+            if placed.below != covered {
+                placed.below = covered;
+                redraw.push(r);
+            }
+            now.push((v.id, VideoPlace::new(r.x0, r.y0, r.width(), r.height(), v.below || covered, v.inhibit_idle)));
+        }
+        for r in redraw {
+            platform.invalidate(win, r);
+        }
+        for (id, _) in w.videos.iter().filter(|(id, _)| !now.iter().any(|(n, _)| n == id)) {
+            platform.place_video(win, *id, None);
+        }
+        for (id, place) in &now {
+            if !w.videos.iter().any(|(o, p)| o == id && p == place) {
+                platform.place_video(win, *id, Some(*place));
+            }
+        }
+        w.videos = now;
+        if !matches!(&w.kind, WinKind::App { spec, .. } if spec.video) {
+            return;
+        }
+        let mut opaque = vec![Rect::from_origin_size(Point::ZERO, w.size)];
+        for (_, p) in w.videos.iter().filter(|(_, p)| p.below) {
+            let [x, y, width, height] = p.bounds();
+            opaque = crate::layout::subtract(&opaque, Rect::new(x, y, x + width, y + height));
+        }
+        if w.opaque.as_ref() != Some(&opaque) {
+            w.opaque = Some(opaque.clone());
+            platform.set_opaque_region(win, Some(opaque));
+        }
+    }
+
+    /// Where video `video` of `window` takes frames, from any thread.
+    pub fn video_sink(
+        &mut self,
+        window: WindowKey,
+        video: crate::widgets::video::VideoId,
+        platform: &mut dyn Platform,
+    ) -> Option<sidestep_ui::video::VideoSink> {
+        let win = self.window_of(window)?;
+        platform.video_sink(win, video)
     }
 
     /// Windows with widgets to lay out again (and nothing to view again).
@@ -787,6 +874,7 @@ impl Core {
             self.update_hot(win, p, platform);
         }
         self.follow_anchors(win, platform);
+        self.sync_videos(win, platform);
         self.stats.view_layout(started.elapsed());
     }
 

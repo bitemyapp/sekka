@@ -920,6 +920,57 @@ p95 in the harness (not measured live), is the one interaction left above
 the budget.
 
 
+## Utsushi (Media Player)
+
+A player's budget is power more than frame time: what wakes the machine,
+how often, and what the GPU and the compositor do per frame. Utsushi's
+answers (`docs/apps.md`, Utsushi) are frames shown as decoded, nothing
+decoded out of sight, long audio cycles and a window that redraws a
+digit a second; these are the measurements.
+
+On 28 October, on the X1 Carbon (Intel Core Ultra 7 365, Xe graphics,
+the iHD VA-API driver 26.3.5), the installed Aizome compositor running
+headless at 1920 × 1080 on its GPU (GLES), each player in turn, release
+builds, CPU time and context switches (the sum over the process's
+threads) over 30 seconds after six of settling, sound off (Utsushi's null
+output, mpv's `--ao=null`). A 1080p24 H.264 file at 6 Mbit/s:
+
+| Player | Player CPU | Switches/s | Compositor CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi (VA-API, dmabufs) | 1.2% | 115 | 1.5% | 92 |
+| mpv `--hwdec=vaapi --vo=dmabuf-wayland` | 2.2% | 405 | 1.1% | 79 |
+| mpv `--hwdec=vaapi --vo=gpu-next` | 3.5% | 376 | 1.7% | 127 |
+| mpv with Sekka's `mpv.conf` | 11.3% | 401 | 1.2% | 79 |
+
+Utsushi's switches per thread: the render thread 61 a second (each frame
+is a message in, then its presentation feedback and release back), the
+video thread 34, the null output's 50 ms cycles 20 (PipeWire's in normal
+use), the interface 9.5 (ticks were four a second then; now one). The
+same headless setup over 10 seconds for other codecs, 1080p24 at
+3–4 Mbit/s: HEVC Main 10 (P010 dmabufs) 1.3% and 89 switches a second,
+VP9 1.0% and 86, AV1 1.0% and 86, all with every frame presented and
+none dropped. AV1 was 9.1% before Utsushi chose FFmpeg's own AV1 decoder
+(which uses VA-API) over libdav1d (which can't).
+
+Music, a 3-minute 192 kbit/s MP3 at 44.1 kHz, muted, PipeWire otherwise
+idle, the daemon's switches counted too:
+
+| Player | Player CPU | Switches/s | PipeWire CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi | 0.4% | 46 | 0.2% | 50 |
+| mpv `--no-video` | 1.0% | 246 | 0.3% | 99 |
+
+Utsushi's stream asked for 8192-frame cycles but got PipeWire's cap,
+2048 at 48 kHz (`clock.max-quantum`, before Aizome's module raised it to
+8192); its data thread woke 91 times a second, about four per cycle.
+
+Headless, the compositor composes every frame for every player: these
+numbers don't include display planes, which only a KMS backend has, and
+which only lower the compositor's share for a player whose video is the
+topmost surface (Utsushi's, while nothing covers the picture). Not yet
+measured: whole-system power on battery (`/sys/class/power_supply`
+over minutes, screen on, live session), which is the number that matters.
+
 ## Annai (Welcome)
 
 Headlessly, `apps/annai/tests/budget.rs` (`cargo test --release -p

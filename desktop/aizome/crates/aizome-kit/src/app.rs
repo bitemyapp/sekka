@@ -616,6 +616,26 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
+    fn place_video(
+        &mut self,
+        id: WinId,
+        video: sidestep_ui::video::VideoId,
+        place: Option<sidestep_ui::video::VideoPlace>,
+    ) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.place_video(video, place);
+        }
+    }
+
+    fn hide_cursor_until_moved(&mut self) {
+        self.sx.hide_cursor(true);
+    }
+
+    fn video_sink(&mut self, id: WinId, video: sidestep_ui::video::VideoId) -> Option<sidestep_ui::video::VideoSink> {
+        let w = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s))?;
+        Some(w.video_sink(video))
+    }
+
     fn set_input_region(&mut self, id: WinId, region: Option<Vec<Rect>>) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
             w.set_input_region(region.as_deref());
@@ -751,7 +771,8 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
                 core.pinch(win, position, 1.0 + magnification, phase, &mut p);
             }
             WindowEvent::StateChanged(s) => {
-                let state = crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized };
+                let state =
+                    crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized, suspended: s.suspended };
                 rt.window_state(win, state, &mut p);
                 return;
             }
