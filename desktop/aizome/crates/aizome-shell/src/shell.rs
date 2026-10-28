@@ -560,6 +560,7 @@ impl Shell {
                 None => self.screens.push(Screen { output: o, bar: None, desktop: None }),
             }
         }
+        self.sync_lock_surfaces(cx);
         // The Deskbar first: surfaces of one layer stack in the order they
         // open, and the bar's menus and panels show over what's under it.
         let had_deskbar = self.deskbar.is_some();
@@ -1636,13 +1637,19 @@ impl Program for Shell {
         )
     }
 
-    fn close_requested(&mut self, window: WindowKey, _cx: &mut Cx<Msg>) -> bool {
+    fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
         if self.panel.as_ref().is_some_and(|p| p.window == window) {
             self.panel = None;
         }
         // A layer the compositor took away (its output went): forget it; it's
         // opened again when the outputs change.
         if let Some(s) = self.surfaces.remove(&window) {
+            if matches!(s, Surface::Lock { .. }) {
+                self.lock.surfaces.retain(|(key, _)| *key != window);
+                // Reconcile after the kit has destroyed the old surface;
+                // creating its replacement here would duplicate its role.
+                cx.send(Msg::Nothing);
+            }
             for sc in &mut self.screens {
                 if sc.bar == Some(window) {
                     sc.bar = None;
@@ -1735,6 +1742,7 @@ impl Shell {
     /// What every update ends with: surfaces sized to their content, the
     /// geometry drags need.
     pub fn after_update(&mut self, cx: &mut Cx<Msg>) {
+        self.sync_lock_surfaces(cx);
         if self.opts.live && self.carry_ready && !self.retiring {
             self.save_carried(false);
         }
@@ -1969,6 +1977,7 @@ impl Shell {
                     }
                 }
                 SessionEvent::Resumed => {
+                    self.sync_screens(cx.outputs(), cx);
                     // Take the delay again for the next sleep.
                     if let Some(l) = &self.sys.logind
                         && let Err(e) = l.take_sleep_delay()

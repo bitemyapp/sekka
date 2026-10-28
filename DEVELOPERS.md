@@ -18,7 +18,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, brand, patches sent upstream |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs; the one submodule, `vendor/sidestep`, is Sidestep's fork, which Aizome builds against ([Aizome](#aizome)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -131,35 +131,17 @@ same mandatory gate and rejects changed contents, executable bits, symlinks,
 missing directories/paths and altered registration. Neither check certifies
 a complete release image or physical hardware.
 
-The October 24 investigation of the October 22 download is recorded in
-`docs/test-results/installer-integrity-2026-10-24.json`. The public ISO and its
-Firefox passed verification; injecting corruption into that exact ISO's live
-store reproduced the post-format copy failure. This establishes the missing
-installer integrity boundary, not what damaged the reporting Mac's bytes.
 Checks cannot guarantee against RAM faults, media changes or I/O failures
 after verification. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
-or build failures at that point.
-
-Additional RAM stress evidence is recorded in
-`docs/test-results/installer-memory-2026-10-24.json`. With the same diagnostic
-image, a 4 GiB VM completed the normal GUI installation while a background
-process held 1.5 GiB of random data resident and could not swap. The installer
-selected the deferred route, built the 8.31 GiB system on disk, and subsequently
-booted, accepted a normal login and opened Firefox with its expected hash.
-Available RAM fell to 56 MiB and zram swap use reached 3.23 GiB without OOM kills.
-This demonstrates that the complete system need not fit in physical RAM; it
-does not establish a universal minimum memory requirement.
-
-The 2 GiB clean-install case failed during Nix evaluation on both the unmodified
-public ISO and the diagnostic image: live-store space ran out and the kernel
-OOM-killed desktop processes before any target writes. The evaluations were
-then interrupted; these are failed tests, not graceful automatic refusals.
-The separate corrupt-file case at 2 GiB did refuse installation before erasure
-and preserved the entire target. Deferring downloads does not eliminate the
-RAM and temporary live-store space needed to evaluate the configuration first.
-Do not describe the deferred route as immune to memory exhaustion or these
-focused VM results as physical-hardware or full-release qualification.
+or build failures at that point. The deferred route builds the system on the
+target, so the complete system need not fit in physical RAM, but it does not
+eliminate the RAM and temporary live-store space needed to evaluate the
+configuration first. Do not describe the deferred route as immune to memory
+exhaustion, or focused VM results as physical-hardware or full-release
+qualification. The
+[installer incident](docs/incidents/2026-10-24-installer-hash-mismatch-after-erase.md)
+records the failure that led to this boundary and its memory-pressure tests.
 
 The ISO embeds a prebuilt system and precache path list for every desktop
 offered by Genkan, including default Aizome, and one more prebuilt system with
@@ -1045,6 +1027,36 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
+The lock screen follows enabled Wayland outputs throughout lock acquisition
+and the confirmed lock. Every display has a focused password field sharing
+one authentication state; mirrors show their source's prompt and explicitly
+disabled displays stay off. Output removal destroys obsolete lock surfaces,
+returning outputs get new ones, and mode/scale/rotation changes reconfigure
+existing ones. The compositor also retargets the keyboard when displays
+change or the pointer moves between prompts. It keeps the session locked
+while outputs are absent. The
+[lock-screen display-change incident](docs/incidents/2026-10-27-lock-screen-display-change.md)
+records the failure that led to this.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell -p aizome-kit
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell
+nix develop .#aizome -c env AIZOME_LOCK_TEST_SHELL="$PWD/desktop/aizome/target/debug/aizome-shell" \
+  cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test lock_displays -- --include-ignored
+```
+
+The shell tests cover authentication, every display's field, output loss
+during lock acquisition, no-output intervals, surface replacement and view
+updates. `lock_displays` uses a test lock client to check that lock surfaces
+refit mode/scale/rotation changes and that the keyboard follows the pointer
+between displays' lock surfaces. Its desktop cases, ignored unless explicitly
+run with the built shell, use the real shell and compositor over private
+Wayland sockets to check repeated output removal/restoration, disabled
+outputs, lid-close/undock/lid-open, DPMS, mirrors, input isolation and which
+prompt has the keyboard. `aizomectl input-state` names the lock surface with
+the keyboard (`the lock screen on <output>`). These are component checks,
+not physical suspend/resume or ISO qualification.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,
@@ -1838,17 +1850,14 @@ host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
 and the daemon collects garbage when free space runs low.
 
 The runner's Nix client comes from Sekka's pinned Determinate input, matching
-the host daemon's implementation. The builder step prints the client version
-and only the daemon endpoint, version and trust status; it does not print
-environment variables or configuration. On October 20, an upstream Nix 2.34.8
-client hid a template-lock failure behind `Invalid BuildResult status ^P`.
-Determinate 3.15.0 encodes a cancelled build as
-[status 16](https://github.com/DeterminateSystems/nix-src/blob/v3.15.0/src/libstore/include/nix/store/build-result.hh),
-while the upstream client's
-[decoder accepts only 0–14](https://github.com/NixOS/nix/blob/2.34.8/src/libstore/common-protocol.cc).
-The template failure was fixed separately; changing the client preserves the
-original error when sibling builds are cancelled. `checks.x86_64-linux.runner-protocol`
-tests that path through a real daemon as an untrusted user, with the upstream
+the host daemon's implementation. An upstream client cannot decode every build
+status a Determinate daemon sends, and loses the original error when sibling
+builds are cancelled
+([incident](docs/incidents/2026-10-20-nightly-build-status-decode.md)). The
+builder step prints the client version and only the daemon endpoint, version
+and trust status; it does not print environment variables or configuration.
+`checks.x86_64-linux.runner-protocol`
+tests a cancelled sibling build through a real daemon as an untrusted user, with the upstream
 client as a negative control. It does not certify an existing runner deployment.
 
 After reviewing a runner change, rebuild and deploy its images using the steps

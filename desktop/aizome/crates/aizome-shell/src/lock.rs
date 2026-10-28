@@ -1,6 +1,6 @@
 //! The lock screen: ext-session-lock surfaces on every output — the
 //! wallpaper under a `kachi` scrim, the time in IBM Plex Mono 64pt and the
-//! date, and on the focused output the user's picture or initial, their
+//! date, and on every output the user's picture or initial, their
 //! name, the password field (a focus rail while focused) and the mark.
 //! PAM runs on a thread; a failure shakes the field and says so.
 
@@ -48,8 +48,6 @@ pub struct LockState {
     pub phase: Phase,
     /// Each output's lock surface.
     pub surfaces: Vec<(WindowKey, u32)>,
-    /// The output with the password field.
-    pub focused: Option<u32>,
     pub password: String,
     pub busy: bool,
     pub error: Option<String>,
@@ -73,8 +71,6 @@ pub fn shake_offset(step: u32) -> f64 {
 pub struct LockView {
     pub time: String,
     pub date: String,
-    /// The password and the rest show on this output.
-    pub main: bool,
     pub name: String,
     pub initial: String,
     pub picture: Option<Image>,
@@ -214,7 +210,7 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
     })
     .text(if show_clock { v.time.clone() } else { String::new() }, SemanticRole::Label);
     let mut column: Vec<Element<LockMsg>> = vec![clock.into()];
-    if v.main {
+    {
         let (initial, picture, name) = (v.initial.clone(), v.picture.clone(), v.name.clone());
         let who = drawn(size.width, 120.0, (name.clone(), picture.is_some()), move |cx| {
             let b = cx.bounds();
@@ -288,16 +284,13 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
             );
         }
     }
-    let notes_h = if v.main { v.notes.len() as f64 * NOTE_H } else { 0.0 };
-    let block_h = if v.main { 120.0 + 120.0 + 34.0 + 30.0 + notes_h } else { 120.0 };
+    let notes_h = v.notes.len() as f64 * NOTE_H;
+    let block_h = 120.0 + 120.0 + 34.0 + 30.0 + notes_h;
     let top = ((size.height - block_h) / 2.0 - 40.0).max(24.0);
-    let main = v.main;
-    let mark = drawn(size.width, 40.0, main, move |cx| {
-        if main {
-            let b = cx.bounds();
-            let night = aizome_kit::Theme::night();
-            look::mark(cx.canvas, &night, Point::new(((b.width() - 24.0) / 2.0).round(), 8.0), 24.0);
-        }
+    let mark = drawn(size.width, 40.0, (), move |cx| {
+        let b = cx.bounds();
+        let night = aizome_kit::Theme::night();
+        look::mark(cx.canvas, &night, Point::new(((b.width() - 24.0) / 2.0).round(), 8.0), 24.0);
     });
     let content = aizome_kit::column(column).padding([top, 0.0, 0.0, 0.0]);
     aizome_kit::stack(vec![
@@ -311,8 +304,7 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
 }
 
 impl Shell {
-    /// Lock: a lock surface on every output, the password on the focused
-    /// one's.
+    /// Lock with a complete, keyboard-ready prompt on every enabled output.
     pub fn lock(&mut self, cx: &mut Cx<Msg>) {
         if self.lock.phase != Phase::Unlocked {
             return;
@@ -329,15 +321,39 @@ impl Shell {
         self.lock.phase = Phase::Locking;
         self.lock.password.clear();
         self.lock.error = None;
-        self.lock.focused = self.focused_screen().map(|s| s.output.id);
         self.lock.since =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        for s in self.screens.clone() {
-            let k = cx.open_window(WindowSpec::lock(s.output.id));
-            self.surfaces.insert(k, Surface::Lock { output: s.output.id });
-            self.lock.surfaces.push((k, s.output.id));
+        self.sync_lock_surfaces(cx);
+    }
+
+    /// Follow Wayland's advertised outputs, including changes while asleep
+    /// or still waiting for lock confirmation. Disabled outputs aren't
+    /// advertised, and mirrors display their source's lock surface.
+    pub fn sync_lock_surfaces(&mut self, cx: &mut Cx<Msg>) {
+        if self.lock.phase == Phase::Unlocked {
+            return;
         }
-        cx.focus("lock-password");
+        self.lock.surfaces.retain(|(key, output)| {
+            if self.screens.iter().any(|s| s.output.id == *output) {
+                true
+            } else {
+                cx.close_window(*key);
+                self.surfaces.remove(key);
+                false
+            }
+        });
+        for screen in &self.screens {
+            let output = screen.output.id;
+            if self.lock.surfaces.iter().any(|(_, id)| *id == output) {
+                continue;
+            }
+            let key = cx.open_window(WindowSpec::lock(output));
+            self.surfaces.insert(key, Surface::Lock { output });
+            self.lock.surfaces.push((key, output));
+            // Focus each new window immediately: a single focus after the
+            // loop only prepares the last one, which may not get the keys.
+            cx.focus("lock-password");
+        }
     }
 
     pub fn lock_confirmed(&mut self, cx: &mut Cx<Msg>) {
@@ -448,13 +464,11 @@ impl Shell {
 
     pub fn lock_view(&self, output: u32) -> Element<Msg> {
         let Some(screen) = self.screens.iter().find(|s| s.output.id == output) else { return aizome_kit::space(0.0) };
-        let main = self.lock.focused.unwrap_or(output) == output;
         let name = self.user.1.clone();
         let picture = self.user_picture.clone();
         let v = LockView {
             time: self.now.time_label(self.bar_cfg.clock, false),
             date: self.now.date_label(),
-            main,
             initial: name.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default(),
             name,
             picture,

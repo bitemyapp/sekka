@@ -1131,7 +1131,16 @@ fn input_state(state: &State) -> aizome_ipc::InputState {
     use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_constraint};
     let az = &state.az;
     let app_of = |s: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface| {
-        az.window_for_root(s).and_then(|id| az.window_app(id)).or_else(|| Some("a surface".into()))
+        az.window_for_root(s)
+            .and_then(|id| az.window_app(id))
+            .or_else(|| {
+                // Which display's prompt has the keys, while locked.
+                az.out
+                    .iter()
+                    .find(|(_, o)| o.lock_surface.as_ref().is_some_and(|l| l.wl_surface() == s))
+                    .map(|(o, _)| format!("the lock screen on {}", o.name()))
+            })
+            .or_else(|| Some("a surface".into()))
     };
     let mut out = aizome_ipc::InputState::default();
     if let Some(pointer) = az.seat.get_pointer() {

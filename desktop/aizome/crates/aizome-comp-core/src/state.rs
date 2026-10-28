@@ -578,6 +578,12 @@ impl State {
             // behind the closed lid, goes dark before its first frame.
             self.apply_power();
             self.lg_call((), |vt, st| (vt.outputs_changed)(st));
+            if self.az.lock.is_locked() {
+                // The keyboard may still point at a lock surface on the
+                // display that just went away. Select a surviving prompt
+                // even when no new surface needs to be created.
+                self.update_keyboard_focus();
+            }
         }
         self.lg_call((), |vt, st| (vt.loop_iteration)(st));
         self.lg_call((), |vt, st| (vt.publish)(st));
