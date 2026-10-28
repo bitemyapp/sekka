@@ -157,3 +157,12 @@ The package passes 44 native tests and six independent Wayland suites.
 The [frame harness](docs/frame-benchmark.md) measures actual private-compositor
 captures and records observer overhead separately. Its tool qualification and
 the isolated shaping improvements do not establish application performance parity.
+
+Subsequent integrated changes add [native pixel scrolling](docs/pixel-scroll.md)
+with exact partial/full framebuffer checks, and
+[packed ASCII cell stores](docs/ascii-cell-store.md) with 139 standalone tests,
+strict Clippy, Miri and direct reference comparisons. Their isolated validation
+does not change the historical package identities above; the next combined
+package must be qualified separately. The [GPU buffer probe](docs/gpu-buffer-capability.md)
+now passes an offscreen Intel DMA-BUF round trip locally, while the workstation
+NVIDIA export limitation remains. A production GPU renderer is still pending.
