@@ -27,3 +27,14 @@ No generated corpus or executable is included in Git. This small-grid
 measurement does not replace the earlier 80-row common-corpus qualification or
 establish whole-application performance parity. Shared product source is
 unchanged by this experiment.
+
+A separate [cached-lookahead version](../upstream/ascii-subruns/cached-lookahead/README.md)
+removes repeated decoding with a safe private cursor. It passes 143 debug and
+release tests and the same reference gates, but also remains rejected. Its
+mixed-text medians regress 4.4–4.9%, and dense-wide medians regress about 13%
+in both modes. Every corresponding round median is slower; one legacy
+dense-wide round has an additional large outlier, preserved in the raw data.
+The malformed-prefix gains remain, so the next investigation can restrict the
+handoff to the error path while leaving ordinary valid-text printing unchanged.
+The cached-cursor results do not prove that repeated decoding caused the first
+version's entire regression.
