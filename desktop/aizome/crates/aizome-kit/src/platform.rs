@@ -87,6 +87,7 @@ pub trait Platform {
     fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead;
     /// Publish text whose allocation and MIME preparation already ran on a worker.
     fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText);
+    fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard);
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
     fn cancel_timer(&mut self, token: u64);

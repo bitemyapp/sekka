@@ -30,9 +30,11 @@ nix build .#hotaru --no-update-lock-file
 The focused Nix package builds Hotaru without compiling the Aizome compositor.
 The desktop's default terminal remains unchanged during qualification.
 Entering the Aizome development shell initializes Sidestep and applies the
-tracked `upstream/sidestep-clipboard.patch` and `sidestep-input.patch` in order,
-idempotently. Conflicts stop setup without resetting local changes. Nix applies
-the same patches to its pinned copy.
+tracked `upstream/sidestep-clipboard.patch`, `sidestep-input.patch` and
+`sidestep-mime.patch` in order. A private temporary index recognizes an already
+applied prefix and validates the complete series before changing the worktree.
+Conflicts preserve both staged and unstaged local changes. Nix applies the same
+patches to its pinned copy.
 
 The latest Ghostty checkout is an **external reference**, not part of Hotaru's
 source or build. `upstream/ghostty.json` pins its exact commit, the old fork's
@@ -51,6 +53,9 @@ and working directories for this effort are:
 | `/home/callen/work/sekka-hotaru-20261028` | Native app mirror, necessary Aizome/Sidestep/Yukimi paths only |
 | `/home/callen/work/hotaru-reference-tools` | Differential and benchmark runners |
 | `/home/callen/work/hotaru-reference-fixtures` | Generated upstream oracle outputs and comparison reports |
+| `/home/callen/work/hotaru-rich-copy-checkpoint-20261028` | Frozen core snapshot, formatter and hyperlink checkpoint |
+| `/home/callen/work/sekka-hotaru-nix-20261028` | Exact source mirror for focused Nix package validation |
+| `/home/callen/work/hotaru-gui-probes` | Private Wayland GUI reference probes and original captures |
 
 All heavy jobs take `flock -x /home/callen/.cache/hotaru-workstation.lock`.
 Timing trials are serial, with no concurrent builds from this effort. Record
@@ -78,9 +83,19 @@ device/status replies now have pinned-reference fixtures. Native splits and
 basic saved settings are implemented. These are partial subsystem ports;
 broader compatibility and platform qualification remain open.
 
+OSC 8 links and plain/ANSI/HTML/mixed formatting now have independent upstream
+fixtures. One explicit difference corrects invalid crossing HTML tag scopes;
+raw upstream evidence is retained. Copy All captures owned history blocks in
+O(blocks + visible rows), with bounded decoding and formatting on the clipboard
+worker. The native selection publishes prepared plain and HTML representations
+together. See [hyperlinks and formatting](docs/hyperlinks.md) and
+[history capture](docs/history.md) for coverage and ownership details.
+The [GUI probe](docs/gui-probe.md) documents the full Linux reference build and
+the renderer/font gaps exposed by exploratory application measurements.
+
 Major outstanding work includes page/arena and compressed-history performance
-parity, complete VT modes and replies, hyperlinks, Kitty graphics/clipboard,
-tmux integration, search across history, all copy formats, Ghostty config/theme
+parity, complete VT modes and replies, hyperlink activation, Kitty graphics/clipboard,
+tmux integration, search across history, complete selection behavior, Ghostty config/theme
 compatibility, shell integration, terminfo, accessibility and renderer/font
 behavior. Unhandled protocols must not be advertised as implemented.
 

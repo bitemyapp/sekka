@@ -45,6 +45,7 @@ def run(binary, evidence):
         "vendor/sidestep/crates/sidestep-engine/src/backend/seat.rs",
         "vendor/sidestep/crates/sidestep-ui/src/event.rs", "vendor/sidestep/crates/sidestep-ui/src/testing.rs",
         "apps/hotaru/upstream/sidestep-clipboard.patch", "apps/hotaru/upstream/sidestep-input.patch",
+        "apps/hotaru/upstream/sidestep-mime.patch",
     ])
     binary_hash = hashlib.sha256(binary.read_bytes()).hexdigest()
     manifest = {"recorded_utc": datetime.now(timezone.utc).isoformat(), "binary": str(binary),
@@ -93,10 +94,14 @@ def run(binary, evidence):
             return json.loads(subprocess.check_output(["swaymsg", "-s", str(socket), *args], env=env))
 
         def key(code, modifiers, layout=None):
+            keys([(code, modifiers)], layout)
+
+        def keys(events, layout=None):
             key_env = dict(env)
             if layout:
                 key_env["HOTARU_TEST_LAYOUT"] = layout
-            subprocess.run([str(build / "key"), str(code), modifiers], env=key_env, check=True, timeout=3)
+            args = [argument for code, modifiers in events for argument in [str(code), modifiers]]
+            subprocess.run([str(build / "key"), *args], env=key_env, check=True, timeout=3)
 
         def click(x, y):
             subprocess.run([str(build / "pointer"), str(int(x)), str(int(y)), "1280", "800"],
@@ -109,6 +114,12 @@ def run(binary, evidence):
 
         expected = b"".join(f"{index:05d} ".encode() + b"A" * 121 + b"\n" for index in range(9000))
         (evidence / "expected-output.txt").write_bytes(expected)
+        # Default trim drops trailing empty rows; expected bytes are calculated
+        # independently of the app's formatter and compared without normalization.
+        expected_copy = expected.rstrip(b"\n")
+        (evidence / "expected-copy.txt").write_bytes(expected_copy)
+        expected_html = b'<div style="font-family: monospace; white-space: pre;">' + expected_copy + b'</div>'
+        (evidence / "expected-output.html").write_bytes(expected_html)
         pasted = b"hotaru-paste-roundtrip-" * 50000
         (evidence / "expected-paste.txt").write_bytes(pasted)
         expected_input = (b"\x1b[97;5u\x1b[97;5:3u"
@@ -174,27 +185,53 @@ while True: time.sleep(1)
         copied = None
         until = time.monotonic() + 10
         while time.monotonic() < until:
-            outcome = subprocess.run(["wl-paste", "--no-newline"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
-            if outcome.returncode == 0 and outcome.stdout.rstrip(b"\n") == expected.rstrip(b"\n"):
+            outcome = subprocess.run(["wl-paste", "--type", "text/plain;charset=utf-8", "--no-newline"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
+            if outcome.returncode == 0 and outcome.stdout == expected_copy:
                 copied = outcome.stdout; break
             time.sleep(.05)
         if copied is None:
             (evidence / "failed-copy.txt").write_bytes(outcome.stdout)
             (evidence / "failed-copy-inspect.json").write_text(json.dumps(inspected(), indent=2))
             subprocess.run(["grim", str(evidence / "failed-copy.png")], env=env, timeout=3)
-            raise AssertionError(f"Native copy mismatch: {len(outcome.stdout)} bytes, expected {len(expected)}; {outcome.stderr!r}")
+            raise AssertionError(f"Native copy mismatch: {len(outcome.stdout)} bytes, expected {len(expected_copy)}; {outcome.stderr!r}")
         (evidence / "copied.txt").write_bytes(copied)
-        result["checks"]["copy"] = {"bytes": len(copied), "sha256": hashlib.sha256(copied).hexdigest(), "exact_trimmed_match": True}
+        result["checks"]["copy"] = {"bytes": len(copied), "sha256": hashlib.sha256(copied).hexdigest(), "exact_match": True}
+        html = subprocess.check_output(["wl-paste", "--type", "text/html", "--no-newline"], env=env, timeout=5)
+        (evidence / "copied.html").write_bytes(html)
+        assert html == expected_html, (len(html), len(expected_html))
+        result["checks"]["copy_html"] = {"bytes": len(html), "sha256": hashlib.sha256(html).hexdigest(), "exact_match": True}
 
         # A destination that stops reading must not hold the source event loop.
         slow = subprocess.Popen(["wl-paste", "--no-newline"], env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         processes.append(slow)
+        slow_html = subprocess.Popen(["wl-paste", "--type", "text/html", "--no-newline"], env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        processes.append(slow_html)
         time.sleep(.15)
         started = time.monotonic()
         key(33, "super")  # F: keep servicing native UI while clipboard pipe is full.
         wait("Find responds while copy destination is stalled", lambda: '"name": "find"' in json.dumps(inspected()))
         result["checks"]["stalled_reader_ui"] = {"seconds": time.monotonic() - started}
         slow.terminate(); slow.wait(timeout=3)
+        slow_html.terminate(); slow_html.wait(timeout=3)
+        result["checks"]["cancelled_readers"] = ["text/plain", "text/html"]
+
+        # A burst of copies followed by closing their pane cannot overwrite a
+        # newer foreign selection with a late formatter completion.
+        original = next(e["name"] for e in inspected()["elements"] if e.get("name", "").startswith("terminal-"))
+        subprocess.run([str(binary), "--", sys.executable, "-c", "import time; print('CLOSING-PANE', flush=True); time.sleep(30)"],
+                       env=env, check=True, timeout=3)
+        wait("temporary copy pane", lambda: any(e.get("name", "").startswith("terminal-") and e["name"] != original for e in inspected()["elements"]))
+        keys([(46, "super,shift")] * 16 + [(17, "super")])
+        wait("copy pane closes", lambda: any(e.get("name") == original for e in inspected()["elements"]))
+        sentinel = b"selection-after-closed-pane"
+        sentinel_owner = subprocess.Popen(["wl-copy", "--foreground", "--type", "text/plain;charset=utf-8"],
+                                         env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        processes.append(sentinel_owner)
+        sentinel_owner.stdin.write(sentinel); sentinel_owner.stdin.close()
+        for _ in range(5):
+            time.sleep(.1)
+            assert subprocess.check_output(["wl-paste", "--no-newline"], env=env, timeout=3) == sentinel
+        result["checks"]["closed_pane_copy_race"] = {"copy_requests": 16, "new_selection_preserved": True}
 
         # Refocus terminal via its inspect rectangle after Find took the focus.
         description = inspected()

@@ -72,6 +72,7 @@ let
   };
   clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;
   inputPatch = ../../../apps/hotaru/upstream/sidestep-input.patch;
+  mimePatch = ../../../apps/hotaru/upstream/sidestep-mime.patch;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -85,6 +86,7 @@ let
           hotaruSrc
           clipboardPatch
           inputPatch
+          mimePatch
           sidestep
           version
           rev
@@ -98,6 +100,7 @@ let
           hotaruSrc
           clipboardPatch
           inputPatch
+          mimePatch
           sidestep
           fonts
           version

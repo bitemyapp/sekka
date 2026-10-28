@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T15:43:56.951881+00:00",
+  "kind": "ghostty",
+  "binary": "/home/callen/.cache/hotaru-reference/gui-result/bin/ghostty",
+  "binary_sha256": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+  "probe_sha256": "bb2eff9f22760d35e3464391f83a2363a0bf2b809ee97a4cd621da118c31bf58",
+  "running_executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+  "running_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+  "command": [
+    "/home/callen/.cache/hotaru-reference/gui-result/bin/ghostty",
+    "--config-default-files=false",
+    "--config-file=/tmp/hotaru-gui-probe-szxcaqhj/ghostty.conf",
+    "-e",
+    "/usr/bin/python3",
+    "/home/callen/work/hotaru-checkpoint-20261028/tools/gui-probe.py",
+    "--fixture",
+    "/tmp/hotaru-gui-probe-szxcaqhj/control"
+  ],
+  "configuration": "gtk-single-instance = false\nshell-integration = none\nscrollback-limit-bytes = unlimited\nscrollback-limit-lines = 0\nfont-family = IBM Plex Mono\nfont-size = 14\ncursor-style-blink = false\n",
+  "font_directory": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts",
+  "fontconfig": "<?xml version=\"1.0\"?><!DOCTYPE fontconfig SYSTEM \"fonts.dtd\"><fontconfig><dir>/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts</dir><cachedir>/tmp/hotaru-gui-probe-szxcaqhj/cache/fonts</cachedir></fontconfig>",
+  "mesa_directory": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "backend": "private Sway pixman; LIBGL_ALWAYS_SOFTWARE=1, GALLIUM_DRIVER=llvmpipe",
+  "bus": "private session D-Bus without service activation",
+  "scope": "Exploratory software GUI probe; DSR is parse completion, not presentation",
+  "grid": {
+    "cols": 120,
+    "rows": 40
+  },
+  "window_pixels": [
+    1334,
+    1004
+  ],
+  "launch_to_pty_ready_ms": 439.872619,
+  "launch_to_observed_window_ms": 441.330229,
+  "idle_seconds": 3.000306702,
+  "idle_cpu_seconds": 0.15,
+  "idle_process": {
+    "sample_ns": 4050511307926132,
+    "cpu_ticks": 257,
+    "memory_kib_except_threads": {
+      "VmRSS": 383832,
+      "VmHWM": 383832,
+      "RssAnon": 247212,
+      "RssFile": 120924,
+      "Threads": 21
+    }
+  },
+  "host": "callen",
+  "kernel": "6.17.0-1032-oem",
+  "cpu_affinity": [
+    8,
+    9,
+    10,
+    11
+  ],
+  "load_average": [
+    0.58984375,
+    0.56640625,
+    0.7958984375
+  ],
+  "workloads": [
+    {
+      "path": "/home/callen/work/hotaru-corpora/ascii.vt",
+      "sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "write_to_dsr_ns": 118257365,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388632,
+      "process_before": {
+        "sample_ns": 4050511329079679,
+        "cpu_ticks": 257,
+        "memory_kib_except_threads": {
+          "VmRSS": 383832,
+          "VmHWM": 383832,
+          "RssAnon": 247212,
+          "RssFile": 120924,
+          "Threads": 21
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050511449683582,
+        "cpu_ticks": 293,
+        "memory_kib_except_threads": {
+          "VmRSS": 384716,
+          "VmHWM": 384716,
+          "RssAnon": 247776,
+          "RssFile": 121244,
+          "Threads": 21
+        }
+      },
+      "screenshot": "ascii.png"
+    },
+    {
+      "path": "/home/callen/work/hotaru-corpora/unicode.vt",
+      "sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "write_to_dsr_ns": 162652045,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388655,
+      "process_before": {
+        "sample_ns": 4050511819280646,
+        "cpu_ticks": 298,
+        "memory_kib_except_threads": {
+          "VmRSS": 384716,
+          "VmHWM": 384716,
+          "RssAnon": 247776,
+          "RssFile": 121244,
+          "Threads": 21
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050511983770568,
+        "cpu_ticks": 354,
+        "memory_kib_except_threads": {
+          "VmRSS": 385140,
+          "VmHWM": 385140,
+          "RssAnon": 247880,
+          "RssFile": 121564,
+          "Threads": 21
+        }
+      },
+      "screenshot": "unicode.png"
+    },
+    {
+      "path": "/home/callen/work/hotaru-corpora/styled.vt",
+      "sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "write_to_dsr_ns": 131459804,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388608,
+      "process_before": {
+        "sample_ns": 4050512352455108,
+        "cpu_ticks": 360,
+        "memory_kib_except_threads": {
+          "VmRSS": 385140,
+          "VmHWM": 385140,
+          "RssAnon": 247880,
+          "RssFile": 121564,
+          "Threads": 21
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050512484942801,
+        "cpu_ticks": 403,
+        "memory_kib_except_threads": {
+          "VmRSS": 385208,
+          "VmHWM": 385208,
+          "RssAnon": 247808,
+          "RssFile": 121704,
+          "Threads": 21
+        }
+      },
+      "screenshot": "styled.png"
+    }
+  ]
+}

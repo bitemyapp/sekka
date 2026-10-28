@@ -261,6 +261,11 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         self.platform.set_prepared_clipboard_text(text);
     }
 
+    /// Publish immutable MIME representations prepared by a worker in one step.
+    pub fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.platform.set_prepared_clipboard(data);
+    }
+
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
         if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {

@@ -46,7 +46,31 @@ before row allocations. A malformed block cannot request more than 4 MiB of
 codec output. Internal archives are immutable and are never accepted from
 external files or terminal escape sequences.
 
-Snapshots decode only intersecting blocks and retain the resulting owned rows.
+`Terminal::content_snapshot` is the copy/search ownership boundary. Capture
+costs O(history blocks + visible rows), with one reference per immutable
+history block and one per active row. It never decodes history. Cloning the
+result is constant-time. Resident blocks are shared too: appending after a
+capture copies at most one block's 64 row handles. Eviction advances a private
+prefix without copying a shared block. Outstanding captures can retain evicted
+data until their worker releases them.
+
+`ContentSnapshot::rows_range` uses frozen physical row coordinates and a binary
+search over block ends. Workers decode only intersecting blocks, at most one
+block at a time; `next_cancellable` checks before each row and before starting
+the next decode. A decode is not preempted midway and is bounded by the 4 MiB
+raw archive cap, with separately bounded row and dictionary allocations.
+The same owned capture remains valid across compression, eviction, reflow and
+terminal teardown. Palette, defaults and cursor coordinates are frozen with it.
+Existing render `Snapshot` remains unchanged; `snapshot_all` is an eager
+diagnostic compatibility path, not the native whole-history copy path.
+
+The versioned archive uses a block-local hyperlink dictionary. Raw URI and
+explicit identity bytes are preserved, implicit identities retain their numeric
+value, and decoded runs share owned hyperlink objects. Dictionary counts,
+2,048-byte identity/URI bounds, run indices and ordered nonoverlapping ranges
+are validated. A hyperlink-dense row whose conservative archive bound exceeds
+4 MiB stays resident with all data intact.
+
 Reading does not promote cold history into permanently resident storage.
 Eviction skips compressed rows without decoding them; a partially evicted
 block is freed after its last logical row leaves history. Resize materializes
@@ -59,7 +83,37 @@ eviction allocates no replacement row. `compressed_bytes` includes this metadata
 Tests cover archive round trips, every truncation boundary, 20,000 malformed
 row/LZ4 mutations, maximal-width grapheme rows, outstanding snapshots,
 partial reads, incremental progress during eviction, and a compressed versus
-resident terminal through scrolling, resizing and clearing.
+resident terminal through scrolling, resizing and clearing. Content tests also
+cover immutable block sharing, bounded tail copy-on-write, range boundaries,
+cancellation before deliberately damaged compressed content, hyperlink
+dictionaries and concurrent reads after terminal teardown.
+
+## Content capture measurements
+
+`upstream/content-capture.json` records the exact source and binary hashes for
+the owned capture and the eager `snapshot_all` implementation from checkpoint
+`13423440ef68b3633b41d267aea196d87b1007da`. Both use 80 columns and 24 visible
+rows; 120 columns would hit the existing 8-million-history-cell cap before
+100,000 rows. Measurements use CPU 8 on `wx-workstation`, native CPU code,
+thin LTO, one codegen unit and the system allocator. Five fresh processes run
+each case, with 500 owned captures or 30 eager captures per process. Values
+below are medians of each process's median; release costs are measured
+separately in the report.
+
+| History rows | Owned resident capture | Owned cold capture | Checkpoint resident eager capture | Checkpoint cold eager capture | Cold worker restore after teardown |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 0.231 µs | 0.231 µs | 6.840 µs | 181.675 µs | 0.271 ms |
+| 10,000 | 0.831 µs | 0.831 µs | 64.919 µs | 1.850 ms | 2.838 ms |
+| 100,000 | 6.671 µs | 6.690 µs | 665.789 µs | 22.155 ms | 28.470 ms |
+
+The capture improvement comes from moving restoration to the worker and
+cloning block handles. It does not establish faster decoding or total-terminal
+performance parity. Capture still scales with block count. Worker restore
+includes row access and destruction, and verifies a first-cell checksum after
+the terminal owner has been dropped. Reproduce with the
+`content_capture` example, `tools/capture-checkpoint.rs` installed as an
+example in an isolated checkout of the named checkpoint, and
+`tools/content-capture.py` under the shared workstation lock.
 
 ## Measurements and present limitation
 

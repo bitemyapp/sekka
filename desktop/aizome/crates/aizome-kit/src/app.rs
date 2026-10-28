@@ -558,6 +558,10 @@ impl Platform for SidestepPlatform<'_> {
         self.sx.set_prepared_clipboard_text(text);
     }
 
+    fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.sx.set_prepared_clipboard(data);
+    }
+
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
         let tid = if repeat { self.sx.set_repeating_timer(after) } else { self.sx.set_timer(after) };
         self.maps.next_token += 1;

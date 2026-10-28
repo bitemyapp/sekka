@@ -1,10 +1,97 @@
 # Hyperlinks, copy formats and scrollback search audit
 
-This is an implementation proposal, not completed feature coverage. It audits
-Ghostty `6ba144158577d033ccb6ed4b574e4013957c9161` and the current Hotaru worktree.
+This document records the implemented hyperlink/copy slice and the remaining
+search proposal. It audits Ghostty
+`6ba144158577d033ccb6ed4b574e4013957c9161` and the Hotaru worktree.
 The reference library used for the small probes below has SHA-256
 `70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639`.
-No product source changed during this audit.
+
+## Implemented hyperlink and formatting slice
+
+`hyperlink.rs` stores owned raw URI/ID bytes behind shared immutable references.
+Rows use optional sorted hyperlink ranges and a row-local reference table;
+unlinked rows allocate no link metadata and cells remain eight bytes. Repeated
+printing checks pointer identity before comparing URI bytes. Overwrite, wide
+boundaries, erasure, insertion/deletion, reset, scrolling and reflow propagate
+or remove ranges. Table compaction bounds stale references. History blocks
+encode a shared dictionary plus validated ranges; oversized blocks stay
+resident, preserving data instead of truncating metadata.
+
+`ContentSnapshot` captures shared immutable history segments and active rows,
+plus palette/default colors. Capturing does not decompress history. Its worker
+iterator decodes bounded blocks and checks cancellation before each row/block.
+`formatter::format_copy` produces `Plain`, `Vt`, `Html` or `Mixed` output from
+this owned content, with exclusive selection endpoints, rectangles, trimming
+and wrap options. The default is mixed with trim/unwrap enabled. A byte budget
+applies to the aggregate MIME data. Cancellation, invalid selection and budget
+exhaustion return errors; no partial or silently truncated clipboard is returned.
+Mixed HTML omits outer default colors, while explicit HTML/VT includes captured
+defaults. Palette colors resolve from the snapshot, even after later mutations
+or terminal destruction. No terminal state is borrowed by formatting workers.
+The `(rows, 0)` EOF sentinel is accepted for linear ranges only; rectangles
+reject it so normalization cannot silently change their selected columns.
+
+`upstream/hyperlink-fixtures.json` contains 134 cases obtained from the pinned
+external C API: parser/body limits, raw URI bytes, identity transitions,
+row/wide edits, resets/screens, resize, styles, whitespace, wrap options and
+linear/rectangle selections. Tests compare every visible URI at three input
+chunk sizes (402 comparisons), plus plain/VT/HTML output (402 comparisons).
+391 output comparisons are byte-exact; eleven named HTML cases intentionally
+repair a bug in the pinned formatter. Independent dense-array testing covers
+20,000 sparse range mutations and dictionary restoration. Owned content tests
+cover compressed-history capture, decode, eviction, resize and terminal teardown.
+`upstream/hyperlink-report.json` identifies exact source and fixture hashes.
+
+The intentional HTML correction is narrow: crossing terminal style and link
+scopes can produce `<div style="...">a<a href="...">b</div>c</a>` or
+`<a href="...">a<div style="...">b</a>c</div>` upstream. Hotaru closes and
+reopens inner elements to retain both scopes with valid nesting. Raw reference
+bytes are preserved. `tools/hyperlink-oracle.py` permits repaired expectations
+only for `style-link-crossed`, `link-style-crossed`, and four explicitly named
+partial-selection variants of `style-link-transitions`. Its independent HTML
+parser verifies equal per-character CSS/link projections. All other HTML
+fixtures compare unmodified raw reference bytes, except for the five URI
+corrections below. Large output uses one outer
+HTML wrapper rather than exposing Ghostty's internal page divisions.
+
+The pinned formatter also converts each UTF8 URI byte into an HTML numeric
+entity: `/é` becomes `/&#195;&#169;`, whose parsed destination is `/Ã©`.
+Hotaru escapes valid UTF8 as Unicode scalars and preserves undecodable bytes as
+`%XX`, leaving existing percent escapes intact. Unicode controls are encoded
+as their UTF8 percent escapes because HTML remaps numeric C1 entities (for
+example `&#128;` becomes a euro sign). The named `raw-uri`, `unicode-uri`,
+`unicode-uri-percent`, `invalid-uri-truncated` and `unicode-uri-control` cases
+retain the raw oracle HTML and explicitly corrected expectations. Independent
+Python decoding verifies the expected destinations; all VT URI bytes remain
+unchanged. Parser fixtures also verify the unusual upstream treatment of
+empty option segments through exact explicit IDs in VT output, rather than
+relying only on URI equality.
+An independent review additionally checked 529 actual Rust outputs using
+Python's HTML parser and a separate URI projection, including deterministic
+mixtures of valid Unicode, malformed UTF8, controls and existing percent escapes;
+see `upstream/formatter-uri-audit.json` and its reproducible driver scripts.
+
+This is partial subsystem coverage. Search across scrollback, selection gesture
+policies, configurable copy codepoint maps, hyperlink hover/activation policy,
+full terminal state serialization and C API compatibility are separate work.
+No broad performance acceptance is inferred from these correctness fixtures.
+
+The serial diagnostic in `upstream/hyperlink-performance-verified.json` uses
+four deterministic approximately 2 MiB streams, a pinned CPU, zero history,
+native optimized builds, three warmups and twenty measured iterations per
+engine. Full grid/effects, every visible URI and exact content VT transitions
+match before timing. The same ASCII or dense wide-Unicode payload is run with
+no link, then with one persistent 2,031-byte URI. Hotaru/Ghostty feed ratios are
+1.383 / 0.060 for ASCII without/with the link and 4.715 / 0.407 for wide Unicode.
+The link path improves on this reference workload, but unlinked wide text
+remains substantially slower. These patterns differ from the earlier four
+reviewed corpora and do not establish broad performance parity. Source, tool,
+binary and build hashes are recorded, and checked unchanged across timing.
+
+## Initial audit at checkpoint 1342344
+
+The following audit and design were recorded before the implementation above;
+statements about the then-missing copy features describe that checkpoint.
 
 ## Current behavior and the missing ownership boundary
 

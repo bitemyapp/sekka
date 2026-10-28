@@ -52,6 +52,7 @@ pub struct TestPlatform {
     /// The test's clock: how long since the harness started.
     pub clock: Duration,
     pub clipboard: Option<String>,
+    pub clipboard_data: Option<sidestep_ui::PreparedClipboard>,
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
@@ -100,6 +101,7 @@ impl TestPlatform {
             next_token: 0,
             clock: Duration::ZERO,
             clipboard: None,
+            clipboard_data: None,
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
@@ -200,6 +202,7 @@ impl Platform for TestPlatform {
 
     fn set_clipboard_text(&mut self, text: &str) {
         self.clipboard = Some(text.to_owned());
+        self.clipboard_data = None;
     }
 
     fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
@@ -207,7 +210,12 @@ impl Platform for TestPlatform {
     }
 
     fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText) {
-        self.clipboard = Some(text.text().to_owned());
+        self.set_prepared_clipboard(text.into());
+    }
+
+    fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.clipboard = data.text().map(str::to_owned);
+        self.clipboard_data = Some(data);
     }
 
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {

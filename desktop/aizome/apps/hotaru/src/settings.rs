@@ -23,6 +23,28 @@ pub enum Theme {
     HighContrast,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CopyFormat {
+    Plain,
+    Vt,
+    Html,
+    #[default]
+    Mixed,
+}
+
+impl CopyFormat {
+    pub fn formatter(self) -> hotaru_core::formatter::CopyFormat {
+        use hotaru_core::formatter::CopyFormat as Format;
+        match self {
+            Self::Plain => Format::Plain,
+            Self::Vt => Format::Vt,
+            Self::Html => Format::Html,
+            Self::Mixed => Format::Mixed,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
@@ -55,6 +77,7 @@ pub struct Settings {
     pub font_weight: u16,
     pub theme: Theme,
     pub scrollback: usize,
+    pub copy_format: CopyFormat,
     pub keybindings: BTreeMap<String, Action>,
 }
 
@@ -65,6 +88,7 @@ impl Default for Settings {
             font_weight: 400,
             theme: Theme::Desktop,
             scrollback: 10_000,
+            copy_format: CopyFormat::Mixed,
             keybindings: BTreeMap::new(),
         }
     }

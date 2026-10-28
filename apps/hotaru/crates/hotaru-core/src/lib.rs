@@ -3,8 +3,11 @@
 #![deny(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod content;
+pub mod formatter;
 mod grapheme;
 mod history;
+pub mod hyperlink;
 pub mod input;
 mod parser;
 mod row;
@@ -13,7 +16,8 @@ mod scan;
 mod screen;
 mod style;
 
-pub use history::HistoryMemory;
+pub use content::{ContentCancelled, ContentRows, ContentSnapshot};
+pub use history::{HistoryMemory, HistorySnapshot};
 pub use row::{Cell, Row};
 pub use screen::{Cursor, Modes, TerminalEvent};
 pub use style::{Color, Rgb, Style, Underline, attrs};
@@ -181,6 +185,11 @@ impl Terminal {
     }
     pub fn snapshot_all(&self) -> Snapshot {
         self.state.snapshot_all()
+    }
+    /// Cheap immutable capture for copy/search workers. Capturing does not
+    /// decompress history; row iteration on the consuming worker does.
+    pub fn content_snapshot(&self) -> ContentSnapshot {
+        self.state.content_snapshot()
     }
     pub fn scrollback_len(&self) -> usize {
         self.state.scrollback_len()

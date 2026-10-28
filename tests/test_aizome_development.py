@@ -80,7 +80,7 @@ diff --git a/clipboard-writer.txt b/clipboard-writer.txt
 
 
 class DevelopmentEnvironment(unittest.TestCase):
-    def test_both_native_patches_apply_and_repeat_without_changing_checkout(self):
+    def test_dependent_native_patches_apply_and_repeat_without_changing_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             root, first, _ = sekka(base)
@@ -92,15 +92,77 @@ class DevelopmentEnvironment(unittest.TestCase):
 -developer notes
 +native keyboard metadata
 ''')
+            # This changes an earlier patch's replacement and prevents that
+            # earlier patch from being reverse-checked in isolation.
+            (root / 'apps/hotaru/upstream/sidestep-mime.patch').write_text('''diff --git a/clipboard-reader.txt b/clipboard-reader.txt
+--- a/clipboard-reader.txt
++++ b/clipboard-reader.txt
+@@ -1 +1 @@
+-reader: asynchronous
++reader: asynchronous MIME
+''')
             initial = hook(base, root, first)
             checkout = root / 'vendor/sidestep'
-            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: asynchronous\n')
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: asynchronous MIME\n')
             self.assertEqual((checkout / 'notes.txt').read_text(), 'native keyboard metadata\n')
             self.assertLess(initial.stderr.index('native clipboard patch'), initial.stderr.index('native input patch'))
+            self.assertLess(initial.stderr.index('native input patch'), initial.stderr.index('native mime patch'))
             before = git(checkout, 'diff')
             repeated = hook(base, root, first)
             self.assertEqual(git(checkout, 'diff'), before)
             self.assertNotIn('applied Hotaru', repeated.stderr)
+
+    def test_later_patch_conflict_does_not_partially_apply_series_or_touch_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            (root / 'apps/hotaru/upstream/sidestep-mime.patch').write_text('''diff --git a/notes.txt b/notes.txt
+--- a/notes.txt
++++ b/notes.txt
+@@ -1 +1 @@
+-developer notes
++clipboard MIME metadata
+''')
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            (checkout / 'notes.txt').write_text('staged developer notes\n')
+            git(checkout, 'add', 'notes.txt')
+            (checkout / 'notes.txt').write_text('unstaged developer notes\n')
+            before = git(checkout, 'diff', 'HEAD')
+            staged = git(checkout, 'diff', '--cached')
+            result = hook(base, root, first, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(git(checkout, 'diff', 'HEAD'), before)
+            self.assertEqual(git(checkout, 'diff', '--cached'), staged)
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: synchronous\n')
+
+    def test_existing_prefix_receives_dependent_patch_and_preserves_staged_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            patch = clipboard_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            git(checkout, 'apply', str(patch))
+            (checkout / 'notes.txt').write_text('staged unrelated work\n')
+            git(checkout, 'add', 'notes.txt')
+            staged = git(checkout, 'diff', '--cached')
+            (checkout / 'notes.txt').write_text('unstaged unrelated work\n')
+            (root / 'apps/hotaru/upstream/sidestep-mime.patch').write_text('''diff --git a/clipboard-reader.txt b/clipboard-reader.txt
+--- a/clipboard-reader.txt
++++ b/clipboard-reader.txt
+@@ -1 +1 @@
+-reader: asynchronous
++reader: asynchronous MIME
+''')
+            result = hook(base, root, first)
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: asynchronous MIME\n')
+            self.assertEqual((checkout / 'notes.txt').read_text(), 'unstaged unrelated work\n')
+            self.assertEqual(git(checkout, 'diff', '--cached'), staged)
+            self.assertIn('native mime patch', result.stderr)
+            self.assertNotIn('native clipboard patch', result.stderr)
+            self.assertNotIn('applied Hotaru', hook(base, root, first).stderr)
 
     def test_clipboard_patch_is_applied_to_fresh_submodule_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:

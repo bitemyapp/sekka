@@ -1,7 +1,9 @@
 //! Explicit, bounded archive representation. No raw Rust layout or pointer bytes
 //! enter the codec, and decoding validates every offset before constructing Row.
 use super::{Cell, CompactString, Row};
+use crate::hyperlink::{LinkIdentity, LinkRef};
 use crate::{Color, MAX_COLS, Rgb, Style};
+use std::collections::HashMap;
 
 pub(crate) struct Reader<'a>(pub &'a [u8]);
 impl<'a> Reader<'a> {
@@ -45,18 +47,29 @@ impl Row {
         row.dirty_end = cols as u16;
         row
     }
-    /// A constant-time upper bound on the archive size, including the bounded
-    /// 64-scalar grapheme payloads. This also bounds compression-step work.
+    /// Upper bound on the archive size, including bounded graphemes and a
+    /// conservative per-run charge for the block's shared link dictionary.
     pub(crate) fn history_size_bound(&self) -> usize {
-        11 + self.cells.len() * 8 + self.styles.len() * 14 + self.graphemes.len() * 260
+        let links = self
+            .hyperlink_runs()
+            .map(|(_, link)| {
+                let identity = match &link.id {
+                    LinkIdentity::Explicit(id) => 2 + id.len(),
+                    LinkIdentity::Implicit(_) => 8,
+                };
+                8 + 1 + identity + 2 + link.uri.len()
+            })
+            .sum::<usize>();
+        13 + self.cells.len() * 8 + self.styles.len() * 14 + self.graphemes.len() * 260 + links
     }
-    pub(crate) fn encode_history(&self, bytes: &mut Vec<u8>) {
+    pub(crate) fn encode_history(&self, bytes: &mut Vec<u8>, links: &HashMap<LinkRef, u32>) {
         bytes.extend_from_slice(&(self.cells.len() as u16).to_le_bytes());
         bytes.extend_from_slice(&self.retained_cols.to_le_bytes());
         bytes.push(u8::from(self.wrapped) | (u8::from(self.wrap_continuation) << 1));
         bytes.extend_from_slice(&(self.styles.len() as u16).to_le_bytes());
         bytes.extend_from_slice(&self.last_style.to_le_bytes());
         bytes.extend_from_slice(&(self.graphemes.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(&(self.hyperlink_runs().count() as u16).to_le_bytes());
         for style in &self.styles {
             color_encode(style.foreground, bytes);
             color_encode(style.background, bytes);
@@ -74,8 +87,13 @@ impl Row {
             bytes.extend_from_slice(&(text.len() as u16).to_le_bytes());
             bytes.extend_from_slice(text.as_bytes());
         }
+        for (range, link) in self.hyperlink_runs() {
+            bytes.extend_from_slice(&(range.start as u16).to_le_bytes());
+            bytes.extend_from_slice(&(range.end as u16).to_le_bytes());
+            bytes.extend_from_slice(&links[link].to_le_bytes());
+        }
     }
-    pub(crate) fn decode_history(bytes: &mut &[u8]) -> Option<Self> {
+    pub(crate) fn decode_history(bytes: &mut &[u8], links: &[LinkRef]) -> Option<Self> {
         let mut r = Reader(bytes);
         let cols = usize::from(r.u16()?);
         let retained_cols = r.u16()?;
@@ -83,6 +101,7 @@ impl Row {
         let styles = usize::from(r.u16()?);
         let last_style = r.u16()?;
         let graphemes = usize::from(r.u16()?);
+        let runs = usize::from(r.u16()?);
         if !(1..=MAX_COLS).contains(&cols)
             || usize::from(retained_cols) < cols
             || usize::from(retained_cols) > MAX_COLS
@@ -91,11 +110,12 @@ impl Row {
             || styles > MAX_COLS * 2 + 1
             || usize::from(last_style) >= styles
             || graphemes > cols
+            || runs > cols
         {
             return None;
         }
         // Validate the minimum complete payload before allocating any vectors.
-        if r.0.len() < styles * 14 + cols * 8 + graphemes * 4 {
+        if r.0.len() < styles * 14 + cols * 8 + graphemes * 4 + runs * 8 {
             return None;
         }
         let mut row = Row::new(cols);
@@ -159,6 +179,21 @@ impl Row {
             row.graphemes.insert(col, CompactString::new(text));
             previous = Some(col);
         }
+        let mut restored_runs = Vec::new();
+        restored_runs.try_reserve_exact(runs).ok()?;
+        let mut previous_end = 0;
+        for _ in 0..runs {
+            let start = usize::from(r.u16()?);
+            let end = usize::from(r.u16()?);
+            let index = r.u32()? as usize;
+            if start < previous_end || start >= end || end > cols {
+                return None;
+            }
+            let link = links.get(index)?;
+            restored_runs.push((start..end, link.clone()));
+            previous_end = end;
+        }
+        row.restore_hyperlink_runs(restored_runs)?;
         *bytes = r.0;
         Some(row)
     }
@@ -167,6 +202,53 @@ impl Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hyperlink_runs_round_trip_and_reject_corrupt_ranges_and_indices() {
+        use crate::hyperlink::Hyperlink;
+        let links = vec![
+            LinkRef::new(Hyperlink {
+                id: LinkIdentity::Implicit(7),
+                uri: b"https://one.test/".as_slice().into(),
+            }),
+            LinkRef::new(Hyperlink {
+                id: LinkIdentity::Explicit(b"same".as_slice().into()),
+                uri: b"https://two.test/".as_slice().into(),
+            }),
+        ];
+        let ids = links
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(id, link)| (link, id as u32))
+            .collect();
+        let mut row = Row::new(8);
+        row.set_hyperlink_range(1..3, Some(&links[0]));
+        row.set_hyperlink_range(4..8, Some(&links[1]));
+        let mut encoded = Vec::new();
+        row.encode_history(&mut encoded, &ids);
+        let restored = Row::decode_history(&mut encoded.as_slice(), &links).unwrap();
+        for col in 0..8 {
+            assert_eq!(row.hyperlink(col), restored.hyperlink(col));
+        }
+        for end in 0..encoded.len() {
+            assert!(Row::decode_history(&mut &encoded[..end], &links).is_none());
+        }
+        let runs_start = encoded.len() - 16;
+        for (at, bytes) in [
+            (11, u16::MAX.to_le_bytes().to_vec()),
+            (runs_start, 8u16.to_le_bytes().to_vec()),
+            (runs_start + 2, 9u16.to_le_bytes().to_vec()),
+            (runs_start + 4, u32::MAX.to_le_bytes().to_vec()),
+            (runs_start + 8, 2u16.to_le_bytes().to_vec()),
+        ] {
+            let mut corrupt = encoded.clone();
+            corrupt[at..at + bytes.len()].copy_from_slice(&bytes);
+            assert!(
+                Row::decode_history(&mut corrupt.as_slice(), &links).is_none(),
+                "corrupt offset {at}"
+            );
+        }
+    }
     #[test]
     fn exact_archive_round_trip_and_all_truncations() {
         let mut row = Row::new(17);
@@ -195,17 +277,17 @@ mod tests {
         row.wrapped = true;
         row.wrap_continuation = true;
         let mut bytes = Vec::new();
-        row.encode_history(&mut bytes);
+        row.encode_history(&mut bytes, &HashMap::new());
         assert!(bytes.len() <= row.history_size_bound());
         let mut input = bytes.as_slice();
-        let decoded = Row::decode_history(&mut input).unwrap();
+        let decoded = Row::decode_history(&mut input, &[]).unwrap();
         assert!(input.is_empty());
         let mut restored = Vec::new();
-        decoded.encode_history(&mut restored);
+        decoded.encode_history(&mut restored, &HashMap::new());
         assert_eq!(restored, bytes);
         for end in 0..bytes.len() {
             assert!(
-                Row::decode_history(&mut &bytes[..end]).is_none(),
+                Row::decode_history(&mut &bytes[..end], &[]).is_none(),
                 "accepted truncated archive at {end}"
             );
         }
@@ -217,7 +299,7 @@ mod tests {
         row.put(3, 'e', 1, Style::default(), false);
         row.combine(3, '\u{301}');
         let mut source = Vec::new();
-        row.encode_history(&mut source);
+        row.encode_history(&mut source, &HashMap::new());
         let mut seed = 0x4f37a290u32;
         for _ in 0..10000 {
             seed ^= seed << 13;
@@ -226,13 +308,13 @@ mod tests {
             let mut bytes = source.clone();
             let at = seed as usize % bytes.len();
             bytes[at] = (seed >> 16) as u8;
-            let _ = Row::decode_history(&mut bytes.as_slice());
+            let _ = Row::decode_history(&mut bytes.as_slice(), &[]);
         }
         let mut large = source.clone();
         large[0..2].copy_from_slice(&u16::MAX.to_le_bytes());
-        assert!(Row::decode_history(&mut large.as_slice()).is_none());
+        assert!(Row::decode_history(&mut large.as_slice(), &[]).is_none());
         large = source.clone();
         large[5..7].copy_from_slice(&u16::MAX.to_le_bytes());
-        assert!(Row::decode_history(&mut large.as_slice()).is_none());
+        assert!(Row::decode_history(&mut large.as_slice(), &[]).is_none());
     }
 }

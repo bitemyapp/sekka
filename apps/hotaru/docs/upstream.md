@@ -68,6 +68,17 @@ whole directory is complete because a small terminal demo runs.
 
 ## Clipboard hang audit
 
+The subsequent OSC8/copy slice is documented in
+[`hyperlinks.md`](hyperlinks.md) and
+[`../upstream/hyperlink-report.json`](../upstream/hyperlink-report.json).
+It adds owned sparse links, metadata-preserving compressed history, immutable
+content captures and bounded/cancellable plain/VT/HTML/mixed formatting.
+134 real-library fixtures cover 402 URI/chunk comparisons and 402 format
+comparisons; six named HTML cases correct crossed tags while preserving
+per-character style/link semantics, and five correct UTF8/invalid-byte URI
+escaping without double-encoding existing percent escapes. Search, gesture policies and configurable
+copy codepoint maps remain unfinished. The ledger marks these modules partial.
+
 The user's fix is commit
 [`108af5ed0a19800671e74421ec47699b6a35875e`](https://github.com/bitemyapp/ghostty/commit/108af5ed0a19800671e74421ec47699b6a35875e),
 on `bitemyapp/fix-clipboard-hangs`. Its merge base with current upstream is
@@ -163,6 +174,10 @@ the official archive SHA-256, rejects tracked reference edits, checks out the
 exact pin and builds ReleaseFast terminal/benchmark binaries. Its `build`
 action records commands, revisions, compiler and binary hashes in
 `hotaru-baseline.json` in the external checkout.
+
+The separate full Linux GUI reference and initial private Wayland measurements
+are documented in [GUI probes](gui-probe.md). Their software-rendering and font
+differences preclude a performance-parity claim.
 
 Copy `tools/` and `upstream/ghostty.json` into a matching layout on the remote
 host, then run:
@@ -310,6 +325,20 @@ validation.
 ## Comparable feed benchmarks
 
 The current measured core checkpoint still misses the performance gate.
+[`../upstream/candidate-rich-copy-build.json`](../upstream/candidate-rich-copy-build.json)
+identifies the audited owned-history, hyperlink and formatter build. Its four
+compared states matched. Rust/Zig median feed ratios were **1.115 ASCII**,
+**1.143 Unicode**, **0.606 styled text** and **0.102 cursor/erase**, recorded in
+`upstream/benchmarks/rich-copy-*.json`. A separate diagnostic checks actual URI
+metadata and exact VT link transitions before timing. It exposes a larger gap
+on a dense wide-character stream: **4.715** without links, versus **0.407** with
+a persistent long link. Its distinct ASCII pattern measures **1.383** without
+links and **0.060** with the link. See
+[`../upstream/hyperlink-performance-verified.json`](../upstream/hyperlink-performance-verified.json)
+and [diagnostic scope](hyperlinks.md). Faster linked workloads do not excuse the
+no-link throughput gaps or establish complete parity.
+
+The preceding
 [`../upstream/candidate-checkpoint-build.json`](../upstream/candidate-checkpoint-build.json)
 identifies the build with reflow, keyboard/mouse input, extended styles and the
 compressed-row recycling fix. All four compared states matched. Rust/Zig median
@@ -427,7 +456,16 @@ later implementations require fresh measurements.
 
 ## Native package checkpoint
 
-The integrated package is recorded in
+The audited rich-copy package is recorded in
+[`../upstream/nix-rich-copy-checkpoint.json`](../upstream/nix-rich-copy-checkpoint.json).
+Its sandbox build passes 21 application tests. Independent core validation
+passes 69 core tests, 19 I/O tests, one documentation test and strict workspace
+Clippy. The Sidestep MIME patch follows the unchanged clipboard and input
+patches; it shares prepared UTF-8 text allocations and immutable HTML bytes.
+The exact packaged runtime evidence is under
+[`../upstream/native-rich-copy/`](../upstream/native-rich-copy/).
+
+The preceding integrated package is recorded in
 [`../upstream/nix-native-checkpoint.json`](../upstream/nix-native-checkpoint.json).
 Its sandbox build passed all 18 application tests. The packaged executable then
 passed the private headless Wayland test with ambient font/library overrides

@@ -1,0 +1,222 @@
+diff --git a/crates/sidestep-ui/src/app.rs b/crates/sidestep-ui/src/app.rs
+index b6172b3bae9f729c632a5fb5ce7fe3d66176b773..ee144349337e3fa66faf8c33c37f8da33b35d349 100644
+--- a/crates/sidestep-ui/src/app.rs
++++ b/crates/sidestep-ui/src/app.rs
+@@ -39,9 +39,10 @@ pub struct PreparedClipboardText {
+ 
+ impl PreparedClipboardText {
+     pub fn new(text: String) -> Self {
+-        let bytes: Arc<[u8]> = Arc::from(text.as_bytes());
++        let text: Arc<str> = text.into();
++        let bytes: Arc<[u8]> = text.clone().into();
+         let items = clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))).collect();
+-        Self { text: text.into(), contents: Arc::new(Contents { items }) }
++        Self { text, contents: Arc::new(Contents { items }) }
+     }
+ 
+     pub fn text(&self) -> &str {
+@@ -49,19 +50,74 @@ impl PreparedClipboardText {
+     }
+ }
+ 
++/// Immutable MIME representations prepared on a worker and published together.
++/// Preparing validates MIME names and allocates text aliases; cloning and
++/// publication only copy Arcs. The backend retains its bounded nonblocking pipes.
++#[derive(Clone)]
++pub struct PreparedClipboard {
++    text: Option<Arc<str>>,
++    contents: Arc<Contents>,
++}
++
++impl PreparedClipboard {
++    /// `plain` supplies the standard UTF-8 text aliases. Additional MIME entries
++    /// share their provided allocations. At most 16 additional types are allowed;
++    /// names must be distinct, printable ASCII, and no longer than 255 bytes.
++    pub fn new(plain: Option<String>, representations: Vec<(String, Arc<[u8]>)>) -> std::io::Result<Self> {
++        let invalid = || std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid clipboard MIME bundle");
++        if representations.len() > 16 || (plain.is_none() && representations.is_empty()) {
++            return Err(invalid());
++        }
++        let mut items = Vec::with_capacity(clipboard::TEXT_MIMES.len() + representations.len());
++        let text = plain.map(|text| {
++            let text: Arc<str> = text.into();
++            let bytes: Arc<[u8]> = text.clone().into();
++            items.extend(clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))));
++            text
++        });
++        for (mime, bytes) in representations {
++            if mime.is_empty()
++                || mime.len() > 255
++                || !mime.bytes().all(|byte| (0x20..=0x7e).contains(&byte))
++                || clipboard::TEXT_MIMES.contains(&mime.as_str())
++                || items.iter().any(|(existing, _)| existing == &mime)
++            {
++                return Err(invalid());
++            }
++            items.push((mime, Some(bytes)));
++        }
++        Ok(Self { text, contents: Arc::new(Contents { items }) })
++    }
++
++    pub fn text(&self) -> Option<&str> {
++        self.text.as_deref()
++    }
++
++    pub fn data(&self, mime: &str) -> Option<&[u8]> {
++        self.contents.items.iter().find(|(name, _)| name == mime).and_then(|(_, bytes)| bytes.as_deref())
++    }
++}
++
++impl From<PreparedClipboardText> for PreparedClipboard {
++    fn from(text: PreparedClipboardText) -> Self {
++        Self { text: Some(text.text), contents: text.contents }
++    }
++}
++
+ /// Owned clipboard snapshot for a worker. Creating one never reads a pipe or
+ /// clones selected bytes. Completion must be discarded if `is_current` is false.
+ #[derive(Clone)]
+ pub struct ClipboardRead {
+     foreign: Option<clipboard::TextRead>,
+     local: Option<Arc<str>>,
++    local_selection: bool,
+     cancelled: Arc<AtomicBool>,
+ }
+ 
+ impl ClipboardRead {
+     /// A fixed headless/test clipboard; current until explicitly cancelled.
+     pub fn from_text(text: Option<Arc<str>>) -> Self {
+-        Self { foreign: None, local: text, cancelled: Arc::new(AtomicBool::new(false)) }
++        Self { foreign: None, local: text, local_selection: true, cancelled: Arc::new(AtomicBool::new(false)) }
+     }
+ 
+     pub fn is_current(&self) -> bool {
+@@ -81,9 +137,10 @@ impl ClipboardRead {
+         if !self.is_current() || timeout.is_zero() {
+             return None;
+         }
+-        let text = match &self.local {
+-            Some(text) => Some(text.clone()),
+-            None => self.foreign.as_ref().and_then(|read| read.read(timeout, maximum)),
++        let text = if self.local_selection {
++            self.local.clone()
++        } else {
++            self.foreign.as_ref().and_then(|read| read.read(timeout, maximum))
+         };
+         text.filter(|text| text.len() <= maximum && self.is_current())
+     }
+@@ -615,7 +672,7 @@ pub struct Cx {
+     opened_any: bool,
+     /// The text the program last put on the clipboard, with the change it
+     /// made.
+-    clipboard: Option<(ClipboardIdentity, PreparedClipboardText)>,
++    clipboard: Option<(ClipboardIdentity, PreparedClipboard)>,
+     drags: HashMap<u64, DragState>,
+     /// The appearance and accent windows last drew in.
+     looks: (Appearance, Color),
+@@ -922,22 +979,29 @@ impl Cx {
+     /// Commit a worker-prepared selection without copying its text on the UI
+     /// thread. Native writing remains readiness-driven on the render thread.
+     pub fn set_prepared_clipboard_text(&mut self, text: PreparedClipboardText) {
++        self.set_prepared_clipboard(text.into());
++    }
++
++    /// Publish all worker-prepared MIME representations as one selection without
++    /// iterating over or copying their bytes on the interface thread.
++    pub fn set_prepared_clipboard(&mut self, data: PreparedClipboard) {
+         let shared = clipboard::shared();
+         let (_, identity) = shared.bump_identity();
+-        shared.offer_prepared(Some(text.contents.clone()));
+-        self.clipboard = Some((identity, text));
++        shared.offer_prepared(Some(data.contents.clone()));
++        self.clipboard = Some((identity, data));
+     }
+ 
+     /// Capture an O(1) snapshot for a worker. No pipe read or condition-variable
+     /// wait happens here, including for foreign multi-MiB selections.
+     pub fn clipboard_read(&self) -> ClipboardRead {
+         let foreign = clipboard::shared().text_read();
+-        let local = self
+-            .clipboard
+-            .as_ref()
+-            .filter(|(identity, _)| *identity == foreign.identity())
+-            .map(|(_, text)| text.text.clone());
+-        ClipboardRead { foreign: Some(foreign), local, cancelled: Arc::new(AtomicBool::new(false)) }
++        let cached = self.clipboard.as_ref().filter(|(identity, _)| *identity == foreign.identity());
++        ClipboardRead {
++            local: cached.and_then(|(_, data)| data.text.clone()),
++            local_selection: cached.is_some(),
++            foreign: Some(foreign),
++            cancelled: Arc::new(AtomicBool::new(false)),
++        }
+     }
+ 
+     /// The clipboard's text: this program's, or another's, which may take
+@@ -946,7 +1010,7 @@ impl Cx {
+     pub fn clipboard_text(&self) -> Option<String> {
+         let shared = clipboard::shared();
+         match &self.clipboard {
+-            Some((identity, text)) if shared.identity() == *identity => Some(text.text.to_string()),
++            Some((identity, data)) if shared.identity() == *identity => data.text().map(str::to_owned),
+             _ => shared.foreign_text(),
+         }
+     }
+@@ -1692,9 +1756,45 @@ mod tests {
+         assert!(Arc::ptr_eq(&prepared.text, &other.text));
+         assert!(Arc::ptr_eq(&prepared.contents, &other.contents));
+         let bytes = prepared.contents.items[0].1.as_ref().unwrap();
++        assert_eq!(bytes.as_ptr(), prepared.text.as_ptr());
+         assert!(prepared.contents.items.iter().all(|(_, item)| Arc::ptr_eq(bytes, item.as_ref().unwrap())));
+     }
+ 
++    #[test]
++    fn prepared_mime_bundle_shares_bytes_and_preserves_representations() {
++        let html: Arc<[u8]> = Arc::from(b"<b>different rich text</b>".as_slice());
++        let prepared =
++            PreparedClipboard::new(Some("plain text".into()), vec![("text/html".into(), html.clone())]).unwrap();
++        let other = prepared.clone();
++        assert!(Arc::ptr_eq(&prepared.contents, &other.contents));
++        assert!(Arc::ptr_eq(prepared.text.as_ref().unwrap(), other.text.as_ref().unwrap()));
++        assert_eq!(prepared.text(), Some("plain text"));
++        assert_eq!(prepared.data("text/plain").unwrap().as_ptr(), prepared.text().unwrap().as_ptr());
++        for mime in clipboard::TEXT_MIMES {
++            assert_eq!(prepared.data(mime), Some(b"plain text".as_slice()));
++        }
++        let stored = prepared.contents.items.iter().find(|(mime, _)| mime == "text/html").unwrap().1.as_ref().unwrap();
++        assert!(Arc::ptr_eq(stored, &html));
++        assert_eq!(prepared.data("text/html"), Some(b"<b>different rich text</b>".as_slice()));
++        let html_only = PreparedClipboard::new(None, vec![("text/html".into(), html)]).unwrap();
++        assert_eq!(html_only.text(), None);
++        assert_eq!(html_only.data("text/plain"), None);
++    }
++
++    #[test]
++    fn prepared_mime_bundle_rejects_ambiguous_or_unbounded_metadata() {
++        let bytes: Arc<[u8]> = Arc::from(b"x".as_slice());
++        for mime in ["", "text/plain", "UTF8_STRING", "text/html\0bad", "text/html\n"] {
++            assert!(PreparedClipboard::new(None, vec![(mime.into(), bytes.clone())]).is_err());
++        }
++        assert!(PreparedClipboard::new(None, vec![]).is_err());
++        assert!(PreparedClipboard::new(None, vec![("text/html".into(), bytes.clone()); 2]).is_err());
++        assert!(
++            PreparedClipboard::new(None, (0..17).map(|i| (format!("x/type{i}"), bytes.clone())).collect()).is_err()
++        );
++        assert!(PreparedClipboard::new(Some(String::new()), vec![]).is_ok());
++    }
++
+     #[test]
+     fn clipboard_worker_handle_honors_size_and_cancellation() {
+         fn assert_send<T: Send>() {}
+diff --git a/crates/sidestep-ui/src/lib.rs b/crates/sidestep-ui/src/lib.rs
+index c0cdef0429a580979f7a44db83fac294e0815c53..93b0f92d3b2a1f2c0644f04906145d673467c157 100644
+--- a/crates/sidestep-ui/src/lib.rs
++++ b/crates/sidestep-ui/src/lib.rs
+@@ -88,7 +88,7 @@ pub mod testing;
+ 
+ pub use app::{
+     ActivationRequest, App, ClipboardRead, Cx, Drag, DragId, DragSource, DropAction, DropResponse, Error, FrameStats,
+-    FrameTiming, Handler, Output, PreparedClipboardText, Proxy, TimerId,
++    FrameTiming, Handler, Output, PreparedClipboard, PreparedClipboardText, Proxy, TimerId,
+ };
+ pub use canvas::{
+     BlendMode, Canvas, ImageOptions, LineCap, LineJoin, LinearGradient, Paint, RadialGradient, Shadow, StrokeStyle,

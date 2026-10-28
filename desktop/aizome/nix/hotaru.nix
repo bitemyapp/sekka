@@ -20,6 +20,7 @@
   hotaruSrc,
   clipboardPatch,
   inputPatch,
+  mimePatch,
   sidestep,
   fonts,
   version,
@@ -34,6 +35,7 @@ let
     chmod -R u+w $out/vendor/sidestep
     patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
     patch -d $out/vendor/sidestep -p1 < ${inputPatch}
+    patch -d $out/vendor/sidestep -p1 < ${mimePatch}
     chmod u+w $out/desktop/aizome
     ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';

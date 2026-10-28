@@ -27,12 +27,19 @@ It never discards replies to a live recipient. Shutdown uses an atomic stop flag
 and eventfd wake independently of command queue capacity.
 
 Copy and paste use one clipboard worker with a single replaceable pending job.
-Formatting copied snapshots and preparing MIME data happen there. The UI commits
-prepared clipboard text in constant time. Reads have a two second deadline and a
+Copy All captures immutable history blocks without decompressing them on the PTY
+owner. Formatting and block decoding happen on the clipboard worker. The UI
+publishes all prepared MIME formats together in constant time. Reads have a two second deadline and a
 size limit; obsolete jobs and offers are cancelled. Completion tokens prevent an
 older copy from replacing a newer one, and paste remains attached to the pane that
 requested it. Paste encoding runs on the PTY worker using its current mode and
 strips embedded control sequences that could terminate bracketed paste.
+
+Copy defaults to plain text plus HTML. Edit → Copy Format also offers plain text,
+ANSI text with terminal formatting, and HTML alone. The choice is saved. A new
+copy or a closed pane cancels obsolete work. Copies exceeding 128 MiB across all
+requested formats report an error without replacing the clipboard or truncating
+the selection. Plain aliases and the local text cache share one allocation.
 
 OSC 52 requests are reported but do not grant programs clipboard access.
 Colors are configured in the terminal engine itself, so OSC queries and rendered
@@ -65,6 +72,7 @@ font_size = 14.0
 font_weight = 400
 theme = "desktop" # desktop, night, day, high-contrast
 scrollback = 10000 # Applies to newly created panes.
+copy_format = "mixed" # plain, vt, html, mixed
 
 [keybindings]
 "super+d" = "split-right"
@@ -92,14 +100,15 @@ cargo build --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --locked
 ```
 
 Tests cover native Night/Day rendering, explicit terminal colors, tabs and splits,
-large asynchronous copies, stale results, output delivery before shell exit,
+large asynchronous plain/HTML copies, cancellation and stale results, output delivery before shell exit,
 copying after exit, settings validation/persistence, negotiated input and 50,000
 terminal queries under PTY backpressure. Ignored child fixtures are executed as
 isolated PTY children by the corresponding parent tests.
 
 `tests/wayland/smoke.py BINARY EVIDENCE_DIRECTORY` creates a private headless Sway
-session and tests actual Wayland copy and paste above 1 MiB, plus native UI input
-while a clipboard recipient stops reading, nested split teardown, and actual
+session and tests exact plain text and HTML copies plus paste above 1 MiB, native UI input
+while recipients stop reading, canceled receivers, repeated copies followed by
+pane closure, nested split teardown, and actual
 Wayland keyboard/mouse input. It records binary/source hashes,
 result hashes, a screenshot and logs, then terminates its private processes. It
 requires Sway, wl-clipboard, grim and the Wayland C development tools documented

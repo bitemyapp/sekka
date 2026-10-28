@@ -1,4 +1,5 @@
 use crate::history::History;
+use crate::hyperlink::{Hyperlink, LinkIdentity, LinkRef};
 use crate::input::{KeyboardOptions, KittyFlags, KittyKeyboard, MouseFormat, MouseTracking};
 use crate::parser::{Csi, Handler, Param};
 use crate::style::Underline;
@@ -94,6 +95,7 @@ struct Screen {
     top: usize,
     bottom: usize,
     kitty_keyboard: KittyKeyboard,
+    active_link: Option<LinkRef>,
 }
 
 impl Screen {
@@ -110,6 +112,7 @@ impl Screen {
             top: 0,
             bottom: rows - 1,
             kitty_keyboard: KittyKeyboard::default(),
+            active_link: None,
         }
     }
     fn row(&mut self) -> &mut Row {
@@ -353,8 +356,9 @@ impl ResizeRows {
                     continue;
                 }
                 if cell.width() == 2 && cols > 1 && col == cols - 1 {
-                    Arc::make_mut(self.lines.back_mut().unwrap())
-                        .set_spacer_head(col, Style::default());
+                    let target = Arc::make_mut(self.lines.back_mut().unwrap());
+                    target.set_spacer_head(col, Style::default());
+                    target.set_hyperlink_range(col..col + 1, row.hyperlink_ref(source_col));
                     pending = true;
                     continue;
                 }
@@ -415,6 +419,7 @@ pub(crate) struct State {
     single_shift: Option<usize>,
     protected: bool,
     cursor_style: u16,
+    next_link_id: u64,
     tabs: Vec<bool>,
     default_colors: TerminalColors,
     palette: [Rgb; 256],
@@ -451,6 +456,7 @@ impl State {
             single_shift: None,
             protected: false,
             cursor_style: 1,
+            next_link_id: 0,
             tabs: (0..cols).map(|c| c != 0 && c % 8 == 0).collect(),
             default_colors: TerminalColors::default(),
             palette: crate::style::default_palette(),
@@ -580,6 +586,9 @@ impl State {
         snapshot.cursor.row += screen.history.len();
         snapshot
     }
+    pub fn content_snapshot(&self) -> crate::ContentSnapshot {
+        crate::ContentSnapshot::capture(self.snapshot(0), self.screen().history.capture())
+    }
     pub fn print_ascii(&mut self, mut bytes: &[u8]) {
         if self.insert || self.charset[self.active_charset] != 0 || self.single_shift.is_some() {
             for &b in bytes {
@@ -592,6 +601,7 @@ impl State {
             let style = self.style;
             let protected = self.protected;
             let s = self.screen_mut();
+            let link = s.active_link.clone();
             let col = s.cursor.col;
             let count = bytes.len().min(s.cols - col);
             let row = s.row();
@@ -604,6 +614,9 @@ impl State {
             let id = row.style_id(style);
             for (cell, &byte) in row.cells[col..col + count].iter_mut().zip(&bytes[..count]) {
                 *cell = Cell::new(byte as char, id, 1).protected(protected);
+            }
+            if let Some(link) = &link {
+                row.set_hyperlink_range(col..col + count, Some(link));
             }
             if clear_previous_spacer {
                 s.clear_previous_spacer();
@@ -643,6 +656,7 @@ impl State {
             let protected = self.protected;
             let s = self.screen_mut();
             let mut col = s.cursor.col;
+            let link = s.active_link.clone();
             let mut pending = s.wrap_pending;
             let mut clear_previous_spacer = false;
             // One ownership check/copy per row, rather than an atomic Arc check
@@ -660,6 +674,9 @@ impl State {
                     clear_previous_spacer |=
                         col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
                     row.put(col, ch, width, style, protected);
+                    if let Some(link) = &link {
+                        row.set_hyperlink_range(col..col + width, Some(link));
+                    }
                     col += width;
                     if col == s.cols {
                         col -= 1;
@@ -787,6 +804,9 @@ impl State {
             7 => self.autowrap = set,
             25 => self.screen_mut().cursor.visible = set,
             47 | 1047 | 1049 => {
+                if self.modes.alternate_screen != set {
+                    self.screen_mut().active_link = None;
+                }
                 if self.modes.alternate_screen == set {
                     return;
                 }
@@ -1026,12 +1046,16 @@ impl Handler for State {
         let auto = self.autowrap;
         let protected = self.protected;
         let s = self.screen_mut();
+        let link = s.active_link.clone();
         let mut width = width;
         if width == 2 && s.cursor.col + 1 >= s.cols {
             if auto && s.cols > 1 {
                 let col = s.cursor.col;
                 s.row().erase(col, col + 1, style);
                 s.row().set_spacer_head(col, style);
+                if let Some(link) = &link {
+                    s.row().set_hyperlink_range(col..col + 1, Some(link));
+                }
                 s.row().wrapped = true;
                 s.cursor.col = 0;
                 s.linefeed(style);
@@ -1051,6 +1075,9 @@ impl Handler for State {
             s.clear_previous_spacer();
         }
         s.row().put(col, ch, width, style, protected);
+        if let Some(link) = &link {
+            s.row().set_hyperlink_range(col..col + width, Some(link));
+        }
         s.cursor.col += width;
         if s.cursor.col >= s.cols {
             s.cursor.col = s.cols - 1;
@@ -1459,6 +1486,55 @@ impl Handler for State {
         }
     }
     fn osc(&mut self, bytes: &[u8], bell_terminated: bool) {
+        if let Some(body) = bytes.strip_prefix(b"8;") {
+            // The reference OSC 8 parser reserves one fixed-buffer byte for
+            // its sentinel NUL. Invalid commands retain the active link.
+            if body.len() > 2047 {
+                return;
+            }
+            let Some(separator) = body.iter().position(|&b| b == b';') else {
+                return;
+            };
+            let mut id = None;
+            let parameters = &body[..separator];
+            let mut start = 0;
+            while start < parameters.len() {
+                // Upstream searches for the delimiter after the first byte.
+                // An empty segment is joined with the next option as an
+                // unknown key; later well-formed options are still parsed.
+                let end = parameters[start + 1..]
+                    .iter()
+                    .position(|&b| b == b':')
+                    .map_or(parameters.len(), |offset| start + 1 + offset);
+                let parameter = &parameters[start..end];
+                let Some(equal) = parameter.iter().position(|&b| b == b'=') else {
+                    break;
+                };
+                if &parameter[..equal] == b"id" && equal + 1 < parameter.len() {
+                    id = Some(&parameter[equal + 1..]);
+                }
+                start = end + 1;
+            }
+            let uri = &body[separator + 1..];
+            if uri.is_empty() {
+                if id.is_none() {
+                    self.screen_mut().active_link = None;
+                }
+            } else {
+                let id = if let Some(id) = id {
+                    LinkIdentity::Explicit(id.into())
+                } else {
+                    let id = self.next_link_id;
+                    self.next_link_id = self.next_link_id.wrapping_add(1);
+                    LinkIdentity::Implicit(id)
+                };
+                self.screen_mut().active_link = Some(LinkRef::new(Hyperlink {
+                    id,
+                    uri: uri.into(),
+                }));
+            }
+            return;
+        }
         let Ok(text) = std::str::from_utf8(bytes) else {
             return;
         };

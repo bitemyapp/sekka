@@ -4533,10 +4533,18 @@
       "blob": "398496da64d69c08acd8330807d38cef06cc5617",
       "bytes": 54799,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/formatter.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/SelectionGesture.zig",
@@ -5207,10 +5215,19 @@
       "blob": "f1ec6b7c13c014e51b22be331f9917944628f80e",
       "bytes": 276902,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/formatter.rs",
+        "crates/hotaru-core/src/content.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/fraction.zig",
@@ -5247,10 +5264,19 @@
       "blob": "68f914f890381088c2957e30767b0c6ca163b3b2",
       "bytes": 7701,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/hyperlink.rs",
+        "crates/hotaru-core/src/row.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/kitty.zig",
@@ -5644,10 +5670,18 @@
       "blob": "d8e84b63c6a1ab16f0a54c3b685a30e77aec0882",
       "bytes": 4647,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/screen.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/osc/parsers/iterm2.zig",
@@ -5936,10 +5970,18 @@
       "blob": "4c3184030f17495d7407f9e615a18827c2b9ff5f",
       "bytes": 898,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/formatter.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/sgr.zig",
@@ -6044,10 +6086,20 @@
       "blob": "2df3f9232ef91033270b928d708208035fb81c3b",
       "bytes": 16161,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/content.rs",
+        "crates/hotaru-core/src/row/history.rs",
+        "crates/hotaru-core/src/history.rs"
+      ],
+      "evidence": [
+        "upstream/hyperlink-report.json",
+        "upstream/hyperlink-fixtures.json",
+        "crates/hotaru-core/tests/hyperlinks.rs",
+        "crates/hotaru-core/tests/content.rs",
+        "docs/hyperlinks.md"
+      ],
+      "note": "Owned OSC8 ranges and block dictionary; bounded/cancellable plain/VT/HTML/mixed formatting and exclusive linear/rectangle ranges. 134 real-library cases, 402 URI/chunk and 402 format comparisons; six explicit balanced-HTML corrections preserve per-character style/link semantics, and five explicit URI corrections preserve UTF8 destinations/invalid octets without double-encoding percent escapes. Partial: gesture policies, copy codepoint maps, scrollback search, terminal state serialization and broad performance acceptance remain separate."
     },
     {
       "path": "src/terminal/snapshot/io.zig",

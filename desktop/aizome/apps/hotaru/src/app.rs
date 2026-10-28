@@ -1,11 +1,12 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use aizome_kit::prelude::*;
-use aizome_kit::{ClipboardRead, PreparedClipboardText};
-use hotaru_core::{Snapshot, Terminal, TerminalColors};
+use aizome_kit::{ClipboardRead, PreparedClipboard};
+use hotaru_core::{ContentSnapshot, Snapshot, Terminal, TerminalColors};
 use hotaru_io::PtyCommand;
 
-use crate::clipboard::{ClipboardWorker, Job};
+use crate::clipboard::{ClipboardWorker, CopySource, Job};
 use crate::panes::{Axis, Direction, PaneTree};
 use crate::session::{Command, Session};
 use crate::settings::{self, Action, Bindings, Settings};
@@ -26,6 +27,7 @@ pub enum Msg {
     Action(Action),
     SetTheme(settings::Theme),
     SetWeight(u16),
+    SetCopyFormat(settings::CopyFormat),
     ConfigLoaded(u64, Result<Settings, String>),
     ConfigSaved(u64, Result<(), String>),
     Frame(u64, Arc<Snapshot>),
@@ -46,8 +48,9 @@ pub enum Msg {
     Copy,
     CopyScreen,
     CopyAll,
-    CopySnapshot(u64, Arc<Snapshot>),
-    CopyReady(u64, PreparedClipboardText),
+    CopySnapshot(u64, u64, Arc<ContentSnapshot>),
+    CopyReady(u64, u64, PreparedClipboard),
+    CopyFailed(u64, u64, String),
     PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
     Paste,
     Find,
@@ -89,6 +92,8 @@ pub struct Hotaru {
     pub instance: Option<crate::instance::Instance>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
+    clipboard_cancel: Arc<AtomicBool>,
+    clipboard_format: settings::CopyFormat,
     clipboard_read: Option<ClipboardRead>,
     colors: Option<Arc<TerminalColors>>,
     pub settings: Settings,
@@ -119,6 +124,8 @@ impl Hotaru {
             instance: None,
             clipboard: None,
             clipboard_token: 0,
+            clipboard_cancel: Arc::new(AtomicBool::new(false)),
+            clipboard_format: settings::CopyFormat::Mixed,
             clipboard_read: None,
             colors: None,
             settings: Settings::default(),
@@ -324,6 +331,9 @@ impl Hotaru {
     }
 
     fn clipboard_request(&mut self) -> u64 {
+        self.clipboard_cancel.store(true, Ordering::Release);
+        self.clipboard_cancel = Arc::new(AtomicBool::new(false));
+        self.clipboard_format = self.settings.copy_format;
         if let Some(read) = self.clipboard_read.take() {
             read.cancel();
         }
@@ -339,10 +349,17 @@ impl Hotaru {
         } else {
             None
         };
-        let snapshot = tab.snapshot.clone();
+        let pane = tab.id;
+        let source = CopySource::Viewport { snapshot: tab.snapshot.clone(), selection };
         let token = self.clipboard_request();
         if let Some(worker) = &self.clipboard {
-            worker.submit(Job::Copy { token, snapshot, selection });
+            worker.submit(Job::Copy {
+                token,
+                pane,
+                source,
+                format: self.clipboard_format,
+                cancel: self.clipboard_cancel.clone(),
+            });
         }
     }
 
@@ -486,6 +503,10 @@ impl Program for Hotaru {
             }
             Msg::SetWeight(weight) => {
                 self.settings.font_weight = weight;
+                self.save_settings();
+            }
+            Msg::SetCopyFormat(format) => {
+                self.settings.copy_format = format;
                 self.save_settings();
             }
             Msg::ConfigLoaded(token, result) => {
@@ -653,16 +674,28 @@ impl Program for Hotaru {
                 let token = self.clipboard_request();
                 self.send(id, Command::CopyAll(token));
             }
-            Msg::CopySnapshot(token, snapshot) => {
+            Msg::CopySnapshot(token, pane, snapshot) => {
                 if token == self.clipboard_token
+                    && self.panes.iter().any(|candidate| candidate.id == pane)
                     && let Some(worker) = &self.clipboard
                 {
-                    worker.submit(Job::Copy { token, snapshot, selection: None });
+                    worker.submit(Job::Copy {
+                        token,
+                        pane,
+                        source: CopySource::Content(snapshot),
+                        format: self.clipboard_format,
+                        cancel: self.clipboard_cancel.clone(),
+                    });
                 }
             }
-            Msg::CopyReady(token, prepared) => {
+            Msg::CopyReady(token, pane, prepared) => {
+                if token == self.clipboard_token && self.panes.iter().any(|candidate| candidate.id == pane) {
+                    cx.set_prepared_clipboard(prepared);
+                }
+            }
+            Msg::CopyFailed(token, pane, error) => {
                 if token == self.clipboard_token {
-                    cx.set_prepared_clipboard_text(prepared);
+                    self.notice(pane, &error);
                 }
             }
             Msg::Paste => {
@@ -766,11 +799,22 @@ impl Program for Hotaru {
             .item(self.item("Close Tab", Action::CloseTab))
             .separator()
             .item(self.item("Reload Configuration", Action::ReloadConfig).enabled(self.settings_path.is_some()));
+        let mut copy_format = Menu::new("Copy Format");
+        for (name, format) in [
+            ("Plain Text", settings::CopyFormat::Plain),
+            ("ANSI Text", settings::CopyFormat::Vt),
+            ("HTML", settings::CopyFormat::Html),
+            ("Plain Text + HTML", settings::CopyFormat::Mixed),
+        ] {
+            copy_format = copy_format
+                .item(MenuItem::new(name, Msg::SetCopyFormat(format)).checked(self.settings.copy_format == format));
+        }
         let edit = Menu::new("Edit")
             .item(self.item("Copy", Action::Copy).enabled(selected))
             .item(self.item("Paste", Action::Paste))
             .item(MenuItem::new("Copy Visible Screen", Msg::CopyScreen))
             .item(self.item("Copy All Output", Action::CopyAll))
+            .submenu(copy_format)
             .separator()
             .item(self.item("Find…", Action::Find));
         let appearance = Menu::new("Appearance")
@@ -824,6 +868,7 @@ impl Program for Hotaru {
 
 impl Drop for Hotaru {
     fn drop(&mut self) {
+        self.clipboard_cancel.store(true, Ordering::Release);
         if let Some(read) = &self.clipboard_read {
             read.cancel();
         }

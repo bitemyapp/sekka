@@ -1,28 +1,112 @@
 //! One clipboard worker, one replaceable pending job, no interface-thread I/O.
 
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use aizome_kit::{ClipboardRead, MsgSender, PreparedClipboardText};
-use hotaru_core::Snapshot;
+use aizome_kit::{ClipboardRead, MsgSender, PreparedClipboard};
+use hotaru_core::formatter::{self, FormatError, FormatOptions};
+use hotaru_core::{ContentSnapshot, Snapshot};
 
 use crate::app::Msg;
+use crate::settings::CopyFormat;
 use crate::terminal_view::Selection;
 
+const COPY_LIMIT: usize = 128 * 1024 * 1024;
+
+pub enum CopySource {
+    Viewport { snapshot: Arc<Snapshot>, selection: Option<Selection> },
+    Content(Arc<ContentSnapshot>),
+}
+
 pub enum Job {
-    Copy { token: u64, snapshot: Arc<Snapshot>, selection: Option<Selection> },
+    Copy { token: u64, pane: u64, source: CopySource, format: CopyFormat, cancel: Arc<AtomicBool> },
     Paste { token: u64, tab: u64, read: ClipboardRead },
+}
+
+#[derive(Clone)]
+enum Cancellation {
+    Copy(Arc<AtomicBool>),
+    Paste(ClipboardRead),
+}
+
+impl Cancellation {
+    fn cancel(&self) {
+        match self {
+            Self::Copy(cancel) => cancel.store(true, Ordering::Release),
+            Self::Paste(read) => read.cancel(),
+        }
+    }
+}
+
+impl Job {
+    fn cancellation(&self) -> Cancellation {
+        match self {
+            Self::Copy { cancel, .. } => Cancellation::Copy(cancel.clone()),
+            Self::Paste { read, .. } => Cancellation::Paste(read.clone()),
+        }
+    }
 }
 
 #[derive(Default)]
 struct Pending {
     job: Option<Job>,
+    active: Option<Cancellation>,
     stop: bool,
 }
 
 pub struct ClipboardWorker {
     pending: Arc<(Mutex<Pending>, Condvar)>,
+}
+
+fn prepare_copy(token: u64, pane: u64, source: CopySource, format: CopyFormat, cancel: &AtomicBool) -> Option<Msg> {
+    if cancel.load(Ordering::Acquire) {
+        return None;
+    }
+    let (snapshot, selection) = match source {
+        CopySource::Content(snapshot) => (snapshot, None),
+        CopySource::Viewport { snapshot, selection } => {
+            let selection = selection.map(|selected| formatter::Selection {
+                start: (selected.anchor.row, selected.anchor.col),
+                end: (selected.end.row, selected.end.col),
+                rectangle: false,
+            });
+            // The bounded visible-row conversion also stays off the UI thread.
+            (Arc::new(ContentSnapshot::from((*snapshot).clone())), selection)
+        }
+    };
+    let options =
+        FormatOptions { format: format.formatter(), selection, trim: true, unwrap: true, max_bytes: COPY_LIMIT };
+    let formatted = match formatter::format_copy(&snapshot, &options, cancel) {
+        Ok(formatted) => formatted,
+        Err(FormatError::Cancelled) => return None,
+        Err(FormatError::LimitExceeded) => {
+            return Some(Msg::CopyFailed(token, pane, "Copy exceeds the 128 MiB combined format limit.".into()));
+        }
+        Err(FormatError::InvalidSelection) => {
+            return Some(Msg::CopyFailed(token, pane, "The selected text is no longer available.".into()));
+        }
+        Err(FormatError::AllocationFailed) => {
+            return Some(Msg::CopyFailed(token, pane, "Not enough memory to prepare the copied text.".into()));
+        }
+    };
+    if cancel.load(Ordering::Acquire) {
+        return None;
+    }
+    let plain = match formatted.plain.map(String::from_utf8).transpose() {
+        Ok(plain) => plain,
+        Err(_) => return Some(Msg::CopyFailed(token, pane, "Clipboard text could not be encoded.".into())),
+    };
+    let extra = formatted.html.into_iter().map(|html| ("text/html".into(), Arc::from(html))).collect();
+    let prepared = PreparedClipboard::new(plain, extra);
+    if cancel.load(Ordering::Acquire) {
+        return None;
+    }
+    Some(match prepared {
+        Ok(prepared) => Msg::CopyReady(token, pane, prepared),
+        Err(error) => Msg::CopyFailed(token, pane, format!("Clipboard formats could not be prepared: {error}")),
+    })
 }
 
 impl ClipboardWorker {
@@ -40,19 +124,23 @@ impl ClipboardWorker {
                     if pending.stop {
                         return;
                     }
-                    pending.job.take().expect("pending clipboard job")
+                    let job = pending.job.take().expect("pending clipboard job");
+                    pending.active = Some(job.cancellation());
+                    job
                 };
                 let message = match job {
-                    Job::Copy { token, snapshot, selection } => {
-                        let text = selection.map_or_else(|| snapshot.plain_text(), |s| s.text(&snapshot));
-                        Msg::CopyReady(token, PreparedClipboardText::new(text))
+                    Job::Copy { token, pane, source, format, cancel } => {
+                        prepare_copy(token, pane, source, format, &cancel)
                     }
                     Job::Paste { token, tab, read } => {
                         let text = read.read(Duration::from_secs(2), 32 * 1024 * 1024 - 12);
-                        Msg::PasteReady(token, tab, read, text)
+                        Some(Msg::PasteReady(token, tab, read, text))
                     }
                 };
-                if !tx.send(message) {
+                worker.0.lock().unwrap_or_else(|e| e.into_inner()).active = None;
+                if let Some(message) = message
+                    && !tx.send(message)
+                {
                     return;
                 }
             }
@@ -62,9 +150,15 @@ impl ClipboardWorker {
 
     pub fn submit(&self, job: Job) {
         let (lock, wake) = &*self.pending;
-        let old = lock.lock().unwrap_or_else(|e| e.into_inner()).job.replace(job);
-        if let Some(Job::Paste { read, .. }) = old {
-            read.cancel();
+        let (old, active) = {
+            let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
+            (pending.job.replace(job), pending.active.clone())
+        };
+        if let Some(active) = active {
+            active.cancel();
+        }
+        if let Some(old) = old {
+            old.cancellation().cancel();
         }
         wake.notify_one();
     }
@@ -73,11 +167,29 @@ impl ClipboardWorker {
 impl Drop for ClipboardWorker {
     fn drop(&mut self) {
         let (lock, wake) = &*self.pending;
-        let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
-        pending.stop = true;
-        if let Some(Job::Paste { read, .. }) = pending.job.take() {
-            read.cancel();
+        let (pending, active) = {
+            let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
+            pending.stop = true;
+            (pending.job.as_ref().map(Job::cancellation), pending.active.clone())
+        };
+        for cancellation in pending.into_iter().chain(active) {
+            cancellation.cancel();
         }
+        // The worker releases the pending snapshot, outside any UI lock.
         wake.notify_one();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hotaru_core::Terminal;
+
+    #[test]
+    fn cancelled_copy_never_prepares_or_publishes_mime_data() {
+        let mut terminal = Terminal::new(80, 24, 100);
+        terminal.feed(b"cancelled contents");
+        let source = CopySource::Content(Arc::new(terminal.content_snapshot()));
+        assert!(prepare_copy(1, 1, source, CopyFormat::Mixed, &AtomicBool::new(true)).is_none());
     }
 }

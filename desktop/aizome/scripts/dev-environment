@@ -36,21 +36,60 @@ if [[ -n $pinned && $have != "$pinned" ]]; then
     "the revision Sekka records" >&2
 fi
 
-# Hotaru needs the same clipboard transport and native keyboard metadata in
-# development and Nix builds. Apply patches in their recorded order against
-# the pinned external dependency;
-# never reset a developer's submodule or silently overwrite conflicting work.
-for patch_name in clipboard input; do
+# Later patches may change earlier patches' context. Recognize an applied
+# prefix by reversing it in order in a private index, then validate the whole
+# series. The real index and worktree stay untouched until every patch passes.
+# Current patches modify existing tracked files only; unrelated local edits
+# are included in the private index and preserved in the resulting diff.
+patches=()
+patch_names=()
+for patch_name in clipboard input mime; do
   native_patch=$root/apps/hotaru/upstream/sidestep-$patch_name.patch
   [[ -s $native_patch ]] || continue
-  if git -C "$sidestep" apply --reverse --check "$native_patch" 2>/dev/null; then
-    : # Already applied, including when other unrelated local edits exist.
-  elif git -C "$sidestep" apply --check "$native_patch" 2>/dev/null; then
-    git -C "$sidestep" apply "$native_patch"
-    echo "aizome: applied Hotaru's native $patch_name patch" >&2
-  else
-    echo "aizome: cannot apply apps/hotaru/upstream/sidestep-$patch_name.patch;" \
-      "preserving vendor/sidestep. Reconcile its local changes before building Hotaru." >&2
-    exit 1
-  fi
+  patches+=("$native_patch")
+  patch_names+=("$patch_name")
+done
+(( ${#patches[@]} )) || exit 0
+
+patch_scratch=$(mktemp -d)
+trap 'rm -rf -- "$patch_scratch"' EXIT
+GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" read-tree HEAD
+GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" add -u -- .
+before_tree=$(GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" write-tree)
+after_tree=
+applied_count=0
+for ((prefix=${#patches[@]}; prefix>=0; prefix--)); do
+  cp -- "$patch_scratch/base" "$patch_scratch/trial"
+  valid=true
+  for ((i=prefix-1; i>=0; i--)); do
+    if ! GIT_INDEX_FILE=$patch_scratch/trial git -C "$sidestep" apply --cached --reverse "${patches[i]}" 2>/dev/null; then
+      valid=false
+      break
+    fi
+  done
+  $valid || continue
+  for native_patch in "${patches[@]}"; do
+    if ! GIT_INDEX_FILE=$patch_scratch/trial git -C "$sidestep" apply --cached "$native_patch" 2>/dev/null; then
+      valid=false
+      break
+    fi
+  done
+  $valid || continue
+  after_tree=$(GIT_INDEX_FILE=$patch_scratch/trial git -C "$sidestep" write-tree)
+  applied_count=$prefix
+  break
+done
+
+if [[ -z $after_tree ]]; then
+  echo "aizome: cannot apply Hotaru's ordered native patch series;" \
+    "preserving vendor/sidestep. Reconcile its local changes before building Hotaru." >&2
+  exit 1
+fi
+[[ $before_tree != "$after_tree" ]] || exit 0
+git -C "$sidestep" diff-tree --no-commit-id --binary -p "$before_tree" "$after_tree" > "$patch_scratch/change.patch"
+# git apply checks the entire diff before updating files. Concurrent edits
+# that invalidate the diff are rejected without changing the developer's index.
+git -C "$sidestep" apply "$patch_scratch/change.patch"
+for ((i=applied_count; i<${#patches[@]}; i++)); do
+  echo "aizome: applied Hotaru's native ${patch_names[i]} patch" >&2
 done

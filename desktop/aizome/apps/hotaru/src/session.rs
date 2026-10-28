@@ -327,7 +327,7 @@ fn run(
                     changed = true;
                 }
                 Ok(Command::CopyAll(token)) => {
-                    tx.send(Msg::CopySnapshot(token, Arc::new(terminal.snapshot_all())));
+                    tx.send(Msg::CopySnapshot(token, id, Arc::new(terminal.content_snapshot())));
                 }
                 Ok(Command::Resize { .. } | Command::Colors(_)) => unreachable!("controls use the mailbox"),
             }

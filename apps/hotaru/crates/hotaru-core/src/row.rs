@@ -4,7 +4,9 @@
 
 use crate::Style;
 use crate::grapheme::GraphemeMap;
+use crate::hyperlink::{Hyperlink, LinkRef, RowLinks};
 use compact_str::CompactString;
+use std::ops::Range;
 
 mod history;
 
@@ -99,6 +101,12 @@ impl Cell {
     pub(crate) fn is_spacer_head(self) -> bool {
         self._reserved & 2 != 0
     }
+    pub(crate) fn has_text(self) -> bool {
+        self.scalar != 0
+    }
+    pub(crate) fn background_only(self) -> bool {
+        self._reserved & 4 != 0
+    }
     pub fn character(self) -> char {
         if self.scalar == 0 {
             return ' ';
@@ -129,6 +137,7 @@ pub struct Row {
     // Cells at/after this bound equal Cell::blank(0). Reset can leave that
     // already-blank suffix untouched even when style 0's value changes.
     dirty_end: u16,
+    links: Option<Box<RowLinks>>,
 }
 
 impl Row {
@@ -142,6 +151,7 @@ impl Row {
             wrap_continuation: false,
             retained_cols: cols as u16,
             dirty_end: 0,
+            links: None,
         }
     }
     pub fn cells(&self) -> &[Cell] {
@@ -155,6 +165,37 @@ impl Row {
     }
     pub fn wrapped(&self) -> bool {
         self.wrapped
+    }
+    pub fn hyperlink(&self, col: usize) -> Option<&Hyperlink> {
+        self.hyperlink_ref(col).map(|link| &**link)
+    }
+    pub(crate) fn hyperlink_ref(&self, col: usize) -> Option<&LinkRef> {
+        self.links.as_ref()?.get(col)
+    }
+    pub(crate) fn hyperlink_runs(&self) -> impl Iterator<Item = (Range<usize>, &LinkRef)> {
+        self.links.iter().flat_map(|links| links.iter())
+    }
+    /// Restore sparse metadata in linear expected time during history decode.
+    pub(crate) fn restore_hyperlink_runs(
+        &mut self,
+        runs: Vec<(Range<usize>, LinkRef)>,
+    ) -> Option<()> {
+        let links = RowLinks::from_ordered_runs(runs, self.cells.len())?;
+        self.links = (!links.is_empty()).then(|| Box::new(links));
+        Some(())
+    }
+    pub(crate) fn set_hyperlink_range(&mut self, range: Range<usize>, link: Option<&LinkRef>) {
+        let range = range.start.min(self.cells.len())..range.end.min(self.cells.len());
+        if range.is_empty() || (link.is_none() && self.links.is_none()) {
+            return;
+        }
+        let links = self
+            .links
+            .get_or_insert_with(|| Box::new(RowLinks::default()));
+        links.set(range, link, self.cells.len());
+        if links.is_empty() {
+            self.links = None;
+        }
     }
     pub(crate) fn style_id(&mut self, style: Style) -> u16 {
         if self.styles[self.last_style as usize] == style {
@@ -198,6 +239,7 @@ impl Row {
         self.cells[..usize::from(self.dirty_end).min(cols)].fill(Cell::blank(0));
         self.dirty_end = 0;
         self.graphemes.clear();
+        self.links = None;
         self.wrapped = false;
         self.wrap_continuation = false;
     }
@@ -220,6 +262,7 @@ impl Row {
         self.dirty_end = self.dirty_end.max(end as u16);
         self.cells[start..end].fill(Cell::blank(id));
         self.graphemes.retain(|&col, _| col < start || col >= end);
+        self.set_hyperlink_range(start..end, None);
     }
     pub(crate) fn erase_selective(&mut self, start: usize, end: usize, style: Style) {
         let mut col = start;
@@ -249,6 +292,12 @@ impl Row {
             let first = if left { start - 1 } else { start };
             let last = end + usize::from(right);
             self.graphemes.retain(|&col, _| col < first || col >= last);
+        }
+        if self.links.is_some() {
+            self.set_hyperlink_range(
+                if left { start - 1 } else { start }..end + usize::from(right),
+                None,
+            );
         }
     }
     pub(crate) fn put(
@@ -290,6 +339,9 @@ impl Row {
         let len = self.cells.len();
         self.cells.copy_within(col..len - count, col + count);
         self.graphemes.shift_right(col, count, len);
+        if let Some(links) = &mut self.links {
+            links.shift_right(col, count, len);
+        }
         let id = self.style_id(style.erased());
         self.cells[col..col + count].fill(Cell::blank(id));
         self.repair_wide(style);
@@ -300,6 +352,9 @@ impl Row {
         let len = self.cells.len();
         self.cells.copy_within(col + count..len, col);
         self.graphemes.shift_left(col, count);
+        if let Some(links) = &mut self.links {
+            links.shift_left(col, count);
+        }
         let id = self.style_id(style.erased());
         self.cells[len - count..].fill(Cell::blank(id));
         self.repair_wide(style);
@@ -332,6 +387,7 @@ impl Row {
         self.cells[col] = Cell::blank(id);
         self.cells[col]._reserved |= 2;
         self.graphemes.remove(&col);
+        self.set_hyperlink_range(col..col + 1, None);
     }
     pub(crate) fn clear_spacer_head(&mut self) {
         if let Some(cell) = self.cells.last_mut()
@@ -350,8 +406,12 @@ impl Row {
         if let Some(grapheme) = source.graphemes.get(&source_col) {
             self.graphemes.insert(col, grapheme.clone());
         }
+        self.set_hyperlink_range(col..col + 1, source.hyperlink_ref(source_col));
     }
     pub(crate) fn resize(&mut self, cols: usize) {
+        if cols < self.cells.len() {
+            self.set_hyperlink_range(cols..self.cells.len(), None);
+        }
         // A partial row copy into a wider allocation does not copy wrap
         // metadata. Growing back inside retained storage keeps that metadata,
         // matching Ghostty's non-reflow screen resize.
@@ -381,6 +441,7 @@ impl Row {
             {
                 self.cells[col] = Cell::blank(id);
                 self.graphemes.remove(&col);
+                self.set_hyperlink_range(col..col + 1, None);
             }
         }
     }

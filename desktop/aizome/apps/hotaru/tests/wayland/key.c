@@ -31,7 +31,9 @@ static void removed(void *data, struct wl_registry *registry, uint32_t name) {
 static const struct wl_registry_listener listener = { global, removed };
 
 int main(int argc, char **argv) {
-    if (argc != 3) { fprintf(stderr, "usage: key EVDEV_CODE MODIFIERS\n"); return 2; }
+    if (argc < 3 || argc > 129 || argc % 2 != 1) {
+        fprintf(stderr, "usage: key EVDEV_CODE MODIFIERS [EVDEV_CODE MODIFIERS ...]\n"); return 2;
+    }
     struct wl_display *display = wl_display_connect(NULL);
     if (!display) return 3;
     struct wl_registry *registry = wl_display_get_registry(display);
@@ -53,15 +55,16 @@ int main(int argc, char **argv) {
      * and receive focus before the first injected key is sent. */
     usleep(150000);
     wl_display_roundtrip(display);
-    uint32_t modifiers = 0;
-    if (strstr(argv[2], "super")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
-    if (strstr(argv[2], "shift")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_SHIFT);
-    if (strstr(argv[2], "ctrl")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_CTRL);
-    zwp_virtual_keyboard_v1_modifiers(keyboard, modifiers, 0, 0, 0);
-    zwp_virtual_keyboard_v1_key(keyboard, 1, (uint32_t)strtoul(argv[1], NULL, 10), WL_KEYBOARD_KEY_STATE_PRESSED);
-    wl_display_roundtrip(display);
-    zwp_virtual_keyboard_v1_key(keyboard, 2, (uint32_t)strtoul(argv[1], NULL, 10), WL_KEYBOARD_KEY_STATE_RELEASED);
-    zwp_virtual_keyboard_v1_modifiers(keyboard, 0, 0, 0, 0);
+    for (int at = 1; at < argc; at += 2) {
+        uint32_t modifiers = 0;
+        if (strstr(argv[at + 1], "super")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
+        if (strstr(argv[at + 1], "shift")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_SHIFT);
+        if (strstr(argv[at + 1], "ctrl")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_CTRL);
+        zwp_virtual_keyboard_v1_modifiers(keyboard, modifiers, 0, 0, 0);
+        zwp_virtual_keyboard_v1_key(keyboard, (uint32_t)at, (uint32_t)strtoul(argv[at], NULL, 10), WL_KEYBOARD_KEY_STATE_PRESSED);
+        zwp_virtual_keyboard_v1_key(keyboard, (uint32_t)at + 1, (uint32_t)strtoul(argv[at], NULL, 10), WL_KEYBOARD_KEY_STATE_RELEASED);
+        zwp_virtual_keyboard_v1_modifiers(keyboard, 0, 0, 0, 0);
+    }
     wl_display_roundtrip(display);
     zwp_virtual_keyboard_v1_destroy(keyboard);
     zwp_virtual_keyboard_manager_v1_destroy(manager);

@@ -304,7 +304,62 @@ fn large_copy_finishes_off_thread_and_stale_reply_is_ignored() {
     }
     let text = h.platform.clipboard.as_ref().expect("worker published clipboard");
     assert!(text.len() > 1024 * 1024);
+    assert!(h.platform.clipboard_data.as_ref().unwrap().data("text/html").unwrap().len() > 1024 * 1024);
     let copied = text.clone();
-    h.send(Msg::CopyReady(0, aizome_kit::PreparedClipboardText::new("stale".into())));
+    h.send(Msg::CopyReady(0, id, aizome_kit::PreparedClipboardText::new("stale".into()).into()));
     assert_eq!(h.platform.clipboard.as_deref(), Some(copied.as_str()));
+}
+
+#[test]
+fn newer_copies_win_and_closed_panes_cannot_publish_results() {
+    let mut h = Harness::new(Hotaru::preview());
+    let first = h.program().active_pane().unwrap().id;
+    let mut large = Terminal::new(4096, 300, 0);
+    large.feed(&vec![b'x'; 4096 * 290]);
+    h.send(Msg::Frame(first, Arc::new(large.snapshot())));
+    for _ in 0..16 {
+        h.send(Msg::CopyScreen);
+    }
+    let mut latest = Terminal::new(80, 24, 0);
+    latest.feed(b"newest copy survives");
+    h.send(Msg::Frame(first, Arc::new(latest.snapshot())));
+    h.send(Msg::CopyScreen);
+    let until = Instant::now() + Duration::from_secs(3);
+    while h.platform.clipboard.as_deref().is_none_or(|text| !text.contains("newest copy survives"))
+        && Instant::now() < until
+    {
+        h.advance(Duration::from_millis(1));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(h.platform.clipboard.as_deref().unwrap().contains("newest copy survives"));
+    assert!(!h.platform.clipboard.as_deref().unwrap().contains("xxx"));
+    let copied = h.platform.clipboard.clone();
+    h.send(Msg::NewTab);
+    h.send(Msg::SelectTab(first));
+    h.send(Msg::CopyScreen); // token18
+    h.send(Msg::CloseTab); // invalidates token18 and removes its pane
+    h.send(Msg::CopyReady(18, first, aizome_kit::PreparedClipboardText::new("closed pane".into()).into()));
+    for _ in 0..20 {
+        h.advance(Duration::from_millis(1));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert_eq!(h.platform.clipboard, copied);
+}
+
+#[test]
+fn html_only_copy_has_no_stale_plain_text_fallback() {
+    use aizome_hotaru::settings::CopyFormat;
+    let mut h = Harness::new(Hotaru::preview());
+    h.platform.clipboard = Some("old foreign text".into());
+    h.send(Msg::SetCopyFormat(CopyFormat::Html));
+    h.send(Msg::CopyScreen);
+    let until = Instant::now() + Duration::from_secs(3);
+    while h.platform.clipboard_data.is_none() && Instant::now() < until {
+        h.advance(Duration::from_millis(1));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let data = h.platform.clipboard_data.as_ref().unwrap();
+    assert!(data.data("text/html").is_some());
+    assert!(data.data("text/plain").is_none());
+    assert!(h.platform.clipboard.is_none());
 }
