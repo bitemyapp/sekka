@@ -23,12 +23,47 @@ pub fn window(m: &Myaku) -> Element<Msg> {
     }
     column![
         toolbar(m),
+        profiling(m),
         aizome_kit::widgets::layout::row(middle).width(Length::Fill).height(Length::Fill),
         graphs(m),
         status(m),
     ]
     .width(Length::Fill)
     .height(Length::Fill)
+    .into()
+}
+
+fn profiling(m: &Myaku) -> Element<Msg> {
+    let recording = m.profile.is_some();
+    let can = m.profile_targets();
+    column![
+        row![
+            text("Record performance"),
+            dropdown(["Timeline", "CPU samples + timeline"], Some(m.profile_mode))
+                .compact()
+                .enabled(!recording)
+                .on_select(Msg::ProfileMode)
+                .label("Capture mode"),
+            dropdown(["10 seconds", "30 seconds", "60 seconds"], Some(m.profile_duration))
+                .compact()
+                .enabled(!recording)
+                .on_select(Msg::ProfileDuration)
+                .label("Capture duration"),
+            button(if recording { "Stop" } else { "Record" })
+                .on_press_maybe(if recording {
+                    Some(Msg::ProfileStop)
+                } else {
+                    can.is_ok().then_some(Msg::ProfileStart)
+                })
+                .tooltip(can.err().unwrap_or_else(|| "Record selected processes and desktop timing".into()))
+                .id("profile-record"),
+            button("Open Folder").on_press_maybe(m.profile_path.is_some().then_some(Msg::ProfileFolder)),
+        ]
+        .spacing(8.0),
+        text(m.profile_status.as_str()).role(Role::Text2),
+    ]
+    .spacing(4.0)
+    .padding(8.0)
     .into()
 }
 

@@ -73,6 +73,7 @@ let
       (aizome + "/crates/aizome-theme")
       (aizome + "/crates/aizome-config")
       (aizome + "/crates/aizome-shell-proto")
+      (aizome + "/crates/aizome-trace")
       # Sukumo, which the kit draws with: its workspace manifest and crates.
       (aizome + "/sukumo/Cargo.toml")
       (aizome + "/sukumo/crates")

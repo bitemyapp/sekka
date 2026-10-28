@@ -50,6 +50,15 @@ pub enum AppMessage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "request", rename_all = "kebab-case")]
 pub enum ShellRequest {
+    /// Route only to exact PIDs; no application-id fallback.
+    Profile {
+        pids: Vec<u32>,
+        config: aizome_trace::Config,
+    },
+    ProfileStop {
+        pids: Vec<u32>,
+        session: u64,
+    },
     /// Open the command palette (or close it if open), in a scope
     /// (`commands`, `windows`, `files`, `apps`, `settings`), with text.
     Palette {
@@ -61,12 +70,18 @@ pub enum ShellRequest {
     /// Open the Toolchest.
     Toolchest,
     /// Open the focused app's menu at a point of the global layout.
-    AppMenu { x: f64, y: f64 },
+    AppMenu {
+        x: f64,
+        y: f64,
+    },
     /// Lock the screen.
     Lock,
     /// Show the on-screen display: `kind` is `volume`, `mute`,
     /// `brightness` or `keyboard`, `value` 0.0–1.0.
-    Osd { kind: String, value: f64 },
+    Osd {
+        kind: String,
+        value: f64,
+    },
     /// Post a notification as an app would.
     Notify {
         #[serde(default)]
@@ -82,7 +97,9 @@ pub enum ShellRequest {
     },
     /// Open a systray widget's panel (`network`, `sound`, `bluetooth`,
     /// `display`, `battery`, `clock`), or a menu of the bar by its title.
-    Open { what: String },
+    Open {
+        what: String,
+    },
     /// Close whatever transient surface is open (menus, panels, palette).
     Dismiss,
     /// What the shell shows now, as JSON in the reply's message.
@@ -119,14 +136,26 @@ pub enum ShellRequest {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ShellMessage {
+    Profile {
+        config: aizome_trace::Config,
+    },
+    ProfileStop {
+        session: u64,
+    },
     /// Item `id` was chosen.
-    Activate { id: u32 },
+    Activate {
+        id: u32,
+    },
     /// Menu `menu` (a top-level menu's or a submenu's id) is about to show:
     /// send menus again if any state changed.
-    AboutToShow { menu: u32 },
+    AboutToShow {
+        menu: u32,
+    },
     /// The selected text, please, for a service: answered with
     /// [`AppMessage::ServicesText`] and the same serial.
-    ServicesText { serial: u64 },
+    ServicesText {
+        serial: u64,
+    },
     /// The answer to an [`AppMessage::Request`]: whether it was done, and
     /// what to say (JSON for [`ShellRequest::State`]).
     Reply {
@@ -140,6 +169,10 @@ pub enum ShellMessage {
 /// `aizomectl` and tests use.
 pub fn request(path: impl AsRef<Path>, request: ShellRequest) -> io::Result<(bool, String)> {
     let mut c = Client::connect(path)?;
+    if matches!(&request, ShellRequest::Profile { .. } | ShellRequest::ProfileStop { .. }) {
+        c.writer.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
+        c.writer.set_write_timeout(Some(std::time::Duration::from_secs(2)))?;
+    }
     c.send(&AppMessage::Request { request })?;
     loop {
         match c.recv()? {

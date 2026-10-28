@@ -58,13 +58,30 @@ impl ShellLink {
         let alive = Arc::new(AtomicBool::new(true));
         let flag = alive.clone();
         std::thread::Builder::new().name("aizome-shell".into()).spawn(move || {
+            let mut profile = None;
             while let Ok(Some(m)) = client.recv() {
+                match &m {
+                    proto::ShellMessage::Profile { config } => {
+                        if aizome_trace::start(config.clone()).is_ok() {
+                            profile = Some(config.session);
+                        }
+                        continue;
+                    }
+                    proto::ShellMessage::ProfileStop { session } => {
+                        aizome_trace::stop(*session);
+                        continue;
+                    }
+                    _ => {}
+                }
                 if tx.send(m).is_err() {
-                    return;
+                    break;
                 }
                 wake();
             }
             // The shell hung up.
+            if let Some(id) = profile {
+                aizome_trace::stop(id);
+            }
             flag.store(false, Ordering::Release);
             wake();
         })?;

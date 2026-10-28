@@ -22,6 +22,23 @@ impl State {
 
     fn request(&mut self, req: Request) -> Result<Response, String> {
         Ok(match req {
+            Request::ProfileStart { config } => {
+                if self.az.lock.is_locked() {
+                    return Err("the session is locked".into());
+                }
+                aizome_trace::start(config).map_err(|e| e.to_string())?;
+                Response::Ok
+            }
+            Request::ProfileStop { session } => {
+                aizome_trace::stop(session);
+                Response::Ok
+            }
+            Request::ProfileState => Response::Profile {
+                pid: std::process::id(),
+                session: aizome_trace::session(),
+                locked: self.az.lock.is_locked(),
+                backend: self.backend.name().into(),
+            },
             Request::Version => Response::Version {
                 version: env!("CARGO_PKG_VERSION").into(),
                 protocol: aizome_ipc::PROTOCOL_VERSION,
@@ -207,6 +224,8 @@ impl State {
     }
 
     fn synthesize(&mut self, e: Synthetic) -> Result<(), String> {
+        // aux=1 distinguishes injected test input from a backend device.
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::InputDispatch, 0, 1);
         let time = self.az.start.elapsed().as_millis() as u32;
         match e {
             Synthetic::PointerMotion { x, y } => self.pointer_motion_absolute(Point::from((x, y)), time),

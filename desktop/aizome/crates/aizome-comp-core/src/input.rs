@@ -66,6 +66,7 @@ pub(crate) enum Decision {
 impl State {
     /// Feeds an event from a backend.
     pub fn process_input<B: InputBackend>(&mut self, event: InputEvent<B>) {
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::InputDispatch, 0, 0);
         match event {
             InputEvent::Keyboard { event } => {
                 let pressed = event.state() == KeyState::Pressed;

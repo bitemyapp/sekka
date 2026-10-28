@@ -46,6 +46,14 @@ pub const INTERVALS: [(&str, u64); 3] = [("Every Second", 1000), ("Every 2 Secon
 
 #[derive(Clone, Debug)]
 pub enum Msg {
+    ProfileMode(usize),
+    ProfileDuration(usize),
+    ProfileStart,
+    ProfileStop,
+    ProfileProgress(String),
+    ProfileDone(Result<aizome_profile::Outcome, aizome_profile::Failure>),
+    ProfileFolder,
+    ProfileFolderDone(Result<(), String>),
     Frame(Arc<Frame>),
     Lens(Lens),
     /// Show the GPU lens for one card, by its PCI address, or every card.
@@ -125,6 +133,12 @@ pub struct Myaku {
     pub inspector: bool,
     pub interval: u64,
     pub notice: Option<(String, bool)>,
+    pub profile_mode: usize,
+    pub profile_duration: usize,
+    pub profile: Option<aizome_profile::Capture>,
+    pub profile_status: String,
+    pub profile_path: Option<std::path::PathBuf>,
+    profile_closing: bool,
     sampler: Option<mpsc::Sender<Command>>,
     live: bool,
     signaller: Signaller,
@@ -166,6 +180,12 @@ impl Myaku {
             inspector: request.pid.is_some(),
             interval: 1000,
             notice: None,
+            profile_mode: 0,
+            profile_duration: 0,
+            profile: None,
+            profile_status: "Select an app to record its performance. Captures stay on this computer.".into(),
+            profile_path: None,
+            profile_closing: false,
             sampler: None,
             live: false,
             signaller,
@@ -459,6 +479,26 @@ impl Myaku {
             (format!("{verb} {name}, but not all of it: {}", failed.join("; ")), true)
         });
     }
+
+    pub fn profile_targets(&self) -> Result<Vec<aizome_profile::Target>, String> {
+        if !self.live {
+            return Err("recording is unavailable in sample mode".into());
+        }
+        let sel = self.sel.ok_or("select an application or process")?;
+        let (members, _) = self.targets(sel);
+        let targets: Vec<_> = members
+            .into_iter()
+            .filter_map(|i| {
+                let p = &self.frame.processes[i];
+                (!p.kernel && p.uid == self.frame.uid)
+                    .then_some(aizome_profile::Target { pid: p.pid, start_ticks: p.start_ticks })
+            })
+            .collect();
+        if targets.is_empty() || targets.len() > 64 {
+            return Err("select 1–64 processes owned by your user".into());
+        }
+        Ok(targets)
+    }
 }
 
 impl Program for Myaku {
@@ -483,6 +523,108 @@ impl Program for Myaku {
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
+            Msg::ProfileMode(i) => {
+                if self.profile.is_none() {
+                    self.profile_mode = i.min(1);
+                }
+            }
+            Msg::ProfileDuration(i) => {
+                if self.profile.is_none() {
+                    self.profile_duration = i.min(2);
+                }
+            }
+            Msg::ProfileStart => {
+                if self.profile.is_some() {
+                    return;
+                }
+                match self.profile_targets() {
+                    Err(e) => self.profile_status = e,
+                    Ok(targets) => {
+                        let capture = aizome_profile::Capture::new();
+                        let stop = capture.cancellation();
+                        let options = aizome_profile::Options {
+                            targets,
+                            seconds: [10, 30, 60][self.profile_duration],
+                            mode: if self.profile_mode == 0 {
+                                aizome_profile::Mode::Timeline
+                            } else {
+                                aizome_profile::Mode::Cpu
+                            },
+                        };
+                        self.profile = Some(capture);
+                        self.profile_path = None;
+                        self.profile_status = "Starting capture…".into();
+                        let tx = cx.stream();
+                        let worker = std::thread::Builder::new().name("myaku-profile".into()).spawn(move || {
+                            let result = aizome_profile::record_process(options, stop, |s| {
+                                tx.send(Msg::ProfileProgress(s));
+                            });
+                            tx.send(Msg::ProfileDone(result));
+                        });
+                        if let Err(e) = worker {
+                            self.profile = None;
+                            self.profile_status = format!("Could not start capture worker: {e}");
+                        }
+                    }
+                }
+            }
+            Msg::ProfileStop => {
+                if let Some(capture) = &self.profile {
+                    capture.stop();
+                    self.profile_status = "Finishing capture…".into();
+                }
+            }
+            Msg::ProfileProgress(s) => self.profile_status = s,
+            Msg::ProfileDone(result) => {
+                self.profile = None;
+                match result {
+                    Ok(result) => {
+                        self.profile_status = format!(
+                            "Saved capture: {} native app(s), {} reported drops; {}. Open trace.json in Perfetto.",
+                            result.native_participants, result.reported_drops, result.stop_reason
+                        );
+                        self.profile_path = Some(result.path);
+                    }
+                    Err(e) => {
+                        self.profile_status = e.message;
+                        self.profile_path = e.path;
+                    }
+                }
+                if self.profile_closing {
+                    if let Some(meters) = self.energy_meters.take() {
+                        cx.close_window(meters);
+                    }
+                    cx.close_window(self.window);
+                }
+            }
+            Msg::ProfileFolder => {
+                if let Some(path) = self.profile_path.clone() {
+                    let tx = cx.stream();
+                    let worker = std::thread::Builder::new().name("myaku-open-profile".into()).spawn(move || {
+                        tx.send(Msg::ProfileFolderDone(
+                            std::process::Command::new("xdg-open")
+                                .arg(path)
+                                .status()
+                                .map_err(|e| e.to_string())
+                                .and_then(|status| {
+                                    if status.success() {
+                                        Ok(())
+                                    } else {
+                                        Err(format!("Could not open the capture folder ({status})"))
+                                    }
+                                }),
+                        ));
+                    });
+                    if let Err(e) = worker {
+                        self.notice = Some((e.to_string(), true));
+                    }
+                }
+            }
+            Msg::ProfileFolderDone(result) => {
+                if let Err(e) = result {
+                    self.notice = Some((e, true));
+                }
+            }
             Msg::Frame(f) => self.take(f),
             Msg::Gpu(pci) => {
                 self.gpu = pci;
@@ -621,6 +763,14 @@ impl Program for Myaku {
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if window == self.window {
+            if let Some(capture) = &self.profile {
+                capture.stop();
+                self.profile_closing = true;
+                self.profile_status = "Finishing capture before closing…".into();
+                return false;
+            }
+        }
         if Some(window) == self.energy_meters {
             self.energy_meters = None;
         } else if window == self.window
@@ -680,6 +830,12 @@ impl Program for Myaku {
             .map(|s| self.targets(s).0)
             .is_some_and(|m| !m.is_empty() && m.iter().all(|&i| self.frame.processes[i].paused()));
         let process = Menu::new("Process")
+            .item(
+                MenuItem::new("Record Performance", Msg::ProfileStart)
+                    .enabled(self.profile.is_none() && self.profile_targets().is_ok()),
+            )
+            .item(MenuItem::new("Stop Performance Recording", Msg::ProfileStop).enabled(self.profile.is_some()))
+            .separator()
             .item(MenuItem::new("Quit…", Msg::AskQuit(false)).shortcut(Shortcut::cmd('Q').alt()).enabled(can))
             .item(
                 MenuItem::new("Force Quit…", Msg::AskQuit(true))
@@ -721,6 +877,13 @@ pub fn kind_rank(k: Option<Kind>) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sample_mode_cannot_profile_real_processes() {
+        let (signals, _) = Myaku::recorder();
+        let app = Myaku::with_frame(Arc::new(Frame::default()), signals, Request::default());
+        assert!(app.profile_targets().unwrap_err().contains("sample mode"));
+    }
 
     #[test]
     fn launch_requests() {

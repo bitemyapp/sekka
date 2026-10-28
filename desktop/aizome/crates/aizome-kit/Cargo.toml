@@ -9,6 +9,7 @@ repository.workspace = true
 build = "build.rs"
 
 [dependencies]
+aizome-trace = { path = "../aizome-trace" }
 aizome-theme.workspace = true
 sidestep-ui.workspace = true
 serde.workspace = true

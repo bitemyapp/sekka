@@ -16,6 +16,7 @@ name = "aizome-myaku"
 path = "src/main.rs"
 
 [dependencies]
+aizome-profile = { path = "../../crates/aizome-profile" }
 aizome-kit.workspace = true
 aizome-sys.workspace = true
 aizome-ipc = { path = "../../crates/aizome-ipc" }

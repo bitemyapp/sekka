@@ -1,8 +1,10 @@
 # Profiling research fixtures
 
 These small fixtures support [the options report](../../profiling-options.md).
-They do not alter Aizome, exercise an actual desktop interaction, or certify
-battery cost. Run them on the workstation, not the laptop. No root access,
+The standalone research probes do not alter Aizome or exercise an actual desktop
+interaction. The later implementation evidence below exercises the packaged
+desktop headlessly. Neither certifies battery cost. Run these on the
+workstation, not the laptop. No root access,
 kernel policy changes, app injection or disk-device operations are required.
 
 The checked-in JSON files are observations from 27 October 2026 on
@@ -107,7 +109,25 @@ default `perf` wrapper also lacks tools for its running OEM kernel. The alternat
 installed perf binary reached the kernel permission check; that is not a
 successful sampling compatibility test. See `sampling-preflight.json`.
 
-No connected Tracy capture, Superluminal recording, native Aizome trace,
+The initial research did not perform a connected Tracy capture, Superluminal recording, native Aizome trace,
 browser/Telegram/game integration, GPU timing, full Aizome build, VM install,
-physical display test or battery test was performed. The report proposes the
-work required to establish those separately.
+physical display test or battery test. The report proposes the work required
+to establish those separately.
+
+## First implementation slice
+
+[first-slice-results.json](first-slice-results.json) records the subsequent
+root-flake runtime/debug build and packaged headless exercise on the same
+workstation, completed on 28 October UTC (27 October local time). It identifies
+the exact Nix outputs and six matching build IDs, Perfetto import, ten capture
+cycles, lifecycle/lock checks and before/after memory snapshots. The runtime
+source is the implementation accompanying this evidence, based on root commit
+`4dc885718ce48fd5555adff48908ab517efb62fe` and the recorded Sidestep commit.
+
+Reproduce with `desktop/aizome/scripts/test-profile-session.py` and
+`desktop/aizome/scripts/verify-profile-symbols.py`, following the commands in
+`DEVELOPERS.md`. Raw final results remain under `/tmp/azprof-final` on the
+workstation; the checked-in summary preserves the relevant observations.
+The real Myaku capture imported 485 timeline events. The sampling permission
+failure is recorded explicitly: successful CPU sampling, physical presentation,
+battery impact and ISO installation remain unverified.

@@ -541,3 +541,122 @@ The present experiments establish viable building blocks and expose a concrete
 Tracy idle-cost problem. They do not yet establish production capture overhead,
 whole-stack clock/cause matching, Chrome/Telegram/game integration, or battery
 neutrality. Those uncertainties drive the ranking and the order above.
+
+## First implementation slice — 2026-10-27
+
+The branch now implements matching split symbols, a finite Myaku recording
+controller, unprivileged CPU sampling, and a coarse native-app/compositor
+timeline. The rankings above remain the exploration's recommendations; this
+section describes the implemented subset, rather than promoting the proposed
+whole-stack flow model to a measured result.
+
+Select an app or process in Myaku, choose **Timeline** or **CPU samples +
+timeline**, and record for 10/30/60 seconds. Stop finalizes the capture; closing
+Myaku finishes an active capture before closing its window. **Open Folder**
+works for successful captures and diagnostic folders from failed captures.
+The Process menu exposes Record/Stop as well. The equivalent CLI is
+`aizome-profile timeline|cpu 10|30|60 PID [PID…]`.
+
+`trace.json` imports into Perfetto. `manifest.json` records the selected PID and
+start-time identities, session, clock, backend, native participants actually
+observed, loss lower bounds, stop reason and executable mappings/build IDs.
+CPU captures additionally contain `perf.data` and a bounded `perf.log`.
+Session directories/files are private (0700/0600); filenames contain opaque
+session numbers. Event payloads contain phase classes and numeric identifiers,
+not typed characters, document contents, window titles or URLs. CPU stacks and
+executable paths are still private diagnostic data.
+
+The small `aizome-trace` interface is a disabled atomic gate with no timestamp,
+allocation, worker or timer at dormant sites. Existing shell connections arm
+native kit apps; the compositor owns its trace state in the stable core.
+Enabled producers send fixed 80-byte packets over nonblocking Unix datagrams.
+Full queues drop events rather than stall rendering. The collector validates
+kernel-provided UID/PID credentials; the shell uses peer credentials for app
+identity instead of trusting the advertised PID. App IDs are never a fallback
+for routing a capture to a process.
+
+Myaku uses a short-lived control worker and recorder process, not the kit's
+persistent worker pool. Exporting and symbol inventory happen in that process;
+its heap and code pages are reclaimed on exit. A small JSON control stream
+carries progress/results back to Myaku, with bounded replies and an outer
+deadline. Process start times survive the handoff, and parent-death signals
+prevent an exited owner from leaving the recorder or perf running.
+The native transport expires on a monotonic deadline and retires on collector
+failure. A new session can recover an idle producer whose previous collector
+died. Stop messages include session IDs, so a late stop cannot disable a new
+capture. Lock disarms the compositor immediately and native apps through their
+existing shell connection; the collector checks lock/identity status while
+active and stops perf. No kernel policy, privileges, polling interval or release
+publication setting is changed.
+
+The native collector streams through a 64 KiB writer instead of accumulating
+the timeline. Timeline output is capped at 32 MiB; perf has a 220 MiB file-size
+limit, its log is capped at 64 KiB, and the encoded manifest at 3 MiB. These fit
+within a 256 MiB per-capture file budget. Mapping inventories have bounded reads,
+entry counts and path budgets. These are file and native-buffer bounds, not a
+claim that all of perf's per-CPU/per-thread kernel buffers fit the proposed
+64 MiB aggregate memory target on every machine. Producer loss counts are lower
+bounds: tail loss or a producer dying can hide the final count.
+
+| Captured | Interpretation and current limit |
+| --- | --- |
+| Kit event dispatch, update, view/layout, paint recording | One native app's work on the shared `CLOCK_MONOTONIC` timeline; paint recording precedes Sidestep rasterization |
+| Compositor input dispatch | Backend input, or explicitly tagged injected input; includes desktop work outside the selected app |
+| Surface commits | Filtered to selected PIDs; client-local surface numbers are observations, not causal rendering tokens |
+| Compositor render and frame queue | CPU-side desktop work, including the DRM path; no synchronous GPU wait added |
+| DRM presentation | Hardware monotonic timestamp when the existing DRM callback reports valid hardware timing; callback receipt is also retained |
+| Headless/nested presentation | Explicit estimate, never labeled physical presentation |
+| CPU samples | Fixed 99 Hz user-space `cpu-clock:u`, bounded DWARF stack snapshots and ring settings; existing selected processes/threads, without inheritance |
+| Matching symbols | `.#aizome-debug` contains the exact runtime build's line tables, including core and logic, outside the normal runtime closure |
+
+There are deliberately no input-to-frame flow arrows yet. Raster, worker-task,
+GPU execution, discard/supersession and causal surface-to-presentation tracks
+remain follow-up work. Output/surface numbers are capture observations, not
+stable identities across hotplug or object reuse. Chrome/Telegram internals,
+Steam/game instrumentation, a privileged sampling helper, a Settei entry point,
+late worker discovery and a capture-library UI are not implemented in this slice.
+XWayland/Gamescope surface commits belong to their outer Wayland peer; this
+slice does not map them back to an individual X11 app or game, so filtering to
+that app can omit those commits. Direct Wayland clients are the tested model.
+The UI reports native participation and drops instead of implying coverage of
+unmodified third-party app internals.
+
+All builds and tests for this slice ran on `ssh wx-workstation`. The reproducible
+headless exercise is `desktop/aizome/scripts/test-profile-session.py`; package
+symbol checks are `desktop/aizome/scripts/verify-profile-symbols.py`. The
+[saved results](experiments/profiling/first-slice-results.json) identify the
+exact runtime/debug outputs, build IDs and final packaged-run observations.
+Evidence:
+
+- Real Myaku pointer-driven Record/Stop with Sumi produced a timeline imported
+  by Perfetto's trace processor. It contained app phases, selected-client commits,
+  desktop rendering and explicitly estimated headless presentation, without
+  recording the fixture's typed text.
+- Ten capture cycles, compositor logic reload during capture, collector crash
+  with an idle native producer, target exit, closing/reopening Myaku during a
+  capture, locking and refusing a new capture while locked passed.
+- In the final packaged run, Myaku and Sumi each returned to nine threads.
+  Their before/after PSS snapshots were 37,420/37,047 KiB and 30,671/30,445 KiB
+  respectively. These snapshots check lifecycle behavior; shared-page variation
+  and the lack of a controlled baseline prevent a retained-memory or energy
+  claim from these numbers alone.
+- Transport tests cover disabled emission, stale spans/stops, exclusivity,
+  deadline validation/expiry, malformed packets and a full nonblocking queue.
+  Controller tests cover identity reuse, cancellation and build-ID parsing.
+- Myaku's existing UI, visual and performance tests passed. Representative
+  600-process/2× results: updates p50 2.16 ms / p95 2.53 ms; row clicks p50
+  0.18 ms; scrolls p50 0.25 ms; its 200-reading memory check stayed flat. These
+  are existing component budgets, not a controlled baseline/active A/B study.
+- Separate debug files matched runtime build IDs for the compositor, core,
+  logic, Myaku, Sumi and recorder. Runtime DWARF was stripped, unwind tables
+  remained, and source lookup worked. The runtime closure retained neither the
+  debug output nor rustc.
+- The workstation's real perf tool rejected `cpu-clock:u` at
+  `perf_event_paranoid=4`. The failure produced a diagnostic capture without
+  changing policy. Successful CPU stack collection and profiler-side stack
+  symbolization therefore remain unverified here.
+
+Headless/component results do not validate physical DRM timestamps, VRR,
+multi-monitor behavior, laptop discharge, aarch64, or an installed ISO. KVM was
+not accessible to this workstation user. Before making battery-neutrality or
+active-overhead claims, run the repeated hardware A/B trials described above.

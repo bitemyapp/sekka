@@ -163,6 +163,7 @@ impl<P: Program> Runtime<P> {
                     Ok(k) => self.kit(*k, platform),
                     Err(msg) => match msg.downcast::<P::Msg>() {
                         Ok(m) => {
+                            let _trace = aizome_trace::Span::new(aizome_trace::Phase::Update, 0, 0);
                             let started = Instant::now();
                             let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
                             self.program.update(*m, &mut cx);
@@ -198,6 +199,7 @@ impl<P: Program> Runtime<P> {
 
     /// View `win` again (with its sheets) and put it in place.
     pub fn rebuild(&mut self, win: WinId, platform: &mut dyn Platform) {
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::ViewLayout, win as u64, 0);
         let Some(w) = self.core.wins.get(&win) else { return };
         let Some(key) = w.key() else { return };
         let sheet_keys = w.sheets.clone();
@@ -715,6 +717,7 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
 
     fn window_event(&mut self, cx: &mut sidestep_ui::Cx, window: WindowId, event: WindowEvent) {
         let Some(&win) = self.maps.to_kit.get(&window) else { return };
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::AppEvent, win as u64, 0);
         let (rt, mut p) = self.split(cx);
         let core = &mut rt.core;
         match event {
@@ -773,6 +776,7 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
 
     fn draw(&mut self, _cx: &mut sidestep_ui::Cx, window: WindowId, canvas: &mut Canvas) {
         let Some(&win) = self.maps.to_kit.get(&window) else { return };
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::PaintRecording, win as u64, 0);
         // The first frame of a window drawn ahead, at the size and scale
         // drawn: the picture, and what changed since drawn over it.
         if let Some(k) = self.maps.pictures.remove(&win).filter(|k| k.shown)

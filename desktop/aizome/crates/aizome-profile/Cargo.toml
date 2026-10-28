@@ -1,0 +1,14 @@
+[package]
+name = "aizome-profile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+aizome-trace = { path = "../aizome-trace" }
+aizome-ipc = { path = "../aizome-ipc" }
+aizome-shell-proto = { path = "../aizome-shell-proto" }
+serde.workspace = true
+serde_json.workspace = true
+libc = "0.2"

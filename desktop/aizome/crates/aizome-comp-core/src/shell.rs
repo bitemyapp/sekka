@@ -103,6 +103,17 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        if aizome_trace::enabled() {
+            let pid = self
+                .az
+                .dh
+                .get_client(surface.id())
+                .ok()
+                .and_then(|c| c.get_credentials(&self.az.dh).ok())
+                .map(|c| c.pid as u64)
+                .unwrap_or(0);
+            aizome_trace::instant(aizome_trace::Phase::SurfaceCommit, surface.id().protocol_id() as u64, pid);
+        }
         let fresh_shm = crate::backend::fresh_shm_buffers(surface);
         // A layer surface taking its buffer down leaves its last frame for
         // the logic to move away (before the buffer is let go).
@@ -733,6 +744,7 @@ impl SessionLockHandler for State {
     }
 
     fn lock(&mut self, confirmation: SessionLocker) {
+        aizome_trace::stop_all();
         info!("locking the session");
         self.az.lock = LockState::Locking(confirmation, Instant::now());
         self.az.queue_redraw_all();
