@@ -116,6 +116,9 @@ let
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };
       myaku-grouping = import ./vm-myaku-grouping-test.nix { inherit pkgs self; };
+      # The processor's power meter: root's, asked by Myaku as a user
+      # (vm-power-meter-test.nix).
+      power-meter = import ./vm-power-meter-test.nix { inherit pkgs self; };
       tansu-size = import ./vm-tansu-size-test.nix { inherit pkgs self; };
       tansu-resize = import ./vm-tansu-resize-test.nix { inherit pkgs self; };
       sumi-search = import ./vm-sumi-search-test.nix { inherit pkgs self; };

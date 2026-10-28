@@ -23,7 +23,9 @@ use std::time::{Duration, Instant};
 use aizome_sys::apps::AppIndex;
 use aizome_sys::sysinfo::detail::{ProcReader, ProcessMaps, pressure};
 use aizome_sys::sysinfo::drm::{ClientUse, DrmClient, gpu_stats, parse_fdinfo};
-use aizome_sys::sysinfo::power::{EnergyCounter, Floor, battery_draw, joules, rapl_counters, rapl_domains, split};
+use aizome_sys::sysinfo::power::{
+    EnergyCounter, Floor, battery_draw, joules, meter_counters, meters_package, rapl_counters, rapl_domains, split,
+};
 use aizome_sys::sysinfo::{self, CpuSampler, DiskIoSampler, NetSampler, ProcessSampler};
 
 use crate::group::{self, Node};
@@ -69,15 +71,21 @@ fn merge_nvidia(gpus: &mut [model::Gpu], processes: &mut [Process], readings: &[
 }
 
 /// The meters, as `Power` gives them: the processor package's counters
-/// (RAPL) where readable, else the package's meter as AMD's integrated
-/// graphics report it (the processor included), else the battery while it
-/// discharges, else nothing for the processor; and beside any of them, the
-/// discrete cards' own meters.
-pub(crate) fn meters(rapl: Option<f64>, battery: Option<f64>, discharging: bool, gpus: &[model::Gpu]) -> model::Power {
-    let package = gpus.iter().filter(|g| g.integrated && g.driver == "amdgpu").find_map(|g| g.power);
+/// (RAPL) where readable, else the package's meter as an AMD APU's
+/// integrated graphics report it (the processor included), else the
+/// battery while it discharges, else nothing for the processor; and beside
+/// any of them, the discrete cards' own meters. `rapl` is RAPL's power
+/// when its counters are read: `Some(None)` until two readings give one.
+pub(crate) fn meters(
+    rapl: Option<Option<f64>>,
+    battery: Option<f64>,
+    discharging: bool,
+    gpus: &[model::Gpu],
+) -> model::Power {
+    let package = gpus.iter().filter(|g| g.package_meter).find_map(|g| g.power);
     let graphics = gpus.iter().filter(|g| !g.integrated).filter_map(|g| g.power).reduce(|a, b| a + b);
     let (meter, cpu) = match (rapl, package) {
-        (Some(w), _) => (Meter::Rapl, Some(w)),
+        (Some(w), _) => (Meter::Rapl, w),
         (None, Some(w)) => (Meter::Package, Some(w)),
         (None, None) if discharging && battery.is_some() => (Meter::Battery, None),
         (None, None) if graphics.is_some() => (Meter::Graphics, None),
@@ -86,7 +94,8 @@ pub(crate) fn meters(rapl: Option<f64>, battery: Option<f64>, discharging: bool,
     let total = match meter {
         Meter::Battery => battery,
         Meter::None => None,
-        _ => Some(cpu.unwrap_or(0.0) + graphics.unwrap_or(0.0)),
+        Meter::Graphics => graphics,
+        Meter::Rapl | Meter::Package => cpu.map(|w| w + graphics.unwrap_or(0.0)),
     };
     model::Power { meter, cpu, graphics, battery, on_battery: discharging, total, attributed: 0.0 }
 }
@@ -199,6 +208,42 @@ struct Card {
     gpu: sysinfo::Gpu,
     pci: String,
     integrated: bool,
+    package_meter: bool,
+}
+
+/// The package's power from RAPL's counters, read directly or through
+/// Aizome's power meter. The meter answers with its last reading until it
+/// may take the next (twice a second), so the same counters again leave
+/// the last rate standing.
+#[derive(Default)]
+struct Rapl {
+    /// The last new reading, and when it was taken.
+    before: Option<(Instant, Vec<EnergyCounter>)>,
+    watts: Option<f64>,
+}
+
+impl Rapl {
+    /// The power by `counters` read `now`, for [`meters`]: `None` when
+    /// they can't be read, `Some(None)` until a second reading gives it.
+    fn read(&mut self, now: Instant, counters: Option<Vec<EnergyCounter>>) -> Option<Option<f64>> {
+        let Some(counters) = counters else {
+            *self = Rapl::default();
+            return None;
+        };
+        match self.before.take() {
+            Some((at, before)) if before == counters => self.before = Some((at, before)),
+            Some((at, before)) if before.len() == counters.len() && now > at => {
+                let joules: f64 = before.iter().zip(&counters).map(|(b, a)| joules(b, a)).sum();
+                self.watts = Some(joules / now.duration_since(at).as_secs_f64());
+                self.before = Some((now, counters));
+            }
+            _ => {
+                self.watts = None;
+                self.before = Some((now, counters));
+            }
+        }
+        Some(self.watts)
+    }
 }
 
 pub struct Sampler {
@@ -214,8 +259,8 @@ pub struct Sampler {
     clients: HashMap<(String, u64), (DrmClient, Instant)>,
     cards: Vec<Card>,
     nvml: Option<Nvml>,
-    rapl: Vec<PathBuf>,
-    rapl_before: Option<Vec<EnergyCounter>>,
+    rapl_domains: Vec<PathBuf>,
+    rapl: Rapl,
     /// Each card's energy counter at the last reading, in joules.
     gpu_energy: Vec<Option<f64>>,
     floor: Floor,
@@ -245,10 +290,14 @@ impl Sampler {
     pub fn new() -> Sampler {
         let cards: Vec<Card> = sysinfo::gpus()
             .into_iter()
-            .map(|g| Card {
-                pci: aizome_sys::sysinfo::drm::card_pci(&g.card).unwrap_or_default(),
-                integrated: aizome_sys::sysinfo::drm::card_integrated(&g.card),
-                gpu: g,
+            .map(|g| {
+                let integrated = aizome_sys::sysinfo::drm::card_integrated(&g.card);
+                Card {
+                    pci: aizome_sys::sysinfo::drm::card_pci(&g.card).unwrap_or_default(),
+                    integrated,
+                    package_meter: meters_package(&g, integrated),
+                    gpu: g,
+                }
             })
             .collect();
         let nvml = cards.iter().any(|c| c.gpu.driver.as_deref() == Some("nvidia")).then(Nvml::open).flatten();
@@ -266,8 +315,8 @@ impl Sampler {
             clients: HashMap::new(),
             cards,
             nvml,
-            rapl: rapl_domains(),
-            rapl_before: None,
+            rapl_domains: rapl_domains(),
+            rapl: Rapl::default(),
             gpu_energy: vec![None; count],
             floor: Floor::default(),
             gpu_floors: vec![Floor::default(); count],
@@ -536,6 +585,7 @@ impl Sampler {
                     driver: c.gpu.driver.clone().unwrap_or_default(),
                     pci: c.pci.clone(),
                     integrated: c.integrated,
+                    package_meter: c.package_meter,
                     busy,
                     video: s.video.map(f64::from),
                     vram_used: s.vram_used,
@@ -572,17 +622,12 @@ impl Sampler {
             *before = counter;
         }
 
-        // Power: the meters, shared by use of what each measures.
-        let counters = rapl_counters(&self.rapl);
-        let rapl_watts = match (&self.rapl_before, &counters) {
-            (Some(b), Some(a)) if seconds > 0.0 && b.len() == a.len() => {
-                Some(b.iter().zip(a).map(|(b, a)| joules(b, a)).sum::<f64>() / seconds)
-            }
-            _ => None,
-        };
-        self.rapl_before = counters;
+        // Power: the meters, shared by use of what each measures. RAPL
+        // directly where Myaku may read it (as root), else through Aizome's
+        // power meter.
+        let rapl = self.rapl.read(Instant::now(), rapl_counters(&self.rapl_domains).or_else(meter_counters));
         let (battery, discharging) = battery_draw();
-        let mut power = meters(rapl_watts, battery, discharging, &gpus);
+        let mut power = meters(rapl, battery, discharging, &gpus);
         let parts = attribute(&power, &gpus, &processes, ncpu, &mut self.floor, &mut self.gpu_floors);
         power.attributed = parts.iter().flatten().sum();
         for (p, part) in processes.iter_mut().zip(parts) {
@@ -729,18 +774,33 @@ mod tests {
 
     #[test]
     fn graphics_cards_measure_without_root_or_a_battery() {
-        let radeon = model::Gpu { driver: "amdgpu".into(), integrated: true, power: Some(48.0), ..Default::default() };
+        let apu = model::Gpu {
+            driver: "amdgpu".into(),
+            integrated: true,
+            package_meter: true,
+            power: Some(48.0),
+            ..Default::default()
+        };
         let rtx = model::Gpu { driver: "nvidia".into(), power: Some(400.0), ..Default::default() };
-        // A desktop: RAPL is root's and there's no battery, but the Radeon's
-        // meter is the processor package's, and the RTX has its own.
-        let p = meters(None, None, false, &[radeon.clone(), rtx.clone()]);
+        // RAPL is root's and there's no battery, but an APU's Radeon meters
+        // the processor package, and the RTX has its own meter.
+        let p = meters(None, None, false, &[apu.clone(), rtx.clone()]);
         assert_eq!((p.meter, p.cpu, p.graphics, p.total), (Meter::Package, Some(48.0), Some(400.0), Some(448.0)));
-        let p = meters(Some(60.0), None, false, &[radeon, rtx.clone()]);
+        let p = meters(Some(Some(60.0)), None, false, &[apu.clone(), rtx.clone()]);
         assert_eq!(
             (p.meter, p.cpu, p.total),
             (Meter::Rapl, Some(60.0), Some(460.0)),
             "the package isn't counted twice"
         );
+        // A Ryzen desktop processor's Radeon meters itself alone: a tenth of
+        // a watt with every core busy is not the processor's.
+        let granite_ridge = model::Gpu { package_meter: false, power: Some(0.11), ..apu };
+        let p = meters(None, None, false, &[granite_ridge.clone(), rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Graphics, None, Some(400.0)));
+        let p = meters(Some(Some(95.0)), None, false, &[granite_ridge.clone(), rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Rapl, Some(95.0), Some(495.0)));
+        let p = meters(Some(None), None, false, &[granite_ridge, rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Rapl, None, None), "RAPL, before its first rate");
         let p = meters(None, None, false, std::slice::from_ref(&rtx));
         assert_eq!((p.meter, p.cpu, p.total), (Meter::Graphics, None, Some(400.0)));
         // A laptop: Intel's integrated graphics have no meter of their own.
@@ -748,6 +808,29 @@ mod tests {
         let p = meters(None, Some(32.0), true, std::slice::from_ref(&xe));
         assert_eq!((p.meter, p.graphics, p.total), (Meter::Battery, None, Some(32.0)));
         assert_eq!(meters(None, Some(32.0), false, &[xe]).meter, Meter::None, "charging measures nothing");
+    }
+
+    #[test]
+    fn rapl_through_the_meter_keeps_its_rate_between_new_readings() {
+        let start = Instant::now();
+        let at = |ms| start + Duration::from_millis(ms);
+        let package =
+            |microjoules| vec![EnergyCounter { name: "package-0".into(), microjoules, range: 65_532_610_987 }];
+        let mut rapl = Rapl::default();
+        assert_eq!(rapl.read(at(0), None), None, "neither readable nor answered");
+        assert_eq!(rapl.read(at(0), Some(package(1_000_000))), Some(None));
+        // The first frame comes 300 ms after the first reading, before the
+        // meter takes another: its answer is the same.
+        assert_eq!(rapl.read(at(300), Some(package(1_000_000))), Some(None));
+        assert_eq!(rapl.read(at(1250), Some(package(96_000_000))), Some(Some(76.0)));
+        assert_eq!(rapl.read(at(1500), Some(package(96_000_000))), Some(Some(76.0)), "asked again too soon");
+        assert_eq!(rapl.read(at(2250), Some(package(191_000_000))), Some(Some(95.0)), "from the last new reading");
+        // The counter wraps at its range.
+        let mut rapl = Rapl::default();
+        rapl.read(at(0), Some(package(65_532_000_000)));
+        assert_eq!(rapl.read(at(1000), Some(package(10_000_000))), Some(Some(10.610987)));
+        assert_eq!(rapl.read(at(2000), None), None, "the meter went away");
+        assert_eq!(rapl.read(at(3000), Some(package(20_000_000))), Some(None), "a new start");
     }
 
     #[test]
