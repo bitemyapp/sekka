@@ -119,7 +119,11 @@ In `nix develop .#aizome`, run `cargo test -p aizome-comp --test layout`.
 The tests start separate headless compositors, with private runtime,
 configuration, state and home directories. They cover launch/close,
 tab groups, restore, oversized defaults, display scaling and Deskbar
-changes. To run the same checks against an installed compositor, set
+changes. Remembered geometry is accepted only within the new window's
+declared size limits. Fixed-size helpers neither inherit nor replace an
+app-wide size, even when they share the main window's app ID (Steam does
+this). The regression also checks this behavior across a logic reload.
+To run the same checks against an installed compositor, set
 `AIZOME_LAYOUT_TEST_EXE` to its executable.
 
 The optional desktop test drives the real launcher with synthetic

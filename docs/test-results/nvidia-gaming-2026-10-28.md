@@ -106,6 +106,50 @@ shell/compiler, AI workload and Aizome launcher checks also pass.
 This tests scheduling mechanics, not an actual Steam or Proton game. The host
 daemon and installed system generation remain unchanged.
 
+## Steam window geometry follow-up
+
+The host remembered `steam` as `[469,352,107,100]`. Its compositor log showed
+both the sign-in window and the main client mapping at 107×100 logical points.
+Steam's main X11 window declared a 2020×1200 physical minimum on this 2×
+display. Steam also uses the same app ID for unparented fixed-size helpers;
+one observed popup declared a fixed 214×199 physical size. Aizome previously
+saved any closing free toplevel's geometry by app ID and restored it without
+checking the new window's constraints.
+
+The logic now excludes fixed-size windows from both restoring and saving
+app-wide geometry, and rejects remembered dimensions outside a client's
+minimum/maximum. Last committed constraints survive unmapping, and a logic
+reload reconstructs them from the connected surfaces. This is a general
+window-memory fix, with no Steam title or executable special case.
+
+Validation:
+
+- 65 compositor-logic unit tests and all seven headless layout tests pass.
+- The added protocol regression runs at 1× and 2×. It seeds stale 107×100
+  memory, opens a main window with a larger minimum, saves a deliberate
+  resize, opens and closes a fixed-size helper with the same app ID across
+  a logic reload, and checks that the main window's size survives. It also
+  rejects saved dimensions above a new window's maximum.
+- The pre-fix packaged Aizome is a failing control: the new main-window
+  fixture stays 107×100 instead of its requested 1100×720.
+- For a live fix without logout, the same logic-only patch was applied to
+  the exact Nix source of the running compositor, built through the root
+  flake's development shell using `aizome-dev` and its recorded toolchain,
+  flags and target. All seven layout tests pass against that optimized build.
+- The compatible library was loaded into the current session at 19:24 UTC.
+  The compositor reports healthy logic, one reload and zero rollbacks. Other
+  windows retained their geometry, groups and Desks. The stale Steam entry
+  was backed up and removed; Steam's main UI was closed and reopened on its
+  original Desk. It mapped at 1685×1034 logical points, was visually checked,
+  and focus returned to the original terminal. Screenshot retained locally
+  at `/tmp/sekka-steam-window-after.png`, at its original resolution; it is
+  not published because it includes the user's Steam library.
+
+The live library is `~/.local/state/aizome/hotfixes/steam-window-2026-10-28.so`;
+the geometry backup is `~/.local/state/aizome/windows.before-steam-window-fix-2026-10-28.json`.
+This hot reload applies the window fix to the current session only. No system
+generation was activated; future logins need the updated packaged logic.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.

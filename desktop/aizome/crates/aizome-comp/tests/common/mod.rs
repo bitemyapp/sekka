@@ -363,6 +363,8 @@ pub struct Spec {
     pub ssd: bool,
     /// xdg_toplevel.set_min_size, if any.
     pub min_size: Option<(i32, i32)>,
+    /// xdg_toplevel.set_max_size, if any.
+    pub max_size: Option<(i32, i32)>,
     /// Delay each configure response to exercise commits of obsolete sizes.
     pub configure_delay: Duration,
     /// Request fullscreen before the first surface commit, optionally on an output.
@@ -387,6 +389,7 @@ impl Spec {
             size: (400, 300),
             ssd: true,
             min_size: None,
+            max_size: None,
             configure_delay: Duration::ZERO,
             fullscreen: false,
             fullscreen_output: None,
@@ -414,6 +417,10 @@ impl Spec {
     }
     pub fn min_size(mut self, w: i32, h: i32) -> Spec {
         self.min_size = Some((w, h));
+        self
+    }
+    pub fn max_size(mut self, w: i32, h: i32) -> Spec {
+        self.max_size = Some((w, h));
         self
     }
     pub fn size(mut self, w: i32, h: i32) -> Spec {
@@ -599,6 +606,9 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
     tl.set_title(spec.title.clone());
     if let Some((w, h)) = spec.min_size {
         tl.set_min_size(w, h);
+    }
+    if let Some((w, h)) = spec.max_size {
+        tl.set_max_size(w, h);
     }
     if let Some(d) = &deco {
         let td = d.get_toplevel_decoration(&tl, &qh, ());

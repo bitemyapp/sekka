@@ -142,6 +142,54 @@ fn oversized_defaults_and_remembered_windows_fit_at_each_scale() {
 }
 
 #[test]
+fn remembered_geometry_respects_client_limits_and_fixed_helpers_do_not_replace_it() {
+    for output in ["1920x1080@1", "3840x2160@2"] {
+        let c = start(Options { outputs: &[output], ..Default::default() });
+        let _shell = shell(&c);
+        // Reproduce old app-wide state poisoned by a 107x100 Steam helper.
+        let stale = c.client(Spec::new("shared-app-id", 0x886644).size(107, 100).csd());
+        let old = c.wait_window("shared-app-id");
+        drop(stale);
+        c.wait_windows("old tiny geometry saved", |ws| ws.iter().all(|w| w.id != old.id));
+
+        // This client follows every configure even below its declared minimum,
+        // just as the X11 bridge does. The compositor must reject stale memory.
+        let spec = Spec::new("shared-app-id", 0x448866).size(1100, 720).min_size(1010, 600).csd();
+        let main = c.client(spec.clone());
+        main.wait_seen("main window uses its own initial size", |s| s.size == (1100, 720));
+        let main_id = c.wait_window("shared-app-id").id;
+        c.ok(Request::Resize { id: Some(main_id), rect: Rect::new(100, 120, 1120, 740) });
+        main.wait_seen("normal geometry deliberately resized", |s| s.size == (1120, 740));
+        c.wait_windows("normal resize committed", |ws| ws.iter().any(|w| w.geometry.w == 1120));
+        drop(main);
+        c.wait_windows("normal geometry saved", |ws| ws.is_empty());
+
+        let helper =
+            c.client(Spec::new("shared-app-id", 0x664488).size(107, 100).min_size(107, 100).max_size(107, 100).csd());
+        helper.wait_seen("fixed helper keeps its own size", |s| s.size == (107, 100));
+        c.wait_window("shared-app-id");
+        // Reload reconstructs client limits from the still-connected surface.
+        let Response::Reload { report } =
+            c.request(Request::Reload { logic: true, shell: false, from: None, shell_from: None, check: false })
+        else {
+            panic!("reload response");
+        };
+        assert_eq!(report.logic.action, "reloaded", "{report:?}");
+        drop(helper);
+        c.wait_windows("helper closed", |ws| ws.is_empty());
+        let reopened = c.client(spec);
+        reopened.wait_seen("helper did not overwrite normal geometry", |s| s.size == (1120, 740));
+        drop(reopened);
+        c.wait_windows("main closed again", |ws| ws.is_empty());
+
+        // A different small resizable window must not inherit a size above
+        // its maximum, either. Its natural default is left to the client.
+        let small = c.client(Spec::new("shared-app-id", 0x884466).size(400, 300).max_size(600, 500).csd());
+        small.wait_seen("oversized remembered geometry rejected", |s| s.size == (400, 300));
+    }
+}
+
+#[test]
 fn deskbar_arrival_width_changes_and_removal_refit_without_losing_restore() {
     let c = start(Options::default());
     let _app = c.client(Spec::new("filled", 0x886644));
