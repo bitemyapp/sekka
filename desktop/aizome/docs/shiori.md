@@ -70,12 +70,16 @@ process pinned to the performance cores, over the 1,189 pages all three
 drew in under 5 seconds, it takes 8.0 seconds against PDFium's 10.8 and
 master's 14.1. Per page it's as fast as PDFium at the median, 1.4 times
 PDFium's time at the 90th percentile and faster at the 99th, with no
-crashes or timeouts where PDFium has three. It's still slower than PDFium
-on JPEG images drawn smaller than their size (zune-jpeg has no scaled
-decoding), free-form meshes and some gradients, and spends about 7 ms
-building its CMYK transform the first time a document needs it. Its pages
-differ from hayro's own references on under 0.1% of pixels by more than 48
-levels, except one page where a hard edge in a gradient moved a pixel.
+crashes or timeouts where PDFium has three. JPEGs drawn smaller than their
+size are now decoded at 1/2, 1/4 or 1/8 of it, as PDFium's libjpeg-turbo
+does, through a fork of zune-jpeg
+([bitemyapp/zune-image](https://github.com/bitemyapp/zune-image), branch
+`scaled-idct`), which makes thumbnails of scanned pages three to four times
+faster. It's still slower than PDFium on free-form meshes, some gradients
+and JPEGs drawn larger than the page, and spends about 7 ms building its
+CMYK transform the first time a document needs it. Its pages differ from
+hayro's own references on under 1% of pixels by more than 48 levels,
+except one page where a hard edge in a gradient moved a pixel.
 
 Shiori still draws with PDFium. To move to hayro it would need character
 boxes (hayro hands each glyph's Unicode and transform to a drawing device),

@@ -45,7 +45,18 @@
     "masked-image layers": "an image with a soft mask of another size is drawn as a layer clipped to the image's whole-pixel bounds; vello_cpu otherwise composites its destination-in layer over the whole target (chrome-text-selection-markedContent: 78 to 13 ms)",
     "CMaps": "the predefined CMaps are embedded uncompressed (467 KB, 217 KB more), saving about 3 ms of brotli decompression for each document with a CID font",
     "PostScript functions": "the 100-entry stack is reused per thread instead of set up and moved for every evaluation (function_based_shading: 92 to 56 ms)",
-    "single-copy tiling patterns": "when only one copy of a cell can be seen and the fill has no soft mask or blend mode, the cell is drawn directly into the fill's clip at device resolution (tiling-pattern-box: 84 to 6.8 ms, PDFium 4.9)"
+    "single-copy tiling patterns": "when only one copy of a cell can be seen and the fill has no soft mask or blend mode, the cell is drawn directly into the fill's clip at device resolution (tiling-pattern-box: 84 to 6.8 ms, PDFium 4.9)",
+    "JPEGs decoded no larger than drawn": "JPEGs are decoded at 1/2, 1/4 or 1/8 across and, separately, down, while the decoded image stays 1.5 times the drawn size, using reduced-size decoding added to zune-jpeg (below); 2x, three runs each, pinned: large_jpeg_downscale 46 to 19 ms (PDFium 20), 22060_A1_01_Plans 237 to 133 ms, and at 1/4 (a thumbnail) 225 to 59 ms. These were measured after the corpus totals above, which don't include the change"
+  },
+  "zune_jpeg": {
+    "fork": "https://github.com/bitemyapp/zune-image, branch scaled-idct, on zune-jpeg's development branch (0.5.16-rc3); hayro's fork depends on it by git until it's released",
+    "reduced_size_decoding": "DecoderOptions::jpeg_set_scale_denominator(s) and JpegDecoder::output_dimensions: each block reconstructed by the decoder's inverse DCT and averaged (libjpeg's scale_denom computes the same means), a 1 by 1 block from its DC term alone, subsampled components reconstructed at the output's resolution so nothing is up-sampled; falls back to full size for DNL images and raw, planar and scanline output",
+    "against_libjpeg_turbo": "djpeg -scale 1/2, 1/4, 1/8 on a photograph re-encoded by cjpeg: 4:4:4 and 4:2:0, baseline and progressive, within 0.3 levels on average (at most 3); 4:2:2, 4:4:0 and 4:1:1 within 1.3 (at most 30), where libjpeg up-samples chroma",
+    "robustness": "every JPEG in zune-image's test images at every scale, and 13,500 truncated or corrupted variants (release and debug builds), without a panic",
+    "speed": "7680 by 4320 4:4:4: 62 ms at full size, 40 ms at 1/2, 24 ms at 1/8; Huffman decoding, about half of a full decode, is the floor",
+    "restart_regression": "zune-jpeg's development branch tore grayscale JPEGs whose restart interval doesn't divide an MCU row (pdfbox 2244 in hayro's suite): a latched RST was handled at the end of a row with the segment's last MCUs still buffered. Bisected to babf5c25 (May 2026, after the 0.5.15 release); fixed with a test on the fork (branch fix-restart-across-rows, and in scaled-idct)",
+    "other_difference_from_0_5_15": "a truncated JPEG in hayro's corpus/0942791 shows one fewer row of decoded padding, filled with neutral grey: the development branch's deliberate handling of incomplete data",
+    "not_proposed": "neither branch has been proposed to zune-image yet"
   },
   "results": {
     "pages_all_three_drew_under_5_s": 1189,
@@ -63,7 +74,8 @@
     "max_page": "issue19517, a 9 s page that PDFium doesn't draw"
   },
   "quality": {
-    "hayro_test_suite": "934 passed, 844 failed, 73 ignored, no panics; the suite allows 3 levels per channel against CI's references, which the glyph cache's quarter-pixel placement exceeds on text (as in the second pass)",
+    "hayro_test_suite_with_jpeg_reduction": "901 passed, 877 failed, 73 ignored, no panics; of 1,291 differing pages, 1,267 have pixels off by more than 48 on under 0.01% of the page, 19 on 0.01-0.1%, 4 on 0.1-1% (one is corpus/0942791, under zune_jpeg), and pdfbox 4913 as below",
+    "hayro_test_suite": "before the JPEG change: 934 passed, 844 failed, 73 ignored, no panics; the suite allows 3 levels per channel against CI's references, which the glyph cache's quarter-pixel placement exceeds on text (as in the second pass)",
     "graded": "of the 1,249 pages that differ from CI's references, 1,242 have pixels off by more than 48 on under 0.01% of the page and 6 on 0.01-0.1%; pdfbox 4913 has a hard edge in a gradient one pixel row higher (1% of its 200 by 200 pixels); the largest single-pixel difference is 231",
     "pixel_changes_accepted_for_speed": {
       "masked-image layers": "vello_cpu composites a clipped layer's partly covered pixels slightly differently: bigboundingbox, 8 pixels by up to 22 levels (clipping transparency groups the same way changed many pages and was dropped)",
@@ -72,7 +84,7 @@
     }
   },
   "remaining_gaps_to_pdfium": {
-    "JPEG": "zune-jpeg decodes at full size and the image is then resampled; PDFium's libjpeg-turbo decodes at 1/2, 1/4 or 1/8 when an image is drawn smaller (issue12841_reduced 136 ms against 68; large_jpeg_downscale 43 against 20). Needs scaled IDCT in zune-jpeg",
+    "JPEG": "issue12841_reduced (136 ms against 68) draws a 5280 by 3792 JPEG larger than itself, mostly outside the page: the whole image is converted and premultiplied where a tenth of it shows. Reduced-size decoding doesn't apply; cropping to what shows would",
     "free-form and lattice meshes": "types 4 and 5 are sampled pixel by pixel with a winding test per triangle (issue2948 49 ms against 9)",
     "gradients": "vello_cpu's gradient painter with many stops (axial_shading_many_inputs 24 ms against 2.9) and radial gradients drawn as textures (radial_gradients 26 ms against 12)",
     "start-up per document": "building the CMYK ICC transform takes about 7 ms the first time anything is CMYK (moxcms samples a 17^4 grid through the profile); PDFium uses a compiled-in table",
