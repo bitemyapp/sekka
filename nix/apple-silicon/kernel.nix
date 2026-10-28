@@ -27,9 +27,13 @@ let
 
   original = builtins.readFile ./linux-aurora.config;
   from = ''CONFIG_LOCALVERSION="-ARCH"'';
+  replaced = builtins.replaceStrings [ from ] [ ''CONFIG_LOCALVERSION="${localVersion}"'' ] original;
+  # hasInfix uses a regular expression over the whole kernel configuration. Its
+  # recursive matcher overflows Determinate Nix's stack on this ARM host.
+  # Compare the replacement instead; the generated configuration is identical.
   text =
-    assert lib.assertMsg (lib.hasInfix from original) "linux-aurora.config no longer sets ${from}";
-    builtins.replaceStrings [ from ] [ ''CONFIG_LOCALVERSION="${localVersion}"'' ] original;
+    assert lib.assertMsg (replaced != original) "linux-aurora.config no longer sets ${from}";
+    replaced;
 
   # As the kernel builder's own readConfig does for a configuration file in the
   # source tree, without importing from a derivation.

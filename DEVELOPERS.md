@@ -2241,6 +2241,13 @@ unsetting the variable allowed uwsm's inherited software default to return.
 Neither platform changes Tatami's palette; its shipped colors were Tokyo
 Night already. A fresh login is needed to use updated desktop packages.
 
+The kernel recipe checks its `LOCALVERSION` replacement by comparing the
+result with the original text. Do not use `lib.hasInfix` on the whole kernel
+configuration: its regular expression overflowed the stack in Determinate
+Nix 3.23.3 and 3.24.0 on this Mac, preventing system evaluation and Yukimi
+updates. The plain string check produces exactly the same kernel and system
+derivations; both Nix clients can evaluate it.
+
 ### Installing from macOS
 
 `packages.aarch64-linux.mac-installer-j514s` (`image.nix`) is a directory the
