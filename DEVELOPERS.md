@@ -205,56 +205,123 @@ User `mpv.conf` and command-line preferences override those defaults.
 in an Aizome VM using the shipped config and checks both override routes.
 This component test does not replace playback through the exact ISO's normal UI.
 
-When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend
-inside Aizome. Sekka starts that frontend with `aizome-session.target`; GNOME
-keeps its own IBus service and Xfce keeps the legacy frontend. Aizome's GTK/Qt
-input modules use Wayland only within its session environment. An explicit
-custom IBus panel remains under the user's own integration.
-`checks.x86_64-linux.aizome-ibus-policy` evaluates these configuration cases;
-`checks.x86_64-linux.aizome-ibus` exercises real Hangul preedit, editing,
-spaces, digits and Enter in Sumi and GTK, plus desktop switches with a lingering
-user manager. A frontend exit of 1 is accepted only after its Aizome session
-has stopped or begun stopping. The test injects exit 1 into a temporary copy of
-the installed wrapper to check both states, then kills the real frontend and
-verifies automatic recovery before composing text. This instrumented component
-VM does not qualify an ISO.
+### Aizome and IBus
 
-The Aizome frontend alone backports the physical-key forwarding part of
-[IBus commit 58b74bd76d79](https://github.com/ibus/ibus/commit/58b74bd76d79bfb909eb011f5f444f474a9415c1)
-to pinned IBus 1.5.34. Without it, Hangul commits composed text but loses
-forwarded spaces and digits through input-method-v2. Keycode-zero synthetic
-keysyms remain unsupported; the later upstream implementation depends on its
-1.5.35 keymap refactor. Sekka's all-desktop configuration adds no IBus engines,
-so it offers the built-in XKB/simple engines, which do not emit forwarded-key
-events. Its application catalog and Settings do not configure additional
-engines. The component test explicitly adds Hangul 1.5.5, whose forwarding
-call retains the physical keycode. This establishes coverage for those paths,
-not arbitrary engines installed and configured by a user. Before adding an
-engine to the shipped configuration, inspect its forwarding semantics and
-test its native and GTK text paths; a keycode-zero engine needs the remaining
-upstream fix first.
+When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend
+inside Aizome. `installer/genkan/rust/system/input-method.nix` starts that
+frontend with `aizome-session.target`; GNOME keeps its own IBus service and
+Xfce keeps the legacy frontend. Only Aizome's frontend package is patched;
+the distribution daemon, engines and GTK/Qt modules remain unchanged. An
+explicit custom IBus panel remains under the user's own integration.
+Aizome's GTK/Qt input modules use Wayland only within its session environment.
+
+The Aizome dconf profile defaults `org.freedesktop.ibus.general`'s
+`use-system-keyboard-layout` to true. Its actual dconf path is
+`/desktop/ibus/general/use-system-keyboard-layout`, **not** the schema ID
+converted into a path. Aizome owns ordinary XKB layouts; IBus still handles
+engine composition. With the backport, keys an engine does not consume reach
+applications as key events instead of unsolicited text commits. This also
+preserves application shortcuts without modifiers. The default is unlocked:
+a user's explicit preference wins. No startup script writes the shared user
+database, and GNOME/Xfce do not inherit this Aizome profile default.
+
+The Chrome failure is reproducible by focusing a webpage input, opening a
+new tab with Ctrl+T, closing it with Ctrl+W, and typing. Letters disappear
+until a non-text key such as Shift is pressed. Protocol traces show text
+reaching Chrome immediately; this is not queued input or compositor latency.
+Chromium's browser-shortcut suppression discards character events until a
+fresh keydown, while its single-character IME commit path can produce a
+character without that keydown
+([browser suppression](https://github.com/chromium/chromium/blob/155.0.8059.84/content/browser/renderer_host/render_widget_host_impl.cc#L1819-L1880),
+[IME commit path](https://github.com/chromium/chromium/blob/155.0.8059.84/ui/base/ime/linux/input_method_auralinux.cc#L467-L499),
+[related IBus report](https://github.com/ibus/ibus/issues/2855)). The traces and
+source support this mechanism; the browser's internal flag was not inspected
+with a debugger. Preserving ordinary key events fixes the reproduced failure
+without disabling IME composition or injecting fake recovery keys.
+
+The patch series in `nix/patches/` applies to pinned IBus 1.5.34 in this order:
+
+| Patch | Upstream provenance and purpose |
+| --- | --- |
+| `ibus-wayland-forward-keycode.patch` | Physical-keycode subset of [58b74bd76d79](https://github.com/ibus/ibus/commit/58b74bd76d79bfb909eb011f5f444f474a9415c1); preserves Hangul's forwarded Space, digits and Enter through input-method-v2. |
+| `ibus-wayland-serial.patch` | [a8ff75597150](https://github.com/ibus/ibus/commit/a8ff755971509f09e1d0ea52a10be1bfc13af39b); resets the commit counter only for a new input-method interface, not unrelated globals such as a newly connected display. |
+| `ibus-wayland-system-keymap-dependencies.patch` | [18d8e37e112a](https://github.com/ibus/ibus/commit/18d8e37e112a155f3f80d36e4d6a845cc2e23bd8) guards removed seats; [a32d034f27c5](https://github.com/ibus/ibus/commit/a32d034f27c5f89813405e0a0f780b851b2cf893) bounds modifier-mask shifts; [ad28e5e42f4c](https://github.com/ibus/ibus/commit/ad28e5e42f4c89a4cbf546660db858f7ddd130b6) releases old resources. These are prerequisites for the keymap refactor, retained without functional changes. |
+| `ibus-wayland-system-keymap.patch` | [cbaffca21e9e](https://github.com/ibus/ibus/commit/cbaffca21e9e9b61d081742058a9a6642b8d3bb4) separates compositor and engine keymaps; [6796a3dcd8e6](https://github.com/ibus/ibus/commit/6796a3dcd8e6d815bda838f7f2cb153e89f79b66) implements system-keymap/key-event forwarding; [ce066c8d9b17](https://github.com/ibus/ibus/commit/ce066c8d9b17f086cba3159eafbc4f7a92f93807) connects the existing preference to the Wayland frontend. |
+
+Do not replace this series with **1.5.35-rc1 solely because it contains those
+commits**. In the October 27, 2026 isolated tests with Chrome 155.0.8059.84,
+the installed frontend failed 20/20 tab-return trials. Both the narrow
+backport and 1.5.35-rc1 with the setting enabled passed 20/20, but the latter
+corrupted Hangul 1.5.5's forwarded keys: Space became `n`, Enter became `t`,
+and `1` disappeared. Its forwarding path subtracts eight from the supplied
+physical evdev keycode. The existing adapted physical-keycode patch preserves
+that code. Upgrading alone with the upstream default setting still failed
+20/20 Chrome trials. The narrow series retains both previous fixes and avoids
+the later forwarding/latch changes responsible for this observed regression.
+
+Regression checks:
+
+```sh
+nix build .#checks.x86_64-linux.aizome-ibus-policy \
+  .#checks.x86_64-linux.ibus-wayland-serial \
+  .#checks.x86_64-linux.aizome-ibus --no-update-lock-file
+```
+
+The policy check evaluates complete system derivations for desktop combinations,
+disabled IBus and custom panels, including the scope of the dconf default.
+The serial check compiles the actual registry callback before and after its
+patch; its negative control must reproduce the unrelated-global serial reset.
+The component VM exercises real Hangul preedit, editing, spaces, digits and
+Enter in Sumi, GTK and native-Wayland Google Chrome, then switches between
+Aizome, Xfce and GNOME with a lingering user manager. The Chrome probe observes
+a local textarea and contenteditable using CDP, but sends tested keys through
+Aizome's input path. It checks both held and released Ctrl during tab cycling,
+ordinary DOM keydowns, the user's ability to override and reset the default,
+and composition after a tab cycle. It records whether disabling the option
+reproduces lost text and Shift recovery; a future browser may fix that control.
+The VM also verifies frontend failure/restart and normal logout behavior.
+These are component tests, not ISO or physical docking qualification.
+
+Known limits: keycode-zero synthetic keysyms remain unsupported. Sekka's
+all-desktop configuration adds no IBus engines, so it offers the built-in
+XKB/simple engines. The component test explicitly adds Hangul 1.5.5; it does
+not establish support for arbitrary user-installed engines. Before adding an
+engine, inspect its forwarding semantics and test native, GTK and browser
+composition. Separately, changing the compositor layout while IBus is already
+running can leave its virtual-keyboard path using the previous keymap. This
+was reproduced with both the installed frontend and the narrow backport;
+the no-IBus control updated correctly. US/German layouts and Compose configured
+at session start passed isolated tests. Live keymap propagation is a separate
+remaining integration issue, not fixed by this Chrome backport.
+
+**Returning to vanilla IBus:**
+
+1. On a Nixpkgs update, confirm the pinned source contains all the fixes above
+   or documented equivalents, and check the physical-keycode units against
+   the installed engines. The existence of a newer version or the original
+   forward-key commit is insufficient; 1.5.35-rc1 is the known counterexample.
+2. On a development branch, replace the `frontend` override in
+   `input-method.nix` with `pkgs.ibus` and run the checks above using that exact
+   package. Require Chrome tab-return typing and Hangul preedit, editing,
+   spaces, digits and Enter to pass together, including desktop switches.
+   Retain serial coverage, adapting the before/after harness when its patch
+   is no longer applied. Check display changes and live layout propagation
+   separately; do not claim those limitations are solved by the upgrade.
+3. Once the vanilla package passes, delete the obsolete patch files and the
+   override, update the provenance/validation record here, and retain the
+   regression tests. Aizome still needs its frontend service and session
+   environment. Keep the system-keyboard-layout policy unless a separate
+   tested policy change replaces it: removing patches does not imply that
+   upstream's false default has become appropriate for Aizome.
+
+After activating a system containing this change, restarting
+`aizome-ibus.service` replaces its frontend without restarting the compositor
+or closing applications. An explicit false user preference remains false;
+`DCONF_PROFILE=aizome dconf reset /desktop/ibus/general/use-system-keyboard-layout`
+returns it to the session default. A system-generation rollback restores the
+previous package and profile defaults without undoing user preferences.
 
 ## Sources and installed-system updates
-
-Sekka backports IBus's upstream serial fix
-[`a8ff7559`](https://github.com/ibus/ibus/commit/a8ff755971509f09e1d0ea52a10be1bfc13af39b)
-to Aizome's Wayland input-method frontend. In 1.5.34 every newly announced
-Wayland global reset the input-method counter: plugging in a display made
-foot discard letters while Return, sent as a virtual keyboard event, still
-worked. The counter now resets only for an input-method interface. Aizome
-already tolerates the old frontend's counter, but fixing IBus also protects
-sessions running older local compositor builds. No compositor development
-or live-reload workflow changes are required.
-
-`nix build .#checks.x86_64-linux.ibus-wayland-serial` compiles the real IBus
-registry callback before and after the backport. It requires the original
-to exhibit the precise serial reset, then checks repeated output and other
-global announcements, including the maximum serial, and initialization of
-both input-method versions. This is a component test, not a physical docking
-test. The patch is confined to the existing Aizome frontend override; remove
-it once the pinned IBus contains the upstream fix. After activating the new
-system, `systemctl --user restart aizome-ibus.service` replaces that frontend
-without restarting the compositor or closing applications.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 

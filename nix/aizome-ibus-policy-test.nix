@@ -21,6 +21,11 @@ let
       ];
     }).config;
   enabled = c: c.systemd.user.services ? aizome-ibus;
+  systemKeymap =
+    c:
+    lib.any (db: db.settings."desktop/ibus/general".use-system-keyboard-layout or false) (
+      c.programs.dconf.profiles.aizome.databases or [ ]
+    );
   alone = system [ "aizome" ] { };
   coexist = system [ "aizome" "gnome" "xfce" ] { };
   gnome = system [ "gnome" ] { };
@@ -59,6 +64,18 @@ assert !enabled withoutAizome;
 assert !(gnome.environment.etc ? "xdg/aizome/environment");
 assert !(xfce.environment.etc ? "xdg/aizome/environment");
 assert !(withoutAizome.environment.etc ? "xdg/aizome/environment");
+assert systemKeymap coexist;
+assert builtins.all (c: !systemKeymap c) (
+  [
+    alone
+    gnome
+    xfce
+    disabled
+    custom
+    withoutAizome
+  ]
+  ++ otherDesktops
+);
 assert builtins.all (c: !(c.environment.etc ? "xdg/aizome/environment")) otherDesktops;
 assert coexist.environment.variables.GTK_IM_MODULE == "ibus";
 assert coexist.environment.variables.QT_IM_MODULE == "ibus";
