@@ -7,6 +7,8 @@ application interfaces. It required recipe corrections and Codex assistance;
 it is not an unattended replay or ISO qualification.
 
 The implementation and usage are in [the harness guide](../../jev-harness.md).
+[Standalone bug reports](BUGS.md) record reproduction sequences, expected and
+actual behavior, evidence, and the remaining work needed to establish causes.
 The complete private evidence remains at
 `/home/callen/work/sekka-jev/.work/jev-evidence/`: original captures, exact
 requests/responses, scenario versions, input events, manifests, QEMU arguments,

@@ -1,0 +1,30 @@
+{
+  "body": {
+    "answers": {
+      "empty": {
+        "noul": 0.99,
+        "type": "noul"
+      },
+      "field": {
+        "noul": 1.0,
+        "type": "noul"
+      },
+      "generic": {
+        "noul": 0.07,
+        "type": "noul"
+      },
+      "title": {
+        "noul": 0.99,
+        "type": "noul"
+      }
+    },
+    "model": "jev-1.14.0",
+    "usage": {
+      "input_tokens": 3086,
+      "output_tokens": 68
+    }
+  },
+  "http_status": 200,
+  "latency_ms": 369,
+  "transport_success": true
+}
