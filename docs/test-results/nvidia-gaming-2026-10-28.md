@@ -263,6 +263,17 @@ The user approved testing the newer Windows release through Proton after
 the native fullscreen issue was fixed. Native config/saves were backed up
 under `~/.cache/sekka-turok-fullscreen/native-backup`.
 
+Proton Experimental launched the Windows build dated December 10, 2025,
+using Vulkan on the RTX 5090. Its engine log reports a 240 Hz fixed rate
+(`0.004166666666666667` seconds) with VSync enabled; Steam's counter showed
+240 FPS in the title scene and main menu. The original 3840×2160 capture is
+`/tmp/sekka-turok-proton-main-menu.png`. This is a startup/menu observation,
+not a gameplay benchmark. The user ended testing here to move to another
+game. Turok remains selected for Proton Experimental; the temporary
+`DISPLAY=:158` launch option and separate test bridge were removed.
+The normal desktop still requires the branch update and a fresh login to
+load the fullscreen restoration fix.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.
