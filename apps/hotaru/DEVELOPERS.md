@@ -50,7 +50,10 @@ adapted logic and fixtures.
 
 ## Workstation coordination
 
-Heavy builds and tests run through `ssh wx-workstation`. Existing reference
+All builds, tests and benchmarks run through `ssh wx-workstation`, including
+GPU diagnostics. The user reaffirmed this on 2026-10-28 because local runs
+were slowing the laptop; do not use local fallback runs. Local source editing,
+review and evidence inspection remain available. Existing reference
 and working directories for this effort are:
 
 | Remote directory | Purpose |
