@@ -293,6 +293,10 @@ fn carries_on_when_a_worker_dies() {
     assert_eq!(d.current_page(), 8);
     let view = Rect::new(d.scroll.0, d.scroll.1, d.scroll.0 + d.view.width, d.scroll.1 + d.view.height);
     assert!(d.layout.tiles(8, d.scale, view, view.center()).iter().all(|k| d.tiles.has(k)));
+    // The notice gives way to the page number again.
+    r.h.advance(Duration::from_secs(12));
+    assert!(doc(&r).trouble.is_none());
+    assert!(r.h.texts(w).iter().any(|t| t.starts_with("Page 9 of 12")), "{:?}", r.h.texts(w));
 }
 
 #[test]

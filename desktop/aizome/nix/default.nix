@@ -111,6 +111,9 @@ let
       koyomi-session = import ./vm-koyomi-session-test.nix { inherit pkgs self; };
       koyomi-modal = import ./vm-koyomi-modal-test.nix { inherit pkgs self; };
       shashin-modal = import ./vm-shashin-modal-test.nix { inherit pkgs self; };
+      # Packaged Shiori: a document opened, found through its PDFium
+      # worker, the worker killed and replaced (vm-shiori-test.nix).
+      shiori = import ./vm-shiori-test.nix { inherit pkgs self; };
       file-panel-multiple = import ./vm-file-panel-multiple-test.nix { inherit pkgs self; };
       terminal-shortcuts = import ./vm-terminal-shortcuts-test.nix { inherit pkgs self; };
       shashin-wallpaper = import ./vm-shashin-wallpaper-test.nix { inherit pkgs self; };

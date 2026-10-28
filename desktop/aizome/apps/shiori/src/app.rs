@@ -263,8 +263,10 @@ pub struct Doc {
     pub reported: Rc<Cell<u64>>,
     /// The place last kept, to keep it again only when it moves.
     pub kept: Option<Place>,
-    /// A broken worker's last word.
+    /// What's gone wrong, in the toolbar's place for the page number.
     pub trouble: Option<String>,
+    /// The tick a passing notice goes at (lasting ones have none).
+    pub trouble_until: Option<u64>,
 }
 
 impl Doc {
@@ -301,6 +303,7 @@ impl Doc {
     fn unreadable_now(&mut self) {
         self.reloading = false;
         self.trouble = Some("The file changed and can't be read yet; this is how it was.".into());
+        self.trouble_until = None;
     }
 
     fn place(&self) -> Option<Place> {
@@ -656,6 +659,7 @@ impl Shiori {
                 reported: Rc::new(Cell::new(0)),
                 kept: pending,
                 trouble: None,
+                trouble_until: None,
             };
             doc.engine = Some(self.start_engine(serial, &path, None));
             cx.set_title(window, doc.title());
@@ -873,6 +877,7 @@ impl Shiori {
             }
             Event::Reply(Reply::Working(_) | Reply::Drawn(_)) => {}
             Event::Failed { job, why, gave_up } => {
+                let ticks = self.ticks;
                 let Some(d) = self.doc_mut(w) else { return };
                 let what = match why {
                     Failure::TooLong => "took too long",
@@ -898,6 +903,8 @@ impl Shiori {
                 }
                 d.asked.retain(|j| Some(j) != job.as_ref());
                 d.trouble = Some(format!("PDFium {what}; Shiori started it again."));
+                // About ten seconds, then the page number again.
+                d.trouble_until = Some(ticks + 7);
                 if gave_up {
                     d.engine = None;
                     d.asked.clear();
@@ -909,6 +916,7 @@ impl Shiori {
                         d.load = Load::Failed(format!("PDFium {what} while opening it."));
                     } else {
                         d.trouble = Some(format!("PDFium {what} too often; the rest of this document can't be drawn."));
+                        d.trouble_until = None;
                     }
                 }
             }
@@ -1608,6 +1616,13 @@ impl Program for Shiori {
             }
             Msg::Tick => {
                 self.ticks += 1;
+                let ticks = self.ticks;
+                for d in &mut self.docs {
+                    if d.trouble_until.is_some_and(|t| ticks >= t) {
+                        d.trouble = None;
+                        d.trouble_until = None;
+                    }
+                }
                 self.watch();
                 let windows: Vec<WindowKey> = self.docs.iter().map(|d| d.window).collect();
                 for w in windows {

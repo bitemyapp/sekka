@@ -156,4 +156,11 @@ changing, drawing ahead) and its look in Night and Day (`tests/golden`).
 Documents are written by `tests/common` from text; `tests/fixtures/locked.pdf`
 is the sample encrypted by qpdf 12.4 (the command is in `tests/worker.rs`).
 
-Not yet tested: the packaged reader in an Aizome VM, and on hardware.
+`nix build .#aizome-checks.shiori -L` runs the packaged reader in an
+Aizome session in a VM (`nix/vm-shiori-test.py`): it opens a document,
+its worker has the package's `libpdfium` mapped, ❖F and typing find two
+hits and Return goes to the second, a worker killed with `SIGKILL` is
+replaced with the window open and the notice shown, and the session's
+`application/pdf` default is Shiori.
+
+Not yet tested on hardware.

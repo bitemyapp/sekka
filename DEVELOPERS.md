@@ -1154,7 +1154,11 @@ documents and a qpdf-encrypted fixture, so run them where PDFium is found
 cargo test -p aizome-shiori
 cargo test -p aizome-shiori --release --test budget -- --nocapture
 cargo run --release -p aizome-shiori --example corpus -- DIR
+nix build .#aizome-checks.shiori -L
 ```
+
+The last runs the packaged reader in an Aizome VM, including a worker
+killed and replaced.
 
 The engine evaluation (PDFium against hayro over the pdf.js corpus, and
 why MuPDF and Poppler were ruled out by licence) and the reader's design
