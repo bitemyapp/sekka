@@ -1,0 +1,1884 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "kind": "hotaru",
+  "purpose": "qualification",
+  "scope": "private headless software compositor screencopy completion; no physical scanout or parser timing",
+  "marker_contract": "matching complete top/bottom 76-cell markers, sequence32 + CRC32(sequence,nonce); sampled opaque interiors; not a full glyph-pixel CRC",
+  "recorded_utc": "2026-10-28T20:33:52.807022+00:00",
+  "nonce": 691087746,
+  "capture_interval_us": 1000,
+  "commands": {
+    "dbus": [
+      "dbus-daemon",
+      "--nofork",
+      "--nopidfile",
+      "--config-file=/tmp/hotaru-frames-3mb00in4/dbus.conf"
+    ],
+    "sway": [
+      "taskset",
+      "-c",
+      "12-13",
+      "sway",
+      "--unsupported-gpu",
+      "-c",
+      "/tmp/hotaru-frames-3mb00in4/sway.conf"
+    ],
+    "observer": [
+      "taskset",
+      "-c",
+      "14",
+      "/home/callen/work/hotaru-frame-harness-20261028/hotaru-calibration-3/observer-build/frame-observer"
+    ],
+    "application": [
+      "taskset",
+      "-c",
+      "8-11",
+      "/nix/store/26jmmbqz0m6j903y1vm3c1d9si3b7j41-hotaru-0.1.0/bin/hotaru",
+      "--config-file",
+      "/tmp/hotaru-frames-3mb00in4/hotaru.toml",
+      "--",
+      "/usr/bin/python3",
+      "/home/callen/work/hotaru-frame-harness-20261028/tools/frame-benchmark.py",
+      "--fixture",
+      "/tmp/hotaru-frames-3mb00in4/fixture.sock",
+      "691087746"
+    ]
+  },
+  "cpu_sets": {
+    "app": "8-11",
+    "compositor": "12-13",
+    "observer": "14",
+    "fixture": "16",
+    "controller": "15"
+  },
+  "host": "callen",
+  "kernel": "6.17.0-1032-oem",
+  "clock_ticks_per_second": 100,
+  "load_average": [
+    8.55419921875,
+    15.76611328125,
+    20.2626953125
+  ],
+  "tool_sha256": "a6ad849512939b5552be8ff103013bd0e84601c8a05f3f646cf27055d9bc978e",
+  "binary_sha256": "b6d9c1a7b595d83e1aedb53bd54ed9e403015a695c6b960da57d12442164213c",
+  "environment": {
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman",
+    "LIBGL_ALWAYS_SOFTWARE": "1",
+    "GALLIUM_DRIVER": "llvmpipe",
+    "LP_NUM_THREADS": "4",
+    "SIDESTEP_RASTER_THREADS": "4",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": null,
+    "LIBGL_DRIVERS_PATH": null,
+    "RUST_LOG": "warn"
+  },
+  "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d"
+  },
+  "unrelated_uta_builds": [
+    {
+      "pid": 3940361,
+      "command": "nix build (Uta targets active)"
+    }
+  ],
+  "configuration": "font_size = 14.0\nscrollback = 0\ntheme = \"night\"\nshell_integration = false\n",
+  "startup": {
+    "launch_ns": 4067907244976887,
+    "pty_ready": {
+      "event": "ready",
+      "ready_ns": 4067907296870141,
+      "pid": 4112160,
+      "cols": 120,
+      "rows": 40,
+      "cpu_affinity": [
+        16
+      ],
+      "controller_received_ns": 4067907297398284
+    },
+    "fixture_write": {
+      "event": "write",
+      "sequence": 0,
+      "kind": "initial",
+      "crc": 3661745565,
+      "read_ns": null,
+      "write_start_ns": 4067907297081563,
+      "write_end_ns": 4067907297093531,
+      "bytes": 7681,
+      "sha256": "4d969119720fda15bbbdfefd3fc1443bba4986b46a0ca6332305167e76adcd52",
+      "cols": 120,
+      "rows": 40,
+      "controller_received_ns": 4067907297670939
+    },
+    "matching_frame": {
+      "event": "capture",
+      "capture": 5,
+      "request_ns": 4067907304663959,
+      "ready_ns": 4067907319543999,
+      "decode_done_ns": 4067907319811595,
+      "valid": true,
+      "sequence": 0,
+      "compositor_sec_hi": 0,
+      "compositor_sec_lo": 4067907,
+      "compositor_nsec": 319226947,
+      "flags": 0,
+      "controller_received_ns": 4067907319951718
+    },
+    "geometry": {
+      "event": "geometry",
+      "time_ns": 4067907319808320,
+      "x": 30,
+      "y": 84,
+      "cell_width": 11,
+      "cell_height": 24,
+      "rows": 40,
+      "bottom_y": 1020,
+      "controller_received_ns": 4067907319856934
+    },
+    "launch_to_pty_ready_ns": 51893254,
+    "launch_to_matching_capture_ns": 74567112,
+    "initial_grid_matches_requested": true,
+    "qualified": true
+  },
+  "running_executable": "/nix/store/26jmmbqz0m6j903y1vm3c1d9si3b7j41-hotaru-0.1.0/bin/.hotaru-wrapped",
+  "running_executable_sha256": "e3828214ade4069f23ae439c266830ca5dfb96bae33d67b006fcde35d32258be",
+  "grid": {
+    "event": "size",
+    "cols": 120,
+    "rows": 40,
+    "controller_received_ns": 4067907330576790
+  },
+  "window_pixels": [
+    1349,
+    1077
+  ],
+  "geometry": {
+    "event": "geometry",
+    "time_ns": 4067907337944630,
+    "x": 30,
+    "y": 84,
+    "cell_width": 11,
+    "cell_height": 24,
+    "rows": 40,
+    "bottom_y": 1020,
+    "controller_received_ns": 4067907337994475
+  },
+  "compositor_outputs": [
+    {
+      "id": 3,
+      "type": "output",
+      "orientation": "none",
+      "percent": 1.0,
+      "urgent": false,
+      "marks": [],
+      "layout": "output",
+      "border": "none",
+      "current_border_width": 0,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1440
+      },
+      "deco_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "window_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "name": "HEADLESS-1",
+      "window": null,
+      "nodes": [],
+      "floating_nodes": [],
+      "focus": [
+        4
+      ],
+      "fullscreen_mode": 0,
+      "sticky": false,
+      "primary": false,
+      "make": "Unknown",
+      "model": "Unknown",
+      "serial": "Unknown",
+      "modes": [],
+      "non_desktop": false,
+      "active": true,
+      "dpms": true,
+      "power": true,
+      "scale": 1.0,
+      "scale_filter": "nearest",
+      "transform": "normal",
+      "adaptive_sync_status": "disabled",
+      "current_workspace": "1",
+      "current_mode": {
+        "width": 1920,
+        "height": 1440,
+        "refresh": 60000
+      },
+      "max_render_time": 0,
+      "focused": true,
+      "subpixel_hinting": "unknown"
+    }
+  ],
+  "physical_geometry_qualified": true,
+  "observer_controls": [
+    {
+      "active": false,
+      "start_ns": 4067907490554635,
+      "end_ns": 4067907590619094,
+      "before": {
+        "application": {
+          "sample_ns": 4067907490337875,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067907490430486,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067907490491349,
+          "cpu_ticks": 4,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067907490552091,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067907590713308,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067907590769433,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067907590815313,
+          "cpu_ticks": 4,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067907590858538,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 0,
+      "valid_captures": 0,
+      "decode_wall_ns": 0
+    },
+    {
+      "active": true,
+      "start_ns": 4067907741235809,
+      "end_ns": 4067907841304876,
+      "before": {
+        "application": {
+          "sample_ns": 4067907741085701,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067907741145051,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067907741192043,
+          "cpu_ticks": 4,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067907741233967,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067907841423667,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067907841482125,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067907841527174,
+          "cpu_ticks": 4,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067907841568677,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 6,
+      "valid_captures": 6,
+      "decode_wall_ns": 21201
+    },
+    {
+      "active": false,
+      "start_ns": 4067907991893348,
+      "end_ns": 4067908091954222,
+      "before": {
+        "application": {
+          "sample_ns": 4067907991752314,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067907991807117,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067907991850913,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067907991891886,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908092070329,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908092123079,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908092166154,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908092206125,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 0,
+      "valid_captures": 0,
+      "decode_wall_ns": 0
+    },
+    {
+      "active": true,
+      "start_ns": 4067908242560491,
+      "end_ns": 4067908342620083,
+      "before": {
+        "application": {
+          "sample_ns": 4067908242409872,
+          "cpu_ticks": 3,
+          "faults_minor": 14722,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908242470164,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908242516865,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908242559049,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908342808069,
+          "cpu_ticks": 3,
+          "faults_minor": 14724,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62576,
+            "VmRSS": 62576,
+            "RssAnon": 38324,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908342888922,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908342943235,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908342990136,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 6,
+      "valid_captures": 6,
+      "decode_wall_ns": 21323
+    }
+  ],
+  "keyboard": [
+    {
+      "sequence": 100,
+      "injected": {
+        "event": "key",
+        "sequence": 100,
+        "inject_ns": 4067908388369047,
+        "flush_return_ns": 4067908388373504,
+        "flush_complete": true,
+        "controller_received_ns": 4067908388458613
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 100,
+        "kind": "keyboard",
+        "crc": 3069385744,
+        "read_ns": 4067908388594079,
+        "write_start_ns": 4067908388600809,
+        "write_end_ns": 4067908388609092,
+        "bytes": 2830,
+        "sha256": "852e09cdda3448656dc8900305798c06d01b7b5ad091a9fa956d54bc86f5b3e4",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 4067908388927436
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 45,
+        "request_ns": 4067908398737458,
+        "ready_ns": 4067908414954069,
+        "decode_done_ns": 4067908414958436,
+        "valid": true,
+        "sequence": 100,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 4067908,
+        "compositor_nsec": 414611318,
+        "flags": 0,
+        "controller_received_ns": 4067908415069825
+      },
+      "inject_to_fixture_read_ns": 225032,
+      "fixture_write_to_capture_ns": 26344977,
+      "inject_to_capture_ns": 26585022
+    }
+  ],
+  "keyboard_summary_ns": {
+    "p50": 26585022,
+    "p95": 26585022,
+    "p99": 26585022,
+    "max": 26585022
+  },
+  "streams": [
+    {
+      "kind": "marker",
+      "producer_hz": 30,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        10000,
+        10001
+      ],
+      "first_write_ns": 4067908415891484,
+      "last_write_ns": 4067908449297305,
+      "last_capture_ns": 4067908463169622,
+      "final_write_to_capture_ns": 13872317,
+      "observed_unique_per_second": 42.302850421055076,
+      "bytes": 5640,
+      "before": {
+        "application": {
+          "sample_ns": 4067908415319885,
+          "cpu_ticks": 4,
+          "faults_minor": 14728,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62592,
+            "VmRSS": 62592,
+            "RssAnon": 38340,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908415547261,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908415589545,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908415624198,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908463443138,
+          "cpu_ticks": 4,
+          "faults_minor": 14734,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62616,
+            "VmRSS": 62616,
+            "RssAnon": 38364,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908463509449,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908463558183,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908463603772,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "marker",
+      "producer_hz": 60,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        11000,
+        11001
+      ],
+      "first_write_ns": 4067908464082760,
+      "last_write_ns": 4067908480819852,
+      "last_capture_ns": 4067908495419886,
+      "final_write_to_capture_ns": 14600034,
+      "observed_unique_per_second": 63.822062048702236,
+      "bytes": 5656,
+      "before": {
+        "application": {
+          "sample_ns": 4067908463690955,
+          "cpu_ticks": 4,
+          "faults_minor": 14734,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62616,
+            "VmRSS": 62616,
+            "RssAnon": 38364,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908463731426,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908463770315,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908463809164,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908495682215,
+          "cpu_ticks": 4,
+          "faults_minor": 14736,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62624,
+            "VmRSS": 62624,
+            "RssAnon": 38372,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908495744600,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908495796308,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908495840015,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "marker",
+      "producer_hz": 0,
+      "produced": 2,
+      "observed_unique": 1,
+      "unobserved_or_coalesced": 1,
+      "sequences": [
+        12001
+      ],
+      "first_write_ns": 4067908496224099,
+      "last_write_ns": 4067908496240423,
+      "last_capture_ns": 4067908511543436,
+      "final_write_to_capture_ns": 15303013,
+      "observed_unique_per_second": 65.27697641222984,
+      "bytes": 5664,
+      "before": {
+        "application": {
+          "sample_ns": 4067908495915760,
+          "cpu_ticks": 4,
+          "faults_minor": 14736,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62624,
+            "VmRSS": 62624,
+            "RssAnon": 38372,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908495955711,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908495994460,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908496042392,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908511799235,
+          "cpu_ticks": 4,
+          "faults_minor": 14737,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62628,
+            "VmRSS": 62628,
+            "RssAnon": 38376,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908511856872,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908511902171,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908511943214,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 30,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        13000,
+        13001
+      ],
+      "first_write_ns": 4067908512387409,
+      "last_write_ns": 4067908545791697,
+      "last_capture_ns": 4067908559919543,
+      "final_write_to_capture_ns": 14127846,
+      "observed_unique_per_second": 42.07679798260268,
+      "bytes": 5672,
+      "before": {
+        "application": {
+          "sample_ns": 4067908512020070,
+          "cpu_ticks": 4,
+          "faults_minor": 14737,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62628,
+            "VmRSS": 62628,
+            "RssAnon": 38376,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908512060572,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908512098980,
+          "cpu_ticks": 5,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908512137569,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908560208973,
+          "cpu_ticks": 4,
+          "faults_minor": 14746,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62664,
+            "VmRSS": 62664,
+            "RssAnon": 38412,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908560269966,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908560316136,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908560358700,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 60,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        14000,
+        14001
+      ],
+      "first_write_ns": 4067908560794904,
+      "last_write_ns": 4067908577533368,
+      "last_capture_ns": 4067908592276289,
+      "final_write_to_capture_ns": 14742921,
+      "observed_unique_per_second": 63.52960646426452,
+      "bytes": 5662,
+      "before": {
+        "application": {
+          "sample_ns": 4067908560431411,
+          "cpu_ticks": 4,
+          "faults_minor": 14746,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62664,
+            "VmRSS": 62664,
+            "RssAnon": 38412,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908560470991,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908560509460,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908560547507,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908592541532,
+          "cpu_ticks": 4,
+          "faults_minor": 14752,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62688,
+            "VmRSS": 62688,
+            "RssAnon": 38436,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908592601904,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908592647723,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908592692151,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 0,
+      "produced": 2,
+      "observed_unique": 1,
+      "unobserved_or_coalesced": 1,
+      "sequences": [
+        15001
+      ],
+      "first_write_ns": 4067908593145069,
+      "last_write_ns": 4067908593166332,
+      "last_capture_ns": 4067908608506871,
+      "final_write_to_capture_ns": 15340539,
+      "observed_unique_per_second": 65.09652969098286,
+      "bytes": 5684,
+      "before": {
+        "application": {
+          "sample_ns": 4067908592766013,
+          "cpu_ticks": 4,
+          "faults_minor": 14752,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62688,
+            "VmRSS": 62688,
+            "RssAnon": 38436,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908592810381,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908592848939,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908592887277,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908608765715,
+          "cpu_ticks": 4,
+          "faults_minor": 14759,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62716,
+            "VmRSS": 62716,
+            "RssAnon": 38464,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908608823653,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908608874320,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908608916944,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 30,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        16000,
+        16001
+      ],
+      "first_write_ns": 4067908609381691,
+      "last_write_ns": 4067908642781262,
+      "last_capture_ns": 4067908659963341,
+      "final_write_to_capture_ns": 17182079,
+      "observed_unique_per_second": 39.540030821454025,
+      "bytes": 5932,
+      "before": {
+        "application": {
+          "sample_ns": 4067908608987642,
+          "cpu_ticks": 4,
+          "faults_minor": 14759,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62716,
+            "VmRSS": 62716,
+            "RssAnon": 38464,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908609041183,
+          "cpu_ticks": 3,
+          "faults_minor": 3341,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23152,
+            "VmRSS": 23152,
+            "RssAnon": 12100,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908609080433,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908609119032,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908660296998,
+          "cpu_ticks": 4,
+          "faults_minor": 14766,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62744,
+            "VmRSS": 62744,
+            "RssAnon": 38492,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908660363919,
+          "cpu_ticks": 3,
+          "faults_minor": 3342,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23156,
+            "VmRSS": 23156,
+            "RssAnon": 12104,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908660414236,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908660460226,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 60,
+      "produced": 2,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        17000,
+        17001
+      ],
+      "first_write_ns": 4067908660942569,
+      "last_write_ns": 4067908677682886,
+      "last_capture_ns": 4067908695740646,
+      "final_write_to_capture_ns": 18057760,
+      "observed_unique_per_second": 57.47444032611343,
+      "bytes": 5928,
+      "before": {
+        "application": {
+          "sample_ns": 4067908660549151,
+          "cpu_ticks": 4,
+          "faults_minor": 14766,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62744,
+            "VmRSS": 62744,
+            "RssAnon": 38492,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908660588952,
+          "cpu_ticks": 3,
+          "faults_minor": 3342,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23156,
+            "VmRSS": 23156,
+            "RssAnon": 12104,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908660627530,
+          "cpu_ticks": 6,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908660665888,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908696077478,
+          "cpu_ticks": 5,
+          "faults_minor": 14772,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62768,
+            "VmRSS": 62768,
+            "RssAnon": 38516,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908696143819,
+          "cpu_ticks": 3,
+          "faults_minor": 3343,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23160,
+            "VmRSS": 23160,
+            "RssAnon": 12108,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908696194165,
+          "cpu_ticks": 7,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908696240065,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 0,
+      "produced": 2,
+      "observed_unique": 1,
+      "unobserved_or_coalesced": 1,
+      "sequences": [
+        18001
+      ],
+      "first_write_ns": 4067908696708437,
+      "last_write_ns": 4067908696730110,
+      "last_capture_ns": 4067908713479431,
+      "final_write_to_capture_ns": 16749321,
+      "observed_unique_per_second": 59.626757960798265,
+      "bytes": 5928,
+      "before": {
+        "application": {
+          "sample_ns": 4067908696331214,
+          "cpu_ticks": 5,
+          "faults_minor": 14772,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62768,
+            "VmRSS": 62768,
+            "RssAnon": 38516,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908696371154,
+          "cpu_ticks": 3,
+          "faults_minor": 3343,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23160,
+            "VmRSS": 23160,
+            "RssAnon": 12108,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908696409743,
+          "cpu_ticks": 7,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908696448182,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 4067908713806058,
+          "cpu_ticks": 5,
+          "faults_minor": 14778,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 62792,
+            "VmRSS": 62792,
+            "RssAnon": 38540,
+            "RssFile": 12860,
+            "Threads": 14
+          }
+        },
+        "fixture": {
+          "sample_ns": 4067908713868673,
+          "cpu_ticks": 3,
+          "faults_minor": 3343,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 23160,
+            "VmRSS": 23160,
+            "RssAnon": 12108,
+            "RssFile": 11052,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 4067908713917908,
+          "cpu_ticks": 7,
+          "faults_minor": 7975,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 52268,
+            "VmRSS": 52268,
+            "RssAnon": 5460,
+            "RssFile": 14052,
+            "Threads": 2
+          }
+        },
+        "observer": {
+          "sample_ns": 4067908713964018,
+          "cpu_ticks": 1,
+          "faults_minor": 474,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 13564,
+            "VmRSS": 13564,
+            "RssAnon": 568,
+            "RssFile": 2196,
+            "Threads": 1
+          }
+        }
+      }
+    }
+  ]
+}

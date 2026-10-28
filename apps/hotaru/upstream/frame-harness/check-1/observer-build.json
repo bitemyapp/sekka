@@ -1,0 +1,35 @@
+{
+  "command": [
+    "cc",
+    "-O2",
+    "-std=c11",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I/home/callen/work/hotaru-frame-harness-20261028/check-1/build",
+    "/home/callen/work/hotaru-frame-harness-20261028/tools/frame-observer.c",
+    "/home/callen/work/hotaru-frame-harness-20261028/check-1/build/screencopy-protocol.c",
+    "/home/callen/work/hotaru-frame-harness-20261028/check-1/build/virtual-keyboard-protocol.c",
+    "-lwayland-client",
+    "-lxkbcommon",
+    "-o",
+    "/home/callen/work/hotaru-frame-harness-20261028/check-1/build/frame-observer"
+  ],
+  "source_sha256": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+  "binary_sha256": "3bf2a4ba967c7526e4266b9fb48c730df205253afede449627f5bcdb83a8f1c3",
+  "protocols": {
+    "screencopy": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-wlr-0.3.12/wlr-protocols/unstable/wlr-screencopy-unstable-v1.xml",
+      "sha256": "131b8f9b4aad0c8a9cf705e90d2a1511a5ca0c477637fd3400cf1cc4fa963fb8"
+    },
+    "virtual-keyboard": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-misc-0.3.12/protocols/virtual-keyboard-unstable-v1.xml",
+      "sha256": "7ad7870003ecd592cae47dc19d277a609b7f18fd7b7be012623cf3225a7294f5"
+    }
+  },
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "pkg_config_versions": [
+    "1.22.0",
+    "1.6.0"
+  ]
+}

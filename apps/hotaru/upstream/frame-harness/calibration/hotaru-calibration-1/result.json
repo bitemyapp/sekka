@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "kind": "hotaru",
+  "purpose": "qualification",
+  "scope": "private headless software compositor screencopy completion; no physical scanout or parser timing",
+  "marker_contract": "matching complete top/bottom 76-cell markers, sequence32 + CRC32(sequence,nonce); sampled opaque interiors; not a full glyph-pixel CRC",
+  "recorded_utc": "2026-10-28T20:29:53.413093+00:00",
+  "nonce": 691087746,
+  "capture_interval_us": 1000,
+  "commands": {
+    "dbus": [
+      "dbus-daemon",
+      "--nofork",
+      "--nopidfile",
+      "--config-file=/tmp/hotaru-frames-61babjwb/dbus.conf"
+    ],
+    "sway": [
+      "taskset",
+      "-c",
+      "12-13",
+      "sway",
+      "--unsupported-gpu",
+      "-c",
+      "/tmp/hotaru-frames-61babjwb/sway.conf"
+    ],
+    "observer": [
+      "taskset",
+      "-c",
+      "14",
+      "/home/callen/work/hotaru-frame-harness-20261028/hotaru-calibration-1/observer-build/frame-observer"
+    ]
+  },
+  "cpu_sets": {
+    "app": "8-11",
+    "compositor": "12-13",
+    "observer": "14",
+    "fixture": "16",
+    "controller": "15"
+  },
+  "host": "callen",
+  "kernel": "6.17.0-1032-oem",
+  "clock_ticks_per_second": 100,
+  "load_average": [
+    14.17822265625,
+    17.31689453125,
+    21.56787109375
+  ],
+  "tool_sha256": "4beb3831167a55d283970a83b9c086feb0216b7d300aa43fc514dfd212630b37",
+  "binary_sha256": "b6d9c1a7b595d83e1aedb53bd54ed9e403015a695c6b960da57d12442164213c",
+  "environment": {
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman",
+    "LIBGL_ALWAYS_SOFTWARE": "1",
+    "GALLIUM_DRIVER": "llvmpipe",
+    "LP_NUM_THREADS": "4",
+    "SIDESTEP_RASTER_THREADS": "4",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": null,
+    "LIBGL_DRIVERS_PATH": null,
+    "RUST_LOG": "warn"
+  },
+  "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d"
+  },
+  "unrelated_uta_builds": [
+    {
+      "pid": 3940361,
+      "command": "nix build (Uta targets active)"
+    },
+    {
+      "pid": 4015894,
+      "command": "nix build (Uta targets active)"
+    }
+  ],
+  "configuration": "font_size = 14.0\nscrollback = 0\ntheme = \"night\"\nshell_integration = false\n",
+  "error": "CalledProcessError(2, ['swaymsg', '-s', '/tmp/hotaru-frames-61babjwb/sway-ipc.1000.4042751.sock', 'for_window [app_id=\"org.aizome.Hotaru\"] floating enable, border none, resize set 1400 px 1080 px, move position 20 px 20 px'])"
+}

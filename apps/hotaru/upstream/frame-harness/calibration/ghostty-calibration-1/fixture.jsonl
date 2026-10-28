@@ -1,0 +1,4 @@
+{"event":"ready","ready_ns":4067776677359857,"pid":4095300,"cols":120,"rows":40,"cpu_affinity":[16],"controller_received_ns":4067776677833177}
+{"event":"write","sequence":0,"kind":"initial","crc":3661745565,"read_ns":null,"write_start_ns":4067776677577909,"write_end_ns":4067776677593923,"bytes":7681,"sha256":"4d969119720fda15bbbdfefd3fc1443bba4986b46a0ca6332305167e76adcd52","cols":120,"rows":40,"controller_received_ns":4067776678040502}
+{"event":"size","cols":120,"rows":40,"controller_received_ns":4067776921190258}
+{"event":"write","sequence":1,"kind":"initial","crc":3877757997,"read_ns":null,"write_start_ns":4067776921425646,"write_end_ns":4067776921434579,"bytes":7681,"sha256":"de18ec9123500c795da3f7896b8f28a3da2ed28fdb405c5b6cc9f2c289fe0219","cols":120,"rows":40,"controller_received_ns":4067776921628945}
