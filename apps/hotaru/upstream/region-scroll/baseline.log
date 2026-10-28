@@ -1,0 +1,20 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-region-scroll-isolated/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.84s
+     Running tests/pixel_scroll.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/pixel_scroll-e8d0b2b2a6008f4f)
+
+running 1 test
+region scale=1 action=[10]: ExactFrameCheck { differing_pixels: 0, copied_pixels: 0, rasterized_pixels: 414720, total_pixels: 614400, moves: 0 }
+
+thread 'partial_regions_and_line_edits_preserve_every_pixel' (938760) panicked at apps/hotaru/tests/pixel_scroll.rs:121:13:
+unchanged row identities should enable a region move
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test partial_regions_and_line_edits_preserve_every_pixel ... FAILED
+
+failures:
+
+failures:
+    partial_regions_and_line_edits_preserve_every_pixel
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.08s
+
+error: test failed, to rerun pass `-p aizome-hotaru --test pixel_scroll`

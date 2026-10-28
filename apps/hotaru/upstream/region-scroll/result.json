@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "base_runtime": "178-sprite candidate 2201b9bd9157d11f5464fb7ebfd0726f7bd81a7e3f36819d35e77a34eac0c669 including cursor-decoration correction",
+  "product_files": {
+    "desktop/aizome/apps/hotaru/src/terminal_view.rs": "d0c50500c9878e63b29d894a837cb8c13d8b927790e9e24a81d8192ec5fa914d",
+    "desktop/aizome/apps/hotaru/tests/pixel_scroll.rs": "05f192ff9f3ff12ec1adfebe31031416dd6868e5f682c4ba223eadc625f0940f",
+    "desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py": "c511662c923950602048bda60441b0d3fc4d264b75eda003eb94de7c20d05dc2"
+  },
+  "binary_sha256": "81a7d10da33fad1a5a56f338bf588442afa6d32d37d51d3bb64355651578fc53",
+  "native_tests": 62,
+  "ignored": 7,
+  "strict_clippy": "passed",
+  "native_rgba_pairs": 42,
+  "additional_unsafe": false,
+  "scratch_max_rows": 4096,
+  "scratch_max_votes": 8191,
+  "limitations": [
+    "No elapsed-time speed claim.",
+    "Combined Braille/region Nix qualification is separate."
+  ],
+  "independent_review": "upstream_clipboard reviewed owned hints, dual pixel proofs, copy bounds, cursor clipping and corrected exposure benefit gate; no remaining concrete defect."
+}

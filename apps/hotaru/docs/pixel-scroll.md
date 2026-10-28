@@ -52,3 +52,37 @@ and the original candidate patch remain under
 and on `wx-workstation`; the qualified binary is retained on the workstation.
 The integrated source hashes match all five qualified files exactly. A new
 combined Nix package qualification remains separate from this isolated result.
+
+## Partial scroll regions
+
+The later region extension also finds translations when the viewport origin
+does not change, such as scrolling margins, alternate-screen scrolling, and
+line insertion/deletion. Its temporary identity table is limited to 4,096 rows
+and 8,191 vote entries with fallible reservation. Ordinary single-row edits
+avoid those allocations. Both snapshots retain every identity key throughout
+the lookup, and repeated old-row identities cannot propose a translation.
+Every reused pixel row still requires both the owned row and shaped-run proof.
+
+An inferred move copies only the smallest interval containing proved changed
+destinations and their sources. Stationary pixels outside it stay in place;
+unproven rows repaint. The work gate counts only pixels actually retained inside
+that copy rectangle, and rejects intervals that would dirty at least as many
+stationary rows as they preserve. This avoids both small-margin/full-window
+repaint regressions and a shared-row/exposure counterexample found in review.
+Cursor repairs are clipped to the actual source/destination interval. Existing
+overhang, overlay, metric, theme, clipping and physical-alignment guards remain.
+
+The isolated extension passes 62 native tests, strict Clippy and all 42 exact
+private-Wayland copy-versus-redraw frame pairs. The software tests cover main
+and alternate screens, both directions, opposite simultaneous regions, line
+edits, queued copies, cursor states, duplicate identities and scales 1/1.25/2.
+Half-pixel padding at 1.25 correctly uses ordinary damage. The four-row fixture
+at scale 1 copies 55,440 pixels and rasterizes 23,040 of 614,400 window pixels.
+These are work counts, not elapsed-time speed or 60 Hz acceptance results.
+
+The [component result](../upstream/region-scroll/result.json) identifies the
+three exact integrated files and tested binary. Its runtime base has 178
+sprites; the subsequent combination with 434 sprites requires separate Nix
+and native qualification. The [evidence](../upstream/region-scroll/README.md)
+retains the original missing-optimization failure and the exposure work-gate
+failure. No unsafe code or buffer ownership changes are introduced.

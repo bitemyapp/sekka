@@ -79,6 +79,94 @@ fn exact(h: &mut Harness<Hotaru>, scale: f64) -> ExactFrameCheck {
 }
 
 #[test]
+fn partial_regions_and_line_edits_preserve_every_pixel() {
+    let mut h = Harness::new(Hotaru::preview());
+    let w = h.window();
+    h.advance(Duration::ZERO);
+    let id = h.program().active_pane().unwrap().id;
+    h.focus_window(w, true);
+    h.send(Msg::FocusPane(id));
+    for scale in [1., 1.25, 2.] {
+        h.output_scale(w, scale);
+        h.advance(Duration::ZERO);
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().font_metrics().is_some_and(|m| m.scale == scale)
+        }));
+        let mut term = Terminal::new(70, 20, 0);
+        if scale == 2. {
+            term.feed(b"\x1b[?1049h");
+        }
+        term.feed(b"\x1b[2 q");
+        for row in 1..=20 {
+            term.feed(
+                format!("\x1b[{row};1H{row:03} 日本語 😀 e\u{301} ─┼│ \x1b[3{};4mcolor\x1b[0m", row % 8).as_bytes(),
+            );
+        }
+        term.feed(b"\x1b[2;19r\x1b[19;1H");
+        show(&mut h, term.snapshot());
+        exact(&mut h, scale);
+        // A four-row region must leave the other sixteen rows in place, even
+        // with a stationary cursor outside it. Copying the entire viewport
+        // would be correct but would turn four dirty rows into almost twenty.
+        term.feed(b"\x1b[5;8r\x1b[1;1H");
+        show(&mut h, term.snapshot());
+        exact(&mut h, scale);
+        term.feed(b"\x1b[S");
+        show(&mut h, term.snapshot());
+        let narrow = exact(&mut h, scale);
+        eprintln!("narrow region scale={scale}: {narrow:?}");
+        if scale != 1.25 {
+            assert!(narrow.moves > 0);
+            assert!(narrow.copied_pixels < narrow.total_pixels / 4);
+            assert!(narrow.rasterized_pixels < narrow.total_pixels / 4);
+        }
+        term.feed(b"\x1b[2;19r\x1b[19;1H");
+        show(&mut h, term.snapshot());
+        exact(&mut h, scale);
+        let position = term.snapshot().position;
+        for action in [
+            b"\n".as_slice(),
+            b"\x1b[2S",
+            b"\x1b[2;1H\x1bM",
+            b"\x1b[2T",
+            b"\x1b[6;1H\x1b[2L",
+            b"\x1b[6;1H\x1b[2M",
+            // Two disjoint regions move in opposite directions in one frame.
+            b"\x1b[2;9r\x1b[S\x1b[11;19r\x1b[T",
+        ] {
+            term.feed(action);
+            assert_eq!(term.snapshot().position, position, "partial scroll keeps viewport origin");
+            show(&mut h, term.snapshot());
+            let result = exact(&mut h, scale);
+            eprintln!("region scale={scale} action={action:?}: {result:?}");
+            if scale == 1.25 {
+                assert_eq!(result.moves, 0, "half-pixel terminal padding requires ordinary rasterization");
+            } else {
+                assert!(result.moves > 0, "unchanged row identities should enable a region move");
+            }
+            assert!(result.rasterized_pixels < result.total_pixels);
+        }
+        // Coalesced copies must remain correct without an intervening paint.
+        for action in [b"\x1b[2;19r\x1b[S".as_slice(), b"\x1b[2T", b"\x1b[4;1H\x1b[L"] {
+            term.feed(action);
+            show(&mut h, term.snapshot());
+        }
+        exact(&mut h, scale);
+        for action in [b"\x1b[4 q\x1b[S".as_slice(), b"\x1b[6 q\x1b[T", b"\x1b[?25l\x1b[S"] {
+            term.feed(action);
+            show(&mut h, term.snapshot());
+            assert_eq!(exact(&mut h, scale).moves > 0, scale != 1.25);
+        }
+        h.focus_window(w, false);
+        term.feed(b"\x1b[?25h\x1b[2 q\x1b[T");
+        show(&mut h, term.snapshot());
+        exact(&mut h, scale);
+        h.focus_window(w, true);
+        exact(&mut h, scale);
+    }
+}
+
+#[test]
 fn row_scroll_preserves_exact_pixels_and_reduces_raster_work() {
     let mut h = Harness::new(Hotaru::preview());
     let w = h.window();

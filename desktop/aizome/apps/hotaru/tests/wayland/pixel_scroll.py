@@ -25,13 +25,28 @@ while True:
     try:stage=int((root/'stage').read_text())
     except (FileNotFoundError,ValueError):time.sleep(.005);continue
     if stage!=previous:
-        if stage:
+        if 0 < stage < 28:
             for _ in range(1+stage%5):row()
         if stage==8:os.write(1,b'\x1b]4;1;#ff8844\x07')
         if stage==12:os.write(1,b'\x1b[4 q')
         if stage==16:os.write(1,b'\x1b[6 q')
         if stage==20:os.write(1,b'\x1b[?25l')
         if stage==24:os.write(1,b'\x1b[?25h\x1b[2 q')
+        if stage==28:
+            rows=os.get_terminal_size().lines
+            os.write(1,b'\x1b[r\x1b[2J\x1b[H')
+            for y in range(1,rows+1):
+                os.write(1,f'\x1b[{y};1Hregion {y:03} 日本語 😀 e\u0301 ─┼│ \x1b[3{y%8};4mcolor\x1b[0m'.encode())
+            os.write(1,f'\x1b[2;{rows-1}r\x1b[{rows-1};1H'.encode())
+        actions={29:b'\n',30:b'\x1b[2S',31:b'\x1b[2;1H\x1bM',32:b'\x1b[2T',
+                 33:b'\x1b[6;1H\x1b[2L',34:b'\x1b[6;1H\x1b[2M',
+                 36:b'\x1b[8;1Hchanged retained row\x1b[S',37:b'\x1b[6 q\x1b[T',
+                 38:b'\x1b[4 q\x1b[S',39:b'\x1b[?25l\x1b[T',
+                 40:b'\x1b[?25h\x1b[2 q\x1b[S',41:b'\x1b[r\x1b[2T'}
+        if stage==35:
+            mid=rows//2
+            os.write(1,f'\x1b[2;{mid}r\x1b[S\x1b[{mid+2};{rows-1}r\x1b[T'.encode())
+        if stage in actions:os.write(1,actions[stage])
         os.write(1,f'\x1b]2;scroll-stage-{stage}\x07'.encode())
         previous=stage
     time.sleep(.005)
@@ -64,7 +79,7 @@ while True:
                 try:return json.loads(next(inspect.glob(f'org.aizome.Hotaru.{app.pid}.*.json')).read_text())['title']
                 except (StopIteration,FileNotFoundError,json.JSONDecodeError):return None
             wait('native window',title)
-            for stage in range(28):
+            for stage in range(42):
                 (runtime/'stage').write_text(str(stage))
                 wait('stage title',lambda:title()==f'scroll-stage-{stage} — Hotaru')
                 # Require repeated unchanged actual compositor frames. The title
@@ -92,10 +107,10 @@ while True:
     differing=[n for n,(a,b) in enumerate(zip(screenshots['copy'],screenshots['redraw'])) if a!=b]
     report={'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
             'scope':'private headless Sway/pixman actual screenshots; exact RGBA, no timing claim',
-            'frames_per_mode':28,'screenshots_sha256':screenshots,'differing_frames':differing,
+            'frames_per_mode':42,'screenshots_sha256':screenshots,'differing_frames':differing,
             'status':'passed' if not differing else 'failed'}
     (evidence/'result.json').write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps({'status':report['status'],'differing_frames':differing,'frames_per_mode':28}))
+    print(json.dumps({'status':report['status'],'differing_frames':differing,'frames_per_mode':42}))
     assert not differing, differing
 
 
