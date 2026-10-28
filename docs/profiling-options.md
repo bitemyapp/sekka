@@ -678,7 +678,41 @@ multiple user stack frames, including `Perl_pp_modulo`, `Perl_runops_standard`,
 `perl_run` and `main`. The private capture is
 `/tmp/aizome-perf-check.reZiOn/perf.data` on the laptop. No root access, policy
 change, local compilation or persistent package installation was used.
-This proves the sampling mechanism works on this laptop; it does not yet
-validate an integrated Myaku CPU capture or the split-symbol workflow for
-sampled Aizome stacks. The earlier workstation package evidence predates this
-argument fix.
+This preflight proves the sampling mechanism works on this laptop. The earlier
+workstation package evidence predates this argument fix.
+
+### Laptop integrated capture — 2026-10-28
+
+The corrected root-flake runtime and debug outputs were rebuilt on
+`wx-workstation` as
+`/nix/store/gps09farjkl0byz07nz0y1y9m6k4shik-aizome-0.1.0` and
+`/nix/store/nkyyaxi3hf3dmf991h205lrby6l29mwq-aizome-0.1.0-debug`.
+The six-binary symbol verification passed again. The laptop's Nix daemon
+refused unsigned workstation outputs, so the runtime and symbols were copied
+to a user-owned demo directory. Only the two shell wrappers' executable paths
+were relocated; ELF files were preserved byte for byte.
+
+Using the real Myaku controls in an isolated headless session on the laptop,
+**CPU samples + timeline** recorded Sumi for ten seconds while injected input
+typed and rendered text. The capture finished normally with 21,141 timeline
+events, one observed native participant, zero reported producer losses and
+58 CPU samples with zero reported lost samples. `perf report` and `perf script`
+resolved native frames such as `Runtime<Sumi>::flush`, `refresh_menus`,
+`Sumi`'s menu construction and toolkit layout. Perfetto's trace processor
+imported all 58 exported stack samples and all 21,141 timeline events. This is
+a small functional recording, not a statistically reliable hotspot ranking.
+
+The visible nested Wayland launcher also started successfully with Myaku and
+Sumi, on a 2406×1600 output at scale 2. The launcher, matching symbol tree and
+example capture are under `/home/callen/work/sekka-profiling-demo` on the laptop;
+they do not replace its installed session. The saved example is `example-cpu/`:
+
+| File | SHA-256 |
+| --- | --- |
+| `perf.data` | `c821e465eb0578de53f301768441a6db94adbdacb9ed29ff01af99e3fa25f298` |
+| `trace.json` | `5cc42819957b98ff2bd461cd3bc458a730d1442a34c9f53783a8d935646f4b70` |
+| `cpu-stacks.txt` | `261c888f6198ab4da0ae18b08f932dffa55c85f5dee5eda6412c76995adc4b19` |
+
+These results establish integrated CPU recording and readable native stacks.
+They do not establish physical presentation timing, baseline/active overhead,
+battery cost or ISO qualification.
