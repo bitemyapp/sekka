@@ -67,3 +67,25 @@ blinking shapes, default reset, hollow unfocused cursor, and refocus. The second
 window uses a separate private runtime directory to avoid single-instance
 handoff. This is native compositor-loop evidence, not VM or hardware-display
 qualification.
+
+## Decorated block-cursor correction
+
+The subsequent native sprite review exposed an older decoration gap. Ordinary
+block-cursor redraw erased underline, overline and strike; the sprite-overhang
+path preserved them but retained their original colors. The pinned Ghostty
+renderer tints all non-cursor source-cell quads, including decorations, with
+cursor text color. The correction preserves underline/overline before glyphs
+and strike after glyphs, clips cursor color to the source cell (including wide
+cells), and keeps the original span geometry so dotted/dashed/curly patterns
+retain their phase.
+
+The focused regression fails on the previous source and passes after correction.
+Ten paired narrow/wide underline-style cases compare ordinary and overhang paint
+paths, expected cursor/neighbor pixels, opaque sprite overlap and exact partial
+damage. All 57 native tests and strict all-target package Clippy pass. The
+[qualification and patch](../upstream/cursor-decoration/README.md) preserve logs
+and source identities; all 221 available source-manifest entries match the
+tested candidate. Its applied vendor files match too; five uncompiled patch
+inputs are intentionally absent from that isolated mirror. The earlier
+`73ea25d` Nix package and GUI pilot remain frozen historical artifacts and do
+not include this later correction.

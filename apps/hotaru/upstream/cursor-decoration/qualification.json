@@ -1,0 +1,57 @@
+{
+  "baseline_sha256": "005e153a8ef92944d010c443cae7de0d28e3bdbd022aa6c9135eded1ebd2c93e",
+  "candidate_sha256": "63e11655cc55dfef2e4a991721017a34742489ba69edf566cda29a0841804f6f",
+  "checks": [
+    {
+      "name": "red",
+      "command": [
+        "/home/callen/.cargo/bin/cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/Cargo.toml",
+        "-p",
+        "aizome-hotaru",
+        "block_cursor_keeps_and_tints_decorations",
+        "--",
+        "--nocapture"
+      ],
+      "returncode": 101
+    },
+    {
+      "name": "green",
+      "command": [
+        "/home/callen/.cargo/bin/cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/Cargo.toml",
+        "-p",
+        "aizome-hotaru"
+      ],
+      "returncode": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "/home/callen/.cargo/bin/cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--manifest-path",
+        "/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/Cargo.toml",
+        "-p",
+        "aizome-hotaru",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "returncode": 0
+    }
+  ],
+  "status": "passed"
+}
