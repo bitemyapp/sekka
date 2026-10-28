@@ -57,6 +57,9 @@ pub struct TestPlatform {
     pub clock: Duration,
     pub clipboard: Option<String>,
     pub clipboard_data: Option<sidestep_ui::PreparedClipboard>,
+    /// What the clipboard offers besides text, by MIME type (a picture, a
+    /// file list), as a test puts it there.
+    pub offer: Vec<(String, Vec<u8>)>,
     /// The primary selection, likewise.
     pub primary: Option<String>,
     pub primary_data: Option<sidestep_ui::PreparedClipboard>,
@@ -122,6 +125,7 @@ impl TestPlatform {
             clock: Duration::ZERO,
             clipboard: None,
             clipboard_data: None,
+            offer: Vec::new(),
             primary: None,
             primary_data: None,
             quit: false,
@@ -259,6 +263,7 @@ impl Platform for TestPlatform {
     fn set_clipboard_text(&mut self, text: &str) {
         self.clipboard = Some(text.to_owned());
         self.clipboard_data = None;
+        self.offer.clear();
     }
 
     fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
@@ -272,6 +277,7 @@ impl Platform for TestPlatform {
     fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
         self.clipboard = data.text().map(str::to_owned);
         self.clipboard_data = Some(data);
+        self.offer.clear();
     }
 
     fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
@@ -281,6 +287,30 @@ impl Platform for TestPlatform {
     fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
         self.primary = data.text().map(str::to_owned);
         self.primary_data = Some(data);
+    }
+
+    fn clipboard_types(&mut self) -> Vec<String> {
+        let mut types: Vec<String> = self.offer.iter().map(|(mime, _)| mime.clone()).collect();
+        match prepared(&self.clipboard, &self.clipboard_data) {
+            Some(data) => types.extend(sidestep_ui::ClipboardRead::from_prepared(data).types()),
+            None if self.clipboard.is_some() => types.push("text/plain;charset=utf-8".into()),
+            None => {}
+        }
+        types
+    }
+
+    fn clipboard_reader(&mut self) -> crate::platform::ClipboardReader {
+        let (offer, text) = (self.offer.clone(), self.clipboard.clone());
+        let data = prepared(&self.clipboard, &self.clipboard_data).cloned();
+        std::sync::Arc::new(move |mime| {
+            if let Some((_, bytes)) = offer.iter().find(|(m, _)| m == mime) {
+                return Some(bytes.clone());
+            }
+            match &data {
+                Some(data) => data.data(mime).map(<[u8]>::to_vec),
+                None => text.clone().filter(|_| mime.starts_with("text/plain")).map(String::into_bytes),
+            }
+        })
     }
 
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
@@ -1621,8 +1651,17 @@ pub fn menu_item<'a>(menus: &'a [aizome_shell_proto::Menu], label: &str) -> &'a 
 /// What a selection holds: every type of the prepared data while its text is
 /// still what the test put there, else just that text.
 fn snapshot(text: &Option<String>, data: &Option<sidestep_ui::PreparedClipboard>) -> sidestep_ui::ClipboardRead {
-    match data {
-        Some(data) if data.text() == text.as_deref() => sidestep_ui::ClipboardRead::from_prepared(data),
-        _ => sidestep_ui::ClipboardRead::from_text(text.as_deref().map(Arc::from)),
+    match prepared(text, data) {
+        Some(data) => sidestep_ui::ClipboardRead::from_prepared(data),
+        None => sidestep_ui::ClipboardRead::from_text(text.as_deref().map(Arc::from)),
     }
+}
+
+/// The prepared contents, while they still hold the text a test sees (a
+/// test may put text on the clipboard directly).
+fn prepared<'a>(
+    text: &Option<String>,
+    data: &'a Option<sidestep_ui::PreparedClipboard>,
+) -> Option<&'a sidestep_ui::PreparedClipboard> {
+    data.as_ref().filter(|data| data.text() == text.as_deref())
 }
