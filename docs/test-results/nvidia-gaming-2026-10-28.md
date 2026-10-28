@@ -77,6 +77,35 @@ completed and all five Gamescope runs exited successfully. Logs were
 retained locally in `/tmp/sekka-gaming-gpu.7h0PXK`. This is render-node
 evidence; the private headless host has no real panel or PipeWire capture.
 
+## Steam scheduling follow-up
+
+The requested policy is Steam at nice −5 and its same-user descendants at a
+−10 baseline, including unlisted games and Proton/runtime wrappers. Stronger
+named and per-thread nice priorities and existing real-time CPU policies are
+preserved. Fossilize shader-cache processing and its children remain idle.
+Ananicy owns this policy; GameMode does not compete with it. The mechanism
+and ancestry limits are documented in [tuning.md](../tuning.md#steam-process-trees).
+
+Both component checks pass:
+
+```sh
+nix build .#checks.x86_64-linux.tuning-policy .#checks.x86_64-linux.tuning \
+  --no-update-lock-file --no-link -L
+```
+
+The policy check compiles and exercises the process-tree classifier against
+PID reuse, UID changes, reparenting, exec transitions and real thread-group
+identity. The disposable NixOS VM runs the packaged daemon with ordinary-user
+Steam/game stand-ins. It verifies −5/−10 priorities on all threads, known and
+unknown executables, a generic background runtime, shell wrappers, wineserver
+at −12, a game thread retaining nice −15 and SCHED_FIFO, background shader
+helper descendants, fork without exec, late threads after launcher exit, and
+classification of existing Steam trees after daemon restart. Existing Nix,
+shell/compiler, AI workload and Aizome launcher checks also pass.
+
+This tests scheduling mechanics, not an actual Steam or Proton game. The host
+daemon and installed system generation remain unchanged.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.

@@ -134,6 +134,41 @@ Nix builders belong to the daemon rather than the calling agent. Sekka sets
 daemon's CPU/IO weights to 20 as overridable defaults. This also covers
 Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
 
+### Steam process trees
+
+With system tuning enabled, `steam`, `steam.sh` and `Steam.exe` receive nice
+−5 with normal CPU scheduling and best-effort I/O. Their same-user descendants
+receive a nice −10 baseline, including unlisted native games, Proton wrappers,
+secondary launchers and Steam's browser helpers. Generic shell, runtime and
+game rules cannot lower that baseline. A stronger named rule, such as
+`wineserver` at −12, still applies, and threads already using a stronger nice
+value retain it. Existing FIFO, RR and deadline CPU policies are preserved;
+this policy does not grant real-time CPU scheduling.
+
+`fossilize_replay` and its descendants are the deliberate exception: background
+shader-cache processing remains at nice 16 with idle CPU and I/O scheduling,
+so it yields to a running game. Steam and its other descendants receive
+best-effort I/O instead of inheriting the upstream launcher's idle I/O class.
+GameMode does not renice processes, leaving Ananicy as the policy owner.
+
+`nix/scheduling/ananicy-descendants.patch` adds `child_rule`, naming a rule to
+apply to descendants. `descendant-rules.hpp` walks host `/proc` ancestry at
+fork/exec events and on the daemon's startup scan, normalizing thread IDs to
+their process leader. It retains observed lineage across exec and reparenting,
+keyed by PID, start time and UID; dead entries are pruned. A process with its
+own `child_rule` starts a new lineage, which lets Fossilize override Steam's
+foreground policy. The daemon's `nice_only_raise` flag keeps stronger thread
+priorities, and `sched_keep_realtime` preserves existing real-time CPU policies.
+Upstream rules for Steam and Fossilize are removed before adding Sekka's rules,
+so filesystem iteration order cannot choose the old launcher policy.
+
+Ancestry stops at UID changes and setuid helpers. No process is moved between
+cgroups. A process that loses all recognizable ancestry before its first
+observation cannot be attributed; restarting the daemon also forgets already
+orphaned lineage. Games started independently of Steam continue to use their
+ordinary named rules. These are CPU contention priorities, not quotas or a
+promise of higher FPS in a GPU-bound game.
+
 ### Launcher and ananicy repairs
 
 Aizome's desktop-entry launcher already uses app scopes, but its keybinding
@@ -161,14 +196,15 @@ manager, the launcher keeps its direct-spawn behavior.
 - Recognize known harness scripts under Node/Bun before applying their generic
   background-runtime rule, so interpreted harnesses stay interactive.
 
-Review the ananicy patch whenever ananicy-cpp changes and remove it when the
-upstream version contains equivalent fixes. Existing terminals and harnesses
+Review both Ananicy patches whenever ananicy-cpp changes and remove them when
+the upstream version contains equivalent fixes. Existing terminals and harnesses
 should be restarted after installing the change.
 
 ### Checks
 
 `nix build .#checks.x86_64-linux.tuning-policy` checks disabling the policy,
-explicit overrides and process-tree classification.
+explicit overrides and process-tree classification, including Steam ancestry,
+PID reuse, credential boundaries and reparenting.
 `nix build .#checks.x86_64-linux.tuning` boots a disposable VM and checks the
 preemption and disk-scheduler settings, terminal/shell/compiler nice values,
 all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
@@ -177,6 +213,10 @@ harnesses, scope stop propagation, and Aizome's launch function with a real
 user manager. The unpatched ananicy binary is the failing control for
 pre-existing Nix worker threads. `tests/test_agent_workloads.py` checks process
 tree classification and the boundaries on which units the service may manage.
+The same VM checks Steam's −5 launcher and −10 descendants as an ordinary
+user, unknown and known games, generic runtimes, shell wrappers, Wine's
+stronger rule, preservation of real-time threads, background shader helpers,
+fork-only children, reparenting, and classification after daemon restart.
 
 `nix build .#checks.x86_64-linux.aizome-login` additionally logs into the full
 Aizome desktop, opens actual Foot through its IPC launcher, starts a raw-mode

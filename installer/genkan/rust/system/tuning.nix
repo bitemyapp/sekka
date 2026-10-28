@@ -23,18 +23,24 @@ let
     "tcsh"
     "zsh"
   ];
-  # CachyOS's rules without its shell rules. ananicy loads rule files in
+  steamLaunchers = [
+    "steam"
+    "steam.sh"
+    "Steam.exe"
+  ];
+  replacedRules = shells ++ steamLaunchers ++ [ "fossilize_replay" ];
+  # CachyOS's rules without names replaced below. ananicy loads rule files in
   # directory order and the last rule for a name wins, so an added rule could
   # not reliably replace them.
   rules = pkgs.runCommand "ananicy-rules-sekka" { } ''
     cp -r ${pkgs.ananicy-rules-cachyos} $out
     chmod -R u+w $out
-    pattern='"name": *"(${lib.concatStringsSep "|" shells})"'
+    pattern='"name": *"(${lib.concatStringsSep "|" (map lib.escapeRegex replacedRules)})"'
     grep -rlE "$pattern" $out/etc/ananicy.d | while read -r file; do
       sed -i -E "/$pattern/d" "$file"
     done
     if grep -rqE "$pattern" $out/etc/ananicy.d; then
-      echo "shell rules remain" >&2
+      echo "replaced upstream rules remain" >&2
       exit 1
     fi
   '';
@@ -167,6 +173,41 @@ in
             inherit name;
             nice = 0;
           }) shells
+          # Steam's launcher must not pass the upstream Launcher type's nice
+          # 16 and idle I/O to unknown games. The packaged daemon follows
+          # same-user ancestry across wrappers, execs, forks and threads.
+          ++ map (name: {
+            inherit name;
+            nice = -5;
+            nice_only_raise = true;
+            sched = "normal";
+            sched_keep_realtime = true;
+            ioclass = "best-effort";
+            child_rule = "sekka-steam-children";
+          }) steamLaunchers
+          ++ [
+            {
+              name = "sekka-steam-children";
+              nice = -10;
+              nice_only_raise = true;
+              sched = "normal";
+              sched_keep_realtime = true;
+              ioclass = "best-effort";
+            }
+            {
+              # Steam's background shader cache processing must not compete
+              # with a running game, even through compiler/helper children.
+              name = "fossilize_replay";
+              type = "BG_CPUIO";
+              child_rule = "sekka-steam-shader-children";
+            }
+            {
+              name = "sekka-steam-shader-children";
+              type = "BG_CPUIO";
+              nice_only_raise = false;
+              sched_keep_realtime = false;
+            }
+          ]
           # Harnesses stay interactive, like Foot and Chrome. Only their child
           # workloads enter the background slice, through the user service.
           ++

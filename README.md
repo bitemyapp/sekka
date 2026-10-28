@@ -167,6 +167,11 @@ frame times and GPU usage, or add `--gamescope` to run it inside Gamescope.
 There is no need to nest Gamescope inside the Steam login session; the
 launcher detects it.
 
+With system tuning enabled, Steam games automatically receive higher CPU
+priority, including games absent from the scheduling rules. Background shader
+cache processing stays at low priority. This helps games compete with other
+CPU work; it does not increase the GPU's rendering capacity.
+
 Aizome supports explicit synchronization for NVIDIA games and adaptive sync
 under **Settings → Displays**, with fullscreen-only operation by default.
 If a display flickers with adaptive sync, select **Off**. Aizome still

@@ -215,6 +215,12 @@ inspiration from [Bazzite's ScopeBuddy](https://docs.bazzite.gg/Advanced/scopebu
 It does not rewrite Steam's launch options or force a Proton version.
 GameMode requests the performance governor only while registered games run;
 Ananicy retains priority policy, with no GameMode renice or GPU overclock.
+With `calamares.tuning.enable`, Steam runs at nice -5 and its descendants
+receive a -10 baseline, including unlisted games and Proton wrappers. Stronger
+named or per-thread nice priorities and existing real-time CPU threads are
+preserved. Fossilize shader-cache processing and its descendants retain idle
+CPU/I/O scheduling. [Scheduling details](docs/tuning.md#steam-process-trees)
+cover ancestry tracking and its limits.
 
 The separate Steam login session enables Gamescope's HDR and adaptive-sync
 support. Tearing is opt-in:
