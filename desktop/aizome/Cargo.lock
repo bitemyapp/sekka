@@ -500,6 +500,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-utsushi"
+version = "0.1.0"
+dependencies = [
+ "aizome-kit",
+ "aizome-media",
+ "env_logger",
+ "image",
+ "log",
+ "serde",
+ "serde_json",
+ "sidestep-engine",
+ "zbus",
+]
+
+[[package]]
 name = "aizome-yukimi"
 version = "0.1.0"
 dependencies = [
