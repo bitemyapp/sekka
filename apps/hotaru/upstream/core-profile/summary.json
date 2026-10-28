@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T19:43:04.081412+00:00",
+  "scope": "Callgrind instruction-count diagnostic; not native elapsed time or performance acceptance",
+  "source_sha256": "a3e74ef33281a79744da2fa15e63d019699950490bbcc94eef783997391ca128",
+  "binary_sha256": "749ca4640420ab2e0f869d87458c4cc38beca91f98209d2e71999a71c64fca00",
+  "build_metadata_sha256": "26d7c973f8fd15af16f06a3dfca5562c7d8465e29ac4b1b7eab65e4c5b009c0e",
+  "target_cpu": "x86-64-v3",
+  "debug_info": 2,
+  "valgrind": "/nix/store/4298593522xgrr28874w20cvvs742r51-valgrind-3.27.1",
+  "input": "/home/callen/work/hotaru-rep-last-cell-20261028/measurements/unicode.vt",
+  "input_sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+  "grid": [
+    120,
+    12
+  ],
+  "grapheme_width": "unicode",
+  "iterations": 1,
+  "raw_profile": "/home/callen/work/hotaru-profiler-20261028/v3-mixed.callgrind",
+  "raw_profile_sha256": "ae5d7c1582709048f36081cdaa0b240a5fa6e899ddb82b3eab653ca9d56e4ff1",
+  "collected_instructions": 307252265,
+  "observations": [
+    "State::print_utf8 and scalar fallback dominate this mixed combining/emoji workload.",
+    "Full-row charge recomputation accounts for approximately 8% of reported instructions across inlined source locations; investigate skipping unchanged charges without changing allocation order.",
+    "Standard UTF-8 validation accounts for 6.5% of reported instructions; many short spans use the dependency scalar fallback."
+  ],
+  "limitations": [
+    "Native AVX-512 build failed in Valgrind before terminal execution with an unsupported instruction; its partial profile is invalid.",
+    "The v3 diagnostic executable is deliberately different from native benchmark and Nix GUI binaries.",
+    "Includes initialization and teardown; no history or renderer.",
+    "Instruction counts are not wall-clock, hardware-counter or cache-latency measurements."
+  ],
+  "evidence": {
+    "v3-mixed.callgrind": "ae5d7c1582709048f36081cdaa0b240a5fa6e899ddb82b3eab653ca9d56e4ff1",
+    "v3-mixed-annotated.txt": "206ae75a67cf278b8e00777a819969aef308b8ac315a554083e071e025c1d9cb",
+    "v3-mixed.log": "60788bc0b34b6284e2f388e8d4761b45843f9901470765db58d9cfb4adf81884",
+    "combined-mixed.log": "c33ce3091c35e3b1a2c974164c472e500eb21f6971f234aa8e3f6bcda776a5f1"
+  }
+}
