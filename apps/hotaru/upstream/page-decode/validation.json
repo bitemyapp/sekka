@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "production_integrated": false,
+  "recommendation": "Reject mapped decoding: cold reads regress in all five compared workloads; retain heap-construction cleanup as a separate candidate.",
+  "source_sha256": "4b31dcaa550ac7d7b44d9ab89fffa4929be4986195bd538c9dc6430d4dbfbcbd",
+  "builds": {
+    "owner": {
+      "source_sha256": "2f8ad97e7e82766b99655fdc591658ad45a8ba40c59fb879bf9934a75a30f774",
+      "binary_sha256": "7a08e8c182ed46704edace87d25a241b734eaa15bed9175982338ffff4eaa254"
+    },
+    "heap": {
+      "source_sha256": "4b31dcaa550ac7d7b44d9ab89fffa4929be4986195bd538c9dc6430d4dbfbcbd",
+      "binary_sha256": "6fd24d35c019ae48525b5000485ee3d1dabd73372e0ed807e9dc8dff31b74a90"
+    },
+    "direct": {
+      "source_sha256": "4b31dcaa550ac7d7b44d9ab89fffa4929be4986195bd538c9dc6430d4dbfbcbd",
+      "binary_sha256": "3d5a4c5271e27274b27fa4d910b812bc0c1e7ce728609d92a4adfef6b3281c15"
+    }
+  },
+  "tests_passed": 115,
+  "commands": [
+    "cargo +1.95.0 test -p hotaru-core --tests",
+    "cargo +1.95.0 clippy -p hotaru-core --all-targets -- -D warnings"
+  ],
+  "miri": {
+    "toolchain": "nightly-2026-08-28",
+    "commands": [
+      "MIRIFLAGS=\"-Zmiri-strict-provenance\" cargo +nightly-2026-08-28 miri test -p hotaru-core --lib direct_decode",
+      "MIRIFLAGS=\"-Zmiri-tree-borrows -Zmiri-strict-provenance\" cargo +nightly-2026-08-28 miri test -p hotaru-core --lib direct_decode"
+    ],
+    "passed_each": 3,
+    "ignored_each": 1,
+    "limitation": "Same private builder/owner machinery, heap backing replaces OS mapping; maximum-size native mapping case ignored under Miri."
+  },
+  "independent_review": "upstream_clipboard found no concrete acceptance, bounds, ownership or dictionary double-charge issue. Noted bounded scratch mapping may be reserved before logical row-budget rejection.",
+  "artifacts": {
+    "direct-decode.patch": "161d012d2e190eda66c5c47d7dc6e3a1f9b2ad789a0a0ba5ad2db527569ae67c",
+    "report.json": "7f677e38db9df0e6235c736840154189b4cec7c413b9cb2c6a1e9381ba58d658",
+    "validation.log": "ff0e35b1dc41dc4f033d44b5da731a9a52ea9d05aba95895c778a5c427da6f93",
+    "miri.log": "6d66e2b2afd350630d0930d969dae057f4adb0ede4286ad4d7b9354abc3ef08c",
+    "measure-decode.py": "551daf0e5cc23e23a8cdc47095a023a0dad8793d98a4aa37a801e73690aefac7"
+  }
+}
