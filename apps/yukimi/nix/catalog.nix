@@ -1,30 +1,42 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Describe availability from the packages the catalog actually installs. Reading
 # metadata does not build a package or relax Nixpkgs' installation policy.
+#
+# Systems read metadata only. Instantiating every application's packages
+# nearly doubled a reference system's evaluation, and it meets Nixpkgs' policy
+# too, so a system refusing unfree packages would have reported those as
+# unsupported. Wrappers whose metadata claims more than their dependencies
+# support, as Steam's 32-bit runtime does on ARM, list their `platforms` in
+# the catalog; checks.application-platforms instantiates everything to keep
+# those lists and the `unfree` flags honest.
 {
   lib,
   hostPlatform,
   packagesFor,
+  # Also instantiate each package, without building or retaining its closure.
+  instantiate ? false,
 }:
 catalog:
 let
   describe =
     app:
     let
-      problems = lib.concatMap (
-        package:
-        if package == null || !lib.isDerivation package then
-          [ "A required package is missing from this system's package source." ]
-        else if !lib.meta.availableOn hostPlatform package then
+      problems =
+        if app ? platforms && !builtins.elem hostPlatform.system app.platforms then
           [ "Not available for ${hostPlatform.system}." ]
-        else if package.meta.broken or false then
-          [ "A required package is marked broken for ${hostPlatform.system}." ]
         else
-          [ ]
-      ) (packagesFor app);
-      # Wrappers may have broad (or absent) meta.platforms while an input is
-      # unsupported. Instantiate too, without building or retaining its closure.
-      evaluated = map (package: package.drvPath) (packagesFor app);
+          lib.concatMap (
+            package:
+            if package == null || !lib.isDerivation package then
+              [ "A required package is missing from this system's package source." ]
+            else if !lib.meta.availableOn hostPlatform package then
+              [ "Not available for ${hostPlatform.system}." ]
+            else if package.meta.broken or false then
+              [ "A required package is marked broken for ${hostPlatform.system}." ]
+            else
+              [ ]
+          ) (packagesFor app);
+      evaluated = lib.optionals instantiate (map (package: package.drvPath) (packagesFor app));
       checked = builtins.tryEval (
         builtins.deepSeq problems (
           if problems == [ ] then builtins.deepSeq evaluated problems else problems

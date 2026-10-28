@@ -29,6 +29,7 @@ let
   availableCatalog = import ../../../../apps/yukimi/nix/catalog.nix {
     inherit lib;
     inherit (pkgs.stdenv) hostPlatform;
+    instantiate = config.programs.yukimi.instantiateCatalogs or false;
     packagesFor =
       app:
       if (app.source or "nixpkgs") == "omp" then

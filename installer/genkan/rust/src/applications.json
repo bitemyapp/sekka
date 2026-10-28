@@ -33,6 +33,6 @@
   {"id":"obs-studio","name":"OBS Studio","description":"Record your screen and stream live video.","category":"Media & creativity","packages":["obs-studio"]},
   {"id":"gimp","name":"GIMP","description":"Edit photographs and other images.","category":"Media & creativity","packages":["gimp"]},
   {"id":"inkscape","name":"Inkscape","description":"Draw vector illustrations, logos, and diagrams.","category":"Media & creativity","packages":["inkscape"]},
-  {"id":"steam","name":"Steam","description":"Install and play games, with Steam's Linux compatibility runtime.","category":"Gaming","packages":["steam"],"unfree":true},
+  {"id":"steam","name":"Steam","description":"Install and play games, with Steam's Linux compatibility runtime.","category":"Gaming","packages":["steam"],"unfree":true,"platforms":["x86_64-linux"]},
   {"id":"kakehashi","name":"Kakehashi","description":"Write Sekka, or any disk image, to a USB drive, and check every byte.","category":"Utilities","source":"sekka","packages":["kakehashi"]}
 ]

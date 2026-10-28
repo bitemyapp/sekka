@@ -14,6 +14,7 @@ let
   ownCatalog = import ./catalog.nix {
     inherit lib;
     inherit (pkgs.stdenv) hostPlatform;
+    instantiate = cfg.instantiateCatalogs;
     packagesFor =
       app:
       map (name: lib.attrByPath (lib.splitString "." name) null pkgs) (
@@ -146,6 +147,17 @@ in
         The system's own choices Yukimi offers to change, such as a
         distribution's desktops and login screen. Yukimi writes only these
         settings, and only to the values listed, then rebuilds.
+      '';
+    };
+    instantiateCatalogs = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      internal = true;
+      description = ''
+        Also instantiate every catalog application's packages when deciding
+        which are available, to find dependencies their metadata doesn't
+        mention. Slow, and subject to this system's Nixpkgs policy: for
+        checks of the catalogs, not for systems.
       '';
     };
   };

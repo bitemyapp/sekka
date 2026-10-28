@@ -1101,6 +1101,33 @@ and workspace manifest. Helper-only changes do not rebuild the window.
 `nix build .#checks.x86_64-linux.yukimi-tatami` and
 `nix build .#checks.x86_64-linux.yukimi-x11`; these are not ISO qualification.
 
+Yukimi's own catalog and Genkan's catalog record availability against the
+target system and the package source each entry actually installs from. The
+shared resolver in `apps/yukimi/nix/catalog.nix` checks platform metadata,
+broken packages, missing packages and required applications. It neither
+builds the applications nor enables unsupported packages. Yukimi keeps
+unavailable cards visible with a reason; the helper refuses new unavailable
+catalog selections before editing configuration, while allowing existing
+entries to be removed. Older system metadata retains its previous catalog
+behavior until the next successful system update.
+
+Systems read metadata only. Instantiating every catalog package as well took
+a reference Aizome system's evaluation from 8.6 to 15.9 s of CPU and its peak
+memory from 2.1 to 3.7 GB, and it met Nixpkgs' policy, so systems refusing
+unfree packages reported those as unsupported. Metadata alone adds about
+0.2 GB of peak memory and no measurable CPU time. Wrappers whose metadata
+claims more than their dependencies support list their `platforms` in the
+catalog instead: Steam and Heroic bring 32-bit x86 libraries, and Lutris
+brings the x86-only libstrangle. An application whose package pulls in an
+unfree one is marked `unfree`, as Lutris is for Steam's runtime.
+`checks.x86_64-linux.application-platforms` keeps those honest: it resolves
+both catalogs for x86 and ARM Linux from metadata, as systems do, and again
+with every package instantiated (`programs.yukimi.instantiateCatalogs`, an
+internal option), and fails when metadata offers something that doesn't
+instantiate, or when an application needs unfree packages that a system
+refusing them would not be warned about. Nothing is built. This is component
+evaluation coverage, not an ISO or hardware qualification.
+
 The [October 2026 resource comparison](docs/test-results/yukimi-unified-2026-10-27.json)
 records three trials of each frontend in a private GPU-backed Tatami compositor
 on Intel integrated graphics, plus a Tatami-only software-rendered VM with no
@@ -1226,20 +1253,6 @@ Sidestep stays a separate product for objc2 programs. It is not kept in
 step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
 same.
-
-Yukimi's own catalog and Genkan's catalog record availability against the
-target system and the package source each entry actually installs from. The
-shared resolver in `apps/yukimi/nix/catalog.nix` checks platform metadata,
-broken packages, missing packages and required applications, and instantiates
-otherwise supported packages to catch unsupported dependencies in wrappers.
-It neither builds the applications nor enables unsupported packages. Both
-interfaces keep unavailable cards visible with a reason; the helper refuses
-new unavailable catalog selections before editing configuration, while allowing
-existing entries to be removed. Older system metadata retains its previous
-catalog behavior until the next successful system update.
-`checks.x86_64-linux.application-platforms` checks both x86 and ARM Linux
-catalogs, including Discord and Steam, without building their applications.
-This is component evaluation coverage, not an ISO or hardware qualification.
 
 ## Tatami Bluetooth
 

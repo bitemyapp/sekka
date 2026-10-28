@@ -22,6 +22,10 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// The systems it installs on, when its packages' metadata claims more
+    /// (Steam's 32-bit runtime): read by Yukimi's catalog resolver.
+    #[serde(default)]
+    pub platforms: Vec<String>,
 }
 
 pub fn catalog() -> &'static [Application] {
