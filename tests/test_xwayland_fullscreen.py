@@ -102,6 +102,22 @@ def test(scale):
                 command("map")
                 check(expected)
                 if transitions:
+                    for _ in range(3):
+                        command("minimize")
+                        wait_for(f"{name}: minimized", lambda: window(name)["minimised"])
+                        wait_for(f"{name}: ICCCM iconic", lambda: command("iconic") == "1")
+                        wait_for(f"{name}: EWMH hidden", lambda: command("hidden") == "1")
+                        # SDL drops the fullscreen request while hidden. The
+                        # fullscreen acknowledgement must preserve HIDDEN.
+                        command("remove")
+                        check(False)
+                        assert command("hidden") == "1"
+                        ipc("focus", str(window(name)["id"]))
+                        wait_for(f"{name}: restored", lambda: not window(name)["minimised"])
+                        wait_for(f"{name}: ICCCM normal", lambda: command("iconic") == "0")
+                        wait_for(f"{name}: EWMH visible", lambda: command("hidden") == "0")
+                        command("add")
+                        check(True)
                     command("remove")
                     check(False)
                     command("add")

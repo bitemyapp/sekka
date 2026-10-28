@@ -1,4 +1,4 @@
-# Keep initial X11 fullscreen state until its Wayland toplevel exists.
+# Preserve X11 fullscreen intent at startup and across minimize/restore.
 # Scoped to Aizome; other desktops retain their own Xwayland integration.
 { xwayland-satellite, xwayland }:
 xwayland-satellite.overrideAttrs (old: {

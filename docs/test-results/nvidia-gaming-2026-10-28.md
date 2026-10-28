@@ -201,7 +201,7 @@ Validation:
   `/tmp/sekka-turok-fullscreen/physical-0.png` and `physical-1.png`;
   the run log is `physical-final-results.log` in the same directory.
 
-The exact Turok inversion was intermittent: initial reruns through the old
+At this stage the exact Turok inversion was intermittent: initial reruns through the old
 bridge also successfully entered fullscreen. This is a deterministic protocol
 fix with a failing control, not proof that every cause of the original game
 symptom has been eliminated. At 3840×2160, `v_windowed=1` plus
@@ -210,6 +210,58 @@ symptom has been eliminated. At 3840×2160, `v_windowed=1` plus
 The new bridge was tested separately from the desktop's existing X11 server;
 it was not substituted underneath running Steam or other X11 apps. Install
 the branch update and log out/in (or reboot) to use it for ordinary launches.
+
+### Follow-up: native Steam focus loss and the 60 FPS limit
+
+After activating `6539f7b`, the user reproduced the decorated-window failure
+again. Testing the actual Steam launch revealed the missing transition:
+the 2018 native Turok starts fullscreen, but SDL 2.32.10 auto-minimizes
+exclusive fullscreen on focus loss. Satellite logged an unhandled
+`WM_CHANGE_STATE`, and the game returned as a decorated 1685×1034 window.
+The previous startup-only tests did not exercise this path.
+
+The bridge now translates the ICCCM iconification request into
+`xdg_toplevel.set_minimized`, announces `WM_STATE=Iconic` and
+`_NET_WM_STATE_HIDDEN`, then announces restoration on keyboard focus.
+Updating fullscreen modifies only its own state atom, preserving HIDDEN
+while SDL temporarily releases fullscreen. This follows the
+[EWMH hidden-state semantics](https://specifications.freedesktop.org/wm/latest/ar01s05.html).
+
+Validation of this follow-up:
+
+- All 85 upstream unit and 29 integration tests still pass. The packaged
+  16-scenario X11 check now also exercises three minimize/restore cycles
+  at each scale, checking compositor visibility, ICCCM state, EWMH hidden
+  state, preservation of hidden state during fullscreen removal, and
+  re-entry to fullscreen.
+- The prior `6539f7b` bridge fails the new check waiting for minimization:
+  `/tmp/sekka-minimize-negative.log`. The passing final check log is
+  `/tmp/sekka-minimize-check-passed.log`.
+- Real Steam launches used its pressure-vessel runtime and mapped
+  `sdl2-classic/libSDL2-2.0.so.0.3200.10`. Only Turok was temporarily routed
+  to the patched bridge on display `:158`; the desktop's normal bridge
+  remained running. Two exclusive-fullscreen launches, including a restart
+  with `v_windowed=0`, passed three focus-away/restore cycles each. Each
+  return covered 1920×1080 logical points at 3840×2160/240 Hz, with
+  `fullscreen=true` and VRR policy enabled. A separate borderless launch
+  (`v_windowed=1`, `v_borderless=1`) stayed fullscreen and unminimized
+  across two focus cycles. No global SDL focus-loss override was used.
+- The recorded restart cycles are in
+  `/tmp/sekka-turok-native-steam-restoration.jsonl`; original 3840×2160
+  captures are `/tmp/sekka-turok-native-restored.png` and
+  `/tmp/sekka-turok-native-restart-restored.png`.
+
+The native executable is dated July 26, 2018. Its `kexSessionLocal::RunGame`
+explicitly clamps `cl_maxfps` above 60 to 60 (compare against `0x3c` at
+`0x4b1c22`, followed by `kexCvar::Set(int)`). Setting the config to 240 was
+therefore ineffective and was reset by the engine. Xwayland reported
+239.98 Hz while Aizome reported 240000 mHz; this was not an output stuck
+at 60 Hz. Nightdive's
+[KEX 4 announcement](https://store.steampowered.com/news/app/405820/view/516329008965617018)
+adds high-refresh support and warns that old saves are incompatible.
+The user approved testing the newer Windows release through Proton after
+the native fullscreen issue was fixed. Native config/saves were backed up
+under `~/.cache/sekka-turok-fullscreen/native-backup`.
 
 ## Repository-wide evaluation
 

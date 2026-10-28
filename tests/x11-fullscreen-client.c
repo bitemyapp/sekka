@@ -27,6 +27,8 @@ int main(int argc, char **argv) {
     }
     Atom state = XInternAtom(display, "_NET_WM_STATE", False);
     Atom fullscreen = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
+    Atom hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", False);
+    Atom wm_state = XInternAtom(display, "WM_STATE", False);
     XSync(display, False);
     puts("ready");
     fflush(stdout);
@@ -36,6 +38,7 @@ int main(int argc, char **argv) {
         if (!strcmp(command, "quit")) break;
         if (!strcmp(command, "map")) XMapWindow(display, window);
         else if (!strcmp(command, "unmap")) XUnmapWindow(display, window);
+        else if (!strcmp(command, "minimize")) XIconifyWindow(display, window, DefaultScreen(display));
         else if (!strcmp(command, "restore-size")) XResizeWindow(display, window, atoi(argv[2]), atoi(argv[3]));
         else if (!strcmp(command, "property-full") || !strcmp(command, "property-normal")) {
             XChangeProperty(display, window, state, XA_ATOM, 32, PropModeReplace,
@@ -53,20 +56,24 @@ int main(int argc, char **argv) {
             event.xclient.data.l[1] = fullscreen;
             event.xclient.data.l[3] = 1;
             XSendEvent(display, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &event);
-        } else if (!strcmp(command, "state")) {
+        } else if (!strcmp(command, "state") || !strcmp(command, "hidden") || !strcmp(command, "iconic")) {
             Atom type;
             int format;
             unsigned long count, remaining;
             unsigned char *value = NULL;
-            int is_fullscreen = 0;
-            XGetWindowProperty(display, window, state, 0, 1024, False, XA_ATOM,
+            int present = 0;
+            int iconic = !strcmp(command, "iconic");
+            XGetWindowProperty(display, window, iconic ? wm_state : state, 0, 1024,
+                False, iconic ? wm_state : XA_ATOM,
                 &type, &format, &count, &remaining, &value);
-            if (type == XA_ATOM && format == 32) {
+            if (iconic && type == wm_state && format == 32 && count > 0) {
+                present = ((long *)value)[0] == IconicState;
+            } else if (!iconic && type == XA_ATOM && format == 32) {
                 for (unsigned long i = 0; i < count; i++)
-                    if (((Atom *)value)[i] == fullscreen) is_fullscreen = 1;
+                    if (((Atom *)value)[i] == (!strcmp(command, "hidden") ? hidden : fullscreen)) present = 1;
             }
             if (value) XFree(value);
-            printf("%d\n", is_fullscreen);
+            printf("%d\n", present);
             fflush(stdout);
             continue;
         } else return 4;
