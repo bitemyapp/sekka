@@ -885,6 +885,35 @@ flake to check actual module and dependency compatibility before deployment.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
 
+### T6030 developer-image brightness
+
+The J514S/J516S developer image's pinned `7.1.12-aurora20` kernel predates
+[linux-aurora PR 183](https://github.com/omacom/linux-aurora/pull/183). Without
+that driver support, `/sys/class/backlight` is empty; changing a desktop
+percentage cannot change the panel. Import
+`sekka.nixosModules.apple-silicon-backlight` alongside that image's modules to
+backport the upstream panel support. This optional module asserts the exact
+kernel source and version. Remove it when upgrading to a kernel that includes
+the upstream fix; it is not a generic backlight patch for other kernels.
+
+The backport retains the pinned kernel's separate H17P dispatch and admits
+only J514S/J516S internal panels. It uses the existing logind backlight
+interface, bounds the panel request to 500 nits, and leaves the boot loader's
+brightness in place until userspace requests a level. An actual level is
+reported only after the matching successful present. Aizome consumes refused
+brightness keys without inventing 45% or 55% readings and uses the backend's
+rounded level for an accepted request.
+
+`checks.x86_64-linux.t6030-backlight` applies the patch without fuzz to the
+exact source archive and exercises its production wire encoding, level
+policy and work gates. The patch also carries upstream's KUnit tests under
+`CONFIG_DRM_APPLE_DISPLAY_KUNIT_TEST`; compiling these is separate from
+running them. These component checks and a native kernel/system build do
+not certify a physical panel or suspend/resume. Hardware validation requires
+booting the new generation, checking `apple-panel-bl`, varying brightness
+with keys and sliders, and checking the panel after blanking and sleep.
+Keep the previous boot generation available during that validation.
+
 ## Binary cache
 
 `https://cache.sekka.computer` serves Sekka's own packages and the patched

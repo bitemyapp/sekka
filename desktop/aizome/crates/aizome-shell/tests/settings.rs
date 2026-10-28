@@ -316,3 +316,28 @@ fn brightness_keys_reach_only_a_built_in_panel() {
     assert!(h.program().osd.is_none(), "no OSD, and no backlight changed, on HEADLESS-1");
     assert!(aizome_shell::shell::builtin_panel("LVDS-1") && !aizome_shell::shell::builtin_panel("DP-2"));
 }
+
+#[test]
+fn brightness_keys_do_not_invent_levels_when_the_controller_is_unavailable() {
+    use aizome_sys::Wake;
+    use aizome_sys::power::Backlight;
+
+    let root = std::env::temp_dir().join(format!("aizome-shell-no-backlight-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let mut h = scene(false);
+    h.program_mut().sys.backlight = Some(Backlight::with(None, root.clone(), None, Wake::none()));
+    for action in ["brightness-up", "brightness-up", "brightness-down"] {
+        binding(&mut h, action);
+        assert!(h.program().osd.is_none(), "no fabricated 45% or 55% without a backlight");
+    }
+    // A readable controller still cannot be changed without logind.
+    let device = root.join("panel");
+    std::fs::create_dir(&device).unwrap();
+    std::fs::write(device.join("max_brightness"), "500").unwrap();
+    std::fs::write(device.join("brightness"), "140").unwrap();
+    h.program().sys.backlight.as_ref().unwrap().refresh();
+    binding(&mut h, "brightness-up");
+    assert!(h.program().osd.is_none(), "no claimed change when logind is unavailable");
+    drop(h);
+    std::fs::remove_dir_all(root).unwrap();
+}

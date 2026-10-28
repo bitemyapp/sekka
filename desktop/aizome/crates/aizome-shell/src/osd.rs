@@ -178,17 +178,23 @@ impl Shell {
                 if !self.shows_builtin_panel() {
                     return true;
                 }
-                let up = action == "brightness-up";
-                let mut v = self
-                    .sys
-                    .backlight
-                    .as_ref()
-                    .and_then(|b| b.snapshot().primary().map(|d| d.fraction()))
-                    .unwrap_or(0.5);
-                if let Some(b) = &self.sys.backlight {
-                    let _ = b.step(if up { 0.05 } else { -0.05 });
-                    v = (v + if up { 0.05 } else { -0.05 }).clamp(0.0, 1.0);
-                }
+                let v = if let Some(b) = &self.sys.backlight {
+                    let task = b.step(if action == "brightness-up" { 0.05 } else { -0.05 });
+                    // Missing hardware or logind cannot change the panel.
+                    // Do not invent a level for a refused request.
+                    if matches!(task.take(), Some(Err(_))) {
+                        return true;
+                    }
+                    let Some(v) = b.snapshot().primary().map(|d| d.fraction()) else {
+                        return true;
+                    };
+                    // step() updates the snapshot with the rounded hardware
+                    // level, including the minimum and the 5% grid.
+                    v
+                } else {
+                    // The sample shell has no system services.
+                    0.5
+                };
                 Osd { kind: OsdKind::Brightness, value: v, muted: false }
             }
             "kbd-brightness-up" | "kbd-brightness-down" | "kbd-brightness" => {
