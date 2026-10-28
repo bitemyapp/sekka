@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "status": "self-test and independent source review passed",
+  "source": "apps/hotaru/tools/frame-matrix.py",
+  "source_sha256": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+  "python": "/nix/store/0qyzm5q7whhc0n7hjjf3q44jdxi76nih-python3-3.14.8-env/bin/python3",
+  "command": ["frame-matrix.py", "--self-test"],
+  "returncode": 0,
+  "checks": [
+    "CPU active and I/O wait arithmetic",
+    "actual adjacent sample coverage and irregular sample intervals",
+    "missing coverage and excessive gap rejection",
+    "owned orphan in independent session terminated and reaped through pidfd"
+  ],
+  "independent_review": "aizome_architecture found no further concrete defect after interval coverage, independent-session cleanup and wrapper hash fixes",
+  "scope": "Controller qualification only; no application timing or relative performance acceptance. Local pilot rejection and environment setup are separate records."
+}

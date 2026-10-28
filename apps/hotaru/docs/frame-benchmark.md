@@ -174,3 +174,47 @@ do not wrap it in another acquisition of that same lock. The default workload
 is a first qualification slice. At least 30 alternating fresh processes,
 longer idle controls and 500 or more paced keyboard samples belong to a later
 statistical comparison, after geometry and full-controller correctness pass.
+
+## Alternating matrix controller
+
+`tools/frame-matrix.py` runs calibrated Hotaru/Ghostty pairs in alternating
+order. It snapshots its controller and observer sources, calibration receipts,
+configuration and font identities into each output directory. Startup mode
+uses fresh application processes; steady mode uses 500 keyboard samples,
+120-frame streams and 30-second controls. `--rounds` selects the number of
+pairs. No statistical comparison has been accepted merely because this
+controller's qualification passes.
+
+The outer controller owns the shared benchmark lock; children use a separate
+private lock. Role-specific CPU sets are configurable and must be available
+and disjoint. The activity monitor includes their SMT siblings. One-second
+preflight observations reject substantial CPU or I/O activity and observed
+compilers. Each measurement must have actual adjacent activity samples before
+and after it, with gaps no greater than 2.5 seconds. A final synchronous sample
+closes the interval after child cleanup. Recorded samples cannot prove
+exclusive host use or detect every short-lived competing process.
+
+Every trial checks both wrapper and runtime ELF identities, font hashes,
+configuration and startup/final physical geometry against its calibration.
+Failures and interference remain in the output. `--preflight-only` collects
+the gate evidence without launching an application.
+
+The Linux controller is a process-local child subreaper. On timeout it first
+asks the inner harness to clean up. It then identifies remaining owned
+descendants, opens pidfds, rechecks ancestry and terminates those children;
+independent sessions cannot escape cleanup. Requiring this fallback rejects
+the trial. It neither adopts nor signals unrelated host jobs. The
+`--self-test` exercises activity arithmetic, missing/irregular interval
+coverage and cleanup of a real orphan child in its own session. The
+[qualification receipt](../upstream/frame-harness/matrix-check/result.json)
+identifies the independently reviewed source.
+
+Local Intel measurements use the separate
+`~/.cache/hotaru-local-benchmark.lock`. CPU topology identifies P-cores 0–3
+and E-cores 4–7; the current local GUI role assignment is application 3,
+compositor 2, observer 4, controller 5 and fixture 6. The exact Nix application
+closures can run in a task-owned rooted store and private mount namespace
+when host-daemon import is unavailable. Record this environment separately
+from workstation measurements; matching executable bytes do not make the
+machines or driver stacks equivalent. The initial local preflight rejected
+saturated CPUs before launching either application.
