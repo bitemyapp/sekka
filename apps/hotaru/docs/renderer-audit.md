@@ -13,6 +13,9 @@ immutable shaped-row reuse and native cursor shapes/blinking. The table and
 source-level gaps below describe the original audited snapshot; their
 full-row-shaping and fixed-cursor observations are superseded by that checkpoint.
 GPU drawing/presentation and pixel-move scrolling remain open.
+The later [GPU buffer probe](gpu-buffer-capability.md) verifies NVIDIA drawing
+under the package's Nix loader, while descriptor export fails with denied DRM
+render-node access. It does not establish hardware Wayland presentation.
 
 ## What the two applications do
 
