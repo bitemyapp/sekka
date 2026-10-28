@@ -834,6 +834,11 @@ impl EventCx<'_, '_> {
         self.platform.clipboard_text()
     }
 
+    /// The clipboard's types (MIME).
+    pub fn clipboard_types(&mut self) -> Vec<String> {
+        self.platform.clipboard_types()
+    }
+
     pub fn set_clipboard_text(&mut self, text: &str) {
         self.platform.set_clipboard_text(text);
     }

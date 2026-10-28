@@ -52,6 +52,9 @@ pub struct TestPlatform {
     /// The test's clock: how long since the harness started.
     pub clock: Duration,
     pub clipboard: Option<String>,
+    /// What the clipboard offers besides text, by MIME type (a picture, a
+    /// file list), as a test puts it there.
+    pub offer: Vec<(String, Vec<u8>)>,
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
@@ -100,6 +103,7 @@ impl TestPlatform {
             next_token: 0,
             clock: Duration::ZERO,
             clipboard: None,
+            offer: Vec::new(),
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
@@ -200,6 +204,23 @@ impl Platform for TestPlatform {
 
     fn set_clipboard_text(&mut self, text: &str) {
         self.clipboard = Some(text.to_owned());
+        self.offer.clear();
+    }
+
+    fn clipboard_types(&mut self) -> Vec<String> {
+        let mut types: Vec<String> = self.offer.iter().map(|(mime, _)| mime.clone()).collect();
+        if self.clipboard.is_some() {
+            types.push("text/plain;charset=utf-8".into());
+        }
+        types
+    }
+
+    fn clipboard_reader(&mut self) -> crate::platform::ClipboardReader {
+        let (offer, text) = (self.offer.clone(), self.clipboard.clone());
+        std::sync::Arc::new(move |mime| match offer.iter().find(|(m, _)| m == mime) {
+            Some((_, data)) => Some(data.clone()),
+            None => text.clone().filter(|_| mime.starts_with("text/plain")).map(String::into_bytes),
+        })
     }
 
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {

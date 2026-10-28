@@ -550,6 +550,14 @@ impl Platform for SidestepPlatform<'_> {
         self.sx.set_clipboard_text(text);
     }
 
+    fn clipboard_types(&mut self) -> Vec<String> {
+        self.sx.clipboard_types()
+    }
+
+    fn clipboard_reader(&mut self) -> crate::platform::ClipboardReader {
+        std::sync::Arc::new(self.sx.clipboard_reader())
+    }
+
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
         let tid = if repeat { self.sx.set_repeating_timer(after) } else { self.sx.set_timer(after) };
         self.maps.next_token += 1;

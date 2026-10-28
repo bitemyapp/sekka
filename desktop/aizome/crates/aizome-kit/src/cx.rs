@@ -248,6 +248,21 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         self.platform.set_clipboard_text(text);
     }
 
+    /// The clipboard's types (MIME): `image/png` for a screenshot,
+    /// `text/uri-list` for files.
+    pub fn clipboard_types(&mut self) -> Vec<String> {
+        self.platform.clipboard_types()
+    }
+
+    /// Read the clipboard as `mime` (one of [`Cx::clipboard_types`]) on a
+    /// worker, as another program's data (a screenshot) can take a while
+    /// to arrive: `on_read` gets the bytes, or `None`, and makes the message.
+    pub fn read_clipboard(&mut self, mime: &str, on_read: impl FnOnce(Option<Vec<u8>>) -> Msg + Send + 'static) {
+        let reader = self.platform.clipboard_reader();
+        let mime = mime.to_owned();
+        self.spawn(move || on_read(reader(&mime)));
+    }
+
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
         if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {

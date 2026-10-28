@@ -61,6 +61,8 @@ pub(crate) struct ScrollState {
     revealed: Option<u64>,
     /// The offset the content was last laid out at.
     laid: Option<Vec2>,
+    /// The last `scroll_to_end` token the view went to the end for.
+    end_token: Option<u64>,
 }
 
 impl ScrollState {
@@ -347,6 +349,8 @@ pub struct Scroll<Msg> {
     pub(crate) common: Common,
     dir: Direction,
     child: RawElement,
+    follow_end: bool,
+    end_token: Option<u64>,
     _m: PhantomData<fn() -> Msg>,
 }
 
@@ -357,6 +361,8 @@ pub fn scroll<Msg>(child: impl Into<Element<Msg>>) -> Scroll<Msg> {
         common: Common::sized(Length::Fill, Length::Fill),
         dir: Direction::Vertical,
         child: child.into().raw,
+        follow_end: false,
+        end_token: None,
         _m: PhantomData,
     }
 }
@@ -374,12 +380,33 @@ impl<Msg> Scroll<Msg> {
     pub fn both(self) -> Self {
         self.direction(Direction::Both)
     }
+
+    /// Keep the end in view as the content grows (a log, a conversation
+    /// being written): it opens at its end, and while it shows its end it
+    /// stays there. Scrolled away from the end, it stays where the reader
+    /// left it until they come back to the end.
+    pub fn follow_end(mut self) -> Self {
+        self.follow_end = true;
+        self
+    }
+
+    /// Go to the end whenever `token` changes (a message just sent): the
+    /// view follows its end again from there.
+    pub fn scroll_to_end(mut self, token: u64) -> Self {
+        self.end_token = Some(token);
+        self
+    }
 }
 
 impl<Msg> From<Scroll<Msg>> for Element<Msg> {
     fn from(s: Scroll<Msg>) -> Element<Msg> {
         Element::from_raw(RawElement {
-            widget: Box::new(ScrollWidget { dir: s.dir, shrink_height: s.common.height == Length::Shrink }),
+            widget: Box::new(ScrollWidget {
+                dir: s.dir,
+                shrink_height: s.common.height == Length::Shrink,
+                follow_end: s.follow_end,
+                end_token: s.end_token,
+            }),
             common: s.common,
             children: vec![s.child],
         })
@@ -389,6 +416,8 @@ impl<Msg> From<Scroll<Msg>> for Element<Msg> {
 struct ScrollWidget {
     dir: Direction,
     shrink_height: bool,
+    follow_end: bool,
+    end_token: Option<u64>,
 }
 
 impl Widget for ScrollWidget {
@@ -403,9 +432,12 @@ impl Widget for ScrollWidget {
         let child_bc = Constraints {
             // A shrinking view follows short content instead of stretching it.
             min: Size::new(view.width, if self.shrink_height { bc.min.height } else { view.height }),
+            // Across an axis it doesn't scroll, the content has the room the
+            // view has, or all it wants where that is unbounded (a sideways
+            // scroll in a column that grows: code in a document).
             max: Size::new(
-                if dir.x() { f64::INFINITY } else { view.width },
-                if dir.y() { f64::INFINITY } else { view.height },
+                if dir.x() || !bc.max.width.is_finite() { f64::INFINITY } else { view.width },
+                if dir.y() || !bc.max.height.is_finite() { f64::INFINITY } else { view.height },
             ),
         };
         let content = if cx.child_count() > 0 { cx.layout_child(0, child_bc) } else { Size::ZERO };
@@ -413,9 +445,19 @@ impl Widget for ScrollWidget {
             if bc.max.width.is_finite() { view.width } else { content.width },
             if bc.max.height.is_finite() && !self.shrink_height { view.height } else { content.height },
         ));
+        let (follow_end, end_token) = (self.follow_end, self.end_token);
         let st = cx.state::<ScrollState>();
+        // At the end before this layout (or never laid out): stay there.
+        let was_at_end = st.laid.is_none() || st.offset.y >= st.max().y - 1.0;
+        let asked = end_token.is_some() && st.end_token != end_token;
+        if asked {
+            st.end_token = end_token;
+        }
         st.viewport = size;
         st.content = content;
+        if (follow_end && was_at_end) || asked {
+            st.offset.y = st.max().y;
+        }
         st.clamp();
         let offset = st.offset;
         let moved = st.moved_since_laid();

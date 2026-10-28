@@ -52,6 +52,8 @@ pub enum FindRequest {
 
 /// What a click on a character asks of the program, if anything.
 type ClickFn = std::rc::Rc<dyn Fn(usize, Modifiers) -> Option<AnyMsg>>;
+type KeyFn = std::rc::Rc<dyn Fn(&sidestep_ui::KeyEvent) -> Option<AnyMsg>>;
+type PasteFn = std::rc::Rc<dyn Fn(&[String]) -> Option<AnyMsg>>;
 
 /// Many lines of text: `text_editor(&self.content).on_action(Msg::Edit).line_numbers(true)`.
 pub struct TextEditor<Msg> {
@@ -60,6 +62,8 @@ pub struct TextEditor<Msg> {
     on_action: Option<MsgMap<EditorAction>>,
     on_find: Option<MsgMap<FindRequest>>,
     on_click: Option<ClickFn>,
+    on_key: Option<KeyFn>,
+    on_paste: Option<PasteFn>,
     opts: Options,
     _m: PhantomData<fn() -> Msg>,
 }
@@ -83,6 +87,8 @@ struct Options {
     /// Bumped by the program when its highlighter's output changes.
     styles_version: u64,
     padding: f64,
+    /// As tall as its text, between this many lines and that many.
+    fit: Option<(usize, usize)>,
     /// The text's colour, and the caret's (an editor on a coloured ground).
     text_color: Option<Color>,
     caret_color: Option<Color>,
@@ -95,6 +101,8 @@ pub fn text_editor<Msg>(content: &EditorContent) -> TextEditor<Msg> {
         on_action: None,
         on_find: None,
         on_click: None,
+        on_key: None,
+        on_paste: None,
         opts: Options {
             line_numbers: false,
             wrap: true,
@@ -109,6 +117,7 @@ pub fn text_editor<Msg>(content: &EditorContent) -> TextEditor<Msg> {
             placeholder: None,
             styles_version: 0,
             padding: 12.0,
+            fit: None,
             text_color: None,
             caret_color: None,
         },
@@ -135,6 +144,23 @@ impl<Msg: Send + 'static> TextEditor<Msg> {
     /// instead of placing the caret, or `None` to let it place the caret.
     pub fn on_click(mut self, f: impl Fn(usize, Modifiers) -> Option<Msg> + 'static) -> Self {
         self.on_click = Some(std::rc::Rc::new(move |at, mods| f(at, mods).map(|m| Box::new(m) as AnyMsg)));
+        self
+    }
+
+    /// A key the program takes before the editor does (Return sending a
+    /// message, ↑ at the top recalling an earlier one): `f(key)` gives a
+    /// message to send instead, or `None` to let the editor have it.
+    pub fn on_key(mut self, f: impl Fn(&sidestep_ui::KeyEvent) -> Option<Msg> + 'static) -> Self {
+        self.on_key = Some(std::rc::Rc::new(move |k| f(k).map(|m| Box::new(m) as AnyMsg)));
+        self
+    }
+
+    /// A paste the program takes instead of the editor (a picture or files
+    /// on the clipboard): `f(types)` gets the clipboard's MIME types and
+    /// gives a message to send instead of pasting text, or `None`. The
+    /// program reads the data with `Cx::read_clipboard`.
+    pub fn on_paste(mut self, f: impl Fn(&[String]) -> Option<Msg> + 'static) -> Self {
+        self.on_paste = Some(std::rc::Rc::new(move |types| f(types).map(|m| Box::new(m) as AnyMsg)));
         self
     }
 }
@@ -219,6 +245,13 @@ impl<Msg> TextEditor<Msg> {
         self.opts.caret_color = Some(c);
         self
     }
+
+    /// Be as tall as the text (a composer), at least `min` lines and at
+    /// most `max`, scrolling past that; give it `.height(Shrink)`.
+    pub fn fit_lines(mut self, min: usize, max: usize) -> Self {
+        self.opts.fit = Some((min.max(1), max.max(min.max(1))));
+        self
+    }
 }
 
 impl<Msg> From<TextEditor<Msg>> for Element<Msg> {
@@ -228,6 +261,8 @@ impl<Msg> From<TextEditor<Msg>> for Element<Msg> {
             on_action: e.on_action,
             on_find: e.on_find,
             on_click: e.on_click,
+            on_key: e.on_key,
+            on_paste: e.on_paste,
             opts: e.opts,
             lines: Vec::new(),
             gutter: 0.0,
@@ -315,6 +350,8 @@ struct EditorWidget {
     on_action: Option<MsgMap<EditorAction>>,
     on_find: Option<MsgMap<FindRequest>>,
     on_click: Option<ClickFn>,
+    on_key: Option<KeyFn>,
+    on_paste: Option<PasteFn>,
     opts: Options,
     lines: Vec<Laid>,
     gutter: f64,
@@ -776,6 +813,12 @@ impl EditorWidget {
     }
 
     fn key(&mut self, cx: &mut EventCx, k: &sidestep_ui::KeyEvent) -> Status {
+        if let Some(f) = &self.on_key
+            && let Some(msg) = f(k)
+        {
+            cx.emit_any(msg);
+            return Status::Handled;
+        }
         let m = k.modifiers;
         let shift = m.shift();
         let n = self.snap.rope.len_chars();
@@ -874,7 +917,7 @@ impl Widget for EditorWidget {
 
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
         let t = cx.env.theme;
-        let size = Size::new(
+        let mut size = Size::new(
             if bc.max.width.is_finite() { bc.max.width } else { 480.0 },
             if bc.max.height.is_finite() { bc.max.height } else { 320.0 },
         );
@@ -894,6 +937,21 @@ impl Widget for EditorWidget {
         };
         self.text_x = if self.opts.line_numbers { self.gutter + (14.0 * em).round() } else { self.opts.padding };
         let width = self.wrap_width(t, size.width);
+        if let Some((min, max)) = self.opts.fit {
+            // As tall as the lines laid out, within the limits.
+            let room = self.opts.padding * 2.0;
+            let cap = max as f64 * self.line_h;
+            let mut h = 0.0;
+            for line in 0..lines {
+                h += self.lay(t, cx.env.text, line, width, "", false).h;
+                if h >= cap {
+                    break;
+                }
+            }
+            let fitted = h.clamp(min as f64 * self.line_h, cap) + room;
+            size.height = bc.constrain(Size::new(size.width, fitted)).height;
+            self.size = size;
+        }
         let st = cx.state::<EditorState>();
         let focused = st.focused;
         let preedit = st.preedit.clone();
@@ -1163,7 +1221,11 @@ impl Widget for EditorWidget {
     fn hash(&self, h: &mut PaintHasher) {
         // The lines diff themselves, and move as pixels as it scrolls; the
         // editor as a whole is redrawn when its gutter changes.
-        h.add(&(self.opts.line_numbers, self.opts.wrap)).f64(self.gutter);
+        h.add(&(self.opts.line_numbers, self.opts.wrap, self.opts.read_only)).f64(self.gutter);
+        // An empty editor shows its placeholder, which the program may change.
+        if let Some(placeholder) = &self.opts.placeholder {
+            h.str(placeholder);
+        }
     }
 
     fn hit(&self) -> bool {
@@ -1369,6 +1431,23 @@ impl Widget for EditorWidget {
                     true
                 } else {
                     false
+                }
+            }
+            EditCommand::Paste if self.editable() && self.on_paste.is_some() => {
+                let types = cx.clipboard_types();
+                let taken = self.on_paste.as_ref().and_then(|f| f(&types));
+                match taken {
+                    Some(msg) => {
+                        cx.emit_any(msg);
+                        true
+                    }
+                    None => match cx.clipboard_text() {
+                        Some(t) => {
+                            self.edit(cx, EditorAction::Paste(t));
+                            true
+                        }
+                        None => false,
+                    },
                 }
             }
             EditCommand::Paste | EditCommand::PasteAsPlainText => match cx.clipboard_text() {

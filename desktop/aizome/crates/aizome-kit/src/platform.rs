@@ -10,6 +10,9 @@ use sidestep_ui::{Color, Cursor};
 
 use crate::layout::{Rect, Size, Vec2};
 use crate::program::Output;
+
+/// Reads the clipboard as a MIME type, on any thread.
+pub type ClipboardReader = Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>;
 use sidestep_ui::layer_shell::{Anchors, KeyboardInteractivity, Layer, LayerOptions, Margins};
 
 /// The engine's name for a window (an app's, or a popup).
@@ -83,6 +86,15 @@ pub trait Platform {
     fn begin_move(&mut self, id: WinId);
     fn clipboard_text(&mut self) -> Option<String>;
     fn set_clipboard_text(&mut self, text: &str);
+    /// The clipboard's types (MIME).
+    fn clipboard_types(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Something to read the clipboard with, as one of its types, on
+    /// another thread: another program's data can take a while to come.
+    fn clipboard_reader(&mut self) -> ClipboardReader {
+        Arc::new(|_| None)
+    }
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
     fn cancel_timer(&mut self, token: u64);
