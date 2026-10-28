@@ -2192,7 +2192,8 @@ every installed system has it, and does nothing until
   - **Performance.** `sekka-m3-gpu-performance.service` sets the batching
     values Omarchy's release pairs with this Mesa.
 
-  Other desktops (Plasma, GNOME) render in software.
+  Aizome receives the same matched graphics environment through its own
+  session and greeter configuration. Other desktops render in software.
 
   `packages.aarch64-linux.m3-gpu-session-env-test`
   (`m3-gpu/test-session-env.sh`) sources the gate as uwsm does, against fake
@@ -2208,6 +2209,37 @@ reference lists a PC's storage drivers and this kernel has no `ahci`.
 `installed-j514s-boot-bin` is its `boot.bin`: m1n1-aurora byte for byte, the
 device trees (J514S among them), U-Boot, then the three switches. Both build,
 but nothing has booted them on a Mac.
+
+### Updating the original J514S installation
+
+The October 18 developer image left `/etc/nixos` empty. It booted Tatami
+and Firefox, but had no flake for `nixos-rebuild` or Yukimi to update.
+`nix/apple-silicon/installed/` supplies that missing configuration for the
+original image: its root label and ESP UUID, mutable existing users without
+resetting their passwords, the Apple platform, and Aizome as the default
+desktop and login screen. Tatami remains available. The flake follows the
+Apple Silicon integration branch while the platform is absent from main;
+its dependencies follow Sekka's root lock. Copy both files to `/etc/nixos`,
+lock the flake and build its `nixosConfigurations.sekka` before staging it
+with `switch-to-configuration boot`. Keep the old boot generation.
+
+The configuration uses the same `calamares.applications` list as Genkan,
+so Yukimi can install the missed applications after installation. Add desired
+catalog IDs to that list; the upstream catalog still includes applications
+that their publishers do not supply for ARM Linux. Aizome brings its own
+apps and configured fish shell. Zram provides swap without changing partitions.
+
+Aizome does not use uwsm. The platform now gives its session and greeter the
+same pinned OpenGL/Vulkan environment as Tatami, and grants the greeter
+access to the render node. Apple has separate rendering and display DRM
+nodes, so Aizome selects AGX's persistent render-device path. Aizome's session
+imports this environment into its user manager and removes it on logout.
+Tatami retains its health gate; Aizome uses the matched stack directly.
+`calamares.appleSilicon.m3ProGraphics = false` disables both integrations.
+The active GPU environment explicitly sets `LIBGL_ALWAYS_SOFTWARE=0`:
+unsetting the variable allowed uwsm's inherited software default to return.
+Neither platform changes Tatami's palette; its shipped colors were Tokyo
+Night already. A fresh login is needed to use updated desktop packages.
 
 ### Installing from macOS
 

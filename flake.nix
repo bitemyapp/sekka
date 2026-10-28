@@ -285,6 +285,11 @@
           ];
         };
       };
+      apps.aarch64-linux.update = {
+        type = "app";
+        program = "${inputs.yukimi.packages.aarch64-linux.yukimi}/bin/sekka-update";
+        meta.description = "Update an installed Sekka system";
+      };
       # Apple Silicon Macs (nix/apple-silicon).
       packages.aarch64-linux = import ./nix/apple-silicon {
         inherit inputs nixpkgs hyprlandOverlay;

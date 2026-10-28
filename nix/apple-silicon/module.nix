@@ -28,6 +28,10 @@ let
   uboot = pkgs.callPackage ./uboot.nix { };
   mesa = pkgs.callPackage ./mesa.nix { };
   graphics = pkgs.callPackage ./graphics.nix { inherit mesa; };
+  aizomeEnvironment = graphics.nativeEnvironment // {
+    # Apple separates rendering and display. Start the renderer on AGX.
+    AIZOME_DRM_DEVICE = "/dev/dri/by-path/platform-292400000.gpu-render";
+  };
   esp = config.boot.loader.efi.efiSysMountPoint;
   switches = lib.optionals cfg.t6030Handoff m1n1.t6030Switches;
 
@@ -58,9 +62,9 @@ in
       default = cfg.t6030Handoff;
       defaultText = lib.literalExpression "config.calamares.appleSilicon.t6030Handoff";
       description = ''
-        Let uwsm sessions (Tatami) use the M3 Pro's native OpenGL and Vulkan
-        when the GPU passes the session's checks. Every other session, and
-        any login that fails them, renders in software.
+        Use the pinned M3 Pro OpenGL and Vulkan stack in Aizome's desktop and
+        greeter and in uwsm sessions (Tatami). Tatami additionally checks
+        GPU health at login and falls back to software if its gate fails.
       '';
     };
     graphicsUsers = lib.mkOption {
@@ -221,7 +225,7 @@ in
       })
 
       (lib.mkIf cfg.m3ProGraphics {
-        # Software unless the session's checks pass (graphics.nix): the
+        # Sessions without the matched stack render in software: the
         # kernel refuses Nixpkgs' Mesa on the M3 GPU.
         environment.sessionVariables = {
           LIBGL_ALWAYS_SOFTWARE = "1";
@@ -231,14 +235,32 @@ in
           # The M3 Pro's GPU for this session if its checks pass (calamares.appleSilicon).
           . ${graphics.sessionEnv}
         '';
-        # Only the render group opens the GPU's render node, so a greeter or
-        # other session never reaches it with Nixpkgs' Mesa.
+        # Aizome does not use uwsm. Its session imports these variables into
+        # the user manager and removes them at logout. The greeter needs the
+        # same stack before its private compositor starts (PAM can replace
+        # the daemon's environment, so put it on the command itself).
+        environment.etc."xdg/aizome/environment".text = lib.mkIf config.programs.aizome.enable (
+          lib.mkAfter (
+            lib.concatStrings (lib.mapAttrsToList (name: value: "${name}=${value}\n") aizomeEnvironment)
+          )
+        );
+        services.greetd.settings.default_session.command = lib.mkIf config.programs.aizome.greeter.enable (
+          lib.mkForce "${pkgs.coreutils}/bin/env ${
+            lib.concatStringsSep " " (
+              lib.mapAttrsToList (name: value: lib.escapeShellArg "${name}=${value}") aizomeEnvironment
+            )
+          } /run/current-system/sw/bin/aizome-greeter"
+        );
+        # Only explicitly configured users, including Aizome's greeter,
+        # receive access to the M3 render node.
         services.udev.extraRules = ''
           SUBSYSTEM=="drm", KERNEL=="renderD*", DRIVERS=="asahi", ATTR{device/of_node/compatible}=="apple,agx-t6030", GROUP="render", MODE="0660"
         '';
-        users.users = lib.genAttrs cfg.graphicsUsers (_: {
-          extraGroups = [ "render" ];
-        });
+        users.users =
+          lib.genAttrs (cfg.graphicsUsers ++ lib.optional config.programs.aizome.greeter.enable "greeter")
+            (_: {
+              extraGroups = [ "render" ];
+            });
         systemd.user.services.sekka-m3-gpu-confirm = {
           description = "Confirm that this login on the M3 Pro's GPU came up";
           wantedBy = [ "graphical-session.target" ];
