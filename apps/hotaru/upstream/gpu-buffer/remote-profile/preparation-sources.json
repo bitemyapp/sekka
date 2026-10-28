@@ -1,0 +1,11 @@
+{
+  "desktop/aizome/apps/hotaru/src/app.rs": "cbc389dc06739730bbcc19941cccf9a5617ddb6eeeda5c32f0da703dc0c1aa3a",
+  "desktop/aizome/apps/hotaru/tests/scene_inventory.rs": "cb07edb887ddce8cc790093bafd8a66a4f9e0261b5c44d6fa99c1cb6323ce8ca",
+  "desktop/aizome/crates/aizome-kit/src/testing.rs": "78dd1af1faeb18a075dccfb572c1b72aec851277975732ccb9f611546067a969",
+  "vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs": "e52b595d2857fa6c970fcefcdddc63868d7a1eef7763df5d1aba7b12cfbfdb40",
+  "vendor/sidestep/crates/sidestep-engine/src/gpu_scene_samples.rs": "2d11920f749108b291eddb6f8229fa59c4df07f0e2ce37c037f0a2a08334e7c4",
+  "vendor/sidestep/crates/sidestep-engine/src/lib.rs": "eb28457f4bb3564fa46d8cb65a80f24fce2a54bff793fc3c8bd64d11430b02e6",
+  "vendor/sidestep/crates/sidestep-engine/src/text.rs": "9f9391712bda1ff97dfc1d042c058ed0f0cbb9e5f6fd00910a4628aca0c2c3d0",
+  "vendor/sidestep/crates/sidestep-engine/src/text/raster.rs": "d4052bba2b3beb9211bb18ee290b93a1ecde3cee8fc7b9c3e0ae1ea34ad115de",
+  "vendor/sidestep/crates/sidestep-ui/src/offscreen.rs": "e27a480d34c53253679598477ee86e8385bdac12b548c4657e05f63a4cd11dfb"
+}
