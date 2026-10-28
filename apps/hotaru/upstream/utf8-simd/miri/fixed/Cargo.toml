@@ -1,0 +1,6 @@
+[package]
+name = "hotaru-simdutf8-miri-fixed"
+version = "0.0.0"
+edition = "2021"
+[dependencies]
+simdutf8 = { path = "/home/callen/work/hotaru-simdutf8-patched/vendor/simdutf8" }

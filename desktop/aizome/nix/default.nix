@@ -69,6 +69,7 @@ let
       ../../../apps/hotaru/Cargo.toml
       ../../../apps/hotaru/crates
       ../../../apps/hotaru/resources
+      ../../../apps/hotaru/vendor/simdutf8
     ];
   };
   clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;

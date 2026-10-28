@@ -125,6 +125,18 @@ Shift modifiers plus a character, named navigation key or F1–F35. Actions incl
 Aizome's Super shortcuts are the defaults; familiar Linux Ctrl-Shift-O/E and
 Ctrl-Shift-C/V aliases are also available. Plain Control-C remains terminal input.
 
+Hover an OSC 8 hyperlink to see its actual target in the status bar; hold Super
+to underline it and click to open it in the desktop handler. Both mouse edges
+are consumed, including when a gesture is cancelled. Movement, leaving the
+widget, releasing Super, or changing the displayed terminal frame cancels the
+press. Ordinary pointer selection and terminal mouse reporting keep working.
+Targets must be valid UTF-8 URIs without control characters; they are passed as
+one literal argument to `xdg-open`, never evaluated by a shell. Aizome Kit queues
+at most eight outstanding opens, with at most four opener processes active, and
+spawns/reaps them off the UI thread. Queue rejection and opener failures appear
+in the status bar. Closing the application cancels queued opens; already started
+desktop handlers are not terminated during normal shutdown.
+
 ## Component validation
 
 Run from the repository root, using the repository's Rust toolchain:
@@ -161,3 +173,14 @@ same pinned fonts; see the linked font notes for their exact commands.
 keyboard path, verifies whole-history counts, follows Next/Previous shortcuts
 through wraparound, copies the selected historical match, and replaces the query.
 It saves the native inspection, screenshots, binary hash and result evidence.
+
+`tests/wayland/shell.py BINARY EVIDENCE_DIRECTORY` launches the packaged default
+shell with an isolated home, types a directory change containing spaces and
+Japanese characters, then verifies a new split's startup cwd. It checks the
+installed resources and compares the private terminfo with a fresh compilation.
+
+`tests/wayland/links.py BINARY EVIDENCE_DIRECTORY` uses a disposable fake
+`xdg-open` on its explicit PATH. Native Super-click opens one exact URI argument,
+including from a wide cell's continuation; plain clicks, movement, stale frames
+and malformed UTF-8 do not open it. The fixture records hover rendering and
+verifies a failed opener's status, without launching external applications.

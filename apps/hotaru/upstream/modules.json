@@ -4598,7 +4598,8 @@
         "crates/hotaru-core/src/screen.rs",
         "crates/hotaru-core/src/unicode.rs",
         "crates/hotaru-core/src/unicode_tables.rs",
-        "crates/hotaru-core/tests/unicode_mode.rs"
+        "crates/hotaru-core/tests/unicode_mode.rs",
+        "crates/hotaru-core/tests/vt_controls.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
@@ -4607,9 +4608,15 @@
         "docs/unicode-mode.md",
         "upstream/unicode-mode-fixtures.json",
         "upstream/unicode-mode/kernel-report.json",
-        "upstream/unicode-mode/validation-combined.log"
+        "upstream/unicode-mode/validation-combined.log",
+        "docs/vt-controls.md",
+        "docs/vt-controls-review.md",
+        "tools/vt-controls-oracle.py",
+        "tools/vt-controls-review.py",
+        "upstream/vt-controls-fixtures.json",
+        "upstream/vt-controls/combined/controls-report.json"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial."
     },
     {
       "path": "src/terminal/UTF8Decoder.zig",
@@ -5578,7 +5585,8 @@
         "crates/hotaru-core/src/screen.rs",
         "crates/hotaru-core/src/unicode.rs",
         "crates/hotaru-core/src/unicode_tables.rs",
-        "crates/hotaru-core/tests/unicode_mode.rs"
+        "crates/hotaru-core/tests/unicode_mode.rs",
+        "crates/hotaru-core/tests/vt_controls.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
@@ -5591,9 +5599,15 @@
         "docs/unicode-mode.md",
         "upstream/unicode-mode-fixtures.json",
         "upstream/unicode-mode/kernel-report.json",
-        "upstream/unicode-mode/validation-combined.log"
+        "upstream/unicode-mode/validation-combined.log",
+        "docs/vt-controls.md",
+        "docs/vt-controls-review.md",
+        "tools/vt-controls-oracle.py",
+        "tools/vt-controls-review.py",
+        "upstream/vt-controls-fixtures.json",
+        "upstream/vt-controls/combined/controls-report.json"
       ],
-      "note": "Keyboard/mouse negotiation, selected DECRQM modes and DECSTR resets verified against the pinned C API. Many terminal modes and mode-dependent behaviors remain unsupported. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
+      "note": "Keyboard/mouse negotiation, selected DECRQM modes and DECSTR resets verified against the pinned C API. Many terminal modes and mode-dependent behaviors remain unsupported. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial."
     },
     {
       "path": "src/terminal/mouse.zig",
@@ -6308,14 +6322,22 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/lib.rs"
+        "crates/hotaru-core/src/lib.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/vt_controls.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "docs/vt-controls.md",
+        "docs/vt-controls-review.md",
+        "tools/vt-controls-oracle.py",
+        "tools/vt-controls-review.py",
+        "upstream/vt-controls-fixtures.json",
+        "upstream/vt-controls/combined/controls-report.json"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial."
     },
     {
       "path": "src/terminal/stream_continuation.zig",
@@ -6334,14 +6356,21 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/screen.rs"
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/vt_controls.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "docs/vt-controls.md",
+        "docs/vt-controls-review.md",
+        "tools/vt-controls-oracle.py",
+        "tools/vt-controls-review.py",
+        "upstream/vt-controls-fixtures.json",
+        "upstream/vt-controls/combined/controls-report.json"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial."
     },
     {
       "path": "src/terminal/style.zig",

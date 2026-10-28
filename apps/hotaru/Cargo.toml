@@ -1,5 +1,6 @@
 [workspace]
 resolver = "3"
+exclude = ["vendor/simdutf8"]
 members = ["crates/hotaru-core", "crates/hotaru-io", "crates/hotaru-replay"]
 
 [workspace.package]

@@ -24,6 +24,7 @@ def main():
     p.add_argument('--library',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--grapheme-width',choices=('legacy','unicode'),default='legacy')
+    p.add_argument('--workload',action='append',choices=('ascii','unicode','styled','cursor','dense-wide'),help='Repeat to select measured diagnostic patterns; default ASCII/mixed Unicode/dense Han')
     p.add_argument('--lock',type=Path,default=Path.home()/'.cache/hotaru-workstation.lock')
     a=p.parse_args();a.output.parent.mkdir(parents=True,exist_ok=True)
     os.sched_setaffinity(0,{min(os.sched_getaffinity(0))})
@@ -35,7 +36,9 @@ def main():
     with a.lock.open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
         oracle=Oracle(a.library)
-        for name,pattern in [('ascii',PATTERNS['ascii']),('unicode',PATTERNS['unicode']),('dense-wide',('雪'*36+'\r\n').encode())]:
+        patterns={**PATTERNS,'dense-wide':('雪'*36+'\r\n').encode()}
+        for name in a.workload or ('ascii','unicode','dense-wide'):
+            pattern=patterns[name]
             data=pattern*(2*1024*1024//len(pattern));path=a.output.parent/(name+'.vt');path.write_bytes(data)
             common=['--data',str(path),'--rows','12','--cols','120','--chunk','65536']
             if a.grapheme_width=='unicode':common+=['--grapheme-width','unicode']

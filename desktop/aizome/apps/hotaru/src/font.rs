@@ -29,6 +29,13 @@ pub struct Frame {
     pub rows: Vec<Vec<Span>>,
     pub primary_family: String,
     pub missing_families: Vec<String>,
+    pub links: Vec<LinkSpan>,
+}
+
+pub struct LinkSpan {
+    pub row: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 pub struct Job {
@@ -143,6 +150,7 @@ impl Drop for Worker {
 fn shape(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> Result<Frame, grid::Error> {
     let metrics = fonts.metrics(job.scale)?;
     let mut rows = Vec::with_capacity(job.snapshot.rows);
+    let mut links: Vec<LinkSpan> = Vec::new();
     let projected = job.search.as_ref().map_or_else(Vec::new, |cache| cache.results.project(&job.snapshot));
     let current = job
         .search
@@ -151,6 +159,19 @@ fn shape(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> Result<Fr
     for (y, row) in job.snapshot.lines.iter().enumerate().take(job.snapshot.rows) {
         if cancel.load(Ordering::Relaxed) {
             return Err(grid::Error::Cancelled);
+        }
+        for col in 0..row.cells().len().min(job.snapshot.cols) {
+            if let Some(link) = row.hyperlink(col) {
+                if let Some(last) = links.last_mut()
+                    && last.row == y
+                    && last.end == col
+                    && row.hyperlink(last.start) == Some(link)
+                {
+                    last.end += 1;
+                } else {
+                    links.push(LinkSpan { row: y, start: col, end: col + 1 });
+                }
+            }
         }
         let mut matches = vec![0u8; row.cells().len()];
         for (found, mark) in projected.iter().map(|found| (found, 1)).chain(current.iter().map(|found| (found, 2))) {
@@ -227,6 +248,7 @@ fn shape(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> Result<Fr
         rows,
         primary_family: fonts.primary_family().into(),
         missing_families: fonts.missing_families.clone(),
+        links,
     })
 }
 

@@ -17,6 +17,148 @@ fn settle_frame(h: &mut Harness<Hotaru>) {
     );
 }
 
+#[test]
+fn osc8_super_click_uses_displayed_cell_and_recorded_desktop_opener() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::{Key, Modifiers, PointerButton};
+    let mut h = Harness::new(Hotaru::preview());
+    let win = h.window();
+    h.advance(Duration::ZERO);
+    let id = h.program().active_pane().unwrap().id;
+    let target = "https://example.test/日本?x=$(false)&quote='literal'";
+    let mut term = Terminal::new(80, 24, 0);
+    term.feed(format!("\x1b]8;id=link;{target}\x1b\\界ab\x1b]8;;\x1b\\ plain").as_bytes());
+    h.send(Msg::Frame(id, Arc::new(term.snapshot())));
+    settle_frame(&mut h);
+    let pane = h.program().active_pane().unwrap();
+    let metrics = pane.font_metrics().unwrap();
+    let origin = pane.rect.origin() + Vec2::new(10., 10.);
+    let at = |col: f64| origin + Vec2::new(col * metrics.cell_width(), metrics.cell_height() * 0.4);
+    // The right half of the last link cell must still hit that cell, not the
+    // selection boundary after it. Wide continuation cell 1 is also clickable.
+    h.key(win, Key::Unidentified, Modifiers::SUPER);
+    h.move_to(win, at(3.9));
+    assert!(h.texts(win).iter().any(|text| text == target));
+    assert!(h.platform.cursors.values().any(|cursor| *cursor == aizome_kit::sidestep_ui::Cursor::Pointer));
+    h.click(win, at(3.9));
+    h.click(win, at(1.8));
+    assert_eq!(h.platform.opened_urls, vec![target, target]);
+    h.click(win, at(4.1));
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    // No modifier preserves ordinary pointer selection and never opens.
+    h.key(win, Key::Unidentified, Modifiers::NONE);
+    h.click(win, at(0.4));
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    // Motion cancels even when the pointer returns to its original cell.
+    h.key(win, Key::Unidentified, Modifiers::SUPER);
+    h.press(win, at(0.4), PointerButton::Left, 1);
+    h.move_to(win, at(0.5));
+    h.move_to(win, at(0.4));
+    h.release(win, at(0.4), PointerButton::Left);
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    h.press(win, at(0.4), PointerButton::Left, 1);
+    h.key(win, Key::Unidentified, Modifiers::NONE);
+    h.release(win, at(0.4), PointerButton::Left);
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    // A newly displayed snapshot cancels an otherwise identical target.
+    h.key(win, Key::Unidentified, Modifiers::SUPER);
+    h.press(win, at(0.4), PointerButton::Left, 1);
+    term.feed(b"\x1b[2;1Hchanged");
+    h.send(Msg::Frame(id, Arc::new(term.snapshot())));
+    settle_frame(&mut h);
+    h.release(win, at(0.4), PointerButton::Left);
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    h.platform.open_url_rejection = Some(aizome_kit::urls::OpenUrlError::Busy);
+    h.click(win, at(0.4));
+    assert_eq!(h.platform.opened_urls.len(), 2);
+    assert!(h.program().active_pane().unwrap().status.contains("too many"));
+    h.platform.open_url_rejection = None;
+    h.platform.open_url_result = Err(aizome_kit::urls::OpenUrlError::Exit(Some(3)));
+    h.advance(Duration::ZERO);
+    h.move_to(win, at(6.5));
+    h.move_to(win, at(0.4));
+    assert!(h.texts(win).iter().any(|text| text == target), "error fixture starts with a visible hovered target");
+    h.click(win, at(0.4));
+    assert!(h.settle(Duration::from_secs(1), |app| app.active_pane().unwrap().status.contains("exit status 3")));
+    assert!(h.texts(win).iter().any(|text| text.contains("Could not open link:") && text.contains("exit status 3")));
+    // A stationary pointer must not let the hovered target mask an opener
+    // error. Exercise the actual view, including subsequent idle timer work.
+    h.advance(Duration::from_millis(1));
+    h.settle(Duration::ZERO, |_| false);
+    assert!(h.texts(win).iter().any(|text| text.contains("Could not open link:") && text.contains("exit status 3")));
+    assert!(!h.texts(win).iter().any(|text| text == target));
+}
+
+#[test]
+fn osc8_gesture_consumes_both_mouse_edges_and_preserves_other_clicks() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers, PointerButton};
+    let mut command = PtyCommand::new(std::env::current_exe().unwrap());
+    command.args = ["--ignored", "--exact", "osc8_mouse_child", "--nocapture", "--test-threads=1"]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    command.env.push(("HOTARU_LINK_CHILD".into(), "1".into()));
+    let mut h = Harness::new(Hotaru::new(command));
+    h.advance(Duration::ZERO);
+    assert!(
+        h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("LINK-READY"))
+    );
+    settle_frame(&mut h);
+    let win = h.window();
+    let pane = h.program().active_pane().unwrap();
+    let id = pane.id;
+    let metrics = pane.font_metrics().unwrap();
+    let origin = pane.rect.origin() + aizome_kit::Vec2::new(10., 10.);
+    let at = |col: f64| origin + aizome_kit::Vec2::new(col * metrics.cell_width(), metrics.cell_height() * 0.4);
+    h.key(win, Key::Unidentified, Modifiers::SUPER);
+    h.click(win, at(1.5));
+    h.press(win, at(1.5), PointerButton::Left, 1);
+    h.move_to(win, at(1.6));
+    h.release(win, at(1.6), PointerButton::Left);
+    h.key(win, Key::Unidentified, Modifiers::NONE);
+    h.click(win, at(6.5));
+    h.send(Msg::Input(id, b"done\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    let text = h.program().active_pane().unwrap().snapshot.plain_text();
+    assert_eq!(h.platform.opened_urls, vec!["https://example.test"], "{text}");
+    assert!(text.contains("LINK-INPUT-OK"), "{text}");
+}
+
+#[test]
+#[ignore]
+fn osc8_mouse_child() {
+    if std::env::var_os("HOTARU_LINK_CHILD").is_none() {
+        return;
+    }
+    use std::io::{Read, Write};
+    let mut attributes = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: this isolated subprocess owns its PTY; termios is initialized
+    // before access and each libc call receives a live, correctly sized value.
+    unsafe {
+        assert_eq!(libc::tcgetattr(0, attributes.as_mut_ptr()), 0);
+        let mut attributes = attributes.assume_init();
+        libc::cfmakeraw(&mut attributes);
+        assert_eq!(libc::tcsetattr(0, libc::TCSANOW, &attributes), 0);
+    }
+    std::io::stdout()
+        .write_all(
+            b"\x1b[2J\x1b[H\x1b[?1000h\x1b[?1006h\x1b]8;;https://example.test\x1b\\link\x1b]8;;\x1b\\ plain LINK-READY",
+        )
+        .unwrap();
+    std::io::stdout().flush().unwrap();
+    let mut actual = Vec::new();
+    loop {
+        let mut byte = [0];
+        std::io::stdin().read_exact(&mut byte).unwrap();
+        actual.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
+        }
+    }
+    assert_eq!(actual, b"\x1b[<0;7;1M\x1b[<0;7;1mdone\n");
+    println!("LINK-INPUT-OK");
+}
+
 fn settle_search(h: &mut Harness<Hotaru>, expected: &str) {
     let until = Instant::now() + Duration::from_secs(5);
     loop {
@@ -700,7 +842,7 @@ fn newer_copies_win_and_closed_panes_cannot_publish_results() {
         && Instant::now() < until
     {
         h.advance(Duration::from_millis(1));
-        std::thread::sleep(Duration::from_millis(1));
+        h.settle(Duration::from_millis(1), |_| false);
     }
     assert!(h.platform.clipboard.as_deref().unwrap().contains("newest copy survives"));
     assert!(!h.platform.clipboard.as_deref().unwrap().contains("xxx"));
@@ -712,7 +854,7 @@ fn newer_copies_win_and_closed_panes_cannot_publish_results() {
     h.send(Msg::CopyReady(18, first, aizome_kit::PreparedClipboardText::new("closed pane".into()).into()));
     for _ in 0..20 {
         h.advance(Duration::from_millis(1));
-        std::thread::sleep(Duration::from_millis(1));
+        h.settle(Duration::from_millis(1), |_| false);
     }
     assert_eq!(h.platform.clipboard, copied);
 }
@@ -727,7 +869,9 @@ fn html_only_copy_has_no_stale_plain_text_fallback() {
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard_data.is_none() && Instant::now() < until {
         h.advance(Duration::from_millis(1));
-        std::thread::sleep(Duration::from_millis(1));
+        // Advancing timers alone does not pump worker completions once the
+        // initial layout ticks are exhausted.
+        h.settle(Duration::from_millis(1), |_| false);
     }
     let data = h.platform.clipboard_data.as_ref().unwrap();
     assert!(data.data("text/html").is_some());

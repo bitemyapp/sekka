@@ -56,7 +56,7 @@ unsafe fn scan_sse2<const UTF8: bool>(bytes: &[u8]) -> usize {
         let value = unsafe { _mm_loadu_si128(bytes.as_ptr().add(at).cast()) };
         let invalid = if UTF8 {
             // Signed negative bytes (UTF-8 leads/continuations) are printable
-            // candidates here; the standard library validates UTF-8 afterward.
+            // candidates here; the compatibility validator checks UTF-8 afterward.
             let c0 = _mm_and_si128(
                 _mm_cmplt_epi8(value, low),
                 _mm_cmpgt_epi8(value, negative_one),

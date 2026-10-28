@@ -1,0 +1,199 @@
+--- a/apps/hotaru/Cargo.toml
++++ b/apps/hotaru/Cargo.toml
+@@ -1,5 +1,6 @@
+ [workspace]
+ resolver = "3"
++exclude = ["vendor/simdutf8"]
+ members = ["crates/hotaru-core", "crates/hotaru-io", "crates/hotaru-replay"]
+ 
+ [workspace.package]
+--- a/apps/hotaru/crates/hotaru-core/Cargo.toml
++++ b/apps/hotaru/crates/hotaru-core/Cargo.toml
+@@ -8,6 +8,7 @@
+ repository.workspace = true
+ 
+ [dependencies]
++simdutf8 = { version = "0.1.5", path = "../../vendor/simdutf8" }
+ compact_str = "0.10"
+ lz4_flex = { version = "0.14", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
+ triomphe = { version = "0.1.17", default-features = false, features = ["std"] }
+--- a/apps/hotaru/crates/hotaru-core/src/lib.rs
++++ b/apps/hotaru/crates/hotaru-core/src/lib.rs
+@@ -187,7 +187,7 @@
+                         printable_utf8 = scan::printable_utf8_bytes(bytes);
+                     }
+                     let end = printable_utf8;
+-                    let valid = match std::str::from_utf8(&bytes[..end]) {
++                    let valid = match validate_utf8_run(&bytes[..end]) {
+                         Ok(text) => Some(text),
+                         Err(error) => std::str::from_utf8(&bytes[..error.valid_up_to()])
+                             .ok()
+@@ -260,3 +260,10 @@
+         std::mem::take(&mut self.state.events)
+     }
+ }
++
++// Keep validation's dispatch/error paths out of the parser's ASCII/control
++// loop. This call is reached only for candidate non-ASCII text runs.
++#[inline(never)]
++fn validate_utf8_run(bytes: &[u8]) -> Result<&str, simdutf8::compat::Utf8Error> {
++    simdutf8::compat::from_utf8(bytes)
++}
+--- a/apps/hotaru/crates/hotaru-core/src/scan.rs
++++ b/apps/hotaru/crates/hotaru-core/src/scan.rs
+@@ -56,7 +56,7 @@
+         let value = unsafe { _mm_loadu_si128(bytes.as_ptr().add(at).cast()) };
+         let invalid = if UTF8 {
+             // Signed negative bytes (UTF-8 leads/continuations) are printable
+-            // candidates here; the standard library validates UTF-8 afterward.
++            // candidates here; the compatibility validator checks UTF-8 afterward.
+             let c0 = _mm_and_si128(
+                 _mm_cmplt_epi8(value, low),
+                 _mm_cmpgt_epi8(value, negative_one),
+--- a/apps/hotaru/crates/hotaru-core/tests/utf8_validation.rs
++++ b/apps/hotaru/crates/hotaru-core/tests/utf8_validation.rs
+@@ -0,0 +1,133 @@
++#[test]
++fn compat_validation_preserves_standard_error_boundaries() {
++    fn compare(input: &[u8]) {
++        let standard = std::str::from_utf8(input).map_err(|e| (e.valid_up_to(), e.error_len()));
++        let simd = simdutf8::compat::from_utf8(input).map_err(|e| (e.valid_up_to(), e.error_len()));
++        assert_eq!(
++            simd,
++            standard,
++            "input prefix: {:?}",
++            &input[..input.len().min(32)]
++        );
++    }
++    compare(&[]);
++    for first in 0..=255u8 {
++        compare(&[first]);
++        for second in 0..=255u8 {
++            compare(&[first, second]);
++            for third in 0..=255u8 {
++                compare(&[first, second, third]);
++            }
++        }
++    }
++    let valid = "ASCII é 雪 👩🏽‍💻 e\u{301}".as_bytes();
++    let mut seed = 0x94c3_b16du32;
++    for case in 0..2048 {
++        seed ^= seed << 13;
++        seed ^= seed >> 17;
++        seed ^= seed << 5;
++        let len = if case % 8 == 0 {
++            65536
++        } else {
++            64 + seed as usize % 4096
++        };
++        let offset = case % 32;
++        let mut bytes = vec![0; offset + len];
++        for (at, value) in bytes[offset..].iter_mut().enumerate() {
++            *value = valid[at % valid.len()];
++        }
++        // Every prefix cut exercises an incomplete sequence at some boundary;
++        // sparse and dense mutations also check early failure in long runs.
++        compare(&bytes[offset..]);
++        for mutation in 0..16 {
++            seed ^= seed << 13;
++            seed ^= seed >> 17;
++            seed ^= seed << 5;
++            let at = offset + seed as usize % len;
++            bytes[at] = if mutation % 2 == 0 {
++                0xff
++            } else {
++                (seed >> 24) as u8
++            };
++            compare(&bytes[offset..]);
++        }
++    }
++}
++
++#[test]
++fn simd_error_offsets_match_across_vector_boundaries() {
++    let mut data = [b'x'; 256];
++    // Force a non-ASCII first block, then place every two-byte value around
++    // 32/64-byte boundaries in later blocks. The short exhaustive test above
++    // also covers the public API's intentionally scalar <64-byte fallback.
++    data[..2].copy_from_slice("é".as_bytes());
++    for at in [30, 31, 32, 62, 63, 64, 126, 127, 128, 254] {
++        for first in 0..=255u8 {
++            for second in 0..=255u8 {
++                data[at] = first;
++                data[at + 1] = second;
++                let standard =
++                    std::str::from_utf8(&data).map_err(|e| (e.valid_up_to(), e.error_len()));
++                let simd = simdutf8::compat::from_utf8(&data)
++                    .map_err(|e| (e.valid_up_to(), e.error_len()));
++                assert_eq!(simd, standard, "at={at}, bytes={first:02x}/{second:02x}");
++            }
++        }
++        data[at..at + 2].fill(b'x');
++    }
++}
++
++#[cfg(target_os = "linux")]
++#[test]
++fn validator_loads_stay_before_guard_page() {
++    // SAFETY: sysconf accepts no pointers; a positive page size is required.
++    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
++    assert!(page > 512);
++    let page = page as usize;
++    // SAFETY: create two private anonymous pages and check MAP_FAILED.
++    let raw = unsafe {
++        libc::mmap(
++            std::ptr::null_mut(),
++            page * 2,
++            libc::PROT_READ | libc::PROT_WRITE,
++            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
++            -1,
++            0,
++        )
++    };
++    assert_ne!(raw, libc::MAP_FAILED);
++    struct Mapping(*mut libc::c_void, usize);
++    impl Drop for Mapping {
++        fn drop(&mut self) {
++            // SAFETY: this guard owns precisely the original mapping.
++            assert_eq!(unsafe { libc::munmap(self.0, self.1) }, 0);
++        }
++    }
++    let _mapping = Mapping(raw, page * 2);
++    // SAFETY: the second page is a page-aligned subrange of the owned mapping.
++    assert_eq!(
++        unsafe { libc::mprotect(raw.cast::<u8>().add(page).cast(), page, libc::PROT_NONE) },
++        0
++    );
++    // SAFETY: the first page is live, exclusive, writable and initialized below.
++    let memory = unsafe { std::slice::from_raw_parts_mut(raw.cast::<u8>(), page) };
++    memory.fill(0);
++    let pattern = "é雪👩".as_bytes();
++    for len in 0..=512 {
++        let bytes = &mut memory[page - len..];
++        for (at, byte) in bytes.iter_mut().enumerate() {
++            *byte = pattern[at % pattern.len()];
++        }
++        let compare = |bytes: &[u8]| {
++            let standard = std::str::from_utf8(bytes).map_err(|e| (e.valid_up_to(), e.error_len()));
++            let simd =
++                simdutf8::compat::from_utf8(bytes).map_err(|e| (e.valid_up_to(), e.error_len()));
++            assert_eq!(simd, standard, "guarded length={len}");
++        };
++        compare(bytes);
++        if let Some(last) = bytes.last_mut() {
++            *last = 0xff;
++            compare(bytes);
++        }
++    }
++}
+--- a/apps/hotaru/tools/build-candidate.py
++++ b/apps/hotaru/tools/build-candidate.py
+@@ -22,7 +22,7 @@
+ 
+ def sources(workspace):
+     paths = [workspace / "Cargo.toml", workspace / "Cargo.lock"]
+-    for directory in (workspace / "crates", workspace / ".cargo"):
++    for directory in (workspace / "crates", workspace / ".cargo", workspace / "vendor"):
+         if directory.is_dir():
+             paths.extend(path for path in directory.rglob("*")
+                          if path.is_file() and not {"target", ".git"}.intersection(path.parts))

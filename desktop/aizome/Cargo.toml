@@ -83,3 +83,8 @@ codegen-units = 4
 [profile.release-lto]
 inherits = "release"
 lto = "thin"
+
+# Hotaru's audited copy includes the upstream AVX2 prefetch pointer repair.
+# Resolve transitive users to the same repaired source, too.
+[patch.crates-io]
+simdutf8 = { path = "../../apps/hotaru/vendor/simdutf8" }

@@ -38,6 +38,7 @@ dependencies = [
  "libc",
  "lz4_flex",
  "serde_json",
+ "simdutf8",
  "triomphe",
  "unicode-width",
 ]
@@ -147,6 +148,10 @@ dependencies = [
  "serde_core",
  "zmij",
 ]
+
+[[package]]
+name = "simdutf8"
+version = "0.1.5"
 
 [[package]]
 name = "static_assertions"

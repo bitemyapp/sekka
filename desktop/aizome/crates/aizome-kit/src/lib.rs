@@ -55,6 +55,7 @@ pub mod testing;
 pub mod text;
 pub mod theme;
 pub mod tree;
+pub mod urls;
 pub mod widget;
 pub mod widgets;
 
@@ -69,8 +70,8 @@ pub use menu::{Menu, MenuBar, MenuItem, MenuRole, Shortcut, ShortcutKey};
 pub use program::{ActivationRequest, Anchors, DragId, KeyboardInteractivity, Layer, LayerOptions, Margins, Output};
 pub use program::{AppInfo, Program, WindowKey, WindowKind, WindowSpec, WindowState};
 pub use sidestep_ui;
-pub use sidestep_ui::{Color, DragSource, DropAction, Image};
 pub use sidestep_ui::{ClipboardRead, PreparedClipboard, PreparedClipboardText};
+pub use sidestep_ui::{Color, DragSource, DropAction, Image};
 pub use text::{Span, rich_text, text};
 pub use theme::{Appearance, FontSpec, Role, Theme};
 pub use widgets::controls::{

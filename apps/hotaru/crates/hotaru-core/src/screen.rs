@@ -88,6 +88,40 @@ struct SavedCursor {
     protected: bool,
 }
 
+// XTSAVE/XTRESTORE have one saved slot per supported DEC mode, not a stack.
+// Unsaved slots use protocol defaults, including when the application's
+// configured default for mode 2027 differs. Keep unknown modes unrecognized.
+const SAVED_MODE_NUMBERS: &[u16] = &[
+    1, 6, 7, 9, 25, 47, 66, 67, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035, 1036,
+    1047, 1048, 1049, 2004, 2027,
+];
+
+struct SavedModes(u32);
+
+impl Default for SavedModes {
+    fn default() -> Self {
+        let mut saved = Self(0);
+        for mode in [7, 25, 1007, 1035, 1036] {
+            saved.set(mode, true);
+        }
+        saved
+    }
+}
+
+impl SavedModes {
+    fn index(mode: u16) -> Option<usize> {
+        SAVED_MODE_NUMBERS.iter().position(|&value| value == mode)
+    }
+    fn set(&mut self, mode: u16, value: bool) {
+        if let Some(index) = Self::index(mode) {
+            self.0 = (self.0 & !(1 << index)) | (u32::from(value) << index);
+        }
+    }
+    fn get(&self, mode: u16) -> Option<bool> {
+        Self::index(mode).map(|index| self.0 & (1 << index) != 0)
+    }
+}
+
 struct Screen {
     lines: VecDeque<Arc<Row>>,
     history: History,
@@ -104,6 +138,9 @@ struct Screen {
     bottom: usize,
     kitty_keyboard: KittyKeyboard,
     active_link: Option<LinkRef>,
+    // The old destination pen is used to erase on 1049 entry, before the
+    // source cursor/pen is copied. State::style owns the active pen.
+    inactive_style: Style,
 }
 
 impl Screen {
@@ -124,6 +161,7 @@ impl Screen {
             bottom: rows - 1,
             kitty_keyboard: KittyKeyboard::default(),
             active_link: None,
+            inactive_style: Style::default(),
         };
         screen.rebase_budget();
         screen
@@ -482,7 +520,10 @@ pub(crate) struct State {
     alternate: Screen,
     modes: Modes,
     default_grapheme_cluster: bool,
-    saved_grapheme_cluster: bool,
+    saved_modes: SavedModes,
+    alternate_mode_bits: u8,
+    save_cursor_mode: bool,
+    previous_char: Option<char>,
     mouse_tracking_modes: u8,
     mouse_format_modes: u8,
     style: Style,
@@ -518,7 +559,10 @@ impl State {
             alternate: Screen::new(cols, rows, 0, Some(0)),
             modes: Modes::default(),
             default_grapheme_cluster: false,
-            saved_grapheme_cluster: false,
+            saved_modes: SavedModes::default(),
+            alternate_mode_bits: 0,
+            save_cursor_mode: false,
+            previous_char: None,
             mouse_tracking_modes: 0,
             mouse_format_modes: 0,
             style: Style::default(),
@@ -736,6 +780,7 @@ impl State {
                 s.wrap_pending = true;
             }
             s.enforce_budget();
+            self.previous_char = Some(bytes[count - 1] as char);
             bytes = &bytes[count..];
         }
     }
@@ -876,6 +921,7 @@ impl State {
             let link = s.active_link.clone();
             let mut pending = s.wrap_pending;
             let mut clear_previous_spacer = false;
+            let mut previous = None;
             // One ownership check/copy per row, rather than an atomic Arc check
             // for every scalar. Controls cannot occur in a validated text run.
             let row = Arc::make_mut(&mut s.lines[s.cursor.row]);
@@ -903,6 +949,7 @@ impl State {
                 let id = row.style_id(style);
                 loop {
                     chars.next();
+                    previous = Some(ch);
                     clear_previous_spacer |=
                         col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
                     row.cells[col] = Cell::new(ch, id, width as u8).protected(protected);
@@ -945,6 +992,9 @@ impl State {
                 s.clear_previous_spacer();
             }
             s.enforce_budget();
+            if let Some(previous) = previous {
+                self.previous_char = Some(previous);
+            }
             // The scalar at a row boundary goes through the normal wrapping
             // path, including one-column screens and disabled autowrap.
             if let Some(ch) = chars.next() {
@@ -970,6 +1020,7 @@ impl State {
         let link = screen.active_link.clone();
         let mut col = screen.cursor.col;
         let mut consumed = 0;
+        let mut previous = None;
         let mut clear_previous_spacer = false;
         let row = Arc::make_mut(&mut screen.lines[screen.cursor.row]);
         while let Some(&ch) = chars.peek() {
@@ -985,6 +1036,7 @@ impl State {
                 break;
             }
             chars.next();
+            previous = Some(ch);
             clear_previous_spacer |=
                 col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
             row.put(col, ch, width, style, protected);
@@ -1008,7 +1060,35 @@ impl State {
         // No scroll/history mutation occurs inside the span. Its highest
         // charged allocation is retained by BudgetSignal even after releases.
         screen.enforce_budget();
+        if let Some(previous) = previous {
+            self.previous_char = Some(previous);
+        }
         consumed
+    }
+    #[inline(never)]
+    fn print_repeat(&mut self, count: usize) {
+        let Some(ch) = self.previous_char else { return };
+        // Bounded stack storage amortizes the existing print fast paths without
+        // allocating proportional to a control sequence's repeat count.
+        let mut scalar = [0; 4];
+        let encoded = ch.encode_utf8(&mut scalar);
+        let mut bytes = [0; 1024];
+        let batch = count.min(bytes.len() / encoded.len());
+        let used = batch * encoded.len();
+        for output in bytes[..used].chunks_exact_mut(encoded.len()) {
+            output.copy_from_slice(encoded.as_bytes());
+        }
+        let text = std::str::from_utf8(&bytes[..used]).expect("repeated encoded scalar");
+        let mut remaining = count;
+        while remaining != 0 {
+            let n = remaining.min(batch);
+            if ch.is_ascii() {
+                self.print_ascii(&bytes[..n]);
+            } else {
+                self.print_utf8(&text[..n * encoded.len()]);
+            }
+            remaining -= n;
+        }
     }
     fn scalar_metadata_writes(&self, count: usize) -> bool {
         let screen = self.screen();
@@ -1073,10 +1153,68 @@ impl State {
         self.single_shift = None;
         self.protected = saved.protected;
         let s = self.screen_mut();
+        let visible = s.cursor.visible;
         s.cursor = saved.cursor;
+        s.cursor.visible = visible;
         s.cursor.col = s.cursor.col.min(s.cols - 1);
         s.cursor.row = s.cursor.row.min(s.lines.len() - 1);
         s.wrap_pending = saved.wrap_pending;
+    }
+    fn clear_alternate_screen(&mut self, style: Style) {
+        debug_assert!(self.modes.alternate_screen);
+        let screen = self.screen_mut();
+        // Alternate history is empty, but its identity must change when the
+        // screen is cleared so retained Find anchors cannot refer to a new use.
+        screen.history.clear();
+        for row in &mut screen.lines {
+            Arc::make_mut(row).reset(screen.cols, style);
+        }
+        screen.wrap_pending = false;
+    }
+    #[inline(never)]
+    fn switch_screen_mode(&mut self, value: u16, set: bool) {
+        // These transitions are intentionally not idempotent: 1049 saves and
+        // clears on every enable and restores on every disable. 1047 clears
+        // the alternate screen on exit; 47 never clears either screen.
+        if value == 1049 && set {
+            self.save_cursor();
+        }
+        if value == 1047 && !set && self.modes.alternate_screen {
+            self.clear_alternate_screen(self.style);
+        }
+        let changed = self.modes.alternate_screen != set;
+        let old_cursor = self.screen().cursor;
+        let old_wrap = self.screen().wrap_pending;
+        let destination_style = if changed && set {
+            self.alternate.inactive_style
+        } else {
+            self.style
+        };
+        if changed {
+            self.screen_mut().inactive_style = self.style;
+            let top = self.screen().top;
+            let bottom = self.screen().bottom;
+            self.screen_mut().set_active_link(None);
+            self.modes.alternate_screen = set;
+            let screen = self.screen_mut();
+            screen.cursor = old_cursor;
+            screen.wrap_pending = old_wrap;
+            // Scroll margins are terminal state shared by the two screens.
+            screen.top = top;
+            screen.bottom = bottom;
+        }
+        if value == 1049 {
+            if set {
+                self.clear_alternate_screen(destination_style);
+                if changed {
+                    let screen = self.screen_mut();
+                    screen.cursor = old_cursor;
+                    screen.wrap_pending = old_wrap;
+                }
+            } else {
+                self.restore_cursor();
+            }
+        }
     }
     fn mode(&mut self, private: bool, value: u16, set: bool) {
         if !private {
@@ -1129,35 +1267,20 @@ impl State {
             7 => self.autowrap = set,
             25 => self.screen_mut().cursor.visible = set,
             47 | 1047 | 1049 => {
-                if self.modes.alternate_screen != set {
-                    self.screen_mut().set_active_link(None);
-                }
-                if self.modes.alternate_screen == set {
-                    return;
-                }
+                let bit = match value {
+                    47 => 1,
+                    1047 => 2,
+                    _ => 4,
+                };
                 if set {
-                    if value == 1049 {
-                        self.save_cursor();
-                    }
-                    let cols = self.primary.cols;
-                    let rows = self.primary.lines.len();
-                    let cursor = self.primary.cursor;
-                    if value != 47 {
-                        let kitty_keyboard = self.alternate.kitty_keyboard;
-                        self.alternate = Screen::new(cols, rows, 0, Some(0));
-                        self.alternate.kitty_keyboard = kitty_keyboard;
-                    }
-                    self.alternate.cursor = cursor;
-                    self.modes.alternate_screen = true;
+                    self.alternate_mode_bits |= bit;
                 } else {
-                    self.primary.cursor = self.alternate.cursor;
-                    self.modes.alternate_screen = false;
-                    if value == 1049 {
-                        self.restore_cursor();
-                    }
+                    self.alternate_mode_bits &= !bit;
                 }
+                self.switch_screen_mode(value, set);
             }
             1048 => {
+                self.save_cursor_mode = set;
                 if set {
                     self.save_cursor()
                 } else {
@@ -1171,6 +1294,16 @@ impl State {
         }
     }
     fn mode_status(&self, private: bool, value: u16) -> u8 {
+        // Recognized fixed-reset modes have no mutable state or side effects.
+        if (private && value == 117)
+            || (!private
+                && matches!(
+                    value,
+                    1 | 5 | 7 | 10 | 11 | 13 | 14 | 15 | 16 | 17 | 18 | 19
+                ))
+        {
+            return 4;
+        }
         let set = if private {
             match value {
                 1 => Some(self.modes.application_cursor),
@@ -1202,7 +1335,16 @@ impl State {
                 6 => Some(self.origin),
                 7 => Some(self.autowrap),
                 25 => Some(self.screen().cursor.visible),
-                47 | 1047 | 1049 => Some(self.modes.alternate_screen),
+                47 | 1047 | 1049 => Some(
+                    self.alternate_mode_bits
+                        & match value {
+                            47 => 1,
+                            1047 => 2,
+                            _ => 4,
+                        }
+                        != 0,
+                ),
+                1048 => Some(self.save_cursor_mode),
                 1004 => Some(self.modes.focus_events),
                 2004 => Some(self.modes.bracketed_paste),
                 2027 => Some(self.modes.grapheme_cluster),
@@ -1349,6 +1491,12 @@ impl State {
 
 impl Handler for State {
     fn print(&mut self, mut ch: char) {
+        // The reference stream ignores decoded C1 controls. They must not
+        // consume a single shift or become REP's previous printed scalar.
+        if matches!(ch, '\u{80}'..='\u{9f}') {
+            return;
+        }
+        let original = ch;
         match self.charset[self.single_shift.take().unwrap_or(self.active_charset)] {
             1 => ch = dec_graphic(ch),
             2 if ch == '#' => ch = '£',
@@ -1392,6 +1540,7 @@ impl Handler for State {
             s.enforce_budget();
             return;
         }
+        self.previous_char = Some(original);
         self.prepare_wrap();
         let style = self.style;
         let insert = self.insert;
@@ -1546,6 +1695,11 @@ impl Handler for State {
         }
     }
     fn csi(&mut self, csi: Csi<'_>) {
+        if matches!(csi.final_byte, b'h' | b'l' | b's' | b'r')
+            && csi.params.iter().any(|param| param.colon)
+        {
+            return;
+        }
         let p = |i: usize, default: usize| -> usize {
             csi.params
                 .get(i)
@@ -1617,12 +1771,11 @@ impl Handler for State {
         }
         if csi.private == Some(b'?') && matches!(csi.final_byte, b's' | b'r') {
             for param in csi.params {
-                if param.value == 2027 {
-                    if csi.final_byte == b's' {
-                        self.saved_grapheme_cluster = self.modes.grapheme_cluster;
-                    } else {
-                        self.modes.grapheme_cluster = self.saved_grapheme_cluster;
-                    }
+                if csi.final_byte == b's' {
+                    self.saved_modes
+                        .set(param.value, self.mode_status(true, param.value) == 1);
+                } else if let Some(saved) = self.saved_modes.get(param.value) {
+                    self.mode(true, param.value, saved);
                 }
             }
             return;
@@ -1653,6 +1806,7 @@ impl Handler for State {
         let style = self.style;
         let origin = self.origin;
         match csi.final_byte {
+            b'b' if csi.params.len() == 1 && !csi.params[0].colon => self.print_repeat(p(0, 1)),
             b'A' | b'B' | b'C' | b'D' | b'E' | b'F' | b'a' | b'e' => {
                 let s = self.screen_mut();
                 let n = p(0, 1);
@@ -2043,7 +2197,9 @@ fn han(ch: char) -> bool {
 #[inline]
 fn unicode_char_width(ch: char) -> usize {
     if ch as u32 <= 255 {
-        1
+        // End a batch at decoded C1; the scalar dispatch ignores it without
+        // changing cursor, grapheme, charset or REP state.
+        usize::from(!matches!(ch, '\u{80}'..='\u{9f}'))
     } else if han(ch) {
         2
     } else {
@@ -2079,8 +2235,8 @@ fn unicode_batch_boundary(row: &Row, col: usize, auto: bool, ch: char) -> bool {
 }
 
 fn char_width(ch: char) -> usize {
-    if ch.is_ascii() {
-        1
+    if ch as u32 <= 255 {
+        usize::from(!matches!(ch, '\u{80}'..='\u{9f}'))
     } else if matches!(ch, '\u{1f1e6}'..='\u{1f1ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')
     {
         2
@@ -2134,7 +2290,11 @@ mod width_fastpath_test {
     fn unicode_width_fastpaths_match_pinned_properties_for_every_scalar() {
         for value in 0..=0x10ffff {
             if let Some(ch) = char::from_u32(value) {
-                let expected = if value <= 255 {
+                let expected = if matches!(ch, '\u{80}'..='\u{9f}') {
+                    // Stream-dispatch sentinel: the actual-library controls
+                    // corpus checks that decoded C1 is ignored in every path.
+                    0
+                } else if value <= 255 {
                     1
                 } else {
                     crate::unicode::properties(ch).width()
@@ -2144,10 +2304,12 @@ mod width_fastpath_test {
         }
     }
     #[test]
-    fn fast_width_matches_existing_policy_for_every_unicode_scalar() {
+    fn fast_width_matches_legacy_policy_with_reference_latin1() {
         for value in 0..=0x10ffff {
             if let Some(ch) = char::from_u32(value) {
-                let expected = if ch.is_ascii() {
+                let expected = if matches!(ch, '\u{80}'..='\u{9f}') {
+                    0
+                } else if value <= 255 {
                     1
                 } else if matches!(ch, '\u{1f1e6}'..='\u{1f1ff}') {
                     2

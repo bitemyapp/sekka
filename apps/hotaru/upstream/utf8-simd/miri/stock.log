@@ -1,0 +1,56 @@
+Preparing a sysroot for Miri (target: x86_64-unknown-linux-gnu)... done
+    Updating crates.io index
+     Locking 1 package to latest compatible version
+   Compiling simdutf8 v0.1.5
+   Compiling hotaru-simdutf8-miri-stock v0.0.0 (/home/callen/work/hotaru-simdutf8-miri-20261028/stock)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/deps/hotaru_simdutf8_miri_stock-4d7c21064498aceb)
+
+running 1 test
+test non_ascii_final_block_prefetch ... error: Undefined Behavior: in-bounds pointer arithmetic failed: attempting to offset pointer by 192 bytes, but got alloc36706 which is only 128 bytes from the end of the allocation
+   --> /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/algorithm.rs:306:43
+    |
+306 | ...                   simd_prefetch(input.as_ptr().add(idx + SIMD_CHUNK_SIZE * 2));
+    |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Undefined Behavior occurred here
+    |
+   ::: /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/x86/avx2.rs:261:1
+    |
+261 | algorithm_simd!("avx2");
+    | ----------------------- in this macro invocation
+    |
+    = help: this indicates a bug in the program: it performed an invalid operation, and caused Undefined Behavior
+    = help: see https://doc.rust-lang.org/nightly/reference/behavior-considered-undefined.html for further information
+help: alloc36706 was allocated here:
+   --> src/lib.rs:6:17
+    |
+  6 |     let bytes = "é".repeat(64).into_bytes().into_boxed_slice();
+    |                 ^^^^^^^^^^^^^^
+    = note: this is on thread `non_ascii_final`
+    = note: stack backtrace:
+            0: simdutf8::implementation::x86::avx2::validate_utf8_compat_simd0
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/algorithm.rs:306:43: 306:88
+            1: simdutf8::implementation::x86::avx2::validate_utf8_compat
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/algorithm.rs:273:13: 273:46
+            2: simdutf8::implementation::x86::validate_utf8_compat_avx2
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/x86/mod.rs:164:5: 164:38
+            3: simdutf8::implementation::x86::validate_utf8_compat
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/x86/mod.rs:156:5: 156:37
+            4: simdutf8::implementation::validate_utf8_compat
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/implementation/mod.rs:38:5: 38:37
+            5: simdutf8::compat::from_utf8
+                at /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/simdutf8-0.1.5/src/compat.rs:81:9: 81:36
+            6: non_ascii_final_block_prefetch
+                at src/lib.rs:7:13: 7:48
+            7: non_ascii_final_block_prefetch::{closure#0}
+                at src/lib.rs:2:36: 2:36
+    = note: this error originates in the macro `algorithm_simd` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: some details are omitted, run with `MIRIFLAGS=-Zmiri-backtrace=full` for a verbose backtrace
+
+error: aborting due to 1 previous error
+
+error: test failed, to rerun pass `--lib`
+
+Caused by:
+  process didn't exit successfully: `/home/callen/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo-miri runner /home/callen/work/hotaru-simdutf8-miri-20261028/stock/target/miri/x86_64-unknown-linux-gnu/debug/deps/hotaru_simdutf8_miri_stock-4d7c21064498aceb` (exit status: 1)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.

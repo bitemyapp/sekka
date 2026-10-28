@@ -7,6 +7,8 @@ Maintain that boundary; the core has no UI dependencies. The core denies unsafe
 Rust except for its bounded SIMD byte scanner, whose load bounds and CPU
 requirements are documented and tested against the scalar implementation.
 Each Linux I/O unsafe block documents its FFI and ownership invariants.
+UTF-8 validation uses a bundled, audited simdutf8 release with the upstream
+prefetch-pointer repair; see [the dependency audit](docs/utf8-simd.md).
 
 The working Sekka branch is `codex/hotaru-rust-terminal`, based on
 `3f4b5593c04b83ac533c7f3d48d7dc0a22839967`. The initial local worktree is
@@ -113,10 +115,11 @@ retained content and documents Ghostty's per-page hyperlink-capacity loss.
 The [page storage proposal](docs/history-page-storage.md) is a design, not a
 shipped memory improvement. The [UTF-8 scanner audit](docs/utf8-scanning.md)
 records the integrated linear-time malformed-input fix and rejected performance
-experiments; the packaged checkpoint includes no simdutf8 dependency.
+experiments. The later [SIMD audit](docs/utf8-simd.md) records the repaired
+dependency now included in both workspaces and the package.
 
 Major outstanding work includes page/arena and compressed-history performance
-parity, complete VT modes and replies, hyperlink activation, Kitty graphics/clipboard,
+parity, complete VT modes and replies, Kitty graphics/clipboard,
 tmux integration, incremental live-search equivalence, complete selection behavior, Ghostty config/theme
 compatibility, complete shell integration and terminfo, accessibility and renderer/font
 behavior. Unhandled protocols must not be advertised as implemented.
@@ -127,3 +130,14 @@ teardown races, long-running fuzzing, memory accounting, and same-host Zig/Rust
 throughput, latency, frame pacing, startup and resident-memory comparisons.
 No whole-application performance claim follows from a parser microbenchmark.
 Do not mark the goal complete while these requirements remain unresolved.
+
+The [VT control slice](docs/vt-controls.md) adds repetition and supported DEC
+mode save/restore, with corrected alternate-screen behavior and decoded-C1
+handling. Native OSC 8 activation uses the displayed snapshot and a bounded
+desktop-opener worker; [its scope and tests](../../desktop/aizome/apps/hotaru/README.md)
+remain distinct from full selection/URL-detection compatibility.
+
+The [combined package checkpoint](docs/links-vt-checkpoint.md) records the
+exact package and source hashes for this slice, 38 ordinary native tests and
+five independent Wayland suites. Its software-compositor qualification does
+not establish GPU, physical-desktop or whole-application performance parity.

@@ -376,6 +376,7 @@ impl<P: Program> Runtime<P> {
 /// The kit's windows and timers as Sidestep knows them.
 #[derive(Default)]
 struct Maps {
+    urls: Option<crate::urls::Launcher>,
     to_side: HashMap<WinId, WindowId>,
     to_kit: HashMap<WindowId, WinId>,
     timers: HashMap<TimerId, (u64, bool)>,
@@ -412,6 +413,19 @@ struct SidestepPlatform<'a> {
 }
 
 impl Platform for SidestepPlatform<'_> {
+    fn open_url(
+        &mut self,
+        url: &str,
+        completion: crate::urls::OpenUrlCompletion,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        if !crate::urls::valid_target(url) {
+            return Err(crate::urls::OpenUrlError::InvalidTarget);
+        }
+        if self.maps.urls.is_none() {
+            self.maps.urls = Some(crate::urls::Launcher::new().map_err(|_| crate::urls::OpenUrlError::Unavailable)?);
+        }
+        self.maps.urls.as_ref().expect("URL worker initialized").open(url, completion)
+    }
     fn open_window(&mut self, id: WinId, spec: &OpenSpec) {
         let background = spec.background.map_or(Background::Transparent, Background::Color);
         let options = match &spec.kind {

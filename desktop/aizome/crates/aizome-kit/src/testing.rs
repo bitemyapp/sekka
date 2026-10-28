@@ -44,6 +44,10 @@ pub struct TestWindow {
 
 /// The stand-in platform: what the engine asked, written down.
 pub struct TestPlatform {
+    /// Accepted desktop-opening requests. Tests never start a real application.
+    pub opened_urls: Vec<String>,
+    pub open_url_rejection: Option<crate::urls::OpenUrlError>,
+    pub open_url_result: Result<(), crate::urls::OpenUrlError>,
     pub windows: BTreeMap<WinId, TestWindow>,
     /// Damage since the test last took it, by window.
     pub damage: HashMap<WinId, Vec<Rect>>,
@@ -95,6 +99,9 @@ pub struct TestPlatform {
 impl TestPlatform {
     fn new() -> TestPlatform {
         TestPlatform {
+            opened_urls: Vec::new(),
+            open_url_rejection: None,
+            open_url_result: Ok(()),
             windows: BTreeMap::new(),
             damage: HashMap::new(),
             timers: BTreeMap::new(),
@@ -134,6 +141,21 @@ impl TestPlatform {
 }
 
 impl Platform for TestPlatform {
+    fn open_url(
+        &mut self,
+        url: &str,
+        completion: crate::urls::OpenUrlCompletion,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        if !crate::urls::valid_target(url) {
+            return Err(crate::urls::OpenUrlError::InvalidTarget);
+        }
+        if let Some(error) = self.open_url_rejection {
+            return Err(error);
+        }
+        self.opened_urls.push(url.into());
+        completion(self.open_url_result);
+        Ok(())
+    }
     fn open_window(&mut self, id: WinId, spec: &OpenSpec) {
         self.windows.insert(id, TestWindow { spec: spec.clone(), title: spec.title.clone() });
         if !spec.visible {

@@ -3,6 +3,7 @@ mod clipboard;
 mod font;
 pub mod input;
 pub mod instance;
+mod links;
 pub mod panes;
 mod search;
 mod session;

@@ -187,7 +187,7 @@ impl Terminal {
                         printable_utf8 = scan::printable_utf8_bytes(bytes);
                     }
                     let end = printable_utf8;
-                    let valid = match std::str::from_utf8(&bytes[..end]) {
+                    let valid = match validate_utf8_run(&bytes[..end]) {
                         Ok(text) => Some(text),
                         Err(error) => std::str::from_utf8(&bytes[..error.valid_up_to()])
                             .ok()
@@ -259,4 +259,11 @@ impl Terminal {
     pub fn take_events(&mut self) -> Vec<TerminalEvent> {
         std::mem::take(&mut self.state.events)
     }
+}
+
+// Keep validation's dispatch/error paths out of the parser's ASCII/control
+// loop. This call is reached only for candidate non-ASCII text runs.
+#[inline(never)]
+fn validate_utf8_run(bytes: &[u8]) -> Result<&str, simdutf8::compat::Utf8Error> {
+    simdutf8::compat::from_utf8(bytes)
 }

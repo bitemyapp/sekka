@@ -268,9 +268,32 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
 
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
-        if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {
-            log::warn!("xdg-open {url}: {e}");
+        if let Err(error) = self.platform.open_url(
+            url,
+            Box::new(|result| {
+                if let Err(error) = result {
+                    log::warn!("Desktop opener: {error}");
+                }
+            }),
+        ) {
+            log::warn!("Desktop opener: {error}");
         }
+    }
+
+    /// Queue an opener and report its exit as an app message. Immediate rejection
+    /// (including a full queue) is returned; it never invokes `finished`.
+    pub fn open_url_with_result(
+        &mut self,
+        url: &str,
+        finished: impl FnOnce(Result<(), crate::urls::OpenUrlError>) -> Msg + Send + 'static,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        let tx = self.stream();
+        self.platform.open_url(
+            url,
+            Box::new(move |result| {
+                tx.send(finished(result));
+            }),
+        )
     }
 
     /// Post a desktop notification (through `notify-send`, which speaks

@@ -64,6 +64,15 @@ pub struct OpenSpec {
 }
 
 pub trait Platform {
+    /// Queue a desktop opener. A rejected request never invokes `completion`.
+    /// Accepted requests complete after the opener exits; all process work is off the UI thread.
+    fn open_url(
+        &mut self,
+        _url: &str,
+        _completion: crate::urls::OpenUrlCompletion,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        Err(crate::urls::OpenUrlError::Unavailable)
+    }
     fn open_window(&mut self, id: WinId, spec: &OpenSpec);
     fn close_window(&mut self, id: WinId);
     fn set_title(&mut self, id: WinId, title: &str);

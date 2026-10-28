@@ -22,7 +22,7 @@ def digest(path):
 
 def sources(workspace):
     paths = [workspace / "Cargo.toml", workspace / "Cargo.lock"]
-    for directory in (workspace / "crates", workspace / ".cargo"):
+    for directory in (workspace / "crates", workspace / ".cargo", workspace / "vendor"):
         if directory.is_dir():
             paths.extend(path for path in directory.rglob("*")
                          if path.is_file() and not {"target", ".git"}.intersection(path.parts))

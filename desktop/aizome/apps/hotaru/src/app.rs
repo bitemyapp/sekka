@@ -39,6 +39,9 @@ pub enum Msg {
     Exited(u64, String),
     Failed(u64, String),
     Notice(u64, String),
+    HoverLink(u64, Option<crate::links::Link>),
+    OpenLink(u64, crate::links::Link),
+    LinkOpened(u64, Result<(), aizome_kit::urls::OpenUrlError>),
     Bell(u64),
     Input(u64, Vec<u8>),
     PasteText(u64, Arc<str>),
@@ -80,6 +83,7 @@ pub struct Pane {
     pub session: Option<Session>,
     pub selection: Option<Selection>,
     pub status: String,
+    pub(crate) hovered_link: Option<crate::links::Link>,
     pub ended: bool,
     pub bell: bool,
     pub rect: Rect,
@@ -244,6 +248,7 @@ impl Hotaru {
             session,
             selection: None,
             status,
+            hovered_link: None,
             ended: false,
             bell: false,
             rect: Rect::ZERO,
@@ -891,6 +896,9 @@ impl Program for Hotaru {
                             frame.missing_families
                         );
                     }
+                    if pane.hovered_link.as_ref().is_some_and(|link| !link.matches_snapshot(&frame.snapshot)) {
+                        pane.hovered_link = None;
+                    }
                     pane.rendered = Some(frame);
                 }
             }
@@ -899,6 +907,34 @@ impl Program for Hotaru {
                     && pane.font_epoch == epoch
                 {
                     pane.status = format!("Could not prepare terminal text: {error}");
+                }
+            }
+            Msg::HoverLink(id, link) => {
+                if let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) {
+                    pane.hovered_link = link.filter(|link| {
+                        pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
+                    });
+                }
+            }
+            Msg::OpenLink(id, link) => {
+                if self.active_pane().is_some_and(|pane| pane.id == id)
+                    && self.panes.iter().any(|pane| {
+                        pane.id == id
+                            && pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
+                    })
+                    && let Err(error) = cx.open_url_with_result(&link.target, move |result| Msg::LinkOpened(id, result))
+                {
+                    cx.send(Msg::LinkOpened(id, Err(error)));
+                }
+            }
+            Msg::LinkOpened(id, result) => {
+                if let Err(error) = result
+                    && let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id)
+                {
+                    pane.status = format!("Could not open link: {error}");
+                    // Keep the failure visible even while the pointer remains
+                    // over the clicked link. A later new hover can show a target.
+                    pane.hovered_link = None;
                 }
             }
             Msg::WorkingDirectory(id, directory) => {
@@ -1212,7 +1248,7 @@ impl Program for Hotaru {
         }
         if let Some(tab) = self.active_pane() {
             contents.push(status_bar(vec![
-                status_text(tab.status.as_str()),
+                status_text(tab.hovered_link.as_ref().map_or(tab.status.as_str(), |link| link.target.as_ref())),
                 spacer().into(),
                 status_text(format!("{} × {}", tab.snapshot.cols, tab.snapshot.rows)),
             ]));

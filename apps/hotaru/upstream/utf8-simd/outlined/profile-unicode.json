@@ -1,0 +1,373 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "unicode",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "aca410acce1038a2f1acb66a63b1c91d04c9dd976fca156bb136e0ba6d3058a9",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-utf8-cache-only-build.json",
+      "sha256": "896347036ee4cc67ab741b52d611a2d1f30522547da3c4f8765c3cb7a53ae0b3",
+      "source_sha256": "aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57",
+      "binary_sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+      "revision": "current-combined-std-utf8-cached-span"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-simdutf8-outlined-build.json",
+      "sha256": "d0a6605a6a26ce4c69107ef5b3d02461f76539c6a25ed6d66fc640b21f7702df",
+      "source_sha256": "06f25a0842fb37a485bbea56813c1f4b4be01d31a6dc0dc32fd7b8ae92708977",
+      "binary_sha256": "236ef248a61e1e512eb638f372023a854812dacc6f22f088bf801ae681adbff5",
+      "revision": "current-combined-vendored-simdutf8-outlined"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          1765222,
+          1761177,
+          1772533,
+          1784842,
+          1775568,
+          1801097,
+          1797642,
+          1790170,
+          1797692,
+          1801738,
+          1785674,
+          1770531,
+          1768708,
+          1794838,
+          1792434,
+          1793696,
+          1774326,
+          1773345,
+          1781097,
+          1783110
+        ],
+        "current-combined-vendored-simdutf8-outlined": [
+          1784322,
+          1786775,
+          1775428,
+          1787596,
+          1783510,
+          1789970,
+          1786325,
+          1786995,
+          1792834,
+          1794927,
+          1781687,
+          1782318,
+          1791392,
+          1799014,
+          1793255,
+          1791763,
+          1790601,
+          1779875,
+          1804452,
+          1793216
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 1783976.0,
+        "current-combined-vendored-simdutf8-outlined": 1788783.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          10387528,
+          10495241,
+          10528811,
+          10463122,
+          10451063,
+          10350411,
+          10358583,
+          10411133,
+          10376130,
+          10373936,
+          10346585,
+          10359735,
+          10368749,
+          10392445,
+          10382369,
+          10289789,
+          10283550,
+          10286574,
+          10292753,
+          10334537
+        ],
+        "current-combined-vendored-simdutf8-outlined": [
+          10374687,
+          10467548,
+          10507849,
+          10519077,
+          10484203,
+          10324582,
+          10366556,
+          10365434,
+          10354648,
+          10413306,
+          10312955,
+          10402490,
+          10391373,
+          10397893,
+          10352855,
+          10402760,
+          10463232,
+          10480297,
+          10475130,
+          10462470
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 10371342.5,
+        "current-combined-vendored-simdutf8-outlined": 10402625.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "styled",
+      "input_bytes": 2097152,
+      "sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          6897964,
+          6882210,
+          7042072,
+          6873497,
+          6873567,
+          6091062,
+          6113506,
+          6150132,
+          6222542,
+          6143932,
+          6159666,
+          6201309,
+          6161579,
+          6163972,
+          6140377,
+          6270183,
+          6280949,
+          6256252,
+          6282642,
+          6271185
+        ],
+        "current-combined-vendored-simdutf8-outlined": [
+          7307423,
+          7314755,
+          7298961,
+          7299993,
+          7301755,
+          7304159,
+          6609007,
+          6575896,
+          6534173,
+          6507162,
+          6408583,
+          6405719,
+          6402123,
+          6418137,
+          6398648,
+          6275822,
+          6291004,
+          6256423,
+          6249843,
+          6245216
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 6239397.0,
+        "current-combined-vendored-simdutf8-outlined": 6462649.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "cursor",
+      "input_bytes": 2097120,
+      "sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          9608868,
+          9590310,
+          9685935,
+          9533595,
+          9589569,
+          9570611,
+          9719235,
+          9618964,
+          9706627,
+          9798626,
+          9957926,
+          10064758,
+          10067603,
+          9927581,
+          9917315,
+          9602498,
+          9566173,
+          9607727,
+          9552443,
+          9583069
+        ],
+        "current-combined-vendored-simdutf8-outlined": [
+          9753737,
+          9782701,
+          9733136,
+          9747428,
+          9742070,
+          9637181,
+          9638723,
+          9650161,
+          9612975,
+          9644502,
+          9868141,
+          9876915,
+          9781320,
+          9834761,
+          9769281,
+          9672094,
+          9722040,
+          9719636,
+          9710282,
+          9758665
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 9613916.0,
+        "current-combined-vendored-simdutf8-outlined": 9737603.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          3403013,
+          3383934,
+          3374559,
+          3379617,
+          3380468,
+          3524015,
+          3523826,
+          3502372,
+          3524837,
+          3512468,
+          3470845,
+          3463133,
+          3449943,
+          3455782,
+          3460019,
+          3395621,
+          3367569,
+          3366097,
+          3382261,
+          3389161
+        ],
+        "current-combined-vendored-simdutf8-outlined": [
+          2853570,
+          2864777,
+          2848813,
+          2852278,
+          2856795,
+          2908554,
+          2892389,
+          2879389,
+          2895043,
+          2899781,
+          2921463,
+          2904758,
+          2886350,
+          2887853,
+          2886170,
+          2902815,
+          2932089,
+          2921763,
+          2890526,
+          2905579
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 3426478.0,
+        "current-combined-vendored-simdutf8-outlined": 2891457.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-vendored-simdutf8-outlined",
+        "current-combined-std-utf8-cached-span"
+      ]
+    }
+  ]
+}

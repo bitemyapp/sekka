@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "status": "review complete; three findings corrected",
+  "initial_cases": 343,
+  "initial_matched": 813,
+  "initial_divergent": 216,
+  "independent_final_cases": 739,
+  "combined_final_cases": 1154,
+  "final_compared_chunks": [
+    1,
+    7,
+    65536
+  ],
+  "final_matched": 3462,
+  "final_divergent": 0,
+  "findings": [
+    "decoded C1 must be ignored before shift/REP mutation",
+    "1049 erase uses destination screen previous pen before copying source cursor",
+    "legacy non-C1 Latin1 soft hyphen width is one"
+  ],
+  "final_source_sha256": "0a11196551c74ef433ab789ebaa3dbbeff5d6dde1fb1f9df257a2c8c9195a7ab",
+  "final_binary_sha256": "f7d18cd71666661c59775d6fbb2a75a7c58ced84971a7f9afcee078a75290684",
+  "files": {
+    "final-build.json": "b27f2505db22b0d55118ca3d2ba89c85211ebd1042ef5f7499cd45a844c06279",
+    "final-report.json": "c8397197f857357e16b5730d37e1da63b70a943d2053c252ec0d51dfe839156e",
+    "initial-generator.py": "34496d482438ada76590f99a09c0347fb9bc73875bdb42c1abd148fcee8c9d2c",
+    "initial-report.json": "facefd3da90627d3d4e561565bb4b361e139758aabb393aa7260ea9504bea10f",
+    "latin1-intermediate-report.json": "9865e233970228114f63c0939b9accb2403e96bdbfd2f503d61577e3e276faf5"
+  }
+}

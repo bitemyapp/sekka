@@ -280,6 +280,8 @@ rustPlatform.buildRustPackage {
     install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
     install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+    install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-MIT $out/share/licenses/hotaru/simdutf8-MIT.txt
+    install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-Apache $out/share/licenses/hotaru/simdutf8-Apache.txt
     mkdir -p $out/share/hotaru $out/share/terminfo
     cp -r ../../apps/hotaru/resources/shell-integration $out/share/hotaru/
     install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/hotaru/LICENSE-MIT

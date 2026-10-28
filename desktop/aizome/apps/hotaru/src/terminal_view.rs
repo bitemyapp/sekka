@@ -125,6 +125,11 @@ struct ViewState {
     window_rect: Rect,
     keys: Vec<(u32, vt::KeyEvent)>,
     buttons: Vec<vt::MouseButton>,
+    hovered: Option<crate::links::Link>,
+    link_press: Option<crate::links::Press>,
+    pointer: Option<Point>,
+    link_modifier: bool,
+    hover_clear_pending: bool,
 }
 
 fn emit(cx: &mut EventCx, msg: Msg) {
@@ -132,6 +137,43 @@ fn emit(cx: &mut EventCx, msg: Msg) {
 }
 
 impl TerminalView {
+    fn link_point(&self, pos: Point, state: &ViewState) -> Option<CellPoint> {
+        if self.rendered.is_none() || !pos.x.is_finite() || !pos.y.is_finite() {
+            return None;
+        }
+        let x = pos.x - state.padding;
+        let y = pos.y - state.padding;
+        if x < 0.0 || y < 0.0 || state.cell_width <= 0.0 || state.line_height <= 0.0 {
+            return None;
+        }
+        let cell =
+            CellPoint { row: (y / state.line_height).floor() as usize, col: (x / state.cell_width).floor() as usize };
+        (cell.row < self.snapshot.rows && cell.col < self.snapshot.cols).then_some(cell)
+    }
+    fn hover(&self, cx: &mut EventCx, pos: Option<Point>, modifier: bool) {
+        let st = cx.state::<ViewState>();
+        let hit =
+            pos.and_then(|pos| self.link_point(pos, st)).and_then(|cell| crate::links::Link::at(&self.snapshot, cell));
+        let changed = match (&st.hovered, &hit) {
+            (None, None) => false,
+            (Some(a), Some(b)) => !a.same(b),
+            _ => true,
+        };
+        let paint = changed || st.link_modifier != modifier;
+        st.pointer = pos;
+        st.link_modifier = modifier;
+        st.hovered = hit.clone();
+        if let Some(press) = &mut st.link_press {
+            press.cancelled |= !modifier;
+        }
+        cx.set_cursor(if modifier && hit.is_some() { PointerCursor::Pointer } else { PointerCursor::Text });
+        if paint {
+            cx.invalidate();
+        }
+        if changed {
+            emit(cx, Msg::HoverLink(self.id, hit));
+        }
+    }
     fn mouse_input(
         &self,
         state: &ViewState,
@@ -206,13 +248,24 @@ impl Widget for TerminalView {
         st.font_epoch = epoch;
         let resized = st.size != size || st.cell_width != cell_width || st.line_height != line_height;
         let old_snapshot = st.snapshot.replace(self.snapshot.clone());
+        if old_snapshot.as_ref().is_some_and(|old| !Arc::ptr_eq(old, &self.snapshot)) {
+            st.hover_clear_pending |= st.hovered.take().is_some();
+            if let Some(press) = &mut st.link_press {
+                press.cancelled = true;
+            }
+        }
         let old_cursor = st.cursor.replace(cursor);
         st.size = size;
         st.cell_width = cell_width;
         st.line_height = line_height;
         st.resize_pending |= resized;
         st.theme_pending |= st.theme.replace(theme) != Some(theme);
-        if st.resize_pending || old_cursor != Some(cursor) || st.theme_pending || st.scale_pending {
+        if st.resize_pending
+            || old_cursor != Some(cursor)
+            || st.theme_pending
+            || st.scale_pending
+            || st.hover_clear_pending
+        {
             cx.request_tick(Duration::ZERO);
         }
         for (y, row) in self.snapshot.lines.iter().enumerate() {
@@ -324,6 +377,26 @@ impl Widget for TerminalView {
                 cx.canvas.restore();
             }
         }
+        if let Some(hovered) = &state.hovered
+            && state.link_modifier
+            && hovered.matches_snapshot(&self.snapshot)
+            && let Some(frame) = &self.rendered
+        {
+            for span in &frame.links {
+                if self.snapshot.lines[span.row]
+                    .hyperlink(span.start)
+                    .is_some_and(|link| link.id == hovered.identity && link.uri.as_ref() == hovered.target.as_bytes())
+                {
+                    let r = Rect::new(
+                        pad + span.start as f64 * cw,
+                        pad + span.row as f64 * lh,
+                        pad + span.end as f64 * cw,
+                        pad + (span.row + 1) as f64 * lh,
+                    );
+                    underline(cx.canvas, r, hotaru_core::Underline::Single, theme.focus(), frame.metrics);
+                }
+            }
+        }
         if self.snapshot.cursor.visible {
             let r = self.cursor_rect(state);
             if cx.is_focused() {
@@ -357,6 +430,7 @@ impl Widget for TerminalView {
         match event {
             Event::Tick => {
                 let st = cx.state::<ViewState>();
+                let clear_hover = std::mem::take(&mut st.hover_clear_pending);
                 let cols = ((st.size.width - st.padding * 2.0) / st.cell_width).floor().max(1.0) as usize;
                 let rows = ((st.size.height - st.padding * 2.0) / st.line_height).floor().max(1.0) as usize;
                 let resized = std::mem::take(&mut st.resize_pending);
@@ -364,6 +438,10 @@ impl Widget for TerminalView {
                 let scale = st.scale;
                 let theme_changed = std::mem::take(&mut st.theme_pending);
                 let rect = self.cursor_rect(st);
+                if clear_hover {
+                    cx.set_cursor(PointerCursor::Text);
+                    emit(cx, Msg::HoverLink(self.id, None));
+                }
                 let window_rect = cx.window_rect();
                 if cx.state::<ViewState>().window_rect != window_rect {
                     cx.state::<ViewState>().window_rect = window_rect;
@@ -390,6 +468,8 @@ impl Widget for TerminalView {
                 }
             }
             Event::Key(key) => {
+                let position = cx.state::<ViewState>().pointer;
+                self.hover(cx, position, key.modifiers.super_key());
                 if key.composing.as_ref().is_none_or(|text| text.is_empty())
                     && let Some(action) = self.bindings.action(key)
                 {
@@ -427,6 +507,19 @@ impl Widget for TerminalView {
                 cx.invalidate();
             }
             Event::PointerDown { pos, button, mods, .. } => {
+                self.hover(cx, Some(*pos), mods.super_key());
+                if *button == PointerButton::Left
+                    && mods.super_key()
+                    && let Some(link) = cx.state::<ViewState>().hovered.clone()
+                {
+                    let st = cx.state::<ViewState>();
+                    st.drag = None;
+                    st.link_press = Some(crate::links::Press { link, position: (pos.x, pos.y), cancelled: false });
+                    cx.request_focus();
+                    cx.capture_pointer();
+                    emit(cx, Msg::FocusPane(self.id));
+                    return Status::Handled;
+                }
                 let st = cx.state::<ViewState>();
                 let p = self.point(*pos, st);
                 let mouse_button = input::mouse_button(*button);
@@ -452,7 +545,12 @@ impl Widget for TerminalView {
                 }
             }
             Event::PointerMove { pos, mods, .. } => {
+                self.hover(cx, Some(*pos), mods.super_key());
                 let st = cx.state::<ViewState>();
+                if let Some(press) = &mut st.link_press {
+                    press.moved((pos.x, pos.y));
+                    return Status::Handled;
+                }
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Motion, st.buttons.last().copied());
                 let selection = st.drag.map(|anchor| Selection { anchor, end: self.point(*pos, st) });
                 if !mods.shift() {
@@ -463,6 +561,17 @@ impl Widget for TerminalView {
                 }
             }
             Event::PointerUp { pos, button, mods, .. } => {
+                self.hover(cx, Some(*pos), mods.super_key());
+                if *button == PointerButton::Left
+                    && let Some(press) = cx.state::<ViewState>().link_press.take()
+                {
+                    let hit = cx.state::<ViewState>().hovered.clone();
+                    if let Some(link) = press.release(hit.as_ref(), (pos.x, pos.y), mods.super_key()) {
+                        emit(cx, Msg::OpenLink(self.id, link));
+                    }
+                    cx.release_pointer();
+                    return Status::Handled;
+                }
                 let st = cx.state::<ViewState>();
                 let button = input::mouse_button(*button);
                 st.buttons.retain(|held| Some(*held) != button);
@@ -473,7 +582,16 @@ impl Widget for TerminalView {
                 }
                 cx.release_pointer();
             }
+            Event::PointerLeave => {
+                if let Some(press) = &mut cx.state::<ViewState>().link_press {
+                    press.cancelled = true;
+                }
+                self.hover(cx, None, false);
+            }
             Event::Scroll { pos, delta, mods, .. } => {
+                if let Some(press) = &mut cx.state::<ViewState>().link_press {
+                    press.cancelled = true;
+                }
                 let st = cx.state::<ViewState>();
                 st.scroll_fraction -= delta.y / st.line_height.max(1.0);
                 let lines = st.scroll_fraction.trunc() as i32;
@@ -495,6 +613,10 @@ impl Widget for TerminalView {
                     emit(cx, Msg::FocusPane(self.id));
                 }
                 if !focused {
+                    if let Some(press) = &mut cx.state::<ViewState>().link_press {
+                        press.cancelled = true;
+                    }
+                    self.hover(cx, None, false);
                     for (_, mut key) in std::mem::take(&mut cx.state::<ViewState>().keys) {
                         key.action = vt::KeyAction::Release;
                         emit(cx, Msg::Key(self.id, Arc::new(key)));
