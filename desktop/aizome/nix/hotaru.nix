@@ -8,6 +8,7 @@
   patch,
   pkg-config,
   makeWrapper,
+  ncurses,
   wayland,
   libxkbcommon,
   fontconfig,
@@ -55,6 +56,7 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkg-config
     makeWrapper
+    ncurses
     rustPlatform.bindgenHook
   ];
   buildInputs = [
@@ -109,12 +111,20 @@ rustPlatform.buildRustPackage {
     install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
     install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+    mkdir -p $out/share/hotaru $out/share/terminfo
+    cp -r ../../apps/hotaru/resources/shell-integration $out/share/hotaru/
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/hotaru/LICENSE-MIT
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/licenses/hotaru/Shell-integration-MIT.txt
+    install -m644 ../../apps/hotaru/resources/hotaru.terminfo $out/share/hotaru/hotaru.terminfo
+    tic -x -o $out/share/terminfo $out/share/hotaru/hotaru.terminfo
     runHook postInstall
   '';
   postFixup = ''
     wrapProgram $out/bin/hotaru \
       --set-default AIZOME_FONT_DIR ${fonts} \
       --set-default HOTARU_FONT_DIR ${hotaruFonts} \
+      --set-default HOTARU_RESOURCES_DIR $out/share/hotaru \
+      --set-default HOTARU_TERMINFO_DIR $out/share/terminfo \
       --prefix LD_LIBRARY_PATH : ${
         lib.makeLibraryPath [
           libglvnd

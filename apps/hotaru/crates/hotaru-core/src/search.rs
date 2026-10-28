@@ -184,7 +184,16 @@ impl Matcher<'_> {
         if self.bytes & 255 == 0 && self.cancel.load(Ordering::Relaxed) {
             return Err(Error::Cancelled);
         }
+        self.bytes += 1;
+        self.last = position;
         let byte = byte.to_ascii_lowercase();
+        // With no live prefix, a mismatching byte cannot contribute to a
+        // future match. Keep its formatting/cancellation position, but avoid
+        // writing the coordinate ring until a possible match starts. Every
+        // complete match still writes its full needle-length run of bytes.
+        if self.matched == 0 && byte != self.needle[0] {
+            return Ok(());
+        }
         self.positions[self.next] = position.start;
         self.next += 1;
         if self.next == self.needle.len() {
@@ -215,8 +224,6 @@ impl Matcher<'_> {
             }
             self.matched = self.prefix[self.matched - 1];
         }
-        self.bytes += 1;
-        self.last = position;
         Ok(())
     }
     fn text(&mut self, text: &str, position: Match) -> Result<(), Error> {

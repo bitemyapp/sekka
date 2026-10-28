@@ -12,6 +12,7 @@ compile_error!("Hotaru supports Linux only");
 
 pub mod clipboard;
 mod fd;
+pub mod launch;
 pub mod pty;
 
 pub use clipboard::{Cancellation, ClipboardReader, ClipboardWriter, TransferState};

@@ -288,3 +288,51 @@ fn overwrite_allocation_order_is_independent_of_ascii_and_unicode_batching() {
         }
     }
 }
+
+#[test]
+fn interior_wide_overwrites_preserve_erased_style_allocation_and_compaction_order() {
+    let seed = "雪雪\x1b[31;44mA\x1b[32mB\x1b[33mC\r\x1b[31m";
+    let mut compacting = seed.to_owned();
+    for color in 100..113 {
+        compacting.push_str(&format!("\x1b[8G\x1b[38;5;{color}mX"));
+    }
+    compacting.push_str("\r\x1b[31m");
+    for seed in [seed, compacting.as_str()] {
+        for overwrite in ["abcdefgh", "αβγδεζηθ"] {
+            let mut initial = b"old\r\n".repeat(80);
+            initial.extend_from_slice(seed.as_bytes());
+            let make =
+                |bytes| Terminal::with_history_limits(8, 3, HistoryLimits { rows: 1000, bytes });
+            let mut unlimited = make(None);
+            unlimited.feed(&initial);
+            let before = unlimited.history_memory();
+            for limit in [None, Some(before.active_bytes + before.logical_bytes)] {
+                let mut expected = None;
+                for cold in [false, true] {
+                    for chunk in [1, 7, 65536] {
+                        let mut t = make(limit);
+                        t.feed(&initial);
+                        let held = t.content_snapshot();
+                        if cold {
+                            compress(&mut t);
+                        }
+                        for part in overwrite.as_bytes().chunks(chunk) {
+                            t.feed(part);
+                        }
+                        let memory = t.history_memory();
+                        let charge = (memory.rows, memory.active_bytes, memory.logical_bytes);
+                        let actual = t.content_snapshot();
+                        if let Some((snapshot, prior_charge)) = &expected {
+                            same(snapshot, &actual);
+                            assert_eq!(*prior_charge, charge, "chunk={chunk} limit={limit:?}");
+                        } else {
+                            expected = Some((actual, charge));
+                        }
+                        // The original wide cells remain owned by the capture.
+                        assert_eq!(held.rows().last().unwrap().cells()[0].character(), '雪');
+                    }
+                }
+            }
+        }
+    }
+}

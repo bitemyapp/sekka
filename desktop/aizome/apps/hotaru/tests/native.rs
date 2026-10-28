@@ -32,6 +32,47 @@ fn settle_search(h: &mut Harness<Hotaru>, expected: &str) {
 }
 
 #[test]
+fn internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory() {
+    let mut h = Harness::new(Hotaru::preview());
+    let first = h.program().active_pane().unwrap().id;
+    h.send(Msg::WorkingDirectory(first, "/tmp/reported-directory".into()));
+    h.send(Msg::Split(Axis::Right));
+    assert_eq!(
+        h.program().active_pane().unwrap().working_directory.as_deref(),
+        Some(std::path::Path::new("/tmp/reported-directory"))
+    );
+    let mut explicit = PtyCommand::shell();
+    explicit.cwd = Some("/tmp/requested-directory".into());
+    h.send(Msg::Launch(explicit));
+    assert_eq!(
+        h.program().active_pane().unwrap().working_directory.as_deref(),
+        Some(std::path::Path::new("/tmp/requested-directory"))
+    );
+}
+
+#[test]
+fn actor_accepts_local_cwd_without_overwriting_an_explicit_title() {
+    let mut command = PtyCommand::new("/bin/sh");
+    command.args = vec!["-c".into(), "printf '\\033]2;User title\\007\\033]7;file://localhost/tmp/a%%20b\\007'".into()];
+    let mut h = Harness::new(Hotaru::new(command));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    let pane = h.program().active_pane().unwrap();
+    assert_eq!(pane.title, "User title");
+    assert_eq!(pane.working_directory.as_deref(), Some(std::path::Path::new("/tmp/a b")));
+    let mut command = PtyCommand::new("/bin/sh");
+    command.args = vec!["-c".into(), "printf '\\033]7;file://remote/ignored\\007'".into()];
+    let mut remote = Harness::new(Hotaru::new(command));
+    assert!(remote.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    assert!(remote.program().active_pane().unwrap().working_directory.is_none());
+    let mut command = PtyCommand::new("/bin/sh");
+    command.cwd = Some("/tmp".into());
+    command.args = vec!["-c".into(), "printf '\\033]7;\\007'".into()];
+    let mut cleared = Harness::new(Hotaru::new(command));
+    assert!(cleared.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    assert!(cleared.program().active_pane().unwrap().working_directory.is_none());
+}
+
+#[test]
 fn find_navigates_owned_history_and_wraps_in_both_directions() {
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec![

@@ -75,6 +75,13 @@ Close Tab removes all panes in that tab. View contains directional and sequentia
 pane focus actions. Shift-drag selects text while a running program captures the
 mouse; Shift-wheel scrolls local history.
 
+Packaged sessions use Hotaru's private terminfo entry. Default Bash, Zsh and
+Fish shells can report their working directory without changing user dotfiles;
+new tabs and splits inherit an accepted local directory. Explicit commands
+keep their arguments and startup behavior. See the [shell integration notes](../../../../apps/hotaru/docs/shell-integration.md)
+for startup details and the after-config fallback for Zsh frameworks that
+replace prompt hooks.
+
 Settings live at `$XDG_CONFIG_HOME/aizome/hotaru.toml`, falling back to
 `~/.config/aizome/hotaru.toml`. `--config-file FILE` selects the configuration for
 the initial application instance. View saves text size, weight and appearance
@@ -92,6 +99,7 @@ font_features = [] # For example ["liga=0", "calt=0"].
 theme = "desktop" # desktop, night, day, high-contrast
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
+shell_integration = true # Future default-shell panes only.
 
 [keybindings]
 "super+d" = "split-right"

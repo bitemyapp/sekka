@@ -466,6 +466,29 @@ later implementations require fresh measurements.
 
 ## Native package checkpoint
 
+The shell integration checkpoint is recorded in
+[`../upstream/nix-shell-checkpoint.json`](../upstream/nix-shell-checkpoint.json).
+Its sandbox build passes 34 application tests. The package includes the
+linear-time malformed UTF-8 scanner correction, owner-only budget accounting
+optimization, scalar allocation-order preservation for bulk wide-cell writes,
+metadata row-span optimization and Find's newer-result/older-frame race fix.
+No simdutf8 dependency is included. Source hashes, executable/wrapper hashes,
+installed notices and exact test summaries identify this checkpoint independently
+of later changes.
+
+All four packaged Wayland suites pass with ambient font, library and resource
+overrides cleared: clipboard/input/splits, Unicode font scaling, history Find,
+and default-shell working-directory inheritance. The latter types a real shell
+`cd` into a directory containing spaces and Japanese text, then verifies a
+new split starts in that directory. Installed shell resources and terminfo
+match their source; 105 recorded source files match the worktree and 100 match
+the prepared Nix source, with only the standalone lock and four applied patch
+inputs intentionally omitted. Results are in
+[`../upstream/native-shell/`](../upstream/native-shell/). These are component
+checks under headless Sway, not Aizome VM, physical desktop or performance
+qualification. The [shell integration notes](shell-integration.md) list the
+supported hooks and remaining scope.
+
 The audited rich-copy package is recorded in
 [`../upstream/nix-rich-copy-checkpoint.json`](../upstream/nix-rich-copy-checkpoint.json).
 Its sandbox build passes 21 application tests. Independent core validation

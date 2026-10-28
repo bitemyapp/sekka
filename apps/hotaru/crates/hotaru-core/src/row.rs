@@ -204,6 +204,19 @@ impl Row {
     pub(crate) fn has_dynamic_metadata(&self) -> bool {
         !self.graphemes.is_empty() || self.links.is_some()
     }
+    pub(crate) fn needs_scalar_write_order(&self, range: Range<usize>, style: Style) -> bool {
+        if self.has_dynamic_metadata()
+            || self.styles.len() >= (self.cells.len() * 2 + 1).min(u16::MAX as usize)
+        {
+            return true;
+        }
+        // Scalar replacement of an interior wide glyph briefly erases its
+        // other half. A batched replacement can skip that cell write, but must
+        // not skip allocating the erased style. The base style slot makes the
+        // common default-background path constant-time; it cannot disappear
+        // through compaction because the threshold above selects scalar order.
+        self.styles[0] != style.erased() && self.cells[range].iter().any(|cell| cell.width() != 1)
+    }
     fn uncached_owned_bytes(&self) -> usize {
         crate::memory::allocation(std::mem::size_of::<Self>() + std::mem::size_of::<usize>())
             + crate::memory::vector::<Cell>(self.cells.capacity())

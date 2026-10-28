@@ -33,6 +33,8 @@ struct Request {
     args: Vec<Vec<u8>>,
     cwd: Option<Vec<u8>>,
     env: Vec<(Vec<u8>, Vec<u8>)>,
+    #[serde(default)]
+    integrate_shell: bool,
 }
 
 impl Request {
@@ -42,6 +44,7 @@ impl Request {
             args: command.args.iter().map(|s| s.as_bytes().to_vec()).collect(),
             cwd: command.cwd.as_ref().map(|p| p.as_os_str().as_bytes().to_vec()),
             env: command.env.iter().map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec())).collect(),
+            integrate_shell: command.integrate_shell,
         }
     }
     fn command(self) -> PtyCommand {
@@ -51,6 +54,7 @@ impl Request {
             args: self.args.into_iter().map(OsString::from_vec).collect(),
             cwd: self.cwd.map(|p| PathBuf::from(OsString::from_vec(p))),
             env: self.env.into_iter().map(|(k, v)| (OsString::from_vec(k), OsString::from_vec(v))).collect(),
+            integrate_shell: self.integrate_shell,
         }
     }
 }

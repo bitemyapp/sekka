@@ -200,17 +200,42 @@ fn encoded_input(
     Ok(())
 }
 
-fn publish_events(terminal: &mut Terminal, id: u64, tx: &MsgSender<Msg>) {
-    let (mut title, mut bell, mut clipboard) = (None, false, false);
+fn publish_events(
+    terminal: &mut Terminal,
+    id: u64,
+    tx: &MsgSender<Msg>,
+    hostname: Option<&str>,
+    seen_title: &mut bool,
+) {
+    let (mut title, mut directory, mut bell, mut clipboard) = (None, None, false, false);
     for event in terminal.take_events() {
         match event {
-            TerminalEvent::Title(value) => title = Some(value),
+            TerminalEvent::Title(value) => {
+                *seen_title = true;
+                title = Some(value);
+            }
+            TerminalEvent::WorkingDirectory(uri) => {
+                if uri.is_empty() {
+                    directory = Some(std::path::PathBuf::new());
+                } else if let Some(path) = hostname.and_then(|host| hotaru_io::launch::directory_from_osc7(&uri, host))
+                {
+                    // Derive the cwd title as native text. Shell hooks never
+                    // emit untrusted filename bytes inside an OSC title.
+                    if !*seen_title {
+                        title = Some(path.to_string_lossy().into_owned());
+                    }
+                    directory = Some(path);
+                }
+            }
             TerminalEvent::Bell => bell = true,
             TerminalEvent::Clipboard { .. } => clipboard = true,
         }
     }
     if let Some(title) = title {
         tx.send(Msg::Title(id, title));
+    }
+    if let Some(directory) = directory {
+        tx.send(Msg::WorkingDirectory(id, directory));
     }
     if bell {
         tx.send(Msg::Bell(id));
@@ -230,6 +255,8 @@ fn run(
     shared: Arc<Shared>,
 ) -> io::Result<()> {
     let mut pty = Pty::spawn(command, PtySize::default())?;
+    let hostname = hotaru_io::launch::local_hostname();
+    let mut seen_title = false;
     let mut terminal = Terminal::new(80, 24, history);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.set_default_colors(colors);
@@ -410,7 +437,7 @@ fn run(
             buffered_at += consumed;
             fed += consumed;
             changed |= consumed != 0;
-            publish_events(&mut terminal, id, &tx);
+            publish_events(&mut terminal, id, &tx, hostname.as_deref(), &mut seen_title);
             let replies = terminal.take_responses();
             if !hung_up && !replies.is_empty() {
                 reply_bytes += replies.len();

@@ -22,6 +22,9 @@ pub struct PtyCommand {
     /// Additional variables, overriding the inherited environment and Hotaru's
     /// TERM, COLORTERM, and TERM_PROGRAM defaults. Values never enter logs.
     pub env: Vec<(OsString, OsString)>,
+    /// Integrate only a default shell with no explicit arguments. Never set by
+    /// `new`; callers can disable it without changing the selected shell.
+    pub integrate_shell: bool,
 }
 
 impl PtyCommand {
@@ -31,6 +34,7 @@ impl PtyCommand {
             args: Vec::new(),
             cwd: None,
             env: Vec::new(),
+            integrate_shell: false,
         }
     }
 
@@ -38,7 +42,9 @@ impl PtyCommand {
         let shell = std::env::var_os("SHELL")
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| OsString::from("/bin/sh"));
-        Self::new(shell)
+        let mut command = Self::new(shell);
+        command.integrate_shell = true;
+        command
     }
 }
 
@@ -92,8 +98,9 @@ pub struct Pty {
 }
 
 impl Pty {
-    pub fn spawn(command: PtyCommand, size: PtySize) -> io::Result<Self> {
+    pub fn spawn(mut command: PtyCommand, size: PtySize) -> io::Result<Self> {
         let winsize = size.winsize()?;
+        let defaults = crate::launch::prepare(&mut command);
         // Initialize the reaper before a process exists: thread-creation failure
         // must fail spawn, not create a child that no one can later reap.
         let reaper = reaper()?.clone();
@@ -134,9 +141,8 @@ impl Pty {
         let mut process = Command::new(command.program);
         process
             .args(command.args)
-            .env("TERM", "xterm-256color")
-            .env("COLORTERM", "truecolor")
-            .env("TERM_PROGRAM", "Hotaru")
+            .env_remove("VTE_VERSION")
+            .envs(defaults)
             .envs(command.env)
             .stdin(Stdio::from(slave.try_clone()?))
             .stdout(Stdio::from(slave.try_clone()?))

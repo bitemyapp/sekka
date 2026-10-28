@@ -141,6 +141,35 @@ without decoding, held render/content snapshots, and exact-budget metadata
 overwrites split at one, seven and 65,536 bytes. Existing 12,000-operation
 compressed/resident mutation stress also runs with the new default policy.
 
+### Allocation-order audit and accounting cost
+
+Checkpoint `c9801d6538de464819dc6e4d790a3095ff7df13d` still had a wide-cell
+overwrite edge: replacing both halves in a bulk run could skip an erased-style
+allocation performed by scalar writes. `tools/wide-budget-audit.rs` reproduced
+active charges of 1,036 bytes with one-byte reads versus 980 bytes with seven-byte
+reads. The correction preserves scalar metadata order when an overwritten wide
+cell may allocate an erased style or trigger style compaction. It keeps batching
+when the erased style is already guaranteed present. Exact-limit, unlimited,
+compression, COW and style-compaction regressions cover ASCII and Greek writes.
+
+The accounting signal has one writer, the terminal owner. Captured readers only
+fill a separate immutable row charge cache, and decoded rows have no active
+registration. Replacing locked atomic read-modify-write instructions with relaxed
+loads/stores on that owner preserves Atomic storage and snapshot thread safety.
+The isolated corrected checkpoint passed 98 core tests and strict Clippy.
+
+`upstream/budget-atomics/audit.json` identifies the exact candidate sources,
+patches, validation and raw same-host timing reports. In the controlled earlier
+source, removing the clean-path locked dirty-flag operation improved the
+Rust/Zig ratios from 1.645 to 1.207 for ASCII and 1.716 to 0.820 for styled text.
+Replacing the remaining owner-only operations improved those to 1.070 and 0.777.
+The corrected `c980` candidate, including the wide-cell guard, measured 1.179
+for ASCII, 1.307 for mixed Unicode, 0.770 for styled text and 0.112 for cursor
+updates in legacy width mode. These are zero-history feed measurements with
+reference state checked before timing. They do not establish application-wide
+parity, and reference timing varied between measurement windows. The report
+also retains configured Unicode-mode results and all source/binary hashes.
+
 ## Content capture measurements
 
 `upstream/content-capture.json` records the exact source and binary hashes for

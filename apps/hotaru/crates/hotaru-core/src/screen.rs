@@ -65,6 +65,9 @@ impl Default for Modes {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TerminalEvent {
     Title(String),
+    /// Bounded OSC 7 URI; only the application may decide whether it names a
+    /// local working directory. Never execute or trust it as a shell command.
+    WorkingDirectory(String),
     Bell,
     /// Base64 text from OSC 52, not an instruction to accept clipboard access.
     /// The application applies its policy before decoding or requesting data.
@@ -697,10 +700,11 @@ impl State {
             // Metadata allocations and releases must occur in scalar order:
             // otherwise the budget's peak (and retained history) depends on
             // where a PTY read happens to split an overwrite.
-            if self.scalar_metadata_writes() {
-                self.print(bytes[0] as char);
-                self.screen_mut().enforce_budget();
-                bytes = &bytes[1..];
+            if self.scalar_metadata_writes(bytes.len()) {
+                let mut chars = bytes.iter().copied().map(char::from).peekable();
+                let consumed = self.print_metadata_span(&mut chars);
+                debug_assert!(consumed > 0);
+                bytes = &bytes[consumed..];
                 continue;
             }
             let style = self.style;
@@ -855,9 +859,12 @@ impl State {
         }
         let mut chars = text.chars().peekable();
         while chars.peek().is_some() {
-            if self.scalar_metadata_writes() {
-                self.print(chars.next().unwrap());
-                self.screen_mut().enforce_budget();
+            if self.scalar_metadata_writes(usize::MAX) {
+                self.print_metadata_span(&mut chars);
+                if let Some(ch) = chars.next() {
+                    self.print(ch);
+                    self.screen_mut().enforce_budget();
+                }
                 continue;
             }
             let style = self.style;
@@ -945,9 +952,70 @@ impl State {
             }
         }
     }
-    fn scalar_metadata_writes(&self) -> bool {
+    /// Preserve scalar allocation/link-table order while amortizing row COW
+    /// checks over standalone positive-width scalars. Clusters and wrapping
+    /// continue through the complete scalar state machine.
+    fn print_metadata_span<I: Iterator<Item = char>>(
+        &mut self,
+        chars: &mut std::iter::Peekable<I>,
+    ) -> usize {
+        let style = self.style;
+        let protected = self.protected;
+        let unicode = self.modes.grapheme_cluster;
+        let auto = self.autowrap;
+        let screen = self.screen_mut();
+        if screen.wrap_pending {
+            return 0;
+        }
+        let link = screen.active_link.clone();
+        let mut col = screen.cursor.col;
+        let mut consumed = 0;
+        let mut clear_previous_spacer = false;
+        let row = Arc::make_mut(&mut screen.lines[screen.cursor.row]);
+        while let Some(&ch) = chars.peek() {
+            let width = if unicode {
+                unicode_char_width(ch)
+            } else {
+                char_width(ch)
+            };
+            if width == 0
+                || col + width > screen.cols
+                || (unicode && !unicode_batch_boundary(row, col, auto, ch))
+            {
+                break;
+            }
+            chars.next();
+            clear_previous_spacer |=
+                col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
+            row.put(col, ch, width, style, protected);
+            if let Some(link) = &link {
+                row.set_hyperlink_range(col..col + width, Some(link));
+            }
+            col += width;
+            consumed += 1;
+            if col == screen.cols {
+                screen.wrap_pending = true;
+                col -= 1;
+                break;
+            }
+        }
+        screen.cursor.col = col;
+        if clear_previous_spacer {
+            screen.clear_previous_spacer();
+        }
+        // clear_spacer_head changes only cell flags, never metadata ownership;
+        // deferring it does not alter the allocation peak or saved snapshots.
+        // No scroll/history mutation occurs inside the span. Its highest
+        // charged allocation is retained by BudgetSignal even after releases.
+        screen.enforce_budget();
+        consumed
+    }
+    fn scalar_metadata_writes(&self, count: usize) -> bool {
         let screen = self.screen();
-        screen.active_link.is_some() || screen.lines[screen.cursor.row].has_dynamic_metadata()
+        let start = screen.cursor.col;
+        let end = start + count.min(screen.cols - start);
+        screen.active_link.is_some()
+            || screen.lines[screen.cursor.row].needs_scalar_write_order(start..end, self.style)
     }
     fn move_to(&mut self, row: usize, col: usize) {
         let origin = self.origin;
@@ -971,6 +1039,10 @@ impl State {
                 (existing, &event),
                 (TerminalEvent::Bell, TerminalEvent::Bell)
                     | (TerminalEvent::Title(_), TerminalEvent::Title(_))
+                    | (
+                        TerminalEvent::WorkingDirectory(_),
+                        TerminalEvent::WorkingDirectory(_)
+                    )
                     | (
                         TerminalEvent::Clipboard { .. },
                         TerminalEvent::Clipboard { .. }
@@ -1840,6 +1912,9 @@ impl Handler for State {
         let (command, data) = text.split_once(';').unwrap_or((text, ""));
         match command {
             "0" | "2" => self.event(TerminalEvent::Title(data.chars().take(4096).collect())),
+            "7" if data.len() <= 16 * 1024 => {
+                self.event(TerminalEvent::WorkingDirectory(data.to_owned()));
+            }
             "4" => {
                 // Ghostty/xterm ignore empty fields and stop at the first
                 // invalid pair, keeping operations that preceded that pair.

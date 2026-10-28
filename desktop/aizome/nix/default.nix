@@ -68,6 +68,7 @@ let
     fileset = lib.fileset.unions [
       ../../../apps/hotaru/Cargo.toml
       ../../../apps/hotaru/crates
+      ../../../apps/hotaru/resources
     ];
   };
   clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;
@@ -194,6 +195,13 @@ let
         AIZOME_SIDESTEP_REV = sidestep.rev or "";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
+        HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
+        HOTARU_TERMINFO_DIR = "${
+          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+            mkdir -p $out
+            tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
+          ''
+        }";
         shellHook = ''
           ${pkgs.bash}/bin/bash ${../scripts/dev-environment}
         '';

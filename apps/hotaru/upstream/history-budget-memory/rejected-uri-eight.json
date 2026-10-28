@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "input_sha256": "cff79019359145ddf3a46b8c2da91333cf7b39003ac3d635d2771686baea8390",
+  "input_bytes": 15456120,
+  "recipe": {
+    "kind": "uri",
+    "count": 3000,
+    "uri_bytes": 600,
+    "links": 8
+  },
+  "build_metadata_sha256": "db3082801239106857eca52faf118b8d09c43ff2439988aa40ccec86ef95b239",
+  "reason": "Excluded: full content differs due to the pinned Ghostty 1663-link per-page capacity limitation. Both engines retain2977history rows. No performance ratio.",
+  "adapters": {
+    "reference": {
+      "command": [
+        "/home/callen/work/hotaru-memory-budget-20261028/reference",
+        "/home/callen/work/hotaru-memory-budget-20261028/results/unique-uri.vt",
+        "120",
+        "24",
+        "10000",
+        "50000000",
+        "0"
+      ],
+      "output": {
+        "engine": "ghostty",
+        "input_bytes": 15456120,
+        "cols": 120,
+        "rows": 24,
+        "row_limit": 10000,
+        "byte_limit": 50000000,
+        "compressed": false,
+        "history_rows": 2977,
+        "content_fnv1a64": "eb9253eb95160686",
+        "checksum": 144032,
+        "feed_ns": 99690881,
+        "compression_ns": 30,
+        "read_history_ns": 54763,
+        "rss_base_kib": 2072,
+        "rss_populated_kib": 17820,
+        "rss_cold_kib": 18012,
+        "rss_read_kib": 18012,
+        "rss_released_kib": 3864,
+        "page_resident_populated_bytes": 22544384,
+        "page_resident_cold_bytes": 22544384,
+        "page_resident_after_read_bytes": 22544384,
+        "compressed_pages": 0,
+        "compressed_bytes": 0
+      }
+    },
+    "candidate": {
+      "command": [
+        "/home/callen/work/hotaru-memory-budget-20261028/candidate/target/release/examples/history_budget",
+        "/home/callen/work/hotaru-memory-budget-20261028/results/unique-uri.vt",
+        "120",
+        "24",
+        "10000",
+        "50000000",
+        "0",
+        "none",
+        "0"
+      ],
+      "output": {
+        "byte_limit": 50000000,
+        "capture_logical_bytes": 22235942,
+        "capture_ns": 3285,
+        "capture_storage_estimate": 22235942,
+        "checksum": 144032,
+        "cols": 120,
+        "compressed": false,
+        "compressed_blocks": 0,
+        "compressed_bytes": 0,
+        "compressed_rows": 0,
+        "compression_ns": 30,
+        "compression_steps": 0,
+        "content_fnv1a64": "97f2eff640acb5ab",
+        "engine": "hotaru",
+        "feed_ns": 56661311,
+        "history_rows": 2977,
+        "hold": "none",
+        "input_bytes": 15456120,
+        "logical_active_bytes": 169544,
+        "logical_history_bytes": 22058142,
+        "mutated_before_read": false,
+        "read_history_ns": 106001,
+        "row_limit": 10000,
+        "rows": 24,
+        "rss_base_kib": 2164,
+        "rss_captured_kib": 22588,
+        "rss_cold_kib": 22584,
+        "rss_owner_released_kib": 22588,
+        "rss_populated_kib": 22512,
+        "rss_read_kib": 22588,
+        "rss_released_kib": 22588,
+        "storage_cold_estimate": 22058142,
+        "storage_populated_estimate": 22058142
+      }
+    }
+  },
+  "differing_uri_rows": 1344,
+  "first_differing_rows": [
+    {
+      "row": 207,
+      "reference": "180b939e01049628",
+      "candidate": "ae4be86d992b74fd"
+    },
+    {
+      "row": 208,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "be81514cbef2f5ad"
+    },
+    {
+      "row": 209,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "6f0970c03edfb0bd"
+    },
+    {
+      "row": 210,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "244e7a010126314d"
+    },
+    {
+      "row": 211,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "9b259c3dc7723ffd"
+    },
+    {
+      "row": 212,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "4086be8ffe0a98bd"
+    },
+    {
+      "row": 213,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "f89b0a54aaea03cd"
+    },
+    {
+      "row": 214,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "4d9e9824a1cda54d"
+    },
+    {
+      "row": 215,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "ba0216d69e8903fd"
+    },
+    {
+      "row": 216,
+      "reference": "c42a06f7e7a28e25",
+      "candidate": "18bbfe7f07d76efd"
+    }
+  ]
+}

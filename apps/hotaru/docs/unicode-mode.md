@@ -19,7 +19,7 @@ records the source, generator and output hashes. `LICENSE.ghostty`,
 `LICENSE.uucode` and `LICENSE.unicode` preserve the applicable notices. The
 Unicode data notice was retrieved from <https://www.unicode.org/license.txt>.
 
-The initial standalone Rust kernel matches the actual C API for every valid
+The standalone Rust kernel matches the actual C API for every valid
 Unicode scalar's width (1,112,064 comparisons) and 56,601 grapheme measurements.
 Those measurements include property-representative triples, 630 applicable UCD
 test vectors and 20,000 seeded longer sequences. This establishes the isolated
@@ -108,3 +108,10 @@ workload while ASCII, styled and cursor timings are nearly unchanged. The
 larger regressions from earlier snapshots therefore require a separate audit
 of budget accounting and metadata fallback. These measurements do not qualify
 rendering, clipboard transport, the full application or every Unicode workload.
+
+The subsequent `metadata-guard-profile.json` is a causal counterfactual, **not a
+candidate for use**. Disabling the metadata scalar guard improves mixed Unicode
+by about 28% on its 2-MiB diagnostic, but loses allocation-order equivalence and
+can change retained history. Its source metadata explicitly identifies that
+limitation. The next experiment keeps every per-cell metadata operation in
+order while reducing repeated row ownership checks.

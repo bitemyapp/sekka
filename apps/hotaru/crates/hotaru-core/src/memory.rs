@@ -49,23 +49,32 @@ impl BudgetSignal {
         if old == new || self.paused.load(Ordering::Relaxed) {
             return;
         }
+        // Only the terminal owner updates this signal; immutable consumers
+        // may fill row charge caches but never write the active accounting.
+        let current = self.bytes.load(Ordering::Relaxed);
         let total = if new > old {
-            self.bytes.fetch_add(new - old, Ordering::Relaxed) + (new - old)
+            current + (new - old)
         } else {
-            self.bytes.fetch_sub(old - new, Ordering::Relaxed) - (old - new)
+            current - (old - new)
         };
-        self.peak.fetch_max(total, Ordering::Relaxed);
+        self.bytes.store(total, Ordering::Relaxed);
+        self.peak.store(
+            self.peak.load(Ordering::Relaxed).max(total),
+            Ordering::Relaxed,
+        );
         self.dirty.store(true, Ordering::Relaxed);
     }
     pub fn current(&self) -> usize {
         self.bytes.load(Ordering::Relaxed)
     }
     pub fn take_change(&self) -> Option<(usize, usize)> {
-        if !self.dirty.swap(false, Ordering::Relaxed) {
+        if !self.dirty.load(Ordering::Relaxed) {
             return None;
         }
+        self.dirty.store(false, Ordering::Relaxed);
         let current = self.current();
-        let peak = self.peak.swap(current, Ordering::Relaxed);
+        let peak = self.peak.load(Ordering::Relaxed);
+        self.peak.store(current, Ordering::Relaxed);
         Some((current, peak.max(current)))
     }
 }

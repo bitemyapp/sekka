@@ -138,6 +138,26 @@ miss is still slower; neither this result nor the faster cases establish
 overall performance parity. This checkpoint precedes the separate performance
 experiments on the budget signal.
 
+## Coordinate-ring experiment after the checkpoint
+
+When KMP has no live prefix and the next byte cannot start the needle, the
+matcher now skips the coordinate-ring write. It still counts the byte, checks
+cancellation and records the formatting position. A complete match necessarily
+writes its full needle-length sequence into the ring, so overlapping matches
+and byte-to-cell coordinates remain unchanged.
+
+`upstream/search-ring-skip-build.json` identifies this isolated candidate;
+`search-ring-skip-benchmark.json` retains its reference comparisons. The paired
+Rust comparison is separate: `tools/search-compare.py` alternates the unchanged
+checkpoint and candidate on the same CPU, checks all coordinates and byte
+counts, and verifies 720 seeded mixed-VT/query pairs. The original exploratory
+run and the retained-driver rerun are both saved in
+`search-ring-skip-paired.json` and `search-ring-skip-paired-reproduced.json`.
+Missing-query medians improve about 2–5% across these paired runs. The candidate
+also passes the 249 reference fixtures at three input splits, all ten position
+tests and strict core Clippy. This is a small optimization, not evidence of
+whole-application parity or a measurement of the later combined source.
+
 Refresh currently scans a new owned capture rather than incrementally updating
 the old search stream. Remaining work includes broader live-search differential
 coverage, bounded incremental updates, long-running output/navigation stress,

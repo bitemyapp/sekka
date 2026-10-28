@@ -99,10 +99,26 @@ worker, validates navigation against row identities and projects highlights onto
 the exact render snapshot. Broader live-search equivalence and final integrated
 latency/memory acceptance remain open.
 
+The [shell integration slice](docs/shell-integration.md) provides opt-out
+Bash, Zsh and Fish hooks, validated local OSC 7 working directories and a
+qualified terminfo subset. Default shell tabs and splits inherit the last
+accepted local working directory. Remote shell installation, complete semantic
+prompt markers and broader terminfo capabilities remain open. The packaged
+checkpoint and four independent Wayland suites are recorded in
+[`upstream/nix-shell-checkpoint.json`](upstream/nix-shell-checkpoint.json) and
+[`upstream/native-shell/`](upstream/native-shell/).
+
+The [history memory audit](docs/history-budget-memory.md) compares equal
+retained content and documents Ghostty's per-page hyperlink-capacity loss.
+The [page storage proposal](docs/history-page-storage.md) is a design, not a
+shipped memory improvement. The [UTF-8 scanner audit](docs/utf8-scanning.md)
+records the integrated linear-time malformed-input fix and rejected performance
+experiments; the packaged checkpoint includes no simdutf8 dependency.
+
 Major outstanding work includes page/arena and compressed-history performance
 parity, complete VT modes and replies, hyperlink activation, Kitty graphics/clipboard,
 tmux integration, incremental live-search equivalence, complete selection behavior, Ghostty config/theme
-compatibility, shell integration, terminfo, accessibility and renderer/font
+compatibility, complete shell integration and terminfo, accessibility and renderer/font
 behavior. Unhandled protocols must not be advertised as implemented.
 
 Full acceptance requires all relevant Linux features, real Aizome/Wayland

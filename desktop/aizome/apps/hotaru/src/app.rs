@@ -35,6 +35,7 @@ pub enum Msg {
     Shaped(u64, Arc<crate::font::Frame>),
     FontFailed(u64, u64, String),
     Title(u64, String),
+    WorkingDirectory(u64, std::path::PathBuf),
     Exited(u64, String),
     Failed(u64, String),
     Notice(u64, String),
@@ -73,6 +74,8 @@ pub enum Msg {
 pub struct Pane {
     pub id: u64,
     pub title: String,
+    /// Last bounded local directory reported by this shell via OSC 7.
+    pub working_directory: Option<std::path::PathBuf>,
     pub snapshot: Arc<Snapshot>,
     pub session: Option<Session>,
     pub selection: Option<Selection>,
@@ -206,7 +209,7 @@ impl Hotaru {
         }
     }
 
-    fn new_pane(&mut self, cx: &mut Cx<Msg>) -> u64 {
+    fn new_pane(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         let mut terminal = Terminal::new(80, 24, self.settings.scrollback);
@@ -216,10 +219,19 @@ impl Hotaru {
         if self.demo {
             terminal.feed(b"\x1b[1;36mHotaru\x1b[0m  \xe8\x9b\x8d\r\n\r\nA little light for your work.\r\n\r\n\x1b[32mcallen\x1b[0m \x1b[34m~/work/sekka\x1b[0m\r\n\xe2\x9d\xaf cargo test\r\n\x1b[32m   Compiling\x1b[0m hotaru-core\r\n\x1b[32m    Finished\x1b[0m test profile\r\n\r\n\x1b[1mtest result:\x1b[0m ok\r\n\r\n\xe2\x9d\xaf ");
         }
+        let mut command = self.command.clone();
+        if inherit_cwd
+            && command.integrate_shell
+            && let Some(directory) = self.active_pane().and_then(|pane| pane.working_directory.clone())
+        {
+            command.cwd = Some(directory);
+        }
+        command.integrate_shell &= self.settings.shell_integration;
+        let working_directory = command.cwd.clone();
         let (session, status) = if self.demo {
             (None, "Preview".into())
         } else {
-            match Session::spawn(id, self.command.clone(), colors, self.settings.scrollback, cx.stream()) {
+            match Session::spawn(id, command, colors, self.settings.scrollback, cx.stream()) {
                 Ok(session) => (Some(session), "Shell".into()),
                 Err(e) => (None, format!("Could not start shell: {e}")),
             }
@@ -227,6 +239,7 @@ impl Hotaru {
         self.panes.push(Pane {
             id,
             title: "Shell".into(),
+            working_directory,
             snapshot: Arc::new(terminal.snapshot()),
             session,
             selection: None,
@@ -245,14 +258,14 @@ impl Hotaru {
         id
     }
 
-    fn new_tab(&mut self, cx: &mut Cx<Msg>) {
+    fn new_tab(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) {
         if self.panes.len() >= 64 {
             if let Some(id) = self.active_pane().map(|pane| pane.id) {
                 self.notice(id, "The 64 pane limit has been reached.");
             }
             return;
         }
-        let id = self.new_pane(cx);
+        let id = self.new_pane(cx, inherit_cwd);
         self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id });
         self.active = id;
         self.focus_after_rebuild(cx);
@@ -264,7 +277,7 @@ impl Hotaru {
             self.notice(target, "The 64 pane limit has been reached.");
             return;
         }
-        let id = self.new_pane(cx);
+        let id = self.new_pane(cx, true);
         let split = self.next_id;
         self.next_id += 1;
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
@@ -676,7 +689,7 @@ impl Program for Hotaru {
         self.window = cx.open_window(WindowSpec::new("Hotaru").size(960.0, 640.0).min_size(320.0, 180.0));
         self.find_state.worker =
             crate::search::Worker::new(cx.stream()).map_err(|error| log::warn!("Search worker: {error}")).ok();
-        self.new_tab(cx);
+        self.new_tab(cx, false);
         if let Some(path) = self.settings_path.clone() {
             match settings::Worker::new(path, cx.stream()) {
                 Ok(worker) => self.settings_worker = Some(worker),
@@ -769,7 +782,7 @@ impl Program for Hotaru {
                     self.shape_all();
                 }
             }
-            Msg::NewTab => self.new_tab(cx),
+            Msg::NewTab => self.new_tab(cx, true),
             Msg::Split(axis) => self.split_pane(axis, cx),
             Msg::ClosePane => self.close_pane(cx),
             Msg::FocusPane(id) => self.focus_pane(id, cx),
@@ -789,7 +802,7 @@ impl Program for Hotaru {
             }
             Msg::Launch(command) => {
                 let previous = std::mem::replace(&mut self.command, command);
-                self.new_tab(cx);
+                self.new_tab(cx, false);
                 self.command = previous;
                 cx.activate(self.window);
             }
@@ -828,6 +841,27 @@ impl Program for Hotaru {
                         self.find_state.invalidate(false);
                         self.request_search(cx);
                     } else {
+                        // A worker result can precede its coalesced actor frame.
+                        // Keep its logical selection in the owned capture and
+                        // publish copy only once this frame validates it. A
+                        // pointer clear removes cache.selected; navigation has
+                        // its own acknowledgment and must not be superseded.
+                        if self.find_state.pending_navigation.is_none()
+                            && !self.find_state.retry_navigation
+                            && let Some(pane) = self.panes.iter().find(|pane| pane.id == id)
+                            && let Some(cache) =
+                                &self.find_state.caches[usize::from(pane.snapshot.modes.alternate_screen)]
+                        {
+                            self.find_state.copy = cache
+                                .selected
+                                .filter(|&index| {
+                                    cache
+                                        .results
+                                        .resolve_match(index, &pane.snapshot.position, pane.snapshot.generation)
+                                        .is_some()
+                                })
+                                .map(|index| (cache.results.clone(), index));
+                        }
                         self.schedule_search(cx);
                     }
                 }
@@ -865,6 +899,11 @@ impl Program for Hotaru {
                     && pane.font_epoch == epoch
                 {
                     pane.status = format!("Could not prepare terminal text: {error}");
+                }
+            }
+            Msg::WorkingDirectory(id, directory) => {
+                if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                    pane.working_directory = (!directory.as_os_str().is_empty()).then_some(directory);
                 }
             }
             Msg::Title(id, title) => {
@@ -1047,7 +1086,7 @@ impl Program for Hotaru {
                     });
                 }
             }
-            Msg::SearchReady(token, id, navigation, mut cache) => {
+            Msg::SearchReady(token, id, navigation, cache) => {
                 if token == self.find_state.token
                     && self.find_state.pane == Some(id)
                     && self.find
@@ -1064,16 +1103,19 @@ impl Program for Hotaru {
                     }
                     let slot = usize::from(cache.results.snapshot.modes.alternate_screen);
                     let first = self.find_state.caches[slot].is_none();
-                    if let Some(pane) = self.active_pane() {
-                        cache.selected = cache.selected.filter(|&index| {
-                            cache
-                                .results
-                                .resolve_match(index, &pane.snapshot.position, pane.snapshot.generation)
-                                .is_some()
-                        });
-                    }
-                    if self.find_state.copy.is_some() {
-                        self.find_state.copy = cache.selected.map(|index| (cache.results.clone(), index));
+                    if self.find_state.pending_navigation.is_none()
+                        && !self.find_state.retry_navigation
+                        && let Some(pane) = self.active_pane()
+                    {
+                        self.find_state.copy = cache
+                            .selected
+                            .filter(|&index| {
+                                cache
+                                    .results
+                                    .resolve_match(index, &pane.snapshot.position, pane.snapshot.generation)
+                                    .is_some()
+                            })
+                            .map(|index| (cache.results.clone(), index));
                     }
                     self.find_state.caches[slot] = Some(cache);
                     self.find_state.in_flight = false;

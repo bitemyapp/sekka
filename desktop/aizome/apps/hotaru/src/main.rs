@@ -42,6 +42,7 @@ fn main() {
                 };
                 command.program = program;
                 command.args = args.collect::<Vec<OsString>>();
+                command.integrate_shell = false;
                 break;
             }
             _ => {

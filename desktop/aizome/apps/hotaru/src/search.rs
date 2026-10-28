@@ -243,12 +243,50 @@ mod tests {
         app.find_state.copy = Some((results.clone(), 0));
         h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(0) }));
         assert!(h.program().find_state.copy.is_none());
-        assert!(h.program().find_state.caches[0].as_ref().unwrap().selected.is_none());
+        // The logical index belongs to the result, while copy requires a
+        // currently valid display anchor. The next worker refresh decides
+        // whether the selected match itself survived.
+        assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(0));
         h.program_mut().find_state.in_flight = true;
         let cancellation = h.program().find_state.cancel.clone();
         h.send(Msg::Failed(id, "injected worker failure".into()));
         assert!(!h.program().find_state.in_flight);
         assert!(cancellation.load(Ordering::Acquire));
         assert!(h.program().find_state.error.is_some());
+    }
+
+    #[test]
+    fn newer_capture_keeps_logical_selection_until_its_frame_arrives() {
+        let mut h = Harness::new(Hotaru::preview());
+        let id = h.program().active_pane().unwrap().id;
+        let mut terminal = hotaru_core::Terminal::new(10, 2, 2);
+        terminal.feed(b"Mark0\r\nMark1\r\nMark2\r\n");
+        let old = Arc::new(
+            search::find(terminal.content_snapshot(), b"Mark", Default::default(), &AtomicBool::new(false)).unwrap(),
+        );
+        let old_frame = Arc::new(terminal.snapshot());
+        terminal.feed(b"Mark3\r\nMark4\r\n");
+        let results = Arc::new(
+            search::find(terminal.content_snapshot(), b"Mark", Default::default(), &AtomicBool::new(false)).unwrap(),
+        );
+        let selected = 0;
+        assert!(results.resolve_match(selected, &old_frame.position, old_frame.generation).is_none());
+        let app = h.program_mut();
+        app.panes[0].snapshot = old_frame;
+        app.find = true;
+        app.search = "Mark".into();
+        app.find_state.pane = Some(id);
+        app.find_state.token = 42;
+        app.find_state.in_flight = true;
+        app.find_state.caches[0] = Some(Cache { results: old.clone(), selected: Some(0) });
+        app.find_state.copy = Some((old, 0));
+        h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(selected) }));
+        assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(selected));
+        assert!(h.program().find_state.copy.is_none());
+        h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
+        assert_eq!(h.program().find_state.copy.as_ref().unwrap().1, selected);
+        h.send(Msg::Select(id, crate::terminal_view::Selection::default()));
+        h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
+        assert!(h.program().find_state.copy.is_none());
     }
 }

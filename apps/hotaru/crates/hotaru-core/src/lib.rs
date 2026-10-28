@@ -166,6 +166,10 @@ impl Terminal {
     }
     fn feed_inner(&mut self, mut bytes: &[u8], reply_budget: usize) -> usize {
         let original = bytes.len();
+        // A failed UTF-8 sequence may leave a long printable byte suffix.
+        // Remember its control-free extent so retries do not rescan that
+        // suffix for each malformed lead. Consuming bytes only shortens it.
+        let mut printable_utf8 = 0usize;
         while !bytes.is_empty() {
             if self.state.responses.len() >= reply_budget {
                 break;
@@ -175,10 +179,14 @@ impl Terminal {
                 if ascii != 0 {
                     self.state.print_ascii(&bytes[..ascii]);
                     bytes = &bytes[ascii..];
+                    printable_utf8 = printable_utf8.saturating_sub(ascii);
                     continue;
                 }
                 if bytes[0] >= 0x80 {
-                    let end = scan::printable_utf8_bytes(bytes);
+                    if printable_utf8 == 0 {
+                        printable_utf8 = scan::printable_utf8_bytes(bytes);
+                    }
+                    let end = printable_utf8;
                     let valid = match std::str::from_utf8(&bytes[..end]) {
                         Ok(text) => Some(text),
                         Err(error) => std::str::from_utf8(&bytes[..error.valid_up_to()])
@@ -188,6 +196,7 @@ impl Terminal {
                     if let Some(text) = valid {
                         self.state.print_utf8(text);
                         bytes = &bytes[text.len()..];
+                        printable_utf8 -= text.len();
                         continue;
                     }
                 }
@@ -195,6 +204,7 @@ impl Terminal {
             self.parser.advance(bytes[0], &mut self.state);
             self.state.enforce_history_budget();
             bytes = &bytes[1..];
+            printable_utf8 = printable_utf8.saturating_sub(1);
         }
         self.state.generation = self.state.generation.wrapping_add(1);
         self.state.enforce_history_budget();

@@ -23,6 +23,7 @@ def main():
     p.add_argument('--metadata',type=Path,nargs='+',required=True)
     p.add_argument('--library',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--grapheme-width',choices=('legacy','unicode'),default='legacy')
     p.add_argument('--lock',type=Path,default=Path.home()/'.cache/hotaru-workstation.lock')
     a=p.parse_args();a.output.parent.mkdir(parents=True,exist_ok=True)
     os.sched_setaffinity(0,{min(os.sched_getaffinity(0))})
@@ -37,13 +38,15 @@ def main():
         for name,pattern in [('ascii',PATTERNS['ascii']),('unicode',PATTERNS['unicode']),('dense-wide',('雪'*36+'\r\n').encode())]:
             data=pattern*(2*1024*1024//len(pattern));path=a.output.parent/(name+'.vt');path.write_bytes(data)
             common=['--data',str(path),'--rows','12','--cols','120','--chunk','65536']
-            expected=oracle.snapshot(data,12,120,65536)
+            if a.grapheme_width=='unicode':common+=['--grapheme-width','unicode']
+            expected=oracle.snapshot(data,12,120,65536,{2027:True} if a.grapheme_width=='unicode' else None)
             for b in builds:
                 actual=json.loads(subprocess.check_output([b['binary'],*common,'--format','json']))
                 assert not differences(expected,actual),(b['revision'],differences(expected,actual))
             samples={b['revision']:[] for b in builds}
             def measure(b,count):
                 value=json.loads(subprocess.check_output([b['binary'],*common,'--bench-json','--iterations',str(count)]))
+                if a.grapheme_width=='unicode':assert value['grapheme_width_method']=='unicode'
                 assert value['timed_scope']=='feed-only' and value['response_bytes']==[0]*count
                 assert value['input_bytes']==len(data) and value['scrollback']==0 and len(value['samples_ns'])==count
                 return value['samples_ns']
@@ -57,7 +60,7 @@ def main():
         for b in builds:
             assert digest(Path(b['binary']))==b['binary_sha256']
             for name,want in b['sources'].items():assert digest(Path(b['workspace'])/name)==want
-        report={'schema':1,'scope':__doc__,'cpu_affinity':sorted(os.sched_getaffinity(0)),'library_sha256':digest(a.library),'tool_sha256':digest(Path(__file__)),'builds':[{'metadata':str(path),'sha256':digest(path),'source_sha256':b['source_sha256'],'binary_sha256':b['binary_sha256'],'revision':b['revision']} for path,b in zip(a.metadata,builds,strict=True)],'results':results}
+        report={'schema':1,'scope':__doc__,'grapheme_width_method':a.grapheme_width,'cpu_affinity':sorted(os.sched_getaffinity(0)),'library_sha256':digest(a.library),'tool_sha256':digest(Path(__file__)),'builds':[{'metadata':str(path),'sha256':digest(path),'source_sha256':b['source_sha256'],'binary_sha256':b['binary_sha256'],'revision':b['revision']} for path,b in zip(a.metadata,builds,strict=True)],'results':results}
         a.output.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({r['name']:r['median_feed_ns'] for r in results}))
 

@@ -22,6 +22,7 @@
   runCommand,
   pkg-config,
   makeWrapper,
+  ncurses,
   patch,
   jq,
   wayland,
@@ -140,6 +141,7 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkg-config
     makeWrapper
+    ncurses
     jq
     rustPlatform.bindgenHook
     # Koe's whisper.cpp (built by whisper-rs-sys through CMake) and its
@@ -278,6 +280,12 @@ rustPlatform.buildRustPackage {
     install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
     install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+    mkdir -p $out/share/hotaru $out/share/terminfo
+    cp -r ../../apps/hotaru/resources/shell-integration $out/share/hotaru/
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/hotaru/LICENSE-MIT
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/licenses/hotaru/Shell-integration-MIT.txt
+    install -m644 ../../apps/hotaru/resources/hotaru.terminfo $out/share/hotaru/hotaru.terminfo
+    tic -x -o $out/share/terminfo $out/share/hotaru/hotaru.terminfo
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
     mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps
@@ -305,7 +313,9 @@ rustPlatform.buildRustPackage {
     wrapProgram $yukimi/libexec/aizome-yukimi --set-default AIZOME_FONT_DIR ${fonts}
     wrapProgram $out/bin/aizome-hotaru \
       --set-default AIZOME_FONT_DIR ${fonts} \
-      --set-default HOTARU_FONT_DIR ${hotaruFonts}
+      --set-default HOTARU_FONT_DIR ${hotaruFonts} \
+      --set-default HOTARU_RESOURCES_DIR $out/share/hotaru \
+      --set-default HOTARU_TERMINFO_DIR $out/share/terminfo
     # The compositor finds its core and std beside it (its own rpath says
     # $ORIGIN/../lib/aizome); they and the logic find each other there.
     for so in $out/lib/aizome/*.so; do

@@ -84,6 +84,8 @@ pub struct Settings {
     pub theme: Theme,
     pub scrollback: usize,
     pub copy_format: CopyFormat,
+    /// Applies only to future default-shell panes; explicit commands bypass it.
+    pub shell_integration: bool,
     pub keybindings: BTreeMap<String, Action>,
 }
 
@@ -99,6 +101,7 @@ impl Default for Settings {
             theme: Theme::Desktop,
             scrollback: 10_000,
             copy_format: CopyFormat::Mixed,
+            shell_integration: true,
             keybindings: BTreeMap::new(),
         }
     }

@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "ddfcc8c8eea75bce3d12254bd1f4a3f746ffb9c7936c07d3c100954fd748f8d7",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-row-span-baseline-build.json",
+      "sha256": "7cf0d8dea544abc1d51eed386ce3dfcec009858dbcd39f213fecd59783b0d946",
+      "source_sha256": "612a2912fbe1c7cd92baa0eabb3b7eeb41a07db7526c8a0173ac1cf4672d6f99",
+      "binary_sha256": "98b0ed1ce2d3a40b642a0962b23802a4e4616dd4757705f222d5c4d668bc5d42",
+      "revision": "c9801d6-integrated-unicode-baseline"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-row-span-build.json",
+      "sha256": "3e6dcc362333da47683bc2ac2f9ee2f1c77d3eb30248787d6896021c2acc80ee",
+      "source_sha256": "141db9c35ee7737db6ff610c14f4df97e9059c93ecdacbef8cad253d8b6258cd",
+      "binary_sha256": "be89b6da665de7f6e6565e0ece89a91a7df59fa57a8fc0d85d70a9d27cf97f9a",
+      "revision": "c9801d6-scalar-metadata-row-borrow"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "c9801d6-integrated-unicode-baseline": [
+          2522428,
+          2504611,
+          2523910,
+          2526864,
+          2518321,
+          2542208,
+          2506503,
+          2521136,
+          2528036,
+          2521126,
+          2523319,
+          2511401,
+          2520204,
+          2517700,
+          2520735,
+          2524171,
+          2511622,
+          2520445,
+          2518442,
+          2521086
+        ],
+        "c9801d6-scalar-metadata-row-borrow": [
+          2531882,
+          2520755,
+          2530741,
+          2526214,
+          2523960,
+          2532042,
+          2508206,
+          2533444,
+          2520094,
+          2520946,
+          2540255,
+          2511882,
+          2538052,
+          2523219,
+          2530730,
+          2540164,
+          2510800,
+          2519964,
+          2532544,
+          2521126
+        ]
+      },
+      "median_feed_ns": {
+        "c9801d6-integrated-unicode-baseline": 2520910.5,
+        "c9801d6-scalar-metadata-row-borrow": 2525087.0
+      },
+      "process_order": [
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "c9801d6-integrated-unicode-baseline": [
+          12191221,
+          12018598,
+          12291182,
+          12295639,
+          12305624,
+          12172592,
+          12245923,
+          12296630,
+          12070768,
+          12318864,
+          12159453,
+          12314558,
+          12529875,
+          14123813,
+          14109191,
+          12101484,
+          12264211,
+          12318062,
+          12117749,
+          12353506
+        ],
+        "c9801d6-scalar-metadata-row-borrow": [
+          8818752,
+          8902480,
+          8910843,
+          8920958,
+          8913546,
+          8804431,
+          8915059,
+          8931384,
+          8924964,
+          8912785,
+          10076982,
+          10115621,
+          10103462,
+          10094558,
+          10111474,
+          10039124,
+          10062760,
+          9346734,
+          9113691,
+          8791891
+        ]
+      },
+      "median_feed_ns": {
+        "c9801d6-integrated-unicode-baseline": 12293410.5,
+        "c9801d6-scalar-metadata-row-borrow": 8928174.0
+      },
+      "process_order": [
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "c9801d6-integrated-unicode-baseline": [
+          2935224,
+          2938329,
+          2958289,
+          2987433,
+          2986021,
+          2931819,
+          2914984,
+          2925970,
+          2926271,
+          2922285,
+          2957358,
+          2940032,
+          2956086,
+          2975986,
+          2945981,
+          2996818,
+          2951549,
+          2957388,
+          2991931,
+          2991549
+        ],
+        "c9801d6-scalar-metadata-row-borrow": [
+          3034054,
+          3312748,
+          3090941,
+          2975725,
+          2922986,
+          3035536,
+          2900040,
+          2941534,
+          2938869,
+          3022587,
+          3026753,
+          3104281,
+          3016247,
+          3126634,
+          3029777,
+          2917307,
+          2964459,
+          3049828,
+          3013563,
+          2936165
+        ]
+      },
+      "median_feed_ns": {
+        "c9801d6-integrated-unicode-baseline": 2953817.5,
+        "c9801d6-scalar-metadata-row-borrow": 3019417.0
+      },
+      "process_order": [
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-integrated-unicode-baseline",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-scalar-metadata-row-borrow",
+        "c9801d6-integrated-unicode-baseline"
+      ]
+    }
+  ]
+}

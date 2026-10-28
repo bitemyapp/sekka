@@ -6,6 +6,8 @@ const MAX_PARAMS: usize = 32;
 // Ghostty's fixed capture excludes the command prefix and its semicolon.
 // Clipboard OSC 52 has a separate allocating cap for its much larger payload.
 const MAX_OSC_BODY: usize = 2048;
+// A Linux PATH_MAX path can expand threefold when percent-encoded in OSC 7.
+const MAX_CWD_BODY: usize = 16 * 1024;
 const MAX_CLIPBOARD_BODY: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -228,6 +230,8 @@ impl Parser {
                     if !self.osc_body && !self.osc_overflow && byte == b';' {
                         let body_limit = if self.osc == b"52" {
                             MAX_CLIPBOARD_BODY
+                        } else if self.osc == b"7" {
+                            MAX_CWD_BODY
                         } else {
                             MAX_OSC_BODY
                         };

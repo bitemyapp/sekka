@@ -1,0 +1,341 @@
+{
+  "schema": 1,
+  "reference_commit": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "reference_library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "probe_source_sha256": "c0be03944d44cfe2552cca289d89aa786f3bfb37f63bbb937f33c31764291a86",
+  "driver_sha256": "b218bb257aff6cb91a7074dc901b0b3ccd00031cb00f8ee5870423866a4fb72f",
+  "build_metadata_sha256": "db3082801239106857eca52faf118b8d09c43ff2439988aa40ccec86ef95b239",
+  "build_command": [
+    "cc",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I/home/callen/work/ghostty-reference-20261028/include",
+    "/home/callen/work/hotaru-memory-budget-20261028/tools/history-hyperlink-capacity.c",
+    "-L/home/callen/work/ghostty-reference-20261028/zig-out/lib",
+    "-Wl,-rpath,/home/callen/work/ghostty-reference-20261028/zig-out/lib",
+    "-lghostty-vt",
+    "-o",
+    "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/hyperlink-capacity-probe"
+  ],
+  "cases": [
+    {
+      "count": 1663,
+      "input_sha256": "c208e58994a4546a09f1d082d5a4ad6d997cc68bcfc531f90751d95b437c8658",
+      "input_bytes": 47117,
+      "reference_cells": {
+        "links_requested": 1663,
+        "mismatches": [],
+        "links_preserved": 1663
+      },
+      "adapters": {
+        "reference": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/reference",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1663.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0"
+          ],
+          "output": {
+            "engine": "ghostty",
+            "input_bytes": 47117,
+            "cols": 120,
+            "rows": 24,
+            "row_limit": 10000,
+            "byte_limit": 50000000,
+            "compressed": false,
+            "history_rows": 0,
+            "content_fnv1a64": "f37b166c4f654ad7",
+            "checksum": 2000,
+            "feed_ns": 1210016,
+            "compression_ns": 40,
+            "read_history_ns": 721,
+            "rss_base_kib": 2076,
+            "rss_populated_kib": 3912,
+            "rss_cold_kib": 4104,
+            "rss_read_kib": 4104,
+            "rss_released_kib": 3840,
+            "page_resident_populated_bytes": 778240,
+            "page_resident_cold_bytes": 778240,
+            "page_resident_after_read_bytes": 778240,
+            "compressed_pages": 0,
+            "compressed_bytes": 0
+          }
+        },
+        "candidate": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/candidate/target/release/examples/history_budget",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1663.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0",
+            "none",
+            "0"
+          ],
+          "output": {
+            "byte_limit": 50000000,
+            "capture_logical_bytes": 252196,
+            "capture_ns": 391,
+            "capture_storage_estimate": 252196,
+            "checksum": 2000,
+            "cols": 120,
+            "compressed": false,
+            "compressed_blocks": 0,
+            "compressed_bytes": 0,
+            "compressed_rows": 0,
+            "compression_ns": 30,
+            "compression_steps": 0,
+            "content_fnv1a64": "f37b166c4f654ad7",
+            "engine": "hotaru",
+            "feed_ns": 470965,
+            "history_rows": 0,
+            "hold": "none",
+            "input_bytes": 47117,
+            "logical_active_bytes": 251124,
+            "logical_history_bytes": 0,
+            "mutated_before_read": false,
+            "read_history_ns": 331,
+            "row_limit": 10000,
+            "rows": 24,
+            "rss_base_kib": 2168,
+            "rss_captured_kib": 2668,
+            "rss_cold_kib": 2668,
+            "rss_owner_released_kib": 2668,
+            "rss_populated_kib": 2604,
+            "rss_read_kib": 2668,
+            "rss_released_kib": 2668,
+            "storage_cold_estimate": 0,
+            "storage_populated_estimate": 0
+          }
+        }
+      }
+    },
+    {
+      "count": 1664,
+      "input_sha256": "df62cdc86eeb1a19c0bb928ac95825f9a73d169c3af98c3333f7658de5ba757d",
+      "input_bytes": 47146,
+      "reference_cells": {
+        "links_requested": 1664,
+        "mismatches": [
+          {
+            "index": 1663,
+            "row": 13,
+            "col": 103,
+            "codepoint": 120,
+            "expected": "https://x/1663",
+            "actual_hex": ""
+          }
+        ],
+        "links_preserved": 1663
+      },
+      "adapters": {
+        "reference": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/reference",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1664.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0"
+          ],
+          "output": {
+            "engine": "ghostty",
+            "input_bytes": 47146,
+            "cols": 120,
+            "rows": 24,
+            "row_limit": 10000,
+            "byte_limit": 50000000,
+            "compressed": false,
+            "history_rows": 0,
+            "content_fnv1a64": "042a644790712d0f",
+            "checksum": 2000,
+            "feed_ns": 1028330,
+            "compression_ns": 40,
+            "read_history_ns": 601,
+            "rss_base_kib": 2072,
+            "rss_populated_kib": 3912,
+            "rss_cold_kib": 4104,
+            "rss_read_kib": 4104,
+            "rss_released_kib": 3840,
+            "page_resident_populated_bytes": 778240,
+            "page_resident_cold_bytes": 778240,
+            "page_resident_after_read_bytes": 778240,
+            "compressed_pages": 0,
+            "compressed_bytes": 0
+          }
+        },
+        "candidate": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/candidate/target/release/examples/history_budget",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1664.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0",
+            "none",
+            "0"
+          ],
+          "output": {
+            "byte_limit": 50000000,
+            "capture_logical_bytes": 252314,
+            "capture_ns": 391,
+            "capture_storage_estimate": 252314,
+            "checksum": 2000,
+            "cols": 120,
+            "compressed": false,
+            "compressed_blocks": 0,
+            "compressed_bytes": 0,
+            "compressed_rows": 0,
+            "compression_ns": 30,
+            "compression_steps": 0,
+            "content_fnv1a64": "68f93636c6b912a5",
+            "engine": "hotaru",
+            "feed_ns": 402801,
+            "history_rows": 0,
+            "hold": "none",
+            "input_bytes": 47146,
+            "logical_active_bytes": 251242,
+            "logical_history_bytes": 0,
+            "mutated_before_read": false,
+            "read_history_ns": 331,
+            "row_limit": 10000,
+            "rows": 24,
+            "rss_base_kib": 2136,
+            "rss_captured_kib": 2608,
+            "rss_cold_kib": 2608,
+            "rss_owner_released_kib": 2608,
+            "rss_populated_kib": 2608,
+            "rss_read_kib": 2608,
+            "rss_released_kib": 2608,
+            "storage_cold_estimate": 0,
+            "storage_populated_estimate": 0
+          }
+        }
+      }
+    },
+    {
+      "count": 1665,
+      "input_sha256": "2b0e54f21d86b09c3c9fbf78eb34fb1eaae1290bdab2a5bab5e41cd859129086",
+      "input_bytes": 47175,
+      "reference_cells": {
+        "links_requested": 1665,
+        "mismatches": [
+          {
+            "index": 1663,
+            "row": 13,
+            "col": 103,
+            "codepoint": 120,
+            "expected": "https://x/1663",
+            "actual_hex": ""
+          },
+          {
+            "index": 1664,
+            "row": 13,
+            "col": 104,
+            "codepoint": 120,
+            "expected": "https://x/1664",
+            "actual_hex": ""
+          }
+        ],
+        "links_preserved": 1663
+      },
+      "adapters": {
+        "reference": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/reference",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1665.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0"
+          ],
+          "output": {
+            "engine": "ghostty",
+            "input_bytes": 47175,
+            "cols": 120,
+            "rows": 24,
+            "row_limit": 10000,
+            "byte_limit": 50000000,
+            "compressed": false,
+            "history_rows": 0,
+            "content_fnv1a64": "e05b33a832a02257",
+            "checksum": 2000,
+            "feed_ns": 917091,
+            "compression_ns": 40,
+            "read_history_ns": 601,
+            "rss_base_kib": 2068,
+            "rss_populated_kib": 3904,
+            "rss_cold_kib": 4096,
+            "rss_read_kib": 4096,
+            "rss_released_kib": 3832,
+            "page_resident_populated_bytes": 778240,
+            "page_resident_cold_bytes": 778240,
+            "page_resident_after_read_bytes": 778240,
+            "compressed_pages": 0,
+            "compressed_bytes": 0
+          }
+        },
+        "candidate": {
+          "command": [
+            "/home/callen/work/hotaru-memory-budget-20261028/candidate/target/release/examples/history_budget",
+            "/home/callen/work/hotaru-memory-budget-20261028/hyperlink-capacity/unique-links-1665.vt",
+            "120",
+            "24",
+            "10000",
+            "50000000",
+            "0",
+            "none",
+            "0"
+          ],
+          "output": {
+            "byte_limit": 50000000,
+            "capture_logical_bytes": 252432,
+            "capture_ns": 410,
+            "capture_storage_estimate": 252432,
+            "checksum": 2000,
+            "cols": 120,
+            "compressed": false,
+            "compressed_blocks": 0,
+            "compressed_bytes": 0,
+            "compressed_rows": 0,
+            "compression_ns": 41,
+            "compression_steps": 0,
+            "content_fnv1a64": "6c37e7e0fd102410",
+            "engine": "hotaru",
+            "feed_ns": 353226,
+            "history_rows": 0,
+            "hold": "none",
+            "input_bytes": 47175,
+            "logical_active_bytes": 251360,
+            "logical_history_bytes": 0,
+            "mutated_before_read": false,
+            "read_history_ns": 340,
+            "row_limit": 10000,
+            "rows": 24,
+            "rss_base_kib": 2156,
+            "rss_captured_kib": 2604,
+            "rss_cold_kib": 2604,
+            "rss_owner_released_kib": 2604,
+            "rss_populated_kib": 2604,
+            "rss_read_kib": 2604,
+            "rss_released_kib": 2604,
+            "storage_cold_estimate": 0,
+            "storage_populated_estimate": 0
+          }
+        }
+      }
+    }
+  ],
+  "note": "Reference omits valid links after its page-local capacity is exhausted. Hotaru intentionally retains these links. No speed or memory ratio is inferred from unequal contents.",
+  "probe_binary_sha256": "717fe7de385b14b99556b34490deb6a6f3963470a5064d2fe1e0a1a50dc46e15"
+}
