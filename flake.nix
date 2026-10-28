@@ -145,6 +145,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        apple-silicon-backlight = import ./nix/apple-silicon/backlight.nix;
       };
       lib = {
         inherit installedLock;
@@ -343,6 +344,7 @@
           inherit pkgs;
           patched = avahiPkgs.sekka-avahi-daemon;
         };
+        t6030-backlight = import ./nix/apple-silicon/backlight-test.nix { inherit pkgs; };
         plasma-login-config = import ./nix/plasma-login-config-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

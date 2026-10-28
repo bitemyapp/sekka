@@ -1,0 +1,2050 @@
+Backport: drm/apple: add T6030 panel brightness control
+
+Upstream: https://github.com/omacom/linux-aurora/pull/183
+Commit: fa224e85a01adbee386542aef7438b6f7e2f2d8c (merged 2026-10-25)
+Base: c46d7dcdb8712ea9aeb0ce47b439ffae76371e55 (aurora-2026.10.17.20)
+
+Adapt the port to the pinned kernel's separate legacy/H17P dispatch:
+- use the existing firmware selector rather than dcp_is_v14_7_panel;
+- route T6030 brightness writes through the shared nits policy;
+- initialise the policy, locks and work before 14.7 probe teardown actions,
+  and exercise that initializer from the KUnit fixtures;
+- retain the separate H17P worker, suspend, resume and backlight ops;
+- retain the older swap layout and board records;
+- omit the J514C test entry: that board is absent from this kernel.
+Includes upstream's KUnit controls under CONFIG_DRM_APPLE_DISPLAY_KUNIT_TEST.
+
+--- a/drivers/gpu/drm/apple/dcp-internal.h
++++ b/drivers/gpu/drm/apple/dcp-internal.h
+@@ -681,6 +681,11 @@
+ 	return dcp->hw.iomfb_method_profile == DCP_IOMFB_METHODS_H17P_EXTERNAL;
+ }
+ 
++#if IS_ENABLED(CONFIG_KUNIT)
++void dcp_work_register_backlight(struct work_struct *work);
++int dcp_v14_init_backlight(struct apple_dcp *dcp);
++#endif
++
+ #define DCP_AUDIO_MAX_CHANS 15
+ 
+ #endif /* __APPLE_DCP_INTERNAL_H__ */
+--- a/drivers/gpu/drm/apple/dcp.c
++++ b/drivers/gpu/drm/apple/dcp.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only OR MIT
+ /* Copyright 2021 Alyssa Rosenzweig */
+ 
++#include <kunit/visibility.h>
+ #include <linux/align.h>
+ #include <linux/bitmap.h>
+ #include <linux/clk.h>
+@@ -1962,7 +1963,7 @@
+ 	}
+ }
+ 
+-static void dcp_work_register_backlight(struct work_struct *work)
++VISIBLE_IF_KUNIT void dcp_work_register_backlight(struct work_struct *work)
+ {
+ 	int ret;
+ 	struct apple_dcp *dcp;
+@@ -1970,14 +1971,17 @@
+ 	dcp = container_of(work, struct apple_dcp, bl_register_wq);
+ 
+ 	mutex_lock(&dcp->bl_register_mutex);
+-	if (dcp->brightness.bl_dev)
++	if (READ_ONCE(dcp->quiescing) || dcp->brightness.bl_dev)
+ 		goto out_unlock;
+ 
+ 	/* try to register backlight device, */
+ 	ret = dcp_backlight_register(dcp);
++	if (ret == -ENODATA)
++		goto out_unlock;
+ 	if (ret) {
+ 		dev_err(dcp->dev, "Unable to register backlight device\n");
+-		dcp->brightness.maximum = 0;
++		if (!dcp_backlight_active(dcp))
++			dcp->brightness.maximum = 0;
+ 	}
+ 
+ out_unlock:
+@@ -1991,6 +1995,19 @@
+ 	dcp = container_of(work, struct apple_dcp, bl_update_wq);
+ 
+ 	dcp_backlight_update(dcp);
++}
++
++/*
++ * This kernel probes 14.7 separately from H17P. Initialise the shared
++ * policy and registration work before 14.7 installs teardown actions,
++ * including on probe/bind failure.
++ */
++VISIBLE_IF_KUNIT int dcp_v14_init_backlight(struct apple_dcp *dcp)
++{
++	INIT_WORK(&dcp->bl_register_wq, dcp_work_register_backlight);
++	mutex_init(&dcp->bl_register_mutex);
++	INIT_WORK(&dcp->bl_update_wq, dcp_work_update_backlight);
++	return dcp_backlight_init(dcp, dcp->dev);
+ }
+ 
+ static int dcp_create_piodma_iommu_dev(struct apple_dcp *dcp)
+@@ -2465,9 +2482,12 @@
+ 		of_node_put(panel_np);
+ 		dcp->fixed_connector_type = DRM_MODE_CONNECTOR_eDP;
+ 		dcp->connector_type = DRM_MODE_CONNECTOR_eDP;
+-		INIT_WORK(&dcp->bl_register_wq, dcp_work_register_backlight);
+-		mutex_init(&dcp->bl_register_mutex);
+-		INIT_WORK(&dcp->bl_update_wq, dcp_work_update_backlight);
++		/* The 14.7 path initialises these before its probe devres. */
++		if (dcp->fw_compat != DCP_FIRMWARE_V_14_7) {
++			INIT_WORK(&dcp->bl_register_wq, dcp_work_register_backlight);
++			mutex_init(&dcp->bl_register_mutex);
++			INIT_WORK(&dcp->bl_update_wq, dcp_work_update_backlight);
++		}
+ 	}
+ 
+ 	if (dcp->fw_compat == DCP_FIRMWARE_V_26_6) {
+@@ -2811,6 +2831,9 @@
+ 			return ret;
+ 	}
+ 	if (fw_compat == DCP_FIRMWARE_V_14_7 && !dcp->external) {
++		ret = dcp_v14_init_backlight(dcp);
++		if (ret)
++			return ret;
+ 		ret = iomfb_v14_7_probe(dcp);
+ 		if (ret)
+ 			return ret;
+@@ -3259,6 +3282,7 @@
+ 		return dcp_platform_suspend_h17p(dev);
+ 	if (READ_ONCE(dcp->ext_dead))
+ 		return 0;
++	iomfb_v14_7_backlight_suspend(dcp);
+ 
+ 	/* Serialize PM against explicit bring-up, including queued startup work.
+ 	 * Before a startup attempt the device remains suspendable. After any
+@@ -3317,6 +3341,7 @@
+ 		return dcp_platform_resume_h17p(dev);
+ 	if (READ_ONCE(dcp->ext_dead))
+ 		return 0;
++	iomfb_v14_7_backlight_resume(dcp);
+ 
+ 	dcp_enable_typec_work(dcp);
+ 	/* The HDMI output's PHY and crossbar may have lost their setup in sleep. */
+--- a/drivers/gpu/drm/apple/dcp_backlight.c
++++ b/drivers/gpu/drm/apple/dcp_backlight.c
+@@ -16,6 +16,7 @@
+ #include "connector.h"
+ #include "dcp.h"
+ #include "dcp-internal.h"
++#include "iomfb_v14_7.h"
+ 
+ #define MIN_BRIGHTNESS_PART1	2U
+ #define MAX_BRIGHTNESS_PART1	99U
+@@ -93,11 +94,31 @@
+ #define DCP_BL_FADE_MS		250U
+ #define DCP_BL_FADE_STEP_MS	16U
+ 
++static bool dcp_backlight_presents_nits(struct apple_dcp *dcp)
++{
++	return (dcp->fw_compat == DCP_FIRMWARE_H17P &&
++		dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G) ||
++	       iomfb_v14_7_panel_nits(dcp);
++}
++
+ bool dcp_backlight_active(struct apple_dcp *dcp)
+ {
+-	return dcp->fw_compat == DCP_FIRMWARE_H17P &&
+-		dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G &&
++	return dcp_backlight_presents_nits(dcp) &&
+ 		READ_ONCE(dcp->backlight.state.ready);
++}
++
++bool dcp_backlight_level_known(struct apple_dcp *dcp)
++{
++	unsigned long flags;
++	bool known;
++
++	/* Only a panel running the policy initialised its lock and state. */
++	if (!dcp_backlight_active(dcp))
++		return false;
++	spin_lock_irqsave(&dcp->backlight.lock, flags);
++	known = dcp->backlight.state.ready && dcp->backlight.state.level_known;
++	spin_unlock_irqrestore(&dcp->backlight.lock, flags);
++	return known;
+ }
+ 
+ int dcp_backlight_takeover(struct apple_dcp *dcp, u32 millinits)
+@@ -121,16 +142,23 @@
+ {
+ 	struct apple_dcp *dcp = bl_get_data(bd);
+ 	unsigned long flags;
+-	u32 actual;
+ 
+ 	if (READ_ONCE(dcp->quiescing))
+ 		return -ENODEV;
+ 
+ 	if (dcp_backlight_active(dcp)) {
++		int ret;
++
++		/*
++		 * The 14.7 panel reports no actual level until a present
++		 * carried one: before that it shows the boot loader's level,
++		 * which Linux does not know.
++		 */
+ 		spin_lock_irqsave(&dcp->backlight.lock, flags);
+-		actual = dcp->backlight.state.actual;
++		ret = dcp_bl_reported_actual(&dcp->backlight.state,
++					     iomfb_v14_7_panel_nits(dcp));
+ 		spin_unlock_irqrestore(&dcp->backlight.lock, flags);
+-		return actual;
++		return ret;
+ 	}
+ 
+ 	return dcp->brightness.nits;
+@@ -144,7 +172,8 @@
+ 	unsigned long flags;
+ 	int ret;
+ 
+-	if (dcp->fw_compat != DCP_FIRMWARE_H17P || !dcp_has_panel(dcp) ||
++	if ((dcp->fw_compat != DCP_FIRMWARE_H17P && !iomfb_v14_7_panel_nits(dcp)) ||
++	    !dcp_has_panel(dcp) ||
+ 	    !dcp->crtc || !kick)
+ 		return -EINVAL;
+ 
+@@ -157,7 +186,7 @@
+ 				  inherited_valid, inherited,
+ 				  default_valid, default_nits);
+ 		if (!ret) {
+-			dcp->backlight.state.fade = true;
++			dcp->backlight.state.fade = !iomfb_v14_7_panel_nits(dcp);
+ 			dcp->backlight.kick = kick;
+ 		}
+ 	}
+@@ -494,8 +523,7 @@
+ 		dcp_backlight_kick(dcp);
+ 		return 0;
+ 	}
+-	if (dcp->fw_compat == DCP_FIRMWARE_H17P &&
+-	    dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G)
++	if (dcp_backlight_presents_nits(dcp))
+ 		return -ENODATA;
+ 
+ 	/*
+@@ -569,7 +597,7 @@
+ 	struct drm_modeset_acquire_ctx ctx;
+ 	int brightness = backlight_get_brightness(bd);
+ 
+-	if (dcp->fw_compat == DCP_FIRMWARE_H17P)
++	if (dcp->fw_compat == DCP_FIRMWARE_H17P || iomfb_v14_7_panel_nits(dcp))
+ 		return dcp_set_brightness_h17p(bd);
+ 
+ 	drm_modeset_acquire_init(&ctx, DRM_MODESET_ACQUIRE_INTERRUPTIBLE);
+@@ -615,6 +643,22 @@
+ 	.controls_device = dcp_backlight_controls_device,
+ };
+ 
++static bool dcp_backlight_controls_device_v14(struct backlight_device *bd,
++					      struct device *display_dev)
++{
++	struct apple_dcp *dcp = bl_get_data(bd);
++
++	/* An fbdev unblank must not present the unrequested default level. */
++	return dcp_backlight_level_known(dcp) &&
++		dcp_backlight_controls_device(bd, display_dev);
++}
++
++static const struct backlight_ops dcp_backlight_ops_v14 = {
++	.get_brightness = dcp_get_brightness,
++	.update_status = dcp_set_brightness,
++	.controls_device = dcp_backlight_controls_device_v14,
++};
++
+ int dcp_backlight_register(struct apple_dcp *dcp)
+ {
+ 	struct device *dev = dcp->dev;
+@@ -626,9 +670,7 @@
+ 		.scale = BACKLIGHT_SCALE_LINEAR,
+ 	};
+ 	props.max_brightness = min(dcp->brightness.maximum, MAX_BRIGHTNESS_PART2 - 1);
+-	if (dcp->fw_compat == DCP_FIRMWARE_H17P &&
+-	    dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G &&
+-	    !dcp_backlight_active(dcp))
++	if (dcp_backlight_presents_nits(dcp) && !dcp_backlight_active(dcp))
+ 		return -ENODATA;
+ 	if (dcp_backlight_active(dcp)) {
+ 		spin_lock_irqsave(&dcp->backlight.lock, flags);
+@@ -644,6 +686,8 @@
+ 	}
+ 
+ 	bl_dev = devm_backlight_device_register(dev, "apple-panel-bl", dev, dcp,
++						iomfb_v14_7_panel_nits(dcp) ?
++						&dcp_backlight_ops_v14 :
+ 						dcp->fw_compat == DCP_FIRMWARE_H17P ?
+ 						&dcp_backlight_ops_h17p :
+ 						&dcp_backlight_ops, &props);
+--- a/drivers/gpu/drm/apple/dcp_backlight.h
++++ b/drivers/gpu/drm/apple/dcp_backlight.h
+@@ -263,6 +263,13 @@
+ 	return true;
+ }
+ 
++static inline int dcp_bl_reported_actual(const struct dcp_backlight_state *state, bool strict)
++{
++	if (strict && !state->level_known)
++		return -ENODATA;
++	return state->actual;
++}
++
+ /* Three deferred retries per user request; a permanent rejection stays dirty. */
+ static inline unsigned int dcp_bl_retry_delay(const struct dcp_backlight_state *state)
+ {
+@@ -280,6 +287,7 @@
+  * Configure before registration and keep the callback valid until teardown.
+  */
+ bool dcp_backlight_active(struct apple_dcp *dcp);
++bool dcp_backlight_level_known(struct apple_dcp *dcp);
+ int dcp_backlight_takeover(struct apple_dcp *dcp, u32 millinits);
+ int dcp_backlight_configure(struct apple_dcp *dcp, u32 maximum,
+ 			    bool inherited_valid, u32 inherited,
+--- a/drivers/gpu/drm/apple/iomfb_v14_7.c
++++ b/drivers/gpu/drm/apple/iomfb_v14_7.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-only OR MIT
+ 
++#include <kunit/static_stub.h>
+ #include <linux/clk.h>
+ #include <linux/debugfs.h>
+ #include <linux/device.h>
+@@ -39,6 +40,7 @@
+ #include "dcp-lifecycle.h"
+ #include "iomfb_internal.h"
+ #include "iomfb_v14_7.h"
++#include "iomfb_v14_7_backlight.h"
+ #include "iomfb_v14_7_board.h"
+ #include "iomfb_v14_7_link.h"
+ #include "iomfb_v14_7_swap.h"
+@@ -73,6 +75,7 @@
+ 	.firmware_uuid = DCP_V14_FIRMWARE_UUID,
+ 	.handoff = "apple,t6030-handoff",
+ 	.promotion = true,
++	.panel_nits = true,
+ };
+ 
+ /*
+@@ -239,6 +242,19 @@
+ 	struct drm_framebuffer *active_fb;
+ 	u64 swaps;
+ 	u64 swap_ns_max;
++
++	/* Immutable probe admission: only the J514S/J516S internal panel. */
++	bool panel_nits;
++	/* Copy of the last accepted surface; active_fb pins its DMA under lock. */
++	u8 shown_surface[DCP_V14_SURFACE_SIZE];
++	u64 shown_iova;
++	u32 shown_width, shown_height, shown_dst_y;
++	struct delayed_work backlight_work;
++	/* Serializes gate transitions with queue admission. */
++	spinlock_t bl_gate_lock;
++	enum dcp_v14_bl_gate bl_gate;
++	u32 nits_sent;
++	u64 nits_presents, brightness_presents, nits_refused;
+ };
+ 
+ /*
+@@ -250,6 +266,136 @@
+ 
+ static int dcp_v14_callback(void *cookie, u32 tag, const void *input, u32 in_size,
+ 			    void *output, u32 out_size);
++
++static void dcp_v14_backlight_work(struct work_struct *work);
++
++/* The internal panel of a board whose swap level block was validated (T6030). */
++static bool dcp_v14_board_nits(const struct apple_dcp_v14 *v14)
++{
++	return !v14->external && v14->panel_nits && v14->board && v14->board->panel_nits;
++}
++
++bool iomfb_v14_7_panel_nits(struct apple_dcp *dcp)
++{
++	return dcp->fw_compat == DCP_FIRMWARE_V_14_7 && dcp->v14 &&
++	       dcp_v14_board_nits(dcp->v14);
++}
++
++static enum dcp_v14_bl_gate dcp_v14_bl_gate_get(struct apple_dcp_v14 *v14)
++{
++	enum dcp_v14_bl_gate gate;
++	unsigned long flags;
++
++	spin_lock_irqsave(&v14->bl_gate_lock, flags);
++	gate = v14->bl_gate;
++	spin_unlock_irqrestore(&v14->bl_gate_lock, flags);
++	return gate;
++}
++
++/* Queues a brightness-only present, unless the gate is shut. */
++static void dcp_v14_bl_queue(struct apple_dcp_v14 *v14, unsigned long delay)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&v14->bl_gate_lock, flags);
++	if (dcp_v14_bl_may_queue(v14->bl_gate))
++		mod_delayed_work(system_dfl_wq, &v14->backlight_work, delay);
++	spin_unlock_irqrestore(&v14->bl_gate_lock, flags);
++}
++
++/*
++ * Shuts the gate, until resume or (@for_good, unbind and remove) for good,
++ * then drains the work. The RPC lock waits for a running present; the
++ * gate lock excludes late queueing. Cancellation runs outside the RPC lock.
++ */
++static void dcp_v14_bl_shut(struct apple_dcp_v14 *v14, bool for_good)
++{
++	unsigned long flags;
++
++	mutex_lock(&v14->lock);
++	spin_lock_irqsave(&v14->bl_gate_lock, flags);
++	v14->bl_gate = for_good ? DCP_V14_BL_CLOSED : dcp_v14_bl_gate_suspend(v14->bl_gate);
++	spin_unlock_irqrestore(&v14->bl_gate_lock, flags);
++	mutex_unlock(&v14->lock);
++	cancel_delayed_work_sync(&v14->backlight_work);
++}
++
++/* The class device may be platform devres, outside the component bind group. */
++static void dcp_v14_stop_backlight(struct apple_dcp_v14 *v14)
++{
++	struct apple_dcp *dcp = READ_ONCE(v14->dcp);
++
++	if (dcp)
++		WRITE_ONCE(dcp->quiescing, true);
++	dcp_v14_bl_shut(v14, true);
++	if (!dcp)
++		return;
++	dcp_backlight_stop(dcp);
++	cancel_work_sync(&dcp->bl_register_wq);
++	cancel_work_sync(&dcp->bl_update_wq);
++	/* Never hold this mutex while waiting for its registration worker. */
++	guard(mutex)(&dcp->bl_register_mutex);
++	if (dcp->brightness.bl_dev) {
++		devm_backlight_device_unregister(dcp->dev, dcp->brightness.bl_dev);
++		dcp->brightness.bl_dev = NULL;
++	}
++}
++
++/* The policy's kick (dcp_backlight.c): only queues; the RPC runs in the work. */
++static void dcp_v14_backlight_kick(struct apple_dcp *dcp)
++{
++	if (iomfb_v14_7_panel_nits(dcp) && !READ_ONCE(dcp->quiescing))
++		dcp_v14_bl_queue(dcp->v14, 0);
++}
++
++/*
++ * The panel's level policy, set up once the panel runs: at most 500 nits
++ * (less if the panel's DT record says so), and no fades. No boot loader
++ * level is known, so none is presented until userspace sets one; until
++ * then the backlight reports DCP_V14_NITS_DEFAULT as its requested level
++ * and no actual level (dcp_backlight.c). dcp_backlight_configure()
++ * registers the device from bl_register_wq.
++ */
++static void dcp_v14_configure_backlight(struct apple_dcp *dcp)
++{
++	struct apple_dcp_v14 *v14 = dcp->v14;
++	u32 maximum = DCP_V14_NITS_MAX;
++	int ret;
++
++	if (!iomfb_v14_7_panel_nits(dcp) || READ_ONCE(dcp->quiescing) ||
++	    !v14->started || dcp_backlight_active(dcp) ||
++	    !dcp_has_panel(dcp) || !dcp->crtc)
++		return;
++	/* A described panel maximum may only lower the wire bound. */
++	if (dcp->brightness.maximum)
++		maximum = min(maximum, dcp->brightness.maximum);
++	ret = dcp_backlight_configure(dcp, maximum, false, 0, true,
++				      min_t(u32, maximum, DCP_V14_NITS_DEFAULT),
++				      dcp_v14_backlight_kick);
++	if (ret && ret != -EBUSY)
++		dev_err_once(dcp->dev, "%s backlight unavailable: %d\n", v14->board->name, ret);
++}
++
++void iomfb_v14_7_backlight_suspend(struct apple_dcp *dcp)
++{
++	if (iomfb_v14_7_panel_nits(dcp))
++		dcp_v14_bl_shut(dcp->v14, false);
++}
++
++/* Pending levels ride the next normal CRTC restore present after admission opens. */
++void iomfb_v14_7_backlight_resume(struct apple_dcp *dcp)
++{
++	struct apple_dcp_v14 *v14 = dcp->v14;
++	unsigned long flags;
++
++	if (!iomfb_v14_7_panel_nits(dcp))
++		return;
++	mutex_lock(&v14->lock);
++	spin_lock_irqsave(&v14->bl_gate_lock, flags);
++	v14->bl_gate = dcp_v14_bl_gate_resume(v14->bl_gate);
++	spin_unlock_irqrestore(&v14->bl_gate_lock, flags);
++	mutex_unlock(&v14->lock);
++}
+ 
+ /*
+  * An external session stopped on a link error, not a crash: its display is
+@@ -288,6 +434,8 @@
+ 	bool vetoed;
+ 	int ret;
+ 
++	KUNIT_STATIC_STUB_REDIRECT(dcp_v14_call_guarded, v14, tag, in, in_size,
++				   out, out_size, completion, admit, admit_cookie);
+ 	if (v14->failed)
+ 		return -EIO;
+ 	dev_dbg(v14->dev, "call %#x in %u out %u\n", tag, in_size, out_size);
+@@ -1396,6 +1544,8 @@
+ {
+ 	struct apple_dcp_v14 *v14 = data;
+ 
++	if (dcp_v14_board_nits(v14))
++		dcp_v14_stop_backlight(v14);
+ 	if (!v14->rtk)
+ 		kfree(v14);
+ }
+@@ -1475,6 +1625,13 @@
+ 		return ERR_PTR(-ENODEV);
+ 	}
+ 	return NULL;
++}
++
++static bool dcp_v14_panel_nits_admit(const struct dcp_v14_board *board,
++				     dcp_v14_compat_fn machine_is, const void *ctx)
++{
++	return board && board->panel_nits &&
++		(machine_is(ctx, "apple,j514s") || machine_is(ctx, "apple,j516s"));
+ }
+ 
+ const char *iomfb_v14_7_board_name(const struct dcp_v14_board *board)
+@@ -1530,10 +1687,13 @@
+ 		return -ENOMEM;
+ 	v14->dev = dev;
+ 	v14->board = board;
++	v14->panel_nits = dcp_v14_panel_nits_admit(board, dcp_v14_machine_is, np);
+ 	v14->dcp = dcp;
+ 	mutex_init(&v14->lock);
+ 	init_waitqueue_head(&v14->described_wait);
+ 	INIT_WORK(&v14->idle_work, dcp_v14_idle);
++	INIT_DELAYED_WORK(&v14->backlight_work, dcp_v14_backlight_work);
++	spin_lock_init(&v14->bl_gate_lock);
+ 	ret = devm_add_action_or_reset(dev, dcp_v14_release, v14);
+ 	if (ret)
+ 		return ret;
+@@ -1972,6 +2132,8 @@
+ 	mutex_init(&v14->lock);
+ 	init_waitqueue_head(&v14->described_wait);
+ 	INIT_WORK(&v14->idle_work, dcp_v14_idle);
++	INIT_DELAYED_WORK(&v14->backlight_work, dcp_v14_backlight_work);
++	spin_lock_init(&v14->bl_gate_lock);
+ 	INIT_WORK(&v14->stopped_work, dcp_v14_stopped_work);
+ 	dcp->v14 = v14;
+ 	dcp_v14_link_init(&v14->link, dev, NULL);
+@@ -2202,6 +2364,8 @@
+ 		flush_work(&v14->idle_work);
+ 		cancel_work_sync(&v14->stopped_work);
+ 	} else {
++		if (dcp_v14_board_nits(v14))
++			dcp_v14_stop_backlight(v14);
+ 		WRITE_ONCE(v14->dcp, NULL);
+ 	}
+ 	if (v14->rtk)
+@@ -2241,6 +2405,8 @@
+ 	 * Callbacks that already loaded the old pointer finish before the
+ 	 * flush returns; later ones see NULL.
+ 	 */
++	if (dcp_v14_board_nits(v14))
++		dcp_v14_stop_backlight(v14);
+ 	WRITE_ONCE(v14->dcp, NULL);
+ 	if (v14->rtk)
+ 		apple_rtkit_flush_rx(v14->rtk);
+@@ -2392,6 +2558,7 @@
+ 	dcp_mode_set_valid(&dcp->mode_state, true);
+ 	dcp->active = true;
+ 	complete(&dcp->start_done);
++	dcp_v14_configure_backlight(dcp);
+ 
+ 	mutex_lock(&dcp->modes_lock);
+ 	selected = dcp->modes[0].mode;
+@@ -2497,20 +2664,64 @@
+ 	return connector && READ_ONCE(connector->connected);
+ }
+ 
++static bool dcp_v14_swap_nits(struct apple_dcp_v14 *v14, u8 *swap,
++			      struct dcp_backlight_present *present)
++{
++	struct apple_dcp *dcp = READ_ONCE(v14->dcp);
++
++	lockdep_assert_held(&v14->lock);
++	/* The policy exists only on the T6030 panel: nothing else is asked. */
++	if (!dcp || !dcp_v14_board_nits(v14) || !dcp_backlight_active(dcp))
++		return false;
++	if (!dcp_v14_swap_takes_nits(true, v14->external, dcp_is_typec_output(dcp), true))
++		return false;
++	/* -EALREADY: no change; -ENODATA/-EBUSY: nothing to present now. */
++	if (dcp_backlight_prepare(dcp, true, present))
++		return false;
++	/* The policy's maximum is at most the wire bound; never above it. */
++	if (WARN_ON_ONCE(dcp_v14_encode_nits(swap, true, present->nits))) {
++		dcp_backlight_complete(dcp, present->sequence, false);
++		v14->nits_refused++;
++		return false;
++	}
++	return true;
++}
++
++static void dcp_v14_swap_nits_done(struct apple_dcp_v14 *v14,
++				   const struct dcp_backlight_present *present, bool accepted)
++{
++	struct apple_dcp *dcp = READ_ONCE(v14->dcp);
++
++	if (!dcp)
++		return;
++	if (!dcp_backlight_complete(dcp, present->sequence, accepted))
++		return;
++	if (accepted) {
++		v14->nits_sent = present->nits;
++		v14->nits_presents++;
++		return;
++	}
++	v14->nits_refused++;
++	/* The internal swap failure is final: swap_locked latches failed. */
++}
++
+ /*
+  * Swap start, then the swap; returns once the firmware completed that swap.
+  * @ctm_state, if set, carries the colour matrix to send first.
+  */
+-static int dcp_v14_swap(struct apple_dcp_v14 *v14, const u8 *surface, u64 iova,
+-			u32 width, u32 height, u32 dst_y,
+-			const struct drm_crtc_state *ctm_state)
++static int dcp_v14_swap_locked(struct apple_dcp_v14 *v14, const u8 *surface, u64 iova,
++			       u32 width, u32 height, u32 dst_y,
++			       const struct drm_crtc_state *ctm_state)
+ {
+ 	struct dcp_v14_swap_admission admission = { .v14 = v14 };
+ 	__le32 start[4] = {}, started[2] = {}, result[3];
++	struct dcp_backlight_present present;
++	bool nits;
+ 	u8 *swap;
+ 	u32 id;
+ 	int ret;
+ 
++	lockdep_assert_held(&v14->lock);
+ 	if (surface && (!iova || !width || width > v14->panel_width || !height ||
+ 			dst_y > v14->panel_height || height > v14->panel_height - dst_y))
+ 		return -EINVAL;
+@@ -2518,7 +2729,6 @@
+ 	if (!swap)
+ 		return -ENOMEM;
+ 
+-	mutex_lock(&v14->lock);
+ 	admission.generation = v14->description_generation;
+ 	/*
+ 	 * A colour matrix the firmware refuses costs night light, not the
+@@ -2535,11 +2745,14 @@
+ 	if (!ret) {
+ 		dcp_v14_encode_swap(swap, id, DCP_V14_BLACK, surface, iova, width, height,
+ 				    dst_y, DCP_V14_LAYER);
++		nits = dcp_v14_swap_nits(v14, swap, &present);
+ 		ret = dcp_v14_call_guarded(v14, A(407), swap, DCP_V14_SWAP_SIZE, result, sizeof(result),
+ 				   id, dcp_v14_swap_admit, &admission);
+ 		/* The swap status sits at byte 5 of the reply. */
+ 		if (!ret && get_unaligned_le32((u8 *)result + 5))
+ 			ret = -EIO;
++		if (nits)
++			dcp_v14_swap_nits_done(v14, &present, !ret);
+ 	}
+ 	/*
+ 	 * An external display can go away under a swap: the firmware then
+@@ -2548,10 +2761,32 @@
+ 	 */
+ 	if (ret && !v14->external)
+ 		v14->failed = true;
+-	mutex_unlock(&v14->lock);
+ 
+ 	kfree(swap);
+ 	return ret;
++}
++
++/* Publish a successful swap while the RPC lock still pins both surfaces. */
++static struct drm_framebuffer *dcp_v14_publish_surface(struct apple_dcp_v14 *v14,
++						       struct drm_framebuffer *fb,
++						       const u8 *surface, u64 iova,
++						       u32 width, u32 height, u32 dst_y)
++{
++	struct drm_framebuffer *old;
++
++	KUNIT_STATIC_STUB_REDIRECT(dcp_v14_publish_surface, v14, fb, surface, iova,
++				   width, height, dst_y);
++	lockdep_assert_held(&v14->lock);
++	old = v14->active_fb;
++	v14->active_fb = fb;
++	if (fb) {
++		memcpy(v14->shown_surface, surface, sizeof(v14->shown_surface));
++		v14->shown_iova = iova;
++		v14->shown_width = width;
++		v14->shown_height = height;
++		v14->shown_dst_y = dst_y;
++	}
++	return old;
+ }
+ 
+ /*
+@@ -2559,15 +2794,17 @@
+  * after the colour matrix of @ctm_state if that is set,
+  * and keeps @fb until the next swap.
+  */
+-static bool dcp_v14_present(struct apple_dcp_v14 *v14, struct drm_framebuffer *fb,
+-			    u32 width, u32 height, u32 dst_y,
+-			    const struct drm_crtc_state *ctm_state)
++static bool dcp_v14_present_locked(struct apple_dcp_v14 *v14, struct drm_framebuffer *fb,
++				   u32 width, u32 height, u32 dst_y,
++				   const struct drm_crtc_state *ctm_state,
++				   struct drm_framebuffer **retired)
+ {
+ 	u8 surface[DCP_V14_SURFACE_SIZE];
+ 	struct drm_framebuffer *old;
+ 	u64 iova = 0, start, elapsed, swaps;
+ 	int ret;
+ 
++	lockdep_assert_held(&v14->lock);
+ 	if (READ_ONCE(v14->failed))
+ 		return false;
+ 	if (fb) {
+@@ -2577,13 +2814,12 @@
+ 		iova = drm_fb_dma_get_gem_obj(fb, 0)->dma_addr;
+ 	}
+ 	start = ktime_get_ns();
+-	ret = dcp_v14_swap(v14, fb ? surface : NULL, iova, fb ? width : 0,
+-			   fb ? height : 0, dst_y, ctm_state);
++	ret = dcp_v14_swap_locked(v14, fb ? surface : NULL, iova, fb ? width : 0,
++				  fb ? height : 0, dst_y, ctm_state);
+ 	elapsed = ktime_get_ns() - start;
+ 	if (ret && v14->external && !READ_ONCE(v14->failed)) {
+ 		/* Refused before it was taken: the old framebuffer stays on screen. */
+-		if (fb)
+-			drm_framebuffer_put(fb);
++		*retired = fb;
+ 		WRITE_ONCE(v14->mode_swaps, 0);
+ 		dev_warn_ratelimited(v14->dev, "display refused a swap: %d\n", ret);
+ 		return false;
+@@ -2593,20 +2829,89 @@
+ 		dev_err(v14->dev, "native DCP flip failed %d; buffers pinned until reboot\n", ret);
+ 		return false;
+ 	}
+-	mutex_lock(&v14->lock);
+-	old = v14->active_fb;
+-	v14->active_fb = fb;
++	old = dcp_v14_publish_surface(v14, fb, surface, iova, width, height, dst_y);
+ 	swaps = ++v14->swaps;
+ 	if (fb)
+ 		v14->mode_swaps++;
+ 	v14->swap_ns_max = max(v14->swap_ns_max, elapsed);
+-	mutex_unlock(&v14->lock);
+-	if (old)
+-		drm_framebuffer_put(old);
++	*retired = old;
+ 	if (swaps <= 3)
+ 		dev_info(v14->dev, "swap %llu complete: surface %d, imported %d, %llu us\n",
+ 			 swaps, !!fb, fb && fb->obj[0]->import_attach, elapsed / NSEC_PER_USEC);
+ 	return true;
++}
++
++static bool dcp_v14_present(struct apple_dcp_v14 *v14, struct drm_framebuffer *fb,
++			    u32 width, u32 height, u32 dst_y,
++			    const struct drm_crtc_state *ctm_state)
++{
++	struct drm_framebuffer *retired = NULL;
++	bool shown;
++
++	mutex_lock(&v14->lock);
++	shown = dcp_v14_present_locked(v14, fb, width, height, dst_y, ctm_state, &retired);
++	mutex_unlock(&v14->lock);
++	if (retired)
++		drm_framebuffer_put(retired);
++	return shown;
++}
++
++static void dcp_v14_backlight_work(struct work_struct *work)
++{
++	struct apple_dcp_v14 *v14 = container_of(to_delayed_work(work), struct apple_dcp_v14,
++						 backlight_work);
++	struct dcp_v14_bl_facts facts;
++	struct drm_framebuffer *fb;
++	struct apple_dcp *dcp;
++	int ret;
++
++	guard(mutex)(&v14->lock);
++	dcp = READ_ONCE(v14->dcp);
++	if (!dcp)
++		return;
++	fb = v14->active_fb;
++	facts = (struct dcp_v14_bl_facts) {
++		.gate = dcp_v14_bl_gate_get(v14),
++		.panel_nits = dcp_v14_board_nits(v14),
++		.external = v14->external,
++		.typec = dcp_is_typec_output(dcp),
++		.started = v14->started,
++		.failed = READ_ONCE(v14->failed),
++		.crashed = READ_ONCE(dcp->crashed),
++		.quiescing = READ_ONCE(dcp->quiescing),
++		.pending = dcp_v14_board_nits(v14) && dcp_backlight_active(dcp) &&
++			   dcp_backlight_pending(dcp),
++		.frame = !!fb,
++		.mode_valid = READ_ONCE(dcp->mode_state.valid),
++	};
++	if (dcp_v14_bl_plan(&facts) != DCP_V14_BL_REPRESENT)
++		return;
++	ret = dcp_v14_swap_locked(v14, v14->shown_surface, v14->shown_iova,
++				  v14->shown_width, v14->shown_height, v14->shown_dst_y, NULL);
++	if (!ret)
++		v14->brightness_presents++;
++	else if (ret != -EAGAIN)
++		dev_err(v14->dev, "brightness present failed: %d\n", ret);
++}
++
++static bool dcp_v14_bl_dpms_applies(struct apple_dcp_v14 *v14, struct apple_dcp *dcp)
++{
++	if (!dcp_v14_board_nits(v14) || !dcp_backlight_active(dcp))
++		return false;
++	return dcp_v14_bl_follow_dpms(true, true, dcp_backlight_level_known(dcp));
++}
++
++static void dcp_v14_blank(struct apple_dcp_v14 *v14, struct apple_dcp *dcp)
++{
++	struct drm_framebuffer *retired = NULL;
++
++	mutex_lock(&v14->lock);
++	if (dcp_v14_bl_dpms_applies(v14, dcp))
++		dcp_backlight_dpms(dcp, false);
++	dcp_v14_present_locked(v14, NULL, 0, 0, 0, NULL, &retired);
++	mutex_unlock(&v14->lock);
++	if (retired)
++		drm_framebuffer_put(retired);
+ }
+ 
+ /* Releases helper waiters without reporting a completed flip. */
+@@ -2897,6 +3202,8 @@
+ 		dcp_drm_crtc_vblank(dcp->crtc);
+ 		return;
+ 	}
++	if (!dcp->external)
++		dcp_v14_configure_backlight(dcp);
+ 	dcp->swap_start = ktime_get();
+ 	if (dcp->v14 && dcp_v14_present(dcp->v14, fb,
+ 					 fb ? (dcp->external ? p->src_w >> 16 : fb->width) : 0,
+@@ -2909,7 +3216,9 @@
+ 
+ void iomfb_v14_7_poweron(struct apple_dcp *dcp)
+ {
+-	/* The panel stays on; the next swap shows the plane again. */
++	/* The next present restores a level only after Linux has set one. */
++	if (dcp->v14 && dcp_v14_bl_dpms_applies(dcp->v14, dcp))
++		dcp_backlight_dpms(dcp, true);
+ }
+ 
+ void iomfb_v14_7_poweroff(struct apple_dcp *dcp)
+@@ -2929,5 +3238,10 @@
+ 	}
+ 	/* Blank to black; the panel and the DCP stay powered. */
+ 	if (v14 && v14->started)
+-		dcp_v14_present(v14, NULL, 0, 0, 0, NULL);
+-}
++		dcp_v14_blank(v14, dcp);
++}
++
++#if IS_ENABLED(CONFIG_DRM_APPLE_DISPLAY_KUNIT_TEST)
++#include "iomfb_v14_7_backlight_test.c"
++#include "iomfb_v14_7_backlight_lifetime_test.c"
++#endif
+--- a/drivers/gpu/drm/apple/iomfb_v14_7.h
++++ b/drivers/gpu/drm/apple/iomfb_v14_7.h
+@@ -22,6 +22,17 @@
+ 
+ /* Platform probe: firmware identity, boot loader handoff, PMP acknowledgment. */
+ int iomfb_v14_7_probe(struct apple_dcp *dcp);
++/*
++ * Whether @dcp is a 14.x internal panel whose swaps carry its level (the
++ * T6030 board record): its backlight is the nits policy in dcp_backlight.c.
++ */
++bool iomfb_v14_7_panel_nits(struct apple_dcp *dcp);
++/*
++ * System sleep: no brightness-only present may be queued or run from
++ * _suspend() until _resume().
++ */
++void iomfb_v14_7_backlight_suspend(struct apple_dcp *dcp);
++void iomfb_v14_7_backlight_resume(struct apple_dcp *dcp);
+ /* Component bind: the running DCP's RTKit session. */
+ int iomfb_v14_7_bind(struct apple_dcp *dcp);
+ int iomfb_v14_7_external_start(struct apple_dcp *dcp);
+--- /dev/null
++++ b/drivers/gpu/drm/apple/iomfb_v14_7_backlight.h
+@@ -0,0 +1,98 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR MIT */
++
++#ifndef __APPLE_IOMFB_V14_7_BACKLIGHT_H__
++#define __APPLE_IOMFB_V14_7_BACKLIGHT_H__
++
++#include <linux/types.h>
++
++/*
++ * Decisions of the 14.7 panel's level path (iomfb_v14_7.c), kept free of
++ * driver state so that KUnit runs the same code.
++ */
++
++/*
++ * Whether brightness-only presents may be queued and run. Set under the
++ * gate lock before the work is cancelled: system sleep suspends it until
++ * resume, unbind and remove close it for good.
++ */
++enum dcp_v14_bl_gate {
++	DCP_V14_BL_OPEN,
++	DCP_V14_BL_SUSPENDED,
++	DCP_V14_BL_CLOSED,
++};
++
++/* Whether a brightness-only present may be queued, or run once queued. */
++static inline bool dcp_v14_bl_may_queue(enum dcp_v14_bl_gate gate)
++{
++	return gate == DCP_V14_BL_OPEN;
++}
++
++static inline enum dcp_v14_bl_gate dcp_v14_bl_gate_suspend(enum dcp_v14_bl_gate gate)
++{
++	return gate == DCP_V14_BL_OPEN ? DCP_V14_BL_SUSPENDED : gate;
++}
++
++static inline enum dcp_v14_bl_gate dcp_v14_bl_gate_resume(enum dcp_v14_bl_gate gate)
++{
++	return gate == DCP_V14_BL_SUSPENDED ? DCP_V14_BL_OPEN : gate;
++}
++
++/*
++ * Whether a swap carries the level the backlight policy reserves: only the
++ * internal panel of a board whose level block was validated (T6030), only
++ * while it shows its own panel (not a J613 internal pipe lent to a Type-C
++ * display), and only with an active policy.
++ */
++static inline bool dcp_v14_swap_takes_nits(bool panel_nits, bool external, bool typec,
++					   bool policy_active)
++{
++	return panel_nits && !external && !typec && policy_active;
++}
++
++/*
++ * Blanking follows DPMS only once Linux has set a level: before that the
++ * panel shows the boot loader's level, and a DPMS cycle must not replace it
++ * with the reported default.
++ */
++static inline bool dcp_v14_bl_follow_dpms(bool panel_nits, bool policy_active,
++					  bool level_known)
++{
++	return panel_nits && policy_active && level_known;
++}
++
++struct dcp_v14_bl_facts {
++	enum dcp_v14_bl_gate gate;
++	bool panel_nits;
++	bool external;
++	bool typec;
++	bool started;
++	bool failed;
++	bool crashed;
++	bool quiescing;
++	/* A level is reserved-able: dirty and not in flight. */
++	bool pending;
++	/* The last present showed a frame (active_fb), not the background. */
++	bool frame;
++	bool mode_valid;
++};
++
++enum dcp_v14_bl_action {
++	/* Nothing to do, or not allowed to: no RPC. */
++	DCP_V14_BL_SKIP,
++	/* Blanked or no frame yet: the next atomic present carries the level. */
++	DCP_V14_BL_WAIT,
++	/* Present the frame shown last again, with the level. */
++	DCP_V14_BL_REPRESENT,
++};
++
++static inline enum dcp_v14_bl_action dcp_v14_bl_plan(const struct dcp_v14_bl_facts *f)
++{
++	if (!dcp_v14_bl_may_queue(f->gate) || !f->panel_nits || f->external || f->typec ||
++	    !f->started || f->failed || f->crashed || f->quiescing || !f->pending)
++		return DCP_V14_BL_SKIP;
++	if (!f->frame || !f->mode_valid)
++		return DCP_V14_BL_WAIT;
++	return DCP_V14_BL_REPRESENT;
++}
++
++#endif /* __APPLE_IOMFB_V14_7_BACKLIGHT_H__ */
+--- /dev/null
++++ b/drivers/gpu/drm/apple/iomfb_v14_7_backlight_lifetime_test.c
+@@ -0,0 +1,421 @@
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/*
++ * Port-specific controls: run the real swap/present, worker, DPMS dispatch
++ * and class teardown. Only the RPC transport is replaced. Threads and a
++ * workqueue context bridge retain KUnit's per-task static-stub context.
++ */
++#include <drm/drm_kunit_helpers.h>
++#include <linux/completion.h>
++#include <linux/delay.h>
++#include <linux/kthread.h>
++
++struct v14_bl_rpc;
++struct v14_bl_actor {
++	struct v14_bl_rpc *ctx;
++	struct task_struct *task;
++	struct completion entered, done;
++	unsigned int op;
++	bool shown;
++};
++
++struct v14_bl_rpc {
++	struct kunit *test;
++	struct v14_bl_fixture f;
++	struct drm_device *drm;
++	struct drm_framebuffer fb[2];
++	struct drm_gem_dma_object gem[2];
++	unsigned int initialized, gems_initialized;
++	struct v14_bl_actor actors[2];
++	struct completion rpc_entered, rpc_release;
++	atomic_t submits;
++	u64 iova[5], nits[5];
++	bool nits_present[5];
++	struct drm_framebuffer *owner[5];
++	bool block_first, refuse;
++};
++
++static struct v14_bl_rpc *v14_bl_rpc_current;
++
++static int v14_bl_rpc_call(struct apple_dcp_v14 *v14, u32 tag, const void *in, u32 in_size,
++			   void *out, u32 out_size, u32 completion,
++			   dcp_v14_admit_fn admit, void *admit_cookie)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_current;
++	unsigned int n;
++
++	KUNIT_EXPECT_TRUE(c->test, mutex_is_locked(&v14->lock));
++	memset(out, 0, out_size);
++	if (tag == A(406)) {
++		put_unaligned_le32(1, out);
++		return 0;
++	}
++	KUNIT_EXPECT_EQ(c->test, tag, A(407));
++	KUNIT_EXPECT_EQ(c->test, in_size, (u32)DCP_V14_SWAP_SIZE);
++	n = atomic_inc_return(&c->submits) - 1;
++	if (n < ARRAY_SIZE(c->iova)) {
++		c->iova[n] = get_unaligned_le64((const u8 *)in + DCP_V14_SWAP_IOVA(0));
++		c->nits_present[n] = ((const u8 *)in)[DCP_V14_SWAP_NITS_PRESENT];
++		c->nits[n] = get_unaligned_le64((const u8 *)in + DCP_V14_SWAP_NITS);
++		c->owner[n] = v14->active_fb;
++	}
++	if (!n && c->block_first) {
++		complete(&c->rpc_entered);
++		wait_for_completion(&c->rpc_release);
++	}
++	if (c->refuse)
++		put_unaligned_le32(1, (u8 *)out + 5);
++	return 0;
++}
++
++static void v14_bl_rpc_work(struct work_struct *work)
++{
++	struct kunit *previous = current->kunit_test;
++
++	current->kunit_test = v14_bl_rpc_current->test;
++	dcp_v14_backlight_work(work);
++	current->kunit_test = previous;
++}
++
++static int v14_bl_actor_run(void *data)
++{
++	struct v14_bl_actor *a = data;
++	struct v14_bl_rpc *c = a->ctx;
++
++	current->kunit_test = c->test;
++	complete(&a->entered);
++	if (a->op < 2)
++		a->shown = dcp_v14_present(c->f.v14, &c->fb[a->op], 64, 64, 0, NULL);
++	else if (a->op == 2)
++		iomfb_v14_7_backlight_suspend(c->f.dcp);
++	else
++		iomfb_v14_7_unbind(c->f.dcp);
++	complete(&a->done);
++	current->kunit_test = NULL;
++	return 0;
++}
++
++static void v14_bl_rpc_cleanup(void *data)
++{
++	struct v14_bl_rpc *c = data;
++	unsigned int i;
++
++	complete_all(&c->rpc_release);
++	for (i = 0; i < ARRAY_SIZE(c->actors); i++)
++		if (!IS_ERR_OR_NULL(c->actors[i].task))
++			kthread_stop_put(c->actors[i].task);
++	dcp_v14_stop_backlight(c->f.v14);
++	if (c->f.v14->active_fb) {
++		drm_framebuffer_put(c->f.v14->active_fb);
++		c->f.v14->active_fb = NULL;
++	}
++	for (i = 0; i < c->initialized; i++)
++		drm_framebuffer_put(&c->fb[i]);
++	for (i = 0; i < c->gems_initialized; i++)
++		drm_gem_object_put(&c->gem[i].base);
++	v14_bl_rpc_current = NULL;
++}
++
++static void v14_bl_fb_destroy(struct drm_framebuffer *fb)
++{
++	drm_framebuffer_cleanup(fb);
++}
++
++static void v14_bl_gem_free(struct drm_gem_object *obj)
++{
++	drm_gem_object_release(obj);
++}
++
++static const struct drm_gem_object_funcs v14_bl_gem_funcs = {
++	.free = v14_bl_gem_free,
++};
++
++static const struct drm_framebuffer_funcs v14_bl_fb_funcs = {
++	.destroy = v14_bl_fb_destroy,
++};
++
++static struct v14_bl_rpc *v14_bl_rpc_setup(struct kunit *test)
++{
++	struct v14_bl_rpc *c = kunit_kzalloc(test, sizeof(*c), GFP_KERNEL);
++	struct device *dev;
++	unsigned int i;
++
++	KUNIT_ASSERT_NOT_NULL(test, c);
++	c->test = test;
++	c->f = v14_bl_fixture(test, &dcp_v14_board_t6030, true);
++	dev = drm_kunit_helper_alloc_device(test);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
++	c->drm = __drm_kunit_helper_alloc_drm_device(test, dev, sizeof(*c->drm), 0,
++						     DRIVER_MODESET | DRIVER_GEM);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, c->drm);
++	init_completion(&c->rpc_entered);
++	init_completion(&c->rpc_release);
++	atomic_set(&c->submits, 0);
++	v14_bl_rpc_current = c;
++	kunit_activate_static_stub(test, dcp_v14_call_guarded, v14_bl_rpc_call);
++	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, v14_bl_rpc_cleanup, c), 0);
++	for (i = 0; i < ARRAY_SIZE(c->fb); i++) {
++		c->fb[i].dev = c->drm;
++		c->fb[i].format = drm_format_info(DRM_FORMAT_XRGB8888);
++		c->fb[i].width = 64;
++		c->fb[i].height = 64;
++		c->fb[i].pitches[0] = 256;
++		drm_gem_private_object_init(c->drm, &c->gem[i].base, PAGE_SIZE);
++		c->gem[i].base.funcs = &v14_bl_gem_funcs;
++		c->gems_initialized++;
++		c->gem[i].dma_addr = 0x100000 + i * 0x10000;
++		c->fb[i].obj[0] = &c->gem[i].base;
++		KUNIT_ASSERT_EQ(test, drm_framebuffer_init(c->drm, &c->fb[i], &v14_bl_fb_funcs), 0);
++		c->initialized++;
++	}
++	c->f.v14->panel_width = 64;
++	c->f.v14->panel_height = 64;
++	c->f.dcp->fixed_connector_type = DRM_MODE_CONNECTOR_eDP;
++	c->f.dcp->connector_type = DRM_MODE_CONNECTOR_eDP;
++	c->f.dcp->panel.width_mm = 200;
++	c->f.dcp->mode_state.valid = true;
++	c->f.dcp->crtc = devm_kzalloc(c->f.dcp->dev, sizeof(*c->f.dcp->crtc), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, c->f.dcp->crtc);
++	c->f.dcp->crtc->base.dev = c->drm;
++	INIT_DELAYED_WORK(&c->f.v14->backlight_work, v14_bl_rpc_work);
++	return c;
++}
++
++static struct v14_bl_actor *v14_bl_actor_start(struct kunit *test,
++					       struct v14_bl_rpc *c, unsigned int slot,
++					       unsigned int op)
++{
++	struct v14_bl_actor *a = &c->actors[slot];
++
++	a->ctx = c;
++	a->op = op;
++	init_completion(&a->entered);
++	init_completion(&a->done);
++	a->task = kthread_create(v14_bl_actor_run, a, "v14-backlight-test");
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, a->task);
++	get_task_struct(a->task);
++	wake_up_process(a->task);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&a->entered, HZ), 0UL);
++	return a;
++}
++
++static struct drm_framebuffer *v14_bl_pause_publication(struct apple_dcp_v14 *v14,
++							struct drm_framebuffer *fb,
++							const u8 *surface, u64 iova,
++							u32 width, u32 height, u32 dst_y)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_current;
++
++	/* Only the first publication pauses; its eventual call runs the real body. */
++	kunit_deactivate_static_stub(c->test, dcp_v14_publish_surface);
++	complete(&c->rpc_entered);
++	wait_for_completion(&c->rpc_release);
++	return dcp_v14_publish_surface(v14, fb, surface, iova, width, height, dst_y);
++}
++
++/* Swap and framebuffer publication cannot be reordered by another present. */
++static void v14_bl_present_publication_serialized(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++	struct v14_bl_actor *first, *second;
++
++	kunit_activate_static_stub(test, dcp_v14_publish_surface, v14_bl_pause_publication);
++	first = v14_bl_actor_start(test, c, 0, 0);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&c->rpc_entered, HZ), 0UL);
++	second = v14_bl_actor_start(test, c, 1, 1);
++	KUNIT_EXPECT_EQ(test,
++			wait_for_completion_timeout(&second->done, msecs_to_jiffies(20)), 0UL);
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 1);
++	complete_all(&c->rpc_release);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&first->done, HZ), 0UL);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&second->done, HZ), 0UL);
++	KUNIT_EXPECT_TRUE(test, first->shown);
++	KUNIT_EXPECT_TRUE(test, second->shown);
++	KUNIT_EXPECT_PTR_EQ(test, c->owner[1], &c->fb[0]);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.v14->active_fb, &c->fb[1]);
++	KUNIT_EXPECT_EQ(test, c->f.v14->shown_iova, (u64)c->gem[1].dma_addr);
++	KUNIT_EXPECT_EQ(test, kref_read(&c->fb[0].base.refcount), 1U);
++	KUNIT_EXPECT_EQ(test, kref_read(&c->fb[1].base.refcount), 2U);
++}
++
++/* A running brightness RPC pins its copied surface until suspend drains it. */
++static void v14_bl_running_work_suspend(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++	struct v14_bl_actor *stop;
++
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	atomic_set(&c->submits, 0);
++	c->block_first = true;
++	v14_bl_request(test, c->f.dcp, 200);
++	dcp_v14_backlight_kick(c->f.dcp);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&c->rpc_entered, HZ), 0UL);
++	stop = v14_bl_actor_start(test, c, 0, 2);
++	KUNIT_EXPECT_EQ(test, wait_for_completion_timeout(&stop->done, msecs_to_jiffies(20)), 0UL);
++	KUNIT_EXPECT_PTR_EQ(test, c->owner[0], &c->fb[0]);
++	KUNIT_EXPECT_EQ(test, kref_read(&c->fb[0].base.refcount), 2U);
++	complete_all(&c->rpc_release);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&stop->done, HZ), 0UL);
++	KUNIT_EXPECT_EQ(test, c->iova[0], (u64)c->gem[0].dma_addr);
++	KUNIT_EXPECT_EQ(test, c->f.v14->bl_gate, DCP_V14_BL_SUSPENDED);
++	v14_bl_request(test, c->f.dcp, 250);
++	dcp_v14_backlight_kick(c->f.dcp);
++	KUNIT_EXPECT_FALSE(test, work_busy(&c->f.v14->backlight_work.work));
++	/* A callback queued before the gate shut must also refuse the pending level. */
++	dcp_v14_backlight_work(&c->f.v14->backlight_work.work);
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 1);
++	iomfb_v14_7_backlight_resume(c->f.dcp);
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 2);
++	KUNIT_EXPECT_TRUE(test, c->nits_present[1]);
++	KUNIT_EXPECT_EQ(test, c->nits[1], dcp_v14_nits_binary64(250));
++}
++
++/* Actual dcp_poweroff/on must reach the 14.7 blank/restore hooks. */
++static void v14_bl_dpms_dispatch(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++	struct platform_device *pdev = kunit_kzalloc(test, sizeof(*pdev), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, pdev);
++	platform_set_drvdata(pdev, c->f.dcp);
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	KUNIT_EXPECT_FALSE(test, c->nits_present[0]);
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(c->f.dcp));
++	dcp_poweroff(pdev);
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 2);
++	KUNIT_EXPECT_FALSE(test, c->nits_present[1]);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.v14->active_fb, NULL);
++	/* Even the advertised default must be an explicit first request. */
++	dcp_poweron(pdev);
++	v14_bl_request(test, c->f.dcp, DCP_V14_NITS_DEFAULT);
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	KUNIT_EXPECT_TRUE(test, c->nits_present[2]);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_level_known(c->f.dcp));
++	dcp_poweroff(pdev);
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 4);
++	KUNIT_EXPECT_TRUE(test, c->nits_present[3]);
++	KUNIT_EXPECT_EQ(test, c->nits[3], 0ULL);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.v14->active_fb, NULL);
++	dcp_poweron(pdev);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_pending(c->f.dcp));
++	KUNIT_EXPECT_FALSE(test, c->f.dcp->backlight.state.dpms_off);
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 5);
++	KUNIT_EXPECT_TRUE(test, c->nits_present[4]);
++	KUNIT_EXPECT_EQ(test, c->nits[4], dcp_v14_nits_binary64(DCP_V14_NITS_DEFAULT));
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_pending(c->f.dcp));
++}
++
++/* An actual failed submit must leave the loader's level unknown. */
++static void v14_bl_failed_submit_unknown(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++
++	c->refuse = true;
++	v14_bl_request(test, c->f.dcp, 240);
++	mutex_lock(&c->f.v14->lock);
++	KUNIT_EXPECT_EQ(test, dcp_v14_swap_locked(c->f.v14, NULL, 0, 0, 0, 0, NULL), -EIO);
++	mutex_unlock(&c->f.v14->lock);
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(c->f.dcp));
++	KUNIT_EXPECT_EQ(test, c->f.v14->nits_presents, 0ULL);
++	KUNIT_EXPECT_TRUE(test, c->f.v14->failed);
++	KUNIT_EXPECT_FALSE(test, work_busy(&c->f.v14->backlight_work.work));
++	/* Neither a later kick nor a work callback may retry the failed panel. */
++	dcp_v14_backlight_kick(c->f.dcp);
++	flush_delayed_work(&c->f.v14->backlight_work);
++	dcp_v14_backlight_work(&c->f.v14->backlight_work.work);
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 1);
++	KUNIT_EXPECT_FALSE(test, work_busy(&c->f.v14->backlight_work.work));
++}
++
++static void v14_bl_mutex_unlock(void *data)
++{
++	mutex_unlock(data);
++}
++
++/* Unbind closes class admission before draining a blocked real registrar. */
++static void v14_bl_registration_unbind_race(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++	struct v14_bl_actor *stop;
++	unsigned long deadline;
++	bool running = false;
++
++	mutex_lock(&c->f.dcp->bl_register_mutex);
++	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, v14_bl_mutex_unlock,
++							&c->f.dcp->bl_register_mutex), 0);
++	KUNIT_EXPECT_TRUE(test, schedule_work(&c->f.dcp->bl_register_wq));
++	deadline = jiffies + HZ;
++	do {
++		running = work_busy(&c->f.dcp->bl_register_wq) & WORK_BUSY_RUNNING;
++		if (running)
++			break;
++		usleep_range(50, 100);
++	} while (time_before(jiffies, deadline));
++	KUNIT_EXPECT_TRUE(test, running);
++	stop = v14_bl_actor_start(test, c, 0, 3);
++	KUNIT_EXPECT_EQ(test, wait_for_completion_timeout(&stop->done, msecs_to_jiffies(20)), 0UL);
++	KUNIT_EXPECT_TRUE(test, READ_ONCE(c->f.dcp->quiescing));
++	kunit_release_action(test, v14_bl_mutex_unlock, &c->f.dcp->bl_register_mutex);
++	KUNIT_ASSERT_NE(test, wait_for_completion_timeout(&stop->done, HZ), 0UL);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.dcp->brightness.bl_dev, NULL);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.v14->dcp, NULL);
++	KUNIT_EXPECT_EQ(test, c->f.v14->bl_gate, DCP_V14_BL_CLOSED);
++	/* A late shared producer is refused as well. */
++	schedule_work(&c->f.dcp->bl_register_wq);
++	flush_work(&c->f.dcp->bl_register_wq);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.dcp->brightness.bl_dev, NULL);
++}
++
++static void v14_bl_class_unregistered(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++
++	schedule_work(&c->f.dcp->bl_register_wq);
++	flush_work(&c->f.dcp->bl_register_wq);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, c->f.dcp->brightness.bl_dev);
++	iomfb_v14_7_unbind(c->f.dcp);
++	KUNIT_EXPECT_PTR_EQ(test, c->f.dcp->brightness.bl_dev, NULL);
++	KUNIT_EXPECT_TRUE(test, c->f.dcp->quiescing);
++	iomfb_v14_7_backlight_resume(c->f.dcp);
++	KUNIT_EXPECT_EQ(test, c->f.v14->bl_gate, DCP_V14_BL_CLOSED);
++}
++
++/* fbdev cannot turn the advertised default into the first brightness request. */
++static void v14_bl_fbdev_unknown_level(struct kunit *test)
++{
++	struct v14_bl_rpc *c = v14_bl_rpc_setup(test);
++	struct device unrelated = {};
++	struct backlight_device *bd;
++
++	schedule_work(&c->f.dcp->bl_register_wq);
++	flush_work(&c->f.dcp->bl_register_wq);
++	bd = c->f.dcp->brightness.bl_dev;
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, bd);
++	KUNIT_EXPECT_FALSE(test, bd->ops->controls_device(bd, NULL));
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_pending(c->f.dcp));
++	KUNIT_EXPECT_EQ(test, atomic_read(&c->submits), 0);
++	v14_bl_request(test, c->f.dcp, 250);
++	KUNIT_ASSERT_TRUE(test, dcp_v14_present(c->f.v14, &c->fb[0], 64, 64, 0, NULL));
++	KUNIT_EXPECT_TRUE(test, bd->ops->controls_device(bd, NULL));
++	KUNIT_EXPECT_TRUE(test, bd->ops->controls_device(bd, c->f.dcp->dev));
++	KUNIT_EXPECT_FALSE(test, bd->ops->controls_device(bd, &unrelated));
++}
++
++static struct kunit_case v14_bl_lifetime_cases[] = {
++	KUNIT_CASE(v14_bl_present_publication_serialized),
++	KUNIT_CASE(v14_bl_running_work_suspend),
++	KUNIT_CASE(v14_bl_dpms_dispatch),
++	KUNIT_CASE(v14_bl_failed_submit_unknown),
++	KUNIT_CASE(v14_bl_registration_unbind_race),
++	KUNIT_CASE(v14_bl_class_unregistered),
++	KUNIT_CASE(v14_bl_fbdev_unknown_level),
++	{}
++};
++
++static struct kunit_suite v14_bl_lifetime_suite = {
++	.name = "dcp_v14_backlight_lifetime",
++	.test_cases = v14_bl_lifetime_cases,
++};
++
++kunit_test_suite(v14_bl_lifetime_suite);
+--- /dev/null
++++ b/drivers/gpu/drm/apple/iomfb_v14_7_backlight_test.c
+@@ -0,0 +1,562 @@
++// SPDX-License-Identifier: GPL-2.0-only OR MIT
++/*
++ * The 14.7 panel level path, included at the end of iomfb_v14_7.c so that
++ * the production functions run: the swap's level block, which boards carry
++ * it, the gate that keeps brightness-only presents out of system sleep and
++ * after unbind, and the policy as this panel uses it (no level presented
++ * until one is requested, no actual level reported until one was presented,
++ * a refused level never becomes the actual one).
++ *
++ * The objects are built here, with no DCP: nothing in a case may reach an
++ * RPC. A J613, J615 or J516C panel never initialises the backlight policy;
++ * its state is set to answer "yes" so that a case fails if anything on
++ * those boards looks at it.
++ */
++#include <kunit/device.h>
++#include <kunit/test.h>
++
++static void v14_bl_unused_work(struct work_struct *work)
++{
++}
++
++static void v14_bl_binary64(struct kunit *test)
++{
++	static const struct {
++		u32 nits;
++		u64 bits;
++	} known[] = {
++		{ 0, 0 },
++		{ 1, 0x3ff0000000000000ULL },
++		{ 2, 0x4000000000000000ULL },
++		{ 3, 0x4008000000000000ULL },
++		{ 140, 0x4061800000000000ULL },
++		{ 255, 0x406fe00000000000ULL },
++		{ 256, 0x4070000000000000ULL },
++		{ 500, 0x407f400000000000ULL },
++	};
++	unsigned int i;
++	u32 nits;
++
++	for (i = 0; i < ARRAY_SIZE(known); i++)
++		KUNIT_EXPECT_EQ_MSG(test, dcp_v14_nits_binary64(known[i].nits), known[i].bits,
++				    "%u nits", known[i].nits);
++	/* Every level up to the bound is an exact integral binary64. */
++	for (nits = 1; nits <= DCP_V14_NITS_MAX; nits++) {
++		u64 bits = dcp_v14_nits_binary64(nits);
++		unsigned int e = (bits >> 52) - 1023;
++		u64 mantissa = bits & GENMASK_ULL(51, 0);
++
++		KUNIT_ASSERT_LT(test, e, 32U);
++		KUNIT_EXPECT_EQ(test, mantissa & GENMASK_ULL(51 - e, 0), 0ULL);
++		KUNIT_EXPECT_EQ(test, (1ULL << e) + (mantissa >> (52 - e)), (u64)nits);
++		KUNIT_EXPECT_FALSE(test, bits >> 63);
++	}
++}
++
++static void v14_bl_level_block(struct kunit *test)
++{
++	u8 *swap = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++	u8 *before = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++	unsigned int i;
++
++	KUNIT_ASSERT_NOT_NULL(test, swap);
++	KUNIT_ASSERT_NOT_NULL(test, before);
++	memset(swap, 0xa5, DCP_V14_SWAP_SIZE);
++	memcpy(before, swap, DCP_V14_SWAP_SIZE);
++
++	/* Above the wire bound: refused, the record untouched. */
++	KUNIT_EXPECT_EQ(test, dcp_v14_encode_nits(swap, true, DCP_V14_NITS_MAX + 1), -EINVAL);
++	KUNIT_EXPECT_EQ(test, memcmp(swap, before, DCP_V14_SWAP_SIZE), 0);
++
++	/* A level touches only the present byte and the binary64. */
++	KUNIT_EXPECT_EQ(test, dcp_v14_encode_nits(swap, true, 140), 0);
++	for (i = 0; i < DCP_V14_SWAP_SIZE; i++) {
++		if (i == DCP_V14_SWAP_NITS_PRESENT ||
++		    (i >= DCP_V14_SWAP_NITS && i < DCP_V14_SWAP_NITS + 8))
++			continue;
++		KUNIT_EXPECT_EQ_MSG(test, swap[i], before[i], "byte %#x", i);
++	}
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 1);
++	KUNIT_EXPECT_EQ(test, get_unaligned_le64(swap + DCP_V14_SWAP_NITS),
++			0x4061800000000000ULL);
++
++	/* No level: zero, as the record the session sent before. */
++	KUNIT_EXPECT_EQ(test, dcp_v14_encode_nits(swap, false, 0), 0);
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 0);
++	KUNIT_EXPECT_EQ(test, get_unaligned_le64(swap + DCP_V14_SWAP_NITS), 0ULL);
++}
++
++/* A swap without a level is byte for byte the one encoded before this. */
++static void v14_bl_swap_unchanged_without_level(struct kunit *test)
++{
++	u8 *swap = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++	u8 *plain = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++	u8 surface[DCP_V14_SURFACE_SIZE];
++
++	KUNIT_ASSERT_NOT_NULL(test, swap);
++	KUNIT_ASSERT_NOT_NULL(test, plain);
++	dcp_v14_encode_surface(surface, 3456 * 4, 3456, 2160, true);
++	dcp_v14_encode_swap(plain, 7, DCP_V14_BLACK, surface, 0x100000000ULL, 3456, 2160, 74,
++			    DCP_V14_LAYER);
++	dcp_v14_encode_swap(swap, 7, DCP_V14_BLACK, surface, 0x100000000ULL, 3456, 2160, 74,
++			    DCP_V14_LAYER);
++	dcp_v14_encode_nits(swap, false, 0);
++	KUNIT_EXPECT_EQ(test, memcmp(swap, plain, DCP_V14_SWAP_SIZE), 0);
++	/* The level block lies in the zeroed prefix, clear of every field. */
++	KUNIT_EXPECT_EQ(test, plain[DCP_V14_SWAP_NITS_PRESENT], 0);
++	KUNIT_EXPECT_EQ(test, get_unaligned_le64(plain + DCP_V14_SWAP_NITS), 0ULL);
++
++	dcp_v14_encode_swap(plain, 8, DCP_V14_BLACK, NULL, 0, 0, 0, 0, DCP_V14_LAYER);
++	dcp_v14_encode_swap(swap, 8, DCP_V14_BLACK, NULL, 0, 0, 0, 0, DCP_V14_LAYER);
++	dcp_v14_encode_nits(swap, false, 0);
++	KUNIT_EXPECT_EQ(test, memcmp(swap, plain, DCP_V14_SWAP_SIZE), 0);
++}
++
++static bool v14_bl_ctx_dcp_is(const void *ctx, const char *compat)
++{
++	return !strcmp(((const char *const *)ctx)[0], compat);
++}
++
++static bool v14_bl_ctx_machine_is(const void *ctx, const char *compat)
++{
++	return !strcmp(((const char *const *)ctx)[1], compat);
++}
++
++/* Only the T6030 record (J514S, J516S) carries levels. */
++static void v14_bl_boards(struct kunit *test)
++{
++	static const char *const t6030_j516s[] = { "apple,t6030-dcp", "apple,j516s" };
++	static const char *const t6030_j514s[] = { "apple,t6030-dcp", "apple,j514s" };
++	static const char *const j613[] = { "apple,t8122-dcp", "apple,j613" };
++	static const char *const j615[] = { "apple,t8122-dcp", "apple,j615" };
++	static const char *const j516c[] = { "apple,t6031-dcp", "apple,j516c" };
++	static const char *const other_t6030[] = { "apple,t6030-dcp", "apple,other" };
++	const struct dcp_v14_board *board;
++	bool known;
++
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, t6030_j516s, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_TRUE(test, board->panel_nits);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_panel_nits_admit(board, v14_bl_ctx_machine_is,
++							 t6030_j516s));
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, t6030_j514s, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_TRUE(test, board->panel_nits);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_panel_nits_admit(board, v14_bl_ctx_machine_is,
++							 t6030_j514s));
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, other_t6030, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_FALSE(test, dcp_v14_panel_nits_admit(board, v14_bl_ctx_machine_is,
++							  other_t6030));
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, j613, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_FALSE(test, board->panel_nits);
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, j615, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_FALSE(test, board->panel_nits);
++	board = dcp_v14_board_select(v14_bl_ctx_dcp_is, v14_bl_ctx_machine_is, j516c, &known);
++	KUNIT_ASSERT_NOT_NULL(test, board);
++	KUNIT_EXPECT_FALSE(test, board->panel_nits);
++}
++
++static void v14_bl_gate_transitions(struct kunit *test)
++{
++	KUNIT_EXPECT_TRUE(test, dcp_v14_bl_may_queue(DCP_V14_BL_OPEN));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_bl_may_queue(DCP_V14_BL_SUSPENDED));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_bl_may_queue(DCP_V14_BL_CLOSED));
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_suspend(DCP_V14_BL_OPEN), DCP_V14_BL_SUSPENDED);
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_suspend(DCP_V14_BL_SUSPENDED), DCP_V14_BL_SUSPENDED);
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_suspend(DCP_V14_BL_CLOSED), DCP_V14_BL_CLOSED);
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_resume(DCP_V14_BL_SUSPENDED), DCP_V14_BL_OPEN);
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_resume(DCP_V14_BL_OPEN), DCP_V14_BL_OPEN);
++	/* Unbind is for good: no resume opens it again. */
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_gate_resume(DCP_V14_BL_CLOSED), DCP_V14_BL_CLOSED);
++}
++
++static void v14_bl_plan(struct kunit *test)
++{
++	const struct dcp_v14_bl_facts ready = {
++		.gate = DCP_V14_BL_OPEN, .panel_nits = true, .started = true,
++		.pending = true, .frame = true, .mode_valid = true,
++	};
++	struct dcp_v14_bl_facts f;
++
++	KUNIT_EXPECT_EQ(test, dcp_v14_bl_plan(&ready), DCP_V14_BL_REPRESENT);
++#define V14_BL_EXPECT(field, value, action) do {			\
++		f = ready;						\
++		f.field = value;					\
++		KUNIT_EXPECT_EQ_MSG(test, dcp_v14_bl_plan(&f), action,	\
++				    #field " = " #value);		\
++	} while (0)
++	V14_BL_EXPECT(gate, DCP_V14_BL_SUSPENDED, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(gate, DCP_V14_BL_CLOSED, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(panel_nits, false, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(external, true, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(typec, true, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(started, false, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(failed, true, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(crashed, true, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(quiescing, true, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(pending, false, DCP_V14_BL_SKIP);
++	V14_BL_EXPECT(frame, false, DCP_V14_BL_WAIT);
++	V14_BL_EXPECT(mode_valid, false, DCP_V14_BL_WAIT);
++#undef V14_BL_EXPECT
++	KUNIT_EXPECT_TRUE(test, dcp_v14_swap_takes_nits(true, false, false, true));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_takes_nits(false, false, false, true));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_takes_nits(true, true, false, true));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_takes_nits(true, false, true, true));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_takes_nits(true, false, false, false));
++}
++
++/* The policy as this panel configures it: a default that is never presented. */
++static void v14_bl_policy(struct kunit *test)
++{
++	struct dcp_backlight_state s;
++	struct dcp_backlight_present p;
++	u64 seq;
++
++	KUNIT_ASSERT_EQ(test, dcp_bl_init(&s, DCP_V14_NITS_MAX, false, 0, true,
++					  DCP_V14_NITS_DEFAULT), 0);
++	/* Nothing to present at takeover: the panel keeps the loader's level. */
++	KUNIT_EXPECT_EQ(test, dcp_bl_prepare(&s, true, &p), -EALREADY);
++	KUNIT_EXPECT_EQ(test, dcp_bl_reported_actual(&s, true), -ENODATA);
++	/* The H17P path keeps reporting its default. */
++	KUNIT_EXPECT_EQ(test, dcp_bl_reported_actual(&s, false), DCP_V14_NITS_DEFAULT);
++	KUNIT_EXPECT_FALSE(test, dcp_v14_bl_follow_dpms(true, true, s.level_known));
++
++	/* A request is presented; a refusal never becomes the actual level. */
++	KUNIT_ASSERT_EQ(test, dcp_bl_request(&s, 250, false, false), 0);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	KUNIT_EXPECT_EQ(test, p.nits, 250U);
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, p.sequence, false));
++	KUNIT_EXPECT_EQ(test, dcp_bl_reported_actual(&s, true), -ENODATA);
++	KUNIT_EXPECT_TRUE(test, s.dirty);
++	KUNIT_EXPECT_EQ(test, dcp_bl_retry_delay(&s), 100U);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	seq = p.sequence;
++	/* A stale completion does not complete the newer reservation. */
++	KUNIT_EXPECT_FALSE(test, dcp_bl_complete(&s, seq - 1, true));
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, seq, true));
++	KUNIT_EXPECT_EQ(test, dcp_bl_reported_actual(&s, true), 250);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_bl_follow_dpms(true, true, s.level_known));
++
++	/* A later refusal keeps the last accepted level. */
++	KUNIT_ASSERT_EQ(test, dcp_bl_request(&s, 300, false, false), 0);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, p.sequence, false));
++	KUNIT_EXPECT_EQ(test, dcp_bl_reported_actual(&s, true), 250);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, p.sequence, true));
++
++	/* DPMS off blanks at 0 nits, on presents the level again. */
++	KUNIT_ASSERT_EQ(test, dcp_bl_dpms(&s, false), 0);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	KUNIT_EXPECT_EQ(test, p.nits, 0U);
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, p.sequence, true));
++	KUNIT_ASSERT_EQ(test, dcp_bl_dpms(&s, true), 0);
++	KUNIT_ASSERT_EQ(test, dcp_bl_prepare(&s, true, &p), 0);
++	KUNIT_EXPECT_EQ(test, p.nits, 300U);
++	KUNIT_EXPECT_TRUE(test, dcp_bl_complete(&s, p.sequence, true));
++}
++
++struct v14_bl_fixture {
++	struct apple_dcp *dcp;
++	struct apple_dcp_v14 *v14;
++};
++
++static void v14_bl_fixture_stop(void *data)
++{
++	struct apple_dcp_v14 *v14 = data;
++
++	cancel_delayed_work_sync(&v14->backlight_work);
++}
++
++/*
++ * An internal 14.7 panel on @board, started, with no DCP behind it. With
++ * @policy, the T6030 panel's policy as dcp_v14_configure_backlight() sets it
++ * up; without, a policy that was never initialised (other boards), whose
++ * state would answer "yes" if anything looked at it.
++ */
++static struct v14_bl_fixture v14_bl_fixture(struct kunit *test,
++					    const struct dcp_v14_board *board, bool policy)
++{
++	static atomic_t serial = ATOMIC_INIT(0);
++	struct v14_bl_fixture f;
++	struct device *dev;
++	char name[32];
++
++	snprintf(name, sizeof(name), "dcp-v14-bl.%d", atomic_inc_return(&serial));
++	dev = kunit_device_register(test, name);
++	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, dev);
++	/* The device's backlight cleanup must run before these objects are freed. */
++	f.dcp = devm_kzalloc(dev, sizeof(*f.dcp), GFP_KERNEL);
++	f.v14 = devm_kzalloc(dev, sizeof(*f.v14), GFP_KERNEL);
++	KUNIT_ASSERT_NOT_NULL(test, f.dcp);
++	KUNIT_ASSERT_NOT_NULL(test, f.v14);
++	f.dcp->dev = dev;
++	spin_lock_init(&f.dcp->mode_state.lock);
++	mutex_init(&f.dcp->bl_register_mutex);
++	INIT_WORK(&f.dcp->bl_register_wq, dcp_work_register_backlight);
++	INIT_WORK(&f.dcp->bl_update_wq, v14_bl_unused_work);
++	INIT_DELAYED_WORK(&f.dcp->swap_watchdog_wq, v14_bl_unused_work);
++	f.dcp->fw_compat = DCP_FIRMWARE_V_14_7;
++	f.dcp->v14 = f.v14;
++	f.v14->dev = dev;
++	f.v14->board = board;
++	f.v14->panel_nits = board && board->panel_nits;
++	f.v14->dcp = f.dcp;
++	f.v14->started = true;
++	mutex_init(&f.v14->lock);
++	INIT_DELAYED_WORK(&f.v14->backlight_work, dcp_v14_backlight_work);
++	spin_lock_init(&f.v14->bl_gate_lock);
++	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, v14_bl_fixture_stop, f.v14), 0);
++	if (policy) {
++		KUNIT_ASSERT_EQ(test, dcp_v14_init_backlight(f.dcp), 0);
++		KUNIT_ASSERT_EQ(test, dcp_bl_init(&f.dcp->backlight.state, DCP_V14_NITS_MAX,
++						  false, 0, true, DCP_V14_NITS_DEFAULT), 0);
++		f.dcp->backlight.kick = dcp_v14_backlight_kick;
++	} else {
++		f.dcp->backlight.state.ready = true;
++		f.dcp->backlight.state.level_known = true;
++		f.dcp->backlight.state.dirty = true;
++	}
++	return f;
++}
++
++/* Through the policy's own entry point, under its lock. */
++static void v14_bl_request(struct kunit *test, struct apple_dcp *dcp, u32 nits)
++{
++	unsigned long flags;
++	int ret;
++
++	spin_lock_irqsave(&dcp->backlight.lock, flags);
++	ret = dcp_bl_request(&dcp->backlight.state, nits, false, false);
++	spin_unlock_irqrestore(&dcp->backlight.lock, flags);
++	KUNIT_ASSERT_EQ(test, ret, 0);
++}
++
++/* Whether the work is queued or running; the caller holds lock. */
++static bool v14_bl_queued(struct apple_dcp_v14 *v14)
++{
++	return work_busy(&v14->backlight_work.work);
++}
++
++/*
++ * The production paths on J613, J615 and J516C: no policy is consulted, no
++ * level is encoded, the work does nothing, sleep leaves the gate alone.
++ */
++static void v14_bl_other_boards_untouched(struct kunit *test)
++{
++	const struct dcp_v14_board *boards[] = {
++		&dcp_v14_board_j613, &dcp_v14_board_j615, &dcp_v14_board_j516c,
++	};
++	struct dcp_backlight_present present;
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(boards); i++) {
++		struct v14_bl_fixture f = v14_bl_fixture(test, boards[i], false);
++		u8 *swap = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++
++		KUNIT_ASSERT_NOT_NULL(test, swap);
++		KUNIT_EXPECT_FALSE(test, iomfb_v14_7_panel_nits(f.dcp));
++		KUNIT_EXPECT_FALSE(test, dcp_backlight_active(f.dcp));
++		KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(f.dcp));
++		KUNIT_EXPECT_FALSE(test, dcp_v14_bl_dpms_applies(f.v14, f.dcp));
++
++		mutex_lock(&f.v14->lock);
++		KUNIT_EXPECT_FALSE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++		mutex_unlock(&f.v14->lock);
++		KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 0);
++		KUNIT_EXPECT_EQ(test, get_unaligned_le64(swap + DCP_V14_SWAP_NITS), 0ULL);
++
++		/* Run directly: it must return without an RPC (there is no DCP). */
++		dcp_v14_backlight_work(&f.v14->backlight_work.work);
++		KUNIT_EXPECT_EQ(test, f.v14->brightness_presents, 0ULL);
++		KUNIT_EXPECT_EQ(test, f.v14->nits_refused, 0ULL);
++
++		iomfb_v14_7_backlight_suspend(f.dcp);
++		KUNIT_EXPECT_EQ(test, f.v14->bl_gate, DCP_V14_BL_OPEN);
++		dcp_v14_configure_backlight(f.dcp);
++		KUNIT_EXPECT_FALSE(test, f.dcp->backlight.kick);
++	}
++}
++
++/* An external T6030 processor is no panel: nothing either. */
++static void v14_bl_external_untouched(struct kunit *test)
++{
++	struct v14_bl_fixture f = v14_bl_fixture(test, &dcp_v14_board_t6030, false);
++	struct dcp_backlight_present present;
++	u8 *swap = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, swap);
++	f.dcp->external = true;
++	f.v14->external = true;
++	KUNIT_EXPECT_FALSE(test, iomfb_v14_7_panel_nits(f.dcp));
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(f.dcp));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_bl_dpms_applies(f.v14, f.dcp));
++	mutex_lock(&f.v14->lock);
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	mutex_unlock(&f.v14->lock);
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 0);
++	dcp_v14_backlight_work(&f.v14->backlight_work.work);
++	KUNIT_EXPECT_EQ(test, f.v14->brightness_presents, 0ULL);
++}
++
++/*
++ * The T6030 panel: no level until one is requested; the requested level is
++ * encoded; a refusal keeps the actual level without a retry; an accepted one
++ * is the actual level, and only then does blanking follow DPMS.
++ */
++static void v14_bl_t6030_swap_levels(struct kunit *test)
++{
++	struct v14_bl_fixture f = v14_bl_fixture(test, &dcp_v14_board_t6030, true);
++	struct dcp_backlight_present present;
++	u8 *swap = kunit_kzalloc(test, DCP_V14_SWAP_SIZE, GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, swap);
++	KUNIT_EXPECT_TRUE(test, iomfb_v14_7_panel_nits(f.dcp));
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_active(f.dcp));
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(f.dcp));
++	KUNIT_EXPECT_FALSE(test, dcp_v14_bl_dpms_applies(f.v14, f.dcp));
++
++	mutex_lock(&f.v14->lock);
++	/* Nothing requested: the swap carries no level. */
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 0);
++	mutex_unlock(&f.v14->lock);
++
++	v14_bl_request(test, f.dcp, 250);
++	mutex_lock(&f.v14->lock);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 1);
++	KUNIT_EXPECT_EQ(test, get_unaligned_le64(swap + DCP_V14_SWAP_NITS),
++			dcp_v14_nits_binary64(250));
++	/* Refused: no actual level, and the panel must not queue a retry. */
++	dcp_v14_swap_nits_done(f.v14, &present, false);
++	mutex_unlock(&f.v14->lock);
++	KUNIT_EXPECT_FALSE(test, dcp_backlight_level_known(f.dcp));
++	KUNIT_EXPECT_EQ(test, f.v14->nits_refused, 1ULL);
++	KUNIT_EXPECT_FALSE(test, delayed_work_pending(&f.v14->backlight_work));
++
++	/* While a Type-C display has the pipe, no level either. */
++	f.dcp->fixed_connector_type = DRM_MODE_CONNECTOR_USB;
++	memset(swap, 0, DCP_V14_SWAP_SIZE);
++	mutex_lock(&f.v14->lock);
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	mutex_unlock(&f.v14->lock);
++	KUNIT_EXPECT_EQ(test, swap[DCP_V14_SWAP_NITS_PRESENT], 0);
++	f.dcp->fixed_connector_type = DRM_MODE_CONNECTOR_eDP;
++
++	mutex_lock(&f.v14->lock);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	dcp_v14_swap_nits_done(f.v14, &present, true);
++	mutex_unlock(&f.v14->lock);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_level_known(f.dcp));
++	KUNIT_EXPECT_EQ(test, f.v14->nits_sent, 250U);
++	KUNIT_EXPECT_TRUE(test, dcp_v14_bl_dpms_applies(f.v14, f.dcp));
++
++	/* Unchanged: not sent again. */
++	mutex_lock(&f.v14->lock);
++	KUNIT_EXPECT_FALSE(test, dcp_v14_swap_nits(f.v14, swap, &present));
++	mutex_unlock(&f.v14->lock);
++}
++
++/*
++ * The gate, through the production queue path: open, a kick queues the work;
++ * suspended, nothing queues until resume; closed, nothing ever does. The
++ * caller holds lock, so a queued work stays queued or running.
++ */
++static void v14_bl_t6030_gate(struct kunit *test)
++{
++	struct v14_bl_fixture f = v14_bl_fixture(test, &dcp_v14_board_t6030, true);
++
++	mutex_lock(&f.v14->lock);
++	dcp_v14_backlight_kick(f.dcp);
++	KUNIT_EXPECT_TRUE(test, v14_bl_queued(f.v14));
++	mutex_unlock(&f.v14->lock);
++	cancel_delayed_work_sync(&f.v14->backlight_work);
++
++	iomfb_v14_7_backlight_suspend(f.dcp);
++	KUNIT_EXPECT_EQ(test, f.v14->bl_gate, DCP_V14_BL_SUSPENDED);
++	mutex_lock(&f.v14->lock);
++	dcp_v14_backlight_kick(f.dcp);
++	dcp_v14_bl_queue(f.v14, 0);
++	KUNIT_EXPECT_FALSE(test, v14_bl_queued(f.v14));
++	mutex_unlock(&f.v14->lock);
++
++	iomfb_v14_7_backlight_resume(f.dcp);
++	KUNIT_EXPECT_EQ(test, f.v14->bl_gate, DCP_V14_BL_OPEN);
++	mutex_lock(&f.v14->lock);
++	dcp_v14_backlight_kick(f.dcp);
++	KUNIT_EXPECT_TRUE(test, v14_bl_queued(f.v14));
++	mutex_unlock(&f.v14->lock);
++	cancel_delayed_work_sync(&f.v14->backlight_work);
++
++	/* A quiescing DCP takes no kick either. */
++	WRITE_ONCE(f.dcp->quiescing, true);
++	mutex_lock(&f.v14->lock);
++	dcp_v14_backlight_kick(f.dcp);
++	KUNIT_EXPECT_FALSE(test, v14_bl_queued(f.v14));
++	mutex_unlock(&f.v14->lock);
++	WRITE_ONCE(f.dcp->quiescing, false);
++
++	dcp_v14_bl_shut(f.v14, true);
++	KUNIT_EXPECT_EQ(test, f.v14->bl_gate, DCP_V14_BL_CLOSED);
++	iomfb_v14_7_backlight_resume(f.dcp);
++	KUNIT_EXPECT_EQ(test, f.v14->bl_gate, DCP_V14_BL_CLOSED);
++	mutex_lock(&f.v14->lock);
++	dcp_v14_backlight_kick(f.dcp);
++	dcp_v14_bl_queue(f.v14, 0);
++	KUNIT_EXPECT_FALSE(test, v14_bl_queued(f.v14));
++	mutex_unlock(&f.v14->lock);
++}
++
++/*
++ * The work itself on the T6030 panel, with no DCP: blanked (no frame) it
++ * leaves the level to the next present; with the gate shut, or while
++ * suspended, it does nothing. None of these may reach an RPC.
++ */
++static void v14_bl_t6030_work(struct kunit *test)
++{
++	struct v14_bl_fixture f = v14_bl_fixture(test, &dcp_v14_board_t6030, true);
++
++	v14_bl_request(test, f.dcp, 250);
++	WRITE_ONCE(f.dcp->mode_state.valid, true);
++	/* No frame shown: the level stays pending for the next present. */
++	dcp_v14_backlight_work(&f.v14->backlight_work.work);
++	KUNIT_EXPECT_EQ(test, f.v14->brightness_presents, 0ULL);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_pending(f.dcp));
++
++	iomfb_v14_7_backlight_suspend(f.dcp);
++	dcp_v14_backlight_work(&f.v14->backlight_work.work);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_pending(f.dcp));
++	iomfb_v14_7_backlight_resume(f.dcp);
++
++	dcp_v14_bl_shut(f.v14, true);
++	dcp_v14_backlight_work(&f.v14->backlight_work.work);
++	KUNIT_EXPECT_EQ(test, f.v14->brightness_presents, 0ULL);
++	KUNIT_EXPECT_TRUE(test, dcp_backlight_pending(f.dcp));
++}
++
++static struct kunit_case v14_backlight_cases[] = {
++	KUNIT_CASE(v14_bl_binary64),
++	KUNIT_CASE(v14_bl_level_block),
++	KUNIT_CASE(v14_bl_swap_unchanged_without_level),
++	KUNIT_CASE(v14_bl_boards),
++	KUNIT_CASE(v14_bl_gate_transitions),
++	KUNIT_CASE(v14_bl_plan),
++	KUNIT_CASE(v14_bl_policy),
++	KUNIT_CASE(v14_bl_other_boards_untouched),
++	KUNIT_CASE(v14_bl_external_untouched),
++	KUNIT_CASE(v14_bl_t6030_swap_levels),
++	KUNIT_CASE(v14_bl_t6030_gate),
++	KUNIT_CASE(v14_bl_t6030_work),
++	{}
++};
++
++static struct kunit_suite v14_backlight_suite = {
++	.name = "dcp_v14_backlight",
++	.test_cases = v14_backlight_cases,
++};
++
++kunit_test_suite(v14_backlight_suite);
+--- a/drivers/gpu/drm/apple/iomfb_v14_7_board.h
++++ b/drivers/gpu/drm/apple/iomfb_v14_7_board.h
+@@ -39,6 +39,8 @@
+ 	 * releases, so they are only set where tested.
+ 	 */
+ 	u32 ctm_set, ctm_get;
++	/* Qualified panel level block; machine admission is separate. */
++	bool panel_nits;
+ };
+ 
+ /* Whether the DCP node or the machine (as @ctx gives them) has @compat. */
+--- a/drivers/gpu/drm/apple/iomfb_v14_7_swap.h
++++ b/drivers/gpu/drm/apple/iomfb_v14_7_swap.h
+@@ -3,6 +3,9 @@
+ #ifndef __APPLE_IOMFB_V14_7_SWAP_H__
+ #define __APPLE_IOMFB_V14_7_SWAP_H__
+ 
++#include <linux/bitops.h>
++#include <linux/build_bug.h>
++#include <linux/errno.h>
+ #include <linux/string.h>
+ #include <linux/types.h>
+ #include <linux/unaligned.h>
+@@ -25,6 +28,54 @@
+ 
+ #define DCP_V14_SWAP_LAYERS		0x7
+ #define DCP_V14_SWAP_SET_BACKGROUND	BIT(31)
++
++/*
++ * The panel level block of the swap record (the 14.7 J514S/J516S panel): a
++ * present byte at +0x354 and the level in nits as an unaligned IEEE 754
++ * binary64 at +0x35c, both zero when the level does not change. The same
++ * layout as SiliconForest commit 44fe00e5eb58d54baf1cc9ad607293e774bfed44
++ * and omacom/linux-aurora PR148 (02524534c6b8).
++ */
++#define DCP_V14_SWAP_NITS_PRESENT	0x354
++#define DCP_V14_SWAP_NITS		0x35c
++/* The nits field takes integral levels up to the panel maximum. */
++#define DCP_V14_NITS_MAX		500
++/*
++ * The level userspace is shown before Linux has set one. It is never
++ * presented on its own: until a level is requested the panel keeps the boot
++ * loader's level, which Linux does not know.
++ */
++#define DCP_V14_NITS_DEFAULT		140
++
++static_assert(DCP_V14_SWAP_NITS_PRESENT >= DCP_V14_SWAP_BACKGROUND + 4);
++static_assert(DCP_V14_SWAP_NITS >= DCP_V14_SWAP_NITS_PRESENT + 1);
++static_assert(DCP_V14_SWAP_NITS + 8 <= DCP_V14_SWAP_SURFACE(0));
++
++/* Integral nits as IEEE 754 binary64, without kernel floating point. */
++static inline u64 dcp_v14_nits_binary64(u32 nits)
++{
++	unsigned int bit;
++
++	if (!nits)
++		return 0;
++	bit = fls(nits) - 1;
++	return ((u64)(1023 + bit) << 52) |
++	       ((u64)(nits - (1U << bit)) << (52 - bit));
++}
++
++/*
++ * The level block of an encoded swap: @nits when @change, else none. A level
++ * above the wire bound leaves the record untouched.
++ */
++static inline int dcp_v14_encode_nits(u8 *swap, bool change, u32 nits)
++{
++	if (change && nits > DCP_V14_NITS_MAX)
++		return -EINVAL;
++	swap[DCP_V14_SWAP_NITS_PRESENT] = change;
++	put_unaligned_le64(change ? dcp_v14_nits_binary64(nits) : 0,
++			   swap + DCP_V14_SWAP_NITS);
++	return 0;
++}
+ 
+ /* Offsets in a surface record. */
+ #define DCP_V14_SURF_OPAQUE		0x02
