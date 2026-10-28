@@ -1062,7 +1062,10 @@ sampling, native interaction timelines, third-party adapters and game profiling,
 with reproducible workstation experiments. The first slice adds Myaku's finite
 local captures and `aizome-profile timeline|cpu 10|30|60 PID [PID…]`. CPU sampling
 uses unprivileged perf with fixed user-space sampling settings; denial is
-reported without changing kernel policy. Native events are dormant until an
+reported without changing kernel policy. On ordinary upstream kernels,
+`kernel.perf_event_paranoid=2` permits this mode. The recorder explicitly uses
+`--user-callchains` as well as `cpu-clock:u`, because DWARF recording can otherwise
+request kernel callchains and fail at that setting. Native events are dormant until an
 explicit session is armed. There is no tracing worker or timer in idle apps.
 Myaku invokes its sibling `aizome-profile` executable on a temporary control
 thread, so exporter and symbol-inventory memory is released with the recorder

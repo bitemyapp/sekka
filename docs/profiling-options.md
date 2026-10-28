@@ -660,3 +660,25 @@ Headless/component results do not validate physical DRM timestamps, VRR,
 multi-monitor behavior, laptop discharge, aarch64, or an installed ISO. KVM was
 not accessible to this workstation user. Before making battery-neutrality or
 active-overhead claims, run the repeated hardware A/B trials described above.
+
+### Laptop sampling preflight — 2026-10-28
+
+The laptop already had `kernel.perf_event_paranoid=2`, `ptrace_scope=1` and
+kernel lockdown disabled. A cache-fetched perf 7.3 binary successfully counted
+`cpu-clock:u`, but the recorder's original DWARF arguments failed: user-space
+event selection did not also exclude kernel callchains. The recorder now adds
+`--user-callchains` explicitly. The kernel checks kernel-callchain permission
+separately from event privilege selection
+([upstream source](https://github.com/torvalds/linux/blob/master/kernel/events/core.c)).
+
+With that addition, attaching to a separate user-owned synthetic Perl workload
+at 99 Hz, using 8 KiB DWARF stack snapshots, 64 mmap pages, no inheritance and
+the monotonic clock captured 99 samples in one second. `perf script` resolved
+multiple user stack frames, including `Perl_pp_modulo`, `Perl_runops_standard`,
+`perl_run` and `main`. The private capture is
+`/tmp/aizome-perf-check.reZiOn/perf.data` on the laptop. No root access, policy
+change, local compilation or persistent package installation was used.
+This proves the sampling mechanism works on this laptop; it does not yet
+validate an integrated Myaku CPU capture or the split-symbol workflow for
+sampled Aizome stacks. The earlier workstation package evidence predates this
+argument fix.

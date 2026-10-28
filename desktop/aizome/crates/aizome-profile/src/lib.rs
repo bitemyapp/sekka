@@ -235,6 +235,8 @@ fn start_perf(options: &Options, dir: &Path) -> io::Result<Child> {
         "99",
         "--call-graph",
         "dwarf,8192",
+        // User-space events alone do not exclude privileged kernel callchains.
+        "--user-callchains",
         "--mmap-pages",
         "64",
         "--no-inherit",
