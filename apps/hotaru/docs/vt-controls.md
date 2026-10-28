@@ -72,6 +72,14 @@ native qualification must identify their exact source and executable.
 The [combined checkpoint](links-vt-checkpoint.md) now records those exact
 identities, final comparisons, regressions and five packaged Wayland suites.
 
+A later isolated experiment read REP's last scalar from the final base cell
+once per row span instead of tracking it per character. Independent review
+and all 3,462 real-library comparisons passed, including wrap and wide-tail
+cases. It did not materially improve mixed Unicode and made styled input
+about 4–6% slower, so it was rejected. The patch, exact build identity and paired
+measurements remain in [`upstream/rep-last-cell/`](../upstream/rep-last-cell/);
+the product still tracks the original printed scalar directly.
+
 ```sh
 python3 tools/vt-controls-oracle.py \
   --library /home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so \

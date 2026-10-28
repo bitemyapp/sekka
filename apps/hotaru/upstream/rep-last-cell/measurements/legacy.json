@@ -1,0 +1,373 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "aca410acce1038a2f1acb66a63b1c91d04c9dd976fca156bb136e0ba6d3058a9",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-combined-vt-20261028/final-build.json",
+      "sha256": "73d5d9735dc42028849e8f6020bbaa9352a5de207997a73eca8e642475140a89",
+      "source_sha256": "a3e74ef33281a79744da2fa15e63d019699950490bbcc94eef783997391ca128",
+      "binary_sha256": "37081f680a4632d6bfdee8f0fcec8e07623b3ac4ef860928c73085687155533b",
+      "revision": "9d95e9e plus frozen VT control and repaired SIMD integration"
+    },
+    {
+      "metadata": "candidate-build.json",
+      "sha256": "956b1eae5a7a675b616e8352d1f5b54c046cfb006d75e93a689d8cffbb73d4fa",
+      "source_sha256": "2fcb34197d2b27bdf16ed37260700e4a3514609d049086ee6f2d153206179cdb",
+      "binary_sha256": "9541ed3f24779699df8491e8d40d72bb9ba4efdf081e317a47f65b85e9b98c78",
+      "revision": "cb91125 isolated REP final-cell sampling"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          1818239,
+          1809585,
+          1822284,
+          1825149,
+          1819380,
+          1829886,
+          1827352,
+          1836376,
+          1838869,
+          1829776,
+          1811759,
+          1788493,
+          1807312,
+          1798829,
+          1814963,
+          1824898,
+          1809505,
+          1816175,
+          1833712,
+          1823075
+        ],
+        "cb91125 isolated REP final-cell sampling": [
+          1801543,
+          1787822,
+          1795584,
+          1793260,
+          1789014,
+          1780521,
+          1775444,
+          1788302,
+          1791297,
+          1797567,
+          1783015,
+          1775233,
+          1780861,
+          1782364,
+          1784537,
+          1792780,
+          1763866,
+          1780942,
+          1777426,
+          1794643
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 1820832.0,
+        "cb91125 isolated REP final-cell sampling": 1786179.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          8374334,
+          8491031,
+          8452693,
+          8459653,
+          8485983,
+          8439333,
+          8496500,
+          8481888,
+          8463840,
+          8457570,
+          8381955,
+          8465603,
+          8485082,
+          8466504,
+          8447234,
+          9508595,
+          9590990,
+          9609258,
+          9590949,
+          9570539
+        ],
+        "cb91125 isolated REP final-cell sampling": [
+          8317368,
+          8422978,
+          8386493,
+          8395246,
+          8394745,
+          8409978,
+          8523761,
+          8521127,
+          8523700,
+          8525323,
+          8357940,
+          8474066,
+          8427946,
+          8435607,
+          9475345,
+          9513362,
+          9470847,
+          9456316,
+          9427561,
+          9464158
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 8474196.0,
+        "cb91125 isolated REP final-cell sampling": 8497596.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          2630981,
+          2639685,
+          2633506,
+          2687097,
+          2682780,
+          2629730,
+          2590380,
+          2504099,
+          2504390,
+          2540384,
+          2488646,
+          2508135,
+          2500173,
+          2511159,
+          2501164,
+          2524059,
+          2501264,
+          2507955,
+          2503438,
+          2505161
+        ],
+        "cb91125 isolated REP final-cell sampling": [
+          2407713,
+          2407171,
+          2386511,
+          2351948,
+          2347841,
+          2457078,
+          2455996,
+          2434884,
+          2425580,
+          2431489,
+          2288311,
+          2287370,
+          2265978,
+          2272037,
+          2268551,
+          2475505,
+          2476347,
+          2486292,
+          2472751,
+          2517169
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 2509647.0,
+        "cb91125 isolated REP final-cell sampling": 2416646.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "styled",
+      "input_bytes": 2097152,
+      "sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          6170490,
+          6195529,
+          6198283,
+          6186816,
+          6198223,
+          6105341,
+          6144582,
+          6110290,
+          6129849,
+          6116129,
+          6174427,
+          6205895,
+          6209420,
+          6201328,
+          6214778,
+          6268119,
+          6289150,
+          6273057,
+          6283272,
+          6351446
+        ],
+        "cb91125 isolated REP final-cell sampling": [
+          6449203,
+          6476806,
+          6473991,
+          6500551,
+          6502544,
+          6572401,
+          6547112,
+          6553382,
+          6580272,
+          6574734,
+          6612161,
+          6713044,
+          6698372,
+          6702147,
+          6710460,
+          6520462,
+          6537207,
+          6553993,
+          6549937,
+          6523727
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 6198253.0,
+        "cb91125 isolated REP final-cell sampling": 6551659.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "cursor",
+      "input_bytes": 2097120,
+      "sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          10162396,
+          10150559,
+          10205011,
+          10138280,
+          10201617,
+          10357503,
+          10498676,
+          10322820,
+          10281117,
+          10340477,
+          10189939,
+          10143858,
+          10153483,
+          10112060,
+          10145330,
+          10273506,
+          10322670,
+          10325093,
+          10227696,
+          10241176
+        ],
+        "cb91125 isolated REP final-cell sampling": [
+          10143357,
+          10150559,
+          10179553,
+          10124138,
+          10164069,
+          10409071,
+          11052567,
+          11468268,
+          11355536,
+          10945525,
+          10201947,
+          10177089,
+          10218752,
+          10267456,
+          10223480,
+          10359496,
+          10305884,
+          10428431,
+          10258823,
+          10388439
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 10216353.5,
+        "cb91125 isolated REP final-cell sampling": 10263139.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated REP final-cell sampling",
+        "cb91125 isolated REP final-cell sampling",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T19:37:19.433597+00:00",
+  "status": "rejected",
+  "scope": "isolated REP last-written-cell sampling; no product integration",
+  "base_commit": "cb91125",
+  "candidate_source_sha256": "2fcb34197d2b27bdf16ed37260700e4a3514609d049086ee6f2d153206179cdb",
+  "candidate_sha256": "9541ed3f24779699df8491e8d40d72bb9ba4efdf081e317a47f65b85e9b98c78",
+  "actual_library_comparisons_matched": 3462,
+  "candidate_over_baseline": {
+    "legacy": {
+      "ascii": 0.9809688647826927,
+      "unicode": 1.0027613829087738,
+      "dense-wide": 0.9629427963374929,
+      "styled": 1.0570171143385079,
+      "cursor": 1.0045795204717614
+    },
+    "unicode": {
+      "ascii": 0.9776426309723063,
+      "unicode": 1.0018337220301374,
+      "dense-wide": 1.0127751624855736,
+      "styled": 1.0387715871379353,
+      "cursor": 0.9964964167385374
+    }
+  },
+  "reason": "Mixed Unicode unchanged; styled input 4\u20136% slower; no consistent benefit. Compatible but not accepted.",
+  "files": {
+    "candidate-build.json": "956b1eae5a7a675b616e8352d1f5b54c046cfb006d75e93a689d8cffbb73d4fa",
+    "candidate.patch": "15ce6dfe971bd8617d8d0d1fb43ab060d8ecc27886d68a9e0283ec0e54a23975",
+    "candidate-controls.json": "b14b252ee7a78aa6357c97886fdbc7b6f596988daf1e5c372d442b67dd4315ea",
+    "measurements/legacy.json": "4d24e1bafbb4242a7c2c157bd26919f3d0ef5aafb493f189470313bb5a96cb28",
+    "measurements/unicode.json": "4a6ea5e7786506e4e7443c6ca0ec15c3a0a96470c1f53a047d149202d73f6dc0"
+  }
+}
