@@ -252,11 +252,19 @@ ICCCM `WM_CHANGE_STATE` iconification to Wayland minimization, reports
 `WM_STATE`/`_NET_WM_STATE_HIDDEN`, and clears hidden state on restoration.
 Fullscreen updates preserve other state atoms. SDL2 exclusive-fullscreen
 games rely on these notifications when focus loss temporarily releases their
-fullscreen mode; otherwise they return as ordinary windows. The package runs
+fullscreen mode; otherwise they return as ordinary windows. Satellite also
+reads Xwayland's per-client `_XWAYLAND_RANDR_EMU_MONITOR_RECTS`: a fullscreen
+game keeps its chosen drawable resolution while the viewport fills the
+physical output. Absolute input and cursor-position hints use that viewport's
+transform, including changes while the pointer remains inside or locked.
+Windowed clients retain normal DPI scaling. Aizome's fill/split actions also
+respect fixed-size client bounds, including fixed tabs in a group.
+The package runs
 its upstream tests; `nix build .#checks.x86_64-linux.xwayland-fullscreen`
 tests real X11 requests through the packaged bridge and Aizome at 1×/2×,
 including startup, cancellation, toggling, remapping and repeated
-minimize/restore transitions. Updating the bridge
+minimize/restore transitions, real RandR mode changes, drawable dimensions,
+pointer coordinates and restoration to the native mode. Updating the bridge
 requires a fresh login, since restarting it disconnects its X11 clients.
 Native `tearing-control-v1` and HDR colour management remain unimplemented
 in Aizome; adding protocol globals alone would misrepresent its renderer.

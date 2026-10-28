@@ -2,7 +2,10 @@
 # Scoped to Aizome; other desktops retain their own Xwayland integration.
 { xwayland-satellite, xwayland }:
 xwayland-satellite.overrideAttrs (old: {
-  patches = (old.patches or [ ]) ++ [ ./xwayland-satellite-fullscreen.patch ];
+  patches = (old.patches or [ ]) ++ [
+    ./xwayland-satellite-fullscreen.patch
+    ./xwayland-satellite-resolution.patch
+  ];
   doCheck = true;
   nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ xwayland ];
   preCheck = (old.preCheck or "") + ''

@@ -156,6 +156,51 @@ def test(scale):
             scenario("legacy-borderless", (1280, 800), "borderless", [], True)
             scenario("legacy-unmanaged", (1280, 800), "unmanaged", [], True)
             scenario("small-windowed", (640, 480), "borderless", [], False)
+
+            # Use real RandR requests: Xwayland publishes the per-client
+            # emulated monitor rectangle. The physical output must stay at
+            # its desktop mode while the game's drawable retains its mode.
+            name = "emulated-resolution"
+            client = start([os.environ["X11_FIXTURE"], name, "640", "480", "decorated"],
+                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            assert line(client) == "ready"
+
+            def command(value):
+                client.stdin.write(value + "\n")
+                client.stdin.flush()
+                return line(client)
+
+            command("mode 640 480")
+            command("property-full")
+            command("map")
+            w = wait_for("emulated fullscreen mapped", lambda: window(name))
+            ipc("focus", str(w["id"]))
+            for width, height in [(640, 480), (800, 600), (640, 480)]:
+                command(f"mode {width} {height}")
+                wait_for("X11 drawable retains chosen mode",
+                         lambda: command("geometry") == f"{width} {height}")
+                assert window(name)["geometry"] == {"x": 0, "y": 0, "w": 1280, "h": 800}
+                assert window(name)["fullscreen"]
+                # Move while still inside the surface, including after a
+                # mode change. Both axes differ from the output DPI scale.
+                ipc("input", "motion", "900", "550")
+                ipc("input", "motion", "960", "600")
+                wait_for("pointer uses emulated resolution",
+                         lambda: command("pointer") == f"{width * 3 // 4} {height * 3 // 4}")
+            command(f"mode {1280 * scale} {800 * scale}")
+            wait_for("removing emulation restores native drawable",
+                     lambda: command("geometry") == f"{1280 * scale} {800 * scale}")
+            command("remove")
+            wait_for("leave emulated fullscreen", lambda: not window(name)["fullscreen"])
+            command("restore-size")
+            wait_for("windowed size restored", lambda: command("geometry") == "640 480")
+            wait_for("normal DPI viewport restored",
+                     lambda: window(name)["geometry"]["w"] == 640 // scale
+                     and window(name)["geometry"]["h"] == 480 // scale)
+            client.stdin.write("quit\n")
+            client.stdin.flush()
+            assert client.wait(timeout=10) == 0
+            print(f"PASS {scale}x emulated resolution, mode changes, pointer and restore", flush=True)
         except Exception:
             for path in directory.glob("*.log"):
                 print(f"{path.name}:\n{path.read_text()[-18000:]}", flush=True)

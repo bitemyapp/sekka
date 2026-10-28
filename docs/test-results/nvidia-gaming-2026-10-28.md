@@ -274,6 +274,89 @@ game. Turok remains selected for Proton Experimental; the temporary
 The normal desktop still requires the branch update and a fresh login to
 load the fullscreen restoration fix.
 
+## Native Duke Nukem 3D: Megaton Edition
+
+Steam app 225140 was tested using the installed native 32-bit Megaton
+executable (1.4.9 STABLE), not the Classic/DOSBox choice or Proton. The
+desktop remained at 3840×2160/240 Hz, scale 2. Two independent placement
+faults reproduced the partially drawn window:
+
+- Aizome's fill/split actions ignored fixed client dimensions. Megaton's
+  windowed SDL window declares minimum and maximum dimensions of 1920×1080
+  X pixels. Filling it enlarged the drawable while its renderer kept the
+  selected resolution. Fill/split now leave fixed-size windows and groups
+  containing a fixed-size tab alone. Fullscreen requests remain supported.
+- Satellite starts Xwayland with `-force-xrandr-emulation`, but owns the
+  Wayland viewport itself. It ignored the per-client emulated monitor
+  rectangle and configured fullscreen clients to the physical output size.
+  Megaton requested 1920×1080, yet received a 3840×2160 drawable. Switching
+  fullscreen off and back on reproduced a quarter-sized render even when
+  the initial title menu appeared correct. The bridge now retains the
+  emulated drawable size, scales the viewport to the fullscreen configure,
+  and transforms absolute input and cursor-position hints accordingly.
+  Mode changes and property deletion update the viewport and input without
+  requiring the pointer to leave the surface.
+
+Validation:
+
+- All 65 Aizome logic tests and eight layout tests pass. The new fixed-size
+  regression covers 1×, 1.5× and 2× scaling, both split directions and mixed
+  tab groups. It fails against the previously installed compositor.
+- `nix build .#aizome` produced
+  `/nix/store/40av5897k75lhgdpp368irxvjbnm6imd-aizome-0.1.0`;
+  all eight layout tests also pass against that exact packaged executable.
+  Its ABI-compatible logic was loaded into the live session in 2 ms.
+  Native Megaton then retained its 960×540 logical / 1920×1080 pixel
+  window after fill and both split requests. Evidence:
+  `/tmp/sekka-duke-fixed-live.json` and `sekka-duke-windowed-fixed.png`.
+- The final bridge package is
+  `/nix/store/m5wk9pqb8931gfpz7clpsjz21kcj1mik-xwayland-satellite-0.8.3`.
+  All 86 upstream unit tests and 29 integration tests pass, as does Clippy
+  with warnings denied. The packaged X11 check passes 18 scenarios at
+  1×/2×, including actual RandR requests, 640×480 → 800×600 → 640×480
+  changes, pointer coordinates with unequal horizontal/vertical scaling,
+  return to the native mode, and windowed DPI restoration. The previous
+  bridge fails waiting for the requested drawable dimensions.
+  Logs: `/tmp/sekka-satellite-resolution-final-unit.log`,
+  `sekka-satellite-resolution-final-check.log` and
+  `sekka-satellite-resolution-negative.log`.
+- Real Steam/pressure-vessel launches on the RTX 5090 used a separate
+  bridge on `:158`. The native title, menus and first level covered the
+  display with a 1920×1080 X drawable. Switching fullscreen off and back
+  on through Megaton's menu, then switching focus away and back, preserved
+  the complete gameplay image and drawable size. Original 3840×2160
+  captures are `/tmp/sekka-duke-native-gameplay.png`,
+  `sekka-duke-native-mode-restored.png` and
+  `sekka-duke-native-focus-restored.png`. This run used
+  `/nix/store/cv9yayw360y9p1i2yqw6bjy92b90rvjk-xwayland-satellite-0.8.3`;
+  the final package changes only the equivalent malformed-property length
+  check to preserve upstream's Rust 1.85 minimum. This was a rendering and
+  transition smoke test, not a performance benchmark.
+- With the combined Sidestep input `853fbb3` from `4267fae`, the final
+  Aizome package `/nix/store/g52815v8ld3c87pfmf44f0lh94k2kxqm-aizome-0.1.0`
+  builds and passes all 18 packaged X11 scenarios. The 65 logic tests and
+  eight layout tests pass again, including all eight against this exact
+  packaged executable. For that run, its `bin` directory also leads `PATH`
+  so the reload test selects the package's own logic instead of the older
+  installed system generation. Logs: `/tmp/sekka-duke-rebased-build.log`,
+  `sekka-duke-rebased-x11-check.log`, `sekka-duke-rebased-logic.log` and
+  `sekka-duke-rebased-packaged-layout.log`.
+
+The missing 4K menu entry is a separate game limit. Xwayland advertises
+3840×2160 at 239.98 Hz. Megaton's published
+[`dnGetVideoModeList`](https://github.com/TermiT/duke3d-megaton/blob/6dca4d5523e84d59e49008d1007706b44214df98/code/dnAPI.cpp#L23-L34)
+filters modes whose width is at least 2880 and height at least 1800.
+The same comparisons are present in the installed ELF at `0x81632b1`
+and `0x81632c5`; its renderer also has fixed resolution limits. No forced
+4K mode or executable modification was applied.
+
+Megaton remains native, configured for 1920×1080 fullscreen. Its original
+local configuration is backed up in `~/.cache/sekka-duke-native`.
+The temporary Steam `DISPLAY=:158` option was removed, the test bridge
+stopped, and Steam restarted normally. The fill/split fix is active in the
+current session. Ordinary fullscreen launches need the branch update and
+a fresh login to use the new bridge.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.

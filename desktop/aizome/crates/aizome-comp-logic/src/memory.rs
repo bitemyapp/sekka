@@ -26,11 +26,14 @@ impl SizeConstraints {
         })
     }
 
+    pub fn fixed(self) -> bool {
+        self.min.0 > 0 && self.min.1 > 0 && self.min == self.max
+    }
+
     pub fn remembers(self, rect: Rect) -> bool {
         // A fixed-size toplevel owns its size; it must neither inherit nor
         // replace an app-wide size. Zero means unconstrained, not fixed.
-        let fixed = self.min.0 > 0 && self.min.1 > 0 && self.min == self.max;
-        !fixed
+        !self.fixed()
             && rect.w >= self.min.0.max(1)
             && rect.h >= self.min.1.max(1)
             && (self.max.0 == 0 || rect.w <= self.max.0)

@@ -2,6 +2,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/Xrandr.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,8 +36,37 @@ int main(int argc, char **argv) {
     char command[64];
     while (fgets(command, sizeof command, stdin)) {
         command[strcspn(command, "\n")] = 0;
+        int mode_w, mode_h;
         if (!strcmp(command, "quit")) break;
-        if (!strcmp(command, "map")) XMapWindow(display, window);
+        if (sscanf(command, "mode %d %d", &mode_w, &mode_h) == 2) {
+            XRRScreenResources *resources = XRRGetScreenResourcesCurrent(display, root);
+            if (!resources || !resources->ncrtc) return 5;
+            XRRCrtcInfo *crtc = XRRGetCrtcInfo(display, resources, resources->crtcs[0]);
+            RRMode mode = None;
+            for (int i = 0; i < resources->nmode; i++)
+                if (resources->modes[i].width == (unsigned)mode_w && resources->modes[i].height == (unsigned)mode_h)
+                    mode = resources->modes[i].id;
+            if (!crtc || mode == None) return 6;
+            Status status = XRRSetCrtcConfig(display, resources, resources->crtcs[0], CurrentTime,
+                crtc->x, crtc->y, mode, crtc->rotation, crtc->outputs, crtc->noutput);
+            XRRFreeCrtcInfo(crtc);
+            XRRFreeScreenResources(resources);
+            if (status != Success) return 7;
+        } else if (!strcmp(command, "geometry")) {
+            XWindowAttributes attrs;
+            XGetWindowAttributes(display, window, &attrs);
+            printf("%d %d\n", attrs.width, attrs.height);
+            fflush(stdout);
+            continue;
+        } else if (!strcmp(command, "pointer")) {
+            Window r, child;
+            int root_x, root_y, x, y;
+            unsigned mask;
+            XQueryPointer(display, window, &r, &child, &root_x, &root_y, &x, &y, &mask);
+            printf("%d %d\n", x, y);
+            fflush(stdout);
+            continue;
+        } else if (!strcmp(command, "map")) XMapWindow(display, window);
         else if (!strcmp(command, "unmap")) XUnmapWindow(display, window);
         else if (!strcmp(command, "minimize")) XIconifyWindow(display, window, DefaultScreen(display));
         else if (!strcmp(command, "restore-size")) XResizeWindow(display, window, atoi(argv[2]), atoi(argv[3]));

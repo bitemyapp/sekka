@@ -205,6 +205,9 @@ impl Actions for State {
 
     /// Fill (the zoom box) on, off or toggled.
     fn set_fill(&mut self, id: WinId, on: Option<bool>) {
+        if !self.lg.r().wm.get(id).is_some_and(|w| w.fill()) && group_has_fixed_size(self, id) {
+            return;
+        }
         let (usable, insets) = self.usable_for(id);
         let l = self.lg.m();
         let old = l.wm.get(id).map(|w| w.rect);
@@ -214,6 +217,12 @@ impl Actions for State {
     }
 
     fn set_split(&mut self, id: WinId, side: Side) {
+        let restoring = self.lg.r().wm.get(id).is_some_and(|w| {
+            matches!((w.placement, side), (Placement::SplitLeft, Side::Left) | (Placement::SplitRight, Side::Right))
+        });
+        if !restoring && group_has_fixed_size(self, id) {
+            return;
+        }
         let (usable, insets) = self.usable_for(id);
         let l = self.lg.m();
         let old = l.wm.get(id).map(|w| w.rect);
@@ -578,6 +587,17 @@ fn after_visibility_change(st: &mut State, id: WinId) {
     st.lg.m().window_changed(id);
     st.az.window_outputs_dirty = true;
     st.redraw_window(id);
+}
+
+/// Fixed-size games and dialogs cannot redraw at a zoomed or tiled size.
+/// Check every tab because the group shares one content rectangle.
+fn group_has_fixed_size(st: &State, id: WinId) -> bool {
+    st.lg
+        .r()
+        .wm
+        .group_members(id)
+        .iter()
+        .any(|id| st.az.windows.get(id).is_some_and(|w| crate::memory::SizeConstraints::of(w.toplevel()).fixed()))
 }
 
 fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect) {

@@ -190,6 +190,39 @@ fn remembered_geometry_respects_client_limits_and_fixed_helpers_do_not_replace_i
 }
 
 #[test]
+fn fixed_size_games_are_not_enlarged_by_fill_or_split() {
+    for output in ["1920x1080@1", "3840x2160@2", "2880x1620@1.5"] {
+        let c = start(Options { outputs: &[output], ..Default::default() });
+        let _shell = shell(&c);
+        // Like SDL's non-resizable X11 windows, this client declares fixed
+        // bounds but follows any configure. A bad configure stretches its
+        // drawable while the game keeps rendering at its selected resolution.
+        let game = c.client(Spec::new("fixed-game", 0x448866).size(640, 480).min_size(640, 480).max_size(640, 480));
+        let w = c.wait_window("fixed-game");
+        for request in [
+            Request::Fill { id: Some(w.id), state: Some(true) },
+            Request::Fill { id: Some(w.id), state: None },
+            Request::Split { id: Some(w.id), side: Side::Left },
+            Request::Split { id: Some(w.id), side: Side::Right },
+        ] {
+            c.ok(request);
+            c.settle();
+            assert_eq!(c.window("fixed-game").unwrap().geometry, w.geometry);
+            assert_eq!(game.seen().size, (640, 480));
+            assert!(!game.seen().maximized);
+        }
+        // A resizable tab must not enlarge its fixed-size neighbour either.
+        let _other = c.client(Spec::new("flexible-tab", 0x884466).size(640, 480));
+        let other = c.wait_window("flexible-tab");
+        c.ok(Request::Stack { a: w.id, b: other.id });
+        c.ok(Request::Fill { id: Some(other.id), state: Some(true) });
+        c.settle();
+        assert_eq!(game.seen().size, (640, 480));
+        assert!(!c.window("flexible-tab").unwrap().fill);
+    }
+}
+
+#[test]
 fn deskbar_arrival_width_changes_and_removal_refit_without_losing_restore() {
     let c = start(Options::default());
     let _app = c.client(Spec::new("filled", 0x886644));
