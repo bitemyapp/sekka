@@ -173,8 +173,10 @@ use blank/eight-basis/full patterns; ordinary metrics cover all 256 patterns.
 
 Combined native captures compare all 434 glyphs at 1/1.25/2/back 1: 1,736 comparisons,
 5,593,392 RGB bytes exact and matching initial/final 1× hashes. Eleven pure tests,
-57 ordinary native tests and strict pure/native Clippy pass. Package qualification
-is separate; no comparative speed claim follows from these checks.
+57 ordinary native tests and strict pure/native Clippy pass. The subsequent
+[434-sprite/partial-scroll package](region-checkpoint.md) passes its release
+Nix build and all eight native runtime suites. No comparative speed claim
+follows from these checks.
 `upstream/sprites/braille/README.md` contains reproduction, hashes, failure evidence
 and scope. Its inventory leaves 651 registered character slots plus 11 internal
 sprite rasters unqualified, preserving prior reports unchanged.

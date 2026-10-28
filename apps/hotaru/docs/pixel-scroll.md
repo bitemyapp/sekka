@@ -82,7 +82,7 @@ These are work counts, not elapsed-time speed or 60 Hz acceptance results.
 
 The [component result](../upstream/region-scroll/result.json) identifies the
 three exact integrated files and tested binary. Its runtime base has 178
-sprites; the subsequent combination with 434 sprites requires separate Nix
-and native qualification. The [evidence](../upstream/region-scroll/README.md)
+sprites; the subsequent [combination with 434 sprites](region-checkpoint.md)
+passes separate Nix and native qualification. The [evidence](../upstream/region-scroll/README.md)
 retains the original missing-optimization failure and the exposure work-gate
 failure. No unsafe code or buffer ownership changes are introduced.

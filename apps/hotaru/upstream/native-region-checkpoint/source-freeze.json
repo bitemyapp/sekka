@@ -1,0 +1,18 @@
+{
+  "product_commit": "0a62d49",
+  "previous_qualified_package": "/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0",
+  "sync_files": {
+    "apps/hotaru/crates/hotaru-sprites/src/braille.rs": "667b84b69e664d42ba301605ad9b191234034b0454cd2c278eae59eca8c2c04b",
+    "apps/hotaru/crates/hotaru-sprites/src/lib.rs": "4e0023f446f1669ea10ebeaa81dbc27bc81e10e155c13875dd886dc0f0b84df5",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/braille.json": "ac0962f732b80069044df14b28fe909146e1cde47973cce9367e772b43f4de95",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/braille.rle": "24e7ce64cbad7da58899dbe3e303a6fc6586b9e6cb048d4eed7f4748813c19f0",
+    "apps/hotaru/crates/hotaru-sprites/tests/golden.rs": "c2a6c5074864aa7616bdc042c45d5c98f93d07c78823ccf8d9c6f6e6a2079793",
+    "apps/hotaru/crates/hotaru-sprites/tests/raster.rs": "82f2483b916c74c5e3a397380d9244ae8930e71ffcd137c7f8ca24d028b6d152",
+    "desktop/aizome/apps/hotaru/src/font.rs": "61d441d8d57db13ef3fa994d91e8fc320893c260cf5661a103ca113cb47ec52f",
+    "desktop/aizome/apps/hotaru/src/sprites.rs": "b27c8cc1502f5895a38e82346828c24fafe0e9bcb38847936ba9df40484ec000",
+    "desktop/aizome/apps/hotaru/src/terminal_view.rs": "d0c50500c9878e63b29d894a837cb8c13d8b927790e9e24a81d8192ec5fa914d",
+    "desktop/aizome/apps/hotaru/tests/pixel_scroll.rs": "05f192ff9f3ff12ec1adfebe31031416dd6868e5f682c4ba223eadc625f0940f",
+    "desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py": "c511662c923950602048bda60441b0d3fc4d264b75eda003eb94de7c20d05dc2",
+    "desktop/aizome/apps/hotaru/tests/wayland/sprites.py": "ead69149639b02d5ca7555271004418f211344b8b4a6c7fbc4f95cb9f0f9ee05"
+  }
+}
