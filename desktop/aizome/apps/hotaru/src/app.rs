@@ -899,12 +899,14 @@ impl Program for Hotaru {
                 {
                     if pane.rendered.as_ref().is_none_or(|old| old.epoch != frame.epoch) {
                         log::debug!(
-                            "terminal font {:?}, scale {}, grid {}x{} px, unavailable families {:?}",
+                            "terminal font {:?}, scale {}, grid {}x{} px, unavailable families {:?}, sprite thickness {} px (estimated {})",
                             frame.primary_family,
                             frame.metrics.scale,
                             frame.metrics.cell_width_px,
                             frame.metrics.cell_height_px,
-                            frame.missing_families
+                            frame.missing_families,
+                            frame.metrics.box_thickness_px,
+                            frame.metrics.box_thickness_estimated
                         );
                     }
                     if pane.hovered_link.as_ref().is_some_and(|link| !link.matches_snapshot(&frame.snapshot)) {

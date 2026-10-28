@@ -44,7 +44,7 @@ fi
 # staging unrelated untracked files or touching the developer's real index.
 patches=()
 patch_names=()
-for patch_name in clipboard input mime grid-font; do
+for patch_name in clipboard input mime grid-font sprites; do
   native_patch=$root/apps/hotaru/upstream/sidestep-$patch_name.patch
   [[ -s $native_patch ]] || continue
   patches+=("$native_patch")

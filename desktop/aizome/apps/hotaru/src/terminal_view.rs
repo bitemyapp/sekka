@@ -193,6 +193,7 @@ struct ViewState {
     pointer: Option<Point>,
     link_modifier: bool,
     hover_clear_pending: bool,
+    sprite_overhang: bool,
 }
 
 fn retained_frame(frame: Option<&Arc<crate::font::Frame>>) -> Option<Arc<crate::font::Frame>> {
@@ -206,7 +207,9 @@ fn scroll_reuse(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<(i
         return None;
     }
     let (a, b) = (&old.snapshot, &new.snapshot);
-    if old.retention_bytes > SCROLL_FRAME_BYTES
+    if old.sprite_overhang
+        || new.sprite_overhang
+        || old.retention_bytes > SCROLL_FRAME_BYTES
         || new.retention_bytes > SCROLL_FRAME_BYTES
         || a.position.epoch != b.position.epoch
         || a.cols != b.cols
@@ -253,6 +256,9 @@ fn emit(cx: &mut EventCx, msg: Msg) {
 }
 
 impl TerminalView {
+    fn has_sprite_overhang(&self) -> bool {
+        self.rendered.as_ref().is_some_and(|f| f.sprite_overhang)
+    }
     fn link_point(&self, pos: Point, state: &ViewState) -> Option<CellPoint> {
         if self.rendered.is_none() || !pos.x.is_finite() || !pos.y.is_finite() {
             return None;
@@ -346,7 +352,11 @@ impl TerminalView {
             }
         }
         if hidden {
-            cx.invalidate_rect(rect);
+            if self.has_sprite_overhang() {
+                cx.invalidate();
+            } else {
+                cx.invalidate_rect(rect);
+            }
         }
     }
     fn cursor_rect(&self, state: &ViewState) -> Rect {
@@ -390,6 +400,9 @@ impl Widget for TerminalView {
         let theme = (cx.theme().is_dark(), rgb(cx.theme().text()), rgb(cx.theme().surface()));
         let st = cx.state::<ViewState>();
         let old_rendered = std::mem::replace(&mut st.rendered, retained_frame(self.rendered.as_ref()));
+        // Retention may reject a large frame, so remember overhang separately.
+        let repair_overhang = st.sprite_overhang || self.has_sprite_overhang();
+        st.sprite_overhang = self.has_sprite_overhang();
         let overlays = !st.preedit.is_empty() || st.hovered.is_some() || self.selection.is_some();
         let old_scale = st.scale;
         let metrics = self.rendered.as_ref().map(|frame| frame.metrics);
@@ -433,7 +446,8 @@ impl Widget for TerminalView {
             pad + self.snapshot.cols as f64 * cell_width,
             pad + self.snapshot.rows as f64 * line_height,
         );
-        let reuse = if !resized
+        let reuse = if !repair_overhang
+            && !resized
             && !font_changed
             && !overlays
             && !st.theme_pending
@@ -467,9 +481,16 @@ impl Widget for TerminalView {
                 cx.cancel_timer(CURSOR_TIMER);
             }
         }
+        if repair_overhang {
+            cx.invalidate_rect(Rect::from_origin_size(Point::ZERO, size));
+        }
         if was_hidden && (input || output) {
             let rect = self.cursor_rect(cx.state::<ViewState>());
-            cx.invalidate_rect(rect);
+            if self.has_sprite_overhang() {
+                cx.invalidate_rect(Rect::from_origin_size(Point::ZERO, size));
+            } else {
+                cx.invalidate_rect(rect);
+            }
         }
         if let Some((delta, _)) = &reuse {
             let dy = *delta as f64 * line_height;
@@ -552,65 +573,120 @@ impl Widget for TerminalView {
         cx.canvas.fill_rect(bounds, Color::rgb8(background.0, background.1, background.2));
         cx.canvas.save();
         cx.canvas.clip_rect(bounds);
-        for (y, spans) in self.rendered.iter().flat_map(|frame| frame.rows.iter().enumerate()) {
-            let row_rect = Rect::new(pad, pad + y as f64 * lh, bounds.width() - pad, pad + (y + 1) as f64 * lh);
-            if !cx.canvas.needs(row_rect) {
-                continue;
+        let overhang = self.has_sprite_overhang();
+        let cursor_kind = cursor_paint(
+            self.snapshot.cursor,
+            cx.is_focused() && cx.window_active(),
+            !state.preedit.is_empty(),
+            state.blink.hidden,
+        );
+        let block_cursor = (overhang && cursor_kind == Some(CursorPaint::Block)).then(|| self.cursor_rect(state));
+
+        // Normal masks stay within cells. Rare oversized ink must be drawn
+        // after every background, so adjacent spans/rows cannot erase it.
+        for pass in 0..if overhang { 2 } else { 1 } {
+            if pass == 1
+                && let Some(rect) = block_cursor
+            {
+                let value = self.snapshot.default_foreground;
+                cx.canvas.fill_rect(rect, Color::rgb8(value.0, value.1, value.2));
             }
-            for span in spans.iter() {
-                let style = span.style;
-                let color = |c: TerminalColor, foreground: bool| match c {
-                    TerminalColor::Default => {
-                        let c = if foreground {
-                            self.snapshot.default_foreground
-                        } else {
-                            self.snapshot.default_background
-                        };
-                        Color::rgb8(c.0, c.1, c.2)
-                    }
-                    TerminalColor::Indexed(i) => {
-                        let c = self.snapshot.palette[usize::from(i)];
-                        Color::rgb8(c.0, c.1, c.2)
-                    }
-                    TerminalColor::Rgb(c) => Color::rgb8(c.0, c.1, c.2),
-                };
-                let mut fg = color(style.foreground, true);
-                let mut bg = color(style.background, false);
-                if style.attrs & attrs::INVERSE != 0 {
-                    std::mem::swap(&mut fg, &mut bg);
-                }
-                if span.selected || span.current_match {
-                    bg = theme.selection();
-                    fg = theme.on_selection();
-                } else if span.matched {
-                    bg = theme.focus().with_alpha(0.3);
-                }
-                if style.attrs & attrs::DIM != 0 {
-                    fg = fg.with_alpha(0.6);
-                }
-                let r = Rect::new(pad + span.start as f64 * cw, row_rect.y0, pad + span.end as f64 * cw, row_rect.y1);
-                cx.canvas.fill_rect(r, bg);
-                if style.attrs & attrs::HIDDEN != 0 {
+            for (y, spans) in self.rendered.iter().flat_map(|frame| frame.rows.iter().enumerate()) {
+                let row_rect = Rect::new(pad, pad + y as f64 * lh, bounds.width() - pad, pad + (y + 1) as f64 * lh);
+                if !overhang && !cx.canvas.needs(row_rect) {
                     continue;
                 }
-                cx.canvas.save();
-                cx.canvas.clip_rect(r);
-                cx.canvas.draw_grid_text(&span.layout, Point::new(pad, r.y0), fg);
-                if style.attrs & attrs::STRIKE != 0 {
-                    let m = span.layout.metrics;
-                    let y = r.y0 + f64::from(m.strike_y_px) / m.scale;
-                    cx.canvas.fill_rect(Rect::new(r.x0, y, r.x1, y + f64::from(m.strike_thickness_px) / m.scale), fg);
+                for span in spans.iter() {
+                    let style = span.style;
+                    let color = |c: TerminalColor, foreground: bool| match c {
+                        TerminalColor::Default => {
+                            let c = if foreground {
+                                self.snapshot.default_foreground
+                            } else {
+                                self.snapshot.default_background
+                            };
+                            Color::rgb8(c.0, c.1, c.2)
+                        }
+                        TerminalColor::Indexed(i) => {
+                            let c = self.snapshot.palette[usize::from(i)];
+                            Color::rgb8(c.0, c.1, c.2)
+                        }
+                        TerminalColor::Rgb(c) => Color::rgb8(c.0, c.1, c.2),
+                    };
+                    let mut fg = color(style.foreground, true);
+                    let mut bg = color(style.background, false);
+                    if style.attrs & attrs::INVERSE != 0 {
+                        std::mem::swap(&mut fg, &mut bg);
+                    }
+                    if span.selected || span.current_match {
+                        bg = theme.selection();
+                        fg = theme.on_selection();
+                    } else if span.matched {
+                        bg = theme.focus().with_alpha(0.3);
+                    }
+                    if style.attrs & attrs::DIM != 0 {
+                        fg = fg.with_alpha(0.6);
+                    }
+                    let r =
+                        Rect::new(pad + span.start as f64 * cw, row_rect.y0, pad + span.end as f64 * cw, row_rect.y1);
+                    if !overhang || pass == 0 {
+                        cx.canvas.fill_rect(r, bg);
+                    }
+                    if overhang && pass == 0 {
+                        continue;
+                    }
+                    if style.attrs & attrs::HIDDEN != 0 {
+                        continue;
+                    }
+                    cx.canvas.save();
+                    cx.canvas.clip_rect(r);
+                    let cursor_row = block_cursor.filter(|cursor| cursor.y0 == r.y0);
+                    let cursor_color = self.snapshot.default_background;
+                    let cursor_color = Color::rgb8(cursor_color.0, cursor_color.1, cursor_color.2);
+                    if let Some(cursor) = cursor_row {
+                        // Tint during the foreground pass; painting a late
+                        // cursor background would erase neighboring overhang.
+                        for (clip, color) in [
+                            (Rect::new(r.x0, r.y0, cursor.x0.min(r.x1), r.y1), fg),
+                            (r.intersect(cursor), cursor_color),
+                            (Rect::new(cursor.x1.max(r.x0), r.y0, r.x1, r.y1), fg),
+                        ] {
+                            if clip.x1 > clip.x0 {
+                                cx.canvas.save();
+                                cx.canvas.clip_rect(clip);
+                                cx.canvas.draw_grid_text(&span.layout, Point::new(pad, r.y0), color);
+                                cx.canvas.restore();
+                            }
+                        }
+                    } else {
+                        cx.canvas.draw_grid_text(&span.layout, Point::new(pad, r.y0), fg);
+                    }
+                    let sprite_cursor = cursor_row.map(|c| ((c.x0 - pad) / cw, (c.x1 - pad) / cw, cursor_color));
+                    if overhang {
+                        cx.canvas.restore();
+                        draw_sprites(cx.canvas, span, Point::new(pad, r.y0), fg, sprite_cursor);
+                        cx.canvas.save();
+                        cx.canvas.clip_rect(r);
+                    } else {
+                        draw_sprites(cx.canvas, span, Point::new(pad, r.y0), fg, sprite_cursor);
+                    }
+                    if style.attrs & attrs::STRIKE != 0 {
+                        let m = span.layout.metrics;
+                        let y = r.y0 + f64::from(m.strike_y_px) / m.scale;
+                        cx.canvas
+                            .fill_rect(Rect::new(r.x0, y, r.x1, y + f64::from(m.strike_thickness_px) / m.scale), fg);
+                    }
+                    if style.attrs & attrs::OVERLINE != 0 {
+                        cx.canvas.fill_rect(Rect::new(r.x0, r.y0 + 1.0, r.x1, r.y0 + 2.0), fg);
+                    }
+                    let underline_color = if style.underline_color == TerminalColor::Default {
+                        fg
+                    } else {
+                        color(style.underline_color, true)
+                    };
+                    underline(cx.canvas, r, style.underline(), underline_color, span.layout.metrics);
+                    cx.canvas.restore();
                 }
-                if style.attrs & attrs::OVERLINE != 0 {
-                    cx.canvas.fill_rect(Rect::new(r.x0, r.y0 + 1.0, r.x1, r.y0 + 2.0), fg);
-                }
-                let underline_color = if style.underline_color == TerminalColor::Default {
-                    fg
-                } else {
-                    color(style.underline_color, true)
-                };
-                underline(cx.canvas, r, style.underline(), underline_color, span.layout.metrics);
-                cx.canvas.restore();
             }
         }
         if let Some(hovered) = &state.hovered
@@ -633,12 +709,7 @@ impl Widget for TerminalView {
                 }
             }
         }
-        if let Some(kind) = cursor_paint(
-            self.snapshot.cursor,
-            cx.is_focused() && cx.window_active(),
-            !state.preedit.is_empty(),
-            state.blink.hidden,
-        ) {
+        if let Some(kind) = cursor_kind {
             let r = self.cursor_rect(state);
             let color = self.snapshot.default_foreground;
             let color = Color::rgb8(color.0, color.1, color.2);
@@ -647,6 +718,7 @@ impl Widget for TerminalView {
                 CursorPaint::Underline => cx.canvas.fill_rect(Rect::new(r.x0, r.y1 - stroke, r.x1, r.y1), color),
                 CursorPaint::Bar => cx.canvas.fill_rect(Rect::new(r.x0, r.y0, r.x0 + stroke, r.y1), color),
                 CursorPaint::Hollow => aizome_kit::draw::border(cx.canvas, r, color, 1.0 / state.scale),
+                CursorPaint::Block if overhang => {}
                 CursorPaint::Block => {
                     cx.canvas.fill_rect(r, color);
                     // Reuse shaped glyphs, clipped to the cursor's full cell(s),
@@ -669,6 +741,15 @@ impl Widget for TerminalView {
                                 Point::new(pad, r.y0),
                                 Color::rgb8(value.0, value.1, value.2),
                             );
+                            if !overhang {
+                                draw_sprites(
+                                    cx.canvas,
+                                    span,
+                                    Point::new(pad, r.y0),
+                                    Color::rgb8(value.0, value.1, value.2),
+                                    None,
+                                );
+                            }
                         }
                         cx.canvas.restore();
                     }
@@ -704,7 +785,11 @@ impl Widget for TerminalView {
                 if self.blink_eligible(focused, state) && state.blink.armed {
                     state.blink.hidden = !state.blink.hidden;
                     let rect = self.cursor_rect(state);
-                    cx.invalidate_rect(rect);
+                    if self.has_sprite_overhang() {
+                        cx.invalidate();
+                    } else {
+                        cx.invalidate_rect(rect);
+                    }
                     cx.set_timer(CURSOR_TIMER, CURSOR_INTERVAL);
                 } else {
                     state.blink.sync(false, false);
@@ -1060,6 +1145,7 @@ mod scroll_retention_tests {
         let fonts = aizome_kit::sidestep_ui::grid::FontSet::new(Default::default()).unwrap();
         Arc::new(crate::font::Frame {
             retention_bytes: charge,
+            sprite_overhang: false,
             epoch: 0,
             snapshot: Arc::new(hotaru_core::Terminal::new(2, 2, 0).snapshot()),
             selection: None,
@@ -1123,5 +1209,194 @@ mod scroll_retention_tests {
         h.send(Msg::CloseTab);
         h.advance(Duration::ZERO);
         assert!(frames.iter().all(|frame| frame.upgrade().is_none()), "closing releases the final displayed frame");
+    }
+}
+
+fn draw_sprites(
+    canvas: &mut aizome_kit::sidestep_ui::Canvas,
+    span: &crate::font::Span,
+    origin: Point,
+    color: Color,
+    cursor: Option<(f64, f64, Color)>,
+) {
+    let metrics = span.layout.metrics;
+    for sprite in span.sprites.iter() {
+        let color = cursor
+            .filter(|(start, end, _)| (sprite.column as f64) < *end && (sprite.column + sprite.width) as f64 > *start)
+            .map_or(color, |(_, _, color)| color);
+        debug_assert!(sprite.column >= span.start && sprite.column + sprite.width <= span.end);
+        let placed = Point::new(
+            origin.x + sprite.column as f64 * metrics.cell_width() + f64::from(sprite.glyph.origin_x) / metrics.scale,
+            origin.y + f64::from(sprite.glyph.origin_y) / metrics.scale,
+        );
+        assert!(canvas.draw_grid_mask(&sprite.glyph.mask, placed, metrics.scale, color), "validated sprite geometry");
+    }
+}
+
+#[cfg(test)]
+mod sprite_paint_tests {
+    use super::*;
+    use aizome_kit::sidestep_ui::grid;
+    use aizome_kit::testing::Harness;
+    struct Fixture {
+        frame: Arc<crate::font::Frame>,
+    }
+    impl Program for Fixture {
+        type Msg = Msg;
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.SpriteTest", "Sprites", "Sprites")
+        }
+        fn launched(&mut self, cx: &mut Cx<Msg>) {
+            cx.open_window(WindowSpec::new("Sprites").size(96.0, 96.0));
+        }
+        fn update(&mut self, msg: Msg, _: &mut Cx<Msg>) {
+            if let Msg::Shaped(_, frame) = msg {
+                self.frame = frame;
+            }
+        }
+        fn view(&self, _: WindowKey) -> Element<Msg> {
+            terminal_view(
+                1,
+                self.frame.snapshot.clone(),
+                (14.0, 400),
+                None,
+                Arc::new(Bindings::new(&crate::settings::Settings::default())),
+                Some(self.frame.clone()),
+                0,
+            )
+            .id("grid")
+        }
+    }
+    fn frame(sprite: bool) -> Arc<crate::font::Frame> {
+        let mut terminal = hotaru_core::Terminal::new(4, 4, 0);
+        terminal.feed(b"\x1b[?25l\x1b[48;2;0;0;200m\x1b[2J");
+        let fonts = grid::FontSet::new(Default::default()).unwrap();
+        let mut metrics = fonts.metrics(1.0).unwrap();
+        metrics.cell_width_px = 8;
+        metrics.cell_height_px = 12;
+        metrics.box_thickness_px = 8;
+        let layout = Arc::new(grid::Layout { metrics, runs: Arc::from([]), clusters: Arc::from([]) });
+        let mut cache = crate::sprites::Cache::default();
+        let glyph = cache.get(0x2501, metrics).unwrap();
+        assert!(glyph.overhang);
+        let mut rows = Vec::new();
+        for row in 0..4 {
+            let sprites = if sprite && row == 1 {
+                vec![crate::sprites::Instance { column: 1, width: 1, glyph: glyph.clone() }]
+            } else {
+                Vec::new()
+            };
+            rows.push(Arc::from(vec![crate::font::Span {
+                start: 0,
+                end: 4,
+                style: hotaru_core::Style {
+                    foreground: TerminalColor::Rgb(Rgb(255, 255, 255)),
+                    background: TerminalColor::Rgb(Rgb(0, 0, 200)),
+                    ..Default::default()
+                },
+                selected: false,
+                matched: false,
+                current_match: false,
+                layout: layout.clone(),
+                sprites: Arc::from(sprites),
+            }]));
+        }
+        Arc::new(crate::font::Frame {
+            retention_bytes: usize::MAX,
+            sprite_overhang: sprite,
+            epoch: 1,
+            snapshot: Arc::new(terminal.snapshot()),
+            selection: None,
+            metrics,
+            rows,
+            primary_family: String::new(),
+            missing_families: Vec::new(),
+            links: Vec::new(),
+        })
+    }
+    #[test]
+    fn block_background_precedes_neighbor_ink_and_tints_only_cursor_source_cell() {
+        for cursor_row in [1, 2] {
+            let mut owned = frame(true);
+            let frame = Arc::get_mut(&mut owned).unwrap();
+            let snapshot = Arc::get_mut(&mut frame.snapshot).unwrap();
+            snapshot.cursor.row = cursor_row;
+            snapshot.cursor.col = 1;
+            snapshot.cursor.visible = true;
+            snapshot.cursor.blinking = true;
+            snapshot.cursor.in_viewport = true;
+            snapshot.default_foreground = Rgb(255, 0, 0);
+            snapshot.default_background = Rgb(0, 0, 0);
+            let mut h = Harness::new(Fixture { frame: owned.clone() });
+            let w = h.window();
+            h.advance(Duration::ZERO);
+            h.focus_window(w, true);
+            h.click(w, Point::new(18.0, 18.0));
+            h.advance(Duration::ZERO);
+            assert_eq!(h.focused_name(w).as_deref(), Some("grid"));
+            let (width, _, rgba) = h.render_rgba(w, 1.0);
+            let sprite = &owned.rows[1][0].sprites[0];
+            let mask = &sprite.glyph.mask;
+            let ox = PAD as i32 + 8 + sprite.glyph.origin_x;
+            let oy = PAD as i32 + 12 + sprite.glyph.origin_y;
+            let mut outside = 0;
+            for y in 0..mask.height() {
+                for x in 0..mask.width() {
+                    let alpha = mask.alpha_bytes()[(y * mask.width() + x) as usize];
+                    if alpha != 255 {
+                        continue;
+                    }
+                    let px = ox + x as i32;
+                    let py = oy + y as i32;
+                    let at = ((py as u32 * width + px as u32) * 4) as usize;
+                    let expected = if cursor_row == 1 { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
+                    assert_eq!(&rgba[at..at + 4], &expected, "source row1 versus cursor row{cursor_row}, {px},{py}");
+                    if py >= PAD as i32 + 24 {
+                        outside += 1;
+                    }
+                }
+            }
+            assert!(outside > 0, "fixture must cross into blank next-row cursor");
+            assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
+            h.advance(Duration::from_millis(600));
+            assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0, "blink must repaint padded extent");
+        }
+    }
+
+    #[test]
+    fn padded_ink_survives_neighbor_backgrounds_and_transition_damage() {
+        let normal = frame(false);
+        let with_ink = frame(true);
+        assert!(scroll_reuse(&normal, &with_ink).is_none());
+        assert!(scroll_reuse(&with_ink, &normal).is_none());
+        let mut h = Harness::new(Fixture { frame: normal.clone() });
+        let w = h.window();
+        h.advance(Duration::ZERO);
+        let initial = h.render_rgba(w, 1.0);
+        assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
+        h.send(Msg::Shaped(1, with_ink.clone()));
+        h.advance(Duration::ZERO);
+        assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
+        let (width, _, rgba) = h.render_rgba(w, 1.0);
+        let sprite = &with_ink.rows[1][0].sprites[0];
+        let origin_x = PAD as i32 + 8 + sprite.glyph.origin_x;
+        let origin_y = PAD as i32 + 12 + sprite.glyph.origin_y;
+        let mask = &sprite.glyph.mask;
+        for y in 0..mask.height() {
+            for x in 0..mask.width() {
+                let a = mask.alpha_bytes()[(y * mask.width() + x) as usize];
+                let at = (((origin_y + y as i32) as u32 * width + (origin_x + x as i32) as u32) * 4) as usize;
+                let blue = ((u32::from(200u8) * (255 - u32::from(a)) + 255 * u32::from(a) + 127) / 255) as u8;
+                assert_eq!(&rgba[at..at + 4], &[a, a, blue, 255], "mask {x},{y}");
+            }
+        }
+        h.send(Msg::Shaped(1, normal));
+        h.advance(Duration::ZERO);
+        assert_eq!(
+            h.check_frame_exact(w, 1.0).differing_pixels,
+            0,
+            "old overhang must be erased even when prior retention was rejected"
+        );
+        assert_eq!(h.render_rgba(w, 1.0), initial);
     }
 }

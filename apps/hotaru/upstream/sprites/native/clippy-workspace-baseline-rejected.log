@@ -1,0 +1,85 @@
+   Compiling aizome-kit v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/crates/aizome-kit)
+    Checking simdutf8 v0.1.5 (/home/callen/work/hotaru-native-sprites-20261028/apps/hotaru/vendor/simdutf8)
+    Checking hotaru-sprites v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/apps/hotaru/crates/hotaru-sprites)
+    Checking hotaru-io v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/apps/hotaru/crates/hotaru-io)
+    Checking aizome-theme v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/crates/aizome-theme)
+    Checking aizome-shell-proto v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/crates/aizome-shell-proto)
+    Checking sidestep-engine v0.0.1 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/sidestep/crates/sidestep-engine)
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/apps/hotaru/crates/hotaru-core)
+    Checking aizome-config v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/crates/aizome-config)
+    Checking sidestep-ui v0.0.1 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/sidestep/crates/sidestep-ui)
+error: this boolean expression can be simplified
+    --> crates/aizome-kit/src/engine.rs:2211:34
+     |
+2211 |             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+     |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+     = note: `-D clippy::nonminimal-bool` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::nonminimal_bool)]`
+help: try
+     |
+2211 -             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+2211 +             Key::Character(s) if !(s != " " || !m.is_empty() && m != Modifiers::SHIFT) => {
+     |
+2211 -             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+2211 +             Key::Character(s) if (m == Modifiers::SHIFT || m.is_empty()) && s == " " => {
+     |
+
+error: this boolean expression can be simplified
+   --> crates/aizome-kit/src/tree.rs:444:20
+    |
+444 |                 if !self.by_id.get(id).is_some_and(|&i| !self.nodes[i].dead) {
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `self.by_id.get(id).is_none_or(|&i| self.nodes[i].dead)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+
+error: this `if` can be collapsed into the outer `match`
+   --> crates/aizome-kit/src/widgets/menus.rs:470:17
+    |
+470 | /                 if cx.state::<MenuState>().open_sub.as_ref() != Some(&r.path) {
+471 | |                     self.open_sub(cx, i);
+472 | |                 }
+    | |_________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_match
+    = note: `-D clippy::collapsible-match` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_match)]`
+help: collapse nested if block
+    |
+469 ~             Some((i, r)) if r.kind == RowKind::Submenu && r.enabled
+470 ~                 && cx.state::<MenuState>().open_sub.as_ref() != Some(&r.path) => {
+471 |                     self.open_sub(cx, i);
+472 ~                 }
+    |
+
+error: this boolean expression can be simplified
+    --> crates/aizome-kit/src/widgets/text_editor.rs:1152:12
+     |
+1152 |         if !cx.state::<EditorState>().is_some_and(|s| s.bar_until.is_some_and(|t| now < t)) {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `cx.state::<EditorState>().is_none_or(|s| s.bar_until.is_none_or(|t| now >= t))`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+
+error: this `if` can be collapsed into the outer `match`
+   --> crates/aizome-kit/src/widgets/text_field.rs:777:17
+    |
+777 | /                 if self.editable() && self.copy(cx) {
+778 | |                     self.replace(cx, "", EditKind::Other);
+779 | |                     true
+780 | |                 } else {
+781 | |                     false
+782 | |                 }
+    | |_________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_match
+help: collapse nested if block
+    |
+776 ~             EditCommand::Cut
+777 ~                 if self.editable() && self.copy(cx) => {
+778 |                     self.replace(cx, "", EditKind::Other);
+779 |                     true
+780 ~                 }
+    |
+
+error: could not compile `aizome-kit` (lib) due to 5 previous errors

@@ -195,6 +195,7 @@ dependencies = [
  "env_logger",
  "hotaru-core",
  "hotaru-io",
+ "hotaru-sprites",
  "libc",
  "log",
  "serde",
@@ -1950,6 +1951,10 @@ version = "0.1.0"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "hotaru-sprites"
+version = "0.1.0"
 
 [[package]]
 name = "hound"

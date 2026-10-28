@@ -35,10 +35,16 @@ def run(binary, evidence):
     source_paths.update(path for path in (root / "apps/hotaru/vendor/simdutf8").rglob("*")
                         if path.is_file() and not {"target", ".git"}.intersection(path.parts))
     for directory in ["desktop/aizome/apps/hotaru", "desktop/aizome/crates/aizome-kit",
-                      "apps/hotaru/crates/hotaru-core", "apps/hotaru/crates/hotaru-io"]:
+                      "apps/hotaru/crates/hotaru-core", "apps/hotaru/crates/hotaru-io", "apps/hotaru/crates/hotaru-sprites"]:
         source_paths.update(path for path in (root / directory).rglob("*")
                             if path.is_file() and path.suffix in {".rs", ".c", ".py", ".toml"})
+    source_paths.update(path for path in (root / "apps/hotaru/crates/hotaru-sprites").rglob("*") if path.is_file())
     source_paths.update(root / path for path in [
+        "vendor/sidestep/crates/sidestep-engine/src/raster.rs",
+        "vendor/sidestep/crates/sidestep-engine/src/raster/masks.rs",
+        "vendor/sidestep/crates/sidestep-engine/src/raster/ops.rs",
+        "vendor/sidestep/crates/sidestep-engine/src/raster/bands.rs",
+        "vendor/sidestep/crates/sidestep-ui/src/image.rs",
         "desktop/aizome/Cargo.toml", "desktop/aizome/Cargo.lock", "apps/hotaru/Cargo.toml", "apps/hotaru/Cargo.lock",
         *[f"desktop/aizome/crates/aizome-kit/src/{name}.rs" for name in ["app", "cx", "lib", "platform", "testing", "engine", "menu", "widget", "urls"]],
         "vendor/sidestep/crates/sidestep-engine/src/clipboard.rs",
@@ -51,6 +57,7 @@ def run(binary, evidence):
         "apps/hotaru/upstream/sidestep-clipboard.patch", "apps/hotaru/upstream/sidestep-input.patch",
         "apps/hotaru/upstream/sidestep-mime.patch",
         "apps/hotaru/upstream/sidestep-grid-font.patch",
+        "apps/hotaru/upstream/sidestep-sprites.patch",
         "vendor/sidestep/Cargo.lock", "vendor/sidestep/crates/sidestep-engine/Cargo.toml",
         "vendor/sidestep/crates/sidestep-engine/src/text.rs",
         "vendor/sidestep/crates/sidestep-engine/src/text/grid.rs",

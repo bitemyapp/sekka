@@ -1,0 +1,108 @@
+{
+  "base": "7f0a312f2ef173c031c407d74cce4d211e4693c5",
+  "files": [
+    {
+      "path": "apps/hotaru/Cargo.lock",
+      "sha256": "6c6e5222f94d0e550761b41860a34625818981101f2c94d13233509bcf063b74"
+    },
+    {
+      "path": "apps/hotaru/Cargo.toml",
+      "sha256": "7b931cbdee42d1a6350bd74f1c6fb2fde3d7ab83659e61785fd8201f93b95678"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/Cargo.toml",
+      "sha256": "593e95f34a0d1109502d3189c887e43067da2ffe97dc7b6558f3a1ddb1ea8da1"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/LICENSE.ghostty",
+      "sha256": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lib.rs",
+      "sha256": "16003518afed6d6726a9bce9f1b4815a0711aa5b051afa5de71aff4151837695"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lines.rs",
+      "sha256": "a59abe67313e6ec36444552f1bdc53b69693b9049ca8d5cec1252592ea493b8f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lines_map.rs",
+      "sha256": "91083cb7244e87b79213d9740664cd39d4e45de87e9dbf5b405c9ca63cc3eba5"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/fixtures/ghostty.json",
+      "sha256": "323b52f6afa11c6a7a263eb3edce1837deeb5bb6c3e5c749a3ef7fb81d331bef"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/fixtures/ghostty.rle",
+      "sha256": "eede9f49bb4dc905fdb1208dde92331bef163d1b8dd4fc60bc64b7a3ed90403a"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/golden.rs",
+      "sha256": "4a92baa8d9fea50cc29fb31889873cb100ba13fc850ece9818d97f9856011fe4"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/raster.rs",
+      "sha256": "8fd4c6d80491498ce2166ff77f563dacef86c7c0240b4d08124248e535c52181"
+    },
+    {
+      "path": "apps/hotaru/upstream/sidestep-sprites.patch",
+      "sha256": "b41c1806d77e493148d0a7d7d9949ee45f1425aaa3d4fe3d8cf365230c7f7677"
+    },
+    {
+      "path": "desktop/aizome/Cargo.lock",
+      "sha256": "27fd3262344a63db26e989afcf1b7e234b7c76eaddbe471886b7384387013998"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/Cargo.toml",
+      "sha256": "478b4b1bdb017c47900bd7fd6f52b237daa24b2436bbbb3ec104bb2729f14443"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/app.rs",
+      "sha256": "3b4aac047194f249ab45465bfbe63f5253ac7e6d467cd5ae856184d633926ad7"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/font.rs",
+      "sha256": "b190971fb29d13036586fd811c3730691f27d3c70b14b158cf55ceb42b3536f0"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/lib.rs",
+      "sha256": "fc1d2d6b232d0d47995791a289e38606c35f496abe530a2f2eea704d92ff7d32"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/sprites.rs",
+      "sha256": "c5e277e2be0f112bb6b5ba209153dbd4cbbf0cc3b1d2594bf4a5c134066e1835"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/terminal_view.rs",
+      "sha256": "005e153a8ef92944d010c443cae7de0d28e3bdbd022aa6c9135eded1ebd2c93e"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/wayland/smoke.py",
+      "sha256": "548c51d1bc449a2246347226da41b5943f01830b1a73d65bf15898c73a132f68"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/wayland/sprites.py",
+      "sha256": "a41e700c7aaf03dd9674ae0553d145f28f9d699791df53f843129015b8ed98f2"
+    },
+    {
+      "path": "desktop/aizome/nix/default.nix",
+      "sha256": "0fe2b0b6afca248a5c14b0aea448dbfc00968984cdca696f66492a87f12a32d3"
+    },
+    {
+      "path": "desktop/aizome/nix/hotaru.nix",
+      "sha256": "b1d3679ca046052c954f0b59e8afbf469ec7ec72263cd299c3ae5e81ce9e7bfa"
+    },
+    {
+      "path": "desktop/aizome/nix/package.nix",
+      "sha256": "3abc8f5522b61a1e6e89b99775b5ea8520a64c5442ebafbb64c789a2e5273141"
+    },
+    {
+      "path": "desktop/aizome/scripts/dev-environment",
+      "sha256": "b9c31ff06d095ed9aca601ecbe8f55ef8cecd4be0e17eec4809dd4086851da90"
+    }
+  ],
+  "binary_copy": [
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/ghostty.rle"
+  ]
+}

@@ -23,6 +23,7 @@
   inputPatch,
   mimePatch,
   gridFontPatch,
+  spritePatch,
   ghosttyLicense,
   uucodeLicense,
   unicodeLicense,
@@ -43,6 +44,7 @@ let
     patch -d $out/vendor/sidestep -p1 < ${inputPatch}
     patch -d $out/vendor/sidestep -p1 < ${mimePatch}
     patch -d $out/vendor/sidestep -p1 < ${gridFontPatch}
+    patch -d $out/vendor/sidestep -p1 < ${spritePatch}
     chmod u+w $out/desktop/aizome
     ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';

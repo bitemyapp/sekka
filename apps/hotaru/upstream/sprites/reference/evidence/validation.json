@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-28T21:01:48.941932+00:00",
+  "status": "prototype validated; not integrated",
+  "product_changes": false,
+  "runtime_unsafe": false,
+  "runtime_dependencies": [],
+  "source_files": {
+    "Cargo.lock": "b45338cd9d734a6a83fd19b6c92b821073975d70fdf466f2604109fa87ba0d2b",
+    "Cargo.toml": "bc91a1b3cb0e4c88f46e359301ed9d4156240ca7a1fff4c36126e0c6e8145e69",
+    "LICENSE.ghostty": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1",
+    "README.md": "99d4cfd6775fc843812f79baafbb16774dfad3967ea329eb7cd90a112b8046fd",
+    "src/lib.rs": "9dc0fead542c6d56b8dd0e772302b58f260b0d7eb6bde27dd63e7c3894b11eb4",
+    "src/lines.rs": "a59abe67313e6ec36444552f1bdc53b69693b9049ca8d5cec1252592ea493b8f",
+    "src/lines_map.rs": "91083cb7244e87b79213d9740664cd39d4e45de87e9dbf5b405c9ca63cc3eba5",
+    "src/main.rs": "361213da1ebea5fe1483b0b0515c29f75bf8b4c3dab9ae84f23a8afb72227657",
+    "tests/fixtures/ghostty.json": "323b52f6afa11c6a7a263eb3edce1837deeb5bb6c3e5c749a3ef7fb81d331bef",
+    "tests/fixtures/ghostty.rle": "eede9f49bb4dc905fdb1208dde92331bef163d1b8dd4fc60bc64b7a3ed90403a",
+    "tests/golden.rs": "4a92baa8d9fea50cc29fb31889873cb100ba13fc850ece9818d97f9856011fe4",
+    "tests/raster.rs": "8fd4c6d80491498ce2166ff77f563dacef86c7c0240b4d08124248e535c52181",
+    "tools/build-oracle.sh": "5b37d33a9e9b929b13bce0c6efe640dcaf9442fcffb8af5fb0fc88d34c955d5f",
+    "tools/compare.py": "021682bc671c2c55c28372cf8196cd98173fcb62a5b74bc1f338bc2140ea05f6",
+    "tools/font-shim.zig": "deb4bbb6a290a11a36abec492df2b985de285e44b3f2914130bc43a6efc881e5",
+    "tools/generate-fixtures.py": "2428a61db94171e63532dee4548a5afd0c6ced1fb5ffb24dc58cd80181367614",
+    "tools/generate-lines.py": "f944be2956b5541f21f5e956f70c94bab8d7b7a35a48a7030a13c76c1c3b4ac0",
+    "tools/global-shim.zig": "38b7ecc08a83107a661ad52804adfc5f7798d20c0bd6c8f60ad6162e44cdfa78",
+    "tools/oracle.zig": "bc9d7fa3bafe1f3ba79ffddff4358a5ae880e0fada8024b907ae11f2f60fdfb3",
+    "tools/prepare-oracle.py": "2450bddb8359bb9091bea53e257c5b409f87ee0c7ca1d660fa8ddc1c905c84ab",
+    "tools/quirks-shim.zig": "5ea281e568af715ba394738992f71f4c30f6b0b19dbc005dfebc677c10b77682",
+    "tools/z2d-options.zig": "89d846b23f638f2fddf6f27636e2f49300b2a6655efdc9dc57d7101da55ee738"
+  },
+  "checks": {
+    "cargo_test_debug": "6 passed;612 upstream golden crops included",
+    "cargo_test_release": "6 passed;612 upstream golden crops included",
+    "clippy": "all targets;warnings denied;passed",
+    "rustfmt": "passed",
+    "generated_mapping_reproducible": "passed;actual upstream source hash required",
+    "python_tools": "syntax checked",
+    "oracle_prepare": "reproduced unchanged sources and identical shims in separate oracle-repro directory",
+    "independent_review": "linux_io: no concrete bounds/ownership/allocation defect; preserve placement and padded damage"
+  },
+  "evidence": {
+    "initial.json": "cafcdb50ff476c83d6e8137288bd6aef358cfcb75fffacefc48650f6ccb8efd2",
+    "final.json": "1caa1d5bcef6c55f4d95702b3082d70c54592f8438ed30690bf956b814469fbb",
+    "provenance.json": "7c78e0297451e4b99484a398e4a1b5c67e0097c98a1659f50eb317ae1cd83fd9",
+    "tests-final.log": "7ee41fda9113b2b002aa299253bd3505380bf5326ca06fef95da54e6a3cd283c"
+  },
+  "comparison_source_match": "all final oracle report rust/src hashes equal this manifest source",
+  "not_claimed": [
+    "native integration",
+    "font-metric derivation parity",
+    "atlas/presentation parity",
+    "complete sprite coverage",
+    "performance parity"
+  ]
+}

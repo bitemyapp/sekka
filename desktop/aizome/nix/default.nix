@@ -76,6 +76,7 @@ let
   inputPatch = ../../../apps/hotaru/upstream/sidestep-input.patch;
   mimePatch = ../../../apps/hotaru/upstream/sidestep-mime.patch;
   gridFontPatch = ../../../apps/hotaru/upstream/sidestep-grid-font.patch;
+  spritePatch = ../../../apps/hotaru/upstream/sidestep-sprites.patch;
   ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
   uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
   unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
@@ -94,6 +95,7 @@ let
           inputPatch
           mimePatch
           gridFontPatch
+          spritePatch
           ghosttyLicense
           uucodeLicense
           unicodeLicense
@@ -113,6 +115,7 @@ let
           inputPatch
           mimePatch
           gridFontPatch
+          spritePatch
           ghosttyLicense
           uucodeLicense
           unicodeLicense

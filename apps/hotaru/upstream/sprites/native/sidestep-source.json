@@ -1,0 +1,38 @@
+[
+  {
+    "path": "crates/sidestep-engine/src/protocol.rs",
+    "sha256": "86d7778cd61db1417b14305136febd71dbcb2bc6aef19b6fbd9e387ad1b71e15"
+  },
+  {
+    "path": "crates/sidestep-engine/src/raster/bands.rs",
+    "sha256": "4a7358e665d9dee5f5064260e496529a1d1352a2cc457a0c26a687d155521aaa"
+  },
+  {
+    "path": "crates/sidestep-engine/src/raster/masks.rs",
+    "sha256": "a2a813d75436075dc946b683b9dd2bc9f53a03222c194866be21894b2b2bf647"
+  },
+  {
+    "path": "crates/sidestep-engine/src/raster/ops.rs",
+    "sha256": "7e9ab00aa052d4f300b0867bf430888bb8047b4c15d2cfcf2d5c071c65aed2c2"
+  },
+  {
+    "path": "crates/sidestep-engine/src/raster.rs",
+    "sha256": "b9888ffb0c0fe7ba73c0569297eb8ed964dc183d19d0a59ab85e515de29d4ea0"
+  },
+  {
+    "path": "crates/sidestep-engine/src/text/grid.rs",
+    "sha256": "c1cc38b82814db16c78e2c0045eccd0fc3f74c4a2d1a95f2595b4db26a0c2826"
+  },
+  {
+    "path": "crates/sidestep-ui/src/canvas.rs",
+    "sha256": "b44a306741fc0df8fef5d32f85b32cc7b02e75b94082d71fb31b6c4600a075aa"
+  },
+  {
+    "path": "crates/sidestep-ui/src/image.rs",
+    "sha256": "b43841b7a5cbfb5df91bea15c11f0544100f1f468db691dcb87e30e18fc740b0"
+  },
+  {
+    "path": "crates/sidestep-ui/src/lib.rs",
+    "sha256": "b38bc63bf6e7c365e2dad611ffaccfa6affc944d6e5cad8653b35d3f7a1ef358"
+  }
+]

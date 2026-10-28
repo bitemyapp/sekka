@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 aizome-kit.workspace = true
+hotaru-sprites = { path = "../../../../apps/hotaru/crates/hotaru-sprites" }
 hotaru-core = { path = "../../../../apps/hotaru/crates/hotaru-core" }
 hotaru-io = { path = "../../../../apps/hotaru/crates/hotaru-io" }
 libc = "0.2"

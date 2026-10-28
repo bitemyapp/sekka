@@ -20,12 +20,15 @@ pub struct Span {
     pub matched: bool,
     pub current_match: bool,
     pub layout: Arc<grid::Layout>,
+    pub sprites: Arc<[crate::sprites::Instance]>,
 }
 
 pub struct Frame {
     /// Conservative logical ownership charge for optional previous-frame
     /// retention. Computed on the font worker; this is not an RSS estimate.
     pub retention_bytes: usize,
+    /// Nonzero sprite ink outside its cell requires full foreground repaint.
+    pub sprite_overhang: bool,
     pub epoch: u64,
     pub snapshot: Arc<Snapshot>,
     pub selection: Option<Selection>,
@@ -186,6 +189,7 @@ struct CachedRow {
 }
 
 struct RowCache {
+    sprites: crate::sprites::Cache,
     config: Option<Arc<grid::FontConfig>>,
     scale: u64,
     rows: HashMap<RowKey, CachedRow>,
@@ -195,7 +199,15 @@ struct RowCache {
 }
 impl Default for RowCache {
     fn default() -> Self {
-        Self { config: None, scale: 0, rows: HashMap::new(), bytes: 0, limit: ROW_CACHE_BYTES, work: Work::default() }
+        Self {
+            sprites: crate::sprites::Cache::default(),
+            config: None,
+            scale: 0,
+            rows: HashMap::new(),
+            bytes: 0,
+            limit: ROW_CACHE_BYTES,
+            work: Work::default(),
+        }
     }
 }
 
@@ -340,6 +352,7 @@ fn shape(
             let selected = job.selection.is_some_and(|s| s.contains(y, column));
             let matched = matches[column];
             let start = column;
+            let is_sprite = crate::sprites::codepoint(row, column, metrics).is_some();
             let mut owned = Vec::new();
             loop {
                 let cell = row.cells()[column];
@@ -355,6 +368,7 @@ fn shape(
                     || row.style(row.cells()[column]) != style
                     || job.selection.is_some_and(|s| s.contains(y, column)) != selected
                     || matches[column] != matched
+                    || crate::sprites::codepoint(row, column, metrics).is_some() != is_sprite
                 {
                     break;
                 }
@@ -365,13 +379,20 @@ fn shape(
                 .collect();
             let cursor =
                 (job.snapshot.cursor.visible && job.snapshot.cursor.row == y).then_some(job.snapshot.cursor.col as u32);
-            let layout = fonts.shape(
-                &cells,
-                grid::Style { bold: style.attrs & attrs::BOLD != 0, italic: style.attrs & attrs::ITALIC != 0 },
-                job.scale,
-                cursor,
-                cancel,
-            )?;
+            let (layout, sprite_instances) = if is_sprite {
+                sprite_layout(&owned, metrics, &mut cache.sprites)?
+            } else {
+                (
+                    fonts.shape(
+                        &cells,
+                        grid::Style { bold: style.attrs & attrs::BOLD != 0, italic: style.attrs & attrs::ITALIC != 0 },
+                        job.scale,
+                        cursor,
+                        cancel,
+                    )?,
+                    Arc::from([]),
+                )
+            };
             spans.push(Span {
                 start,
                 end: column,
@@ -380,6 +401,7 @@ fn shape(
                 matched: matched > 0,
                 current_match: matched == 2,
                 layout,
+                sprites: sprite_instances,
             });
         }
         let spans: Arc<[Span]> = spans.into();
@@ -391,7 +413,9 @@ fn shape(
             .saturating_add(key.highlights.capacity().saturating_mul(std::mem::size_of::<(usize, usize, u8)>()))
             .saturating_add(local_links.len().saturating_mul(std::mem::size_of::<(usize, usize)>()).saturating_add(32))
             .saturating_add(spans.len().saturating_mul(std::mem::size_of::<Span>()).saturating_add(32))
-            .saturating_add(retention_total(spans.iter().map(|span| layout_bytes(&span.layout))));
+            .saturating_add(retention_total(spans.iter().map(|span| {
+                layout_bytes(&span.layout).saturating_add(crate::sprites::retention_bytes(&span.sprites))
+            })));
         retained_rows = retained_rows.saturating_add(bytes);
         if next_bytes.saturating_add(bytes) <= cache.limit {
             next_bytes += bytes;
@@ -405,6 +429,7 @@ fn shape(
     cache.bytes = next_bytes;
     let mut frame = Frame {
         retention_bytes: retained_rows,
+        sprite_overhang: rows.iter().flat_map(|r| r.iter()).flat_map(|s| s.sprites.iter()).any(|s| s.glyph.overhang),
         epoch: job.epoch,
         snapshot: job.snapshot.clone(),
         selection: job.selection,
@@ -436,6 +461,12 @@ impl UncachedFrame {
             // The preserved uncached benchmark does not participate in pixel
             // retention and must not acquire extra timed accounting work.
             retention_bytes: usize::MAX,
+            sprite_overhang: self
+                .rows
+                .iter()
+                .flat_map(|r| r.iter())
+                .flat_map(|s| s.sprites.iter())
+                .any(|s| s.glyph.overhang),
             epoch: self.epoch,
             snapshot: self.snapshot,
             selection: self.selection,
@@ -450,6 +481,7 @@ impl UncachedFrame {
 
 #[cfg(test)]
 fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> Result<UncachedFrame, grid::Error> {
+    let mut sprite_cache = crate::sprites::Cache::default();
     let metrics = fonts.metrics(job.scale)?;
     let mut rows = Vec::with_capacity(job.snapshot.rows);
     let mut links: Vec<LinkSpan> = Vec::new();
@@ -498,6 +530,7 @@ fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> 
             let selected = job.selection.is_some_and(|s| s.contains(y, column));
             let matched = matches[column];
             let start = column;
+            let is_sprite = crate::sprites::codepoint(row, column, metrics).is_some();
             let mut owned = Vec::new();
             loop {
                 let cell = row.cells()[column];
@@ -513,6 +546,7 @@ fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> 
                     || row.style(row.cells()[column]) != style
                     || job.selection.is_some_and(|s| s.contains(y, column)) != selected
                     || matches[column] != matched
+                    || crate::sprites::codepoint(row, column, metrics).is_some() != is_sprite
                 {
                     break;
                 }
@@ -523,13 +557,20 @@ fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> 
                 .collect();
             let cursor =
                 (job.snapshot.cursor.visible && job.snapshot.cursor.row == y).then_some(job.snapshot.cursor.col as u32);
-            let layout = fonts.shape(
-                &cells,
-                grid::Style { bold: style.attrs & attrs::BOLD != 0, italic: style.attrs & attrs::ITALIC != 0 },
-                job.scale,
-                cursor,
-                cancel,
-            )?;
+            let (layout, sprite_instances) = if is_sprite {
+                sprite_layout(&owned, metrics, &mut sprite_cache)?
+            } else {
+                (
+                    fonts.shape(
+                        &cells,
+                        grid::Style { bold: style.attrs & attrs::BOLD != 0, italic: style.attrs & attrs::ITALIC != 0 },
+                        job.scale,
+                        cursor,
+                        cancel,
+                    )?,
+                    Arc::from([]),
+                )
+            };
             spans.push(Span {
                 start,
                 end: column,
@@ -538,6 +579,7 @@ fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> 
                 matched: matched > 0,
                 current_match: matched == 2,
                 layout,
+                sprites: sprite_instances,
             });
         }
         rows.push(spans);
@@ -609,6 +651,18 @@ mod tests {
                     span.start, span.end, span.style, span.selected, span.matched, span.current_match, span.layout
                 )
                 .unwrap();
+                for sprite in span.sprites.iter() {
+                    write!(
+                        &mut out,
+                        "S{}:{}:{},{}:{:?}|",
+                        sprite.column,
+                        sprite.width,
+                        sprite.glyph.origin_x,
+                        sprite.glyph.origin_y,
+                        sprite.glyph.mask.alpha_bytes()
+                    )
+                    .unwrap();
+                }
             }
         }
         for link in &frame.links {
@@ -795,4 +849,104 @@ mod tests {
         }
     }
     include!("font_benchmark.rs");
+}
+
+fn sprite_layout(
+    owned: &[(String, usize, usize)],
+    metrics: grid::Metrics,
+    cache: &mut crate::sprites::Cache,
+) -> Result<(Arc<grid::Layout>, Arc<[crate::sprites::Instance]>), grid::Error> {
+    let mut sprites = Vec::with_capacity(owned.len());
+    for (text, column, width) in owned {
+        let cp = text.chars().next().expect("nonempty terminal cell") as u32;
+        sprites.push(crate::sprites::Instance { column: *column, width: *width, glyph: cache.get(cp, metrics)? });
+    }
+    Ok((Arc::new(grid::Layout { metrics, runs: Arc::from([]), clusters: Arc::from([]) }), sprites.into()))
+}
+
+#[cfg(test)]
+mod sprite_tests {
+    use super::*;
+    #[test]
+    fn unsupported_sprite_metrics_fall_back_without_discarding_surrounding_text() {
+        let mut terminal = hotaru_core::Terminal::new(16, 2, 0);
+        terminal.feed("left─right".as_bytes());
+        let snapshot = Arc::new(terminal.snapshot());
+        let mut cache = RowCache::default();
+        for (size, scale, count) in [(256.0, 8.0, 0), (14.0, 1.0, 1)] {
+            let config = Arc::new(grid::FontConfig { size, ..Default::default() });
+            let mut fonts = grid::FontSet::new((*config).clone()).unwrap();
+            let metrics = fonts.metrics(scale).unwrap();
+            if count == 0 {
+                assert!(
+                    hotaru_sprites::validate_metrics(hotaru_sprites::Metrics {
+                        cell_width: metrics.cell_width_px,
+                        cell_height: metrics.cell_height_px,
+                        box_thickness: metrics.box_thickness_px
+                    })
+                    .is_err()
+                );
+            }
+            let job = Job { epoch: 1, snapshot: snapshot.clone(), config, scale, selection: None, search: None };
+            let frame = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
+            assert_eq!(frame.rows.iter().flat_map(|r| r.iter()).map(|s| s.sprites.len()).sum::<usize>(), count);
+            assert!(frame.rows[0].iter().any(|s| !s.layout.runs.is_empty()));
+            assert!(Arc::ptr_eq(&frame.snapshot, &snapshot));
+            let mut invalid = metrics;
+            invalid.box_thickness_px = metrics.cell_width_px.min(metrics.cell_height_px) + 1;
+            assert_eq!(crate::sprites::codepoint(&snapshot.lines[0], 4, invalid), None);
+        }
+    }
+
+    #[test]
+    fn qualified_sprites_split_shaping_and_retain_styles_links_and_snapshots() {
+        install_fonts();
+        let mut terminal = hotaru_core::Terminal::new(32, 8, 0);
+        terminal.feed(b"\x1b[?25l\x1b]8;id=box;https://example.test/box\x1b\\");
+        let text: String = (0x2500..=0x259f)
+            .filter(|cp| hotaru_sprites::supports(*cp))
+            .map(|cp| char::from_u32(cp).unwrap())
+            .collect();
+        terminal.feed(text.as_bytes());
+        terminal.feed(b"\x1b]8;;\x1b\\\x1b[7;1H\x1b[1;3;4;7;9m");
+        terminal.feed("AB┼CD╭─\u{301}".as_bytes());
+        let mut cache = RowCache::default();
+        let config = Arc::new(grid::FontConfig::default());
+        let mut fonts = grid::FontSet::new((*config).clone()).unwrap();
+        for scale in [1.0, 1.25, 2.0] {
+            let job = Job {
+                epoch: 0,
+                snapshot: Arc::new(terminal.snapshot()),
+                config: config.clone(),
+                scale,
+                selection: None,
+                search: None,
+            };
+            let frame = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
+            let count: usize = frame.rows.iter().flat_map(|r| r.iter()).map(|s| s.sprites.len()).sum();
+            assert_eq!(count, 154);
+            assert!(Arc::ptr_eq(&frame.snapshot, &job.snapshot));
+            assert!(!frame.links.is_empty());
+            let masks = frame
+                .rows
+                .iter()
+                .flat_map(|r| r.iter())
+                .map(|s| crate::sprites::retention_bytes(&s.sprites))
+                .sum::<usize>();
+            assert!(frame.retention_bytes > masks);
+            let style_row = &frame.rows[6];
+            let box_span = style_row.iter().find(|s| !s.sprites.is_empty()).unwrap();
+            assert_eq!((box_span.start, box_span.end), (2, 3));
+            assert_eq!(
+                box_span.style.attrs & (attrs::BOLD | attrs::ITALIC | attrs::INVERSE | attrs::STRIKE),
+                attrs::BOLD | attrs::ITALIC | attrs::INVERSE | attrs::STRIKE
+            );
+            assert!(style_row.iter().any(|s| s.start <= 5 && s.end > 5 && s.sprites.is_empty()));
+            let before = frame.rows.clone();
+            let next = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
+            for (a, b) in before.iter().zip(&next.rows) {
+                assert!(Arc::ptr_eq(a, b));
+            }
+        }
+    }
 }

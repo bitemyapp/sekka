@@ -36,7 +36,8 @@ The focused Nix package builds Hotaru without compiling the Aizome compositor.
 The desktop's default terminal remains unchanged during qualification.
 Entering the Aizome development shell initializes Sidestep and applies the
 tracked `upstream/sidestep-clipboard.patch`, `sidestep-input.patch`,
-`sidestep-mime.patch` and `sidestep-grid-font.patch` in order. A private temporary index recognizes an already
+`sidestep-mime.patch`, `sidestep-grid-font.patch` and `sidestep-sprites.patch`
+in order. A private temporary index recognizes an already
 applied prefix and validates the complete series before changing the worktree.
 Conflicts preserve both staged and unstaged local changes. Nix applies the same
 patches to its pinned copy. Added patch files are recognized without changing
