@@ -153,8 +153,9 @@ impl Default for Model {
 }
 
 impl Model {
-    /// Everything but the store: files Yukimi reads directly, in a few
-    /// milliseconds.
+    /// Everything but the store, loaded on a worker. Completion also inspects
+    /// the desktop over IPC; a stalled compositor can take several seconds
+    /// to time out, so this must never run on the interface thread.
     pub fn quick(paths: &Paths) -> Model {
         let setup = Setup::detect_in(&paths.etc_nixos(), paths.facts(), &yukimi_system::info::hostname());
         let mut model = Model {

@@ -1035,6 +1035,16 @@ Sekka components or Yukimi's GTK interface does not rebuild Aizome.
 when it changes. Aizome retains bundled SQLite through `yukimi-store`'s
 `bundled` feature; GTK keeps its system SQLite dependency.
 
+The shared backend's Aizome completion check uses the local
+`desktop/aizome/crates/aizome-ipc` protocol crate. GTK's package includes only
+that crate and its workspace manifest from Aizome, plus the session launcher
+used by its environment-record regression. Keep these inputs narrow rather
+than copying the whole desktop into the GTK build. Both frontends perform
+session inspection without helper privileges; the helper's system-only check
+never connects to a compositor or follows a user's PATH. See
+[reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
+for the evidence used and remaining limits.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

@@ -214,11 +214,31 @@ fn the_renderer_setting_applies_at_the_next_start() {
     });
     let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!() };
     assert_eq!(stats.renderer_setting, "software");
-    assert_eq!(stats.renderer_after_restart, stats.renderer != "pixman");
+    assert!(!stats.renderer_after_restart, "a startup override is not a pending change");
+    for (setting, pending) in [("gpu", true), ("auto", true), ("software", false)] {
+        std::fs::write(c.dir.join("config/aizome/settings.toml"), format!("[performance]\nrenderer = \"{setting}\"\n"))
+            .unwrap();
+        c.request(Request::Reload { logic: false, shell: false, from: None, shell_from: None, check: false });
+        let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!() };
+        assert_eq!(stats.renderer_setting, setting);
+        assert_eq!(stats.renderer_after_restart, pending);
+    }
     // Without a renderer on the command line, the setting chooses.
     let c = Compositor::start(Options { settings: "[performance]\nrenderer = \"software\"\n", ..Default::default() });
     let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!() };
     assert_eq!(stats.renderer, "pixman");
+    assert!(!stats.renderer_after_restart);
+
+    // A software renderer serving a GPU preference (override or fallback)
+    // is also stable across logins until the preference actually changes.
+    let c = Compositor::start(Options {
+        renderer: Some("pixman"),
+        settings: "[performance]\nrenderer = \"gpu\"\n",
+        ..Default::default()
+    });
+    let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!() };
+    assert_eq!(stats.renderer, "pixman");
+    assert_eq!(stats.renderer_setting, "gpu");
     assert!(!stats.renderer_after_restart);
 }
 

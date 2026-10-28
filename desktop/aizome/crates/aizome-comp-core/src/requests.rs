@@ -113,11 +113,7 @@ impl State {
                     .collect();
                 let renderer = self.backend.renderer_name();
                 let choice = self.az.settings.renderer_choice();
-                let renderer_after_restart = match choice {
-                    aizome_config::RendererChoice::Auto => false,
-                    aizome_config::RendererChoice::Gpu => renderer != "gles",
-                    aizome_config::RendererChoice::Software => renderer != "pixman",
-                };
+                let renderer_after_restart = choice != self.az.startup_renderer;
                 let renderer_setting = match choice {
                     aizome_config::RendererChoice::Auto => "auto",
                     aizome_config::RendererChoice::Gpu => "gpu",

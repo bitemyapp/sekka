@@ -252,7 +252,7 @@ fn channels(app: &Yukimi, moves: Option<&BTreeMap<String, Movement>>) -> Vec<Ele
 pub fn completion(c: &Completion) -> Element<Msg> {
     let (icon_name, role) = match c.action {
         Action::None => (Icon::CircleCheck, Role::Success),
-        Action::Reboot | Action::Logout => (Icon::RotateCw, Role::Warning),
+        Action::Reload | Action::Reboot | Action::Logout => (Icon::RotateCw, Role::Warning),
         Action::Unknown => (Icon::TriangleAlert, Role::Warning),
     };
     let mut r = row![

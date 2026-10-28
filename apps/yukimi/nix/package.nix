@@ -11,13 +11,18 @@
 let
   # Content-addressed source: the same derivation wherever the checkout is.
   source = lib.fileset.toSource {
-    root = ../.;
+    root = ../../..;
     fileset = lib.fileset.unions [
       ../Cargo.toml
       ../Cargo.lock
       ../crates
       ../yukimi
       ../yukimi-helper
+      # The completion checker uses Aizome's UI-independent IPC protocol.
+      # Keep its workspace metadata, without importing the desktop or toolkit.
+      ../../../desktop/aizome/Cargo.toml
+      ../../../desktop/aizome/crates/aizome-ipc
+      ../../../desktop/aizome/session/aizome-session
     ];
   };
 in
@@ -25,6 +30,9 @@ rustPlatform.buildRustPackage {
   pname = "yukimi";
   version = "0.1.0";
   src = source;
+  postUnpack = ''
+    sourceRoot="$sourceRoot/apps/yukimi"
+  '';
   cargoLock.lockFile = ../Cargo.lock;
   nativeBuildInputs = [
     pkg-config
