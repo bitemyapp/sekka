@@ -1,0 +1,26 @@
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling itoa v1.0.18
+   Compiling libc v0.2.191
+   Compiling cfg-if v1.0.5
+   Compiling static_assertions v1.1.0
+   Compiling memchr v2.8.3
+   Compiling triomphe v0.1.17
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-short-utf8-ascii-tail-20261028/vendor/simdutf8)
+   Compiling unicode-width v0.2.3
+   Compiling lz4_flex v0.14.0
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-short-utf8-ascii-tail-20261028/crates/hotaru-core)
+    Finished `release` profile [optimized] target(s) in 6.81s
+     Running unittests src/lib.rs (target/release/deps/hotaru_core-5b6e1280b095e267)
+
+running 1 test
+coverage rows=12 bytes=2097150 calls=38175 eligible=1
+coverage rows=80 bytes=8388600 calls=152694 eligible=3
+test short_utf8_tests::common_mixed_guard_coverage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.05s
+

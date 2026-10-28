@@ -51,3 +51,32 @@ This variant is **also rejected for integration**. On CPU 8, with the same nativ
 Ratios compare this candidate directly with the current ASCII baseline; they are not Ghostty ratios. All 12 complete baseline/candidate state and pinned-reference common-state gates pass. Truncated input is slower in all six legacy rounds and five of six Unicode rounds. Its maximum ratios are 1.0264 and 1.0576. Preflight CPU 8/sibling 72 activity was 2.91%/0%; no compiler appeared in 144 observations, and observed CPU 8 frequencies ranged from 4.674 to 5.046 GHz. Raw samples, all rounds, setup/teardown samples, process observations and per-core activity remain archived without trimming. Periodic observations cannot exclude every brief external disturbance.
 
 The experiment establishes exact error translation and a mixed-text improvement in this bounded run, but removing the duplicate validation alone did not eliminate the malformed-input regression. It remains outside the product, separately preserved from the earlier rejected implementation. A future input guard would need broader malformed-prefix and suffix workloads before any acceptance decision.
+
+## Follow-up: complete final scalar guard
+
+The [ASCII-ending guard](../upstream/short-utf8/ascii-tail-coverage/summary.json) covered only 1/38,175 and 3/152,694 actual helper calls in the two mixed-text sizes. It received no native timing run. The [complete-tail successor](../upstream/short-utf8/complete-tail/summary.json) accepts a legal final scalar using at most four trailing byte positions, including the restricted E0/ED/F0/F4 continuation ranges. Incomplete or malformed tails use the baseline validator. A complete scalar cannot leave an incomplete suffix, so padded errors can be returned unchanged; no private error translation is needed. Coverage rises to about 99.85%. The proof, patch and exhaustive standard-library equality tests are preserved.
+
+This variant is **rejected for integration** too. Its source digest is `0b44994701959869dac11f184ce8bc5332a3272a7f9436fb95fb02da5c12600f`, native binary `c3932c6b5175d69926096581a13e5cf2d514bccd4c4cba98b81eaa50dc4db22c`. The unchanged ASCII baseline is source `7e36bc31…`, binary `5755bcf3…`. Debug and release each passed 149 tests with the same two intentional shell-related ignores, strict all-target Clippy, three strict-provenance Miri tests, 444 earlier and 3,462 VT reference comparisons, and 756 fresh cursor records equal to the fixtures exercised at three chunk sizes.
+
+The expanded native run covers fourteen workloads in both width modes: a 120×12 grid, zero history, 64 KiB chunks, three warmups and six alternating rounds of ten samples per engine, pinned to CPU 8. Every case passed complete baseline/candidate state equality and pinned Ghostty common-state equality before timing. Ratios below are candidate/baseline feed time, not Ghostty ratios.
+
+| Workload | Legacy median | Legacy p95 | Unicode median | Unicode p95 |
+| --- | ---: | ---: | ---: | ---: |
+| ASCII | 0.9814 | 0.9626 | 0.9828 | 0.9751 |
+| Mixed Unicode | 0.9056 | 0.9083 | 0.9427 | 0.8964 |
+| Styled text | 0.9192 | 0.8765 | 0.9245 | 0.9406 |
+| Cursor controls | 0.9348 | 0.8808 | 0.9468 | 0.9492 |
+| Invalid leading bytes | 1.0218 | 1.0970 | 1.0765 | 1.0980 |
+| Truncated four-byte suffix | 1.0660 | 1.0700 | 1.0267 | 1.0848 |
+| Invalid second byte | 1.1112 | 1.1183 | 1.1214 | 1.1423 |
+| Overlong three-byte sequence | 1.1218 | 1.0899 | 1.1323 | 1.1084 |
+| Surrogate encoding | 1.1111 | 1.1374 | 1.1405 | 1.1174 |
+| Above Unicode maximum | 1.0975 | 1.0965 | 1.1446 | 1.1590 |
+| Invalid interior sequence | 1.0825 | 1.0175 | 1.0963 | 1.0547 |
+| Restricted malformed tail | 1.0978 | 0.9197 | 1.0459 | 1.0527 |
+| Truncated two-byte suffix | 1.0462 | 1.0661 | 1.0097 | 1.0452 |
+| Truncated three-byte suffix | 1.1144 | 1.0025 | 1.0279 | 1.0415 |
+
+Mixed text improves 9.4%/5.7%, but invalid second bytes, overlong encodings, surrogate encodings and out-of-range scalars are slower in all six paired rounds in both modes. Median regressions reach 14.5%; the Unicode invalid-second-byte maximum ratio is 1.1872. Truncated suffixes also remain slower. All maxima, individual samples, order and rounds are retained rather than discarded. Nominally unaffected paths move as well, so this report does not attribute every change solely to executed padding.
+
+CPU 8/sibling 72 preflight activity was 4.76%/1.96%. No compiler process was observed in 394 retained observations, including 336 between-batch observations. CPU 8 frequencies ranged from 4.686 to 5.046 GHz; periodic observations cannot exclude every brief external disturbance. This bounded run does not establish general performance or absolute Ghostty parity. Product source is unchanged; absolute comparisons are a separate diagnostic follow-up.

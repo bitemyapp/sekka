@@ -325,5 +325,14 @@
         ]
       }
     ]
+  },
+  "input_reproduction": {
+    "manifest": "expanded-manifest.json",
+    "generator": "tools/generate-malformed.py",
+    "raw_locations": {
+      "local": "/home/callen/work/hotaru-short-utf8-error-20261028/evidence/profiles",
+      "wx-workstation": "/home/callen/work/hotaru-short-utf8-error-20261028/evidence/profiles"
+    },
+    "generated_corpora_in_git": false
   }
 }
