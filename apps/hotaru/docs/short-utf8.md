@@ -30,3 +30,24 @@ Candidate/baseline median feed-time ratios were:
 | Short truncated suffixes | 1.0657 | 1.1767 |
 
 The truncated-suffix regression also appears in tail measurements: p95 ratios are 1.1017/1.1108 and maximum ratios are 1.1094/1.1014 for legacy/Unicode width. Mixed Unicode's Unicode-mode median improves 4.95%, but its p95 improves only 0.36%. The smaller ASCII and cursor regressions are retained in the report too. CPU 8 frequency observations ranged from 4.695 to 5.046 GHz; this single paired window supports a bounded workload result, not universal performance acceptance. The proposed code remains separate.
+
+## Follow-up: translate padded errors
+
+A [separate isolated follow-up](../upstream/short-utf8/error-translation/summary.json) removes the explicit second validation pass after padded SIMD failure. It preserves the first invalid offset and translates the padded error to an incomplete original suffix only when the accepted multibyte prefix ends exactly at the original slice boundary. Invalid final leads retain a one-byte error. A private error record keeps the dependency's fields encapsulated; no dependency or product API changes are involved. The [proof and patch](../upstream/short-utf8/error-translation/design.md) retain the same bounded validated-prefix unsafe conversion.
+
+The source is `7f41c53e192576d238ddefdf682b69eec0a891749147a0709737a7a035b90e83`, native binary `4800fbc922b836f21bfe2df170903cbb88f8f97518ab6b15626ae107381d253d`. Only the helper and its tests differ from the qualified ASCII baseline source `7e36bc31…`, binary `5755bcf3…`. Debug and release each pass 146 tests with the same two intentional shell-related ignores, strict Clippy and two strict-provenance Miri tests. Exhaustive checks cover 33,554,432 three-byte suffixes and 17,530,368 valid-scalar/prefix combinations, plus byte pairs, thresholds, alignments, NULs and protected-page ends. The unchanged Ghostty library matches 444 earlier and 3,462 VT comparisons; 756 fresh cursor cases equal the fixtures checked at three chunk sizes.
+
+This variant is **also rejected for integration**. On CPU 8, with the same native Rust 1.95 flags, zero history, a 120×12 grid and six alternating rounds of ten samples per engine, mixed Unicode improves but truncated input remains slower:
+
+| Workload | Legacy median ratio | Legacy p95 ratio | Unicode median ratio | Unicode p95 ratio |
+| --- | ---: | ---: | ---: | ---: |
+| ASCII | 0.9934 | 0.9857 | 1.0016 | 1.0348 |
+| Mixed Unicode | 0.9101 | 0.8747 | 0.9342 | 0.9185 |
+| Styled text | 1.0163 | 1.0298 | 1.0069 | 1.0520 |
+| Cursor controls | 0.9890 | 0.9543 | 1.0012 | 1.0198 |
+| Malformed leading bytes | 0.9476 | 0.9606 | 1.0046 | 1.0122 |
+| Truncated suffixes | 1.0812 | 1.0665 | 1.0398 | 1.0630 |
+
+Ratios compare this candidate directly with the current ASCII baseline; they are not Ghostty ratios. All 12 complete baseline/candidate state and pinned-reference common-state gates pass. Truncated input is slower in all six legacy rounds and five of six Unicode rounds. Its maximum ratios are 1.0264 and 1.0576. Preflight CPU 8/sibling 72 activity was 2.91%/0%; no compiler appeared in 144 observations, and observed CPU 8 frequencies ranged from 4.674 to 5.046 GHz. Raw samples, all rounds, setup/teardown samples, process observations and per-core activity remain archived without trimming. Periodic observations cannot exclude every brief external disturbance.
+
+The experiment establishes exact error translation and a mixed-text improvement in this bounded run, but removing the duplicate validation alone did not eliminate the malformed-input regression. It remains outside the product, separately preserved from the earlier rejected implementation. A future input guard would need broader malformed-prefix and suffix workloads before any acceptance decision.
