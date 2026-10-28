@@ -1,0 +1,13 @@
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/hotaru-gpu-scene-isolated/desktop/aizome/sidestep/crates/sidestep-engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.19s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/sidestep_engine-427eee78f9e55b70)
+
+running 5 tests
+test gpu_scene::tests::retained_asset_identity_survives_cache_clear_and_exhaustion_is_explicit ... ok
+test gpu_scene::tests::whole_scene_rejects_unsupported_or_nonfinite_before_allocating_assets ... ok
+test gpu_scene::tests::ordered_mask_fill_replacement_negative_clip_matches_original ... ok
+test gpu_scene::tests::filtered_icons_keep_unquantized_samples_until_composition ... ok
+test gpu_scene::tests::tile_indices_are_bounded_and_preserve_order ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.04s
+
