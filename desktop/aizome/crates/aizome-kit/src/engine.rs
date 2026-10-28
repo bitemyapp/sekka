@@ -1061,6 +1061,7 @@ impl Core {
             code: 0,
             modifiers: Modifiers::NONE,
             composing: None,
+            native: Default::default(),
         };
         self.send(menu, root, &Event::Key(down), platform);
     }

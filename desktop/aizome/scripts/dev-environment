@@ -35,3 +35,22 @@ if [[ -n $pinned && $have != "$pinned" ]]; then
     "Sidestep $pinned; \`git submodule update vendor/sidestep\` checks out" \
     "the revision Sekka records" >&2
 fi
+
+# Hotaru needs the same clipboard transport and native keyboard metadata in
+# development and Nix builds. Apply patches in their recorded order against
+# the pinned external dependency;
+# never reset a developer's submodule or silently overwrite conflicting work.
+for patch_name in clipboard input; do
+  native_patch=$root/apps/hotaru/upstream/sidestep-$patch_name.patch
+  [[ -s $native_patch ]] || continue
+  if git -C "$sidestep" apply --reverse --check "$native_patch" 2>/dev/null; then
+    : # Already applied, including when other unrelated local edits exist.
+  elif git -C "$sidestep" apply --check "$native_patch" 2>/dev/null; then
+    git -C "$sidestep" apply "$native_patch"
+    echo "aizome: applied Hotaru's native $patch_name patch" >&2
+  else
+    echo "aizome: cannot apply apps/hotaru/upstream/sidestep-$patch_name.patch;" \
+      "preserving vendor/sidestep. Reconcile its local changes before building Hotaru." >&2
+    exit 1
+  fi
+done

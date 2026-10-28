@@ -202,6 +202,14 @@ impl Platform for TestPlatform {
         self.clipboard = Some(text.to_owned());
     }
 
+    fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
+        sidestep_ui::ClipboardRead::from_text(self.clipboard.as_deref().map(Arc::from))
+    }
+
+    fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText) {
+        self.clipboard = Some(text.text().to_owned());
+    }
+
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
         self.next_token += 1;
         self.timers
@@ -703,12 +711,28 @@ impl<P: Program> Harness<P> {
             Key::Character(s) if !mods.super_key() && !mods.control() => Some(s.clone()),
             _ => None,
         };
-        let press =
-            KeyEvent { key: k.clone(), text, pressed: true, repeat: false, code: 0, modifiers: mods, composing: None };
+        let press = KeyEvent {
+            key: k.clone(),
+            text,
+            pressed: true,
+            repeat: false,
+            code: 0,
+            modifiers: mods,
+            composing: None,
+            native: Default::default(),
+        };
         self.rt.core.key(win, press, &mut self.platform);
         self.rt.flush(&mut self.platform);
-        let release =
-            KeyEvent { key: k, text: None, pressed: false, repeat: false, code: 0, modifiers: mods, composing: None };
+        let release = KeyEvent {
+            key: k,
+            text: None,
+            pressed: false,
+            repeat: false,
+            code: 0,
+            modifiers: mods,
+            composing: None,
+            native: Default::default(),
+        };
         self.rt.core.key(win, release, &mut self.platform);
         self.rt.flush(&mut self.platform);
     }
@@ -774,8 +798,16 @@ impl<P: Program> Harness<P> {
 
     /// The popup windows of the kit, raw: for driving menus.
     pub fn popup_keyboard(&mut self, popup: u32, k: Key, mods: Modifiers) {
-        let press =
-            KeyEvent { key: k, text: None, pressed: true, repeat: false, code: 0, modifiers: mods, composing: None };
+        let press = KeyEvent {
+            key: k,
+            text: None,
+            pressed: true,
+            repeat: false,
+            code: 0,
+            modifiers: mods,
+            composing: None,
+            native: Default::default(),
+        };
         self.rt.core.key(popup, press, &mut self.platform);
         self.rt.flush(&mut self.platform);
     }

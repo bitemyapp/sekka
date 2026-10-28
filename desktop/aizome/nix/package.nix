@@ -22,6 +22,7 @@
   runCommand,
   pkg-config,
   makeWrapper,
+  patch,
   jq,
   wayland,
   libxkbcommon,
@@ -47,6 +48,9 @@
   vulkan-loader,
   src,
   yukimiSrc,
+  hotaruSrc,
+  clipboardPatch,
+  inputPatch,
   sidestep,
   fonts,
   bash,
@@ -58,11 +62,15 @@
   rev ? null,
 }:
 let
-  source = runCommand "aizome-source" { } ''
+  source = runCommand "aizome-source" { nativeBuildInputs = [ patch ]; } ''
     mkdir -p $out/desktop $out/apps $out/vendor
     cp -r ${src} $out/desktop/aizome
     cp -r ${sidestep} $out/vendor/sidestep
     cp -r ${yukimiSrc} $out/apps/yukimi
+    cp -r ${hotaruSrc} $out/apps/hotaru
+    chmod -R u+w $out/vendor/sidestep
+    patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
+    patch -d $out/vendor/sidestep -p1 < ${inputPatch}
     chmod u+w $out/desktop/aizome
     ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
@@ -257,6 +265,7 @@ rustPlatform.buildRustPackage {
     for icon in icons/apps/*.svg; do
       install -Dm644 "$icon" "$out/share/icons/hicolor/scalable/apps/$(basename "$icon")"
     done
+    install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
     mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps

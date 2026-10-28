@@ -248,6 +248,19 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         self.platform.set_clipboard_text(text);
     }
 
+    /// Snapshot the current selection without waiting. Send the returned handle
+    /// to a worker, call `read(timeout, maximum)` there, and check `is_current()`
+    /// before applying the result. Its clones share cancellation.
+    pub fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
+        self.platform.clipboard_read()
+    }
+
+    /// Offer text already prepared on a worker, without copying its contents on
+    /// the interface thread. The native backend sends to readers asynchronously.
+    pub fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText) {
+        self.platform.set_prepared_clipboard_text(text);
+    }
+
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
         if let Err(e) = std::process::Command::new("xdg-open").arg(url).spawn() {

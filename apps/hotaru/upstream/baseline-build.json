@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T09:07:52.007866+00:00",
+  "revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "zig": "0.17.0",
+  "zig_sha256": "7c61539af19fa4082c94848f1c2b57b89e76dc6cfd5bd4c57764c3caf8f82272",
+  "build_command": [
+    "/home/callen/.cache/hotaru-reference/zig-x86_64-linux-0.17.0/zig",
+    "build",
+    "-Demit-bench=true",
+    "-Demit-lib-vt=true",
+    "-Demit-exe=false",
+    "-Dapp-runtime=none",
+    "-Doptimize=ReleaseFast",
+    "-Demit-docs=false",
+    "-Demit-terminfo=false",
+    "-j8"
+  ],
+  "host": "callen",
+  "platform": "Linux-6.17.0-1032-oem-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "binaries": {
+    "ghostty-bench": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench",
+      "sha256": "bcdaba094ab3900bb247c445e9bf7b1038662ed886a96d68bb783b5d6f72669a"
+    },
+    "ghostty-gen": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-gen",
+      "sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362"
+    },
+    "libghostty-vt": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so",
+      "sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639"
+    },
+    "ghostty-reference-replay": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-reference-replay",
+      "sha256": "4d2bc85b61944b7534ef220c7fa28c7ed988969892cfc70890793be9f3e0bf37"
+    }
+  },
+  "build_confirmed": true,
+  "scope": "Linux terminal-core baseline; no GUI or performance parity claim",
+  "adapter": {
+    "source_sha256": "ba5d2ee86560fccfa137c0425f7f901426fb70ffa790912cd04950c9b9124fb0",
+    "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "flags": [
+      "-std=c11",
+      "-O3",
+      "-march=native"
+    ]
+  }
+}

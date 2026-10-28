@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "seed": "0x29312982",
+  "operations": 12000,
+  "initial_sampled_failure_step": 6765,
+  "first_observed_with_dense_checks": {
+    "step": 6745,
+    "operation": "ESC[?1049l",
+    "history_row": 739,
+    "compressed_wrapped": false,
+    "resident_wrapped": true
+  },
+  "root_cause": "Compressed eviction discarded retained-width metadata when recycling a row; a later non-reflow resize changed wrap flags differently from resident recycling.",
+  "dirty_prefix_ruled_out": "Independent rerun with eager full-cell clearing reproduced the same failure.",
+  "minimal_public_reproducer": "crates/hotaru-core/tests/history.rs::compressed_eviction_preserves_recycled_row_resize_semantics",
+  "red_check": "The minimal public test failed before the fix with resident wrapped=true and compressed wrapped=false.",
+  "fix": "Own <=64 retained-width u16 entries per compressed block, use metadata-preserving recycle-pop without decoding, and count metadata in compressed storage and profitability.",
+  "checks_passed": [
+    "minimal public regression",
+    "corrupted-payload no-decode eviction with exact retained-width check",
+    "compressed/resident terminal scroll/resize/clear twin",
+    "independent original-seed 12000-operation stress"
+  ],
+  "fixed_source_sha256": {
+    "crates/hotaru-core/src/history.rs": "6c89868511980f7e267b97fc47d21699cbb8b922aa569f268e7bf8db7c1071b7",
+    "crates/hotaru-core/src/row/history.rs": "d5beeacbbeaad7aa129dfcb7d8dbc346c04e932531629a576076e399bdb15b5c",
+    "crates/hotaru-core/src/screen.rs": "06a0a6ec10c98a573f6dcc6ac61eeb9b7a5e69145f9818d454d77012386a730c",
+    "crates/hotaru-core/tests/history.rs": "62e84bb1a2d1a83ef1235afbf06ca6221abaa8f7cfc6cd862c2edb69cabdca2d",
+    "crates/hotaru-core/tests/history_audit.rs": "0e7a738c3562ec133b8fcbede13794ac412c6c88b0873fac4e2171af144f178f"
+  }
+}

@@ -2,7 +2,7 @@
 resolver = "3"
 # Apps join by name once they have a manifest: an app directory without
 # Cargo.toml would break an "apps/*" glob, and every build, for everyone.
-members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe"]
+members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe", "apps/hotaru"]
 # Sidestep's fork, reached through the `sidestep` link beside this file
 # (to Sekka's vendor/sidestep submodule; the Nix package lays its pinned
 # source out the same way). Its crates are path dependencies, not members.

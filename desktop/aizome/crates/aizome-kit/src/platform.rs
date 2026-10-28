@@ -83,6 +83,10 @@ pub trait Platform {
     fn begin_move(&mut self, id: WinId);
     fn clipboard_text(&mut self) -> Option<String>;
     fn set_clipboard_text(&mut self, text: &str);
+    /// Capture a transferable clipboard read without waiting for another client.
+    fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead;
+    /// Publish text whose allocation and MIME preparation already ran on a worker.
+    fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText);
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
     fn cancel_timer(&mut self, token: u64);

@@ -30,7 +30,11 @@ def sekka(base):
     sidestep = base / 'sidestep'
     sidestep.mkdir()
     git(sidestep, 'init', '-q')
-    git(sidestep, 'commit', '-q', '--allow-empty', '-m', 'first')
+    (sidestep / 'clipboard-reader.txt').write_text('reader: synchronous\n')
+    (sidestep / 'clipboard-writer.txt').write_text('writer: unbounded\n')
+    (sidestep / 'notes.txt').write_text('developer notes\n')
+    git(sidestep, 'add', '.')
+    git(sidestep, 'commit', '-q', '-m', 'first')
     first = git(sidestep, 'rev-parse', 'HEAD')
     git(sidestep, 'commit', '-q', '--allow-empty', '-m', 'second')
     second = git(sidestep, 'rev-parse', 'HEAD')
@@ -48,13 +52,123 @@ def sekka(base):
     return root, first, second
 
 
-def hook(base, cwd, pinned):
-    return subprocess.run(['bash', str(HOOK)], cwd=cwd, check=True, capture_output=True, text=True,
+def hook(base, cwd, pinned, *, check=True):
+    return subprocess.run(['bash', str(HOOK)], cwd=cwd, check=check, capture_output=True, text=True,
                           env={**os.environ, **GIT_ENV, 'GIT_CEILING_DIRECTORIES': str(base),
                                'AIZOME_SIDESTEP_REV': pinned})
 
 
+def clipboard_patch(root):
+    """A real two-file Git patch for the disposable dependency, not string
+    assertions against the production hook's implementation."""
+    patch = root / 'apps/hotaru/upstream/sidestep-clipboard.patch'
+    patch.parent.mkdir(parents=True)
+    patch.write_text('''diff --git a/clipboard-reader.txt b/clipboard-reader.txt
+--- a/clipboard-reader.txt
++++ b/clipboard-reader.txt
+@@ -1 +1 @@
+-reader: synchronous
++reader: asynchronous
+diff --git a/clipboard-writer.txt b/clipboard-writer.txt
+--- a/clipboard-writer.txt
++++ b/clipboard-writer.txt
+@@ -1 +1 @@
+-writer: unbounded
++writer: bounded
+''')
+    return patch
+
+
 class DevelopmentEnvironment(unittest.TestCase):
+    def test_both_native_patches_apply_and_repeat_without_changing_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            (root / 'apps/hotaru/upstream/sidestep-input.patch').write_text('''diff --git a/notes.txt b/notes.txt
+--- a/notes.txt
++++ b/notes.txt
+@@ -1 +1 @@
+-developer notes
++native keyboard metadata
+''')
+            initial = hook(base, root, first)
+            checkout = root / 'vendor/sidestep'
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: asynchronous\n')
+            self.assertEqual((checkout / 'notes.txt').read_text(), 'native keyboard metadata\n')
+            self.assertLess(initial.stderr.index('native clipboard patch'), initial.stderr.index('native input patch'))
+            before = git(checkout, 'diff')
+            repeated = hook(base, root, first)
+            self.assertEqual(git(checkout, 'diff'), before)
+            self.assertNotIn('applied Hotaru', repeated.stderr)
+
+    def test_clipboard_patch_is_applied_to_fresh_submodule_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            initial = hook(base, root / 'desktop/aizome/apps/yukimi', first)
+            checkout = root / 'vendor/sidestep'
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: asynchronous\n')
+            self.assertEqual((checkout / 'clipboard-writer.txt').read_text(), 'writer: bounded\n')
+            self.assertIn('applied Hotaru', initial.stderr)
+            self.assertEqual(initial.stdout, '')
+            before = git(checkout, 'diff')
+            repeated = hook(base, root, first)
+            self.assertEqual(git(checkout, 'diff'), before)
+            self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), first)
+            self.assertNotIn('applied Hotaru', repeated.stderr)
+            self.assertEqual(repeated.stdout, '')
+
+    def test_existing_clipboard_patch_keeps_unrelated_local_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            patch = clipboard_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            git(checkout, 'apply', str(patch))
+            (checkout / 'notes.txt').write_text('unrelated local edit\n')
+            (checkout / 'new-notes.txt').write_text('untracked local work\n')
+            before = git(checkout, 'diff')
+            result = hook(base, root, first)
+            self.assertEqual(git(checkout, 'diff'), before)
+            self.assertEqual((checkout / 'new-notes.txt').read_text(), 'untracked local work\n')
+            self.assertNotIn('applied Hotaru', result.stderr)
+
+    def test_conflicting_clipboard_edit_fails_without_partial_patch_or_reset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            (checkout / 'clipboard-writer.txt').write_text('writer: developer implementation\n')
+            before = git(checkout, 'diff')
+            result = hook(base, root, first, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('cannot apply', result.stderr)
+            self.assertIn('preserving vendor/sidestep', result.stderr)
+            self.assertEqual(result.stdout, '')
+            self.assertEqual(git(checkout, 'diff'), before)
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: synchronous\n')
+            self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), first)
+
+    def test_partial_clipboard_patch_is_reported_without_overwriting_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            (checkout / 'clipboard-reader.txt').write_text('reader: asynchronous\n')
+            before = git(checkout, 'diff')
+            result = hook(base, root, first, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('cannot apply', result.stderr)
+            self.assertEqual(git(checkout, 'diff'), before)
+            self.assertEqual((checkout / 'clipboard-writer.txt').read_text(), 'writer: unbounded\n')
+
     def test_submodule_is_checked_out_from_root_and_nested_directories(self):
         for location in ('', 'desktop/aizome', 'desktop/aizome/apps/yukimi'):
             with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:

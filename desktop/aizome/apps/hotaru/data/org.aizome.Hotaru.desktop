@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Hotaru
+GenericName=Terminal
+Comment=A native terminal for Aizome
+Keywords=terminal;shell;console;command line;hotaru;
+Categories=System;TerminalEmulator;
+Icon=org.aizome.Hotaru
+Exec=aizome-hotaru
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Hotaru
+DBusActivatable=false
+X-TerminalArgExec=--
+X-TerminalArgDir=--working-directory

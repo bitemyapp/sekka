@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T14:00:47.601715+00:00",
+  "upstream_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "fixture_sha256": "e43b85b10cd1c16a514aa0bff71a1a888289a9004afdfb8da71da60f6b28fd4a",
+  "key_encodings": 50018,
+  "mouse_scenarios": 15000,
+  "mouse_encodings": 30000,
+  "negotiation_streams": 32,
+  "negotiation_chunks": [
+    1,
+    7,
+    65536
+  ],
+  "input_tests_passed": 6,
+  "strict_core_clippy_all_targets_passed": true,
+  "toolchain": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "sources": {
+    "Cargo.lock": "35d5dee143fd5650431061b74bee2d3ba41a01e41af3d30b005669049d04e3d4",
+    "crates/hotaru-core/Cargo.toml": "da76be76865a94bd535bd76c117883e3d36c4838635825154c6fd26a47bf68ec",
+    "crates/hotaru-core/src/input.rs": "e81f3ccb24f3bc5177b6416b53b173b4679d711f76734f5becc645ac7efe0013",
+    "crates/hotaru-core/src/lib.rs": "1bec5ef0dbc55ebc5f1522cc248996f52d85c2f5ed3ad76b61b34cb6017e00c6",
+    "crates/hotaru-core/src/parser.rs": "859993d85e8948f81540fe9e004f7880a606dbd54f76cff75e0c72555f9a5a3d",
+    "crates/hotaru-core/src/row.rs": "963be3fab19373c4f1430f2d4e65856a52fb1e214d517bbc0e9d05e049c286c9",
+    "crates/hotaru-core/src/scan.rs": "3a431c7dc32f3b4b9956432f6329c5a6fbcb4664cc3349f91c6da2dbb647be1d",
+    "crates/hotaru-core/src/screen.rs": "83b05e74c69c844d4fb1b37884d65503542a6ddb70dd87b186e743feafd1a361",
+    "crates/hotaru-core/src/style.rs": "09c04e775850f32964fc1a2e3a8194b39ae4a32143b4b8905a3e95bd3d0d0a68",
+    "crates/hotaru-core/tests/input.rs": "2691519a177f8b6670eeaf5936b00035059a5ff88fb58848f8a421420f2aa73a"
+  },
+  "limits": [
+    "Encoding verified against normalized events; toolkit layout/IME mapping is separate",
+    "Hyper/Meta modifier states absent from Ghostty Linux input ABI are not encoded",
+    "Kitty functional keys follow upstream supported key table through F25; other physical keys use text fallback",
+    "Invalid UTF-8 cannot enter the safe Rust String event API",
+    "Mouse pixels follow upstream rounding/viewport policy; invalid geometry is rejected"
+  ]
+}

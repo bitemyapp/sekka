@@ -63,6 +63,15 @@ let
       ../../../apps/yukimi/crates
     ];
   };
+  hotaruSrc = lib.fileset.toSource {
+    root = ../../../apps/hotaru;
+    fileset = lib.fileset.unions [
+      ../../../apps/hotaru/Cargo.toml
+      ../../../apps/hotaru/crates
+    ];
+  };
+  clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;
+  inputPatch = ../../../apps/hotaru/upstream/sidestep-input.patch;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -73,10 +82,25 @@ let
         inherit
           src
           yukimiSrc
+          hotaruSrc
+          clipboardPatch
+          inputPatch
           sidestep
           version
           rev
           fonts
+          ;
+      };
+      hotaru = pkgs.callPackage ./hotaru.nix {
+        inherit
+          src
+          yukimiSrc
+          hotaruSrc
+          clipboardPatch
+          inputPatch
+          sidestep
+          fonts
+          version
           ;
       };
       archivo = pkgs.callPackage ./fonts.nix { };
