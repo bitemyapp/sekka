@@ -22,6 +22,10 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// The systems it installs on, when its packages' metadata claims more
+    /// (Steam's 32-bit runtime): read by Yukimi's catalog resolver.
+    #[serde(default)]
+    pub platforms: Vec<String>,
     /// Whether the ISO carries the app for offline installation.
     #[serde(default = "preload_by_default")]
     pub preload: bool,
