@@ -163,9 +163,13 @@ impl State {
         self.az.windows.insert(id, Mapped { id, window: window.clone(), view: WinView::default() });
         self.az.by_surface.insert(surface.clone(), id);
         info!(id, app_id, title, ssd, "window opened");
-        let committed = toplevel.current_state();
-        let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
-        let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
+        // The first buffer may acknowledge an older configure: a fullscreen
+        // request can arrive after that configure and before this commit.
+        // Transfer the latest accepted policy into the window manager, not the
+        // state of that older frame, or placement would retract the request.
+        let (fullscreen, fullscreen_output) = toplevel
+            .with_pending_state(|s| (s.states.contains(xdg_toplevel::State::Fullscreen), s.fullscreen_output.clone()));
+        let fullscreen_output = fullscreen_output.as_ref().and_then(Output::from_resource);
         let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));

@@ -259,6 +259,11 @@ physical output. Absolute input and cursor-position hints use that viewport's
 transform, including changes while the pointer remains inside or locked.
 Windowed clients retain normal DPI scaling. Aizome's fill/split actions also
 respect fixed-size client bounds, including fixed tabs in a group.
+Aizome transfers the latest accepted fullscreen state into its window manager
+when the first buffer maps. That buffer may still use an older windowed
+configure; using its committed state would cancel a newer fullscreen request.
+The `aizome-comp` `fullscreen` test exercises this ordering, cancellation and
+output changes at 1×/2× without relying on scheduler timing.
 The package runs
 its upstream tests; `nix build .#checks.x86_64-linux.xwayland-fullscreen`
 tests real X11 requests through the packaged bridge and Aizome at 1×/2×,

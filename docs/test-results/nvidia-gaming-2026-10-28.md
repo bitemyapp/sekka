@@ -357,6 +357,60 @@ stopped, and Steam restarted normally. The fill/split fix is active in the
 current session. Ordinary fullscreen launches need the branch update and
 a fresh login to use the new bridge.
 
+### Follow-up: fullscreen request racing the first buffer
+
+After updating and logging in, the user still observed one native Megaton
+launch opening windowed despite fullscreen being selected. The running
+compositor and bridge were verified as `g52815v8ld3c87pfmf44f0lh94k2kxqm`
+and `m5wk9pqb8931gfpz7clpsjz21kcj1mik`, respectively: this was not an old
+session missing the earlier changes.
+
+Aizome initialized its window-manager fullscreen policy from the first
+buffer's committed configure. That configure can precede a fullscreen
+request already accepted by the compositor. Mapping the older frame then
+retracted the newer request. The core now transfers its latest accepted
+state and target output into the window manager. Rendering still uses the
+client's committed buffer state; no fullscreen hint is inferred from game
+names or window dimensions.
+
+A real native Megaton launch through the packaged bridge showed exactly
+this request ordering: initial windowed configure/ack, `set_fullscreen`,
+first buffer commit, then fullscreen configure/ack. That traced launch
+succeeded; asynchronous buffer readiness changes when mapping occurs.
+The deterministic regression submits the older first buffer immediately
+after the new request, eliminating that timing dependency. It fails on
+the prior core and passes with the fix. It also covers withdrawing an
+initial fullscreen request and changing its target monitor before mapping,
+at 1× and 2×. All four fullscreen tests and all five recovery/reload tests
+pass. Logs: `/tmp/sekka-fullscreen-startup-negative.log`,
+`/tmp/sekka-fullscreen-startup-check.log`, and
+`/tmp/sekka-duke-startup-satellite.log`.
+
+The root-flake Aizome package built successfully as
+`/nix/store/z3bq0larglsmsc0815d8kq78gk868psy-aizome-0.1.0`.
+All 18 packaged X11 scenarios, eight layout tests against that exact package,
+and the development fullscreen-frame regression pass. Logs:
+`/tmp/sekka-fullscreen-startup-build.log`,
+`/tmp/sekka-fullscreen-startup-x11.log`,
+`/tmp/sekka-fullscreen-startup-package-layout.log`, and
+`/tmp/sekka-fullscreen-startup-layout.log`.
+
+Native Megaton also launched directly into fullscreen with both the fixed
+development core and the exact package, through Steam/pressure-vessel and
+the packaged bridge. These ran in separate GLES headless compositors on
+the RTX 5090, with fresh compositor state and 3840×2160 outputs at 2×.
+The game stayed at its selected 1920×1080 X drawable and filled the output
+without touching its fullscreen setting. This verifies native game startup
+and rendering, not physical display timing. Original-resolution screenshots:
+`/tmp/sekka-duke-startup-candidate-first.png` and
+`/tmp/sekka-duke-startup-package.png`; the latter's window state is in
+`/tmp/sekka-duke-startup-package-windows.json`.
+
+The core fix needs an update and a fresh login; it cannot be activated by
+reloading the compositor's logic library. The normal desktop was left
+running. Temporary test sessions and Steam routing were removed after
+the game exited normally; its native/fullscreen configuration is retained.
+
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.

@@ -474,6 +474,9 @@ pub struct Seen {
 
 pub enum Cmd {
     Map,
+    /// Request a new state, then submit the first buffer using the previously
+    /// acknowledged configure, before receiving the response to this request.
+    FullscreenThenMap(bool, Option<usize>),
     Title(String),
     Color(u32),
     Fullscreen(bool, Option<usize>),
@@ -633,12 +636,16 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     app.spec.color = c;
                     app.needs_draw = true;
                 }
-                Cmd::Fullscreen(on, output) => {
+                Cmd::Fullscreen(on, output) | Cmd::FullscreenThenMap(on, output) => {
                     let tl = app.toplevel.as_ref().unwrap();
                     if on {
                         tl.set_fullscreen(output.and_then(|i| outputs.get(i)));
                     } else {
                         tl.unset_fullscreen();
+                    }
+                    if matches!(cmd, Cmd::FullscreenThenMap(..)) {
+                        app.spec.defer_mapping = false;
+                        app.draw(&qh);
                     }
                 }
                 Cmd::Dialog(title, color) => {

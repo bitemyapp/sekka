@@ -4,6 +4,41 @@ use aizome_ipc::Rect;
 use common::*;
 
 #[test]
+fn a_fullscreen_request_survives_an_older_first_buffer() {
+    for scale in [1, 2] {
+        let outputs =
+            [format!("{}x{}@{scale}", 1280 * scale, 800 * scale), format!("{}x{}@{scale}", 1024 * scale, 768 * scale)];
+        let c = Compositor::start(Options { outputs: &[&outputs[0], &outputs[1]], ..Default::default() });
+        // Enter, withdraw, and change output before the first buffer; that
+        // buffer still uses the previous configure in every case.
+        for (initial, requested) in [(None, Some(1)), (Some(1), None), (Some(1), Some(0))] {
+            let spec = Spec::new("late-fullscreen", 0x2255aa).defer_mapping();
+            let spec = if let Some(output) = initial { spec.fullscreen(Some(output)) } else { spec };
+            let a = c.client(spec);
+            a.wait_seen("initial configure", |s| s.configures > 0 && s.fullscreen == initial.is_some());
+            a.send(Cmd::FullscreenThenMap(requested.is_some(), requested));
+            c.wait_window("late-fullscreen");
+            let expected =
+                requested.map(|i| if i == 0 { Rect::new(0, 0, 1280, 800) } else { Rect::new(1280, 0, 1024, 768) });
+            c.wait_windows("latest fullscreen request survives mapping", |ws| {
+                ws[0].fullscreen == requested.is_some() && expected.is_none_or(|r| ws[0].geometry == r)
+            });
+            a.wait_seen("client reaches latest accepted state", |s| {
+                s.fullscreen == requested.is_some() && expected.is_none_or(|r| s.size == (r.w, r.h))
+            });
+            c.settle();
+            assert_eq!(c.windows()[0].fullscreen, requested.is_some());
+            if let Some(rect) = expected {
+                assert_eq!(c.windows()[0].geometry, rect);
+            }
+            assert_eq!(a.seen().fullscreen, requested.is_some());
+            drop(a);
+            c.wait_windows("closed", |ws| ws.is_empty());
+        }
+    }
+}
+
+#[test]
 fn a_client_can_start_fullscreen_on_its_requested_output() {
     let c = Compositor::start(Options { outputs: &["1280x800@1", "1024x768@1"], ..Default::default() });
     let a = c.client(Spec::new("initial-fullscreen", 0x2255aa).fullscreen(Some(1)));
