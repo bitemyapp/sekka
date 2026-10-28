@@ -10,7 +10,9 @@ Both applications use a 120×40 grid, 11×24 physical cells, 14-point IBM Plex M
 the same fallback fonts, zero history and a private 1920×1440 Sway/pixman output.
 Each trial has fresh application configuration/cache directories; kernel page
 cache is not cleared. Ghostty uses Mesa llvmpipe; Hotaru uses native CPU
-rasterization and SHM. This limits conclusions about hardware-accelerated Ghostty.
+rasterization and SHM. Ghostty's logs also report failed DMA-BUF exports and
+fallback to CPU presentation in this software environment. These results do
+not represent its normal hardware rendering/presentation path.
 Application CPUs are 8–11, compositor 12–13, observer 14, controller 15 and PTY
 fixture 16. The workstation lock excludes our builds; no external compiler
 overlaps any accepted interval. Periodic observations cannot prove exclusive
