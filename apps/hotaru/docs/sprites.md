@@ -1,7 +1,7 @@
 # Native terminal sprites
 
-The integrated port now covers 434 Ghostty sprites in a safe Rust raster,
-including box/block, geometric Powerline and Braille characters. It uses
+The integrated port now covers 442 Ghostty sprites in a safe Rust raster,
+including box/block, geometric Powerline, Braille and corner-triangle characters. It uses
 Hotaru's existing Aizome/Sidestep software drawing path. It has no
 Ghostty runtime or Zig dependency. It does not establish whole-application or
 GPU performance parity.
@@ -10,8 +10,8 @@ GPU performance parity.
 
 The first 153-character slice covered U+2500–U+256C, U+2574–U+257F and all
 U+2580–U+259F. The qualified expansions below add rounded corners, diagonal
-strokes, the pinned geometric Powerline family and all 256 Braille patterns.
-Other geometric, legacy-computing and branch sprites remain unported. Those codepoints use the
+strokes, the pinned geometric Powerline family, all 256 Braille patterns and
+eight geometric corner triangles. Legacy-computing and branch sprites remain unported. Those codepoints use the
 ordinary native font path. Supported characters with additional combining or
 presentation-selector scalars also retain ordinary font shaping pending an
 exact upstream selection-policy port.
@@ -180,3 +180,30 @@ follows from these checks.
 `upstream/sprites/braille/README.md` contains reproduction, hashes, failure evidence
 and scope. Its inventory leaves 651 registered character slots plus 11 internal
 sprite rasters unqualified, preserving prior reports unchanged.
+
+## Qualified corner-triangle expansion
+
+The next isolated slice adds all eight corner triangles registered by pinned
+Ghostty's Geometric Shapes source: U+25E2–25E5, U+25F8–25FA and U+25FF, for 442
+qualified character rasters. Safe Rust ports the exact closed inset/miter path
+and coverage behavior. A pinned Zig f64 normalization translation corrects
+platform-libm rounding differences; its exact MIT license is installed as the
+ninth notice, `Zig-MIT.txt`. No runtime dependency or Cargo lock change is needed.
+
+The pure actual-library gate passes 43,128 masks/bounds across 5,391 metrics
+(1,111,842,592 Alpha8 bytes) and 32 upstream PNG crops. The shared-vector change
+also passes the previous 57,700 rounded/diagonal/Powerline masks and 100 PNG
+checks. Numerical comparison covers 131,216 actual Zig observations. Permanent
+fixtures retain the nine initial rounding failures and a separately discovered
+repeated-initial-point close-path failure, with red/green evidence and no pixel
+tolerance changes. An intermediate hash-before-lock report is preserved as
+unqualified; only locked reports identify accepted source/binaries.
+
+All 442 native glyphs match the real oracle at 1/1.25/2/back 1: 1,768 captures and
+5,696,496 RGB bytes exact, with identical initial/final 1× hashes. Thirteen pure
+tests, 62 ordinary native tests and strict pure/native Clippy pass. Package
+acceptance remains a separate Nix/runtime step. Ownership, cache bounds and
+padded-ink behavior are unchanged; no throughput or GPU claim follows.
+`upstream/sprites/geometric/README.md` records sources, licensing, reproduction,
+failures and limits. Its inventory leaves 643 registered character slots plus
+11 internal sprite rasters unqualified, preserving earlier evidence unchanged.

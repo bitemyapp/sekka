@@ -5,7 +5,8 @@
 // Spline, Face, Slope, Pen, stroke_plotter, Polygon and multisample.
 // Cairo-derived portions retain the upstream notices in LICENSE.z2d.
 // This bounded subset supports identity-transform, butt-cap open strokes and
-// nonzero polygon fills. No runtime Zig, foreign code, or unsafe Rust.
+// closed inner-stroked corner triangles and nonzero polygon fills.
+// No runtime Zig, foreign code, or unsafe Rust.
 use crate::{Error, Raster};
 const LIMIT: usize = 32768;
 const TOLERANCE: f64 = 0.1;
@@ -33,7 +34,7 @@ impl Point {
         } else if self.y == 0. {
             Self::new(if self.x > 0. { 1. } else { -1. }, 0.)
         } else {
-            let mag = self.x.hypot(self.y);
+            let mag = crate::math::hypot(self.x, self.y);
             Self::new(self.x / mag, self.y / mag)
         }
     }
@@ -383,7 +384,7 @@ fn stroke_points(raster: &mut Raster, mut points: Vec<(Point, bool)>, t: f64) ->
         } else {
             let i = a.slope.normal();
             let o = b.slope.normal();
-            if 2. <= 100. * (1. + i.x * o.x + i.y * o.y) {
+            if 2. <= 100. * (1. + (i.x * o.x + i.y * o.y)) {
                 push(outside, a.intersect(b, cw))?
             } else {
                 push(outside, ao)?;
@@ -429,26 +430,31 @@ struct Edge {
     dir: i32,
 }
 pub(crate) fn fill_device(r: &mut Raster, points: &[Point]) -> Result<(), Error> {
+    fill_contours(r, &[points])
+}
+fn fill_contours(r: &mut Raster, contours: &[&[Point]]) -> Result<(), Error> {
     let mut edges = Vec::new();
-    for i in 0..points.len() {
-        let a = points[i];
-        let b = points[(i + 1) % points.len()];
-        let a = Point::new(a.x * 4., a.y * 4.);
-        let b = Point::new(b.x * 4., b.y * 4.);
-        if a.y == b.y {
-            continue;
+    for points in contours {
+        for i in 0..points.len() {
+            let a = points[i];
+            let b = points[(i + 1) % points.len()];
+            let a = Point::new(a.x * 4., a.y * 4.);
+            let b = Point::new(b.x * 4., b.y * 4.);
+            if a.y == b.y {
+                continue;
+            }
+            let (top, bottom, dir) = if a.y < b.y { (a, b, -1) } else { (b, a, 1) };
+            push(
+                &mut edges,
+                Edge {
+                    top: top.y,
+                    bottom: bottom.y,
+                    x: top.x,
+                    inc: (bottom.x - top.x) / (bottom.y - top.y),
+                    dir,
+                },
+            )?;
         }
-        let (top, bottom, dir) = if a.y < b.y { (a, b, -1) } else { (b, a, 1) };
-        push(
-            &mut edges,
-            Edge {
-                top: top.y,
-                bottom: bottom.y,
-                x: top.x,
-                inc: (bottom.x - top.x) / (bottom.y - top.y),
-                dir,
-            },
-        )?;
     }
     if edges.is_empty() {
         return Ok(());
@@ -604,4 +610,109 @@ pub(crate) fn inner_stroke(
     let last = segments[segments.len() - 1];
     push(&mut output, (shifted(last.p1, last.slope), false))?;
     stroke_points(raster, output, thickness)
+}
+
+// Closed offset and miter stroke from z2d InputSet::alignSegments,
+// offset::runClosed and stroke_plotter::plotClosedJoined. Only the fixed,
+// nondegenerate cell-corner triangles call this entry point. Their first
+// vertex is already the first leftmost point, so alignment preserves order.
+pub(crate) fn inner_stroke_triangle(
+    raster: &mut Raster,
+    vertices: [Point; 3],
+    thickness: f64,
+) -> Result<(), Error> {
+    let points = vertices.map(|p| {
+        Point::new(
+            p.x - f64::from(raster.origin_x),
+            p.y - f64::from(raster.origin_y),
+        )
+    });
+    let slopes = [
+        points[1].sub(points[0]).normal(),
+        points[2].sub(points[1]).normal(),
+        points[0].sub(points[2]).normal(),
+    ];
+    let clockwise = slopes[2].compare(slopes[0]) < 0;
+    let offset = -thickness / 2.;
+    let shifted = |p: Point, slope: Point| {
+        let adjust = Point::new(-slope.y * offset, slope.x * offset);
+        if clockwise {
+            p.sub(adjust)
+        } else {
+            p.add(adjust)
+        }
+    };
+    let mut inset = Vec::new();
+    for out in 0..3 {
+        let incoming = (out + 2) % 3;
+        let a = slopes[incoming];
+        let b = slopes[out];
+        let p = shifted(points[out], a);
+        let q = shifted(points[out], b);
+        let divisor = a.x * b.y - a.y * b.x;
+        if divisor == 0. {
+            return Err(Error::Unsupported);
+        }
+        let t = ((q.x - p.x) * b.y - (q.y - p.y) * b.x) / divisor;
+        push(
+            &mut inset,
+            (Point::new(p.x + t * a.x, p.y + t * a.y), false),
+        )?;
+    }
+    inset.dedup_by(|a, b| a.0 == b.0);
+    if inset.len() < 3 {
+        return stroke_points(raster, inset, thickness);
+    }
+    // z2d's close-path special case joins the penultimate point back through
+    // the initial point when the final line already returned there. Retain
+    // both joins even if floating rounding leaves only two distinct points.
+    if inset.last().unwrap().0 == inset[0].0 {
+        inset.pop();
+    }
+    let mut outer = Vec::new();
+    let mut inner = Vec::new();
+    let mut direction = None;
+    // Normal line processing starts at the second vertex; closing supplies
+    // the final and initial joins. Inner plotting reverses contour order.
+    for i in 1..=inset.len() {
+        let p0 = inset[(i - 1) % inset.len()].0;
+        let p1 = inset[i % inset.len()].0;
+        let p2 = inset[(i + 1) % inset.len()].0;
+        if p0 == p1 || p1 == p2 {
+            direction.get_or_insert(false);
+            continue;
+        }
+        let a = Face::new(p0, p1, thickness);
+        let b = Face::new(p1, p2, thickness);
+        let compare = a.slope.compare(b.slope);
+        let clockwise = compare < 0;
+        let polygon_clockwise = *direction.get_or_insert(clockwise);
+        let (outside, inside) = if clockwise == polygon_clockwise {
+            (&mut outer, &mut inner)
+        } else {
+            (&mut inner, &mut outer)
+        };
+        let ai = if clockwise { a.p1_cw } else { a.p1_ccw };
+        let ao = if clockwise { a.p1_ccw } else { a.p1_cw };
+        let bi = if clockwise { b.p0_cw } else { b.p0_ccw };
+        let bo = if clockwise { b.p0_ccw } else { b.p0_cw };
+        if compare == 0 {
+            push(outside, ao)?;
+            push(inside, ai)?;
+            continue;
+        }
+        let incoming = a.slope.normal();
+        let outgoing = b.slope.normal();
+        if 2. <= 100. * (1. + (incoming.x * outgoing.x + incoming.y * outgoing.y)) {
+            push(outside, a.intersect(b, clockwise))?;
+        } else {
+            push(outside, ao)?;
+            push(outside, bo)?;
+        }
+        push(inside, ai)?;
+        push(inside, p1)?;
+        push(inside, bi)?;
+    }
+    inner.reverse();
+    fill_contours(raster, &[&outer, &inner])
 }

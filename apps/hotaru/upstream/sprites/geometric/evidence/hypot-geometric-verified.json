@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-28T23:18:06.883898+00:00",
+  "scope": "padded Alpha8 raster only; no application, metrics derivation, atlas upload or presentation claim",
+  "upstream_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "glyphs": 8,
+  "metrics": 2308,
+  "fractional_scale_cases": [
+    {
+      "scale": 1,
+      "physical_metrics": [
+        11,
+        24,
+        1
+      ]
+    },
+    {
+      "scale": 1.25,
+      "physical_metrics": [
+        14,
+        30,
+        2
+      ]
+    },
+    {
+      "scale": 1.5,
+      "physical_metrics": [
+        17,
+        36,
+        2
+      ]
+    },
+    {
+      "scale": 1.75,
+      "physical_metrics": [
+        20,
+        42,
+        2
+      ]
+    },
+    {
+      "scale": 2,
+      "physical_metrics": [
+        22,
+        48,
+        2
+      ]
+    },
+    {
+      "scale": 2.25,
+      "physical_metrics": [
+        25,
+        54,
+        3
+      ]
+    },
+    {
+      "scale": 2.5,
+      "physical_metrics": [
+        28,
+        60,
+        3
+      ]
+    },
+    {
+      "scale": 3,
+      "physical_metrics": [
+        33,
+        72,
+        3
+      ]
+    }
+  ],
+  "candidate_sha256": "3acbf55a5423572746fd2899b98a31b78beea9cca26ae813800ba58d2f4a8535",
+  "oracle_sha256": "e81f3a5f4ea58ea2fd028208817c4492107c9bf1e28e3e8e36e85682307d04eb",
+  "oracle_build_mode": "ReleaseSafe",
+  "failures": [],
+  "matches": 18464,
+  "compared_bytes": 785438352,
+  "png_matches": 32,
+  "metadata_matches": 18464,
+  "png_sha256": {
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png": "c52a982f7eca5280f2f9a5319d1513137e8d330ee4078eed36f8bce947025b06",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png": "ab44bfd98b656185f540260079c1896c28ab13fa428d2fb43947d7e836774b59",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png": "18ad45f8c64cf03ce7c866d359d20c4c2a869f041f4c96040cd5d3928b81c8fb",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png": "db4bf9d4cdc505c564073ff670a97810357c7c00cd3f4eef615ca5a264b1820e"
+  },
+  "load_average": [
+    12.1337890625,
+    19.380859375,
+    11.80126953125
+  ],
+  "sources": {
+    "rust/src/braille.rs": "667b84b69e664d42ba301605ad9b191234034b0454cd2c278eae59eca8c2c04b",
+    "rust/src/geometric.rs": "528c006a6075c3a38c3b6e42f23cb838ba2e6213a6230aa209b1bd694f1bfbf2",
+    "rust/src/lib.rs": "487412d0e4280599cb1c3b9d02b5387e0483c5343fc23e73106e454e9c8779a1",
+    "rust/src/powerline.rs": "b35733253fe5527abd72716b14ab503026ea06b526e592d0e6783b880bd40368",
+    "rust/src/main.rs": "361213da1ebea5fe1483b0b0515c29f75bf8b4c3dab9ae84f23a8afb72227657",
+    "rust/src/vector.rs": "59c2d5e8da5527be15fe61724e3d2c25ece95726923cf2a0ab657a6f91d7fc96",
+    "rust/src/lines_map.rs": "91083cb7244e87b79213d9740664cd39d4e45de87e9dbf5b405c9ca63cc3eba5",
+    "rust/src/lines.rs": "a59abe67313e6ec36444552f1bdc53b69693b9049ca8d5cec1252592ea493b8f",
+    "rust/src/curves.rs": "2568bc4a17011662d0ce4690bbe693beef076180e7a7e1e4cdb5a635a0b230d4",
+    "rust/src/math.rs": "578e356aa0d022cd9c579b911d1b8607f69d4751e3c34a7838b613966d745a51",
+    "rust/tests/golden.rs": "c2a6c5074864aa7616bdc042c45d5c98f93d07c78823ccf8d9c6f6e6a2079793",
+    "rust/tests/raster.rs": "477e05d9151562254974419fcd6db36fe758acdf7ef8117665ed2e615d2987a8",
+    "rust/tests/fixtures/ghostty.json": "323b52f6afa11c6a7a263eb3edce1837deeb5bb6c3e5c749a3ef7fb81d331bef",
+    "rust/tests/fixtures/ghostty.rle": "eede9f49bb4dc905fdb1208dde92331bef163d1b8dd4fc60bc64b7a3ed90403a",
+    "rust/tests/fixtures/braille.json": "ac0962f732b80069044df14b28fe909146e1cde47973cce9367e772b43f4de95",
+    "rust/tests/fixtures/curves-powerline.rle": "2e4a3d5003e9c3de6f8cbc98c602e2fba93459a6c296cba9545d695614e66350",
+    "rust/tests/fixtures/braille.rle": "24e7ce64cbad7da58899dbe3e303a6fc6586b9e6cb048d4eed7f4748813c19f0",
+    "rust/tests/fixtures/curves-powerline.json": "56796d683378bee9612acbdf0948c1aa57b427b3106e53abde5525e03ecf6a31",
+    "oracle-expanded/src/global.zig": "38b7ecc08a83107a661ad52804adfc5f7798d20c0bd6c8f60ad6162e44cdfa78",
+    "oracle-expanded/src/quirks.zig": "5ea281e568af715ba394738992f71f4c30f6b0b19dbc005dfebc677c10b77682",
+    "oracle-expanded/src/font/main.zig": "deb4bbb6a290a11a36abec492df2b985de285e44b3f2914130bc43a6efc881e5",
+    "oracle-expanded/src/font/sprite/canvas.zig": "7c17cec4fb41b9dfc6eb2ec8b371cb7a45b5fe468523f042931cf65c25053f6a",
+    "oracle-expanded/src/font/sprite/draw/geometric_shapes.zig": "e81950c543d683d394a499b1fe47e7071f1fb97db723f7b45394f207f7617d0c",
+    "oracle-expanded/src/font/sprite/draw/box.zig": "ee10346fb261a2cc104352ff235664f32204e845ff98772c48f3b6a63053a951",
+    "oracle-expanded/src/font/sprite/draw/braille.zig": "8093913ed854b6d46a8b627c465d7f1ac7b2deedd35c208603f06c05bf9a6a8c",
+    "oracle-expanded/src/font/sprite/draw/common.zig": "e9715d969a60c109a4eea7f081ca8b6114e6d8126896ae13e9cbbcddba704319",
+    "oracle-expanded/src/font/sprite/draw/powerline.zig": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+    "oracle-expanded/src/font/sprite/draw/block.zig": "54494d690e3c50e05e230cac1107ce36f519047dc7f09f728ad8bfdd862898f3",
+    "oracle-expanded/oracle.zig": "7ae0c1d3d7c8c07c219985ef62f3853726bc3c8e88c8e04090685905f3e84841"
+  },
+  "status": "passed"
+}

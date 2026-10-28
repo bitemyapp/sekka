@@ -1,0 +1,15 @@
+{
+  "apps/hotaru/crates/hotaru-sprites/src/lib.rs": "487412d0e4280599cb1c3b9d02b5387e0483c5343fc23e73106e454e9c8779a1",
+  "apps/hotaru/crates/hotaru-sprites/src/vector.rs": "4c711fbe9e49828b1dfc200cc71852d6e5d5d612788e040f7b3e9e32a6806e0e",
+  "apps/hotaru/crates/hotaru-sprites/src/geometric.rs": "528c006a6075c3a38c3b6e42f23cb838ba2e6213a6230aa209b1bd694f1bfbf2",
+  "apps/hotaru/crates/hotaru-sprites/src/math.rs": "c18c2d76f74bf6848861df0f96187701f7dd6daf41ddcbe896a9eb8c2b2b5c3a",
+  "apps/hotaru/crates/hotaru-sprites/tests/raster.rs": "477e05d9151562254974419fcd6db36fe758acdf7ef8117665ed2e615d2987a8",
+  "apps/hotaru/crates/hotaru-sprites/tests/golden.rs": "a198de5a408d887298ba561f822576414c954f22607af6a42bdf9012cddc995e",
+  "apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.rle": "961a6e0b0115fa013d9dd98ce5f437c6538538ff765f2a070fb61e6b349c938a",
+  "apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.json": "c3fa2292c0af86a0b500e29cfed17f111da945b1a7484407b7767f977f1d1f08",
+  "apps/hotaru/crates/hotaru-sprites/LICENSE.zig": "5c537d6853e005298a285d508cff9ac7192cea23576c840d485b2b586a7ff177",
+  "desktop/aizome/apps/hotaru/src/font.rs": "e77c3381c830505735d8ffb50e18e6b8dabe554bf02a97b810fa944dece6ee26",
+  "desktop/aizome/apps/hotaru/tests/wayland/sprites.py": "9869decb9757a6a34261590d2855b6b10d85f9338740d8d02c1824ffd3bda64c",
+  "desktop/aizome/nix/hotaru.nix": "c030e3ccc15d0cbf6153df27f84374269c40a5024971535defe774e24c911d9a",
+  "desktop/aizome/nix/package.nix": "42d584f15accaa571c4d72dbdf4ee848c5f74d0387e76359cf7e6951d8cf45ee"
+}

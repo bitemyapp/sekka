@@ -903,7 +903,7 @@ mod sprite_tests {
         install_fonts();
         let mut terminal = hotaru_core::Terminal::new(32, 16, 0);
         terminal.feed(b"\x1b[?25l\x1b]8;id=box;https://example.test/box\x1b\\");
-        let text: String = (0x2500..=0x259f)
+        let text: String = (0x2500..=0x25ff)
             .chain(0x2800..=0x28ff)
             .chain(0xe0b0..=0xe0bf)
             .chain([0xe0d2, 0xe0d4])
@@ -927,7 +927,7 @@ mod sprite_tests {
             };
             let frame = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
             let count: usize = frame.rows.iter().flat_map(|r| r.iter()).map(|s| s.sprites.len()).sum();
-            assert_eq!(count, 436);
+            assert_eq!(count, 444);
             assert!(Arc::ptr_eq(&frame.snapshot, &job.snapshot));
             assert!(!frame.links.is_empty());
             let masks = frame

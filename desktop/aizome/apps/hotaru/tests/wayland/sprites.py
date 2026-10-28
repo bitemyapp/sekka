@@ -20,7 +20,7 @@ import time
 from PIL import Image
 from smoke import wait
 
-CPS = [*range(0x2500, 0x25a0), *range(0x2800, 0x2900), *range(0xe0b0, 0xe0c0), 0xe0d2, 0xe0d4]
+CPS = [*range(0x2500, 0x25a0), *range(0x25e2, 0x25e6), *range(0x25f8, 0x25fb), 0x25ff, *range(0x2800, 0x2900), *range(0xe0b0, 0xe0c0), 0xe0d2, 0xe0d4]
 
 
 def sha(path):
@@ -80,7 +80,7 @@ while True:
     rows,cols,_,_=struct.unpack('HHHH',fcntl.ioctl(0,termios.TIOCGWINSZ,bytes(8)))
     if rows>=34 and cols>=80:break
     time.sleep(.02)
-cp=[*range(0x2500,0x25a0),*range(0x2800,0x2900),*range(0xe0b0,0xe0c0),0xe0d2,0xe0d4]
+cp=[*range(0x2500,0x25a0),*range(0x25e2,0x25e6),*range(0x25f8,0x25fb),0x25ff,*range(0x2800,0x2900),*range(0xe0b0,0xe0c0),0xe0d2,0xe0d4]
 payload='\\x1b[?25l\\x1b]11;#000000\\x07\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255m█'
 payload+='\\x1b[38;2;255;255;255m\\x1b]8;id=sprite-fixture;https://example.test/sprites\\x1b\\\\'
 for i,c in enumerate(cp):
@@ -97,7 +97,7 @@ while True:
     result = {'schema': 1, 'binary': str(binary), 'binary_sha256': sha(binary),
               'oracle_library': str(library), 'oracle_sha256': sha(library), 'oracle_build_mode': 'ReleaseFast',
               'upstream_pin': '6ba144158577d033ccb6ed4b574e4013957c9161',
-              'scope': 'exact actual private Wayland software capture of 434 qualified sprites; no GPU or timing claim',
+              'scope': 'exact actual private Wayland software capture of 442 qualified sprites; no GPU or timing claim',
               'fixture_sha256': sha(fixture), 'compositor_config': config.read_text(), 'scales': []}
     try:
         log = open(evidence / 'sway.log', 'wb'); files.append(log)

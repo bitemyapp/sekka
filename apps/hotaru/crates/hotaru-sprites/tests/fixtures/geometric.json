@@ -1,0 +1,777 @@
+{
+  "ghostty_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "oracle_sha256": "e81f3a5f4ea58ea2fd028208817c4492107c9bf1e28e3e8e36e85682307d04eb",
+  "records": [
+    {
+      "cp": "U+25E2",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "f362b75e0560fd0c8965fefe3e2d9601749b3302d5f6f7a1084312add454b55d"
+    },
+    {
+      "cp": "U+25E3",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "00e7b8693f5234beb18e63c0a2b286cb0076fa1019dc5e72ac2a5232f527a2d1"
+    },
+    {
+      "cp": "U+25E4",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "7c72afc7126567974d8887a326c7906ba71deadb6e380e925696378f59f4eeef"
+    },
+    {
+      "cp": "U+25E5",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "ed8cb63ca35972495244deecaa87f5ad092d406841c176f40660a4404e7acc96"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "eba6141c21a6380ee27de01560f1a0bfe52b235a450239d86bd42e0f0f2c1787"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "4ba08ced767deb9badebc2db6251cdfe0d16833efa8dda5e0d0b5dd1b7e3b390"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "798ab6f2ad2c3932146902bc84ad591fef61193bec2feee2aaf8977913bb8560"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "92376966b8c1a8d826f200f260eb12d4491d5d99a26b8c44a5444cb66603b78e"
+    },
+    {
+      "cp": "U+25E2",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "8a9f4075cefd3a7baa30b22807fdf10efd0177e58ef3931b8846d1b4a99b781a"
+    },
+    {
+      "cp": "U+25E3",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "0015c6145ee16fa312e72bcaed3eff62c2ffc10f4f433aed5cbaa05f4c2fd4ff"
+    },
+    {
+      "cp": "U+25E4",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "1fcc6a1e5cdd608ea64ef650866039bbe73ede6aab8b9ffb21ef047a1f30d512"
+    },
+    {
+      "cp": "U+25E5",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "8f3f5a7e22a275fb0d9c4482097ad89e485a5d30dd2393182af1d1df2355f623"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "c25b7a034c7e52d74ec4d52ec9e4014119a342127af1cbad0ea1afafbf012de9"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "00b5f9ed70a96a28208bf18fb1a900540e5951bd8805b76b62772b6c5cd1ba91"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "9d0a8e749886dd9e7af6b95afbe74ebc56ac4f72348735ee7618786a1bf460d6"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "770b2b2cdecfa519c6560f2c9165c7044d59d683992ae5bdd9b26e23d718da30"
+    },
+    {
+      "cp": "U+25E2",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "a430d4c5ccd1163bae2c3695216dbee26d86346865e614bbc2d29e866fedccf7"
+    },
+    {
+      "cp": "U+25E3",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "7a1ed043d55b9051e8f5687ee26ce15863b855b64f13aa069767576aa65e21ae"
+    },
+    {
+      "cp": "U+25E4",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "6d53db77533f4fa4dc58a72fd42760d0afddbeb3c28b81ba898025d3c03be8f2"
+    },
+    {
+      "cp": "U+25E5",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "06a3078e6b8e14af7c6093da807b293259b806d874b7a1efd1b5565d31dc9ccc"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "5600344aeb887adf529136bb09bb2c781a481807c8587750b4f11ca0bda3fd15"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "b5f15ac778f13aa2747390c5a3dd6ae22fb434e2a88d8494e48466370974a1f7"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "373e4027d5c1df557058b323dc5763013e697e13b670ffe3300c2d92d9ddd4cf"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "9982e73eed44cdfcba5f20fb05e8a6b3f29e3a1a3f3c8af4ea3f207fcffb1777"
+    },
+    {
+      "cp": "U+25E2",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "609dfd812cb3184a86b532c01143f7e83f30e7190a5e06c6afe8a8d51ff7a50f"
+    },
+    {
+      "cp": "U+25E3",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "6246b6dd82c54b9ababbe86ee21b45d6c5d06d04309bd1583822f43277f88686"
+    },
+    {
+      "cp": "U+25E4",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "0a3f35b572b04c4a419adfadc64bd599dbfcb2c566e0871e9e21d8e2e58a5b68"
+    },
+    {
+      "cp": "U+25E5",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "e70d78b3144ae2f88e774dd4f398810b8fe8f21c0307742875b0c9ec5a2e71d7"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "62e0f8445aa16a129f8612fe86c9f32bb1ceea3e57bef04e9d226a770d9847fe"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "d47bc463eae72a0b5ee5228899a51a5652fc6741aacc0fbeb08b379ee6300cbd"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "e526036098a9c2666fc555b31e8051a42c6e367f8924beb04c3d133f04e0f348"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "c149a12f0a09f6fec213efafecdd210a1b67c60a7a7733e239bb52cb14ff52f4"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        2,
+        10,
+        1
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "1085d50b3230512041f3b40a28e4d5829259af4a9872f8045166c7cc1ae9a94d"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        5,
+        11,
+        1
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "0a99e74b45dad4411899f0e7a316cf5ec50c41415f2fb000fc6a944d6a5343fb"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        7,
+        3,
+        1
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "289acfd514e36c4d293a95190d50af661aff3a2a9e23f23d4925d9cf8d52f595"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        7,
+        3,
+        1
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "f2c9c4ca976a7a8ce56434410d40b9b4fff1796d30887687f07b97160a17ec2c"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        7,
+        17,
+        2
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "8859e17f2103ff918ca0859865e66794c8a22e17a23791ca790906bc2360021b"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        10,
+        2,
+        1
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "d4f7d96cc8d7b56cf037d0d3733fed893a2ca33e27e519bf22fe1a3d8871ee24"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        14,
+        6,
+        2
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "74bed0f4d52a3350868c1c7b04d13df080ea512398180b9242a29fd38e5350dc"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        15,
+        3,
+        2
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "221f400d3d34c6b134269d3f0b2f6457255d22a8496cb68d02f971a36a61ec89"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        257,
+        255,
+        127
+      ],
+      "source": "actual-library hypot rounding regression",
+      "raw_sha256": "813abf2ed9da3a244f63673759020b31f38af7e34db4751140335e6efb6759d3"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        6,
+        8,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        6,
+        8,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        6,
+        8,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        6,
+        8,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        5,
+        12,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        5,
+        12,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        5,
+        12,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        5,
+        12,
+        4
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        8,
+        15,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "913c6e2c32d99e4baff62cf421a494730cb043924f2c6bf46406573b59c641bd"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        8,
+        15,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "f200363be039de3ad2c519e8a23f2d6854a8e3c1656fa9682bae27c96afd8c92"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        8,
+        15,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "9468566bb617b99c711d76fb6e0c02a964b9bd3cea12e470675b90bdd7d919b8"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        8,
+        15,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "4c9764a1df0b995cbf23bc4134c2a2cacf0bb9ed4244fe23e2208a29e932c68e"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        7,
+        24,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        7,
+        24,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        7,
+        24,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        7,
+        24,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        9,
+        12,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "0479688f99e8cbc70291ce272876ff8e0db71a0889daf2752884b0996056b4a0"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        9,
+        12,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "5a1c2ec4b49445abf4b2c3609891d1869a1c0090a8c8a50230f989c5bce26711"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        9,
+        12,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "7b46fc5382d50c2f357bb0032e24b6daeb760f676a682aaacb84d2c7333fbd5b"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        9,
+        12,
+        6
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "0479688f99e8cbc70291ce272876ff8e0db71a0889daf2752884b0996056b4a0"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        1,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        1,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        1,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        1,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        1,
+        4096,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        1,
+        4096,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        1,
+        4096,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        1,
+        4096,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
+    },
+    {
+      "cp": "U+25F8",
+      "metrics": [
+        4096,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
+    },
+    {
+      "cp": "U+25F9",
+      "metrics": [
+        4096,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
+    },
+    {
+      "cp": "U+25FA",
+      "metrics": [
+        4096,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
+    },
+    {
+      "cp": "U+25FF",
+      "metrics": [
+        4096,
+        1,
+        1
+      ],
+      "source": "actual-library collapsed/thin inset boundary",
+      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
+    }
+  ],
+  "sha256": "961a6e0b0115fa013d9dd98ce5f437c6538538ff765f2a070fb61e6b349c938a"
+}

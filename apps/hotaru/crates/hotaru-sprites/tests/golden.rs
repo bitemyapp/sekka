@@ -13,6 +13,10 @@ fn curves_powerline_match_upstream_pngs_and_translation_regressions() {
 fn braille_matches_four_committed_upstream_atlases() {
     check(include_bytes!("fixtures/braille.rle"), 1024);
 }
+#[test]
+fn geometric_matches_upstream_pngs_and_numerical_boundaries() {
+    check(include_bytes!("fixtures/geometric.rle"), 77);
+}
 fn check(bytes: &[u8], expected_count: usize) {
     assert_eq!(&bytes[..4], b"HSP1");
     let mut at = 4;

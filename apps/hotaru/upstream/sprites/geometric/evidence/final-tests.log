@@ -1,0 +1,45 @@
+   Compiling hotaru-sprite-prototype v0.1.0 (/home/callen/work/hotaru-sprites-geometric-20261028/rust)
+    Finished `release` profile [optimized] target(s) in 0.20s
+     Running unittests src/lib.rs (rust/target/release/deps/hotaru_sprites-180a399620f565ad)
+
+running 3 tests
+test braille::tests::valid_metrics_do_not_repeat_upstream_remaining_pixel_assertion ... ok
+test math::tests::pinned_fused_rounding_matches_actual_zig_bit_patterns ... ok
+test braille::tests::every_accepted_dimension_keeps_disjoint_dots_inside_cell ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running unittests src/main.rs (rust/target/release/deps/hotaru_sprite_prototype-fc3bc04efce62ec1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden.rs (rust/target/release/deps/golden-84b812769b064678)
+
+running 4 tests
+test curves_powerline_match_upstream_pngs_and_translation_regressions ... ok
+test geometric_matches_upstream_pngs_and_numerical_boundaries ... ok
+test existing_rectilinear_sprites_match_four_committed_upstream_atlases ... ok
+test braille_matches_four_committed_upstream_atlases ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/raster.rs (rust/target/release/deps/raster-1e04695a3de6efb0)
+
+running 6 tests
+test allocation_is_bounded_before_reservation ... ok
+test tiny_heavy_dash_uses_upstream_light_fallback ... ok
+test odd_quadrants_overlap_and_shades_are_alpha_not_dither ... ok
+test complete_explicit_ranges_and_exclusions ... ok
+test braille_is_a_fixed_eight_dot_union_with_inert_stroke_thickness ... ok
+test ink_bounds_reconstruct_every_nonzero_pixel ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests hotaru_sprites
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
