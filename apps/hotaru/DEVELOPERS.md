@@ -4,8 +4,11 @@ Hotaru's terminal engine and Linux I/O live in this independent Cargo workspace.
 The native application lives in `desktop/aizome/apps/hotaru`, within Aizome's
 existing workspace, and uses `aizome-kit`/Sidestep for chrome and drawing.
 Maintain that boundary; the core has no UI dependencies. The core denies unsafe
-Rust except for its bounded SIMD byte scanner, whose load bounds and CPU
-requirements are documented and tested against the scalar implementation.
+Rust except for its bounded SIMD byte scanner and whole-cell ASCII stores.
+The scanner's load bounds and CPU requirements are documented and tested
+against the scalar implementation. ASCII stores use one possibly unaligned
+eight-byte write, guarded by compile-time field type/layout assertions and
+tested against ordinary constructors, boundary cases and strict-provenance Miri.
 Each Linux I/O unsafe block documents its FFI and ownership invariants.
 UTF-8 validation uses a bundled, audited simdutf8 release with the upstream
 prefetch-pointer repair; see [the dependency audit](docs/utf8-simd.md).

@@ -8,6 +8,7 @@ use crate::hyperlink::{Hyperlink, LinkRef, RowLinks};
 use compact_str::CompactString;
 use std::ops::Range;
 
+mod ascii;
 mod history;
 pub(crate) use history::RecycleLayout;
 

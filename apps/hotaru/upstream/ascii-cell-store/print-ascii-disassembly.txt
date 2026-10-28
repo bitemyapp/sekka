@@ -1,0 +1,620 @@
+0000000000044360 <hotaru_core::screen::State::print_ascii>:
+   44360:	push   %rbp
+   44361:	push   %r15
+   44363:	push   %r14
+   44365:	push   %r13
+   44367:	push   %r12
+   44369:	push   %rbx
+   4436a:	sub    $0x108,%rsp
+   44371:	mov    %rdx,%r15
+   44374:	mov    %rsi,%r12
+   44377:	mov    %rdi,%r13
+   4437a:	cmpb   $0x0,0xa02(%rdi)
+   44381:	je     443c5 <hotaru_core::screen::State::print_ascii+0x65>
+   44383:	test   %r15,%r15
+   44386:	je     443b3 <hotaru_core::screen::State::print_ascii+0x53>
+   44388:	xor    %ebx,%ebx
+   4438a:	mov    0x5c5a7(%rip),%r14        # a0938 <_DYNAMIC+0x5d0>
+   44391:	data16 data16 data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+   443a0:	movzbl (%r12,%rbx,1),%esi
+   443a5:	mov    %r13,%rdi
+   443a8:	call   *%r14
+   443ab:	inc    %rbx
+   443ae:	cmp    %rbx,%r15
+   443b1:	jne    443a0 <hotaru_core::screen::State::print_ascii+0x40>
+   443b3:	add    $0x108,%rsp
+   443ba:	pop    %rbx
+   443bb:	pop    %r12
+   443bd:	pop    %r13
+   443bf:	pop    %r14
+   443c1:	pop    %r15
+   443c3:	pop    %rbp
+   443c4:	ret
+   443c5:	mov    0x3b8(%r13),%rdi
+   443cc:	cmp    $0x4,%rdi
+   443d0:	jae    44d4e <hotaru_core::screen::State::print_ascii+0x9ee>
+   443d6:	cmpb   $0x0,0x6d8(%r13,%rdi,1)
+   443df:	jne    44383 <hotaru_core::screen::State::print_ascii+0x23>
+   443e1:	cmpq   $0x0,0x260(%r13)
+   443e9:	jne    44383 <hotaru_core::screen::State::print_ascii+0x23>
+   443eb:	test   %r15,%r15
+   443ee:	je     443b3 <hotaru_core::screen::State::print_ascii+0x53>
+   443f0:	lea    0x6ea(%r13),%rax
+   443f7:	mov    %rax,0x88(%rsp)
+   443ff:	lea    0x130(%r13),%rax
+   44406:	mov    %rax,0x58(%rsp)
+   4440b:	lea    0x48(%rsp),%rax
+   44410:	mov    %rax,0x78(%rsp)
+   44415:	mov    %r13,0x50(%rsp)
+   4441a:	jmp    44433 <hotaru_core::screen::State::print_ascii+0xd3>
+   4441c:	nopl   0x0(%rax)
+   44420:	xor    %r15d,%r15d
+   44423:	add    %r15,%r12
+   44426:	mov    0x28(%rsp),%rax
+   4442b:	sub    %r15,%rax
+   4442e:	mov    %rax,%r15
+   44431:	je     443b3 <hotaru_core::screen::State::print_ascii+0x53>
+   44433:	cmpb   $0x0,0x6df(%r13)
+   4443b:	mov    %r13,%rbx
+   4443e:	cmovne 0x58(%rsp),%rbx
+   44444:	cmpb   $0x1,0x12f(%rbx)
+   4444b:	jne    444d8 <hotaru_core::screen::State::print_ascii+0x178>
+   44451:	movzbl 0xa01(%r13),%eax
+   44459:	mov    0x6ee(%r13),%ebp
+   44460:	movb   $0x0,0x12f(%rbx)
+   44467:	cmp    $0x1,%al
+   44469:	jne    444d8 <hotaru_core::screen::State::print_ascii+0x178>
+   4446b:	mov    %rbx,%rdi
+   4446e:	call   481b0 <hotaru_core::screen::Screen::row>
+   44473:	movb   $0x1,0x6e(%rax)
+   44477:	movq   $0x0,0x90(%rbx)
+   44482:	movb   $0x0,0x12f(%rbx)
+   44489:	mov    0x98(%rbx),%rax
+   44490:	cmp    0x100(%rbx),%rax
+   44497:	jne    444af <hotaru_core::screen::State::print_ascii+0x14f>
+   44499:	mov    $0x1,%esi
+   4449e:	mov    %rbx,%rdi
+   444a1:	mov    $0x1,%edx
+   444a6:	mov    %ebp,%ecx
+   444a8:	call   48310 <hotaru_core::screen::Screen::scroll_up>
+   444ad:	jmp    444c7 <hotaru_core::screen::State::print_ascii+0x167>
+   444af:	inc    %rax
+   444b2:	mov    0x38(%rbx),%rcx
+   444b6:	dec    %rcx
+   444b9:	cmp    %rax,%rcx
+   444bc:	cmovae %rax,%rcx
+   444c0:	mov    %rcx,0x98(%rbx)
+   444c7:	mov    %rbx,%rdi
+   444ca:	call   481b0 <hotaru_core::screen::Screen::row>
+   444cf:	movb   $0x1,0x6f(%rax)
+   444d3:	mov    0x50(%rsp),%r13
+   444d8:	mov    %r13,%rdi
+   444db:	mov    %r15,%rsi
+   444de:	call   459e0 <hotaru_core::screen::State::scalar_metadata_writes>
+   444e3:	test   %al,%al
+   444e5:	mov    %r15,0x28(%rsp)
+   444ea:	je     446c0 <hotaru_core::screen::State::print_ascii+0x360>
+   444f0:	mov    0x88(%rsp),%rcx
+   444f8:	mov    (%rcx),%rax
+   444fb:	mov    0x6(%rcx),%rcx
+   444ff:	mov    %rcx,0x6e(%rsp)
+   44504:	mov    %rax,0x68(%rsp)
+   44509:	cmpb   $0x0,0x6df(%r13)
+   44511:	mov    %r13,%r14
+   44514:	cmovne 0x58(%rsp),%r14
+   4451a:	cmpb   $0x1,0x12f(%r14)
+   44522:	je     44420 <hotaru_core::screen::State::print_ascii+0xc0>
+   44528:	movzbl 0xa04(%r13),%ecx
+   44530:	movzbl 0x6e6(%r13),%eax
+   44538:	mov    %al,0x40(%rsp)
+   4453c:	movzbl 0xa01(%r13),%eax
+   44544:	mov    %al,0xf(%rsp)
+   44548:	mov    0x118(%r14),%rax
+   4454f:	test   %rax,%rax
+   44552:	je     4455e <hotaru_core::screen::State::print_ascii+0x1fe>
+   44554:	lock incq (%rax)
+   44558:	jle    44ce5 <hotaru_core::screen::State::print_ascii+0x985>
+   4455e:	mov    %rax,0x10(%rsp)
+   44563:	mov    %rax,0x48(%rsp)
+   44568:	mov    0x98(%r14),%rbx
+   4456f:	cmp    0x38(%r14),%rbx
+   44573:	jae    44ceb <hotaru_core::screen::State::print_ascii+0x98b>
+   44579:	mov    %cl,0x38(%rsp)
+   4457d:	add    0x30(%r14),%rbx
+   44581:	mov    0x90(%r14),%rax
+   44588:	mov    %rax,0x20(%rsp)
+   4458d:	mov    0x20(%r14),%rax
+   44591:	mov    0x28(%r14),%r13
+   44595:	cmp    %rax,%rbx
+   44598:	mov    $0x0,%ecx
+   4459d:	cmovae %rax,%rcx
+   445a1:	sub    %rcx,%rbx
+   445a4:	mov    0x0(%r13,%rbx,8),%rax
+   445a9:	mov    (%rax),%rax
+   445ac:	mov    0x0(%r13,%rbx,8),%rbp
+   445b1:	cmp    $0x1,%rax
+   445b5:	je     4464b <hotaru_core::screen::State::print_ascii+0x2eb>
+   445bb:	lea    0x8(%rbp),%rsi
+   445bf:	lea    0x98(%rsp),%rdi
+   445c7:	call   *0x5c373(%rip)        # a0940 <_DYNAMIC+0x5d8>
+   445cd:	movq   $0x1,0x90(%rsp)
+   445d9:	mov    $0x78,%edi
+   445de:	call   *0x5bf6c(%rip)        # a0550 <malloc@GLIBC_2.2.5>
+   445e4:	test   %rax,%rax
+   445e7:	je     44d06 <hotaru_core::screen::State::print_ascii+0x9a6>
+   445ed:	vmovdqu 0x90(%rsp),%ymm0
+   445f6:	vmovdqu 0xb0(%rsp),%ymm1
+   445ff:	vmovdqu 0xd0(%rsp),%ymm2
+   44608:	vmovdqu 0xe8(%rsp),%ymm3
+   44611:	vmovdqu %ymm3,0x58(%rax)
+   44616:	vmovdqu %ymm2,0x40(%rax)
+   4461b:	vmovdqu %ymm1,0x20(%rax)
+   44620:	mov    %rax,%r15
+   44623:	vmovdqu %ymm0,(%rax)
+   44627:	lea    0x0(,%rbx,8),%rbx
+   4462f:	add    %r13,%rbx
+   44632:	lock decq 0x0(%rbp)
+   44637:	jne    44645 <hotaru_core::screen::State::print_ascii+0x2e5>
+   44639:	mov    %rbx,%rdi
+   4463c:	vzeroupper
+   4463f:	call   *0x5c303(%rip)        # a0948 <_DYNAMIC+0x5e0>
+   44645:	mov    %r15,%rbp
+   44648:	mov    %r15,(%rbx)
+   4464b:	mov    %rbp,0x80(%rsp)
+   44653:	lea    0x8(%rbp),%r15
+   44657:	movzbl (%r12),%edi
+   4465c:	cmpb   $0x0,0x40(%rsp)
+   44661:	mov    %edi,0x18(%rsp)
+   44665:	je     44842 <hotaru_core::screen::State::print_ascii+0x4e2>
+   4466b:	cmp    $0xa0,%dil
+   4466f:	mov    0x20(%rsp),%rbp
+   44674:	jl     44872 <hotaru_core::screen::State::print_ascii+0x512>
+   4467a:	lea    0x1(%rbp),%rax
+   4467e:	mov    0xf0(%r14),%rcx
+   44685:	mov    %rcx,0x30(%rsp)
+   4468a:	cmp    %rcx,%rax
+   4468d:	ja     44872 <hotaru_core::screen::State::print_ascii+0x512>
+   44693:	movzbl 0xf(%rsp),%edx
+   44698:	mov    %r15,%rdi
+   4469b:	mov    %rbp,%rsi
+   4469e:	mov    0x18(%rsp),%ecx
+   446a2:	vzeroupper
+   446a5:	call   425d0 <hotaru_core::screen::unicode_batch_boundary>
+   446aa:	mov    $0x1,%ebx
+   446af:	test   %al,%al
+   446b1:	je     44872 <hotaru_core::screen::State::print_ascii+0x512>
+   446b7:	jmp    4497d <hotaru_core::screen::State::print_ascii+0x61d>
+   446bc:	nopl   0x0(%rax)
+   446c0:	mov    0x6ee(%r13),%edx
+   446c7:	movzbl 0xa04(%r13),%ecx
+   446cf:	cmpb   $0x0,0x6df(%r13)
+   446d7:	mov    %r13,%r14
+   446da:	cmovne 0x58(%rsp),%r14
+   446e0:	mov    0x118(%r14),%rax
+   446e7:	test   %rax,%rax
+   446ea:	je     446f6 <hotaru_core::screen::State::print_ascii+0x396>
+   446ec:	lock incq (%rax)
+   446f0:	jle    44ce5 <hotaru_core::screen::State::print_ascii+0x985>
+   446f6:	mov    %edx,0x18(%rsp)
+   446fa:	mov    %cl,0x20(%rsp)
+   446fe:	mov    %rax,0x10(%rsp)
+   44703:	mov    %rax,0x90(%rsp)
+   4470b:	mov    0x90(%r14),%rbp
+   44712:	mov    0xf0(%r14),%rcx
+   44719:	mov    %r15,%rax
+   4471c:	mov    %rcx,0x40(%rsp)
+   44721:	mov    %rcx,%r15
+   44724:	sub    %rbp,%r15
+   44727:	cmp    %rax,%r15
+   4472a:	cmovae %rax,%r15
+   4472e:	mov    %r14,%rdi
+   44731:	call   481b0 <hotaru_core::screen::Screen::row>
+   44736:	mov    %rax,%rbx
+   44739:	lea    (%r15,%rbp,1),%rax
+   4473d:	mov    0x10(%rbx),%rdx
+   44741:	cmp    $0x2,%rbp
+   44745:	jae    447a0 <hotaru_core::screen::State::print_ascii+0x440>
+   44747:	cmp    $0x2,%rax
+   4474b:	mov    $0x2,%esi
+   44750:	cmovb  %rax,%rsi
+   44754:	cmp    %rdx,%rsi
+   44757:	ja     44cbd <hotaru_core::screen::State::print_ascii+0x95d>
+   4475d:	lea    0x0(,%rbp,8),%rcx
+   44765:	mov    0x8(%rbx),%rax
+   44769:	add    %rcx,%rax
+   4476c:	shl    $0x3,%rsi
+   44770:	sub    %rcx,%rsi
+   44773:	data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+   44780:	test   %rsi,%rsi
+   44783:	setne  %r13b
+   44787:	je     44797 <hotaru_core::screen::State::print_ascii+0x437>
+   44789:	add    $0xfffffffffffffff8,%rsi
+   4478d:	cmpb   $0x1,0x6(%rax)
+   44791:	lea    0x8(%rax),%rax
+   44795:	je     44780 <hotaru_core::screen::State::print_ascii+0x420>
+   44797:	test   %rbp,%rbp
+   4479a:	jne    447a3 <hotaru_core::screen::State::print_ascii+0x443>
+   4479c:	xor    %eax,%eax
+   4479e:	jmp    447b8 <hotaru_core::screen::State::print_ascii+0x458>
+   447a0:	xor    %r13d,%r13d
+   447a3:	cmp    %rdx,%rbp
+   447a6:	jae    44d31 <hotaru_core::screen::State::print_ascii+0x9d1>
+   447ac:	mov    0x8(%rbx),%rax
+   447b0:	cmpb   $0x0,0x6(%rax,%rbp,8)
+   447b5:	sete   %al
+   447b8:	movzbl %al,%ecx
+   447bb:	mov    %rbx,%rdi
+   447be:	mov    %rbp,%rsi
+   447c1:	lea    (%r15,%rbp,1),%rdx
+   447c5:	mov    0x18(%rsp),%r8d
+   447ca:	call   3ff40 <hotaru_core::row::Row::prepare_write_with_left>
+   447cf:	mov    %rbx,%rdi
+   447d2:	mov    0x88(%rsp),%rsi
+   447da:	call   413d0 <hotaru_core::row::Row::style_id>
+   447df:	mov    0x10(%rbx),%rdx
+   447e3:	lea    (%r15,%rbp,1),%rsi
+   447e7:	cmp    %rbp,%rsi
+   447ea:	jb     44ccb <hotaru_core::screen::State::print_ascii+0x96b>
+   447f0:	mov    %rsi,0x18(%rsp)
+   447f5:	cmp    %rdx,%rsi
+   447f8:	ja     44cc6 <hotaru_core::screen::State::print_ascii+0x966>
+   447fe:	cmp    %rbp,0x40(%rsp)
+   44803:	je     44bf4 <hotaru_core::screen::State::print_ascii+0x894>
+   44809:	mov    0x8(%rbx),%rsi
+   4480d:	lea    (%rsi,%rbp,8),%rcx
+   44811:	movzbl 0x20(%rsp),%edx
+   44816:	shl    $0x38,%rdx
+   4481a:	movzwl %ax,%eax
+   4481d:	shl    $0x20,%rax
+   44821:	or     %rdx,%rax
+   44824:	movabs $0x1000000000000,%rdx
+   4482e:	or     %rdx,%rax
+   44831:	cmp    $0x4,%r15
+   44835:	jae    448cb <hotaru_core::screen::State::print_ascii+0x56b>
+   4483b:	xor    %edx,%edx
+   4483d:	jmp    44be0 <hotaru_core::screen::State::print_ascii+0x880>
+   44842:	vzeroupper
+   44845:	call   41e90 <hotaru_core::screen::char_width>
+   4484a:	mov    0x20(%rsp),%rbp
+   4484f:	mov    %rax,%rbx
+   44852:	test   %rax,%rax
+   44855:	je     44872 <hotaru_core::screen::State::print_ascii+0x512>
+   44857:	mov    %rbx,%rax
+   4485a:	add    %rbp,%rax
+   4485d:	mov    0xf0(%r14),%rcx
+   44864:	mov    %rcx,0x30(%rsp)
+   44869:	cmp    %rcx,%rax
+   4486c:	jbe    4497d <hotaru_core::screen::State::print_ascii+0x61d>
+   44872:	mov    %rbp,0x90(%r14)
+   44879:	mov    $0x110000,%ebx
+   4487e:	xor    %r15d,%r15d
+   44881:	mov    %r14,%rdi
+   44884:	vzeroupper
+   44887:	call   47590 <hotaru_core::screen::Screen::enforce_budget>
+   4488c:	cmp    $0x110000,%ebx
+   44892:	mov    0x50(%rsp),%r13
+   44897:	je     448a0 <hotaru_core::screen::State::print_ascii+0x540>
+   44899:	mov    %ebx,0x6d0(%r13)
+   448a0:	mov    0x10(%rsp),%rax
+   448a5:	test   %rax,%rax
+   448a8:	je     448bb <hotaru_core::screen::State::print_ascii+0x55b>
+   448aa:	lock decq (%rax)
+   448ae:	jne    448bb <hotaru_core::screen::State::print_ascii+0x55b>
+   448b0:	lea    0x48(%rsp),%rdi
+   448b5:	call   *0x5c03d(%rip)        # a08f8 <_DYNAMIC+0x590>
+   448bb:	cmp    0x28(%rsp),%r15
+   448c0:	jbe    44423 <hotaru_core::screen::State::print_ascii+0xc3>
+   448c6:	jmp    44ca5 <hotaru_core::screen::State::print_ascii+0x945>
+   448cb:	vmovq  %rax,%xmm0
+   448d0:	cmp    $0x10,%r15
+   448d4:	jae    448da <hotaru_core::screen::State::print_ascii+0x57a>
+   448d6:	xor    %edx,%edx
+   448d8:	jmp    4494e <hotaru_core::screen::State::print_ascii+0x5ee>
+   448da:	mov    %r15,%rdx
+   448dd:	and    $0xfffffffffffffff0,%rdx
+   448e1:	vpbroadcastq %xmm0,%ymm1
+   448e6:	lea    (%rsi,%rbp,8),%rsi
+   448ea:	add    $0x60,%rsi
+   448ee:	xor    %edi,%edi
+   448f0:	vpmovzxbq (%r12,%rdi,1),%ymm2
+   448f6:	vpmovzxbq 0x4(%r12,%rdi,1),%ymm3
+   448fd:	vpmovzxbq 0x8(%r12,%rdi,1),%ymm4
+   44904:	vpmovzxbq 0xc(%r12,%rdi,1),%ymm5
+   4490b:	vpor   %ymm2,%ymm1,%ymm2
+   4490f:	vpor   %ymm3,%ymm1,%ymm3
+   44913:	vpor   %ymm4,%ymm1,%ymm4
+   44917:	vpor   %ymm5,%ymm1,%ymm5
+   4491b:	vmovdqu %ymm2,-0x60(%rsi,%rdi,8)
+   44921:	vmovdqu %ymm3,-0x40(%rsi,%rdi,8)
+   44927:	vmovdqu %ymm4,-0x20(%rsi,%rdi,8)
+   4492d:	vmovdqu %ymm5,(%rsi,%rdi,8)
+   44932:	add    $0x10,%rdi
+   44936:	cmp    %rdi,%rdx
+   44939:	jne    448f0 <hotaru_core::screen::State::print_ascii+0x590>
+   4493b:	cmp    %rdx,%r15
+   4493e:	je     44bf4 <hotaru_core::screen::State::print_ascii+0x894>
+   44944:	test   $0xc,%r15b
+   44948:	je     44be0 <hotaru_core::screen::State::print_ascii+0x880>
+   4494e:	mov    %rdx,%rsi
+   44951:	mov    %r15,%rdx
+   44954:	and    $0xfffffffffffffffc,%rdx
+   44958:	vpbroadcastq %xmm0,%ymm0
+   4495d:	nopl   (%rax)
+   44960:	vpmovzxbq (%r12,%rsi,1),%ymm1
+   44966:	vpor   %ymm1,%ymm0,%ymm1
+   4496a:	vmovdqu %ymm1,(%rcx,%rsi,8)
+   4496f:	add    $0x4,%rsi
+   44973:	cmp    %rsi,%rdx
+   44976:	jne    44960 <hotaru_core::screen::State::print_ascii+0x600>
+   44978:	jmp    44bef <hotaru_core::screen::State::print_ascii+0x88f>
+   4497d:	cmp    $0x1,%rbp
+   44981:	ja     449b3 <hotaru_core::screen::State::print_ascii+0x653>
+   44983:	mov    0x80(%rsp),%rax
+   4498b:	mov    0x18(%rax),%rsi
+   4498f:	cmp    %rsi,%rbp
+   44992:	jae    44d65 <hotaru_core::screen::State::print_ascii+0xa05>
+   44998:	mov    0x10(%rax),%rax
+   4499c:	movzbl 0x6(%rax,%rbp,8),%eax
+   449a1:	cmp    $0x1,%rax
+   449a5:	setne  %cl
+   449a8:	cmp    %eax,%ebx
+   449aa:	setne  %r13b
+   449ae:	and    %cl,%r13b
+   449b1:	jmp    449b6 <hotaru_core::screen::State::print_ascii+0x656>
+   449b3:	xor    %r13d,%r13d
+   449b6:	mov    0x68(%rsp),%rax
+   449bb:	mov    0x6e(%rsp),%rcx
+   449c0:	mov    %rcx,0x96(%rsp)
+   449c8:	mov    %rax,0x90(%rsp)
+   449d0:	movzbl 0x38(%rsp),%r9d
+   449d6:	mov    %r15,%rdi
+   449d9:	mov    %rbp,%rsi
+   449dc:	mov    0x18(%rsp),%edx
+   449e0:	mov    %rbx,%rcx
+   449e3:	lea    0x90(%rsp),%r8
+   449eb:	mov    %r9d,0x64(%rsp)
+   449f0:	call   403b0 <hotaru_core::row::Row::put>
+   449f5:	add    %rbp,%rbx
+   449f8:	cmpq   $0x0,0x10(%rsp)
+   449fe:	je     44a13 <hotaru_core::screen::State::print_ascii+0x6b3>
+   44a00:	mov    %r15,%rdi
+   44a03:	mov    %rbp,%rsi
+   44a06:	mov    %rbx,%rdx
+   44a09:	lea    0x48(%rsp),%rcx
+   44a0e:	call   3fc20 <hotaru_core::row::Row::set_hyperlink_range>
+   44a13:	mov    %r15,0x38(%rsp)
+   44a18:	mov    $0x1,%r15d
+   44a1e:	cmp    0x30(%rsp),%rbx
+   44a23:	jne    44a3a <hotaru_core::screen::State::print_ascii+0x6da>
+   44a25:	movb   $0x1,0x12f(%r14)
+   44a2d:	mov    0x30(%rsp),%rbx
+   44a32:	dec    %rbx
+   44a35:	jmp    44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44a3a:	cmpq   $0x1,0x28(%rsp)
+   44a40:	je     44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44a46:	cs nopw 0x0(%rax,%rax,1)
+   44a50:	movzbl (%r12,%r15,1),%r8d
+   44a55:	cmpb   $0x0,0x40(%rsp)
+   44a5a:	mov    %r8d,0x20(%rsp)
+   44a5f:	je     44ab0 <hotaru_core::screen::State::print_ascii+0x750>
+   44a61:	xor    %eax,%eax
+   44a63:	cmp    $0xa0,%r8b
+   44a67:	setge  %cl
+   44a6a:	jl     44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44a70:	mov    %cl,%al
+   44a72:	add    %rbx,%rax
+   44a75:	cmp    0x30(%rsp),%rax
+   44a7a:	ja     44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44a80:	movzbl 0xf(%rsp),%edx
+   44a85:	mov    0x38(%rsp),%rdi
+   44a8a:	mov    %rbx,%rsi
+   44a8d:	mov    %r8d,%ecx
+   44a90:	call   425d0 <hotaru_core::screen::unicode_batch_boundary>
+   44a95:	mov    $0x1,%ebp
+   44a9a:	test   %al,%al
+   44a9c:	jne    44ad5 <hotaru_core::screen::State::print_ascii+0x775>
+   44a9e:	jmp    44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44aa3:	data16 data16 data16 cs nopw 0x0(%rax,%rax,1)
+   44ab0:	mov    %r8d,%edi
+   44ab3:	call   41e90 <hotaru_core::screen::char_width>
+   44ab8:	mov    %rax,%rbp
+   44abb:	test   %rax,%rax
+   44abe:	je     44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44ac4:	mov    %rbp,%rax
+   44ac7:	add    %rbx,%rax
+   44aca:	cmp    0x30(%rsp),%rax
+   44acf:	ja     44ba8 <hotaru_core::screen::State::print_ascii+0x848>
+   44ad5:	cmp    $0x1,%rbx
+   44ad9:	ja     44b10 <hotaru_core::screen::State::print_ascii+0x7b0>
+   44adb:	mov    0x80(%rsp),%rax
+   44ae3:	mov    0x18(%rax),%rsi
+   44ae7:	cmp    %rsi,%rbx
+   44aea:	jae    44d60 <hotaru_core::screen::State::print_ascii+0xa00>
+   44af0:	mov    0x10(%rax),%rax
+   44af4:	movzbl 0x6(%rax,%rbx,8),%eax
+   44af9:	cmp    $0x1,%rax
+   44afd:	setne  %cl
+   44b00:	cmp    %eax,%ebp
+   44b02:	setne  %al
+   44b05:	and    %cl,%al
+   44b07:	mov    %eax,0x18(%rsp)
+   44b0b:	jmp    44b18 <hotaru_core::screen::State::print_ascii+0x7b8>
+   44b0d:	nopl   (%rax)
+   44b10:	movl   $0x0,0x18(%rsp)
+   44b18:	mov    0x68(%rsp),%rax
+   44b1d:	mov    0x6e(%rsp),%rcx
+   44b22:	mov    %rcx,0x96(%rsp)
+   44b2a:	mov    %rax,0x90(%rsp)
+   44b32:	mov    0x38(%rsp),%rdi
+   44b37:	mov    %rbx,%rsi
+   44b3a:	mov    0x20(%rsp),%edx
+   44b3e:	mov    %rbp,%rcx
+   44b41:	lea    0x90(%rsp),%r8
+   44b49:	mov    0x64(%rsp),%r9d
+   44b4e:	call   403b0 <hotaru_core::row::Row::put>
+   44b53:	add    %rbx,%rbp
+   44b56:	cmpq   $0x0,0x10(%rsp)
+   44b5c:	je     44b73 <hotaru_core::screen::State::print_ascii+0x813>
+   44b5e:	mov    0x38(%rsp),%rdi
+   44b63:	mov    %rbx,%rsi
+   44b66:	mov    %rbp,%rdx
+   44b69:	lea    0x48(%rsp),%rcx
+   44b6e:	call   3fc20 <hotaru_core::row::Row::set_hyperlink_range>
+   44b73:	or     0x18(%rsp),%r13b
+   44b78:	and    $0x1,%r13b
+   44b7c:	cmp    0x30(%rsp),%rbp
+   44b81:	je     44bcf <hotaru_core::screen::State::print_ascii+0x86f>
+   44b83:	inc    %r15
+   44b86:	mov    %rbp,%rbx
+   44b89:	mov    0x20(%rsp),%eax
+   44b8d:	mov    %eax,0x18(%rsp)
+   44b91:	cmp    %r15,0x28(%rsp)
+   44b96:	jne    44a50 <hotaru_core::screen::State::print_ascii+0x6f0>
+   44b9c:	mov    %eax,0x18(%rsp)
+   44ba0:	mov    %rbp,%rbx
+   44ba3:	mov    0x28(%rsp),%r15
+   44ba8:	mov    %rbx,0x90(%r14)
+   44baf:	test   $0x1,%r13b
+   44bb3:	je     44bc6 <hotaru_core::screen::State::print_ascii+0x866>
+   44bb5:	mov    %r14,%rdi
+   44bb8:	call   476b0 <hotaru_core::screen::Screen::clear_previous_spacer>
+   44bbd:	mov    0x18(%rsp),%ebx
+   44bc1:	jmp    44881 <hotaru_core::screen::State::print_ascii+0x521>
+   44bc6:	mov    0x18(%rsp),%ebx
+   44bca:	jmp    44881 <hotaru_core::screen::State::print_ascii+0x521>
+   44bcf:	inc    %r15
+   44bd2:	mov    0x20(%rsp),%eax
+   44bd6:	mov    %eax,0x18(%rsp)
+   44bda:	jmp    44a25 <hotaru_core::screen::State::print_ascii+0x6c5>
+   44bdf:	nop
+   44be0:	movzbl (%r12,%rdx,1),%esi
+   44be5:	or     %rax,%rsi
+   44be8:	mov    %rsi,(%rcx,%rdx,8)
+   44bec:	inc    %rdx
+   44bef:	cmp    %rdx,%r15
+   44bf2:	jne    44be0 <hotaru_core::screen::State::print_ascii+0x880>
+   44bf4:	cmpq   $0x0,0x10(%rsp)
+   44bfa:	je     44c17 <hotaru_core::screen::State::print_ascii+0x8b7>
+   44bfc:	mov    %rbx,%rdi
+   44bff:	mov    %rbp,%rsi
+   44c02:	mov    0x18(%rsp),%rdx
+   44c07:	lea    0x90(%rsp),%rcx
+   44c0f:	vzeroupper
+   44c12:	call   3fc20 <hotaru_core::row::Row::set_hyperlink_range>
+   44c17:	test   %r13b,%r13b
+   44c1a:	je     44c27 <hotaru_core::screen::State::print_ascii+0x8c7>
+   44c1c:	mov    %r14,%rdi
+   44c1f:	vzeroupper
+   44c22:	call   476b0 <hotaru_core::screen::Screen::clear_previous_spacer>
+   44c27:	mov    0x18(%rsp),%rcx
+   44c2c:	mov    %rcx,0x90(%r14)
+   44c33:	mov    0x40(%rsp),%rax
+   44c38:	cmp    %rax,%rcx
+   44c3b:	jne    44c4f <hotaru_core::screen::State::print_ascii+0x8ef>
+   44c3d:	dec    %rax
+   44c40:	mov    %rax,0x90(%r14)
+   44c47:	movb   $0x1,0x12f(%r14)
+   44c4f:	mov    %r14,%rdi
+   44c52:	vzeroupper
+   44c55:	call   47590 <hotaru_core::screen::Screen::enforce_budget>
+   44c5a:	lea    -0x1(%r15),%rdi
+   44c5e:	cmp    0x28(%rsp),%rdi
+   44c63:	jae    44d18 <hotaru_core::screen::State::print_ascii+0x9b8>
+   44c69:	movzbl (%r12,%rdi,1),%eax
+   44c6e:	mov    0x50(%rsp),%r13
+   44c73:	mov    %eax,0x6d0(%r13)
+   44c7a:	mov    0x10(%rsp),%rax
+   44c7f:	test   %rax,%rax
+   44c82:	je     44423 <hotaru_core::screen::State::print_ascii+0xc3>
+   44c88:	lock decq (%rax)
+   44c8c:	jne    44423 <hotaru_core::screen::State::print_ascii+0xc3>
+   44c92:	lea    0x90(%rsp),%rdi
+   44c9a:	call   *0x5bc58(%rip)        # a08f8 <_DYNAMIC+0x590>
+   44ca0:	jmp    44423 <hotaru_core::screen::State::print_ascii+0xc3>
+   44ca5:	lea    0x58fec(%rip),%rcx        # 9dc98 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x658>
+   44cac:	mov    %r15,%rdi
+   44caf:	mov    0x28(%rsp),%rdx
+   44cb4:	mov    %rdx,%rsi
+   44cb7:	call   *0x5ba3b(%rip)        # a06f8 <_DYNAMIC+0x390>
+   44cbd:	lea    0x58fbc(%rip),%rcx        # 9dc80 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x640>
+   44cc4:	jmp    44cd2 <hotaru_core::screen::State::print_ascii+0x972>
+   44cc6:	mov    0x18(%rsp),%rsi
+   44ccb:	lea    0x58f96(%rip),%rcx        # 9dc68 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x628>
+   44cd2:	mov    %rbp,%rdi
+   44cd5:	mov    0x10(%rsp),%rbx
+   44cda:	call   *0x5ba18(%rip)        # a06f8 <_DYNAMIC+0x390>
+   44ce0:	jmp    44d77 <hotaru_core::screen::State::print_ascii+0xa17>
+   44ce5:	call   *0x5bbfd(%rip)        # a08e8 <_DYNAMIC+0x580>
+   44ceb:	lea    -0x38071(%rip),%rdi        # cc81 <hotaru_core::unicode::BREAKS+0x214d>
+   44cf2:	lea    0x5908f(%rip),%rdx        # 9dd88 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x748>
+   44cf9:	mov    $0x14,%esi
+   44cfe:	call   *0x5ba2c(%rip)        # a0730 <_DYNAMIC+0x3c8>
+   44d04:	jmp    44d77 <hotaru_core::screen::State::print_ascii+0xa17>
+   44d06:	mov    $0x8,%edi
+   44d0b:	mov    $0x78,%esi
+   44d10:	call   *0x5b8da(%rip)        # a05f0 <_DYNAMIC+0x288>
+   44d16:	jmp    44d77 <hotaru_core::screen::State::print_ascii+0xa17>
+   44d18:	lea    0x58f31(%rip),%rdx        # 9dc50 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x610>
+   44d1f:	mov    0x28(%rsp),%rsi
+   44d24:	mov    0x10(%rsp),%rbx
+   44d29:	call   *0x5b879(%rip)        # a05a8 <_DYNAMIC+0x240>
+   44d2f:	jmp    44d77 <hotaru_core::screen::State::print_ascii+0xa17>
+   44d31:	lea    0x58a68(%rip),%rax        # 9d7a0 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x160>
+   44d38:	mov    %rbp,%rdi
+   44d3b:	mov    %rdx,%rsi
+   44d3e:	mov    %rax,%rdx
+   44d41:	mov    0x10(%rsp),%rbx
+   44d46:	call   *0x5b85c(%rip)        # a05a8 <_DYNAMIC+0x240>
+   44d4c:	jmp    44d77 <hotaru_core::screen::State::print_ascii+0xa17>
+   44d4e:	lea    0x58ee3(%rip),%rdx        # 9dc38 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x5f8>
+   44d55:	mov    $0x4,%esi
+   44d5a:	call   *0x5b848(%rip)        # a05a8 <_DYNAMIC+0x240>
+   44d60:	mov    %rbx,0x20(%rsp)
+   44d65:	lea    0x59034(%rip),%rdx        # 9dda0 <anon.8cfae0649b24339a7c6ff37f2bd6b634.1766.llvm.13263554319387139704+0x760>
+   44d6c:	mov    0x20(%rsp),%rdi
+   44d71:	call   *0x5b831(%rip)        # a05a8 <_DYNAMIC+0x240>
+   44d77:	ud2
+   44d79:	mov    0x10(%rsp),%rcx
+   44d7e:	jmp    44dba <hotaru_core::screen::State::print_ascii+0xa5a>
+   44d80:	mov    0x10(%rsp),%rcx
+   44d85:	jmp    44dba <hotaru_core::screen::State::print_ascii+0xa5a>
+   44d87:	jmp    44db0 <hotaru_core::screen::State::print_ascii+0xa50>
+   44d89:	jmp    44db0 <hotaru_core::screen::State::print_ascii+0xa50>
+   44d8b:	mov    0x10(%rsp),%rbx
+   44d90:	jmp    44dc7 <hotaru_core::screen::State::print_ascii+0xa67>
+   44d92:	jmp    44db0 <hotaru_core::screen::State::print_ascii+0xa50>
+   44d94:	mov    0x10(%rsp),%rbx
+   44d99:	jmp    44dc2 <hotaru_core::screen::State::print_ascii+0xa62>
+   44d9b:	mov    %rax,%rbx
+   44d9e:	lea    0x98(%rsp),%rdi
+   44da6:	call   4cee0 <core::ptr::drop_in_place<hotaru_core::row::Row>>
+   44dab:	mov    %rbx,%rax
+   44dae:	jmp    44db0 <hotaru_core::screen::State::print_ascii+0xa50>
+   44db0:	mov    0x10(%rsp),%rcx
+   44db5:	test   %rcx,%rcx
+   44db8:	je     44df0 <hotaru_core::screen::State::print_ascii+0xa90>
+   44dba:	lock decq (%rcx)
+   44dbe:	je     44dda <hotaru_core::screen::State::print_ascii+0xa7a>
+   44dc0:	jmp    44df0 <hotaru_core::screen::State::print_ascii+0xa90>
+   44dc2:	test   %rbx,%rbx
+   44dc5:	je     44df0 <hotaru_core::screen::State::print_ascii+0xa90>
+   44dc7:	lock decq (%rbx)
+   44dcb:	lea    0x90(%rsp),%rcx
+   44dd3:	mov    %rcx,0x78(%rsp)
+   44dd8:	jne    44df0 <hotaru_core::screen::State::print_ascii+0xa90>
+   44dda:	mov    0x78(%rsp),%rdi
+   44ddf:	mov    %rax,%rbx
+   44de2:	call   *0x5bb10(%rip)        # a08f8 <_DYNAMIC+0x590>
+   44de8:	mov    %rbx,%rdi
+   44deb:	call   9c1b0 <_Unwind_Resume@plt>
+   44df0:	mov    %rax,%rdi
+   44df3:	call   9c1b0 <_Unwind_Resume@plt>
+   44df8:	int3
+   44df9:	int3
+   44dfa:	int3
+   44dfb:	int3
+   44dfc:	int3
+   44dfd:	int3
+   44dfe:	int3
+   44dff:	int3
+

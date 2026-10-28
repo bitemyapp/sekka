@@ -819,9 +819,12 @@ impl State {
             // Repair only boundary-wide cells; the interior is fully replaced.
             row.prepare_write(col, col + count, style);
             let id = row.style_id(style);
-            for (cell, &byte) in row.cells[col..col + count].iter_mut().zip(&bytes[..count]) {
-                *cell = Cell::new(byte as char, id, 1).protected(protected);
-            }
+            Cell::write_ascii(
+                &mut row.cells[col..col + count],
+                &bytes[..count],
+                id,
+                protected,
+            );
             if let Some(link) = &link {
                 row.set_hyperlink_range(col..col + count, Some(link));
             }
