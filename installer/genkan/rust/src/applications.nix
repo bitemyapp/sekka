@@ -26,6 +26,16 @@ let
     ai = import ../../../../nix/ai-packages.nix aiPackages;
     sekka = sekkaPackages;
   };
+  availableCatalog = import ../../../../apps/yukimi/nix/catalog.nix {
+    inherit lib;
+    inherit (pkgs.stdenv) hostPlatform;
+    packagesFor =
+      app:
+      if (app.source or "nixpkgs") == "omp" then
+        [ ompPackage ]
+      else
+        map (name: (sources.${app.source or "nixpkgs"} or applicationPkgs).${name} or null) app.packages;
+  } catalog;
   # Chromium and Electron apps use GNOME Keyring in every desktop but Plasma.
   withKeyring = import ./keyring.nix {
     inherit lib;
@@ -56,9 +66,11 @@ let
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
   # workflows invoke it as `zed`. Expose the expected command whenever the
   # editor is selected in the installer.
-  zedCli = lib.optional (has "zed") (pkgs.writeShellScriptBin "zed" ''
-    exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
-  '');
+  zedCli = lib.optional (has "zed") (
+    pkgs.writeShellScriptBin "zed" ''
+      exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
+    ''
+  );
   launchers = map (
     app:
     pkgs.makeDesktopItem {
@@ -112,7 +124,7 @@ in
       config = lib.optionalAttrs (options ? programs.yukimi.catalogs) {
         programs.yukimi.catalogs = [
           {
-            file = ./applications.json;
+            file = builtins.toFile "installer-application-catalog.json" (builtins.toJSON availableCatalog);
             setting = "calamares.applications";
             title = "Apps chosen when installing";
           }

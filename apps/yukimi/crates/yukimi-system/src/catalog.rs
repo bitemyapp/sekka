@@ -16,7 +16,7 @@
 //! 32-bit graphics drivers its program switches on.
 use serde::Deserialize;
 
-use crate::setup::CatalogSource;
+use crate::setup::{CatalogSource, Facts};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Application {
@@ -41,6 +41,9 @@ pub struct Application {
     /// Other applications this one selects too.
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Why this system's package sources cannot install it, when known.
+    #[serde(default)]
+    pub unavailable: Option<String>,
     /// For applications from a system's catalog, the setting that installs
     /// them, such as `calamares.applications`.
     #[serde(skip)]
@@ -97,6 +100,22 @@ pub fn parse(text: &str) -> Option<Vec<Application>> {
 /// keeps that program, and what it needs: the system's setting installs
 /// Steam, and Steam still can't be installed as its package alone.
 pub fn load(sources: &[CatalogSource]) -> Vec<Application> {
+    merge(own(), sources)
+}
+
+/// Prefer metadata resolved by the running system's Nix modules. Older systems
+/// keep the embedded catalog until their next successful system update.
+pub fn for_system(facts: &Facts) -> Vec<Application> {
+    let own = facts
+        .own_catalog
+        .as_ref()
+        .and_then(|file| std::fs::read_to_string(file).ok())
+        .and_then(|text| parse(&text))
+        .unwrap_or_else(own);
+    merge(own, &facts.catalogs)
+}
+
+fn merge(own: Vec<Application>, sources: &[CatalogSource]) -> Vec<Application> {
     let mut theirs: Vec<Application> = Vec::new();
     for source in sources {
         let setting = source.setting.clone();
@@ -113,7 +132,6 @@ pub fn load(sources: &[CatalogSource]) -> Vec<Application> {
     let same = |a: &Application, b: &Application| {
         a.name.eq_ignore_ascii_case(&b.name) || (!a.packages.is_empty() && a.packages.first() == b.packages.first())
     };
-    let own = own();
     for app in theirs.iter_mut().filter(|a| a.program.is_none()) {
         if let Some(mine) = own.iter().find(|mine| mine.program.is_some() && same(mine, app)) {
             app.program = mine.program.clone();
@@ -124,6 +142,47 @@ pub fn load(sources: &[CatalogSource]) -> Vec<Application> {
     // The system's applications come first: someone chose to offer them.
     theirs.append(&mut all);
     theirs
+}
+
+/// Refuse new unavailable selections before the helper writes configuration.
+/// Existing selections may be removed, including after their source disappears.
+pub fn validate_selection(
+    apps: &[Application],
+    setting: &str,
+    previous: &[String],
+    requested: &[String],
+) -> Result<(), String> {
+    for id in requested.iter().filter(|id| !previous.contains(id)) {
+        let app = apps
+            .iter()
+            .find(|a| a.id == *id && a.setting.as_deref() == Some(setting))
+            .ok_or_else(|| format!("{id} isn't an application offered through {setting}"))?;
+        if let Some(reason) = &app.unavailable {
+            return Err(format!("{}: {reason}", app.name));
+        }
+    }
+    Ok(())
+}
+
+/// The embedded catalog installs packages/programs directly, without a setting.
+pub fn validate_standalone(
+    apps: &[Application],
+    previous: &yukimi_config::packages::Choices,
+    requested: &yukimi_config::packages::Choices,
+) -> Result<(), String> {
+    for app in apps.iter().filter(|a| a.setting.is_none()) {
+        let added_program =
+            app.program.as_ref().is_some_and(|p| requested.programs.contains(p) && !previous.programs.contains(p));
+        let added_packages = !app.packages.is_empty()
+            && app.packages.iter().all(|p| requested.packages.contains(p))
+            && app.packages.iter().any(|p| !previous.packages.contains(p));
+        if (added_program || added_packages)
+            && let Some(reason) = &app.unavailable
+        {
+            return Err(format!("{}: {reason}", app.name));
+        }
+    }
+    Ok(())
 }
 
 /// Whether an id is one Yukimi will write into the configuration.
@@ -249,5 +308,52 @@ mod tests {
         assert_eq!(found("editor"), ["zed"]);
         assert!(found("eam").is_empty(), "not at the start of a word");
         assert!(found("s").is_empty() && found("  ").is_empty());
+    }
+
+    #[test]
+    fn unavailable_catalog_entries_override_installable_defaults_and_remain_removable() {
+        let apps = with_system_catalog(
+            "unavailable",
+            r#"[{"id":"discord","name":"Discord","description":"Chat.","category":"Communication",
+                 "packages":["discord"],"unavailable":"Not available for aarch64-linux."}]"#,
+        );
+        let discord = apps.iter().find(|a| a.id == "discord").unwrap();
+        assert!(discord.unavailable.as_ref().unwrap().contains("aarch64-linux"));
+        assert_eq!(apps.iter().filter(|a| a.id == "discord").count(), 1);
+        let requested = vec!["discord".into()];
+        assert!(validate_selection(&apps, "calamares.applications", &[], &requested).unwrap_err().contains("Discord"));
+        assert!(validate_selection(&apps, "calamares.applications", &requested, &requested).is_ok());
+        assert!(validate_selection(&apps, "calamares.applications", &requested, &[]).is_ok());
+        assert!(validate_selection(&apps, "another.setting", &[], &requested).is_err());
+        assert!(validate_selection(&apps, "calamares.applications", &[], &["unknown".into()]).is_err());
+    }
+
+    #[test]
+    fn system_resolved_own_catalog_blocks_packages_and_programs() {
+        use yukimi_config::packages::Choices;
+        let dir = std::env::temp_dir().join(format!("yukimi-own-catalog-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("own.json");
+        std::fs::write(
+            &file,
+            r#"[
+            {"id":"discord","name":"Discord","description":"Chat.","category":"Communication",
+             "packages":["discord"],"unavailable":"Not available for aarch64-linux."},
+            {"id":"steam","name":"Steam","description":"Games.","category":"Games",
+             "program":"steam","unavailable":"A dependency is unavailable."}]
+        "#,
+        )
+        .unwrap();
+        let apps = for_system(&Facts { own_catalog: Some(file.to_string_lossy().into_owned()), ..Facts::default() });
+        let _ = std::fs::remove_dir_all(dir);
+        let before = Choices::default();
+        let packages = Choices { packages: vec!["discord".into()], ..Choices::default() };
+        let programs = Choices { programs: vec!["steam".into()], ..Choices::default() };
+        assert!(validate_standalone(&apps, &before, &packages).unwrap_err().contains("Discord"));
+        assert!(validate_standalone(&apps, &before, &programs).unwrap_err().contains("Steam"));
+        assert!(validate_standalone(&apps, &packages, &packages).is_ok());
+        assert!(validate_standalone(&apps, &programs, &before).is_ok());
+        // Older systems retain the embedded catalog and its schema.
+        assert_eq!(for_system(&Facts::default()), own());
     }
 }

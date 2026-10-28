@@ -40,8 +40,10 @@ rec {
   # The catalog's applications from this flake (source "sekka"): its own, and
   # those other flakes package, built with the applications' Nixpkgs.
   catalog.packages.${system} = kakehashi.packages.${system} // {
-    superluminal = superluminal.packages.${system}.default;
-    tracy = tracy.packages.${system}.tracy;
+    # Some upstream flakes have no output for a target (Superluminal on ARM).
+    # Let the catalog report that absence without evaluating a missing attribute.
+    superluminal = superluminal.packages.${system}.default or null;
+    tracy = tracy.packages.${system}.tracy or null;
   };
   calamares = {
     outPath = ../installer/genkan;

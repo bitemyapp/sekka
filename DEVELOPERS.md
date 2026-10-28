@@ -1227,6 +1227,20 @@ step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
 same.
 
+Yukimi's own catalog and Genkan's catalog record availability against the
+target system and the package source each entry actually installs from. The
+shared resolver in `apps/yukimi/nix/catalog.nix` checks platform metadata,
+broken packages, missing packages and required applications, and instantiates
+otherwise supported packages to catch unsupported dependencies in wrappers.
+It neither builds the applications nor enables unsupported packages. Both
+interfaces keep unavailable cards visible with a reason; the helper refuses
+new unavailable catalog selections before editing configuration, while allowing
+existing entries to be removed. Older system metadata retains its previous
+catalog behavior until the next successful system update.
+`checks.x86_64-linux.application-platforms` checks both x86 and ARM Linux
+catalogs, including Discord and Steam, without building their applications.
+This is component evaluation coverage, not an ISO or hardware qualification.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

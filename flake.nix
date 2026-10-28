@@ -349,6 +349,7 @@
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
+        application-platforms = import ./nix/yukimi-catalog-test.nix { inherit pkgs inputs; };
         application-cache = applicationCatalog.cache;
         live-profiles =
           let

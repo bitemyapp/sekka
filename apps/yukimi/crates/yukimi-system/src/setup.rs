@@ -23,6 +23,8 @@ pub struct Facts {
     pub nixpkgs: Option<String>,
     /// The system accepts unfree packages.
     pub allow_unfree: Option<bool>,
+    /// Yukimi's own catalog, resolved against this system's package set.
+    pub own_catalog: Option<String>,
     /// The directory the configuration is in, when it isn't `/etc/nixos`.
     pub configuration: Option<String>,
     /// Applications to offer besides Yukimi's own.
