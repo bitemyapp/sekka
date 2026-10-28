@@ -95,6 +95,16 @@ impl Headless {
         };
         state.az.shm.update_formats(formats);
         if let (HeadlessRenderer::Gles(r), Some(node)) = (&mut h.renderer, h.render_node) {
+            // A render-node-only compositor has real GPU fences too. This
+            // also lets protocol tests exercise NVIDIA without taking a VT.
+            if let Some(path) = node.dev_path()
+                && let Ok(file) = std::fs::OpenOptions::new().read(true).write(true).open(path)
+            {
+                crate::explicit_sync::init(
+                    &mut state.az,
+                    DrmDeviceFd::new(DeviceFd::from(std::os::fd::OwnedFd::from(file))),
+                );
+            }
             let formats = r.dmabuf_formats();
             match DmabufFeedbackBuilder::new(node.dev_id(), formats).build() {
                 Ok(feedback) => {

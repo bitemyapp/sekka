@@ -68,6 +68,7 @@ Protocol version: **1** (`version` reports it).
 | `screenshot` | `output?`, `path?`, `window?`, `area? {x,y,w,h}`, `clipboard` (bool) | `screenshot {path}`; PNG of one output, a window (with its tab, frame and shadow), an area, or (none given) every output side by side; default path `~/Pictures/Screenshots/Screenshot YYYY-MM-DD at HH.MM.SS.png`; also emits `screenshot-taken` |
 | `reload-config` | | `ok`; re-reads `settings.toml`, applies it, emits `config-changed` |
 | `output-config` | `name`, `mode?` (`"WxH"` or `"WxH@Hz"`), `scale?`, `position? [x,y]`, `transform?`, `enabled?` | `ok`; for this session (Settings writes the file). `enabled: false` turns the output off (its CRTC disabled on udev; out of the layout, its Desk out of sight, or on the main display when it had the focus); `true` turns it on again, at `position` or right of the others, with its Desk back |
+| `output-vrr` | `name`, `mode` (`off`, `fullscreen`, `always`) | `ok`; adaptive-sync policy for this session. Enabling it on an unsupported or disabled output is an error. Settings previews and persists it as `[[outputs]] vrr` |
 | `stats` | `reset` (bool) | `stats {stats}`: frame times per output, and `logic` (the build running, where from, reloads, rollbacks, the last error) |
 | `reload` | `logic`, `shell` (bools), `from?` (a logic library), `shell_from?` (a shell binary), `check` | `reload {report}`: `logic`, `shell`, `settings` and `core`, each an `action` (`reloaded`, `restarted`, `unchanged`, `would-reload`, `refused`, `failed`, `skipped`, and for `core` `same` or `needs-restart`) and a `detail`. With none of `logic`, `shell`, `from`, `shell_from`: whatever changed since it was loaded. Emits `reloaded` (`docs/reload.md`) |
 | `quit` | | `ok`; ends the session |
@@ -224,7 +225,11 @@ refresh (mHz), preferred}`, `modes`, `scale`, `transform`, `logical {x,y,w,h}`
 in the settings or `set-primary-output`, else the first in the layout; the
 Deskbar's, and where windows rescued from outputs that go end up),
 `mirror` (the output whose picture it shows; `logical` and `usable` are then
-the source's), `gamma` (it takes gamma ramps, so Night Light shows).
+the source's), `gamma` (it takes gamma ramps, so Night Light shows),
+`vrr_supported` (GLES/KMS adaptive sync is available), `vrr_enabled`
+(the backend's current requested state), and `vrr` (the configured policy).
+`aizomectl outputs` shows capability, policy and active state;
+`aizomectl output-vrr DP-1 fullscreen` changes the policy for this session.
 `enabled: false` outputs (turned off with `output-config` or `enabled =
 false` in the settings) are listed so they can be turned on again; they
 have no place in the layout.

@@ -96,6 +96,11 @@ impl State {
             az.settings.output(&o.name(), &props.make, &props.model, &serial).cloned()
         };
         for o in self.az.known_outputs() {
+            let vrr = entry(&self.az, &o).map(|c| c.vrr).unwrap_or_default();
+            if let Some(out) = self.az.out.get_mut(&o) {
+                out.vrr = vrr;
+            }
+            self.az.queue_redraw(&o);
             let Some(cfg) = entry(&self.az, &o) else { continue };
             let change = crate::outputs::OutputChange {
                 name: o.name(),

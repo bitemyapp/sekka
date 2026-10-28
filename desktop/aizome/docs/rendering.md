@@ -7,7 +7,7 @@ Aizome draws in two places, and both have a GPU path and a software path.
 | The compositor (window frames, tabs, composition, the overview, the switcher) | smithay's GLES renderer on the GPU | smithay's pixman renderer on the CPU |
 | The shell and the apps | — | Sidestep's rasterizer (tiny-skia) on the CPU, into shared memory |
 
-Clients always rasterize on the CPU: Sidestep draws only what changed, into
+Sidestep clients rasterize on the CPU: Sidestep draws only what changed, into
 the shared-memory buffer the compositor shows, in parallel bands for large
 changes. So an app looks and performs the same whichever renderer the
 compositor uses, and the choice is the compositor's alone.
@@ -30,7 +30,7 @@ To force one:
 
 ## What each mode does
 
-Under GLES, client buffers are uploaded to textures when they are committed
+Under GLES, shared-memory client buffers are uploaded to textures when they are committed
 and released straight away (so Sidestep draws the next frame into the same
 buffer), damage tracking repaints only what changed, and window moves are
 pure composition. Under pixman, the compositor composites client memory
@@ -40,6 +40,31 @@ replaces it.
 Both scan out through KMS on real displays (udev backend, with libseat), and
 both render offscreen for the headless backend that tests and screenshots
 use.
+
+GPU clients instead submit DMA-BUFs. On a DRM device with syncobj eventfd
+support, Aizome advertises `linux-drm-syncobj-v1`: the pending surface commit
+waits for its acquire timeline point before buffer import, without blocking
+the compositor thread. Smithay retains the release point with the renderer
+buffer until its last reference retires, including scanout. Destroying a
+surface cancels abandoned acquire waiters. Clients without explicit sync
+keep the implicit DMA-BUF fence path. Software and winit backends do not
+advertise this protocol; the GLES headless backend does so for GPU tests.
+The pinned xwayland-satellite forwards the protocol to Xwayland.
+
+KMS outputs send scanout DMA-BUF feedback for formats the primary renderer
+can also import. An 8-bit game can use direct scanout even when the
+compositor's own buffers are 10-bit; a failed plane test falls back to
+composition. This is still SDR, with no HDR colour conversion or metadata.
+
+`[[outputs]] vrr` accepts `off`, `fullscreen` (the default), or `always`.
+Adaptive sync requires a capable KMS output and GLES; fullscreen policy
+checks the top visible window on each output. Lock, recovery, keyboard
+overlays, animation and mirroring disable it. Transitions force a fresh
+frame even when pixels are unchanged; rejected VRR commits retry at fixed
+refresh. Variable-refresh presentation feedback and frame scheduling stop
+predicting a fixed vblank interval. Settings uses its normal Keep/Revert
+preview for policy changes. Actual panel timing still needs a physical KMS
+test: a render-node test cannot validate VRR, direct scanout, HDR or tearing.
 
 ## Measured
 
@@ -99,5 +124,6 @@ whole session — login, terminal, Settings, Calculator, Files, lock and unlock
   it, with nothing blurred; outputs that are rotated or flipped don't blur
   either.
 
-Nothing was given up for software rendering: every feature of the desktop
-works under pixman, and the VM test runs the whole session that way.
+The desktop's windows and apps work under pixman, and the VM test runs the
+whole session that way. GPU explicit sync, scanout feedback and adaptive
+sync require the GLES backend.

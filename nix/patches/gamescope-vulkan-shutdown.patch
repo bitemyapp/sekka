@@ -1,0 +1,112 @@
+Subject: Join shader compilation and retire Vulkan resources before process exit
+
+Shader-thread join adapted from ThomasEricB's BSD-2-Clause fix:
+https://github.com/ThomasEricB/gamescope-lanczos-downscaling/commit/2e9a5a5fb3f3d7bfaf84c9f2341f5695d059b62b
+
+Reproduced on RTX 5090 / NVIDIA 615.78.08 after a short Vulkan client exits.
+First gamescope-shdr crashes in the driver's compiler. After joining it,
+CVulkanCmdBuffer's static destructor calls FreeCommandBuffers through an
+unloaded ICD. Release command buffers, ReShade and output textures after
+the compositor threads finish, before dynamic-library exit handlers run.
+No renderer, format, fence, or presentation behavior changes.
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 6a0fdb1..39b2d60 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1115,6 +1115,7 @@ int main(int argc, char **argv)
+ 
+ 	gamescope::Process::KillAllChildren( getpid(), SIGTERM );
+ 	gamescope::Process::WaitForAllChildren();
++	vulkan_release_shutdown_resources();
+ }
+ 
+ static void steamCompMgrThreadRun(int argc, char **argv)
+diff --git a/src/rendervulkan.cpp b/src/rendervulkan.cpp
+index 54e4efc..20c1786 100644
+--- a/src/rendervulkan.cpp
++++ b/src/rendervulkan.cpp
+@@ -1227,6 +1227,9 @@ void CVulkanDevice::compileAllPipelines(std::stop_token st)
+ 					if (blur_layers > layerCount)
+ 						continue;
+ 
++					if (st.stop_requested())
++						return;
++
+ 					VkPipeline newPipeline = compilePipeline(layerCount, ycbcrMask, info.shaderType, blur_layers, info.compositeDebug, info.colorspaceMask, info.outputEOTF, info.itmEnable);
+ 					{
+ 						std::lock_guard<std::mutex> lock(m_pipelineMutex);
+@@ -4588,6 +4591,37 @@ void vulkan_wait( uint64_t ulSeqNo, bool bReset )
+ 	return g_device.wait( ulSeqNo, bReset );
+ }
+ 
++void CVulkanDevice::StopPipelineCompilation()
++{
++	if ( m_pipelineThread.joinable() )
++	{
++		m_pipelineThread.request_stop();
++		m_pipelineThread.join();
++	}
++}
++
++void vulkan_stop_pipeline_compilation( void )
++{
++	g_device.StopPipelineCompilation();
++}
++
++void CVulkanDevice::ReleaseCommandBuffers()
++{
++	waitIdle();
++	m_pendingCmdBufs.clear();
++	m_unusedCmdBufs.clear();
++}
++
++void vulkan_release_shutdown_resources( void )
++{
++	// main has joined the compositor threads. Release GPU-owning C++
++	// containers now, before the dynamically loaded ICD's exit handlers.
++	// Their later static destructors must not call into an unloaded driver.
++	g_device.ReleaseCommandBuffers();
++	g_reshadeManager.clear();
++	g_output = VulkanOutput_t{};
++}
++
+ bool vulkan_has_drm_props()
+ {
+ 	for (const auto& ext : g_device.supportedExtensions()) {
+diff --git a/src/rendervulkan.hpp b/src/rendervulkan.hpp
+index fa519db..6bca992 100644
+--- a/src/rendervulkan.hpp
++++ b/src/rendervulkan.hpp
+@@ -465,6 +465,8 @@ gamescope::OwningRc<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struc
+ 
+ std::optional<uint64_t> vulkan_composite( struct FrameInfo_t *frameInfo, gamescope::Rc<CVulkanTexture> pScreenshotTexture, bool partial, gamescope::Rc<CVulkanTexture> pOutputOverride = nullptr, bool increment = true, std::unique_ptr<CVulkanCmdBuffer> pInCommandBuffer = nullptr );
+ void vulkan_wait( uint64_t ulSeqNo, bool bReset );
++void vulkan_stop_pipeline_compilation( void );
++void vulkan_release_shutdown_resources( void );
+ gamescope::Rc<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool defer );
+ gamescope::Rc<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
+ gamescope::Rc<CVulkanTexture> vulkan_acquire_capture_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
+@@ -839,6 +841,8 @@ public:
+ 	uint64_t submit( std::unique_ptr<CVulkanCmdBuffer> cmdBuf);
+ 	uint64_t submitInternal( CVulkanCmdBuffer* cmdBuf );
+ 	void wait(uint64_t sequence, bool reset = true);
++	void StopPipelineCompilation();
++	void ReleaseCommandBuffers();
+ 	void waitIdle(bool reset = true);
+ 	void garbageCollect();
+ 	VkDescriptorSet descriptorSet( CVulkanCmdBuffer *pCmdBuffer );
+diff --git a/src/steamcompmgr.cpp b/src/steamcompmgr.cpp
+index 2ff296b..fe6d31b 100644
+--- a/src/steamcompmgr.cpp
++++ b/src/steamcompmgr.cpp
+@@ -7746,6 +7746,9 @@ error(Display *dpy, XErrorEvent *ev)
+ static void
+ steamcompmgr_exit(void)
+ {
++	// Stop shader compilation before shutting down the compositor and backend.
++	vulkan_stop_pipeline_compilation();
++
+ 	g_ImageWaiter.Shutdown();
+ 
+ 	// Clean up any commits.

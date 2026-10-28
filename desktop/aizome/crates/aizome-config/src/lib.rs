@@ -350,8 +350,39 @@ pub struct OutputConfig {
     pub position: Option<[i32; 2]>,
     pub transform: Option<Transform>,
     pub enabled: Option<bool>,
+    /// Adaptive sync on capable outputs; fullscreen by default.
+    pub vrr: VrrMode,
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+/// When an output may vary its refresh interval.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VrrMode {
+    Off,
+    #[default]
+    Fullscreen,
+    Always,
+}
+
+impl VrrMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Fullscreen => "fullscreen",
+            Self::Always => "always",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "fullscreen" => Some(Self::Fullscreen),
+            "always" => Some(Self::Always),
+            _ => None,
+        }
+    }
 }
 
 impl OutputConfig {

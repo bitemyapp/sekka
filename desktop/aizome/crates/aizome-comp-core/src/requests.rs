@@ -29,6 +29,18 @@ impl State {
                 exe: std::env::current_exe().ok().map(|p| p.to_string_lossy().into_owned()),
                 build: Some(crate::logic::build_info()),
             },
+            Request::OutputVrr { name, mode } => {
+                let mode = aizome_config::VrrMode::parse(&mode).ok_or("VRR must be off, fullscreen or always")?;
+                let output = self.az.known_output(&name).ok_or_else(|| format!("no output {name}"))?;
+                let o = self.az.out.get_mut(&output).ok_or("output is disabled")?;
+                if !o.vrr_supported && mode != aizome_config::VrrMode::Off {
+                    return Err(format!("{name} does not support adaptive sync at this mode"));
+                }
+                o.vrr = mode;
+                self.az.queue_redraw(&output);
+                crate::outputs::outputs_changed(&mut self.az);
+                Response::Ok
+            }
             Request::Outputs => Response::Outputs { outputs: crate::outputs::all_info(&self.az) },
             Request::Spawn { argv, cwd, in_desk_folder } => {
                 let cwd = cwd.map(|c| aizome_config::expand_home(&c)).or_else(|| {

@@ -3,7 +3,12 @@
 # The installer enables it when it finds one, with PRIME offload on laptops.
 # Same package choice as the installation media, so an installation copies
 # the driver from them: NVIDIA's packages are not in the public binary cache.
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.calamares.nvidia;
   busId = lib.mkOption {
@@ -29,6 +34,24 @@ in
       {
         services.xserver.videoDrivers = [ "nvidia" ];
         hardware.graphics.enable = true;
+        # Patchelf can move PT_DYNAMIC into overlapping read-only LOAD
+        # pages in NVIDIA's non-PIE utilities (observed with 615.78.08).
+        # ld.so then faults before main. Nixpkgs keeps the original for
+        # containers; run it through our loader instead of editing its ELF.
+        environment.systemPackages = [
+          (lib.hiPrio (
+            pkgs.writeShellScriptBin "nvidia-smi" ''
+              exec ${pkgs.stdenv.cc.bintools.dynamicLinker} \
+                --library-path ${
+                  lib.makeLibraryPath [
+                    config.hardware.nvidia.package
+                    pkgs.stdenv.cc.libc
+                  ]
+                } \
+                ${lib.getBin config.hardware.nvidia.package}/origBin/nvidia-smi "$@"
+            ''
+          ))
+        ];
         hardware.nvidia = {
           package = config.boot.kernelPackages.nvidiaPackages.latest;
           # NVIDIA's recommended modules from Turing on; the latest driver

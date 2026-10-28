@@ -188,6 +188,106 @@ User `mpv.conf` and command-line preferences override those defaults.
 in an Aizome VM using the shipped config and checks both override routes.
 This component test does not replace playback through the exact ISO's normal UI.
 
+### NVIDIA and Steam gaming
+
+`installer/genkan/rust/system/gaming.nix` follows `programs.steam.enable`
+by default. `calamares.gaming.enable = false` opts out; the Gamescope login
+session and GE-Proton also have independent `enable` switches beneath
+`calamares.gaming.gamescopeSession` and `calamares.gaming.protonGE`.
+The ordinary Steam module supplies controller rules and 32-bit graphics.
+Gamescope's WSI layer is installed for both architectures. Gamescope,
+GameMode, MangoHud and GE-Proton follow the root system lock.
+`nix/gamescope.nix` adapts the shader-compiler shutdown fix from
+[ThomasEricB's fork, commit 2e9a5a5](https://github.com/ThomasEricB/gamescope-lanczos-downscaling/commit/2e9a5a5fb3f3d7bfaf84c9f2341f5695d059b62b).
+The crash was reproduced here in `gamescope-shdr` after a short Vulkan
+client exited. Joining the thread also exposed a second fault in
+`CVulkanCmdBuffer::~CVulkanCmdBuffer`: static destruction called into an
+unloaded NVIDIA ICD. The patch retires command buffers, ReShade and output
+textures after compositor threads finish, before library exit handlers.
+It does not change fences or take the fork's other renderer changes. An explicit
+`programs.gamescope.package` still overrides this default.
+
+The `sekka-game` wrapper is available inside Steam's FHS environment as well
+as in the system PATH. It preserves argument boundaries, applies GameMode
+per game, optionally adds MangoHud or nested Gamescope, and avoids nesting
+inside an existing Gamescope session. This per-game approach takes
+inspiration from [Bazzite's ScopeBuddy](https://docs.bazzite.gg/Advanced/scopebuddy/).
+It does not rewrite Steam's launch options or force a Proton version.
+GameMode requests the performance governor only while registered games run;
+Ananicy retains priority policy, with no GameMode renice or GPU overclock.
+
+The separate Steam login session enables Gamescope's HDR and adaptive-sync
+support. Tearing is opt-in:
+
+```nix
+calamares.gaming.gamescopeSession.allowTearing = true;
+```
+
+This passes `--immediate-flips` to the session at startup. A per-game wrapper
+cannot change an already running Gamescope's options. The wrapper refuses
+HDR/tearing in Aizome's SDR host; a nested Gamescope cannot supply missing
+physical output capabilities. Tatami's Displays can configure an HDR host.
+No global Vulkan ICD, PRIME, Mesa, NVIDIA or Proton environment overrides
+are installed, and Steam's optional network firewall openings remain off.
+
+Aizome's `explicit_sync.rs` waits for DRM acquire points asynchronously and
+lets Smithay retire release points. `gaming.rs` selects VRR per output;
+`backend/udev.rs` applies it through Smithay, supplies scanout feedback and
+allows compatible 8-bit client buffers on a 10-bit SDR compositor. The IPC
+and Settings expose Off/Fullscreen/Always with preview and rollback. The
+pinned xwayland-satellite 0.8.3 already forwards `linux-drm-syncobj-v1`.
+Native `tearing-control-v1` and HDR colour management remain unimplemented
+in Aizome; adding protocol globals alone would misrepresent its renderer.
+See [rendering](desktop/aizome/docs/rendering.md) for lifetime and pacing
+details and the [RTX 5090 component record](docs/test-results/nvidia-gaming-2026-10-28.md)
+for the limits of current evidence.
+
+The NVIDIA module also wraps the driver's original `nvidia-smi` with the
+Nix dynamic loader. Driver 615.78.08's patched non-PIE executable has
+overlapping load segments that leave `PT_DYNAMIC` read-only; ld.so faults
+writing `DT_DEBUG` before main. Nixpkgs retains `origBin/nvidia-smi` for
+containers. Using that binary avoids modifying vendor ELF segments and
+keeps the utility paired with the configured driver, including overrides.
+
+Focused checks, from the root (the render-node test does not take DRM master
+or replace the current desktop):
+
+```sh
+nix build .#checks.x86_64-linux.gaming --no-update-lock-file
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml \
+  -p aizome-config -p aizome-ipc -p aizome-comp-core -p aizome-settei --lib
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml \
+  -p aizome-comp --test explicit_sync --test pacing --test screens --test fullscreen_frames
+AIZOME_RENDER_NODE=/dev/dri/by-path/pci-0000:01:00.0-render \
+  nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml \
+  -p aizome-comp --test explicit_sync -- --include-ignored
+nix build .#aizome --no-update-lock-file
+nix build .#gamescope --no-update-lock-file --out-link result-gamescope-gaming
+```
+
+Use the machine's actual NVIDIA PCI path. The GPU test checks an unsignaled
+acquire point, responsiveness while waiting, release after unmap, and
+descriptor cleanup for abandoned surfaces. It does not validate scanout,
+VRR, HDR, tearing, Steam login, or game frame rates. Those need a physical
+session and a reproducible game workload, with before/after frame-time
+captures. Component results do not qualify an ISO or enable publication.
+
+For a private Xwayland/Vulkan test followed by five nested Gamescope
+render/exit tests (including early exit with the NVIDIA shader cache
+disabled for those processes only), build Aizome with
+`--out-link result-aizome-gaming`, then run:
+
+```sh
+AIZOME_RENDER_NODE=/dev/dri/by-path/pci-0000:01:00.0-render \
+  nix shell --inputs-from . nixpkgs#vulkan-tools nixpkgs#xwayland-satellite \
+  -c bash tests/gaming-gpu-smoke.sh
+```
+
+The script retains logs in a private temporary directory and stops only
+its own processes. `GAMING_GPU_INDEX` chooses vkcube's GPU (default 0);
+check its printed device name against the intended GPU. This is a render
+and synchronization smoke test, not a benchmark.
+
 ### Aizome and IBus
 
 When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend

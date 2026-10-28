@@ -302,6 +302,24 @@ fn display_sections(p: &Displays, vcx: &ViewCx, d: &Display) -> Vec<Element<Msg>
     } else {
         picture.push(form::value("Refresh rate", model::refresh_label(s.mode.refresh)).entry("refresh-rate"));
     }
+    if d.vrr_supported {
+        let n = name.clone();
+        let at = match s.vrr {
+            aizome_config::VrrMode::Off => 0,
+            aizome_config::VrrMode::Fullscreen => 1,
+            aizome_config::VrrMode::Always => 2,
+        };
+        picture.push(
+            form::row(
+                "Adaptive sync",
+                form::choice(&["Off", "Fullscreen", "Always"], at, move |i| Msg::Vrr(n.clone(), i)),
+            )
+            .help("Match the display to the game's frame rate. Choose Off if the screen flickers.")
+            .entry("adaptive-sync"),
+        );
+    } else {
+        picture.push(form::value("Adaptive sync", "Unavailable at this display mode").entry("adaptive-sync"));
+    }
     let labels: Vec<&str> = model::ROTATIONS.iter().map(|(_, l)| *l).collect();
     let n = name.clone();
     picture.push(

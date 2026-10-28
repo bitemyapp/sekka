@@ -58,6 +58,8 @@ session
   reload-config
   output NAME [--mode WxH[@Hz]] [--scale S] [--position X,Y]
               [--transform normal|90|180|270|flipped|flipped-90|...] [--on|--off]
+  output-vrr NAME off|fullscreen|always
+                                adaptive sync, for this session
   mirror NAME SOURCE|--off      show SOURCE's picture on NAME, scaled to fit
   primary NAME                  the main display, for this session
   night-light [on|off] [--temperature K]
@@ -386,6 +388,12 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
             Request::Screenshot { output, path, window, area, clipboard }
         }
         "reload-config" => Request::ReloadConfig,
+        "output-vrr" => {
+            if args.len() != 2 || !["off", "fullscreen", "always"].contains(&args[1].as_str()) {
+                return Err("output-vrr NAME off|fullscreen|always".into());
+            }
+            Request::OutputVrr { name: args[0].clone(), mode: args[1].clone() }
+        }
         "output" => {
             let mode = opt(&mut args, "--mode")?;
             let scale = opt(&mut args, "--scale")?
@@ -912,6 +920,14 @@ fn print_output(o: &OutputInfo) {
     }
     println!("{} \"{} {}\" {}", o.name, o.make, o.model, tags.join(" "));
     println!("  mode      {mode}");
+    if !o.vrr.is_empty() {
+        println!(
+            "  VRR       {} ({}, policy {})",
+            if o.vrr_enabled { "active" } else { "inactive" },
+            if o.vrr_supported { "supported" } else { "unavailable" },
+            o.vrr
+        );
+    }
     println!("  scale     {}", o.scale);
     println!("  transform {:?}", o.transform);
     println!("  layout    {},{} {}x{} pt", o.logical.x, o.logical.y, o.logical.w, o.logical.h);

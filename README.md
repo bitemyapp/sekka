@@ -10,7 +10,7 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 
 - **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
 - **RAID/LVM setup and offline installation are not implemented.** An internet connection is required.
-- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
+- **Hardware coverage is limited.** Sekka is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. A desktop with an RTX 5090 also runs Aizome and is used for GPU component testing. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
 - **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
 
@@ -66,8 +66,8 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
-(Activity), Shashin (Images) and Koe (Dictation). Aizome is new, and so far it
-has run only in virtual machines. See [its README](desktop/aizome/README.md)
+(Activity), Shashin (Images) and Koe (Dictation). Aizome is new and its
+hardware coverage is limited. See [its README](desktop/aizome/README.md)
 for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
@@ -152,6 +152,27 @@ Plasma, GNOME and Xfce are available too. Multiple installed desktops share your
 [![GNOME with Files and Yukimi](docs/images/sekka/gnome.png)](docs/images/sekka/gnome.png)
 
 *This GNOME capture predates Yukimi's shared native interface.*
+
+### Playing games
+
+Install Steam through Genkan or Yukimi. Games with desktop shortcuts appear
+under **Toolchest → Applications → Games** in Aizome. Steam also adds a
+separate **Steam** login session, using Gamescope with adaptive sync and HDR
+on capable displays. GE-Proton is available in Steam's compatibility menu;
+choose it for individual games that need it.
+
+For a game to request GameMode while it runs, set its Steam launch options
+to `sekka-game -- %command%`. Use `sekka-game --hud -- %command%` to show
+frame times and GPU usage, or add `--gamescope` to run it inside Gamescope.
+There is no need to nest Gamescope inside the Steam login session; the
+launcher detects it.
+
+Aizome supports explicit synchronization for NVIDIA games and adaptive sync
+under **Settings → Displays**, with fullscreen-only operation by default.
+If a display flickers with adaptive sync, select **Off**. Aizome still
+displays SDR and does not support tearing; use the Steam login session for
+those features. HDR, VRR and tearing still need physical display and game
+validation on each machine; GPU protocol tests alone do not establish them.
 
 ## Trying Sekka
 

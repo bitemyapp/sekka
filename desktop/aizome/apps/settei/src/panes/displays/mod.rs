@@ -77,6 +77,7 @@ pub enum Msg {
     UseAs(String, Use),
     Resolution(String, (i32, i32)),
     Refresh(String, i32),
+    Vrr(String, usize),
     Scale(String, f64),
     Rotation(String, usize),
     ShowAll(bool),
@@ -424,6 +425,7 @@ impl Pane for Displays {
                 "retina",
             ]),
             SettingEntry::new("fractional", "Fractional scaling").keywords(&["1.5", "125%", "150%"]),
+            SettingEntry::new("adaptive-sync", "Adaptive sync").keywords(&["vrr", "gsync", "freesync", "games"]),
             SettingEntry::new("refresh-rate", "Refresh rate").keywords(&["hz", "120", "144", "frequency"]),
             SettingEntry::new("rotation", "Rotation").keywords(&[
                 "rotate",
@@ -531,6 +533,13 @@ impl Pane for Displays {
                     }
                 });
             }
+            Msg::Vrr(name, index) => self.edit(cx, &name, true, move |s| {
+                s.vrr =
+                    [aizome_config::VrrMode::Off, aizome_config::VrrMode::Fullscreen, aizome_config::VrrMode::Always]
+                        .get(index)
+                        .copied()
+                        .unwrap_or_default();
+            }),
             Msg::Refresh(name, refresh) => self.edit(cx, &name, true, move |s| s.mode.refresh = refresh),
             Msg::Scale(name, scale) => self.edit(cx, &name, false, move |s| s.scale = scale),
             Msg::Rotation(name, i) => {

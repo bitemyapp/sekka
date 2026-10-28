@@ -173,6 +173,7 @@
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
+        gamescope = import ./nix/gamescope.nix { inherit (pkgs) gamescope; };
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
@@ -543,6 +544,7 @@
           inherit pkgs;
           aizomeSource = inputs.aizome.outPath;
         };
+        gaming = import ./nix/gaming-test.nix { inherit nixpkgs system; };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };

@@ -149,6 +149,9 @@ pub struct OutputState {
     pub refresh: Duration,
     /// The display takes gamma ramps (Night Light).
     pub gamma: bool,
+    pub vrr_supported: bool,
+    pub vrr_enabled: bool,
+    pub vrr: aizome_config::VrrMode,
     /// A wlr-gamma-control client holds its ramps.
     pub gamma_client: bool,
     /// Last Deskbar geometry reported to the layout policy. Surface buffers
@@ -175,6 +178,9 @@ impl OutputState {
             presented: None,
             refresh,
             gamma: false,
+            vrr_supported: false,
+            vrr_enabled: false,
+            vrr: Default::default(),
             gamma_client: false,
             deskbar_geometry: None,
         }
@@ -224,6 +230,8 @@ pub struct Aizome {
     pub shm: ShmState,
     pub dmabuf: DmabufState,
     pub dmabuf_global: Option<DmabufGlobal>,
+    pub drm_syncobj: Option<smithay::wayland::drm_syncobj::DrmSyncobjState>,
+    pub(crate) syncobj_waiters: crate::explicit_sync::Waiters,
     pub seat_state: SeatState<State>,
     pub data_device: DataDeviceState,
     pub primary_selection: PrimarySelectionState,
@@ -479,6 +487,8 @@ impl State {
             shm,
             dmabuf: DmabufState::new(),
             dmabuf_global: None,
+            drm_syncobj: None,
+            syncobj_waiters: Default::default(),
             seat_state,
             data_device,
             primary_selection,
