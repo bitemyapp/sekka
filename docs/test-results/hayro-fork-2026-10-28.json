@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "date": "2026-10-28",
-  "scope": "Third pass on Shiori's engine: hayro's speed against PDFium, on a fork of hayro (bitemyapp/hayro, branch aizome-perf), after the first changes were split into upstream pull requests. Component evidence on one laptop; not VM, ISO or hardware qualification. Shiori still draws with PDFium.",
+  "scope": "Third pass on Shiori's engine: hayro's speed against PDFium, on a fork of hayro (bitemyapp/hayro, branch aizome-perf), after the first changes were split into upstream pull requests. Component evidence on a laptop and a shared workstation; not VM, ISO or hardware qualification. Shiori still draws with PDFium.",
   "follows": "rust-pdf-renderers-2026-10-28.json",
   "workstation": "ganymede (Intel Core Ultra 7 365: 4 performance and 4 efficiency cores, 30 GiB RAM), shared with other sessions (one-minute load average 3-4)",
   "corpus": {
@@ -46,7 +46,7 @@
     "CMaps": "the predefined CMaps are embedded uncompressed (467 KB, 217 KB more), saving about 3 ms of brotli decompression for each document with a CID font",
     "PostScript functions": "the 100-entry stack is reused per thread instead of set up and moved for every evaluation (function_based_shading: 92 to 56 ms)",
     "single-copy tiling patterns": "when only one copy of a cell can be seen and the fill has no soft mask or blend mode, the cell is drawn directly into the fill's clip at device resolution (tiling-pattern-box: 84 to 6.8 ms, PDFium 4.9)",
-    "JPEGs decoded no larger than drawn": "JPEGs are decoded at 1/2, 1/4 or 1/8 across and, separately, down, while the decoded image stays 1.5 times the drawn size, using reduced-size decoding added to zune-jpeg (below); 2x, three runs each, pinned: large_jpeg_downscale 46 to 19 ms (PDFium 20), 22060_A1_01_Plans 237 to 133 ms, and at 1/4 (a thumbnail) 225 to 59 ms. These were measured after the corpus totals above, which don't include the change"
+    "JPEGs decoded no larger than drawn": "JPEGs are decoded at 1/2, 1/4 or 1/8 across and, separately, down, while the decoded image stays 1.5 times the drawn size, using reduced-size decoding added to zune-jpeg (below); 2x, three runs each, pinned: large_jpeg_downscale 46 to 19 ms (PDFium 20), 22060_A1_01_Plans 237 to 133 ms, and at 1/4 (a thumbnail) 225 to 59 ms. These were measured after the corpus totals above, which don't include the change; the corpus rerun on wx-workstation (results_with_reduced_size_jpegs) does"
   },
   "zune_jpeg": {
     "fork": "https://github.com/bitemyapp/zune-image, branch scaled-idct, on zune-jpeg's development branch (0.5.16-rc3); hayro's fork depends on it by git until it's released",
@@ -73,6 +73,28 @@
     "earlier_record_for_comparison": "the branch of the second pass took 0.88 of PDFium's total, with per-page p90 1.53 and p99 7.47 of PDFium; this fork takes 0.75, 1.40 and 5.2 (pinned runs)",
     "max_page": "issue19517, a 9 s page that PDFium doesn't draw"
   },
+  "results_with_reduced_size_jpegs": {
+    "workstation": "wx-workstation (AMD Ryzen Threadripper PRO 9985WX: 64 cores in 8 CCDs, 250 GiB RAM), shared with other sessions' builds (one-minute load average 4-15 during the runs)",
+    "method": "the same program and corpus; binaries built with Rust 1.99.0 and linked against the Nix glibc 2.44 that PDFium 8066 uses; 8 files at a time pinned to one CCD's cores (`taskset -c 56-63`; their SMT siblings were 0-3% busy); the system font directories hidden from every engine with bwrap, as on NixOS (PDFium otherwise reads all 2,625 of the host's font files at a document's first missing font, about 14 ms a process); five runs, each page's time the median of the five",
+    "builds": {"pdfium": "8066", "hayro_master": "8558a8a5", "fork_before_reduced_size_jpegs": "dfd3e753", "hayro_fork": "04aecd3c, with zune-jpeg from bitemyapp/zune-image scaled-idct cb1ec802"},
+    "pages_all_three_drew_under_5_s": 1189,
+    "total_ms": {"pdfium": 11421, "hayro_master": 13019, "fork_before_reduced_size_jpegs": 6717, "hayro_fork": 6565},
+    "per_page_ms": {
+      "columns": ["pages drawn", "p50", "p90", "p99", "max"],
+      "pdfium": [1193, 2.31, 11.0, 100.0, 1805.0],
+      "hayro_master": [1206, 2.00, 13.0, 126.5, 9727.5],
+      "fork_before_reduced_size_jpegs": [1206, 1.99, 9.8, 61.1, 7131.5],
+      "hayro_fork": [1206, 1.99, 9.6, 61.8, 7080.2]
+    },
+    "fork_over_pdfium_per_page": {"p50": 0.83, "p90": 1.23, "p99": 5.22},
+    "fork_faster_than_pdfium_on": "857 of 1189 pages",
+    "fork_behind_pdfium": "on 322 pages by 598 ms in all; ahead on the rest by 5,454 ms",
+    "reduced_size_jpegs": "152 ms less over the corpus; faster by more than 10% on 6 pages (22060_A1_01_Plans 206 to 125 ms, large_jpeg_downscale 45 to 18, issue13931 45 to 32, issue19971's fifth page 19 to 13, colorspace_cos and colorspace_sin 15 to 11) and slower on none",
+    "run_to_run": "the totals of runs 1-3 agree within 0.5%; runs 4 and 5, while other jobs raised the load to 13-15, took about 5% longer for every engine; fork over PDFium was 0.559-0.579 in all five",
+    "failures": "PDFium timed out on tiling-pattern-tiny-steps and tiling-pattern-tiny-steps-large and stopped itself on jpx_numcomps in every run; no hayro build crashed or timed out",
+    "machines_differ": "the ratios depend on the machine: on ganymede master took 1.31 times PDFium's total and the fork before reduced-size JPEGs 0.75; here 1.14 and 0.59. Compare builds within one machine's runs",
+    "furthest_behind_pdfium": "issue12841_reduced (114 ms against 63), issue2948 (50 against 8.8), axial_shading_many_inputs (19 against 1.7), radial_gradients pages 3-5 (25-28 against 13), bug1755507 (25 against 10), issue14497 (41 against 28), issue12798_page1_reduced (17 against 4.7), personwithdog (76 against 66), issue18032 (15 against 6.6), issue20513 (19 against 10)"
+  },
   "quality": {
     "hayro_test_suite_with_jpeg_reduction": "901 passed, 877 failed, 73 ignored, no panics; of 1,291 differing pages, 1,267 have pixels off by more than 48 on under 0.01% of the page, 19 on 0.01-0.1%, 4 on 0.1-1% (one is corpus/0942791, under zune_jpeg), and pdfbox 4913 as below",
     "hayro_test_suite": "before the JPEG change: 934 passed, 844 failed, 73 ignored, no panics; the suite allows 3 levels per channel against CI's references, which the glyph cache's quarter-pixel placement exceeds on text (as in the second pass)",
@@ -90,5 +112,5 @@
     "start-up per document": "building the CMYK ICC transform takes about 7 ms the first time anything is CMYK (moxcms samples a 17^4 grid through the profile); PDFium uses a compiled-in table",
     "smaller": "function-based shadings (function_based_shading 56 ms against 44), bug1755507, issue12798_page1_reduced"
   },
-  "not_covered": "the fork isn't in Shiori; no VM or hardware runs; one machine under shared load; JPEG 2000 pages were checked and are on par with PDFium (865 ms against 974 over the 14 corpus pages that have them)"
+  "not_covered": "the fork isn't in Shiori; no VM or hardware runs; machines under shared load; JPEG 2000 pages were checked and are on par with PDFium (865 ms against 974 over the 14 corpus pages that have them)"
 }

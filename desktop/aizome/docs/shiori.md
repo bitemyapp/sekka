@@ -75,7 +75,12 @@ size are now decoded at 1/2, 1/4 or 1/8 of it, as PDFium's libjpeg-turbo
 does, through a fork of zune-jpeg
 ([bitemyapp/zune-image](https://github.com/bitemyapp/zune-image), branch
 `scaled-idct`), which makes thumbnails of scanned pages three to four times
-faster. It's still slower than PDFium on free-form meshes, some gradients
+faster. Measured again with that on a shared Threadripper workstation (five
+runs on one CCD's cores), the fork takes 6.6 seconds over those pages
+against PDFium's 11.4 and master's 13.0, and is the faster on 857 of them.
+hayro's code does relatively better on that machine (master takes 1.14
+times PDFium's time there, 1.31 on the laptop), so compare builds on one
+machine. It's still slower than PDFium on free-form meshes, some gradients
 and JPEGs drawn larger than the page, and spends about 7 ms building its
 CMYK transform the first time a document needs it. Its pages differ from
 hayro's own references on under 1% of pixels by more than 48 levels,
