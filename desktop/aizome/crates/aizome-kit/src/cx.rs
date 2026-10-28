@@ -335,11 +335,7 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
     /// org.freedesktop.Notifications; the shell is that server).
     pub fn notify(&mut self, summary: &str, body: &str) {
         let app = self.core.info.name.clone();
-        let spawned =
-            std::process::Command::new("notify-send").arg("--app-name").arg(app).arg(summary).arg(body).spawn();
-        if let Err(e) = spawned {
-            log::info!("notification ({e}): {summary}: {body}");
-        }
+        self.platform.notify(&app, summary, body);
     }
 
     /// Where the element given `.id(name)` is in `window`, in the window's

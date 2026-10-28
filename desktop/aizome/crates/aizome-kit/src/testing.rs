@@ -63,6 +63,8 @@ pub struct TestPlatform {
     /// The primary selection, likewise.
     pub primary: Option<String>,
     pub primary_data: Option<sidestep_ui::PreparedClipboard>,
+    /// Desktop notifications posted: summary and body, in order.
+    pub notifications: Vec<(String, String)>,
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
@@ -128,6 +130,7 @@ impl TestPlatform {
             offer: Vec::new(),
             primary: None,
             primary_data: None,
+            notifications: Vec::new(),
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
@@ -297,6 +300,10 @@ impl Platform for TestPlatform {
             None => {}
         }
         types
+    }
+
+    fn notify(&mut self, _app: &str, summary: &str, body: &str) {
+        self.notifications.push((summary.to_owned(), body.to_owned()));
     }
 
     fn clipboard_reader(&mut self) -> crate::platform::ClipboardReader {

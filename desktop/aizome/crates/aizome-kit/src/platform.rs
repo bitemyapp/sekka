@@ -15,6 +15,20 @@ use sidestep_ui::layer_shell::{Anchors, KeyboardInteractivity, Layer, LayerOptio
 /// Reads the clipboard as a MIME type, on any thread.
 pub type ClipboardReader = Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>;
 
+/// Run `command` on a thread of its own, which waits for it to end so it
+/// leaves no zombie behind: starting a process is no work for the thread
+/// that draws. (Desktop opening has its own bounded queue: `crate::urls`.)
+fn launch(mut command: std::process::Command, what: String) {
+    let waiter = std::thread::Builder::new().name("aizome-kit-launch".into()).spawn(move || {
+        if let Err(e) = command.status() {
+            log::warn!("{what}: {e}");
+        }
+    });
+    if let Err(e) = waiter {
+        log::warn!("no thread to launch on: {e}");
+    }
+}
+
 /// The engine's name for a window (an app's, or a popup).
 pub type WinId = u32;
 
@@ -113,6 +127,13 @@ pub trait Platform {
     /// another thread: another program's data can take a while to come.
     fn clipboard_reader(&mut self) -> ClipboardReader {
         Arc::new(|_| None)
+    }
+    /// Post a desktop notification (through `notify-send`, which speaks
+    /// org.freedesktop.Notifications; the shell is that server).
+    fn notify(&mut self, app: &str, summary: &str, body: &str) {
+        let mut send = std::process::Command::new("notify-send");
+        send.arg("--app-name").arg(app).arg(summary).arg(body);
+        launch(send, format!("notification: {summary}: {body}"));
     }
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
