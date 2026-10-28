@@ -167,3 +167,9 @@ does not change the historical package identities above; the next combined
 package must be qualified separately. The [GPU buffer probe](docs/gpu-buffer-capability.md)
 now passes an offscreen Intel DMA-BUF round trip locally, while the workstation
 NVIDIA export limitation remains. A production GPU renderer is still pending.
+
+The subsequent [sprite package checkpoint](docs/sprites-checkpoint.md) qualifies
+the combined ASCII, pixel-scroll and 153-sprite implementation: 56 native tests,
+eight private Wayland suites, 226 local source comparisons and 220 prepared-source
+matches. It records a separate package identity and the remaining styled
+block-cursor decoration gap; earlier checkpoint identities remain historical.
