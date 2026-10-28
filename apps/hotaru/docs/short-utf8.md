@@ -86,3 +86,21 @@ CPU 8/sibling 72 preflight activity was 4.76%/1.96%. No compiler process was obs
 The [separate three-engine report](../upstream/short-utf8/complete-tail/direct-ghostty/README.md) keeps the **120×12, zero-history** scope and all 28 input/mode cases. It confirms an existing absolute gap: baseline truncated-suffix patterns take 2.339–2.658× Ghostty feed time, and the candidate takes 2.527–2.767×; on the invalid-interior pattern, the baseline takes 1.512–1.561× Ghostty’s time and the candidate takes 1.659–1.681×. Mixed valid text takes 1.266/1.197× for the baseline and 1.161/1.122× for the candidate in legacy/Unicode width. Overlong/surrogate patterns near parity become slower than Ghostty in the candidate. Invalid-leading-byte-only and invalid-second-byte patterns still beat Ghostty. The self-regression remains explicit, and the candidate stays outside product.
 
 Each engine received 60 samples across six position-balanced permutations, with full-state/reference gates and exact source/input identities. All medians, p95/maxima and rounds are archived. No compiler was observed in 562 snapshots; CPU 8/sibling 72 preflight was 3.85%/0%. These diagnostic numbers do not replace the separately recorded 80-row common-corpus results.
+
+## Instruction attribution after the rejected padding variants
+
+The [malformed-input profiles](../upstream/malformed-attribution/README.md)
+attribute about 56–57% of truncated-pattern process instructions to
+`print_utf8`, including character iteration, versus about 10% to standard
+UTF-8 validation. A valid prefix beginning with a wide character sends its
+following long ASCII run through that scalar loop; the existing packed ASCII
+path is bypassed. This points to a narrow printing optimization, with parser,
+metadata, grapheme and cursor semantics still requiring exact verification.
+
+These are x86-64-v3 Callgrind diagnostics, including setup and teardown, not
+native feed-time ratios. The original native Ghostty library faults on an
+unsupported AVX-512 instruction under Callgrind; those failed attempts are
+retained separately. A pristine build of the same pinned reference with v3
+instructions completed all four profiles and matched the unchanged native
+reference state. All build identities, raw profiles and limitations are retained;
+the qualified product and native performance baseline remain unchanged.

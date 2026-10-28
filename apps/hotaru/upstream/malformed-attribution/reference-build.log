@@ -1,0 +1,4 @@
+Cloning into '/home/callen/work/hotaru-malformed-profile-20261028/reference'...
+done.
+HEAD is now at 6ba144158 example: bump minimum zig version to 0.17.0 (#14893)
+{"source_sha256": "5dc3afb508362b37001ef77c7525685c533c2b3f058405ac9accd9812b940488", "library_sha256": "bdc3fb782b629c4030337216169a6323f33e56ff073ae9b36dfcb9287a85cfe7", "binary_sha256": "dfa169308d6b4286e47266f0c5e68bce7fe2893518487ee242a606399d64dd77", "scope": "Diagnostic attribution only, x86-64-v3/ReleaseFast/debug retained. Not the native timed reference. Original pinned library untouched."}
