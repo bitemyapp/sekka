@@ -552,6 +552,24 @@ impl<P: Program> Harness<P> {
         self.platform.clock = until;
     }
 
+    /// Handle what the program's background work sends ([`Cx::spawn`],
+    /// streams) until `done` says so, for up to `wait`: whether it did.
+    ///
+    /// [`Cx::spawn`]: crate::Cx::spawn
+    pub fn settle(&mut self, wait: Duration, done: impl Fn(&P) -> bool) -> bool {
+        let until = std::time::Instant::now() + wait;
+        loop {
+            self.rt.flush(&mut self.platform);
+            if done(&self.rt.program) {
+                return true;
+            }
+            if std::time::Instant::now() >= until {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
     /// Send the program a message, as if a widget had.
     pub fn send(&mut self, msg: P::Msg) {
         self.send_all([msg]);

@@ -28,6 +28,7 @@ use wayland_client::protocol::{
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
 use wayland_protocols::wp::text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3};
 use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
+use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -460,6 +461,8 @@ pub struct Seen {
     pub ime_enabled: bool,
     pub ime_text: String,
     pub ime_dropped: u32,
+    /// The handle `Cmd::Export` got.
+    pub exported: Option<String>,
 }
 
 pub enum Cmd {
@@ -470,6 +473,9 @@ pub enum Cmd {
     /// Opens a dialog: a 200×150 toplevel of this title and colour, with
     /// the window as its parent.
     Dialog(String, u32),
+    /// Exports the window (xdg-foreign v2), as an app does for a portal
+    /// dialog: its handle comes in `Seen::exported`.
+    Export,
     Quit,
 }
 
@@ -533,6 +539,7 @@ struct App {
     xdg_surface: Option<xdg_surface::XdgSurface>,
     toplevel: Option<xdg_toplevel::XdgToplevel>,
     dialog: Option<(wl_surface::WlSurface, xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
+    exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
     pending_size: Option<(i32, i32)>,
     size: (i32, i32),
     needs_draw: bool,
@@ -572,6 +579,7 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
         xdg_surface: None,
         toplevel: None,
         dialog: None,
+        exported: None,
         pending_size: None,
         needs_draw: false,
         configured: false,
@@ -632,6 +640,11 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     tl.set_title(title);
                     s.commit();
                     app.dialog = Some((s, xs, tl));
+                }
+                Cmd::Export => {
+                    let exporter: zxdg_exporter_v2::ZxdgExporterV2 =
+                        globals.bind(&qh, 1..=1, ()).expect("zxdg_exporter_v2");
+                    app.exported = Some(exporter.export_toplevel(app.surface.as_ref().unwrap(), &qh, ()));
                 }
                 Cmd::Quit => app.quit = true,
             }
@@ -714,8 +727,24 @@ ignore!(
     wl_surface::WlSurface,
     zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
     wl_seat::WlSeat,
-    zwp_text_input_manager_v3::ZwpTextInputManagerV3
+    zwp_text_input_manager_v3::ZwpTextInputManagerV3,
+    zxdg_exporter_v2::ZxdgExporterV2
 );
+
+impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ()> for App {
+    fn event(
+        app: &mut Self,
+        _: &zxdg_exported_v2::ZxdgExportedV2,
+        event: zxdg_exported_v2::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let zxdg_exported_v2::Event::Handle { handle } = event {
+            app.seen.lock().unwrap().exported = Some(handle);
+        }
+    }
+}
 
 impl Dispatch<zwp_text_input_v3::ZwpTextInputV3, ()> for App {
     fn event(

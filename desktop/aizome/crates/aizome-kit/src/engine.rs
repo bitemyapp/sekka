@@ -357,6 +357,7 @@ impl Core {
             background,
             app_id: self.info.app_id.clone(),
             visible: !spec.hidden,
+            foreign_parent: spec.foreign_parent.clone().filter(|_| spec.kind == WindowKind::Normal),
         };
         let mut w = Win::new(id, WinKind::App { key, spec: spec.clone() }, grow(spec.size));
         w.title = spec.title.clone();
@@ -932,6 +933,7 @@ impl Core {
             background: None,
             app_id: self.info.app_id.clone(),
             visible: true,
+            foreign_parent: None,
         };
         platform.open_window(id, &spec);
         id

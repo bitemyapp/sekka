@@ -213,6 +213,12 @@ rustPlatform.buildRustPackage {
         --replace-quiet @systemctl@ "${systemd}/bin/systemctl"
     done
     install -Dm644 session/aizome-portals.conf $out/share/xdg-desktop-portal/aizome-portals.conf
+    # Aizome's own backend (file choosers), started by D-Bus as its unit.
+    install -Dm644 session/aizome.portal $out/share/xdg-desktop-portal/portals/aizome.portal
+    for service in session/dbus/*.service; do
+      install -Dm644 "$service" "$out/share/dbus-1/services/$(basename "$service")"
+      substituteInPlace "$out/share/dbus-1/services/$(basename "$service")" --replace-fail @bindir@ "$out/bin"
+    done
 
     # Apps: desktop entries and icons.
     for entry in apps/*/data/*.desktop; do

@@ -433,6 +433,9 @@ impl Platform for SidestepPlatform<'_> {
                 if let Some(p) = parent.and_then(|p| self.maps.to_side.get(&p)) {
                     o = o.transient_for(*p);
                 }
+                if let Some(handle) = &spec.foreign_parent {
+                    o = o.foreign_parent(handle.clone());
+                }
                 o
             }
             OpenKind::Layer(o) => WindowOptions::layer(o.clone())

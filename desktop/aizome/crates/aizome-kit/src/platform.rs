@@ -59,6 +59,8 @@ pub struct OpenSpec {
     pub app_id: String,
     /// Shown when it opens (else hidden, until `show_window`).
     pub visible: bool,
+    /// Another program's window it's kept over, by its exported handle.
+    pub foreign_parent: Option<String>,
 }
 
 pub trait Platform {

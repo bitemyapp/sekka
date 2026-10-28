@@ -250,6 +250,10 @@ pub struct WindowSpec {
     pub kind: WindowKind,
     /// Opens hidden, until [`Cx::show_window`](crate::Cx::show_window).
     pub hidden: bool,
+    /// Kept over another program's window, named by the handle that
+    /// program exported (xdg-foreign v2), as a portal's dialog is over
+    /// the app that asked for it. Normal windows only.
+    pub foreign_parent: Option<String>,
 }
 
 impl WindowSpec {
@@ -262,6 +266,7 @@ impl WindowSpec {
             resizable: true,
             kind: WindowKind::Normal,
             hidden: false,
+            foreign_parent: None,
         }
     }
 
@@ -304,6 +309,15 @@ impl WindowSpec {
 
     pub fn utility(self) -> Self {
         self.kind(WindowKind::Utility)
+    }
+
+    /// Keep the window over another program's window: `handle` is what
+    /// that program exported, as a portal request's `wayland:<handle>`
+    /// parent names it. Where it can't be (no importer, a stale handle),
+    /// the window stands on its own.
+    pub fn foreign_parent(mut self, handle: impl Into<String>) -> Self {
+        self.foreign_parent = Some(handle.into());
+        self
     }
 }
 

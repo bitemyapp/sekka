@@ -83,7 +83,7 @@ What `launched` and `update` act with:
 
 | | |
 |---|---|
-| `open_window(WindowSpec) -> WindowKey` | `WindowSpec::new(title).size(w, h).min_size(..).max_size(..).resizable(b)`, `.dialog(parent)`, `.utility()`, `WindowSpec::layer(LayerOptions, w, h)`, `WindowSpec::lock(output)`. Sizes are the content's: where the kit draws the menu bar in the window (no Aizome shell), the bar comes on top. |
+| `open_window(WindowSpec) -> WindowKey` | `WindowSpec::new(title).size(w, h).min_size(..).max_size(..).resizable(b)`, `.dialog(parent)`, `.utility()`, `.foreign_parent(handle)` (over another program's window, by the handle it exported: a portal dialog's `wayland:<handle>`), `WindowSpec::layer(LayerOptions, w, h)`, `WindowSpec::lock(output)`. Sizes are the content's: where the kit draws the menu bar in the window (no Aizome shell), the bar comes on top. |
 | `close_window(key)`, `set_title(key, t)`, `request_size`, `minimise`, `set_fullscreen(key, on)`, `activate(key)`, `windows()`, `key_window()` | `activate` brings a window forward (a one-instance app hearing its second launch); `key_window` is the window with the keyboard (or the last that had it), the one a document app's menu commands are for. |
 | `show_window(key)`, `hide_window(key)`, `prepare_window(key, scale) -> bool` | A window opened hidden (`.hidden()` on its `WindowSpec`) or hidden since isn't viewed, its widgets' ticks wait and its focus leaves it (coming back when it shows); shown, it's as it was. `prepare_window` draws a hidden window ahead of its next showing at the scale it'll show at: laid out at once, drawn offscreen at idle in bands of about a millisecond, again when asked, when its focus moves or the theme changes. Shown at that size and scale, its first frame copies the pictures in and draws only what changed since, rather than rasterising all of it (the shell's palette: see `ahead.rs`). The pictures hold the window's pixels while it's hidden. |
 | `spawn(\|\| msg)` | Work on the kit's thread pool; its result comes back as a message. |
@@ -544,7 +544,9 @@ fn adds() {
 in-window menu bar. Input: `click`, `click_text`, `press`/`release`,
 `drag`, `move_to`, `scroll`, `pinch`, `key`, `named`, `command`, `type_text`, `ime`,
 `focus_window`, `send(msg)`, `resize`, `window_state` (the compositor's
-answer; `fullscreen_asked` says what was asked). Looking: `find(text)`,
+answer; `fullscreen_asked` says what was asked). `settle(wait, |p| done)`
+handles what `cx.spawn` and streams send until the program says it's
+done (a folder read, a scan finished), for up to `wait`. Looking: `find(text)`,
 `find_id(name)`, `texts()`, `semantics()`, `selection()`,
 `focused_name()`, `popups()`, `take_damage()`, `title()`, `stats()`.
 `check_frame(window)` makes the window's next frame as a compositor's

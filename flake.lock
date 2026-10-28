@@ -629,17 +629,17 @@
     "sidestep": {
       "flake": false,
       "locked": {
-        "lastModified": 1792372510,
-        "narHash": "sha256-HGpKhuaSNMl8tmy39RKd/ZQbw2X27OaIcSp7S/nl8I4=",
+        "lastModified": 1793172108,
+        "narHash": "sha256-mH8C+/dnySZCz5QGghYxMmTH3uotNHbMxExRfnYytZ4=",
         "owner": "bitemyapp",
         "repo": "sidestep",
-        "rev": "dae957e913376a26e642d6abee533eb755fb9092",
+        "rev": "7bfacbbbc9cd70cf3442def70368e254f3c3712d",
         "type": "github"
       },
       "original": {
         "owner": "bitemyapp",
         "repo": "sidestep",
-        "rev": "dae957e913376a26e642d6abee533eb755fb9092",
+        "rev": "7bfacbbbc9cd70cf3442def70368e254f3c3712d",
         "type": "github"
       }
     },
