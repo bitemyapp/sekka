@@ -1,0 +1,22 @@
+smoke passed
+fonts passed
+search passed
+shell passed
+links passed
+cursor passed
+pixel_scroll passed
+sprites passed
+{
+  "suites": {
+    "smoke": "passed",
+    "fonts": "passed",
+    "search": "passed",
+    "shell": "passed",
+    "links": "passed",
+    "cursor": "passed",
+    "pixel_scroll": "passed",
+    "sprites": "passed"
+  },
+  "source_matches": 235,
+  "licenses": 9
+}

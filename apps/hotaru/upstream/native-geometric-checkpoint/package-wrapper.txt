@@ -1,0 +1,30 @@
+#! /nix/store/nnm9gdr70ihc6zc9298mzz8jpcgaciql-bash-5.3p20/bin/bash -e
+export AIZOME_FONT_DIR=${AIZOME_FONT_DIR-'/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts'}
+export HOTARU_FONT_DIR=${HOTARU_FONT_DIR-'/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts'}
+export HOTARU_RESOURCES_DIR=${HOTARU_RESOURCES_DIR-'/nix/store/8nf099h9921x5jpgw625xvp7k72b3hns-hotaru-0.1.0/share/hotaru'}
+export HOTARU_TERMINFO_DIR=${HOTARU_TERMINFO_DIR-'/nix/store/8nf099h9921x5jpgw625xvp7k72b3hns-hotaru-0.1.0/share/terminfo'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+':'$LD_LIBRARY_PATH':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH/':''/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib'':'/':'}
+LD_LIBRARY_PATH='/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib'$LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH#':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH%':'}
+export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+':'$LD_LIBRARY_PATH':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH/':''/nix/store/p8rsjqmh7fhkhky8rdz1vrl7lk57ycnp-libxkbcommon-1.13.2/lib'':'/':'}
+LD_LIBRARY_PATH='/nix/store/p8rsjqmh7fhkhky8rdz1vrl7lk57ycnp-libxkbcommon-1.13.2/lib'$LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH#':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH%':'}
+export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+':'$LD_LIBRARY_PATH':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH/':''/nix/store/hxbi1p1xhgkyjxg7zmyi9qwac5yc4i8j-fontconfig-2.18.3-lib/lib'':'/':'}
+LD_LIBRARY_PATH='/nix/store/hxbi1p1xhgkyjxg7zmyi9qwac5yc4i8j-fontconfig-2.18.3-lib/lib'$LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH#':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH%':'}
+export LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+':'$LD_LIBRARY_PATH':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH/':''/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib'':'/':'}
+LD_LIBRARY_PATH='/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib'$LD_LIBRARY_PATH
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH#':'}
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH%':'}
+export LD_LIBRARY_PATH
+exec -a "$0" "/nix/store/8nf099h9921x5jpgw625xvp7k72b3hns-hotaru-0.1.0/bin/.hotaru-wrapped"  "$@" 

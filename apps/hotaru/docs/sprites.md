@@ -6,6 +6,9 @@ Hotaru's existing Aizome/Sidestep software drawing path. It has no
 Ghostty runtime or Zig dependency. It does not establish whole-application or
 GPU performance parity.
 
+The [442-sprite package checkpoint](geometric-checkpoint.md) records the current
+combined release build and all eight native Wayland suites.
+
 ## Qualified raster scope
 
 The first 153-character slice covered U+2500–U+256C, U+2574–U+257F and all
