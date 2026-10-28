@@ -9,6 +9,10 @@ fn existing_rectilinear_sprites_match_four_committed_upstream_atlases() {
 fn curves_powerline_match_upstream_pngs_and_translation_regressions() {
     check(include_bytes!("fixtures/curves-powerline.rle"), 123);
 }
+#[test]
+fn braille_matches_four_committed_upstream_atlases() {
+    check(include_bytes!("fixtures/braille.rle"), 1024);
+}
 fn check(bytes: &[u8], expected_count: usize) {
     assert_eq!(&bytes[..4], b"HSP1");
     let mut at = 4;

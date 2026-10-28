@@ -1,15 +1,17 @@
 # Native terminal sprites
 
-The initial integrated slice ports 153 rectilinear Ghostty sprites to a safe
-Rust raster and uses them in Hotaru's existing Aizome/Sidestep software drawing path. It has no
+The integrated port now covers 434 Ghostty sprites in a safe Rust raster,
+including box/block, geometric Powerline and Braille characters. It uses
+Hotaru's existing Aizome/Sidestep software drawing path. It has no
 Ghostty runtime or Zig dependency. It does not establish whole-application or
 GPU performance parity.
 
 ## Qualified raster scope
 
-The port covers U+2500–U+256C, U+2574–U+257F and all U+2580–U+259F. The separately qualified expansion below adds rounded corners, diagonal
-strokes and the pinned geometric Powerline family. Braille, geometric,
-legacy-computing and branch sprites remain unported. Those codepoints use the
+The first 153-character slice covered U+2500–U+256C, U+2574–U+257F and all
+U+2580–U+259F. The qualified expansions below add rounded corners, diagonal
+strokes, the pinned geometric Powerline family and all 256 Braille patterns.
+Other geometric, legacy-computing and branch sprites remain unported. Those codepoints use the
 ordinary native font path. Supported characters with additional combining or
 presentation-selector scalars also retain ordinary font shaping pending an
 exact upstream selection-policy port.
@@ -152,3 +154,27 @@ reproduction commands and the preserved initial failing mask report.
 907 of 1,085 character slots and 11 internal sprite rasters still lack this port's
 exact-raster qualification. Registered slots may include intentional blanks;
 ordinary font fallback and native decorations do not prove sprite equivalence.
+
+## Qualified Braille expansion
+
+The next isolated slice adds every U+2800–28FF pattern, bringing the combined
+character sprite set to 434. It preserves pinned Ghostty's integer square-dot
+geometry, including deliberately blank tiny patterns. No native runtime adapter,
+cache, dependency, lockfile or license-notice change is required.
+
+An actual upstream ReleaseSafe assertion fails at valid 14×23 metrics because it
+rejects two remaining pixels on each axis; another dot increment needs four
+vertical pixels. The port corrects that bookkeeping invariant while preserving
+every coordinate and testing all 4096² layout pairs for bounds/nonoverlap. The
+retained source/logs explain this explicit deviation. The unchanged ReleaseFast
+pixel oracle passes 594,266 complete masks and metadata checks across 2,330 metrics
+(2,245,723,934 bytes), plus 1,024 committed PNG expectations. Large maximum masks
+use blank/eight-basis/full patterns; ordinary metrics cover all 256 patterns.
+
+Combined native captures compare all 434 glyphs at 1/1.25/2/back 1: 1,736 comparisons,
+5,593,392 RGB bytes exact and matching initial/final 1× hashes. Eleven pure tests,
+57 ordinary native tests and strict pure/native Clippy pass. Package qualification
+is separate; no comparative speed claim follows from these checks.
+`upstream/sprites/braille/README.md` contains reproduction, hashes, failure evidence
+and scope. Its inventory leaves 651 registered character slots plus 11 internal
+sprite rasters unqualified, preserving prior reports unchanged.

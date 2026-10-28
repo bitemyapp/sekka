@@ -8,13 +8,14 @@ fn metrics(w: u32, h: u32, t: u32) -> Metrics {
 }
 #[test]
 fn complete_explicit_ranges_and_exclusions() {
-    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 178);
+    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 434);
 
     for cp in [
         0,
         0x24ff,
         0x25a0,
-        0x2800,
+        0x27ff,
+        0x2900,
         0xe0c0,
         0xe0d3,
         0xe0d5,
@@ -97,6 +98,45 @@ fn ink_bounds_reconstruct_every_nonzero_pixel() {
                 } else {
                     assert!(r.alpha.iter().all(|a| *a == 0));
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn braille_is_a_fixed_eight_dot_union_with_inert_stroke_thickness() {
+    for (w, h) in [
+        (1, 1),
+        (3, 4),
+        (4, 8),
+        (9, 17),
+        (11, 24),
+        (14, 30),
+        (22, 49),
+    ] {
+        let dots: Vec<_> = (0..8)
+            .map(|bit| rasterize(0x2800 | (1 << bit), metrics(w, h, 1)).unwrap())
+            .collect();
+        let blank = rasterize(0x2800, metrics(w, h, 1)).unwrap();
+        assert!(blank.ink.is_none());
+        for pattern in 0..=255 {
+            let raster = rasterize(0x2800 | pattern, metrics(w, h, 1)).unwrap();
+            assert_eq!(
+                raster,
+                rasterize(0x2800 | pattern, metrics(w, h, w.min(h))).unwrap()
+            );
+            for (index, &pixel) in raster.alpha.iter().enumerate() {
+                let expected = dots
+                    .iter()
+                    .enumerate()
+                    .any(|(bit, dot)| pattern & (1 << bit) != 0 && dot.alpha[index] != 0);
+                assert_eq!(pixel, if expected { 255 } else { 0 });
+            }
+            if let Some(ink) = raster.ink {
+                let x = -raster.origin_x as u32;
+                let y = -raster.origin_y as u32;
+                assert!(ink.x >= x && ink.y >= y);
+                assert!(ink.x + ink.width <= x + w && ink.y + ink.height <= y + h);
             }
         }
     }

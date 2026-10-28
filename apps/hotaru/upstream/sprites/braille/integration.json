@@ -1,0 +1,10 @@
+{
+  "status": "qualified isolated source integrated",
+  "base": "64826df",
+  "product_files_matched": 9,
+  "tested_source_files_matched": 231,
+  "patch_sha256": "bb8b5ea8cb9a21fffcec1f1c8cd973f407bef2717ffe74f26f5ac7a87fbcb889",
+  "binary_fixture_sha256": "24e7ce64cbad7da58899dbe3e303a6fc6586b9e6cb048d4eed7f4748813c19f0",
+  "package_status": "pending separate combined Nix/runtime qualification",
+  "native_runtime_adapter": "unchanged"
+}
