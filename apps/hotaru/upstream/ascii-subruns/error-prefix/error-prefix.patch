@@ -1,0 +1,217 @@
+--- a/crates/hotaru-core/src/lib.rs
++++ b/crates/hotaru-core/src/lib.rs
+@@ -195,9 +195,17 @@
+                     let end = printable_utf8;
+                     let valid = match validate_utf8_run(&bytes[..end]) {
+                         Ok(text) => Some(text),
+-                        Err(error) => std::str::from_utf8(&bytes[..error.valid_up_to()])
+-                            .ok()
+-                            .filter(|s| !s.is_empty()),
++                        Err(error) => {
++                            if let Ok(text) = std::str::from_utf8(&bytes[..error.valid_up_to()])
++                                && !text.is_empty()
++                            {
++                                print_prefix_before_error(&mut self.state, text);
++                                bytes = &bytes[text.len()..];
++                                printable_utf8 -= text.len();
++                                continue;
++                            }
++                            None
++                        }
+                     };
+                     if let Some(text) = valid {
+                         self.state.print_utf8(text);
+@@ -273,3 +281,38 @@
+ fn validate_utf8_run(bytes: &[u8]) -> Result<&str, simdutf8::compat::Utf8Error> {
+     simdutf8::compat::from_utf8(bytes)
+ }
++
++// A malformed sequence often follows a valid non-ASCII scalar and a longer
++// ASCII tail. Reuse the packed ASCII writer only on this error-prefix path;
++// ordinary valid UTF-8 printing keeps its existing implementation unchanged.
++#[inline(never)]
++fn print_prefix_before_error(state: &mut screen::State, text: &str) {
++    const MIN_ASCII: usize = 16;
++    let bytes = text.as_bytes();
++    let mut at = 0;
++    let mut pending = 0;
++    while at < bytes.len() {
++        // ASCII bytes cannot occur inside a multibyte UTF-8 scalar. Thus each
++        // ASCII start and end below is a valid boundary in the borrowed str.
++        if !bytes[at].is_ascii() {
++            at += 1;
++            continue;
++        }
++        let count = scan::printable_ascii(&bytes[at..]);
++        if count >= MIN_ASCII {
++            if pending < at {
++                state.print_utf8(&text[pending..at]);
++            }
++            state.print_ascii(&bytes[at..at + count]);
++            at += count;
++            pending = at;
++        } else {
++            // Input comes from the existing control-free scanner; the max
++            // also makes this local traversal progress on any ASCII control.
++            at += count.max(1);
++        }
++    }
++    if pending < text.len() {
++        state.print_utf8(&text[pending..]);
++    }
++}
+--- /dev/null
++++ b/crates/hotaru-core/tests/utf8_ascii_runs.rs
+@@ -0,0 +1,152 @@
++use hotaru_core::{GraphemeWidthMethod, HistoryLimits, Terminal};
++
++fn same(a: &mut Terminal, b: &mut Terminal) {
++    let x = a.snapshot_all();
++    let y = b.snapshot_all();
++    assert_eq!((x.cols, x.rows, x.cursor), (y.cols, y.rows, y.cursor));
++    assert_eq!(x.modes, y.modes);
++    assert_eq!(x.palette, y.palette);
++    assert_eq!(a.scrollback_len(), b.scrollback_len());
++    assert_eq!(
++        a.history_memory().active_bytes,
++        b.history_memory().active_bytes
++    );
++    assert_eq!(
++        a.history_memory().logical_bytes,
++        b.history_memory().logical_bytes
++    );
++    assert_eq!(x.lines.len(), y.lines.len());
++    for (x, y) in x.lines.iter().zip(&y.lines) {
++        assert_eq!(x.wrapped(), y.wrapped());
++        assert_eq!(x.cells(), y.cells());
++        for col in 0..x.cells().len() {
++            assert_eq!(x.style(x.cells()[col]), y.style(y.cells()[col]));
++            assert_eq!(x.grapheme(col), y.grapheme(col));
++            assert_eq!(x.hyperlink(col), y.hyperlink(col));
++        }
++    }
++    assert_eq!(a.take_responses(), b.take_responses());
++    assert_eq!(a.take_events(), b.take_events());
++}
++
++#[test]
++fn error_prefix_ascii_preserves_unicode_wrap_charset_and_rep_across_chunks() {
++    let bodies = [
++        "雪{ascii}\u{301}\x1b[3b",
++        "\u{600}{ascii}\x1b[2b",
++        "雪{ascii}1\u{fe0f}\u{20e3}\x1b[2b",
++        "雪{ascii}\u{fe0f}日",
++        "雪{ascii}\u{80}\x1b[2b",
++        "雪{ascii}👩🏽‍💻end",
++        "\x1b(0雪{ascii}x\x1b(B",
++        "\x1b(A雪{ascii}#\x1b(B",
++        "\x1b*0\x1bN雪{ascii}x",
++        "\x1b[4h雪{ascii}\x1b[4l",
++        "\x1b[1\"q雪{ascii}\x1b[0\"q",
++    ];
++    for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
++        for cols in [1, 2, 7, 16, 80] {
++            for nowrap in [false, true] {
++                for count in [15, 16, 17, 48] {
++                    for body in bodies {
++                        let mut data = if nowrap { b"\x1b[?7l".to_vec() } else { vec![] };
++                        let (before, after) = body.split_once("{ascii}").unwrap();
++                        data.extend(before.as_bytes());
++                        data.extend_from_slice(&vec![b'a'; count]);
++                        data.extend(b"\xf0\x9f");
++                        data.extend(after.as_bytes());
++                        data.extend(b"\x1b[6n");
++                        for chunk in [1, 7, 16, 31] {
++                            let mut whole = Terminal::new(cols, 3, 32);
++                            let mut split = Terminal::new(cols, 3, 32);
++                            for t in [&mut whole, &mut split] {
++                                t.set_default_grapheme_width(mode);
++                                t.feed("old 雪雪\r\nline\r".as_bytes());
++                            }
++                            whole.feed(&data);
++                            for part in data.chunks(chunk) {
++                                split.feed(part);
++                            }
++                            same(&mut whole, &mut split);
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn error_prefix_ascii_preserves_metadata_peaks_cow_and_compressed_history() {
++    for limit in [Some(12_000), None] {
++        for chunk in [1, 7, 16, 65_536] {
++            for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
++                let limits = HistoryLimits {
++                    rows: 1000,
++                    bytes: limit,
++                };
++                let mut whole = Terminal::with_history_limits(80, 4, limits);
++                let mut split = Terminal::with_history_limits(80, 4, limits);
++                for t in [&mut whole, &mut split] {
++                    t.set_default_grapheme_width(mode);
++                    for _ in 0..180 {
++                        t.feed(b"historical text\r\n");
++                    }
++                    while t.compress_history_step() {}
++                }
++                let held = (whole.content_snapshot(), split.content_snapshot());
++                for i in 0..96 {
++                    let setup = format!(
++                        "\r\x1b]8;id={i};https://example.test/{i}\x1b\\\x1b[38;5;{};44m雪雪e{}\x1b]8;;\x1b\\\r",
++                        i % 16,
++                        "\u{301}".repeat(i % 31)
++                    );
++                    let mut write = format!("\x1b[31;44m雪{}", "a".repeat(48)).into_bytes();
++                    write.extend(b"\xf0\x9f");
++                    write.extend("\u{301}\x1b[2b\r\n".as_bytes());
++                    for data in [setup.as_bytes(), write.as_slice()] {
++                        let render = (whole.snapshot(), split.snapshot());
++                        whole.feed(data);
++                        for part in data.chunks(chunk) {
++                            split.feed(part);
++                        }
++                        same(&mut whole, &mut split);
++                        assert_eq!(render.0.plain_text(), render.1.plain_text());
++                    }
++                    if i % 17 == 0 {
++                        for t in [&mut whole, &mut split] {
++                            while t.compress_history_step() {}
++                        }
++                        same(&mut whole, &mut split);
++                    }
++                }
++                assert_eq!(held.0.rows, held.1.rows);
++                for (a, b) in held.0.rows().zip(held.1.rows()) {
++                    assert_eq!(a.cells(), b.cells());
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn long_dense_valid_prefix_before_error_matches_bytewise_and_boundary_chunks() {
++    for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
++        for suffix in [b"".as_slice(), b"abcdefghijklmnopabcdefghijklmnop"] {
++            let mut data = "雪".repeat(16_384).into_bytes();
++            data.extend(suffix);
++            data.extend(b"\xf0\x9f\r\n\x1b[6n");
++            for chunk in [1, 7, 65_535, 65_536] {
++                let mut whole = Terminal::new(120, 12, 1024);
++                let mut split = Terminal::new(120, 12, 1024);
++                whole.set_default_grapheme_width(mode);
++                split.set_default_grapheme_width(mode);
++                whole.feed(&data);
++                for part in data.chunks(chunk) {
++                    split.feed(part);
++                }
++                same(&mut whole, &mut split);
++            }
++        }
++    }
++}

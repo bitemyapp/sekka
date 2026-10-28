@@ -38,3 +38,25 @@ The malformed-prefix gains remain, so the next investigation can restrict the
 handoff to the error path while leaving ordinary valid-text printing unchanged.
 The cached-cursor results do not prove that repeated decoding caused the first
 version's entire regression.
+
+The [error-prefix-only version](../upstream/ascii-subruns/error-prefix/README.md)
+restores the original screen implementation and invokes an outlined partition
+only after a UTF-8 validation error. It also remains rejected. Its new long
+dense-prefix case exposes a 16.7% legacy / 10.7% Unicode scan penalty, despite
+32–41% improvements on short truncated patterns. Invalid-lead cases regress
+even though their empty valid prefixes never call the helper, so the changed
+feed branch and generated code also require attribution. All 142 debug and
+release tests, lint checks, pinned-reference gates and 32 timing-state gates
+pass. An incomplete scalar at a chunk boundary selects this path too; it is
+not accurate to say that all ultimately valid streams are unaffected.
+
+The subsequent [bounded instruction attribution](../upstream/ascii-subruns/error-prefix-attribution/README.md)
+uses matching diagnostic compiler flags and preserves native disassembly
+separately. In a single long dense-prefix case, the added helper accounts for
+344,099 of 344,220 extra instructions; the original UTF-8 printer's count is
+unchanged. This identifies the scan cost directly. Invalid-lead and mixed-text
+whole-process counts change only 0.011% and 0.017%, respectively, which does not
+explain their native timing differences. The feed function's native layout and
+branch order change, but no hardware-counter experiment has established the
+remaining cause. Diagnostic instruction counts are not native wall-clock
+measurements. No fourth core candidate is included in this evidence.
