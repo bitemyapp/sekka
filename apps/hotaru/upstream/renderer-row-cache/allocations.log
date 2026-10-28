@@ -1,0 +1,9 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/apps/hotaru)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.77s
+     Running unittests src/lib.rs (/home/callen/work/hotaru-shaped-row-20261028/target/release/deps/aizome_hotaru-2284749389ced806)
+
+running 1 test
+test font::tests::benchmark_row_preparation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 15.32s
+

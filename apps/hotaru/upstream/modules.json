@@ -2392,10 +2392,16 @@
       "blob": "2696985a412e5a1def527b7479d27ec2dbd011a9",
       "bytes": 2925,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "../../desktop/aizome/apps/hotaru/src/font.rs"
+      ],
+      "evidence": [
+        "renderer-row-cache/summary.json",
+        "renderer-row-cache/source-manifest.json",
+        "../docs/renderer-row-cache.md"
+      ],
+      "note": "Aizome replacement reuses immutable shaped rows with owned source identities, overlay/font/scale invalidation and bounded logical admission. 600 seeded transitions and 1,920 workload snapshots match the previous Hotaru shaping path. Worker timings compare Hotaru implementations, not Ghostty; full shaping compatibility and application performance parity remain open."
     },
     {
       "path": "src/font/shaper/coretext.zig",
@@ -3761,10 +3767,18 @@
       "blob": "3314db29f826883a68434eaf4ee91cd5911a5346",
       "bytes": 6444,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/screen.rs",
+        "../../desktop/aizome/apps/hotaru/src/terminal_view.rs",
+        "../../desktop/aizome/crates/aizome-kit/src/tree.rs"
+      ],
+      "evidence": [
+        "cursor-fixtures.json",
+        "combined-core-cursor/summary.json",
+        "../docs/cursor.md"
+      ],
+      "note": "Typed block/underline/bar state, DECSCUSR defaults, DEC 12 and screen transitions have 2,268 pinned-library comparisons. Native drawing covers blink, hollow inactive cursor, wide cells, preedit and fractional scales with one cancellable timer per widget. Exact Ghostty sprite pixels, configurable colors/opacity, password sprites and animated movement remain unimplemented or unqualified."
     },
     {
       "path": "src/renderer/generic.zig",
@@ -4011,10 +4025,16 @@
       "blob": "74a6410128346c66848a8d9937c3598a09be70d5",
       "bytes": 2523,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "../../desktop/aizome/apps/hotaru/src/font.rs",
+        "../../desktop/aizome/apps/hotaru/src/terminal_view.rs"
+      ],
+      "evidence": [
+        "renderer-row-cache/summary.json",
+        "../docs/renderer-row-cache.md"
+      ],
+      "note": "Native row preparation shares immutable spans and projects cached row-relative hyperlinks onto the exact displayed snapshot. Seeded and workload comparisons cover movement, selection, search, cursor boundaries, cancellation and retained frames against the previous Hotaru algorithm. Ghostty GPU row representation and full rendered equivalence remain open."
     },
     {
       "path": "src/renderer/shaders/glsl/bg_color.f.glsl",
@@ -5176,9 +5196,12 @@
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "cursor-fixtures.json",
+        "combined-core-cursor/summary.json",
+        "../tools/cursor-oracle.py"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Typed block/underline/bar shape, blinking, visibility and viewport presence; DECSCUSR 0-6, configured default/reset, DEC 12 query/save/restore and alternate-screen transitions match 756 pinned-library cases at three chunk sizes. Native app selects the GUI blinking default while the standalone core keeps the C API steady default. Full rendering/configuration parity remains separate and incomplete."
     },
     {
       "path": "src/terminal/dcs.zig",

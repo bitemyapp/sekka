@@ -1,0 +1,5 @@
+     Removed 190 files, 56.3MiB total
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-core-qualified-cursor-20261028/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-core-qualified-cursor-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 4.65s
+{"metadata": "artifacts/qualification/release-build.json", "source_sha256": "b9fcaa0ced20a2212e21685002a6da7b1fda89d3443394fe9afe82507c66ec3b", "binary_sha256": "82d9762f258059c84b78b71b62f67977055b29f3e94c544361d3d56f50b2a933"}

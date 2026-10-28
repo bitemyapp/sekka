@@ -69,6 +69,8 @@ pub enum Event {
     WindowFocus(bool),
     /// A tick the widget asked for came due ([`EventCx::request_tick`]).
     Tick,
+    /// A keyed, one-shot timer set by this widget. Keys are scoped to its node.
+    Timer(u32),
     /// Files or text dropped on the widget.
     Drop {
         pos: Point,
@@ -194,7 +196,7 @@ pub enum SemanticAction {
 
 /// A piece of interface that lays out, draws and answers input. See the
 /// module's documentation.
-pub trait Widget: 'static {
+pub trait Widget: std::any::Any {
     /// Its kind, for identity among unkeyed siblings and for debugging.
     fn name(&self) -> &'static str;
 
@@ -538,6 +540,18 @@ impl LayoutCx<'_, '_> {
         self.tree.ticks.push((id, after));
     }
 
+    pub fn is_focused(&self) -> bool {
+        self.env.focus == Some(self.id())
+    }
+
+    /// Replace this widget's timer at `key`. Independent of layout ticks.
+    pub fn set_timer(&mut self, key: u32, after: Duration) {
+        self.tree.widget_timers.push((self.id(), key, Some(after)));
+    }
+    pub fn cancel_timer(&mut self, key: u32) {
+        self.tree.widget_timers.push((self.id(), key, None));
+    }
+
     /// Redraw `rect` (its own coordinates): what a widget whose drawing
     /// it diffs itself (an editor's lines) found changed.
     pub fn invalidate_rect(&mut self, rect: Rect) {
@@ -669,6 +683,7 @@ pub(crate) struct Out {
     pub cursor: Option<Cursor>,
     pub ime: Option<(bool, Option<Rect>)>,
     pub ticks: Vec<(NodeId, Duration)>,
+    pub widget_timers: Vec<(NodeId, u32, Option<Duration>)>,
     pub menus: Vec<MenuRequest>,
     pub close_popup: bool,
     pub reveal: Option<(usize, Rect)>,
@@ -782,6 +797,11 @@ impl EventCx<'_, '_> {
         self.focused
     }
 
+    /// This widget owns keyboard focus in the active window.
+    pub fn has_keyboard_focus(&self) -> bool {
+        self.env.focus == Some(self.id())
+    }
+
     /// Whether nothing in the window has the focus (keys then go to what's
     /// under the pointer).
     pub fn nothing_focused(&self) -> bool {
@@ -833,6 +853,15 @@ impl EventCx<'_, '_> {
     pub fn request_tick(&mut self, after: Duration) {
         let id = self.id();
         self.out.ticks.push((id, after));
+    }
+
+    /// Replace this widget's one-shot timer at `key`. Only one is pending per
+    /// key; it is suspended when hidden and cancelled if the widget disappears.
+    pub fn set_timer(&mut self, key: u32, after: Duration) {
+        self.out.widget_timers.push((self.id(), key, Some(after)));
+    }
+    pub fn cancel_timer(&mut self, key: u32) {
+        self.out.widget_timers.push((self.id(), key, None));
     }
 
     pub fn clipboard_text(&mut self) -> Option<String> {

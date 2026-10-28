@@ -8,6 +8,12 @@ Sidestep files inspected here are individually hashed in
 [`upstream/renderer-audit/source-manifest.json`](../upstream/renderer-audit/source-manifest.json).
 These hashes identify the source audit, not a subsequently built package.
 
+The later [cursor/cache checkpoint](cursor-cache-checkpoint.md) integrates
+immutable shaped-row reuse and native cursor shapes/blinking. The table and
+source-level gaps below describe the original audited snapshot; their
+full-row-shaping and fixed-cursor observations are superseded by that checkpoint.
+GPU drawing/presentation and pixel-move scrolling remain open.
+
 ## What the two applications do
 
 | Stage | Current Hotaru / native Aizome / Sidestep | Pinned Linux Ghostty |

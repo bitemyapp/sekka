@@ -26,6 +26,49 @@ mod tests {
     use crate::{Color, Rgb};
 
     #[test]
+    fn inline_grapheme_overwrite_keeps_capacity_charge_and_heap_release_updates_peak() {
+        let mut row = Row::new(8);
+        let style = Style::default();
+        for col in [0, 1, 3] {
+            row.put(col, 'e', 1, style, false);
+            row.combine(col, '\u{301}');
+        }
+        for _ in 0..24 {
+            row.combine(3, '\u{301}');
+        }
+        let retained = row.clone();
+        let signal = triomphe::Arc::new(crate::memory::BudgetSignal::default());
+        row.attach_budget(&signal);
+        let before = row.owned_bytes();
+        signal.rebase(before);
+        signal.take_change();
+
+        row.put(0, 'x', 1, style, false);
+        assert_eq!(row.owned_bytes(), before);
+        assert_eq!(row.owned_bytes(), row.uncached_owned_bytes());
+        assert_eq!(signal.current(), before);
+        assert_eq!(signal.take_change(), None);
+
+        row.put(3, 'y', 1, style, false);
+        let after_heap = row.owned_bytes();
+        assert!(after_heap < before);
+        assert_eq!(after_heap, row.uncached_owned_bytes());
+        assert_eq!(signal.current(), after_heap);
+        assert_eq!(signal.take_change(), Some((after_heap, before)));
+
+        row.put(1, 'z', 1, style, false);
+        assert!(row.graphemes.is_empty());
+        assert!(row.graphemes.capacity() > 0);
+        assert_eq!(row.owned_bytes(), after_heap);
+        assert_eq!(row.owned_bytes(), row.uncached_owned_bytes());
+        assert_eq!(signal.take_change(), None);
+        assert_eq!(retained.grapheme(0), Some("e\u{301}"));
+        assert_eq!(retained.grapheme(1), Some("e\u{301}"));
+        assert_eq!(retained.grapheme(3).unwrap().chars().count(), 26);
+        assert_eq!(retained.owned_bytes(), before);
+    }
+
+    #[test]
     fn partial_reset_matches_full_clear_through_mixed_row_edits() {
         let mut actual = Row::new(80);
         let mut eager = actual.clone();
@@ -197,6 +240,13 @@ impl Row {
     pub(crate) fn attach_budget(&mut self, signal: &triomphe::Arc<crate::memory::BudgetSignal>) {
         self.owned_bytes();
         self.memory_charge.attach(signal);
+    }
+    /// Conservative logical owned-storage estimate, including retained table
+    /// capacities. This is an admission charge, not RSS or uniquely allocated
+    /// bytes; multiple holders can count the same immutable row. Shared page
+    /// backing must also be accounted for if the storage representation changes.
+    pub fn storage_bytes_estimate(&self) -> usize {
+        self.owned_bytes()
     }
     pub(crate) fn owned_bytes(&self) -> usize {
         self.memory_charge.get(|| self.uncached_owned_bytes())
@@ -372,8 +422,9 @@ impl Row {
         if !self.graphemes.is_empty() {
             let first = if left { start - 1 } else { start };
             let last = end + usize::from(right);
-            self.graphemes.retain(|&col, _| col < first || col >= last);
-            self.refresh_memory_charge();
+            if self.graphemes.retain(|&col, _| col < first || col >= last) {
+                self.refresh_memory_charge();
+            }
         }
         if self.links.is_some() {
             self.set_hyperlink_range(

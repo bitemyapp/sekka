@@ -8,11 +8,23 @@ use std::collections::VecDeque;
 use triomphe::Arc;
 use unicode_width::UnicodeWidthChar;
 
+/// The shape requested by DECSCUSR, independent of focus and blink phase.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum CursorShape {
+    #[default]
+    Block,
+    Underline,
+    Bar,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cursor {
     pub col: usize,
     pub row: usize,
     pub visible: bool,
+    pub in_viewport: bool,
+    pub shape: CursorShape,
+    pub blinking: bool,
 }
 impl Default for Cursor {
     fn default() -> Self {
@@ -20,6 +32,9 @@ impl Default for Cursor {
             col: 0,
             row: 0,
             visible: true,
+            in_viewport: true,
+            shape: CursorShape::Block,
+            blinking: false,
         }
     }
 }
@@ -92,8 +107,8 @@ struct SavedCursor {
 // Unsaved slots use protocol defaults, including when the application's
 // configured default for mode 2027 differs. Keep unknown modes unrecognized.
 const SAVED_MODE_NUMBERS: &[u16] = &[
-    1, 6, 7, 9, 25, 47, 66, 67, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035, 1036,
-    1047, 1048, 1049, 2004, 2027,
+    1, 6, 7, 9, 12, 25, 47, 66, 67, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035,
+    1036, 1047, 1048, 1049, 2004, 2027,
 ];
 
 struct SavedModes(u32);
@@ -535,7 +550,10 @@ pub(crate) struct State {
     active_charset: usize,
     single_shift: Option<usize>,
     protected: bool,
-    cursor_style: u16,
+    cursor_blinking: bool,
+    default_cursor_shape: CursorShape,
+    default_cursor_blinking: bool,
+    cursor_is_default: bool,
     next_link_id: u64,
     tabs: Vec<bool>,
     default_colors: TerminalColors,
@@ -574,7 +592,10 @@ impl State {
             active_charset: 0,
             single_shift: None,
             protected: false,
-            cursor_style: 1,
+            cursor_blinking: false,
+            default_cursor_shape: CursorShape::Block,
+            default_cursor_blinking: false,
+            cursor_is_default: true,
             next_link_id: 0,
             tabs: (0..cols).map(|c| c != 0 && c % 8 == 0).collect(),
             default_colors: TerminalColors::default(),
@@ -588,6 +609,36 @@ impl State {
             responses: Vec::new(),
             events: Vec::new(),
         }
+    }
+    pub fn set_default_cursor(&mut self, shape: CursorShape, blinking: bool) {
+        self.default_cursor_shape = shape;
+        self.default_cursor_blinking = blinking;
+        if self.cursor_is_default {
+            self.set_cursor_style(0);
+        }
+        self.generation = self.generation.wrapping_add(1);
+    }
+    fn set_cursor_style(&mut self, value: u16) {
+        self.cursor_is_default = value == 0;
+        self.cursor_blinking = if value == 0 {
+            self.default_cursor_blinking
+        } else {
+            value % 2 == 1
+        };
+        self.screen_mut().cursor.shape = match value {
+            0 => self.default_cursor_shape,
+            3 | 4 => CursorShape::Underline,
+            5 | 6 => CursorShape::Bar,
+            _ => CursorShape::Block,
+        };
+    }
+    fn cursor_style(&self) -> u16 {
+        let base = match self.screen().cursor.shape {
+            CursorShape::Block => 1,
+            CursorShape::Underline => 3,
+            CursorShape::Bar => 5,
+        };
+        base + u16::from(!self.cursor_blinking)
     }
     pub fn set_default_grapheme_width(&mut self, method: crate::GraphemeWidthMethod) {
         let enabled = method == crate::GraphemeWidthMethod::Unicode;
@@ -699,7 +750,10 @@ impl State {
             .take(screen.lines.len())
             .collect();
         let mut cursor = screen.cursor;
-        cursor.visible &= offset == 0;
+        cursor.row += offset;
+        cursor.in_viewport = cursor.row < screen.lines.len();
+        cursor.visible &= cursor.in_viewport;
+        cursor.blinking = self.cursor_blinking;
         Snapshot {
             position: screen.history.position(begin, screen.lines.len()),
             cols: screen.cols,
@@ -1154,8 +1208,10 @@ impl State {
         self.protected = saved.protected;
         let s = self.screen_mut();
         let visible = s.cursor.visible;
+        let shape = s.cursor.shape;
         s.cursor = saved.cursor;
         s.cursor.visible = visible;
+        s.cursor.shape = shape;
         s.cursor.col = s.cursor.col.min(s.cols - 1);
         s.cursor.row = s.cursor.row.min(s.lines.len() - 1);
         s.wrap_pending = saved.wrap_pending;
@@ -1197,7 +1253,11 @@ impl State {
             self.screen_mut().set_active_link(None);
             self.modes.alternate_screen = set;
             let screen = self.screen_mut();
+            let shape = screen.cursor.shape;
             screen.cursor = old_cursor;
+            if value == 1049 && !set {
+                screen.cursor.shape = shape;
+            }
             screen.wrap_pending = old_wrap;
             // Scroll margins are terminal state shared by the two screens.
             screen.top = top;
@@ -1265,6 +1325,7 @@ impl State {
                 self.move_to(0, 0);
             }
             7 => self.autowrap = set,
+            12 => self.cursor_blinking = set,
             25 => self.screen_mut().cursor.visible = set,
             47 | 1047 | 1049 => {
                 let bit = match value {
@@ -1334,6 +1395,7 @@ impl State {
                 1007 => Some(self.modes.mouse_alternate_scroll),
                 6 => Some(self.origin),
                 7 => Some(self.autowrap),
+                12 => Some(self.cursor_blinking),
                 25 => Some(self.screen().cursor.visible),
                 47 | 1047 | 1049 => Some(
                     self.alternate_mode_bits
@@ -1375,7 +1437,7 @@ impl State {
         self.charset = [0; 4];
         self.active_charset = 0;
         self.single_shift = None;
-        self.cursor_style = 1;
+        self.set_cursor_style(0);
         let screen = self.screen_mut();
         screen.cursor.visible = true;
         screen.top = 0;
@@ -1674,9 +1736,11 @@ impl Handler for State {
                 };
                 let colors = self.default_colors.clone();
                 let grapheme_cluster = self.default_grapheme_cluster;
+                let cursor_default = (self.default_cursor_shape, self.default_cursor_blinking);
                 let foreground = self.foreground_overridden.then_some(self.foreground);
                 let background = self.background_overridden.then_some(self.background);
                 *self = Self::new(cols, rows, limits);
+                self.set_default_cursor(cursor_default.0, cursor_default.1);
                 self.default_grapheme_cluster = grapheme_cluster;
                 self.modes.grapheme_cluster = grapheme_cluster;
                 self.set_default_colors(colors);
@@ -1715,7 +1779,7 @@ impl Handler for State {
                     self.protected = first == 1
                 }
                 (b" ", b'q', None) if csi.params.len() == 1 && first <= 6 => {
-                    self.cursor_style = first.max(1)
+                    self.set_cursor_style(first)
                 }
                 (b"$", b'p', None | Some(b'?')) if csi.has_parameters && csi.params.len() == 1 => {
                     let status = self.mode_status(csi.private.is_some(), first);
@@ -2151,7 +2215,7 @@ impl Handler for State {
                 self.screen().top + 1,
                 self.screen().bottom + 1
             )),
-            b" q" => Some(format!("{} q", self.cursor_style)),
+            b" q" => Some(format!("{} q", self.cursor_style())),
             _ => None,
         };
         if let Some(reply) = reply {

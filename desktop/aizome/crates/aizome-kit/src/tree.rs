@@ -22,12 +22,12 @@ pub struct NodeId(pub(crate) u64);
 impl NodeId {
     pub(crate) const ROOT: NodeId = NodeId(0x9e37_79b9_7f4a_7c15);
 
-    pub(crate) fn keyed(self, key: u64) -> NodeId {
-        NodeId(hash_of(&(self.0, 1u8, key)))
+    pub(crate) fn keyed(self, key: u64, kind: std::any::TypeId) -> NodeId {
+        NodeId(hash_of(&(self.0, 1u8, key, kind)))
     }
 
-    pub(crate) fn indexed(self, index: usize, kind: &str) -> NodeId {
-        NodeId(hash_of(&(self.0, 2u8, index, kind)))
+    pub(crate) fn indexed(self, index: usize, kind: &str, widget_type: std::any::TypeId) -> NodeId {
+        NodeId(hash_of(&(self.0, 2u8, index, kind, widget_type)))
     }
 
     /// An id under this one for something that isn't an element (a
@@ -86,6 +86,7 @@ pub(crate) struct Tree {
     pub root: Option<usize>,
     /// Ticks widgets asked for while laid out (animations starting).
     pub ticks: Vec<(NodeId, std::time::Duration)>,
+    pub widget_timers: Vec<(NodeId, u32, Option<std::time::Duration>)>,
     /// What widgets found changed while laid out (their own coordinates):
     /// an editor's lines.
     pub local_damage: Vec<(usize, Rect)>,
@@ -144,12 +145,14 @@ impl Tree {
     fn mount_under(&mut self, el: RawElement, parent: Option<usize>, index: usize, base: NodeId) -> usize {
         let RawElement { mut widget, common, children } = el;
         let mut id = match common.key {
-            Some(k) => base.keyed(k),
-            None => base.indexed(index, widget.name()),
+            // A key preserves state across moves only for the same widget
+            // type. Replacing its concrete type ends timers and state together.
+            Some(k) => base.keyed(k, widget.as_ref().type_id()),
+            None => base.indexed(index, widget.name(), widget.as_ref().type_id()),
         };
         if self.by_id.contains_key(&id) {
             // Siblings with the same key: tell them apart by place.
-            id = id.indexed(index, "duplicate");
+            id = id.indexed(index, "duplicate", widget.as_ref().type_id());
         }
         let idx = self.nodes.len();
         if let Some(name) = &common.name {

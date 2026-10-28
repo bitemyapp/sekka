@@ -90,6 +90,7 @@ pub struct Pane {
     pub(crate) rendered: Option<Arc<crate::font::Frame>>,
     font_worker: Option<crate::font::Worker>,
     font_epoch: u64,
+    input_activity: u64,
     font_scale: f64,
 }
 
@@ -257,6 +258,7 @@ impl Hotaru {
                 .map_err(|error| log::warn!("Font worker: {error}"))
                 .ok(),
             font_epoch: 0,
+            input_activity: 0,
             font_scale: 1.0,
         });
         self.shape_pane(id, false);
@@ -376,6 +378,14 @@ impl Hotaru {
     }
 
     fn send(&mut self, id: u64, command: Command) {
+        let input = match &command {
+            Command::Input(_) | Command::Paste(_) => true,
+            Command::Key(key) => key.action != hotaru_core::input::KeyAction::Release,
+            _ => false,
+        };
+        if input && let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+            pane.input_activity = pane.input_activity.wrapping_add(1);
+        }
         if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id)
             && let Some(session) = &tab.session
             && let Err(e) = session.command(command)
@@ -591,6 +601,7 @@ impl Hotaru {
                     pane.selection,
                     self.bindings.clone(),
                     pane.rendered.clone(),
+                    pane.input_activity,
                 )
                 .id(format!("terminal-{}", pane.id))
                 .key(pane.id)

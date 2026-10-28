@@ -134,6 +134,14 @@ impl TestPlatform {
         }
     }
 
+    /// The number of native timers currently scheduled (including app timers).
+    pub fn pending_timers(&self) -> usize {
+        self.timers.len()
+    }
+    pub fn timer_tokens(&self) -> Vec<u64> {
+        self.timers.keys().copied().collect()
+    }
+
     /// The timer due first, if it's due by `until`.
     fn next_due(&self, until: Duration) -> Option<u64> {
         self.timers.iter().filter(|(_, (at, _))| *at <= until).min_by_key(|(t, (at, _))| (*at, **t)).map(|(t, _)| *t)
@@ -569,6 +577,11 @@ impl<P: Program> Harness<P> {
             Placement::Above => Point::new(a.x0, a.y0 - size.height),
         };
         Some(Rect::from_origin_size(origin, size))
+    }
+
+    /// Deliver an already-queued native timer callback, even after cancellation.
+    pub fn deliver_timer(&mut self, token: u64) {
+        self.rt.timer(token, &mut self.platform);
     }
 
     /// Move the clock on by `d`, firing the timers that come due.

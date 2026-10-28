@@ -92,7 +92,9 @@ impl GraphemeMap {
             self.1 -= heap(&self.0.remove(i).1);
         }
     }
-    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) {
+    /// Returns whether retained heap charges changed. Removing inline text
+    /// preserves the vector capacity and does not change its ownership charge.
+    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) -> bool {
         let mut removed = 0;
         self.0.retain(|(col, text)| {
             let yes = keep(col, text);
@@ -102,6 +104,7 @@ impl GraphemeMap {
             yes
         });
         self.1 -= removed;
+        removed != 0
     }
     pub fn shift_right(&mut self, col: usize, count: usize, len: usize) {
         let mut removed = 0;

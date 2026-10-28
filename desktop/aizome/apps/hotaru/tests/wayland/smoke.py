@@ -34,7 +34,8 @@ def run(binary, evidence):
     source_paths.update(path for path in (root / "apps/hotaru/resources").rglob("*") if path.is_file())
     source_paths.update(path for path in (root / "apps/hotaru/vendor/simdutf8").rglob("*")
                         if path.is_file() and not {"target", ".git"}.intersection(path.parts))
-    for directory in ["desktop/aizome/apps/hotaru", "apps/hotaru/crates/hotaru-core", "apps/hotaru/crates/hotaru-io"]:
+    for directory in ["desktop/aizome/apps/hotaru", "desktop/aizome/crates/aizome-kit",
+                      "apps/hotaru/crates/hotaru-core", "apps/hotaru/crates/hotaru-io"]:
         source_paths.update(path for path in (root / directory).rglob("*")
                             if path.is_file() and path.suffix in {".rs", ".c", ".py", ".toml"})
     source_paths.update(root / path for path in [

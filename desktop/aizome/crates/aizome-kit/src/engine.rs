@@ -71,6 +71,13 @@ pub(crate) enum TimerUse {
         node: NodeId,
         after: Duration,
     },
+    Widget {
+        win: WinId,
+        node: NodeId,
+        kind: std::any::TypeId,
+        key: u32,
+        after: Duration,
+    },
     /// The next band of a hidden window drawn ahead.
     Ahead {
         win: WinId,
@@ -160,6 +167,7 @@ pub(crate) struct Win {
     /// Its widgets' ticks that came while it was hidden: asked for again
     /// when it shows.
     pub held: Vec<(NodeId, Duration)>,
+    pub held_widgets: Vec<(NodeId, std::any::TypeId, u32, Duration)>,
     /// What had the focus when it was hidden, focused again when it shows
     /// (unless the program focused something meanwhile).
     pub refocus: Option<NodeId>,
@@ -203,6 +211,7 @@ impl Win {
             hidden: false,
             ahead: None,
             held: Vec::new(),
+            held_widgets: Vec::new(),
             refocus: None,
             refresh: false,
         }
@@ -464,8 +473,24 @@ impl Core {
         w.dirty = shown;
         platform.show_window(win, shown);
         if !shown {
+            let held: Vec<_> = self
+                .timers
+                .iter()
+                .filter_map(|(&token, timer)| match timer {
+                    TimerUse::Widget { win: target, node, kind, key, after } if *target == win => {
+                        Some((token, *node, *kind, *key, *after))
+                    }
+                    _ => None,
+                })
+                .collect();
+            for (token, node, kind, key, after) in held {
+                self.timers.remove(&token);
+                platform.cancel_timer(token);
+                self.wins.get_mut(&win).unwrap().held_widgets.push((node, kind, key, after));
+            }
             return;
         }
+        let held_widgets = std::mem::take(&mut w.held_widgets);
         let refocus = w.refocus.take().filter(|_| w.focused.is_none());
         let held = std::mem::take(&mut w.held);
         for (node, _) in &held {
@@ -473,6 +498,13 @@ impl Core {
         }
         for (node, after) in held {
             self.tick_later(win, node, after, platform);
+        }
+        for (node, kind, key, after) in held_widgets {
+            if self.wins.get(&win).and_then(|w| w.tree.get(node).map(|i| w.tree.nodes[i].widget.as_ref().type_id()))
+                == Some(kind)
+            {
+                self.widget_timer(win, node, key, Some(after), platform);
+            }
         }
         if let Some(f) = refocus {
             self.set_focus(win, Some(f), false, platform);
@@ -541,6 +573,7 @@ impl Core {
 
     fn close_win(&mut self, win: WinId, platform: &mut dyn Platform) {
         let Some(w) = self.wins.remove(&win) else { return };
+        self.prune_widget_timers(win, platform);
         if crate::inspect::enabled() {
             crate::inspect::closed(&self.info.app_id, win);
         }
@@ -695,6 +728,7 @@ impl Core {
         };
         w.snapshot = tree.snapshot();
         let ticks = std::mem::take(&mut tree.ticks);
+        let widget_timers = std::mem::take(&mut tree.widget_timers);
         w.tree = tree;
         w.built = true;
         w.dirty = false;
@@ -703,6 +737,10 @@ impl Core {
         w.states.retain(|(id, _), _| live.contains_key(id));
         for (node, after) in ticks {
             self.tick_later(win, node, after, platform);
+        }
+        self.prune_widget_timers(win, platform);
+        for (node, key, after) in widget_timers {
+            self.widget_timer(win, node, key, after, platform);
         }
         let Some(w) = self.wins.get_mut(&win) else { return };
         let mut area = 0.0;
@@ -776,6 +814,7 @@ impl Core {
         let damage = settle(&mut w.tree, &w.snapshot, w.focused, win, platform);
         w.snapshot = w.tree.snapshot();
         let ticks = std::mem::take(&mut w.tree.ticks);
+        let widget_timers = std::mem::take(&mut w.tree.widget_timers);
         let live = &w.tree.by_id;
         w.states.retain(|(id, _), _| live.contains_key(id));
         let mut area = 0.0;
@@ -787,6 +826,10 @@ impl Core {
         self.stats.damage(damage.len(), area, full);
         for (node, after) in ticks {
             self.tick_later(win, node, after, platform);
+        }
+        self.prune_widget_timers(win, platform);
+        for (node, key, after) in widget_timers {
+            self.widget_timer(win, node, key, after, platform);
         }
         if let Some(p) = self.wins.get(&win).and_then(|w| w.pointer) {
             self.update_hot(win, p, platform);
@@ -826,6 +869,11 @@ impl Core {
         w.dirty = false;
         let live = &w.tree.by_id;
         w.states.retain(|(id, _), _| live.contains_key(id));
+        let timers = std::mem::take(&mut w.tree.widget_timers);
+        self.prune_widget_timers(win, platform);
+        for (node, key, after) in timers {
+            self.widget_timer(win, node, key, after, platform);
+        }
         size
     }
 
@@ -1475,6 +1523,7 @@ impl Core {
             cursor,
             ime,
             ticks,
+            widget_timers,
             menus,
             close_popup,
             reveal,
@@ -1544,6 +1593,10 @@ impl Core {
         for (node, after) in ticks {
             self.tick_later(win, node, after, platform);
         }
+        self.prune_widget_timers(win, platform);
+        for (node, key, after) in widget_timers {
+            self.widget_timer(win, node, key, after, platform);
+        }
         if begin_move {
             platform.begin_move(win);
         }
@@ -1573,6 +1626,68 @@ impl Core {
         }
         let token = platform.set_timer(after, false);
         self.timers.insert(token, TimerUse::Tick { win, node, after });
+    }
+
+    fn widget_timer(
+        &mut self,
+        win: WinId,
+        node: NodeId,
+        key: u32,
+        after: Option<Duration>,
+        platform: &mut dyn Platform,
+    ) {
+        let old: Vec<_> = self
+            .timers
+            .iter()
+            .filter_map(|(&token, timer)| match timer {
+                TimerUse::Widget { win: w, node: n, key: k, .. } if (*w, *n, *k) == (win, node, key) => Some(token),
+                _ => None,
+            })
+            .collect();
+        for token in old {
+            self.timers.remove(&token);
+            platform.cancel_timer(token);
+        }
+        let Some(w) = self.wins.get_mut(&win) else { return };
+        w.held_widgets.retain(|(n, _, k, _)| (*n, *k) != (node, key));
+        let Some(after) = after else { return };
+        let Some(index) = w.tree.get(node) else { return };
+        let kind = w.tree.nodes[index].widget.as_ref().type_id();
+        if w.hidden {
+            w.held_widgets.push((node, kind, key, after));
+            return;
+        }
+        let token = platform.set_timer(after, false);
+        self.timers.insert(token, TimerUse::Widget { win, node, kind, key, after });
+    }
+
+    fn prune_widget_timers(&mut self, win: WinId, platform: &mut dyn Platform) {
+        let invalid: Vec<_> = self
+            .timers
+            .iter()
+            .filter_map(|(&token, timer)| match timer {
+                TimerUse::Widget { win: w, node, kind, .. }
+                    if *w == win
+                        && self
+                            .wins
+                            .get(&win)
+                            .and_then(|w| w.tree.get(*node).map(|i| w.tree.nodes[i].widget.as_ref().type_id()))
+                            != Some(*kind) =>
+                {
+                    Some(token)
+                }
+                _ => None,
+            })
+            .collect();
+        for token in invalid {
+            self.timers.remove(&token);
+            platform.cancel_timer(token);
+        }
+        if let Some(w) = self.wins.get_mut(&win) {
+            w.held_widgets.retain(|(node, kind, _, _)| {
+                w.tree.get(*node).is_some_and(|i| w.tree.nodes[i].widget.as_ref().type_id() == *kind)
+            });
+        }
     }
 
     /// A message from node `idx` through the mappers above it.
@@ -2401,6 +2516,23 @@ impl Core {
                 }
                 if let Some(i) = self.wins.get(&win).and_then(|w| w.tree.get(node)) {
                     self.send(win, i, &Event::Tick, platform);
+                }
+            }
+            TimerUse::Widget { win, node, kind, key, after } => {
+                let (win, node, kind, key, after) = (*win, *node, *kind, *key, *after);
+                self.timers.remove(&token);
+                if let Some(w) = self.wins.get_mut(&win)
+                    && w.hidden
+                {
+                    w.held_widgets.push((node, kind, key, after));
+                    return;
+                }
+                if let Some(i) = self
+                    .wins
+                    .get(&win)
+                    .and_then(|w| w.tree.get(node).filter(|&i| w.tree.nodes[i].widget.as_ref().type_id() == kind))
+                {
+                    self.send(win, i, &Event::Timer(key), platform);
                 }
             }
             TimerUse::Tooltip { win, node } => {

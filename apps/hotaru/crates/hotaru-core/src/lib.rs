@@ -24,7 +24,7 @@ pub use content::{ContentCancelled, ContentRetention, ContentRows, ContentSnapsh
 pub use history::{DEFAULT_HISTORY_BYTES, HistoryLimits, HistoryMemory, HistorySnapshot};
 pub use position::{ContentEpoch, ContentPosition};
 pub use row::{Cell, Row};
-pub use screen::{Cursor, Modes, TerminalEvent};
+pub use screen::{Cursor, CursorShape, Modes, TerminalEvent};
 pub use style::{Color, Rgb, Style, Underline, attrs};
 
 /// Terminal width policy. Native applications should select their configured
@@ -158,6 +158,12 @@ impl Terminal {
     }
     pub fn modes(&self) -> Modes {
         self.state.modes()
+    }
+    /// Set the reset/default cursor appearance. An explicit DECSCUSR request
+    /// remains in force until DECSCUSR 0, DECSTR or RIS. DEC mode 12 may still
+    /// override blinking independently.
+    pub fn set_default_cursor(&mut self, shape: CursorShape, blinking: bool) {
+        self.state.set_default_cursor(shape, blinking);
     }
     /// Set both current mode 2027 and its remembered RIS default. DECRST 2027
     /// still disables clustering; DECSTR leaves the current choice unchanged.

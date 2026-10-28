@@ -141,3 +141,16 @@ The [combined package checkpoint](docs/links-vt-checkpoint.md) records the
 exact package and source hashes for this slice, 38 ordinary native tests and
 five independent Wayland suites. Its software-compositor qualification does
 not establish GPU, physical-desktop or whole-application performance parity.
+
+The [cursor/cache package checkpoint](docs/cursor-cache-checkpoint.md) adds
+[cursor shapes and bounded blink timers](docs/cursor.md),
+[incremental shaped-row reuse](docs/renderer-row-cache.md),
+[unchanged grapheme-charge avoidance](docs/grapheme-charge.md), and
+[direct recycled-row construction](docs/history-row-construction.md).
+The combined core passes 136 tests in both debug and release, strict Clippy,
+and 6,174 pinned-library comparisons; exact identities and scope are in
+[`upstream/combined-core-cursor/summary.json`](upstream/combined-core-cursor/summary.json).
+The package passes 44 native tests and six independent Wayland suites.
+The [frame harness](docs/frame-benchmark.md) measures actual private-compositor
+captures and records observer overhead separately. Its tool qualification and
+the isolated shaping improvements do not establish application performance parity.

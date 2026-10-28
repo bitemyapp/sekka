@@ -258,6 +258,7 @@ fn run(
     let hostname = hotaru_io::launch::local_hostname();
     let mut seen_title = false;
     let mut terminal = Terminal::new(80, 24, history);
+    terminal.set_default_cursor(hotaru_core::CursorShape::Block, true);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.set_default_colors(colors);
     let mut output = VecDeque::<PendingWrite>::new();

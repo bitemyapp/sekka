@@ -1,0 +1,33 @@
+--- a/crates/hotaru-core/src/grapheme.rs
++++ b/crates/hotaru-core/src/grapheme.rs
+@@ -92,7 +92,7 @@
+             self.1 -= heap(&self.0.remove(i).1);
+         }
+     }
+-    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) {
++    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) -> bool {
+         let mut removed = 0;
+         self.0.retain(|(col, text)| {
+             let yes = keep(col, text);
+@@ -102,6 +102,7 @@
+             yes
+         });
+         self.1 -= removed;
++        removed != 0
+     }
+     pub fn shift_right(&mut self, col: usize, count: usize, len: usize) {
+         let mut removed = 0;
+--- a/crates/hotaru-core/src/row.rs
++++ b/crates/hotaru-core/src/row.rs
+@@ -372,8 +372,9 @@
+         if !self.graphemes.is_empty() {
+             let first = if left { start - 1 } else { start };
+             let last = end + usize::from(right);
+-            self.graphemes.retain(|&col, _| col < first || col >= last);
+-            self.refresh_memory_charge();
++            if self.graphemes.retain(|&col, _| col < first || col >= last) {
++                self.refresh_memory_charge();
++            }
+         }
+         if self.links.is_some() {
+             self.set_hyperlink_range(

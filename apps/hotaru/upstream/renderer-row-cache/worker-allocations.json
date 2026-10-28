@@ -1,0 +1,1162 @@
+{
+  "allocation_probe_enabled": true,
+  "allocation_scope": "Rust global allocator calls on test thread during shape only; excludes frame retirement and C allocations",
+  "reference": "original uncached font::shape preserved in this test binary",
+  "results": [
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35245481,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 2024960,
+          "allocation_calls": 1280,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 427277,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 0,
+          "reused_rows": 5120,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 2024960,
+          "allocation_calls": 1280,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 421569,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 0,
+          "reused_rows": 5120,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35001282,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34777034,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 2024960,
+          "allocation_calls": 1280,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 423151,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 0,
+          "reused_rows": 5120,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 2024960,
+          "allocation_calls": 1280,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 424071,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 0,
+          "reused_rows": 5120,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35122874,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "unchanged"
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34572153,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2269248,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2261087,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34569034,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34639314,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2267166,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2259641,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34581777,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "cell"
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 91162616,
+          "allocation_calls": 1297462,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34276544,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 8672760,
+          "allocation_calls": 82614,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 3202586,
+          "peak_cache_charge": 402688,
+          "prepared_rows": 256,
+          "reused_rows": 4864,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 8672760,
+          "allocation_calls": 82614,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 3191896,
+          "peak_cache_charge": 402688,
+          "prepared_rows": 256,
+          "reused_rows": 4864,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 91162616,
+          "allocation_calls": 1297462,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34608589,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 91162616,
+          "allocation_calls": 1297462,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34852489,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 8672760,
+          "allocation_calls": 82614,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 3207367,
+          "peak_cache_charge": 402688,
+          "prepared_rows": 256,
+          "reused_rows": 4864,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 8672760,
+          "allocation_calls": 82614,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 3199620,
+          "peak_cache_charge": 402688,
+          "prepared_rows": 256,
+          "reused_rows": 4864,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 91162616,
+          "allocation_calls": 1297462,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34704651,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "cursor"
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35195271,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2277511,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2261488,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35148059,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35096497,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2266145,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 6239136,
+          "allocation_calls": 52994,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 2264772,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 128,
+          "reused_rows": 4992,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 90960288,
+          "allocation_calls": 1300098,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35003224,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "scroll"
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 95763612,
+          "allocation_calls": 1152721,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 37207107,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 15823852,
+          "allocation_calls": 98013,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 8165297,
+          "peak_cache_charge": 519928,
+          "prepared_rows": 129,
+          "reused_rows": 4991,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 15823852,
+          "allocation_calls": 98013,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 8171209,
+          "peak_cache_charge": 519928,
+          "prepared_rows": 129,
+          "reused_rows": 4991,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 95763612,
+          "allocation_calls": 1152721,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 37252479,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 95763612,
+          "allocation_calls": 1152721,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 37303374,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 15823852,
+          "allocation_calls": 98013,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 8176943,
+          "peak_cache_charge": 519928,
+          "prepared_rows": 129,
+          "reused_rows": 4991,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 15823852,
+          "allocation_calls": 98013,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 8186114,
+          "peak_cache_charge": 519928,
+          "prepared_rows": 129,
+          "reused_rows": 4991,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 95763612,
+          "allocation_calls": 1152721,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 37363076,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "fallback"
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "samples": [
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34953991,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 91276800,
+          "allocation_calls": 1291520,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 35623719,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 91276800,
+          "allocation_calls": 1291520,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 35733815,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35211460,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 35014506,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 91276800,
+          "allocation_calls": 1291520,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 35949313,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 91276800,
+          "allocation_calls": 1291520,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 35578033,
+          "peak_cache_charge": 402400,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 88977408,
+          "allocation_calls": 1280640,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 34954653,
+          "peak_cache_charge": 0,
+          "prepared_rows": 5120,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "replace"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 144085059,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 4091392,
+          "allocation_calls": 1408,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 895147,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 0,
+          "reused_rows": 10240,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 4091392,
+          "allocation_calls": 1408,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 888747,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 0,
+          "reused_rows": 10240,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 145126630,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 143754842,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 4091392,
+          "allocation_calls": 1408,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 885388,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 0,
+          "reused_rows": 10240,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 4091392,
+          "allocation_calls": 1408,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 884764,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 0,
+          "reused_rows": 10240,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 144000462,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "unchanged"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 136419542,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4294141,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4259020,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 136221623,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 137330145,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4261355,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4275586,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 137344254,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "cell"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 360385112,
+          "allocation_calls": 5068849,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 136001019,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 18073688,
+          "allocation_calls": 167985,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 6563720,
+          "peak_cache_charge": 1419488,
+          "prepared_rows": 256,
+          "reused_rows": 9984,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 18073688,
+          "allocation_calls": 167985,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 6523535,
+          "peak_cache_charge": 1419488,
+          "prepared_rows": 256,
+          "reused_rows": 9984,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 360385112,
+          "allocation_calls": 5068849,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 137715227,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 360385112,
+          "allocation_calls": 5068849,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 137631501,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 18073688,
+          "allocation_calls": 167985,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 6610709,
+          "peak_cache_charge": 1419488,
+          "prepared_rows": 256,
+          "reused_rows": 9984,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 18073688,
+          "allocation_calls": 167985,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 6526834,
+          "peak_cache_charge": 1419488,
+          "prepared_rows": 256,
+          "reused_rows": 9984,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 360385112,
+          "allocation_calls": 5068849,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 137352758,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "cursor"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 140826527,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4554760,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4339777,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 140514918,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 141310593,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4289372,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 12053408,
+          "allocation_calls": 99586,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 4273760,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 128,
+          "reused_rows": 10112,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 358813088,
+          "allocation_calls": 5063554,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 141653224,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "scroll"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 358709772,
+          "allocation_calls": 4443414,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 151074245,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 29345450,
+          "allocation_calls": 180037,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 14821792,
+          "peak_cache_charge": 1844424,
+          "prepared_rows": 129,
+          "reused_rows": 10111,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 29345450,
+          "allocation_calls": 180037,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 14804949,
+          "peak_cache_charge": 1844424,
+          "prepared_rows": 129,
+          "reused_rows": 10111,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358709772,
+          "allocation_calls": 4443414,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 139024665,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 358709772,
+          "allocation_calls": 4443414,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 138531667,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 29345450,
+          "allocation_calls": 180037,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 14856171,
+          "peak_cache_charge": 1844424,
+          "prepared_rows": 129,
+          "reused_rows": 10111,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 29345450,
+          "allocation_calls": 180037,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 14859390,
+          "peak_cache_charge": 1844424,
+          "prepared_rows": 129,
+          "reused_rows": 10111,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 358709772,
+          "allocation_calls": 4443414,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 138879722,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "fallback"
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "samples": [
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 150442565,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 359951872,
+          "allocation_calls": 5049728,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 150391322,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 0
+        },
+        {
+          "allocated_bytes": 359951872,
+          "allocation_calls": 5049728,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 142290116,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 144755075,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 1
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 145574653,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 359951872,
+          "allocation_calls": 5049728,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 142523812,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 2
+        },
+        {
+          "allocated_bytes": 359951872,
+          "allocation_calls": 5049728,
+          "cached": true,
+          "frames": 128,
+          "nanoseconds": 142680186,
+          "peak_cache_charge": 1419200,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        },
+        {
+          "allocated_bytes": 355299328,
+          "allocation_calls": 5028480,
+          "cached": false,
+          "frames": 128,
+          "nanoseconds": 143341484,
+          "peak_cache_charge": 0,
+          "prepared_rows": 10240,
+          "reused_rows": 0,
+          "round": 3
+        }
+      ],
+      "snapshots_compared": 160,
+      "workload": "replace"
+    }
+  ],
+  "row_cache_generation_limit": 8388608,
+  "schema": 1,
+  "scope": "worker preparation only, no raster/presentation timings"
+}

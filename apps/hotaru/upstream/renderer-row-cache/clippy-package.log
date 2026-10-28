@@ -1,0 +1,6 @@
+   Compiling aizome-kit v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-kit)
+    Checking aizome-theme v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-theme)
+    Checking aizome-shell-proto v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-shell-proto)
+    Checking aizome-config v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-config)
+    Checking aizome-hotaru v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/apps/hotaru)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.36s

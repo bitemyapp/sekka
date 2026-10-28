@@ -1,7 +1,7 @@
 //! One native widget per terminal, with cached text and damage by shared row.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aizome_kit::element::MsgFn;
 use aizome_kit::hash::PaintHasher;
@@ -21,6 +21,59 @@ use crate::input;
 use crate::settings::Bindings;
 
 const PAD: f64 = 10.0;
+const CURSOR_TIMER: u32 = 0;
+const CURSOR_INTERVAL: Duration = Duration::from_millis(600);
+
+#[derive(Default)]
+struct Blink {
+    hidden: bool,
+    armed: bool,
+}
+impl Blink {
+    // None: unchanged, Some(true): replace deadline, Some(false): cancel.
+    fn sync(&mut self, eligible: bool, reset: bool) -> Option<bool> {
+        if !eligible {
+            self.hidden = false;
+            return std::mem::take(&mut self.armed).then_some(false);
+        }
+        if reset || !self.armed {
+            self.hidden = false;
+            self.armed = true;
+            return Some(true);
+        }
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CursorPaint {
+    Block,
+    Hollow,
+    Underline,
+    Bar,
+}
+fn cursor_paint(cursor: hotaru_core::Cursor, focused: bool, preedit: bool, hidden: bool) -> Option<CursorPaint> {
+    if !cursor.in_viewport {
+        return None;
+    }
+    if preedit {
+        return Some(CursorPaint::Block);
+    }
+    if !cursor.visible {
+        return None;
+    }
+    if !focused {
+        return Some(CursorPaint::Hollow);
+    }
+    if cursor.blinking && hidden {
+        return None;
+    }
+    Some(match cursor.shape {
+        hotaru_core::CursorShape::Block => CursorPaint::Block,
+        hotaru_core::CursorShape::Underline => CursorPaint::Underline,
+        hotaru_core::CursorShape::Bar => CursorPaint::Bar,
+    })
+}
 
 // Aizome's established terminal palette, shared visually with etc/foot/foot.ini.
 const ANSI_NIGHT: [u32; 16] = [
@@ -86,10 +139,14 @@ pub fn terminal_view(
     selection: Option<Selection>,
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
+    input_activity: u64,
 ) -> Element<Msg> {
     let snapshot = rendered.as_ref().map_or(snapshot, |frame| frame.snapshot.clone());
     let (font_size, font_weight) = font;
-    Element::new(TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered }, vec![])
+    Element::new(
+        TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered, input_activity },
+        vec![],
+    )
 }
 
 struct TerminalView {
@@ -100,6 +157,7 @@ struct TerminalView {
     selection: Option<Selection>,
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
+    input_activity: u64,
 }
 
 #[derive(Default)]
@@ -107,7 +165,10 @@ struct ViewState {
     // Keep the preceding rows alive until layout has compared them. Raw address
     // caches can mistake allocator reuse for unchanged content between frames.
     snapshot: Option<Arc<Snapshot>>,
-    cursor: Option<(usize, usize, bool)>,
+    cursor: Option<hotaru_core::Cursor>,
+    blink: Blink,
+    input_activity: u64,
+    last_output_reset: Option<Instant>,
     size: Size,
     cell_width: f64,
     line_height: f64,
@@ -207,11 +268,45 @@ impl TerminalView {
                 .min(self.snapshot.cols),
         }
     }
+    fn blink_eligible(&self, focused: bool, state: &ViewState) -> bool {
+        focused
+            && self.rendered.is_some()
+            && self.snapshot.cursor.visible
+            && self.snapshot.cursor.in_viewport
+            && self.snapshot.cursor.blinking
+            && state.preedit.is_empty()
+    }
+    fn reset_blink(&self, cx: &mut EventCx) {
+        let focused = cx.has_keyboard_focus();
+        let state = cx.state::<ViewState>();
+        let hidden = state.blink.hidden;
+        let eligible = self.blink_eligible(focused, state);
+        let timer = state.blink.sync(eligible, true);
+        let rect = self.cursor_rect(state);
+        if let Some(arm) = timer {
+            if arm {
+                cx.set_timer(CURSOR_TIMER, CURSOR_INTERVAL);
+            } else {
+                cx.cancel_timer(CURSOR_TIMER);
+            }
+        }
+        if hidden {
+            cx.invalidate_rect(rect);
+        }
+    }
     fn cursor_rect(&self, state: &ViewState) -> Rect {
         let c = &self.snapshot.cursor;
+        let mut col = c.col;
+        let mut width = 1;
+        if let Some(row) = self.snapshot.lines.get(c.row) {
+            if row.cells().get(col).is_some_and(|c| c.width() == 0) {
+                col = col.saturating_sub(1);
+            }
+            width = row.cells().get(col).map_or(1, |c| c.width().max(1));
+        }
         Rect::from_origin_size(
-            (state.padding + c.col as f64 * state.cell_width, state.padding + c.row as f64 * state.line_height),
-            (state.cell_width, state.line_height),
+            (state.padding + col as f64 * state.cell_width, state.padding + c.row as f64 * state.line_height),
+            (width as f64 * state.cell_width, state.line_height),
         )
     }
 }
@@ -234,7 +329,9 @@ impl Widget for TerminalView {
             if bc.max.width.is_finite() { bc.max.width } else { 80.0 * cell_width + pad * 2.0 },
             if bc.max.height.is_finite() { bc.max.height } else { 24.0 * line_height + pad * 2.0 },
         ));
-        let cursor = (self.snapshot.cursor.col, self.snapshot.cursor.row, self.snapshot.cursor.visible);
+        let cursor = self.snapshot.cursor;
+        let focused = cx.is_focused();
+        let now = cx.now();
         let theme = (cx.theme().is_dark(), rgb(cx.theme().text()), rgb(cx.theme().surface()));
         let st = cx.state::<ViewState>();
         let metrics = self.rendered.as_ref().map(|frame| frame.metrics);
@@ -255,6 +352,18 @@ impl Widget for TerminalView {
             }
         }
         let old_cursor = st.cursor.replace(cursor);
+        let input = st.input_activity != self.input_activity;
+        st.input_activity = self.input_activity;
+        let output = old_snapshot.as_ref().is_none_or(|old| old.generation != self.snapshot.generation)
+            && st
+                .last_output_reset
+                .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_millis(500));
+        if output {
+            st.last_output_reset = Some(now);
+        }
+        let eligible = self.blink_eligible(focused, st);
+        let was_hidden = st.blink.hidden;
+        let timer = st.blink.sync(eligible, input || output || old_cursor != Some(cursor));
         st.size = size;
         st.cell_width = cell_width;
         st.line_height = line_height;
@@ -267,6 +376,17 @@ impl Widget for TerminalView {
             || st.hover_clear_pending
         {
             cx.request_tick(Duration::ZERO);
+        }
+        if let Some(arm) = timer {
+            if arm {
+                cx.set_timer(CURSOR_TIMER, CURSOR_INTERVAL);
+            } else {
+                cx.cancel_timer(CURSOR_TIMER);
+            }
+        }
+        if was_hidden && (input || output) {
+            let rect = self.cursor_rect(cx.state::<ViewState>());
+            cx.invalidate_rect(rect);
         }
         for (y, row) in self.snapshot.lines.iter().enumerate() {
             if font_changed
@@ -284,7 +404,8 @@ impl Widget for TerminalView {
             }
         }
         if old_cursor != Some(cursor) {
-            for (_, y, _) in old_cursor.into_iter().chain([cursor]) {
+            for c in old_cursor.into_iter().chain([cursor]) {
+                let y = c.row;
                 cx.invalidate_rect(Rect::new(
                     0.0,
                     pad + y as f64 * line_height,
@@ -321,7 +442,7 @@ impl Widget for TerminalView {
             if !cx.canvas.needs(row_rect) {
                 continue;
             }
-            for span in spans {
+            for span in spans.iter() {
                 let style = span.style;
                 let color = |c: TerminalColor, foreground: bool| match c {
                     TerminalColor::Default => {
@@ -397,12 +518,46 @@ impl Widget for TerminalView {
                 }
             }
         }
-        if self.snapshot.cursor.visible {
+        if let Some(kind) = cursor_paint(
+            self.snapshot.cursor,
+            cx.is_focused() && cx.window_active(),
+            !state.preedit.is_empty(),
+            state.blink.hidden,
+        ) {
             let r = self.cursor_rect(state);
-            if cx.is_focused() {
-                cx.canvas.fill_rect(Rect::new(r.x0, r.y1 - 2.0, r.x1, r.y1), theme.focus());
-            } else {
-                aizome_kit::draw::border(cx.canvas, r, theme.text3(), 1.0);
+            let color = self.snapshot.default_foreground;
+            let color = Color::rgb8(color.0, color.1, color.2);
+            let stroke = (state.scale * 2.0).round().max(1.0) / state.scale;
+            match kind {
+                CursorPaint::Underline => cx.canvas.fill_rect(Rect::new(r.x0, r.y1 - stroke, r.x1, r.y1), color),
+                CursorPaint::Bar => cx.canvas.fill_rect(Rect::new(r.x0, r.y0, r.x0 + stroke, r.y1), color),
+                CursorPaint::Hollow => aizome_kit::draw::border(cx.canvas, r, color, 1.0 / state.scale),
+                CursorPaint::Block => {
+                    cx.canvas.fill_rect(r, color);
+                    // Reuse shaped glyphs, clipped to the cursor's full cell(s),
+                    // including a wide continuation. No shaping on the UI thread.
+                    if let Some(spans) =
+                        self.rendered.as_ref().and_then(|frame| frame.rows.get(self.snapshot.cursor.row))
+                    {
+                        cx.canvas.save();
+                        cx.canvas.clip_rect(r);
+                        for span in spans.iter() {
+                            if pad + span.end as f64 * cw <= r.x0 || pad + span.start as f64 * cw >= r.x1 {
+                                continue;
+                            }
+                            if span.style.attrs & attrs::HIDDEN != 0 {
+                                continue;
+                            }
+                            let value = self.snapshot.default_background;
+                            cx.canvas.draw_grid_text(
+                                &span.layout,
+                                Point::new(pad, r.y0),
+                                Color::rgb8(value.0, value.1, value.2),
+                            );
+                        }
+                        cx.canvas.restore();
+                    }
+                }
             }
             if !state.preedit.is_empty() {
                 let mut spec = TextSpec::new(FontSpec::mono(self.font_size * (96.0 / 72.0)), theme.text());
@@ -428,6 +583,19 @@ impl Widget for TerminalView {
     }
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
         match event {
+            Event::Timer(CURSOR_TIMER) => {
+                let focused = cx.has_keyboard_focus();
+                let state = cx.state::<ViewState>();
+                if self.blink_eligible(focused, state) && state.blink.armed {
+                    state.blink.hidden = !state.blink.hidden;
+                    let rect = self.cursor_rect(state);
+                    cx.invalidate_rect(rect);
+                    cx.set_timer(CURSOR_TIMER, CURSOR_INTERVAL);
+                } else {
+                    state.blink.sync(false, false);
+                    cx.cancel_timer(CURSOR_TIMER);
+                }
+            }
             Event::Tick => {
                 let st = cx.state::<ViewState>();
                 let clear_hover = std::mem::take(&mut st.hover_clear_pending);
@@ -468,6 +636,9 @@ impl Widget for TerminalView {
                 }
             }
             Event::Key(key) => {
+                if key.pressed {
+                    self.reset_blink(cx);
+                }
                 let position = cx.state::<ViewState>().pointer;
                 self.hover(cx, position, key.modifiers.super_key());
                 if key.composing.as_ref().is_none_or(|text| text.is_empty())
@@ -501,9 +672,13 @@ impl Widget for TerminalView {
                 }
                 emit(cx, Msg::Key(self.id, Arc::new(normalized)));
             }
-            Event::Ime(Ime::Commit(text)) => emit(cx, Msg::Input(self.id, text.as_bytes().to_vec())),
+            Event::Ime(Ime::Commit(text)) => {
+                self.reset_blink(cx);
+                emit(cx, Msg::Input(self.id, text.as_bytes().to_vec()));
+            }
             Event::Ime(Ime::Preedit { text, .. }) => {
                 cx.state::<ViewState>().preedit = text.clone();
+                self.reset_blink(cx);
                 cx.invalidate();
             }
             Event::PointerDown { pos, button, mods, .. } => {
@@ -606,6 +781,7 @@ impl Widget for TerminalView {
                 }
             }
             Event::Focus(focused) | Event::WindowFocus(focused) => {
+                self.reset_blink(cx);
                 let rect = self.cursor_rect(cx.state::<ViewState>());
                 cx.set_text_input(*focused, Some(rect));
                 cx.invalidate();
@@ -691,6 +867,45 @@ fn underline(
                 x += 6.0;
             }
             canvas.stroke(&path, &aizome_kit::sidestep_ui::StrokeStyle::new(thickness), color);
+        }
+    }
+}
+
+#[cfg(test)]
+mod cursor_tests {
+    use super::*;
+    #[test]
+    fn cursor_priority_matches_ghostty_renderer() {
+        for shape in
+            [hotaru_core::CursorShape::Block, hotaru_core::CursorShape::Underline, hotaru_core::CursorShape::Bar]
+        {
+            for focused in [false, true] {
+                for visible in [false, true] {
+                    for blinking in [false, true] {
+                        for hidden in [false, true] {
+                            let mut c = hotaru_core::Cursor { shape, visible, blinking, ..Default::default() };
+                            assert_eq!(cursor_paint(c, focused, true, hidden), Some(CursorPaint::Block));
+                            let p = cursor_paint(c, focused, false, hidden);
+                            if !visible || (focused && blinking && hidden) {
+                                assert_eq!(p, None);
+                            } else if !focused {
+                                assert_eq!(p, Some(CursorPaint::Hollow));
+                            } else {
+                                assert_eq!(
+                                    p,
+                                    Some(match shape {
+                                        hotaru_core::CursorShape::Block => CursorPaint::Block,
+                                        hotaru_core::CursorShape::Underline => CursorPaint::Underline,
+                                        hotaru_core::CursorShape::Bar => CursorPaint::Bar,
+                                    })
+                                );
+                            }
+                            c.in_viewport = false;
+                            assert_eq!(cursor_paint(c, focused, true, hidden), None);
+                        }
+                    }
+                }
+            }
         }
     }
 }

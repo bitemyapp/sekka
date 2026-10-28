@@ -55,15 +55,24 @@ impl Row {
         }
     }
     pub(crate) fn with_recycle_layout(cols: usize, layout: RecycleLayout) -> Self {
-        let mut row = Self::new(cols);
-        row.cells = Vec::with_capacity(usize::from(layout.cells).max(cols));
-        row.cells.resize(cols, Cell::default());
-        row.styles = Vec::with_capacity(usize::from(layout.styles).max(1));
-        row.styles.push(Style::default());
-        row.graphemes = GraphemeMap::with_capacity(usize::from(layout.graphemes));
-        row.retained_cols = layout.retained_cols.max(cols as u16);
-        row.dirty_end = cols as u16;
-        row
+        // Allocate the final retained capacities directly. Row::new would
+        // allocate default cell/style buffers that are immediately discarded.
+        let mut cells = Vec::with_capacity(usize::from(layout.cells).max(cols));
+        cells.resize(cols, Cell::default());
+        let mut styles = Vec::with_capacity(usize::from(layout.styles).max(1));
+        styles.push(Style::default());
+        Self {
+            cells,
+            styles,
+            last_style: 0,
+            graphemes: GraphemeMap::with_capacity(usize::from(layout.graphemes)),
+            wrapped: false,
+            wrap_continuation: false,
+            retained_cols: layout.retained_cols.max(cols as u16),
+            dirty_end: cols as u16,
+            links: None,
+            memory_charge: crate::memory::Charge::default(),
+        }
     }
     /// Archive bound includes the full row-local link table, including entries
     /// retained for reuse but not currently referenced by a visible run.
@@ -328,6 +337,53 @@ impl Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recycled_constructor_preserves_all_default_metadata_and_capacities() {
+        for cols in [1, 2, 80, 120, MAX_COLS] {
+            for retained in [cols, MAX_COLS] {
+                let layout = RecycleLayout {
+                    retained_cols: retained as u16,
+                    cells: (cols * 2) as u16,
+                    styles: 17,
+                    graphemes: 23,
+                };
+                let actual = Row::with_recycle_layout(cols, layout);
+                // Preserve the former construction sequence as an independent
+                // default/capacity oracle, without a product fallback branch.
+                let mut expected = Row::new(cols);
+                expected.cells = Vec::with_capacity(usize::from(layout.cells).max(cols));
+                expected.cells.resize(cols, Cell::default());
+                expected.styles = Vec::with_capacity(usize::from(layout.styles).max(1));
+                expected.styles.push(Style::default());
+                expected.graphemes = GraphemeMap::with_capacity(usize::from(layout.graphemes));
+                expected.retained_cols = layout.retained_cols.max(cols as u16);
+                expected.dirty_end = cols as u16;
+                assert_eq!(actual.cells, expected.cells);
+                assert_eq!(actual.styles, expected.styles);
+                assert_eq!(actual.recycle_layout(), expected.recycle_layout());
+                assert_eq!(actual.owned_bytes(), expected.owned_bytes());
+                assert_eq!(actual.dirty_end, expected.dirty_end);
+                let mut left = Vec::new();
+                let mut right = Vec::new();
+                actual.encode_history(&mut left, &HashMap::new());
+                expected.encode_history(&mut right, &HashMap::new());
+                assert_eq!(left, right);
+                assert!(actual.links.is_none());
+            }
+        }
+        let minimal = Row::with_recycle_layout(
+            7,
+            RecycleLayout {
+                retained_cols: 0,
+                cells: 0,
+                styles: 0,
+                graphemes: 0,
+            },
+        );
+        assert_eq!(minimal.cells.len(), 7);
+        assert_eq!(minimal.styles.len(), 1);
+        assert_eq!(minimal.retained_cols, 7);
+    }
     #[test]
     fn capacities_and_allocation_budget_are_validated_before_restore() {
         let mut row = Row::new(40);
