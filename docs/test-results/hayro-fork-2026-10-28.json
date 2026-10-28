@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-28",
+  "scope": "Third pass on Shiori's engine: hayro's speed against PDFium, on a fork of hayro (bitemyapp/hayro, branch aizome-perf), after the first changes were split into upstream pull requests. Component evidence on one laptop; not VM, ISO or hardware qualification. Shiori still draws with PDFium.",
+  "follows": "rust-pdf-renderers-2026-10-28.json",
+  "workstation": "ganymede (Intel Core Ultra 7 365: 4 performance and 4 efficiency cores, 30 GiB RAM), shared with other sessions (one-minute load average 3-4)",
+  "corpus": {
+    "source": "https://github.com/mozilla/pdf.js test/pdfs",
+    "revision": "279175b948b23077808d744435c07b32d23aa5bc",
+    "files": 1012
+  },
+  "method": {
+    "program": "the scratch benchmark of the earlier passes: each file in a process of its own under `timeout 30`, four files at a time, release builds, up to the first 5 pages at 2x on white, time per page including loading the page",
+    "change_from_earlier_passes": "every process is pinned to the four performance cores (`taskset -c 0-3`); unpinned runs moved between core types and gave bimodal times. Absolute times are lower than in the earlier records, so compare ratios across records, not milliseconds",
+    "final_timings": "PDFium 8066, hayro master 8558a8a5 and the fork's aizome-perf dfd3e753 ran back to back on each file, three times; each page's time is its median of the three",
+    "exactness": "each change was compared with the build before it on every page of the corpus (pixel for pixel) and with hayro's own test suite; changes that alter pixels are listed with how much"
+  },
+  "upstream": {
+    "fork": "https://github.com/bitemyapp/hayro (branch aizome-perf)",
+    "pull_requests": {
+      "1671 hayro-jbig2: Reject pages larger than the bitmap limit when parsing them": "merged",
+      "1672 hayro: Cache drawn images in the render cache": "open",
+      "1673 hayro-interpret: Sample mesh shadings into a grid, only where they're drawn": "open",
+      "1674 hayro-interpret: Evaluate axial and radial texture shadings once per step along them": "open",
+      "1675 hayro: Compute luminance soft masks with per-channel tables": "open"
+    },
+    "not_proposed": {
+      "glyph coverage cache": "the maintainer wants to write glyph caching himself (hayro issue 1613)",
+      "block averaging before large downscales": "dropped: slower than the SIMD resampler alone at moderate reductions (large_jpeg_downscale 43 to 54 ms), and the image cache already covers the one page it helped",
+      "the changes below": "on the fork only so far"
+    },
+    "corrections_while_splitting": {
+      "image cache key": "now also covers a color space resolved by name from the resources and the active transfer function, which change how the same image stream decodes",
+      "mesh sampling area": "clipping to the render context alone changed edge pixels (the texture repeats and is filtered across its edges); the area is the texture's bounds plus a pixel, and the result is pixel-identical to master",
+      "gradient table": "4,096 eagerly evaluated steps became 65,536 evaluated on first use, so a step stays under a pixel on gradients up to 65,536 pixels long; five corpus pages differ from master, by at most 1 level",
+      "luminance masks": "16-bit fixed point differed from vello's formula on 7,749 of the 2^24 colors; per-channel tables of the same float expression are exact on all of them"
+    }
+  },
+  "fork_changes_since_the_pull_requests": {
+    "clip bounds": "the renderer keeps the device-space bounds of the active clips; fills, strokes and images outside them are skipped, and shading and non-repeating pattern textures cover only what the clips let through (tiling-pattern-box: 240 to 83 ms)",
+    "shared color spaces and shadings": "Separation, DeviceN and Indexed color spaces given by arrays, and shadings, are kept in the interpreter's object cache, so their lookup tables and functions are built once (bug1721218_reduced: 360 to 99 ms; PDFium 234)",
+    "patch mesh triangles": "kept per shading and scale from their second use, each grid point's color interpolated once, and each patch cut into cells of about two device pixels instead of 19 by 19 (issue13520: 125 to 14 ms, PDFium 15; personwithdog: 131 to 75 ms, PDFium 78)",
+    "soft masks and pattern-filled stencils": "drawn only within their group's bounds and the active clips, the rest filled with the background's value (issue18032: 77 to 18 ms; bug1795263: 46 to 6.6 ms, PDFium 6.3)",
+    "redundant clip rectangles": "a clip rectangle covering everything visible is not pushed to vello_cpu (issue14297: 54 to 27 ms)",
+    "masked-image layers": "an image with a soft mask of another size is drawn as a layer clipped to the image's whole-pixel bounds; vello_cpu otherwise composites its destination-in layer over the whole target (chrome-text-selection-markedContent: 78 to 13 ms)",
+    "CMaps": "the predefined CMaps are embedded uncompressed (467 KB, 217 KB more), saving about 3 ms of brotli decompression for each document with a CID font",
+    "PostScript functions": "the 100-entry stack is reused per thread instead of set up and moved for every evaluation (function_based_shading: 92 to 56 ms)",
+    "single-copy tiling patterns": "when only one copy of a cell can be seen and the fill has no soft mask or blend mode, the cell is drawn directly into the fill's clip at device resolution (tiling-pattern-box: 84 to 6.8 ms, PDFium 4.9)"
+  },
+  "results": {
+    "pages_all_three_drew_under_5_s": 1189,
+    "total_ms": {"pdfium": 10753, "hayro_master": 14073, "hayro_fork": 8018},
+    "per_page_ms": {
+      "columns": ["pages drawn", "p50", "p90", "p99", "max"],
+      "pdfium": [1193, 3.10, 11.1, 103.1, 1209.9],
+      "hayro_master": [1206, 3.55, 15.0, 125.9, 10022.0],
+      "hayro_fork": [1206, 3.52, 11.5, 63.7, 8935.7]
+    },
+    "fork_over_pdfium_per_page": {"p50": 0.96, "p90": 1.40, "p99": 5.2},
+    "fork_faster_than_pdfium_on": "638 of 1189 pages",
+    "fork_behind_pdfium": "on 539 pages by 1,000 ms in all; ahead on the rest by 3,735 ms",
+    "earlier_record_for_comparison": "the branch of the second pass took 0.88 of PDFium's total, with per-page p90 1.53 and p99 7.47 of PDFium; this fork takes 0.75, 1.40 and 5.2 (pinned runs)",
+    "max_page": "issue19517, a 9 s page that PDFium doesn't draw"
+  },
+  "quality": {
+    "hayro_test_suite": "934 passed, 844 failed, 73 ignored, no panics; the suite allows 3 levels per channel against CI's references, which the glyph cache's quarter-pixel placement exceeds on text (as in the second pass)",
+    "graded": "of the 1,249 pages that differ from CI's references, 1,242 have pixels off by more than 48 on under 0.01% of the page and 6 on 0.01-0.1%; pdfbox 4913 has a hard edge in a gradient one pixel row higher (1% of its 200 by 200 pixels); the largest single-pixel difference is 231",
+    "pixel_changes_accepted_for_speed": {
+      "masked-image layers": "vello_cpu composites a clipped layer's partly covered pixels slightly differently: bigboundingbox, 8 pixels by up to 22 levels (clipping transparency groups the same way changed many pages and was dropped)",
+      "patch cells": "personwithdog, issue13520 and bug1703683_page2_reduced: almost all changed pixels under 16 levels; four pixels at seams between patches by more (pinholes moving)",
+      "direct tiling": "22060_A1_01_Plans: thin hatching in a pattern cell moves by up to a pixel, since the cell is no longer scaled to make its step a whole number of pixels (0.9% of the page by more than 48; it was 3.5% from PDFium before and is 5.0% after)"
+    }
+  },
+  "remaining_gaps_to_pdfium": {
+    "JPEG": "zune-jpeg decodes at full size and the image is then resampled; PDFium's libjpeg-turbo decodes at 1/2, 1/4 or 1/8 when an image is drawn smaller (issue12841_reduced 136 ms against 68; large_jpeg_downscale 43 against 20). Needs scaled IDCT in zune-jpeg",
+    "free-form and lattice meshes": "types 4 and 5 are sampled pixel by pixel with a winding test per triangle (issue2948 49 ms against 9)",
+    "gradients": "vello_cpu's gradient painter with many stops (axial_shading_many_inputs 24 ms against 2.9) and radial gradients drawn as textures (radial_gradients 26 ms against 12)",
+    "start-up per document": "building the CMYK ICC transform takes about 7 ms the first time anything is CMYK (moxcms samples a 17^4 grid through the profile); PDFium uses a compiled-in table",
+    "smaller": "function-based shadings (function_based_shading 56 ms against 44), bug1755507, issue12798_page1_reduced"
+  },
+  "not_covered": "the fork isn't in Shiori; no VM or hardware runs; one machine under shared load; JPEG 2000 pages were checked and are on par with PDFium (865 ms against 974 over the 14 corpus pages that have them)"
+}

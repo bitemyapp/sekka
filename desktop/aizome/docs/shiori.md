@@ -59,15 +59,23 @@ matches PDFium's pixels most closely and is four times slower. None is a
 fast renderer waiting to be made complete. hayro's current master takes 1.28
 times PDFium's time, and seconds on a few pathological pages.
 
-A branch of hayro master (local, not yet published or proposed upstream)
-caches glyph coverage, decoded images and mesh samples, looks gradients up
-in a table, and refuses JBIG2 pages too large to decode before allocating
-for them. Over the 1,189 pages all three drew in under 5 seconds each, it
-takes 10.4 seconds against PDFium's 11.8 and master's 15.1, with no
-crashes or timeouts where PDFium has three. It is still slower than PDFium
-on tiling patterns, complex shadings and soft-mask groups. Its pages differ
-from hayro's own references on under 0.02% of pixels by more than 48
-levels.
+A fork of hayro ([bitemyapp/hayro](https://github.com/bitemyapp/hayro),
+branch `aizome-perf`;
+[`hayro-fork-2026-10-28.json`](../../../docs/test-results/hayro-fork-2026-10-28.json))
+caches glyph coverage, drawn images, shadings, color spaces and patch-mesh
+triangles. It also draws soft masks, pattern textures and mesh samples only
+where clips let them show, and skips what clips hide. Five of its changes
+went upstream as pull requests (the JBIG2 one is merged). With each
+process pinned to the performance cores, over the 1,189 pages all three
+drew in under 5 seconds, it takes 8.0 seconds against PDFium's 10.8 and
+master's 14.1. Per page it's as fast as PDFium at the median, 1.4 times
+PDFium's time at the 90th percentile and faster at the 99th, with no
+crashes or timeouts where PDFium has three. It's still slower than PDFium
+on JPEG images drawn smaller than their size (zune-jpeg has no scaled
+decoding), free-form meshes and some gradients, and spends about 7 ms
+building its CMYK transform the first time a document needs it. Its pages
+differ from hayro's own references on under 0.1% of pixels by more than 48
+levels, except one page where a hard edge in a gradient moved a pixel.
 
 Shiori still draws with PDFium. To move to hayro it would need character
 boxes (hayro hands each glyph's Unicode and transform to a drawing device),

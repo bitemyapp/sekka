@@ -71,5 +71,6 @@
   },
   "remaining_gaps_to_pdfium": "per page, the branch is over 1.5 times PDFium's time on 10% of pages and 7.5 times at the 99th percentile: tiling patterns (tiling-pattern-box 245 ms against 6), mesh and function shadings, soft-mask groups drawn at full canvas size, and building the CMYK colour table once per process (about 35 ms)",
   "what_shiori_would_need_to_use_hayro": "character boxes (hayro-interpret exposes each glyph's Unicode, code and transform to a Device), search, links and the outline read with hayro-syntax, forms; hayro already decrypts, and is memory-safe, though a worker per document would still bound hangs",
-  "not_covered": "the branch isn't in Shiori or upstream; no VM or hardware runs; single machine under shared load"
+  "not_covered": "the branch isn't in Shiori or upstream; no VM or hardware runs; single machine under shared load",
+  "followed_by": "hayro-fork-2026-10-28.json"
 }
