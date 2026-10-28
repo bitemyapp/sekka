@@ -20,7 +20,14 @@ fn main() {
     let history: usize = args[4].parse().unwrap();
     let compress = args.get(5).is_some_and(|arg| arg == "1");
     let before = rss_kib();
-    let mut terminal = Terminal::new(cols, rows, history);
+    let mut terminal = Terminal::with_history_limits(
+        cols,
+        rows,
+        hotaru_core::HistoryLimits {
+            rows: history,
+            bytes: None,
+        },
+    );
     let start = Instant::now();
     for part in data.chunks(65536) {
         terminal.feed(part);

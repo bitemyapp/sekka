@@ -52,8 +52,13 @@
   clipboardPatch,
   inputPatch,
   mimePatch,
+  gridFontPatch,
+  ghosttyLicense,
+  uucodeLicense,
+  unicodeLicense,
   sidestep,
   fonts,
+  hotaruFonts,
   bash,
   weston,
   tzdata,
@@ -73,6 +78,7 @@ let
     patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
     patch -d $out/vendor/sidestep -p1 < ${inputPatch}
     patch -d $out/vendor/sidestep -p1 < ${mimePatch}
+    patch -d $out/vendor/sidestep -p1 < ${gridFontPatch}
     chmod u+w $out/desktop/aizome
     ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
@@ -207,6 +213,7 @@ rustPlatform.buildRustPackage {
   checkPhase = ''
     runHook preCheck
     export AIZOME_FONT_DIR=${fonts}
+    export HOTARU_FONT_DIR=${hotaruFonts}
     # Tests run before postFixup adds the libraries opened with dlopen.
     export LD_LIBRARY_PATH=${lib.makeLibraryPath runtimeLibs}
     # The brand's Japanese glyphs use the same fallback as the desktops.
@@ -268,6 +275,9 @@ rustPlatform.buildRustPackage {
       install -Dm644 "$icon" "$out/share/icons/hicolor/scalable/apps/$(basename "$icon")"
     done
     install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
+    install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
+    install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
+    install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
     mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps
@@ -293,6 +303,9 @@ rustPlatform.buildRustPackage {
       fi
     done
     wrapProgram $yukimi/libexec/aizome-yukimi --set-default AIZOME_FONT_DIR ${fonts}
+    wrapProgram $out/bin/aizome-hotaru \
+      --set-default AIZOME_FONT_DIR ${fonts} \
+      --set-default HOTARU_FONT_DIR ${hotaruFonts}
     # The compositor finds its core and std beside it (its own rpath says
     # $ORIGIN/../lib/aizome); they and the logic find each other there.
     for so in $out/lib/aizome/*.so; do

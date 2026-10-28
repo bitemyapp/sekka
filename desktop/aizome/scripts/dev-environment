@@ -39,11 +39,12 @@ fi
 # Later patches may change earlier patches' context. Recognize an applied
 # prefix by reversing it in order in a private index, then validate the whole
 # series. The real index and worktree stay untouched until every patch passes.
-# Current patches modify existing tracked files only; unrelated local edits
-# are included in the private index and preserved in the resulting diff.
+# Snapshot tracked edits and existing files named by the patches into the
+# private index. This also recognizes already-applied additions without
+# staging unrelated untracked files or touching the developer's real index.
 patches=()
 patch_names=()
-for patch_name in clipboard input mime; do
+for patch_name in clipboard input mime grid-font; do
   native_patch=$root/apps/hotaru/upstream/sidestep-$patch_name.patch
   [[ -s $native_patch ]] || continue
   patches+=("$native_patch")
@@ -55,6 +56,16 @@ patch_scratch=$(mktemp -d)
 trap 'rm -rf -- "$patch_scratch"' EXIT
 GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" read-tree HEAD
 GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" add -u -- .
+for native_patch in "${patches[@]}"; do
+  git -C "$sidestep" apply --numstat -z "$native_patch" > "$patch_scratch/paths"
+  while IFS= read -r -d '' patch_stat; do
+    patch_path=${patch_stat#*$'\t'}
+    patch_path=${patch_path#*$'\t'}
+    if [[ -f $sidestep/$patch_path || -L $sidestep/$patch_path ]]; then
+      GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" add -f -- "$patch_path"
+    fi
+  done < "$patch_scratch/paths"
+done
 before_tree=$(GIT_INDEX_FILE=$patch_scratch/base git -C "$sidestep" write-tree)
 after_tree=
 applied_count=0

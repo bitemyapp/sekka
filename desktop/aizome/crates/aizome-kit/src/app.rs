@@ -731,6 +731,7 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
         let core = &mut rt.core;
         match event {
             WindowEvent::Resized(size) => core.resized(win, size),
+            WindowEvent::ScaleChanged(scale) => core.scale_changed(win, scale),
             WindowEvent::Focused(on) => core.window_focus(win, on, &mut p),
             WindowEvent::Key(k) => core.key(win, k, &mut p),
             WindowEvent::ModifiersChanged(m) => core.mods = m,

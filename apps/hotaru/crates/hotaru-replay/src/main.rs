@@ -18,6 +18,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut iterations = 10usize;
     let mut history = 0usize;
     let mut chunk = 65536usize;
+    let mut grapheme_width = hotaru_core::GraphemeWidthMethod::Legacy;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -31,6 +32,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .parse()?
             }
             "--chunk" => chunk = args.next().ok_or("--chunk requires a number")?.parse()?,
+            "--grapheme-width" => {
+                grapheme_width = match args.next().as_deref() {
+                    Some("unicode") => hotaru_core::GraphemeWidthMethod::Unicode,
+                    Some("legacy") => hotaru_core::GraphemeWidthMethod::Legacy,
+                    _ => return Err("--grapheme-width requires legacy or unicode".into()),
+                }
+            }
             "--format" => format = args.next().ok_or("--format requires plain or json")?,
             "--bench" => bench = true,
             "--bench-json" => bench_json = true,
@@ -42,7 +50,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "hotaru-replay [--data FILE] [--rows 80] [--cols 120] [--format plain|json] [--scrollback 0] [--chunk 65536] [--bench | --bench-json --iterations 10]\nReads stdin when --data is omitted. --bench suppresses serialization. --bench-json measures feed separately from setup/teardown with zero history."
+                    "hotaru-replay [--data FILE] [--rows 80] [--cols 120] [--format plain|json] [--scrollback 0] [--chunk 65536] [--grapheme-width legacy|unicode] [--bench | --bench-json --iterations 10]\nReads stdin when --data is omitted. --bench suppresses serialization. --bench-json measures feed separately from setup/teardown with zero history."
                 );
                 return Ok(());
             }
@@ -80,6 +88,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         for _ in 0..iterations {
             let start = Instant::now();
             let mut terminal = Terminal::new(cols, rows, 0);
+            terminal.set_default_grapheme_width(grapheme_width);
             setup.push(start.elapsed().as_nanos() as u64);
             let start = Instant::now();
             for part in bytes.chunks(chunk) {
@@ -97,11 +106,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             &serde_json::json!({"schema":1,"engine":"hotaru",
             "timed_scope":"feed-only","input_bytes":bytes.len(),"rows":rows,"cols":cols,
             "scrollback":0,"chunk_bytes":chunk,"samples_ns":feed,"setup_ns":setup,"teardown_ns":teardown,
-            "response_bytes":response_bytes}),
+            "response_bytes":response_bytes,
+            "grapheme_width_method":if grapheme_width == hotaru_core::GraphemeWidthMethod::Unicode { "unicode" } else { "legacy" }}),
         )?;
         return Ok(());
     }
-    let mut terminal = Terminal::new(cols, rows, history);
+    let mut terminal = Terminal::with_history_limits(
+        cols,
+        rows,
+        hotaru_core::HistoryLimits {
+            rows: history,
+            bytes: None,
+        },
+    );
+    terminal.set_default_grapheme_width(grapheme_width);
     let mut responses = Vec::new();
     for part in bytes.chunks(chunk) {
         terminal.feed(part);

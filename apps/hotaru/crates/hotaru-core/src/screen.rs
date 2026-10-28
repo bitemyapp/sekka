@@ -1,4 +1,4 @@
-use crate::history::History;
+use crate::history::{History, HistoryLimits};
 use crate::hyperlink::{Hyperlink, LinkIdentity, LinkRef};
 use crate::input::{KeyboardOptions, KittyFlags, KittyKeyboard, MouseFormat, MouseTracking};
 use crate::parser::{Csi, Handler, Param};
@@ -39,6 +39,7 @@ pub struct Modes {
     pub mouse_tracking: MouseTracking,
     pub mouse_format: MouseFormat,
     pub mouse_alternate_scroll: bool,
+    pub grapheme_cluster: bool,
 }
 impl Default for Modes {
     fn default() -> Self {
@@ -56,6 +57,7 @@ impl Default for Modes {
             mouse_tracking: MouseTracking::None,
             mouse_format: MouseFormat::X10,
             mouse_alternate_scroll: true,
+            grapheme_cluster: false,
         }
     }
 }
@@ -87,6 +89,9 @@ struct Screen {
     lines: VecDeque<Arc<Row>>,
     history: History,
     max_history: usize,
+    byte_limit: Option<usize>,
+    history_budget: Option<usize>,
+    budget_signal: Arc<crate::memory::BudgetSignal>,
     cols: usize,
     cursor: Cursor,
     saved: SavedCursor,
@@ -99,11 +104,14 @@ struct Screen {
 }
 
 impl Screen {
-    fn new(cols: usize, rows: usize, max_history: usize) -> Self {
-        Self {
+    fn new(cols: usize, rows: usize, max_history: usize, byte_limit: Option<usize>) -> Self {
+        let mut screen = Self {
             lines: (0..rows).map(|_| Arc::new(Row::new(cols))).collect(),
             history: History::default(),
             max_history,
+            byte_limit,
+            history_budget: byte_limit,
+            budget_signal: Arc::new(crate::memory::BudgetSignal::default()),
             cols,
             cursor: Cursor::default(),
             saved: SavedCursor::default(),
@@ -113,7 +121,52 @@ impl Screen {
             bottom: rows - 1,
             kitty_keyboard: KittyKeyboard::default(),
             active_link: None,
+        };
+        screen.rebase_budget();
+        screen
+    }
+    fn measure_active_bytes(&self) -> usize {
+        crate::memory::vector::<Arc<Row>>(self.lines.capacity())
+            + self
+                .lines
+                .iter()
+                .map(|row| row.owned_bytes())
+                .sum::<usize>()
+            + self
+                .active_link
+                .as_ref()
+                .map_or(0, |link| link.owned_bytes())
+    }
+    fn active_bytes(&self) -> usize {
+        self.budget_signal.current()
+    }
+    fn rebase_budget(&mut self) {
+        for row in &mut self.lines {
+            if !row.budget_attached(&self.budget_signal) {
+                Arc::make_mut(row).attach_budget(&self.budget_signal);
+            }
         }
+        self.budget_signal.rebase(self.measure_active_bytes());
+        self.enforce_budget();
+    }
+    fn set_active_link(&mut self, link: Option<LinkRef>) {
+        let old = self
+            .active_link
+            .as_ref()
+            .map_or(0, |link| link.owned_bytes());
+        let new = link.as_ref().map_or(0, |link| link.owned_bytes());
+        self.active_link = link;
+        self.budget_signal.adjust(old, new);
+    }
+    fn enforce_budget(&mut self) {
+        let Some((current, peak)) = self.budget_signal.take_change() else {
+            return;
+        };
+        self.history.prune(
+            self.max_history,
+            self.byte_limit.map(|limit| limit.saturating_sub(peak)),
+        );
+        self.history_budget = self.byte_limit.map(|limit| limit.saturating_sub(current));
     }
     fn row(&mut self) -> &mut Row {
         Arc::make_mut(&mut self.lines[self.cursor.row])
@@ -125,21 +178,37 @@ impl Screen {
     }
     fn scroll_up(&mut self, count: usize, history: bool, style: Style) {
         for _ in 0..count.min(self.bottom - self.top + 1) {
+            self.enforce_budget();
             let full_screen = self.top == 0 && self.bottom + 1 == self.lines.len();
             let old = self.lines.remove(self.top).expect("valid scroll region");
-            let recycled = if history && full_screen && self.max_history > 0 {
-                self.history.push_back(old);
-                if self.history.len() > self.max_history {
-                    self.history.pop_front_recycle(self.cols)
+            let old_charge = old.owned_bytes();
+            let recycled =
+                if history && full_screen && self.max_history > 0 && self.history_budget != Some(0)
+                {
+                    self.history.push_back(old);
+                    if self
+                        .history
+                        .over_limit(self.max_history, self.history_budget)
+                    {
+                        let row = self.history.pop_front_recycle(self.cols);
+                        self.history.prune(self.max_history, self.history_budget);
+                        row
+                    } else {
+                        None
+                    }
                 } else {
-                    None
-                }
-            } else {
-                Some(old)
-            };
+                    Some(old)
+                };
             let mut blank = recycled.unwrap_or_else(|| Arc::new(Row::new(self.cols)));
+            self.budget_signal.pause();
             Arc::make_mut(&mut blank).reset(self.cols, style);
+            if !blank.budget_attached(&self.budget_signal) {
+                Arc::make_mut(&mut blank).attach_budget(&self.budget_signal);
+            }
+            self.budget_signal.resume();
+            self.budget_signal.adjust(old_charge, blank.owned_bytes());
             self.lines.insert(self.bottom, blank);
+            self.enforce_budget();
         }
     }
     fn scroll_down(&mut self, count: usize, style: Style) {
@@ -158,6 +227,7 @@ impl Screen {
         }
     }
     fn resize(&mut self, cols: usize, rows: usize, reflow: bool) {
+        self.budget_signal.pause();
         let old_rows = self.lines.len();
         let history = self.history.len();
         let mut buffer = ResizeRows {
@@ -170,7 +240,7 @@ impl Screen {
                 .saved_valid
                 .then_some((history + self.saved.cursor.row, self.saved.cursor.col)),
             // Keep enough rows for either height until both phases complete.
-            limit: self.max_history + old_rows.max(rows),
+            limit: self.max_history.saturating_add(old_rows.max(rows)),
         };
         buffer.lines.append(&mut self.lines);
         // Ghostty changes height before narrowing and after widening. Reversing
@@ -227,6 +297,7 @@ impl Screen {
         self.cols = cols;
         self.top = 0;
         self.bottom = rows - 1;
+        self.rebase_budget();
     }
 }
 
@@ -407,6 +478,8 @@ pub(crate) struct State {
     primary: Screen,
     alternate: Screen,
     modes: Modes,
+    default_grapheme_cluster: bool,
+    saved_grapheme_cluster: bool,
     mouse_tracking_modes: u8,
     mouse_format_modes: u8,
     style: Style,
@@ -434,16 +507,15 @@ pub(crate) struct State {
 }
 
 impl State {
-    pub fn new(cols: usize, rows: usize, history: usize) -> Self {
+    pub fn new(cols: usize, rows: usize, limits: HistoryLimits) -> Self {
         let cols = cols.clamp(1, MAX_COLS);
         let rows = rows.clamp(1, MAX_ROWS);
-        // Bound retained cells as well as row count. A pathological wide PTY
-        // cannot silently request gigabytes of history from a row-count setting.
-        let history = history.min(8_000_000 / cols);
         Self {
-            primary: Screen::new(cols, rows, history),
-            alternate: Screen::new(cols, rows, 0),
+            primary: Screen::new(cols, rows, limits.rows, limits.bytes),
+            alternate: Screen::new(cols, rows, 0, Some(0)),
             modes: Modes::default(),
+            default_grapheme_cluster: false,
+            saved_grapheme_cluster: false,
             mouse_tracking_modes: 0,
             mouse_format_modes: 0,
             style: Style::default(),
@@ -469,6 +541,12 @@ impl State {
             responses: Vec::new(),
             events: Vec::new(),
         }
+    }
+    pub fn set_default_grapheme_width(&mut self, method: crate::GraphemeWidthMethod) {
+        let enabled = method == crate::GraphemeWidthMethod::Unicode;
+        self.default_grapheme_cluster = enabled;
+        self.modes.grapheme_cluster = enabled;
+        self.generation = self.generation.wrapping_add(1);
     }
     pub fn set_default_colors(&mut self, colors: TerminalColors) {
         for (index, color) in self.palette.iter_mut().enumerate() {
@@ -508,10 +586,6 @@ impl State {
         if self.tabs.len() != cols {
             self.tabs = (0..cols).map(|col| col != 0 && col % 8 == 0).collect();
         }
-        self.primary.max_history = self.primary.max_history.min(8_000_000 / cols);
-        while self.primary.history.len() > self.primary.max_history {
-            self.primary.history.pop_front();
-        }
         self.primary.resize(cols, rows, self.autowrap);
         self.alternate.resize(cols, rows, false);
         self.generation = self.generation.wrapping_add(1);
@@ -525,7 +599,20 @@ impl State {
             .compress_step(self.primary.lines.len().saturating_mul(2))
     }
     pub fn history_memory(&self) -> crate::HistoryMemory {
-        self.screen().history.memory()
+        let screen = self.screen();
+        debug_assert_eq!(
+            screen.active_bytes(),
+            screen.measure_active_bytes(),
+            "active budget registration drift"
+        );
+        let mut memory = screen.history.memory();
+        memory.active_bytes = screen.active_bytes();
+        memory.limit_bytes = screen.byte_limit;
+        memory
+    }
+    pub fn enforce_history_budget(&mut self) {
+        self.primary.enforce_budget();
+        self.alternate.enforce_budget();
     }
     pub fn keyboard_options(&self) -> KeyboardOptions {
         KeyboardOptions {
@@ -547,6 +634,13 @@ impl State {
             ..self.modes
         }
     }
+    pub fn content_position(&self, offset: usize) -> crate::ContentPosition {
+        let screen = self.screen();
+        screen.history.position(
+            screen.history.len().saturating_sub(offset),
+            screen.lines.len(),
+        )
+    }
     pub fn snapshot(&self, offset: usize) -> Snapshot {
         let screen = self.screen();
         let offset = offset.min(screen.history.len());
@@ -560,6 +654,7 @@ impl State {
         let mut cursor = screen.cursor;
         cursor.visible &= offset == 0;
         Snapshot {
+            position: screen.history.position(begin, screen.lines.len()),
             cols: screen.cols,
             rows: screen.lines.len(),
             lines,
@@ -583,6 +678,7 @@ impl State {
             .chain(screen.lines.iter().cloned())
             .collect();
         snapshot.rows = snapshot.lines.len();
+        snapshot.position.first_row = 0;
         snapshot.cursor.row += screen.history.len();
         snapshot
     }
@@ -598,6 +694,15 @@ impl State {
         }
         while !bytes.is_empty() {
             self.prepare_wrap();
+            // Metadata allocations and releases must occur in scalar order:
+            // otherwise the budget's peak (and retained history) depends on
+            // where a PTY read happens to split an overwrite.
+            if self.scalar_metadata_writes() {
+                self.print(bytes[0] as char);
+                self.screen_mut().enforce_budget();
+                bytes = &bytes[1..];
+                continue;
+            }
             let style = self.style;
             let protected = self.protected;
             let s = self.screen_mut();
@@ -626,6 +731,7 @@ impl State {
                 s.cursor.col -= 1;
                 s.wrap_pending = true;
             }
+            s.enforce_budget();
             bytes = &bytes[count..];
         }
     }
@@ -643,6 +749,103 @@ impl State {
             }
         }
     }
+    /// Append a scalar only when the pinned terminal grapheme rules join it.
+    /// Reconstructing the bounded cluster state also handles enabling 2027
+    /// after legacy output that stored otherwise-invalid grapheme boundaries.
+    fn try_grapheme(&mut self, ch: char) -> bool {
+        use crate::unicode::{BreakState, WidthEffect, grapheme_break, width_effect};
+        let screen = self.screen();
+        if screen.cursor.col == 0 {
+            return false;
+        }
+        let row = &screen.lines[screen.cursor.row];
+        let left = if self.autowrap {
+            usize::from(!screen.wrap_pending)
+        } else if screen.cursor.col + 1 != screen.cols {
+            1
+        } else {
+            usize::from(!row.cells[screen.cursor.col].has_text())
+        };
+        let mut col = screen.cursor.col - left;
+        if row.cells[col].width() == 0 {
+            col = col.saturating_sub(1);
+        }
+        let base = row.cells[col];
+        if !base.has_text() {
+            return false;
+        }
+        let mut previous = base.character();
+        let mut state = BreakState::default();
+        if let Some(text) = row.grapheme(col) {
+            for next in text.chars().skip(1) {
+                grapheme_break(previous, next, &mut state);
+                previous = next;
+            }
+        }
+        if grapheme_break(previous, ch, &mut state) {
+            return false;
+        }
+        let effect = width_effect(previous, ch);
+        if effect == WidthEffect::Ignore {
+            return true;
+        }
+        let style = self.style;
+        let protected = self.protected;
+        let auto = self.autowrap;
+        let screen = self.screen_mut();
+        match effect {
+            WidthEffect::Wide if base.width() != 2 => {
+                screen.cursor.col = col;
+                let link = screen.active_link.clone();
+                if col + 1 == screen.cols {
+                    if !auto {
+                        return true;
+                    }
+                    let old = screen.lines[screen.cursor.row]
+                        .grapheme(col)
+                        .map(compact_str::CompactString::from);
+                    screen.row().wrapped = true;
+                    screen.row().set_spacer_head(col, style);
+                    if let Some(link) = &link {
+                        screen.row().set_hyperlink_range(col..col + 1, Some(link));
+                    }
+                    screen.cursor.col = 0;
+                    screen.linefeed(style);
+                    screen.row().wrap_continuation = true;
+                    col = 0;
+                    screen.row().put(col, base.character(), 2, style, protected);
+                    if let Some(link) = &link {
+                        screen.row().set_hyperlink_range(col..col + 2, Some(link));
+                    }
+                    if let Some(old) = old {
+                        for scalar in old.chars().skip(1) {
+                            screen.row().combine(col, scalar);
+                        }
+                    }
+                } else {
+                    if col == 0 && screen.lines[screen.cursor.row].cells[col + 1].width() == 2 {
+                        screen.clear_previous_spacer();
+                    }
+                    screen
+                        .row()
+                        .widen_grapheme(col, style, protected, link.as_ref());
+                }
+                screen.cursor.col = (col + 2).min(screen.cols - 1);
+                if col + 2 == screen.cols {
+                    screen.wrap_pending = true;
+                }
+            }
+            WidthEffect::Narrow if base.width() == 2 => {
+                screen.row().narrow_grapheme(col);
+                screen.wrap_pending = false;
+                screen.cursor.col = (col + 1).min(screen.cols - 1);
+            }
+            _ => {}
+        }
+        screen.row().combine(col, ch);
+        screen.enforce_budget();
+        true
+    }
     pub fn print_utf8(&mut self, text: &str) {
         if self.insert || self.charset[self.active_charset] != 0 || self.single_shift.is_some() {
             for ch in text.chars() {
@@ -652,8 +855,15 @@ impl State {
         }
         let mut chars = text.chars().peekable();
         while chars.peek().is_some() {
+            if self.scalar_metadata_writes() {
+                self.print(chars.next().unwrap());
+                self.screen_mut().enforce_budget();
+                continue;
+            }
             let style = self.style;
             let protected = self.protected;
+            let unicode = self.modes.grapheme_cluster;
+            let auto = self.autowrap;
             let s = self.screen_mut();
             let mut col = s.cursor.col;
             let link = s.active_link.clone();
@@ -662,39 +872,82 @@ impl State {
             // One ownership check/copy per row, rather than an atomic Arc check
             // for every scalar. Controls cannot occur in a validated text run.
             let row = Arc::make_mut(&mut s.lines[s.cursor.row]);
-            while let Some(&ch) = chars.peek() {
-                let width = char_width(ch);
-                if width != 0 && (pending || col + width > s.cols) {
+            // Group positive-width writes until a combining mark or row
+            // boundary. Intern style and clear overwritten metadata once per
+            // run; combining and wrapping retain the existing scalar behavior.
+            while let Some(&first) = chars.peek() {
+                let mut ch = first;
+                let mut width = if unicode {
+                    unicode_char_width(ch)
+                } else {
+                    char_width(ch)
+                };
+                if width == 0 {
                     break;
                 }
-                chars.next();
-                if width == 0 {
-                    row.combine(if pending { col } else { col.saturating_sub(1) }, ch);
-                } else {
+                if pending || col + width > s.cols {
+                    break;
+                }
+                if unicode && !unicode_batch_boundary(row, col, auto, ch) {
+                    break;
+                }
+                let start = col;
+                let left = col > 0 && row.cells[col].width() == 0;
+                let id = row.style_id(style);
+                loop {
+                    chars.next();
                     clear_previous_spacer |=
                         col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
-                    row.put(col, ch, width, style, protected);
-                    if let Some(link) = &link {
-                        row.set_hyperlink_range(col..col + width, Some(link));
+                    row.cells[col] = Cell::new(ch, id, width as u8).protected(protected);
+                    if width == 2 {
+                        row.cells[col + 1] = Cell::new(' ', id, 0).protected(protected);
                     }
                     col += width;
                     if col == s.cols {
                         col -= 1;
                         pending = true;
+                        break;
+                    }
+                    let Some(&next) = chars.peek() else {
+                        break;
+                    };
+                    if unicode && !unicode_scalar_boundary(ch, next) {
+                        break;
+                    }
+                    ch = next;
+                    width = if unicode {
+                        unicode_char_width(ch)
+                    } else {
+                        char_width(ch)
+                    };
+                    if width == 0 || col + width > s.cols {
+                        break;
                     }
                 }
+                row.finish_print_run(
+                    start,
+                    if pending { s.cols } else { col },
+                    left,
+                    style,
+                    link.as_ref(),
+                );
             }
             s.cursor.col = col;
             s.wrap_pending = pending;
             if clear_previous_spacer {
                 s.clear_previous_spacer();
             }
+            s.enforce_budget();
             // The scalar at a row boundary goes through the normal wrapping
             // path, including one-column screens and disabled autowrap.
             if let Some(ch) = chars.next() {
                 self.print(ch);
             }
         }
+    }
+    fn scalar_metadata_writes(&self) -> bool {
+        let screen = self.screen();
+        screen.active_link.is_some() || screen.lines[screen.cursor.row].has_dynamic_metadata()
     }
     fn move_to(&mut self, row: usize, col: usize) {
         let origin = self.origin;
@@ -805,7 +1058,7 @@ impl State {
             25 => self.screen_mut().cursor.visible = set,
             47 | 1047 | 1049 => {
                 if self.modes.alternate_screen != set {
-                    self.screen_mut().active_link = None;
+                    self.screen_mut().set_active_link(None);
                 }
                 if self.modes.alternate_screen == set {
                     return;
@@ -819,7 +1072,7 @@ impl State {
                     let cursor = self.primary.cursor;
                     if value != 47 {
                         let kitty_keyboard = self.alternate.kitty_keyboard;
-                        self.alternate = Screen::new(cols, rows, 0);
+                        self.alternate = Screen::new(cols, rows, 0, Some(0));
                         self.alternate.kitty_keyboard = kitty_keyboard;
                     }
                     self.alternate.cursor = cursor;
@@ -841,6 +1094,7 @@ impl State {
             }
             1004 => self.modes.focus_events = set,
             2004 => self.modes.bracketed_paste = set,
+            2027 => self.modes.grapheme_cluster = set,
             _ => {}
         }
     }
@@ -879,6 +1133,7 @@ impl State {
                 47 | 1047 | 1049 => Some(self.modes.alternate_screen),
                 1004 => Some(self.modes.focus_events),
                 2004 => Some(self.modes.bracketed_paste),
+                2027 => Some(self.modes.grapheme_cluster),
                 _ => None,
             }
         } else {
@@ -1027,17 +1282,42 @@ impl Handler for State {
             2 if ch == '#' => ch = '£',
             _ => {}
         }
+        if ch as u32 > 255 && self.modes.grapheme_cluster && self.try_grapheme(ch) {
+            return;
+        }
         // Ghostty's default (non-grapheme-clustering) width policy treats each
         // regional indicator as a wide scalar, including an unpaired one.
-        let width = char_width(ch);
+        let width = if self.modes.grapheme_cluster {
+            unicode_char_width(ch)
+        } else {
+            char_width(ch)
+        };
         if width == 0 {
+            if self.modes.grapheme_cluster {
+                return;
+            }
+            let auto = self.autowrap;
             let s = self.screen_mut();
-            let col = if s.wrap_pending {
+            if s.cursor.col == 0 && !(auto && s.wrap_pending) {
+                return;
+            }
+            let mut col = if auto && s.wrap_pending {
                 s.cursor.col
             } else {
-                s.cursor.col.saturating_sub(1)
+                s.cursor.col - 1
             };
+            if s.lines[s.cursor.row].cells[col].width() == 0 {
+                col = col.saturating_sub(1);
+            }
+            let cell = s.lines[s.cursor.row].cells[col];
+            if !cell.has_text()
+                || (matches!(ch, '\u{fe0e}' | '\u{fe0f}')
+                    && !crate::unicode::properties(cell.character()).extended_pictographic())
+            {
+                return;
+            }
             s.row().combine(col, ch);
+            s.enforce_budget();
             return;
         }
         self.prepare_wrap();
@@ -1167,11 +1447,17 @@ impl Handler for State {
             b'c' => {
                 let cols = self.screen().cols;
                 let rows = self.screen().lines.len();
-                let history = self.primary.max_history;
+                let limits = HistoryLimits {
+                    rows: self.primary.max_history,
+                    bytes: self.primary.byte_limit,
+                };
                 let colors = self.default_colors.clone();
+                let grapheme_cluster = self.default_grapheme_cluster;
                 let foreground = self.foreground_overridden.then_some(self.foreground);
                 let background = self.background_overridden.then_some(self.background);
-                *self = Self::new(cols, rows, history);
+                *self = Self::new(cols, rows, limits);
+                self.default_grapheme_cluster = grapheme_cluster;
+                self.modes.grapheme_cluster = grapheme_cluster;
                 self.set_default_colors(colors);
                 // Ghostty's RIS resets indexed colors but preserves OSC 10/11
                 // dynamic overrides. Only OSC 110/111 clear those overrides.
@@ -1254,6 +1540,18 @@ impl Handler for State {
                         .set(KittyFlags(first as u8), mode);
                 }
                 _ => {}
+            }
+            return;
+        }
+        if csi.private == Some(b'?') && matches!(csi.final_byte, b's' | b'r') {
+            for param in csi.params {
+                if param.value == 2027 {
+                    if csi.final_byte == b's' {
+                        self.saved_grapheme_cluster = self.modes.grapheme_cluster;
+                    } else {
+                        self.modes.grapheme_cluster = self.saved_grapheme_cluster;
+                    }
+                }
             }
             return;
         }
@@ -1518,7 +1816,7 @@ impl Handler for State {
             let uri = &body[separator + 1..];
             if uri.is_empty() {
                 if id.is_none() {
-                    self.screen_mut().active_link = None;
+                    self.screen_mut().set_active_link(None);
                 }
             } else {
                 let id = if let Some(id) = id {
@@ -1528,10 +1826,11 @@ impl Handler for State {
                     self.next_link_id = self.next_link_id.wrapping_add(1);
                     LinkIdentity::Implicit(id)
                 };
-                self.screen_mut().active_link = Some(LinkRef::new(Hyperlink {
-                    id,
-                    uri: uri.into(),
-                }));
+                self.screen_mut()
+                    .set_active_link(Some(LinkRef::new(Hyperlink {
+                        id,
+                        uri: uri.into(),
+                    })));
             }
             return;
         }
@@ -1662,10 +1961,53 @@ fn parse_color(value: &str) -> Option<Rgb> {
     }
 }
 
+#[inline]
+fn han(ch: char) -> bool {
+    matches!(ch, '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')
+}
+#[inline]
+fn unicode_char_width(ch: char) -> usize {
+    if ch as u32 <= 255 {
+        1
+    } else if han(ch) {
+        2
+    } else {
+        crate::unicode::properties(ch).width()
+    }
+}
+#[inline]
+fn unicode_scalar_boundary(previous: char, next: char) -> bool {
+    next as u32 <= 255
+        || (han(previous) && han(next))
+        || crate::unicode::grapheme_break(
+            previous,
+            next,
+            &mut crate::unicode::BreakState::default(),
+        )
+}
+fn unicode_batch_boundary(row: &Row, col: usize, auto: bool, ch: char) -> bool {
+    if ch as u32 <= 255 || col == 0 {
+        return true;
+    }
+    let left = if auto || col + 1 < row.cells.len() {
+        1
+    } else {
+        usize::from(!row.cells[col].has_text())
+    };
+    let mut previous = col - left;
+    if row.cells[previous].width() == 0 {
+        previous = previous.saturating_sub(1);
+    }
+    let cell = row.cells[previous];
+    !cell.has_text()
+        || (row.grapheme(previous).is_none() && unicode_scalar_boundary(cell.character(), ch))
+}
+
 fn char_width(ch: char) -> usize {
     if ch.is_ascii() {
         1
-    } else if matches!(ch, '\u{1f1e6}'..='\u{1f1ff}') {
+    } else if matches!(ch, '\u{1f1e6}'..='\u{1f1ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')
+    {
         2
     } else {
         ch.width().unwrap_or(0).min(2)
@@ -1706,5 +2048,39 @@ fn dec_graphic(ch: char) -> char {
         '}' => '£',
         '~' => '·',
         _ => ch,
+    }
+}
+
+#[cfg(test)]
+mod width_fastpath_test {
+    use super::*;
+
+    #[test]
+    fn unicode_width_fastpaths_match_pinned_properties_for_every_scalar() {
+        for value in 0..=0x10ffff {
+            if let Some(ch) = char::from_u32(value) {
+                let expected = if value <= 255 {
+                    1
+                } else {
+                    crate::unicode::properties(ch).width()
+                };
+                assert_eq!(unicode_char_width(ch), expected, "U+{value:04X}");
+            }
+        }
+    }
+    #[test]
+    fn fast_width_matches_existing_policy_for_every_unicode_scalar() {
+        for value in 0..=0x10ffff {
+            if let Some(ch) = char::from_u32(value) {
+                let expected = if ch.is_ascii() {
+                    1
+                } else if matches!(ch, '\u{1f1e6}'..='\u{1f1ff}') {
+                    2
+                } else {
+                    ch.width().unwrap_or(0).min(2)
+                };
+                assert_eq!(char_width(ch), expected, "U+{value:04X}");
+            }
+        }
     }
 }

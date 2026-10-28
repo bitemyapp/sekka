@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T17:51:40.037249+00:00",
+  "host": "callen",
+  "status": "passed",
+  "scope": "Native Unicode font grid, history byte budget and owned live Find checkpoint; feature and performance parity remain incomplete",
+  "derivation": "/nix/store/vs0phsdgfqglv3izb8ca46rw6s9jshvg-hotaru-0.1.0.drv",
+  "output": "/nix/store/9dxlk1kk1dma59z5d5a9lxq37vv4dfdd-hotaru-0.1.0",
+  "source": "/nix/store/kghiimia92rlfpy79l9f6jvaikby3jhn-hotaru-source",
+  "source_nar_hash": "sha256-RwE+FhEoP3bklwsegbbTj3OFO6wda31CAJwKhNwQ3BY=",
+  "binary_sha256": "a2d9b3380266f30d0174c20f248cd21753bff705eb1ae855c519c744616078aa",
+  "wrapper_sha256": "54f2b3aef74c0516a6d7b12f9d2ec917abe08e8016280ff43f71ec7721c02840",
+  "build_log_sha256": "260900d655bbd9d9c7ef6e6eac732be727671766d30c5525b4c8e6dbfa6695dd",
+  "test_summaries": [
+    "test result: ok. 13 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 18 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "build_type": "release",
+  "cargo_test_flags": "-p aizome-hotaru",
+  "help": "Hotaru \u86cd \u2014 Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG\u2026]]\n",
+  "installed_files": [
+    "bin/.hotaru-wrapped",
+    "bin/aizome-hotaru",
+    "bin/hotaru",
+    "share/applications/org.aizome.Hotaru.desktop",
+    "share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg",
+    "share/licenses/hotaru/Ghostty-MIT.txt",
+    "share/licenses/hotaru/Unicode-3.0.txt",
+    "share/licenses/hotaru/uucode-MIT.txt"
+  ],
+  "licenses": {
+    "uucode-MIT.txt": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33",
+    "Unicode-3.0.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "Ghostty-MIT.txt": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1"
+  },
+  "limitations": [
+    "No Aizome VM or physical desktop qualification",
+    "Full Ghostty feature and performance parity remain incomplete",
+    "This package precedes isolated budget-signal performance experiments; its source identity must not be relabeled"
+  ]
+}

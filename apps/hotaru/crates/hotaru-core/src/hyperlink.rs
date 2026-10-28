@@ -22,13 +22,77 @@ struct Run {
     link: u16,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub(crate) struct RowLinks {
     runs: Vec<Run>,
     links: Vec<LinkRef>,
+    payload_bytes: usize,
+}
+impl Clone for RowLinks {
+    fn clone(&self) -> Self {
+        Self {
+            runs: crate::memory::clone_vec(&self.runs),
+            links: crate::memory::clone_vec(&self.links),
+            payload_bytes: self.payload_bytes,
+        }
+    }
+}
+impl Hyperlink {
+    pub(crate) fn owned_bytes(&self) -> usize {
+        crate::memory::allocation(std::mem::size_of::<Self>() + std::mem::size_of::<usize>())
+            + crate::memory::allocation(self.uri.len())
+            + match &self.id {
+                LinkIdentity::Explicit(id) => crate::memory::allocation(id.len()),
+                LinkIdentity::Implicit(_) => 0,
+            }
+    }
 }
 
 impl RowLinks {
+    pub fn owned_bytes(&self) -> usize {
+        Self::allocation_bytes(self.runs.capacity(), self.links.capacity()) + self.payload_bytes
+    }
+    pub fn allocation_bytes(runs: usize, links: usize) -> usize {
+        crate::memory::allocation(std::mem::size_of::<Self>())
+            + crate::memory::vector::<Run>(runs)
+            + crate::memory::vector::<LinkRef>(links)
+    }
+    pub fn archive_table(&self) -> &[LinkRef] {
+        &self.links
+    }
+    pub fn archive_runs(&self) -> impl Iterator<Item = (u16, u16, u16)> + '_ {
+        self.runs.iter().map(|run| (run.start, run.end, run.link))
+    }
+    pub fn archive_capacities(&self) -> (usize, usize) {
+        (self.runs.capacity(), self.links.capacity())
+    }
+    pub fn restore_archive(
+        table: Vec<LinkRef>,
+        runs: Vec<(u16, u16, u16)>,
+        run_capacity: usize,
+        cols: usize,
+    ) -> Option<Self> {
+        let mut restored = Vec::with_capacity(run_capacity);
+        let mut previous = 0;
+        for (start, end, link) in runs {
+            if usize::from(start) < previous
+                || start >= end
+                || usize::from(end) > cols
+                || usize::from(link) >= table.len()
+            {
+                return None;
+            }
+            previous = usize::from(end);
+            restored.push(Run { start, end, link });
+        }
+        let payload_bytes = table.iter().map(|link| link.owned_bytes()).sum();
+        Some(Self {
+            runs: restored,
+            links: table,
+            payload_bytes,
+        })
+    }
+    #[cfg(test)]
     pub fn from_ordered_runs(runs: Vec<(Range<usize>, LinkRef)>, cols: usize) -> Option<Self> {
         use std::collections::HashMap;
         let mut result = Self::default();
@@ -48,6 +112,7 @@ impl RowLinks {
             } else {
                 let id = u16::try_from(result.links.len()).ok()?;
                 ids.insert(link.clone(), id);
+                result.payload_bytes += link.owned_bytes();
                 result.links.push(link);
                 id
             };
@@ -71,6 +136,7 @@ impl RowLinks {
         (usize::from(run.start) <= col).then(|| &self.links[usize::from(run.link)])
     }
 
+    #[cfg(test)]
     pub fn iter(&self) -> impl Iterator<Item = (Range<usize>, &LinkRef)> {
         self.runs.iter().map(|run| {
             (
@@ -100,8 +166,10 @@ impl RowLinks {
                 run.link = ids[old];
             }
             self.links = links;
+            self.payload_bytes = self.links.iter().map(|link| link.owned_bytes()).sum();
         }
         let id = self.links.len() as u16;
+        self.payload_bytes += link.owned_bytes();
         self.links.push(link.clone());
         id
     }
@@ -261,6 +329,14 @@ mod tests {
                 assert_eq!(restored.get(col), expected.as_ref());
             }
             assert!(ranges.links.len() <= COLS * 2 + 1);
+            assert_eq!(
+                ranges.payload_bytes,
+                ranges
+                    .links
+                    .iter()
+                    .map(|link| link.owned_bytes())
+                    .sum::<usize>()
+            );
         }
     }
 }

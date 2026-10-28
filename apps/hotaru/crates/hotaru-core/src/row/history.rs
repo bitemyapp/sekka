@@ -1,9 +1,17 @@
 //! Explicit, bounded archive representation. No raw Rust layout or pointer bytes
 //! enter the codec, and decoding validates every offset before constructing Row.
-use super::{Cell, CompactString, Row};
+use super::{Cell, CompactString, GraphemeMap, Row, RowLinks};
 use crate::hyperlink::{LinkIdentity, LinkRef};
 use crate::{Color, MAX_COLS, Rgb, Style};
 use std::collections::HashMap;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RecycleLayout {
+    pub retained_cols: u16,
+    pub cells: u16,
+    pub styles: u16,
+    pub graphemes: u16,
+}
 
 pub(crate) struct Reader<'a>(pub &'a [u8]);
 impl<'a> Reader<'a> {
@@ -38,38 +46,78 @@ fn color_decode(reader: &mut Reader<'_>) -> Option<Color> {
     }
 }
 impl Row {
-    pub(crate) fn recycle_width(&self) -> u16 {
-        self.retained_cols
+    pub(crate) fn recycle_layout(&self) -> RecycleLayout {
+        RecycleLayout {
+            retained_cols: self.retained_cols,
+            cells: self.cells.capacity() as u16,
+            styles: self.styles.capacity() as u16,
+            graphemes: self.graphemes.capacity() as u16,
+        }
     }
-    pub(crate) fn new_recycled(cols: usize, retained_cols: u16) -> Self {
+    pub(crate) fn with_recycle_layout(cols: usize, layout: RecycleLayout) -> Self {
         let mut row = Self::new(cols);
-        row.retained_cols = retained_cols.max(cols as u16);
+        row.cells = Vec::with_capacity(usize::from(layout.cells).max(cols));
+        row.cells.resize(cols, Cell::default());
+        row.styles = Vec::with_capacity(usize::from(layout.styles).max(1));
+        row.styles.push(Style::default());
+        row.graphemes = GraphemeMap::with_capacity(usize::from(layout.graphemes));
+        row.retained_cols = layout.retained_cols.max(cols as u16);
         row.dirty_end = cols as u16;
         row
     }
-    /// Upper bound on the archive size, including bounded graphemes and a
-    /// conservative per-run charge for the block's shared link dictionary.
+    /// Archive bound includes the full row-local link table, including entries
+    /// retained for reuse but not currently referenced by a visible run.
     pub(crate) fn history_size_bound(&self) -> usize {
-        let links = self
-            .hyperlink_runs()
-            .map(|(_, link)| {
-                let identity = match &link.id {
-                    LinkIdentity::Explicit(id) => 2 + id.len(),
-                    LinkIdentity::Implicit(_) => 8,
-                };
-                8 + 1 + identity + 2 + link.uri.len()
-            })
-            .sum::<usize>();
-        13 + self.cells.len() * 8 + self.styles.len() * 14 + self.graphemes.len() * 260 + links
+        let (links, runs) = self.links.as_ref().map_or((0, 0), |table| {
+            let bytes = table
+                .archive_table()
+                .iter()
+                .map(|link| {
+                    let id = match &link.id {
+                        LinkIdentity::Explicit(id) => 2 + id.len(),
+                        LinkIdentity::Implicit(_) => 8,
+                    };
+                    4 + 1 + id + 2 + link.uri.len()
+                })
+                .sum::<usize>();
+            (bytes, table.archive_runs().count() * 6)
+        });
+        25 + self.cells.len() * 8
+            + self.styles.len() * 14
+            + self.graphemes.len() * (crate::MAX_GRAPHEME_BYTES + 6)
+            + links
+            + runs
+    }
+    pub(crate) fn archive_links(&self) -> impl Iterator<Item = &LinkRef> {
+        self.links.iter().flat_map(|links| links.archive_table())
     }
     pub(crate) fn encode_history(&self, bytes: &mut Vec<u8>, links: &HashMap<LinkRef, u32>) {
+        let table = self.links.as_ref();
+        let runs = table.map_or(0, |table| table.archive_runs().count());
+        let count = table.map_or(0, |table| table.archive_table().len());
+        let (run_capacity, table_capacity) =
+            table.map_or((0, 0), |table| table.archive_capacities());
         bytes.extend_from_slice(&(self.cells.len() as u16).to_le_bytes());
         bytes.extend_from_slice(&self.retained_cols.to_le_bytes());
-        bytes.push(u8::from(self.wrapped) | (u8::from(self.wrap_continuation) << 1));
-        bytes.extend_from_slice(&(self.styles.len() as u16).to_le_bytes());
-        bytes.extend_from_slice(&self.last_style.to_le_bytes());
-        bytes.extend_from_slice(&(self.graphemes.len() as u16).to_le_bytes());
-        bytes.extend_from_slice(&(self.hyperlink_runs().count() as u16).to_le_bytes());
+        bytes.push(
+            u8::from(self.wrapped)
+                | (u8::from(self.wrap_continuation) << 1)
+                | (u8::from(table.is_some()) << 2),
+        );
+        for value in [
+            self.styles.len() as u16,
+            self.last_style,
+            self.graphemes.len() as u16,
+            runs as u16,
+            self.cells.capacity() as u16,
+            self.styles.capacity() as u16,
+            self.graphemes.capacity() as u16,
+            count as u16,
+            run_capacity as u16,
+            table_capacity as u16,
+        ] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
         for style in &self.styles {
             color_encode(style.foreground, bytes);
             color_encode(style.background, bytes);
@@ -82,18 +130,35 @@ impl Row {
             bytes.push(cell.width);
             bytes.push(cell._reserved);
         }
-        for (col, text) in self.graphemes.iter() {
-            bytes.extend_from_slice(&(col as u16).to_le_bytes());
-            bytes.extend_from_slice(&(text.len() as u16).to_le_bytes());
+        for (col, text) in self.graphemes.archive_iter() {
+            for value in [col as u16, text.len() as u16, text.capacity() as u16] {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
             bytes.extend_from_slice(text.as_bytes());
         }
-        for (range, link) in self.hyperlink_runs() {
-            bytes.extend_from_slice(&(range.start as u16).to_le_bytes());
-            bytes.extend_from_slice(&(range.end as u16).to_le_bytes());
-            bytes.extend_from_slice(&links[link].to_le_bytes());
+        if let Some(table) = table {
+            for link in table.archive_table() {
+                bytes.extend_from_slice(&links[link].to_le_bytes());
+            }
+            for (start, end, index) in table.archive_runs() {
+                for value in [start, end, index] {
+                    bytes.extend_from_slice(&value.to_le_bytes());
+                }
+            }
         }
     }
+    #[cfg(test)]
     pub(crate) fn decode_history(bytes: &mut &[u8], links: &[LinkRef]) -> Option<Self> {
+        {
+            let mut budget = crate::memory::MAX_DECODE_BYTES;
+            Self::decode_history_budget(bytes, links, &mut budget)
+        }
+    }
+    pub(crate) fn decode_history_budget(
+        bytes: &mut &[u8],
+        links: &[LinkRef],
+        budget: &mut usize,
+    ) -> Option<Self> {
         let mut r = Reader(bytes);
         let cols = usize::from(r.u16()?);
         let retained_cols = r.u16()?;
@@ -102,23 +167,57 @@ impl Row {
         let last_style = r.u16()?;
         let graphemes = usize::from(r.u16()?);
         let runs = usize::from(r.u16()?);
+        let cells_capacity = usize::from(r.u16()?);
+        let styles_capacity = usize::from(r.u16()?);
+        let graphemes_capacity = usize::from(r.u16()?);
+        let table_count = usize::from(r.u16()?);
+        let run_capacity = usize::from(r.u16()?);
+        let table_capacity = usize::from(r.u16()?);
+        let has_links = flags & 4 != 0;
         if !(1..=MAX_COLS).contains(&cols)
             || usize::from(retained_cols) < cols
             || usize::from(retained_cols) > MAX_COLS
-            || flags > 3
+            || flags > 7
             || styles == 0
             || styles > MAX_COLS * 2 + 1
             || usize::from(last_style) >= styles
             || graphemes > cols
             || runs > cols
+            || !(cols..=MAX_COLS * 2).contains(&cells_capacity)
+            || !(styles..=MAX_COLS * 4 + 4).contains(&styles_capacity)
+            || !(graphemes..=MAX_COLS * 2).contains(&graphemes_capacity)
+            || table_count > MAX_COLS * 2 + 1
+            || !(runs..=MAX_COLS * 2).contains(&run_capacity)
+            || !(table_count..=MAX_COLS * 4 + 4).contains(&table_capacity)
+            || (!has_links
+                && (runs != 0 || table_count != 0 || run_capacity != 0 || table_capacity != 0))
         {
             return None;
         }
         // Validate the minimum complete payload before allocating any vectors.
-        if r.0.len() < styles * 14 + cols * 8 + graphemes * 4 + runs * 8 {
+        if r.0.len() < styles * 14 + cols * 8 + graphemes * 6 + table_count * 4 + runs * 6 {
             return None;
         }
-        let mut row = Row::new(cols);
+        let base_charge =
+            crate::memory::allocation(std::mem::size_of::<Row>() + std::mem::size_of::<usize>())
+                + crate::memory::vector::<Cell>(cells_capacity)
+                + crate::memory::vector::<Style>(styles_capacity)
+                + crate::memory::vector::<(usize, CompactString)>(graphemes_capacity)
+                + if has_links {
+                    RowLinks::allocation_bytes(run_capacity, table_capacity)
+                } else {
+                    0
+                };
+        *budget = budget.checked_sub(base_charge)?;
+        let mut row = Row::with_recycle_layout(
+            cols,
+            RecycleLayout {
+                retained_cols,
+                cells: cells_capacity as u16,
+                styles: styles_capacity as u16,
+                graphemes: graphemes_capacity as u16,
+            },
+        );
         row.dirty_end = cols as u16;
         row.styles.clear();
         for _ in 0..styles {
@@ -164,20 +263,40 @@ impl Row {
         for _ in 0..graphemes {
             let col = usize::from(r.u16()?);
             let len = usize::from(r.u16()?);
+            let capacity = usize::from(r.u16()?);
             if col >= cols
                 || previous.is_some_and(|v| col <= v)
                 || len == 0
-                || len > 256
+                || len > crate::MAX_GRAPHEME_BYTES
+                || capacity < len
+                || capacity > 512
+                || (capacity > std::mem::size_of::<CompactString>()
+                    && capacity
+                        < std::mem::size_of::<CompactString>() + std::mem::size_of::<usize>())
                 || row.cells[col].width == 0
             {
                 return None;
             }
             let text = std::str::from_utf8(r.take(len)?).ok()?;
-            if text.chars().count() > 64 || !text.starts_with(row.cells[col].character()) {
+            if text.chars().count() > crate::MAX_GRAPHEME_SCALARS
+                || !text.starts_with(row.cells[col].character())
+            {
                 return None;
             }
-            row.graphemes.insert(col, CompactString::new(text));
+            if capacity > std::mem::size_of::<CompactString>() {
+                *budget = budget.checked_sub(crate::memory::allocation(capacity))?;
+            }
+            let mut restored = CompactString::with_capacity(capacity);
+            restored.push_str(text);
+            row.graphemes.insert(col, restored);
             previous = Some(col);
+        }
+        let mut table = Vec::with_capacity(table_capacity);
+        for _ in 0..table_count {
+            let index = r.u32()? as usize;
+            let link = links.get(index)?;
+            *budget = budget.checked_sub(link.owned_bytes())?;
+            table.push(link.clone());
         }
         let mut restored_runs = Vec::new();
         restored_runs.try_reserve_exact(runs).ok()?;
@@ -185,15 +304,22 @@ impl Row {
         for _ in 0..runs {
             let start = usize::from(r.u16()?);
             let end = usize::from(r.u16()?);
-            let index = r.u32()? as usize;
+            let index = r.u16()?;
             if start < previous_end || start >= end || end > cols {
                 return None;
             }
-            let link = links.get(index)?;
-            restored_runs.push((start..end, link.clone()));
+            table.get(usize::from(index))?;
+            restored_runs.push((start as u16, end as u16, index));
             previous_end = end;
         }
-        row.restore_hyperlink_runs(restored_runs)?;
+        if has_links {
+            row.links = Some(Box::new(RowLinks::restore_archive(
+                table,
+                restored_runs,
+                run_capacity,
+                cols,
+            )?));
+        }
         *bytes = r.0;
         Some(row)
     }
@@ -202,6 +328,30 @@ impl Row {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn capacities_and_allocation_budget_are_validated_before_restore() {
+        let mut row = Row::new(40);
+        for _ in 0..20 {
+            row.combine(0, '\u{301}');
+        }
+        let mut bytes = Vec::new();
+        row.encode_history(&mut bytes, &HashMap::new());
+        for offset in [13, 15, 17, 19, 21, 23] {
+            let mut corrupt = bytes.clone();
+            corrupt[offset..offset + 2].copy_from_slice(&u16::MAX.to_le_bytes());
+            assert!(
+                Row::decode_history(&mut corrupt.as_slice(), &[]).is_none(),
+                "capacity offset{offset}"
+            );
+        }
+        let mut budget = 0;
+        assert!(Row::decode_history_budget(&mut bytes.as_slice(), &[], &mut budget).is_none());
+        let mut budget = row.owned_bytes();
+        let restored = Row::decode_history_budget(&mut bytes.as_slice(), &[], &mut budget).unwrap();
+        assert_eq!(budget, 0);
+        assert_eq!(row.owned_bytes(), restored.owned_bytes());
+        assert_eq!(row.owned_bytes(), row.clone().owned_bytes());
+    }
     #[test]
     fn hyperlink_runs_round_trip_and_reject_corrupt_ranges_and_indices() {
         use crate::hyperlink::Hyperlink;
@@ -233,13 +383,13 @@ mod tests {
         for end in 0..encoded.len() {
             assert!(Row::decode_history(&mut &encoded[..end], &links).is_none());
         }
-        let runs_start = encoded.len() - 16;
+        let runs_start = encoded.len() - 12;
         for (at, bytes) in [
             (11, u16::MAX.to_le_bytes().to_vec()),
             (runs_start, 8u16.to_le_bytes().to_vec()),
             (runs_start + 2, 9u16.to_le_bytes().to_vec()),
-            (runs_start + 4, u32::MAX.to_le_bytes().to_vec()),
-            (runs_start + 8, 2u16.to_le_bytes().to_vec()),
+            (runs_start + 4, u16::MAX.to_le_bytes().to_vec()),
+            (runs_start + 6, 2u16.to_le_bytes().to_vec()),
         ] {
             let mut corrupt = encoded.clone();
             corrupt[at..at + bytes.len()].copy_from_slice(&bytes);

@@ -18,6 +18,7 @@ const COPY_LIMIT: usize = 128 * 1024 * 1024;
 pub enum CopySource {
     Viewport { snapshot: Arc<Snapshot>, selection: Option<Selection> },
     Content(Arc<ContentSnapshot>),
+    Search { results: Arc<hotaru_core::search::Results>, index: usize },
 }
 
 pub enum Job {
@@ -66,6 +67,17 @@ fn prepare_copy(token: u64, pane: u64, source: CopySource, format: CopyFormat, c
     }
     let (snapshot, selection) = match source {
         CopySource::Content(snapshot) => (snapshot, None),
+        CopySource::Search { results, index } => {
+            let found = results.matches.get(index)?;
+            (
+                Arc::new(results.snapshot.clone()),
+                Some(formatter::Selection {
+                    start: (found.start.row, found.start.col),
+                    end: (found.end.row, found.end.col),
+                    rectangle: false,
+                }),
+            )
+        }
         CopySource::Viewport { snapshot, selection } => {
             let selection = selection.map(|selected| formatter::Selection {
                 start: (selected.anchor.row, selected.anchor.col),

@@ -1,14 +1,41 @@
-//! Sparse row-local clusters. The usual few combining sequences fit in inline
-//! strings, and clearing/repainting a row retains the entry allocation.
-
+//! Sparse row-local clusters with cached heap ownership charges.
 use compact_str::CompactString;
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct GraphemeMap(Vec<(usize, CompactString)>);
-
+fn heap(text: &CompactString) -> usize {
+    if text.is_heap_allocated() {
+        crate::memory::allocation(text.capacity())
+    } else {
+        0
+    }
+}
+#[derive(Debug, Default)]
+pub(crate) struct GraphemeMap(Vec<(usize, CompactString)>, usize);
+impl Clone for GraphemeMap {
+    fn clone(&self) -> Self {
+        let mut entries = Vec::with_capacity(self.0.capacity());
+        entries.extend(self.0.iter().map(|(col, text)| {
+            let mut copy = CompactString::with_capacity(text.capacity());
+            copy.push_str(text);
+            (*col, copy)
+        }));
+        Self(entries, self.1)
+    }
+}
 impl GraphemeMap {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity), 0)
+    }
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+    pub fn owned_bytes(&self) -> usize {
+        crate::memory::vector::<(usize, CompactString)>(self.0.capacity()) + self.1
+    }
+    pub fn archive_iter(&self) -> impl Iterator<Item = (usize, &CompactString)> {
+        self.0.iter().map(|(col, text)| (*col, text))
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -16,72 +43,95 @@ impl GraphemeMap {
     pub fn len(&self) -> usize {
         self.0.len()
     }
-    pub fn iter(&self) -> impl Iterator<Item = (usize, &str)> {
-        self.0.iter().map(|(col, text)| (*col, text.as_str()))
-    }
     pub fn clear(&mut self) {
         self.0.clear();
+        self.1 = 0;
     }
     fn position(&self, col: usize) -> Result<usize, usize> {
         self.0.binary_search_by_key(&col, |(column, _)| *column)
     }
     pub fn get(&self, col: &usize) -> Option<&CompactString> {
-        self.position(*col).ok().map(|index| &self.0[index].1)
+        self.position(*col).ok().map(|i| &self.0[i].1)
     }
     pub fn contains_key(&self, col: &usize) -> bool {
         self.position(*col).is_ok()
     }
-    pub fn get_or_insert_with(
+    pub fn modify(
         &mut self,
         col: usize,
         create: impl FnOnce() -> CompactString,
-    ) -> &mut CompactString {
+        change: impl FnOnce(&mut CompactString),
+    ) {
         let index = match self.position(col) {
-            Ok(index) => index,
-            Err(index) => {
-                self.0.insert(index, (col, create()));
-                index
+            Ok(i) => i,
+            Err(i) => {
+                let text = create();
+                self.1 += heap(&text);
+                self.0.insert(i, (col, text));
+                i
             }
         };
-        &mut self.0[index].1
+        let text = &mut self.0[index].1;
+        let before = heap(text);
+        change(text);
+        self.1 = self.1 - before + heap(text);
     }
     pub fn insert(&mut self, col: usize, text: CompactString) {
+        let charge = heap(&text);
         match self.position(col) {
-            Ok(index) => self.0[index].1 = text,
-            Err(index) => self.0.insert(index, (col, text)),
+            Ok(i) => {
+                self.1 -= heap(&self.0[i].1);
+                self.0[i].1 = text;
+            }
+            Err(i) => self.0.insert(i, (col, text)),
         }
+        self.1 += charge;
     }
     pub fn remove(&mut self, col: &usize) {
-        if let Ok(index) = self.position(*col) {
-            self.0.remove(index);
+        if let Ok(i) = self.position(*col) {
+            self.1 -= heap(&self.0.remove(i).1);
         }
     }
     pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) {
-        self.0.retain(|(col, text)| keep(col, text));
+        let mut removed = 0;
+        self.0.retain(|(col, text)| {
+            let yes = keep(col, text);
+            if !yes {
+                removed += heap(text);
+            }
+            yes
+        });
+        self.1 -= removed;
     }
     pub fn shift_right(&mut self, col: usize, count: usize, len: usize) {
-        self.0.retain_mut(|(at, _)| {
+        let mut removed = 0;
+        self.0.retain_mut(|(at, text)| {
             if *at < col {
                 true
             } else if *at + count < len {
                 *at += count;
                 true
             } else {
+                removed += heap(text);
                 false
             }
         });
+        self.1 -= removed;
     }
     pub fn shift_left(&mut self, col: usize, count: usize) {
-        self.0.retain_mut(|(at, _)| {
+        let mut removed = 0;
+        self.0.retain_mut(|(at, text)| {
             if *at < col {
                 true
             } else if *at >= col + count {
                 *at -= count;
                 true
             } else {
+                removed += heap(text);
                 false
             }
         });
+        self.1 -= removed;
     }
 }
 
@@ -146,9 +196,7 @@ mod tests {
                     expected.retain(|&at, _| at < col || at >= col + count);
                 }
                 _ => {
-                    actual
-                        .get_or_insert_with(col, || "a".into())
-                        .push('\u{301}');
+                    actual.modify(col, || "a".into(), |text| text.push('\u{301}'));
                     expected
                         .entry(col)
                         .or_insert_with(|| "a".into())
@@ -161,6 +209,10 @@ mod tests {
                     .iter()
                     .map(|(&at, text)| (at, text.clone()))
                     .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                actual.1,
+                actual.0.iter().map(|(_, text)| heap(text)).sum::<usize>()
             );
             for at in 0..80 {
                 assert_eq!(actual.get(&at), expected.get(&at));

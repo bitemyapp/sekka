@@ -24,9 +24,15 @@ pub enum Command {
     Focus(bool),
     Paste(Arc<str>),
     Resize { cols: usize, rows: usize },
+    ResizePixels { cols: usize, rows: usize, width: u16, height: u16 },
     Scroll(i32),
     CopyAll(u64),
+    Search(SearchControl),
     Colors(Arc<TerminalColors>),
+}
+pub enum SearchControl {
+    Capture { token: u64, cancel: Arc<AtomicBool> },
+    Navigate { token: u64, results: Arc<hotaru_core::search::Results>, index: usize, cancel: Arc<AtomicBool> },
 }
 struct Shared {
     wake: OwnedFd,
@@ -37,8 +43,10 @@ struct Shared {
 }
 #[derive(Default)]
 struct Controls {
-    resize: Option<(usize, usize)>,
+    resize: Option<(usize, usize, u16, u16)>,
     colors: Option<Arc<TerminalColors>>,
+    search_capture: Option<SearchControl>,
+    search_navigation: Option<SearchControl>,
 }
 pub struct Session {
     tx: mpsc::SyncSender<Command>,
@@ -99,13 +107,31 @@ impl Session {
         }
         let command = match command {
             Command::Resize { cols, rows } => {
-                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize = Some((cols, rows));
+                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize = Some((cols, rows, 0, 0));
+                self.shared.wake();
+                return Ok(());
+            }
+            Command::ResizePixels { cols, rows, width, height } => {
+                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize =
+                    Some((cols, rows, width, height));
                 self.shared.wake();
                 return Ok(());
             }
             Command::Colors(colors) => {
                 // Move and drop even the old Arc outside the critical section.
                 let old = self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).colors.replace(colors);
+                drop(old);
+                self.shared.wake();
+                return Ok(());
+            }
+            Command::Search(control) => {
+                let old = {
+                    let mut controls = self.shared.controls.lock().unwrap_or_else(|e| e.into_inner());
+                    match control {
+                        SearchControl::Capture { .. } => controls.search_capture.replace(control),
+                        SearchControl::Navigate { .. } => controls.search_navigation.replace(control),
+                    }
+                };
                 drop(old);
                 self.shared.wake();
                 return Ok(());
@@ -205,6 +231,7 @@ fn run(
 ) -> io::Result<()> {
     let mut pty = Pty::spawn(command, PtySize::default())?;
     let mut terminal = Terminal::new(80, 24, history);
+    terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.set_default_colors(colors);
     let mut output = VecDeque::<PendingWrite>::new();
     let (mut output_at, mut reply_bytes) = (0usize, 0usize);
@@ -226,10 +253,10 @@ fn run(
         // These latest-state controls cannot be rejected by a full input queue.
         // Never reflow, allocate, or call the PTY while holding the UI's mutex.
         let controls = std::mem::take(&mut *shared.controls.lock().unwrap_or_else(|e| e.into_inner()));
-        if let Some((cols, rows)) = controls.resize {
+        if let Some((cols, rows, width, height)) = controls.resize {
             let (cols, rows) = (cols.clamp(1, 4096), rows.clamp(1, 4096));
             if !eof && !hung_up {
-                pty.resize(PtySize { cols: cols as u16, rows: rows as u16, pixel_width: 0, pixel_height: 0 })?;
+                pty.resize(PtySize { cols: cols as u16, rows: rows as u16, pixel_width: width, pixel_height: height })?;
             }
             terminal.resize(cols, rows);
             last_activity = Instant::now();
@@ -239,6 +266,24 @@ fn run(
         if let Some(colors) = controls.colors {
             terminal.set_default_colors((*colors).clone());
             changed = true;
+        }
+        for control in controls.search_navigation.into_iter().chain(controls.search_capture) {
+            match control {
+                SearchControl::Capture { token, cancel } if !cancel.load(Ordering::Acquire) => {
+                    tx.send(Msg::SearchSnapshot(token, id, Arc::new(terminal.content_snapshot())));
+                }
+                SearchControl::Navigate { token, results, index, cancel } if !cancel.load(Ordering::Acquire) => {
+                    let position = terminal.content_position(0);
+                    let found = results.resolve_match(index, &position, terminal.generation());
+                    if let Some(found) = found {
+                        scrollback =
+                            position.history_rows.saturating_sub(found.start.row).min(terminal.scrollback_len());
+                        changed = true;
+                    }
+                    tx.send(Msg::SearchNavigated(token, id, found.is_some()));
+                }
+                _ => {}
+            }
         }
         for _ in 0..64 {
             if shared.stopping.load(Ordering::Acquire) {
@@ -329,7 +374,9 @@ fn run(
                 Ok(Command::CopyAll(token)) => {
                     tx.send(Msg::CopySnapshot(token, id, Arc::new(terminal.content_snapshot())));
                 }
-                Ok(Command::Resize { .. } | Command::Colors(_)) => unreachable!("controls use the mailbox"),
+                Ok(Command::Resize { .. } | Command::ResizePixels { .. } | Command::Colors(_) | Command::Search(_)) => {
+                    unreachable!("controls use the mailbox")
+                }
             }
         }
 
@@ -525,6 +572,42 @@ mod tests {
     }
 
     #[test]
+    fn search_capture_and_navigation_coalesce_independently_under_input_saturation() {
+        let (session, commands) = Session::channel().unwrap();
+        for _ in 0..64 {
+            session.command(Command::Input(Arc::from(&b""[..]))).unwrap();
+        }
+        let mut terminal = Terminal::new(10, 2, 0);
+        terminal.feed(b"needle");
+        let results = Arc::new(
+            hotaru_core::search::find(
+                terminal.content_snapshot(),
+                b"needle",
+                Default::default(),
+                &AtomicBool::new(false),
+            )
+            .unwrap(),
+        );
+        let cancel = Arc::new(AtomicBool::new(false));
+        for token in 0..100 {
+            session.command(Command::Search(SearchControl::Capture { token, cancel: cancel.clone() })).unwrap();
+            session
+                .command(Command::Search(SearchControl::Navigate {
+                    token: token + 100,
+                    results: results.clone(),
+                    index: 0,
+                    cancel: cancel.clone(),
+                }))
+                .unwrap();
+        }
+        assert!(session.command(Command::Input(Arc::from(&b""[..]))).is_err());
+        let controls = std::mem::take(&mut *session.shared.controls.lock().unwrap());
+        assert!(matches!(controls.search_capture, Some(SearchControl::Capture { token: 99, .. })));
+        assert!(matches!(controls.search_navigation, Some(SearchControl::Navigate { token: 199, .. })));
+        assert_eq!(commands.try_iter().count(), 64);
+    }
+
+    #[test]
     fn latest_resize_and_colors_survive_a_full_input_queue() {
         let (session, commands) = Session::channel().unwrap();
         for _ in 0..64 {
@@ -537,7 +620,7 @@ mod tests {
         }
         let colors =
             TerminalColors { foreground: Rgb(17, 29, 43), background: Rgb(59, 71, 89), ..TerminalColors::default() };
-        session.command(Command::Resize { cols: 201, rows: 51 }).unwrap();
+        session.command(Command::ResizePixels { cols: 201, rows: 51, width: 2211, height: 1275 }).unwrap();
         session.command(Command::Colors(Arc::new(colors.clone()))).unwrap();
         assert!(session.command(Command::Input(Arc::from(&b""[..]))).is_err());
         assert_eq!(session.shared.input_bytes.load(Ordering::Acquire), 0);
@@ -561,7 +644,7 @@ mod tests {
         assert_eq!((frame.cols, frame.rows), (201, 51));
         assert_eq!(frame.default_foreground, colors.foreground);
         assert_eq!(frame.default_background, colors.background);
-        assert!(frame.plain_text().contains("KERNEL-SIZE-201x51"));
+        assert!(frame.plain_text().contains("KERNEL-SIZE-201x51-2211x1275"));
         drop(harness);
         worker.join().unwrap().unwrap();
     }
@@ -578,8 +661,8 @@ mod tests {
             // SAFETY: fd0 is this isolated child's PTY; size is writable and
             // TIOCGWINSZ initializes it synchronously before returning.
             assert_eq!(unsafe { libc::ioctl(0, libc::TIOCGWINSZ, &mut size) }, 0);
-            if size.ws_col == 201 && size.ws_row == 51 {
-                println!("KERNEL-SIZE-201x51");
+            if size.ws_col == 201 && size.ws_row == 51 && size.ws_xpixel == 2211 && size.ws_ypixel == 1275 {
+                println!("KERNEL-SIZE-201x51-2211x1275");
                 return;
             }
             assert!(Instant::now() < deadline, "latest PTY resize was lost");

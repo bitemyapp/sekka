@@ -73,6 +73,10 @@ let
   clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;
   inputPatch = ../../../apps/hotaru/upstream/sidestep-input.patch;
   mimePatch = ../../../apps/hotaru/upstream/sidestep-mime.patch;
+  gridFontPatch = ../../../apps/hotaru/upstream/sidestep-grid-font.patch;
+  ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
+  uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
+  unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -87,10 +91,15 @@ let
           clipboardPatch
           inputPatch
           mimePatch
+          gridFontPatch
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
           sidestep
           version
           rev
           fonts
+          hotaruFonts
           ;
       };
       hotaru = pkgs.callPackage ./hotaru.nix {
@@ -101,8 +110,13 @@ let
           clipboardPatch
           inputPatch
           mimePatch
+          gridFontPatch
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
           sidestep
           fonts
+          hotaruFonts
           version
           ;
       };
@@ -111,6 +125,7 @@ let
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
       # (docs/kit.md).
       fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
+      hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
       default = aizome;
     });
 
@@ -178,6 +193,7 @@ let
         # with the vendor/sidestep submodule.
         AIZOME_SIDESTEP_REV = sidestep.rev or "";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
+        HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
         shellHook = ''
           ${pkgs.bash}/bin/bash ${../scripts/dev-environment}
         '';

@@ -176,7 +176,7 @@ class Oracle:
         finally:
             self.lib.ghostty_formatter_free(formatter)
 
-    def snapshot(self, data, rows, cols, chunk):
+    def snapshot(self, data, rows, cols, chunk, mode_defaults=None, capture=None, after_feed=None):
         terminal = C.c_void_p()
         checked(self.lib.ghostty_terminal_new(None, C.byref(terminal), cols, rows))
         try:
@@ -185,6 +185,9 @@ class Oracle:
             palette = (Rgb * 256)(*(Rgb(*rgb) for rgb in fixture_palette()))
             for name, value in (("COLOR_PALETTE", palette), ("COLOR_FOREGROUND", Rgb(229, 229, 229)), ("COLOR_BACKGROUND", Rgb(0, 0, 0))):
                 checked(self.lib.ghostty_terminal_set(terminal, self.enum("GhosttyTerminalOption", name), C.byref(value)))
+            for number, enabled in (mode_defaults or {}).items():
+                mode = ModeConfig(number, enabled)
+                checked(self.lib.ghostty_terminal_set(terminal, self.enum("GhosttyTerminalOption", "MODE_DEFAULT"), C.byref(mode)))
             replies = bytearray()
             callback_type = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_void_p, C.c_size_t)
             callback = callback_type(lambda terminal, userdata, pointer, length: replies.extend(C.string_at(pointer, length)))
@@ -192,6 +195,8 @@ class Oracle:
             for start in range(0, len(data), chunk):
                 part = data[start:start + chunk]
                 self.lib.ghostty_terminal_vt_write(terminal, part, len(part))
+            if after_feed is not None:
+                after_feed(self, terminal)
             q = lambda name, typ: self.query("ghostty_terminal_get", terminal, "GhosttyTerminalData", name, typ)
             if q("VT_PROCESSING_ERROR", C.c_bool):
                 raise RuntimeError("reference terminal processing failed; refusing fixture")
@@ -243,6 +248,8 @@ class Oracle:
                 text = "".join(cell["text"] for cell in cells if cell["width"] != 0).rstrip(" ")
                 result["lines"].append({"text": text, "wrapped": wrapped, "cells": cells})
             result["_oracle"] = extra
+            if capture is not None:
+                result["_capture"] = capture(self, terminal)
             return result
         finally:
             self.lib.ghostty_terminal_free(terminal)

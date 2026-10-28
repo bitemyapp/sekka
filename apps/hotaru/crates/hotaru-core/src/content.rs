@@ -6,11 +6,20 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
 use triomphe::Arc;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContentRetention {
+    /// Conservative retained storage, counting shared allocations in full.
+    pub storage_bytes_estimate: usize,
+    /// Uncompressed logical ownership, including complete shared blocks.
+    pub logical_bytes: usize,
+}
+
 #[derive(Clone, Debug)]
 /// Capturing costs O(history blocks + visible rows), without decoding history.
 /// Cloning a capture is O(1). Later appends copy at most one 64-row block of
 /// handles; eviction never copies a block, and captured rows remain immutable.
 pub struct ContentSnapshot {
+    pub position: crate::ContentPosition,
     pub cols: usize,
     /// Total retained physical rows, including history and active screen.
     pub rows: usize,
@@ -25,13 +34,32 @@ pub struct ContentSnapshot {
     pub generation: u64,
     history: HistorySnapshot,
     active: Arc<Vec<RowRef>>,
+    retention: ContentRetention,
 }
 impl ContentSnapshot {
     pub(crate) fn capture(screen: Snapshot, history: HistorySnapshot) -> Self {
         let history_rows = history.len();
+        let active_bytes = screen
+            .lines
+            .iter()
+            .map(|row| row.owned_bytes())
+            .sum::<usize>()
+            + crate::memory::vector::<RowRef>(screen.lines.capacity())
+            + crate::memory::allocation(
+                std::mem::size_of::<Vec<RowRef>>() + std::mem::size_of::<usize>(),
+            )
+            + std::mem::size_of::<Self>();
+        let retention = ContentRetention {
+            storage_bytes_estimate: active_bytes + history.retained_bytes_estimate(),
+            logical_bytes: active_bytes + history.logical_retained_bytes(),
+        };
         let mut cursor = screen.cursor;
         cursor.row += history_rows;
         Self {
+            position: crate::ContentPosition {
+                first_row: 0,
+                ..screen.position
+            },
             cols: screen.cols,
             rows: history_rows + screen.lines.len(),
             history_rows,
@@ -43,10 +71,17 @@ impl ContentSnapshot {
             generation: screen.generation,
             history,
             active: Arc::new(screen.lines),
+            retention,
         }
     }
     pub fn rows(&self) -> ContentRows<'_> {
         self.rows_range(0..self.rows)
+    }
+    /// Estimates remain stable after terminal mutation or destruction. Captures
+    /// may overlap: adding their estimates overcounts shared ownership, and an
+    /// external client retaining unbounded captures can retain unbounded data.
+    pub fn retention(&self) -> ContentRetention {
+        self.retention
     }
     /// Half-open physical row range. Out-of-range and reversed ranges are empty.
     pub fn rows_range(&self, range: Range<usize>) -> ContentRows<'_> {
@@ -68,7 +103,10 @@ impl ContentSnapshot {
 }
 impl From<Snapshot> for ContentSnapshot {
     fn from(snapshot: Snapshot) -> Self {
-        Self::capture(snapshot, HistorySnapshot::default())
+        let position = snapshot.position.clone();
+        let mut capture = Self::capture(snapshot, HistorySnapshot::default());
+        capture.position = position;
+        capture
     }
 }
 

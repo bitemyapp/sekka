@@ -64,6 +64,8 @@ pub enum Action {
     Paste,
     CopyAll,
     Find,
+    FindNext,
+    FindPrevious,
     LargerText,
     SmallerText,
     ActualSize,
@@ -75,6 +77,10 @@ pub enum Action {
 pub struct Settings {
     pub font_size: f64,
     pub font_weight: u16,
+    pub font_families: Vec<String>,
+    pub font_fallback: Vec<String>,
+    pub font_emoji: Vec<String>,
+    pub font_features: Vec<String>,
     pub theme: Theme,
     pub scrollback: usize,
     pub copy_format: CopyFormat,
@@ -86,6 +92,10 @@ impl Default for Settings {
         Self {
             font_size: 14.0,
             font_weight: 400,
+            font_families: vec!["IBM Plex Mono".into()],
+            font_fallback: vec!["Noto Sans Mono CJK JP".into(), "Noto Sans Symbols 2".into()],
+            font_emoji: vec!["Noto Color Emoji".into()],
+            font_features: Vec::new(),
             theme: Theme::Desktop,
             scrollback: 10_000,
             copy_format: CopyFormat::Mixed,
@@ -111,6 +121,16 @@ pub fn default_path() -> Option<PathBuf> {
 }
 
 impl Settings {
+    pub fn fonts(&self, size: f64) -> aizome_kit::sidestep_ui::grid::FontConfig {
+        aizome_kit::sidestep_ui::grid::FontConfig {
+            families: self.font_families.clone(),
+            fallback_families: self.font_fallback.clone(),
+            emoji_families: self.font_emoji.clone(),
+            features: self.font_features.clone(),
+            size: size as f32,
+            weight: self.font_weight,
+        }
+    }
     pub fn load(path: &Path) -> Result<Self, String> {
         use std::os::unix::fs::OpenOptionsExt;
         let file = match std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(path) {
@@ -136,11 +156,21 @@ impl Settings {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        self.fonts(self.font_size).validate().map_err(|error| error.to_string())?;
         if !self.font_size.is_finite() || !(8.0..=72.0).contains(&self.font_size) {
             return Err("font_size must be between 8 and 72 points.".into());
         }
         if !(100..=900).contains(&self.font_weight) {
             return Err("font_weight must be between 100 and 900.".into());
+        }
+        if [&self.font_families, &self.font_fallback, &self.font_emoji].iter().any(|list| {
+            list.len() > 32
+                || list.iter().any(|name| name.is_empty() || name.len() > 256 || name.chars().any(char::is_control))
+        }) {
+            return Err("Font family lists accept at most 32 names of 1–256 characters.".into());
+        }
+        if self.font_features.len() > 64 || self.font_features.iter().any(|feature| feature.len() > 64) {
+            return Err("At most 64 font features of 64 bytes each are supported.".into());
         }
         if self.scrollback > 1_000_000 {
             return Err("scrollback cannot exceed 1,000,000 rows.".into());
@@ -251,6 +281,8 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         ("super+v", Paste),
         ("super+shift+c", CopyAll),
         ("super+f", Find),
+        ("super+g", FindNext),
+        ("super+shift+g", FindPrevious),
         ("super+plus", LargerText),
         ("super+-", SmallerText),
         ("super+0", ActualSize),

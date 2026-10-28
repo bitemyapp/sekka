@@ -36,7 +36,7 @@ def run(binary, evidence):
                             if path.is_file() and path.suffix in {".rs", ".c", ".py", ".toml"})
     source_paths.update(root / path for path in [
         "desktop/aizome/Cargo.toml", "desktop/aizome/Cargo.lock", "apps/hotaru/Cargo.toml", "apps/hotaru/Cargo.lock",
-        *[f"desktop/aizome/crates/aizome-kit/src/{name}.rs" for name in ["app", "cx", "lib", "platform", "testing", "engine", "menu"]],
+        *[f"desktop/aizome/crates/aizome-kit/src/{name}.rs" for name in ["app", "cx", "lib", "platform", "testing", "engine", "menu", "widget"]],
         "vendor/sidestep/crates/sidestep-engine/src/clipboard.rs",
         "vendor/sidestep/crates/sidestep-engine/src/backend/selection.rs",
         "vendor/sidestep/crates/sidestep-ui/src/app.rs", "vendor/sidestep/crates/sidestep-ui/src/lib.rs",
@@ -46,6 +46,11 @@ def run(binary, evidence):
         "vendor/sidestep/crates/sidestep-ui/src/event.rs", "vendor/sidestep/crates/sidestep-ui/src/testing.rs",
         "apps/hotaru/upstream/sidestep-clipboard.patch", "apps/hotaru/upstream/sidestep-input.patch",
         "apps/hotaru/upstream/sidestep-mime.patch",
+        "apps/hotaru/upstream/sidestep-grid-font.patch",
+        "vendor/sidestep/Cargo.lock", "vendor/sidestep/crates/sidestep-engine/Cargo.toml",
+        "vendor/sidestep/crates/sidestep-engine/src/text.rs",
+        "vendor/sidestep/crates/sidestep-engine/src/text/grid.rs",
+        "vendor/sidestep/crates/sidestep-ui/src/canvas.rs",
     ])
     binary_hash = hashlib.sha256(binary.read_bytes()).hexdigest()
     manifest = {"recorded_utc": datetime.now(timezone.utc).isoformat(), "binary": str(binary),
@@ -77,6 +82,12 @@ def run(binary, evidence):
         env.pop(key, None)
     env.update(XDG_RUNTIME_DIR=str(runtime), XDG_CONFIG_HOME=str(runtime / "config"), WLR_BACKENDS="headless", WLR_RENDERER="pixman",
                WLR_LIBINPUT_NO_DEVICES="1", XDG_CURRENT_DESKTOP="sway", XDG_SESSION_TYPE="wayland")
+    # Font point-size/physical-grid changes can wrap the 128-column fixture
+    # into multiple physical history rows. Keep the entire independent input
+    # in scope instead of accidentally testing the default history eviction.
+    settings = runtime / "config" / "aizome" / "hotaru.toml"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("scrollback = 40000\n")
     config = runtime / "sway.conf"
     config.write_text("output HEADLESS-1 mode 1280x800\nseat seat0 fallback true\nfocus_follows_mouse no\n")
     inspect = evidence / "inspect"

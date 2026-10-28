@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-28",
+  "base_checkpoint": "1d3c9cf4df2744e6a714d2bea18a31d90f5ddc7a",
+  "host": "wx-workstation",
+  "source_root": "/home/callen/work/hotaru-core-review-20261028",
+  "rust_toolchain": "1.95.0",
+  "serialization": "exclusive flock /home/callen/.cache/hotaru-workstation.lock",
+  "commands": [
+    "cargo +1.95.0 clean -p hotaru-core",
+    "cargo +1.95.0 test --workspace",
+    "cargo +1.95.0 clippy --workspace --all-targets -- -D warnings"
+  ],
+  "results": {
+    "clean": true,
+    "permanent_core_tests": 83,
+    "permanent_replay_tests": 1,
+    "temporary_minimal_reproducer_tests": 1,
+    "failed_tests": 0,
+    "strict_clippy": "pass"
+  },
+  "policy": {
+    "default_logical_bytes": 50000000,
+    "active_always_fits": true,
+    "independent_row_limit": true,
+    "explicit_unlimited_bytes": "HistoryLimits { rows, bytes: None }",
+    "compressed_row_sidecar_bytes_64bit": 16,
+    "maximum_raw_archive_bytes": 4194304,
+    "maximum_compressible_logical_block_bytes": 33554432,
+    "shared_restore_allocation_budget_bytes": 67108864
+  },
+  "regressions": [
+    "unique URI/style/grapheme churn, shrink and recycling",
+    "compression enabled/disabled equal history and exact logical charges",
+    "held render/content snapshots, COW, cancellation and teardown",
+    "oversized active metadata retains active screen and discards history",
+    "corrupt compressed content pruned without decode",
+    "ASCII and Unicode metadata overwrite at exact budget or unlimited, input chunks 1/7/65536",
+    "12000-operation compressed/resident audit",
+    "existing reflow/input/formatter/search/replay reference fixtures",
+    "positive-width runs plus exhaustive all-scalar width-policy equivalence"
+  ],
+  "red_reproducer": {
+    "initial": "80 old lines then e + 63 combining acute marks; budget equals current active + historical logical charge",
+    "overwrite": "CR SGR31 snow ideograph",
+    "before_fix_history_rows": {
+      "bulk": 76,
+      "one_byte_chunks": 77
+    },
+    "fix": "Use scalar metadata mutation order for both ASCII and UTF8 writes when row grapheme/link metadata or active link exists; clean rows retain batching."
+  },
+  "limits": [
+    "No new RSS or latency measurements: these are correctness results, not memory/performance parity evidence.",
+    "Logical charges conservatively count shared payload per owning row; estimates are not unique allocation accounting.",
+    "Immutable consumers can retain evicted blocks; overlapping retention estimates are not additive.",
+    "The temporary budget_order_tmp test exists only in the isolated test mirror; its permanent superset is history_budget.rs."
+  ],
+  "source_sha256": {
+    "crates/hotaru-core/Cargo.toml": "1f8888a439d7a2c128e1a4bde541412194a72dceede4641e7f17b0d0f4bc22a4",
+    "crates/hotaru-core/examples/content_capture.rs": "618050be2e4b66469f39b7e8a46283fd3e7a3679255ce3e0ff8a8852a15e4350",
+    "crates/hotaru-core/examples/search.rs": "57ee2636c08273ffc3790f8455532f399957f972135130ccb96783184a79f0ec",
+    "crates/hotaru-core/src/content.rs": "eb00b9b054ea712e07dc15e11d5b17fa8225365f230f736167004026e2ab1a83",
+    "crates/hotaru-core/src/formatter.rs": "0a189cfa5ad96f27a88b2a0b2717ea81772f880a1dc802ba1719fdaefa2fadc0",
+    "crates/hotaru-core/src/grapheme.rs": "d4da60ee3ee47679571b47cbb2a22dc24c55164e2649a145b0b36672ef1784d0",
+    "crates/hotaru-core/src/history.rs": "901b9e75ff6ad73c3ec65901f1bf9a407b29711df4c7e81a9256cc34a4a430d8",
+    "crates/hotaru-core/src/hyperlink.rs": "a068f4d49ee0a99cd8296ae2a5c38ee0edd4f62615fdee0709c1b39ad4658872",
+    "crates/hotaru-core/src/input.rs": "e81f3ccb24f3bc5177b6416b53b173b4679d711f76734f5becc645ac7efe0013",
+    "crates/hotaru-core/src/lib.rs": "d818706834ef46d59aa3ec87297342a1d7f90867d113865c2ae506d3dd52424b",
+    "crates/hotaru-core/src/memory.rs": "f5c830c64934f9da23a7ad5fe613c5b999bab6266563c71fa44acbcb0b0bd508",
+    "crates/hotaru-core/src/parser.rs": "d7b10db12b380221dc5454e844558fc1a400ddc2cd17d242b14402128f2881c0",
+    "crates/hotaru-core/src/position.rs": "659b1c337ded105673b9edd23115a801b4db02b1db28982f5be2bcca2fd530e0",
+    "crates/hotaru-core/src/row/history.rs": "3b55c866249bd7603d755ef05358337eab43ba4c48d481261f402d42efb3d29a",
+    "crates/hotaru-core/src/row.rs": "4e5cf30c528a0d9dc572eaf4343882ab42a6ca2d8d1710a7369db7141caa4e07",
+    "crates/hotaru-core/src/scan.rs": "3a431c7dc32f3b4b9956432f6329c5a6fbcb4664cc3349f91c6da2dbb647be1d",
+    "crates/hotaru-core/src/screen.rs": "023df611fcd2ea3bad939f502c2ecd42c3901339dd1c2e5d795d51ecff89fd56",
+    "crates/hotaru-core/src/search.rs": "3de8971b43bc1c8856b8a8e85a03225cd4ca86b9f81304f184cad3fa23e9e4a4",
+    "crates/hotaru-core/src/style.rs": "ec000c1148437208a6d52b4d9be4be8bb80114f1e16b49a6e800371b9a364791",
+    "crates/hotaru-core/tests/budget_order_tmp.rs": "c3fb053c2b66b88b898e336a5f8fe35faa8e49eda587ada6535064463bc54250",
+    "crates/hotaru-core/tests/configured_colors.rs": "d1a5a1ba4d6985e03dfc52c87157c46b5e8f99c8ccad3ac218fa6d22e91cc38c",
+    "crates/hotaru-core/tests/content.rs": "7e3b4fb7070a500755cc551119a15fad31692592c0a82ed54e33a3b02a5a1868",
+    "crates/hotaru-core/tests/core_review.rs": "570080a37f6bff8e07e57ddd0421f7ac05e3b3379016659ac77cad3d1a384c03",
+    "crates/hotaru-core/tests/history.rs": "62e84bb1a2d1a83ef1235afbf06ca6221abaa8f7cfc6cd862c2edb69cabdca2d",
+    "crates/hotaru-core/tests/history_audit.rs": "0e7a738c3562ec133b8fcbede13794ac412c6c88b0873fac4e2171af144f178f",
+    "crates/hotaru-core/tests/history_budget.rs": "bf64c08f2babe807c98e72b1b5a7d2462bf5cc9905c4b7a8afd80ced8cd10eab",
+    "crates/hotaru-core/tests/hyperlinks.rs": "372eb74888c46df96ea27ab9085cf0758d2f4c9707cd41780f0cb33c67be2360",
+    "crates/hotaru-core/tests/input.rs": "2691519a177f8b6670eeaf5936b00035059a5ff88fb58848f8a421420f2aa73a",
+    "crates/hotaru-core/tests/reflow.rs": "406571acefe95dc401f398f6eab1d8e44eceffd7a656e06a1f80345050d2d25e",
+    "crates/hotaru-core/tests/scan_boundary.rs": "84fa865081d505174861a8a5c49f0838d39688fcbea718d3f187be4d598aeac7",
+    "crates/hotaru-core/tests/search.rs": "b3657e7ac1ebb2490a9af0108fbe152e6c3feb05cccaeb1f74c8abb401ebcbaf",
+    "crates/hotaru-core/tests/snapshot_threads.rs": "c8853c2f441dd786076eeb4c8ee404c05834b6115e8c24e0d3384ba1feac6e69",
+    "crates/hotaru-core/tests/terminal.rs": "752f7245ff468c0b5458c44ae8a3eca7eb6f85b85e9bcf996cb5a042f6499abc",
+    "crates/hotaru-core/tests/unicode_write.rs": "b8df773c6e4ed44f4099f126ea97331fc3d93d8d7dcc38ff2c6f3cb63f2a1b2f",
+    "crates/hotaru-replay/Cargo.toml": "4fabeac9e5a8eeffcd9b16761c6b3647ea03665d52ad42ae9d81e822e911b802",
+    "crates/hotaru-replay/examples/history.rs": "c8bbb3d80edf66e95e0cc70a91a29b35053df30afe2f43695d55b98a8e5aa02d",
+    "crates/hotaru-replay/examples/reflow.rs": "ad29b9a93d5326dd70bd425d2c51bc98d7594fdf5f49fe6d6cd1514c474c7558",
+    "crates/hotaru-replay/src/main.rs": "cd2f2366c4ed060134dae40b4e7e7aea7f112f309f9703618dca2f182a4c3d43",
+    "crates/hotaru-replay/tests/upstream.rs": "07d87b9615dac641d160b4bbbb03520043dfc210e4a8745989f08a589f7eb775"
+  }
+}

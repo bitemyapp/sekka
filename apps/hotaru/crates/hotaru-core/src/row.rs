@@ -9,6 +9,7 @@ use compact_str::CompactString;
 use std::ops::Range;
 
 mod history;
+pub(crate) use history::RecycleLayout;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -56,6 +57,16 @@ mod tests {
             eager.dirty_end = eager.cells.len() as u16;
             mutate(&mut actual);
             mutate(&mut eager);
+            assert_eq!(
+                actual.owned_bytes(),
+                actual.uncached_owned_bytes(),
+                "cached charge at step {step}"
+            );
+            assert_eq!(
+                actual.owned_bytes(),
+                actual.clone().owned_bytes(),
+                "clone charge at step {step}"
+            );
             assert_eq!(actual.cells, eager.cells, "cells at step {step}");
             assert_eq!(actual.styles, eager.styles, "styles at step {step}");
             for col in 0..actual.cells.len() {
@@ -125,7 +136,7 @@ impl Cell {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Row {
     pub(crate) cells: Vec<Cell>,
     styles: Vec<Style>,
@@ -138,6 +149,24 @@ pub struct Row {
     // already-blank suffix untouched even when style 0's value changes.
     dirty_end: u16,
     links: Option<Box<RowLinks>>,
+    memory_charge: crate::memory::Charge,
+}
+
+impl Clone for Row {
+    fn clone(&self) -> Self {
+        Self {
+            cells: crate::memory::clone_vec(&self.cells),
+            styles: crate::memory::clone_vec(&self.styles),
+            last_style: self.last_style,
+            graphemes: self.graphemes.clone(),
+            wrapped: self.wrapped,
+            wrap_continuation: self.wrap_continuation,
+            retained_cols: self.retained_cols,
+            dirty_end: self.dirty_end,
+            links: self.links.clone(),
+            memory_charge: self.memory_charge.clone(),
+        }
+    }
 }
 
 impl Row {
@@ -152,7 +181,35 @@ impl Row {
             retained_cols: cols as u16,
             dirty_end: 0,
             links: None,
+            memory_charge: crate::memory::Charge::default(),
         }
+    }
+    pub(crate) fn refresh_memory_charge(&mut self) {
+        let bytes = self.uncached_owned_bytes();
+        self.memory_charge.update(bytes);
+    }
+    pub(crate) fn budget_attached(
+        &self,
+        signal: &triomphe::Arc<crate::memory::BudgetSignal>,
+    ) -> bool {
+        self.memory_charge.attached_to(signal)
+    }
+    pub(crate) fn attach_budget(&mut self, signal: &triomphe::Arc<crate::memory::BudgetSignal>) {
+        self.owned_bytes();
+        self.memory_charge.attach(signal);
+    }
+    pub(crate) fn owned_bytes(&self) -> usize {
+        self.memory_charge.get(|| self.uncached_owned_bytes())
+    }
+    pub(crate) fn has_dynamic_metadata(&self) -> bool {
+        !self.graphemes.is_empty() || self.links.is_some()
+    }
+    fn uncached_owned_bytes(&self) -> usize {
+        crate::memory::allocation(std::mem::size_of::<Self>() + std::mem::size_of::<usize>())
+            + crate::memory::vector::<Cell>(self.cells.capacity())
+            + crate::memory::vector::<Style>(self.styles.capacity())
+            + self.graphemes.owned_bytes()
+            + self.links.as_ref().map_or(0, |links| links.owned_bytes())
     }
     pub fn cells(&self) -> &[Cell] {
         &self.cells
@@ -172,16 +229,19 @@ impl Row {
     pub(crate) fn hyperlink_ref(&self, col: usize) -> Option<&LinkRef> {
         self.links.as_ref()?.get(col)
     }
+    #[cfg(test)]
     pub(crate) fn hyperlink_runs(&self) -> impl Iterator<Item = (Range<usize>, &LinkRef)> {
         self.links.iter().flat_map(|links| links.iter())
     }
     /// Restore sparse metadata in linear expected time during history decode.
+    #[cfg(test)]
     pub(crate) fn restore_hyperlink_runs(
         &mut self,
         runs: Vec<(Range<usize>, LinkRef)>,
     ) -> Option<()> {
         let links = RowLinks::from_ordered_runs(runs, self.cells.len())?;
         self.links = (!links.is_empty()).then(|| Box::new(links));
+        self.refresh_memory_charge();
         Some(())
     }
     pub(crate) fn set_hyperlink_range(&mut self, range: Range<usize>, link: Option<&LinkRef>) {
@@ -196,6 +256,7 @@ impl Row {
         if links.is_empty() {
             self.links = None;
         }
+        self.refresh_memory_charge();
     }
     pub(crate) fn style_id(&mut self, style: Style) -> u16 {
         if self.styles[self.last_style as usize] == style {
@@ -213,6 +274,7 @@ impl Row {
         let id = self.styles.len() as u16;
         self.styles.push(style);
         self.last_style = id;
+        self.refresh_memory_charge();
         id
     }
     fn compact_styles(&mut self) {
@@ -230,6 +292,7 @@ impl Row {
         }
         self.styles = live;
         self.last_style = 0;
+        self.refresh_memory_charge();
     }
     pub(crate) fn reset(&mut self, cols: usize, style: Style) {
         self.styles.clear();
@@ -242,6 +305,7 @@ impl Row {
         self.links = None;
         self.wrapped = false;
         self.wrap_continuation = false;
+        self.refresh_memory_charge();
     }
     pub(crate) fn erase(&mut self, start: usize, end: usize, style: Style) {
         if start >= end {
@@ -263,6 +327,7 @@ impl Row {
         self.cells[start..end].fill(Cell::blank(id));
         self.graphemes.retain(|&col, _| col < start || col >= end);
         self.set_hyperlink_range(start..end, None);
+        self.refresh_memory_charge();
     }
     pub(crate) fn erase_selective(&mut self, start: usize, end: usize, style: Style) {
         let mut col = start;
@@ -277,6 +342,9 @@ impl Row {
     /// replaces. Only a wide glyph straddling either boundary needs a blank.
     pub(crate) fn prepare_write(&mut self, start: usize, end: usize, style: Style) {
         let left = start > 0 && self.cells[start].width == 0;
+        self.prepare_write_with_left(start, end, left, style);
+    }
+    fn prepare_write_with_left(&mut self, start: usize, end: usize, left: bool, style: Style) {
         let right = end < self.cells.len() && self.cells[end].width == 0;
         self.dirty_end = self.dirty_end.max((end + usize::from(right)) as u16);
         if left || right {
@@ -292,6 +360,7 @@ impl Row {
             let first = if left { start - 1 } else { start };
             let last = end + usize::from(right);
             self.graphemes.retain(|&col, _| col < first || col >= last);
+            self.refresh_memory_charge();
         }
         if self.links.is_some() {
             self.set_hyperlink_range(
@@ -315,6 +384,25 @@ impl Row {
             self.cells[col + 1] = Cell::new(' ', id, 0).protected(protected);
         }
     }
+    /// Finish a positive-width print run after its interior cells were replaced.
+    /// The left-wide flag was captured before writing; the right neighbor is
+    /// still untouched. Only exterior wide halves and overwritten metadata
+    /// are cleared here. No snapshot can observe the exclusive mutable run.
+    pub(crate) fn finish_print_run(
+        &mut self,
+        start: usize,
+        end: usize,
+        left: bool,
+        style: Style,
+        link: Option<&LinkRef>,
+    ) {
+        debug_assert!(start < end && end <= self.cells.len());
+        debug_assert!(!left || start > 0);
+        self.prepare_write_with_left(start, end, left, style);
+        if let Some(link) = link {
+            self.set_hyperlink_range(start..end, Some(link));
+        }
+    }
     pub(crate) fn combine(&mut self, col: usize, ch: char) {
         let col = if self.cells[col].width == 0 {
             col.saturating_sub(1)
@@ -322,16 +410,47 @@ impl Row {
             col
         };
         let first = self.cells[col].character();
-        let text = self.graphemes.get_or_insert_with(col, || {
-            let mut text = CompactString::default();
-            text.push(first);
-            text
-        });
-        // Match Ghostty's bounded grapheme storage; hostile combining streams
-        // cannot grow a single displayed cell without bound.
-        if text.chars().count() < 64 {
-            text.push(ch);
+        self.graphemes.modify(
+            col,
+            || {
+                let mut text = CompactString::default();
+                text.push(first);
+                text
+            },
+            |text| {
+                // Ghostty permits 64 suffix scalars in addition to the base.
+                if text.chars().count() < crate::MAX_GRAPHEME_SCALARS {
+                    text.push(ch);
+                }
+            },
+        );
+        self.refresh_memory_charge();
+    }
+    /// Change the retained base cell's width while writing a new tail with the
+    /// current style/link. The base keeps its original style and cluster text.
+    pub(crate) fn widen_grapheme(
+        &mut self,
+        col: usize,
+        style: Style,
+        protected: bool,
+        link: Option<&LinkRef>,
+    ) {
+        debug_assert!(col + 1 < self.cells.len());
+        self.prepare_write(col + 1, col + 2, style);
+        let id = self.style_id(style);
+        self.cells[col].width = 2;
+        self.cells[col + 1] = Cell::new('\0', id, 0).protected(protected);
+        if let Some(link) = link {
+            self.set_hyperlink_range(col + 1..col + 2, Some(link));
         }
+    }
+    pub(crate) fn narrow_grapheme(&mut self, col: usize) {
+        self.cells[col].width = 1;
+        if col + 1 < self.cells.len() {
+            self.cells[col + 1].width = 1;
+            self.cells[col + 1].scalar = 0;
+        }
+        self.dirty_end = self.dirty_end.max((col + 2).min(self.cells.len()) as u16);
     }
     pub(crate) fn shift_right(&mut self, col: usize, count: usize, style: Style) {
         self.dirty_end = self.cells.len() as u16;
@@ -345,6 +464,7 @@ impl Row {
         let id = self.style_id(style.erased());
         self.cells[col..col + count].fill(Cell::blank(id));
         self.repair_wide(style);
+        self.refresh_memory_charge();
     }
     pub(crate) fn shift_left(&mut self, col: usize, count: usize, style: Style) {
         self.dirty_end = self.cells.len() as u16;
@@ -358,6 +478,7 @@ impl Row {
         let id = self.style_id(style.erased());
         self.cells[len - count..].fill(Cell::blank(id));
         self.repair_wide(style);
+        self.refresh_memory_charge();
     }
     /// Trailing erased cells are nonsemantic, unlike explicitly printed spaces.
     /// A background fill is meaningful even without a codepoint.
@@ -388,6 +509,7 @@ impl Row {
         self.cells[col]._reserved |= 2;
         self.graphemes.remove(&col);
         self.set_hyperlink_range(col..col + 1, None);
+        self.refresh_memory_charge();
     }
     pub(crate) fn clear_spacer_head(&mut self) {
         if let Some(cell) = self.cells.last_mut()
@@ -407,6 +529,7 @@ impl Row {
             self.graphemes.insert(col, grapheme.clone());
         }
         self.set_hyperlink_range(col..col + 1, source.hyperlink_ref(source_col));
+        self.refresh_memory_charge();
     }
     pub(crate) fn resize(&mut self, cols: usize) {
         if cols < self.cells.len() {
@@ -431,6 +554,7 @@ impl Row {
         self.graphemes.retain(|&c, _| c < cols);
         self.repair_wide(Style::default());
         self.dirty_end = cols as u16;
+        self.refresh_memory_charge();
     }
     fn repair_wide(&mut self, style: Style) {
         let id = self.style_id(style.erased());

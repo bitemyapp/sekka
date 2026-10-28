@@ -64,11 +64,13 @@ static void write_pty(GhosttyTerminal terminal, void *userdata,
     replies->length = need;
 }
 
-static void configure(GhosttyTerminal terminal, struct replies *replies) {
+static void configure(GhosttyTerminal terminal, struct replies *replies, bool unicode) {
     const size_t zero = 0;
     check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &zero));
     check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_USERDATA, replies));
     check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_WRITE_PTY, (const void *)write_pty));
+    const GhosttyTerminalModeConfig grapheme = {.mode = 2027, .value = unicode};
+    check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_MODE_DEFAULT, &grapheme));
     GhosttyColorRgb palette[256] = {
         {0,0,0}, {205,0,0}, {0,205,0}, {205,205,0},
         {0,0,238}, {205,0,205}, {0,205,205}, {229,229,229},
@@ -99,6 +101,7 @@ int main(int argc, char **argv) {
     const char *path = NULL;
     unsigned rows = 80, cols = 120, chunk = 65536, iterations = 15;
     int bench_json = 0;
+    bool unicode = false;
     for (int i = 1; i < argc; ++i) {
         const char *option = argv[i];
         if (!strcmp(option, "--bench-json")) { bench_json = 1; continue; }
@@ -109,6 +112,11 @@ int main(int argc, char **argv) {
         else if (!strcmp(option, "--cols")) cols = number(value);
         else if (!strcmp(option, "--chunk")) chunk = number(value);
         else if (!strcmp(option, "--iterations")) iterations = number(value);
+        else if (!strcmp(option, "--grapheme-width")) {
+            if (!strcmp(value, "unicode")) unicode = true;
+            else if (!strcmp(value, "legacy")) unicode = false;
+            else fail("grapheme width must be legacy or unicode");
+        }
         else fail("unknown option");
     }
     if (!path || !bench_json || rows > 4096 || cols > 8192 || iterations > 10000)
@@ -133,7 +141,7 @@ int main(int argc, char **argv) {
         struct replies replies = {0};
         GhosttyTerminal terminal;
         check(ghostty_terminal_new(NULL, &terminal, (uint16_t)cols, (uint16_t)rows));
-        configure(terminal, &replies);
+        configure(terminal, &replies, unicode);
         setup[i] = now_ns() - start;
         start = now_ns();
         for (size_t offset = 0; offset < length;) {
@@ -154,8 +162,8 @@ int main(int argc, char **argv) {
         teardown[i] = now_ns() - start;
     }
     printf("{\"schema\":1,\"engine\":\"ghostty\",\"timed_scope\":\"feed-only\","
-           "\"input_bytes\":%zu,\"rows\":%u,\"cols\":%u,\"scrollback\":0,\"chunk_bytes\":%u,",
-           length, rows, cols, chunk);
+           "\"input_bytes\":%zu,\"rows\":%u,\"cols\":%u,\"scrollback\":0,\"chunk_bytes\":%u,\"grapheme_width_method\":\"%s\",",
+           length, rows, cols, chunk, unicode ? "unicode" : "legacy");
     array("samples_ns", parse, iterations); putchar(',');
     array("setup_ns", setup, iterations); putchar(',');
     array("teardown_ns", teardown, iterations); putchar(',');

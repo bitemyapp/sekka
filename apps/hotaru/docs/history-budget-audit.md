@@ -1,5 +1,13 @@
 # History budget audit after owned content capture
 
+**Implemented after checkpoint `1d3c9cf`.** The findings below describe the
+earlier checkpoint. The current default is 50,000,000 conservative logical
+bytes including active content, with independent row limits, decode-free byte
+pruning, compressed charge/layout sidecars and capture-retention estimates.
+See [the current policy and limits](history.md#live-history-budget) and
+`upstream/history-budget-validation.json` for the implementation's validation
+manifest. Physical RSS reclamation remains a separate, unclaimed property.
+
 This is a read-only follow-up for the next memory phase. It does not change
 this checkpoint's limits or allocator. Source reviewed: Hotaru's owned content
 capture implementation and pinned Ghostty

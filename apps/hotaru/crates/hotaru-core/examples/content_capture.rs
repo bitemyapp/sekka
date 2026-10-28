@@ -13,7 +13,14 @@ fn main() {
     let history: usize = args[1].parse().unwrap();
     let cold = args[2] == "cold";
     let owned = args[3] == "owned";
-    let mut terminal = Terminal::new(80, 24, history);
+    let mut terminal = Terminal::with_history_limits(
+        80,
+        24,
+        hotaru_core::HistoryLimits {
+            rows: history,
+            bytes: None,
+        },
+    );
     for index in 0..history + 24 {
         terminal.feed(format!("{index:08}: retained history 雪 e\u{301}\r\n").as_bytes());
     }

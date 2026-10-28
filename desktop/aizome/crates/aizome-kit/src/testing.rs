@@ -995,6 +995,15 @@ impl<P: Program> Harness<P> {
         self.render_win(win, scale)
     }
 
+    /// Deliver a native output-scale change and relayout the window. Rendering
+    /// at an arbitrary image scale is separate: inspection must not mutate a
+    /// hidden window's prepared geometry or schedule it to draw again.
+    pub fn output_scale(&mut self, key: WindowKey, scale: f64) {
+        let win = self.win(key);
+        self.rt.core.scale_changed(win, scale);
+        self.rt.flush(&mut self.platform);
+    }
+
     fn render_win(&mut self, win: WinId, scale: f64) -> Image {
         let size = self.rt.core.wins.get(&win).map_or(Size::new(1.0, 1.0), |w| w.size);
         let look = self.look();

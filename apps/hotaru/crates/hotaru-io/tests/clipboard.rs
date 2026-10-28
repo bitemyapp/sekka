@@ -19,6 +19,27 @@ fn pipe() -> (OwnedFd, OwnedFd) {
     pair
 }
 
+fn receive_until_closed(reader: &mut ClipboardReader) -> TransferState {
+    loop {
+        let state = reader.pump(4096).unwrap();
+        if state != TransferState::Pending {
+            return state;
+        }
+        let mut descriptor = libc::pollfd {
+            fd: reader.fd().unwrap().as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let remaining = reader.deadline().saturating_duration_since(Instant::now());
+        let timeout = remaining.as_millis().clamp(1, i32::MAX as u128) as i32;
+        // SAFETY: descriptor refers to one initialized pollfd and the reader
+        // retains its descriptor throughout this readiness wait. The pump's
+        // absolute deadline still decides timeout after EINTR or a poll timeout.
+        let result = unsafe { libc::poll(&mut descriptor, 1, timeout) };
+        assert!(result >= 0 || io::Error::last_os_error().kind() == io::ErrorKind::Interrupted);
+    }
+}
+
 #[test]
 fn multi_mebibyte_selection_survives_slow_peer_and_partial_io() {
     for length in [512 * 1024, 1024 * 1024 + 17, 4 * 1024 * 1024 + 123] {
@@ -172,7 +193,42 @@ fn empty_selection_signals_eof() {
         ClipboardWriter::new(write, Arc::from(&b""[..]), Duration::from_secs(1)).unwrap();
     let mut reader = ClipboardReader::new(read, 0, Duration::from_secs(1)).unwrap();
     assert_eq!(writer.pump(0).unwrap(), TransferState::Complete);
-    assert_eq!(reader.pump(1).unwrap(), TransferState::Complete);
+    assert!(
+        writer.fd().is_none(),
+        "completed writer still owns its pipe"
+    );
+    // A parallel subprocess spawn can inherit this CLOEXEC descriptor between
+    // fork and exec. EOF follows the last writer's close, not this owner's close.
+    assert_eq!(receive_until_closed(&mut reader), TransferState::Complete);
+    assert!(reader.bytes().is_empty());
+}
+
+#[test]
+fn empty_selection_waits_for_last_writer_then_reports_hangup() {
+    let (read, write) = pipe();
+    // An inherited descriptor in a pre-exec child has this same pipe lifetime:
+    // closing the original cannot signal EOF while another writer remains.
+    // SAFETY: write is live, and F_DUPFD_CLOEXEC returns a new owned descriptor.
+    let duplicate = unsafe { libc::fcntl(write.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
+    assert!(duplicate >= 0);
+    // SAFETY: the successful duplication transferred this fresh descriptor.
+    let duplicate = unsafe { OwnedFd::from_raw_fd(duplicate) };
+    let mut writer =
+        ClipboardWriter::new(write, Arc::from(&b""[..]), Duration::from_secs(1)).unwrap();
+    let mut reader = ClipboardReader::new(read, 0, Duration::from_secs(1)).unwrap();
+    assert_eq!(writer.pump(0).unwrap(), TransferState::Complete);
+    assert!(writer.fd().is_none());
+    assert_eq!(reader.pump(1).unwrap(), TransferState::Pending);
+    let mut descriptor = libc::pollfd {
+        fd: reader.fd().unwrap().as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    // SAFETY: one initialized pollfd; zero timeout never waits.
+    assert_eq!(unsafe { libc::poll(&mut descriptor, 1, 0) }, 0);
+    drop(duplicate);
+    assert_eq!(receive_until_closed(&mut reader), TransferState::Complete);
+    assert!(reader.fd().is_none());
     assert!(reader.bytes().is_empty());
 }
 
@@ -202,16 +258,7 @@ fn exactly_full_receiver_still_requires_eof() {
     drop(write);
     // Other tests may fork concurrently. CLOEXEC closes an inherited write end
     // at exec, not at fork, so EOF can legitimately arrive a little later.
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    loop {
-        let state = reader.pump(4096).unwrap();
-        if state != TransferState::Pending {
-            assert_eq!(state, TransferState::Complete);
-            break;
-        }
-        assert!(std::time::Instant::now() < deadline, "writer remained open");
-        std::thread::sleep(Duration::from_millis(1));
-    }
+    assert_eq!(receive_until_closed(&mut reader), TransferState::Complete);
 }
 
 #[test]

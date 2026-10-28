@@ -133,7 +133,8 @@ impl ClipboardWriter {
 
     /// Performs at most `byte_budget` bytes and 32 nonblocking write attempts.
     /// `Pending` includes EAGAIN: wait for readiness instead of calling in a loop.
-    /// A final call closes the pipe so the reader observes EOF immediately.
+    /// A final call closes this pipe writer. The reader observes EOF once all
+    /// duplicated or inherited write descriptors have also closed.
     pub fn pump(&mut self, byte_budget: usize) -> io::Result<TransferState> {
         let state = self.transfer.check();
         if state != TransferState::Pending {

@@ -14,7 +14,7 @@ def classify(path):
     lower = path.lower()
     if any(part in lower for part in ("/metal/", "/coretext.", "/keymapdarwin.", "/os/macos.", "/os/mach.", "/os/cf_release_thread.", "/build/metallib", "/build/xcframework", "/build/macos")) or path in {"src/renderer/Metal.zig", "src/renderer/DisplayLink.zig", "src/apprt/embedded.zig", "src/renderer/shaders/shaders.metal"}:
         return "excluded-platform", "macOS only; no product source imported"
-    if any(part in lower for part in ("/wasm", "_wasm.", "/os/windows.", "/tinyio/windows.", "/lib/windows_dll.", "/kitty/windows.")) or path == "src/apprt/browser.zig":
+    if any(part in lower for part in ("/wasm", "_wasm.", "/web_canvas.", "/os/windows.", "/tinyio/windows.", "/lib/windows_dll.", "/kitty/windows.")) or path == "src/apprt/browser.zig":
         return "excluded-platform", "non-Linux target; no product source imported"
     if path.startswith("src/apprt/gtk"):
         return "native-ui-replacement", "Aizome native replacement; preserve applicable user behavior"

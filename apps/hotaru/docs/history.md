@@ -5,6 +5,49 @@ blocks. The active screen remains directly editable. `RowRef` snapshots own
 all cells, styles and graphemes they expose; resizing, eviction, terminal
 teardown and history compression cannot invalidate an earlier snapshot.
 
+## Live history budget
+
+`Terminal::new` applies an independent row limit and a default **50,000,000
+logical bytes**, including active content. `Terminal::with_history_limits`
+accepts `HistoryLimits { rows, bytes }`; `bytes: None` explicitly disables
+the byte limit for applications and controlled benchmarks. The native default
+continues to request 10,000 history rows. The former eight-million-history-cell
+ceiling has been removed. Oldest rows are pruned when either configured limit
+is exceeded, and active content always fits even when it alone exceeds the
+byte budget. Compression never increases permitted history depth.
+
+Logical charges conservatively include row and block ownership, allocation
+allowances, cell/style/grapheme vector capacities, heap grapheme capacity,
+hyperlink run/table capacity, and every URI/identity in each row-local table,
+including entries that await compaction. Shared link payloads are charged per
+owning row, so this is not unique-allocation accounting. Charges are cached;
+ordinary cell overwrites do not scan history or all active rows. Metadata
+changes update an owner-side total and peak with relaxed atomics. Overwriting
+metadata preserves scalar allocation order in both ASCII and Unicode paths,
+so PTY read boundaries do not change byte-pruning decisions. Clean rows retain
+batched writes. Resize rebases the active total after its atomic transformation.
+
+Copy-on-write row clones preserve allocation capacities and transfer the
+existing live charge without temporarily doubling it. Immutable captured rows
+and worker-decoded rows cannot update the active total. Compressed sidecars
+preserve row charges and recycling layout; pruning does not decode or allocate
+replacement rows. Restoring capacity hints validates explicit bounds before
+allocation. Compression-on/off therefore retains the same history and charge,
+including after shrink, metadata churn and row recycling.
+
+`HistoryMemory::logical_bytes` reports live historical charge;
+`active_bytes` reports active charge, and `limit_bytes` reports the policy.
+`retained_bytes_estimate` additionally includes shared block prefixes still
+owned by the terminal, but excludes blocks retained exclusively by captures.
+`ContentSnapshot::retention` estimates complete captured blocks and active
+row storage, with both stored and uncompressed logical totals. Estimates from
+overlapping captures must not be added and described as unique memory.
+Consumers can retain arbitrarily many immutable snapshots; the terminal's
+live budget cannot reclaim their storage. Native copy/search workers use
+bounded pending work and cancellation, but allocator arenas, decoder scratch,
+formatted output, renderer storage and external consumers are outside this
+logical budget. It is not an RSS or process-memory ceiling.
+
 ## Logical-line resize
 
 Primary-screen resizing reflows soft-wrapped logical lines when autowrap is
@@ -34,7 +77,8 @@ does not change the visible snapshot generation.
 Resident blocks target 64 KiB and contain at most 64 rows. A single large row
 may exceed that target. The raw archive limit is 4 MiB, including the worst
 supported 8,192-column row with bounded graphemes and styles. A block that
-exceeds the limit, cannot allocate scratch, or does not save space remains
+exceeds that limit or 32 MiB of conservative logical ownership, cannot allocate
+scratch, or does not save space remains
 resident. LZ4 encode/decode uses the safe implementations in `lz4_flex` with
 checked decoding. No pointer, Rust container representation, or compiler
 padding enters the archive.
@@ -43,7 +87,10 @@ The decoder checks the complete input length, dimensions, style indices,
 Unicode scalar validity, cell flags, wide-cell pairs, sparse grapheme ordering,
 UTF-8 and the 64-scalar/256-byte grapheme bound. It checks row payload sizes
 before row allocations. A malformed block cannot request more than 4 MiB of
-codec output. Internal archives are immutable and are never accepted from
+codec output; restored dictionary/row allocations share a separate 64 MiB
+conservative debit budget, checked before allocation. This also bounds
+capacity restoration and highly shared hyperlink expansion. Internal archives
+are immutable and are never accepted from
 external files or terminal escape sequences.
 
 `Terminal::content_snapshot` is the copy/search ownership boundary. Capture
@@ -58,7 +105,7 @@ data until their worker releases them.
 search over block ends. Workers decode only intersecting blocks, at most one
 block at a time; `next_cancellable` checks before each row and before starting
 the next decode. A decode is not preempted midway and is bounded by the 4 MiB
-raw archive cap, with separately bounded row and dictionary allocations.
+raw archive cap and 64 MiB shared row/dictionary allocation budget.
 The same owned capture remains valid across compression, eviction, reflow and
 terminal teardown. Palette, defaults and cursor coordinates are frozen with it.
 Existing render `Snapshot` remains unchanged; `snapshot_all` is an eager
@@ -75,9 +122,10 @@ Reading does not promote cold history into permanently resident storage.
 Eviction skips compressed rows without decoding them; a partially evicted
 block is freed after its last logical row leaves history. Resize materializes
 history for logical-line reflow, then allows later idle compression again.
-Each compressed row also retains two bytes of width metadata outside the codec.
-Recycling a row must preserve that state because it affects later non-reflow
-resize behavior, even after the old cell contents are cleared. Discard-only
+Each compressed row retains a 16-byte sidecar on 64-bit targets: its logical
+charge, retained width, and cell/style/grapheme allocation capacities.
+Recycling a row must preserve that layout because it affects later non-reflow
+resize behavior and byte retention, even after old contents are cleared. Discard-only
 eviction allocates no replacement row. `compressed_bytes` includes this metadata.
 
 Tests cover archive round trips, every truncation boundary, 20,000 malformed
@@ -87,13 +135,18 @@ resident terminal through scrolling, resizing and clearing. Content tests also
 cover immutable block sharing, bounded tail copy-on-write, range boundaries,
 cancellation before deliberately damaged compressed content, hyperlink
 dictionaries and concurrent reads after terminal teardown.
+Budget regressions cover unique URI churn, shrinking/recycling, oversized
+active content, compressed/resident equivalence, corrupt cold content pruned
+without decoding, held render/content snapshots, and exact-budget metadata
+overwrites split at one, seven and 65,536 bytes. Existing 12,000-operation
+compressed/resident mutation stress also runs with the new default policy.
 
 ## Content capture measurements
 
 `upstream/content-capture.json` records the exact source and binary hashes for
 the owned capture and the eager `snapshot_all` implementation from checkpoint
 `13423440ef68b3633b41d267aea196d87b1007da`. Both use 80 columns and 24 visible
-rows; 120 columns would hit the existing 8-million-history-cell cap before
+rows; 120 columns would hit the then-existing 8-million-history-cell cap before
 100,000 rows. Measurements use CPU 8 on `wx-workstation`, native CPU code,
 thin LTO, one codegen unit and the system allocator. Five fresh processes run
 each case, with 500 owned captures or 30 eager captures per process. Values
@@ -130,9 +183,12 @@ or forced collection is performed.
 the same Rust binary, plus the pinned Ghostty library. It includes source,
 binary, library and corpus hashes. The populated Rust implementation in the
 second report includes compact grapheme storage and strong-only row ownership.
-These reports precede the retained-width recycling fix. Their measured values
-and source hashes remain unchanged; the current representation adds two bytes
-per compressed row to the accounted archive storage.
+These reports precede the retained-width recycling fix and current byte-budget
+accounting. Their measured values and source hashes remain unchanged. The
+current representation includes 16 bytes of sidecar metadata per compressed
+row and preserves additional allocation/table information in archive version
+HHR3. No current RSS or restore-time parity claim follows from these older
+measurements.
 
 | Corpus | Rust compressed archive | Rust cold RSS | Ghostty cold RSS | Rust history read | Ghostty history read |
 | --- | ---: | ---: | ---: | ---: | ---: |

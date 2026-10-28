@@ -66,6 +66,16 @@ Regeneration retains evidence only where the exact upstream blob and scope are
 unchanged. Keep evidence paths or commands in each row rather than claiming a
 whole directory is complete because a small terminal demo runs.
 
+The Unicode/DEC 2027 slice is documented in [`unicode-mode.md`](unicode-mode.md).
+It ports the exact pinned Unicode 18 properties and tailored grapheme state
+machine, exposes configured defaults for native construction, and preserves
+the legacy default for existing C-library comparison fixtures. Kernel checks
+cover all 1,112,064 Unicode scalars and 56,601 grapheme probes; 484 terminal
+cases cover 11,866 byte splits, including width-changing selectors, bounded
+clusters, mode resets, links, reflow and owned history. The ledger remains
+partial, and separate legacy/Unicode measurements show performance parity is
+still unmet. Historical benchmark reports retain their original configuration.
+
 ## Clipboard hang audit
 
 The subsequent OSC8/copy slice is documented in

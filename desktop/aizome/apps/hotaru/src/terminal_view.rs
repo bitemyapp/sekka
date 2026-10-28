@@ -14,7 +14,7 @@ use aizome_kit::widget::{
     Widget,
 };
 use hotaru_core::input as vt;
-use hotaru_core::{Color as TerminalColor, Rgb, Row, Snapshot, TerminalColors, attrs};
+use hotaru_core::{Color as TerminalColor, Rgb, Snapshot, TerminalColors, attrs};
 
 use crate::app::Msg;
 use crate::input;
@@ -73,7 +73,7 @@ impl Selection {
         let (start, end) = self.ordered();
         snapshot.selection_text((start.row, start.col), (end.row, end.col))
     }
-    fn contains(self, row: usize, col: usize) -> bool {
+    pub(crate) fn contains(self, row: usize, col: usize) -> bool {
         let (start, end) = self.ordered();
         (row, col) >= (start.row, start.col) && (row, col) < (end.row, end.col)
     }
@@ -82,13 +82,14 @@ impl Selection {
 pub fn terminal_view(
     id: u64,
     snapshot: Arc<Snapshot>,
-    font_size: f64,
-    font_weight: u16,
+    font: (f64, u16),
     selection: Option<Selection>,
-    search: String,
     bindings: Arc<Bindings>,
+    rendered: Option<Arc<crate::font::Frame>>,
 ) -> Element<Msg> {
-    Element::new(TerminalView { id, snapshot, font_size, font_weight, selection, search, bindings }, vec![])
+    let snapshot = rendered.as_ref().map_or(snapshot, |frame| frame.snapshot.clone());
+    let (font_size, font_weight) = font;
+    Element::new(TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered }, vec![])
 }
 
 struct TerminalView {
@@ -97,8 +98,8 @@ struct TerminalView {
     font_size: f64,
     font_weight: u16,
     selection: Option<Selection>,
-    search: String,
     bindings: Arc<Bindings>,
+    rendered: Option<Arc<crate::font::Frame>>,
 }
 
 #[derive(Default)]
@@ -110,6 +111,11 @@ struct ViewState {
     size: Size,
     cell_width: f64,
     line_height: f64,
+    padding: f64,
+    scale: f64,
+    scale_pending: bool,
+    font_epoch: Option<u64>,
+    font_metrics: Option<aizome_kit::sidestep_ui::grid::Metrics>,
     drag: Option<CellPoint>,
     preedit: String,
     scroll_fraction: f64,
@@ -123,37 +129,6 @@ struct ViewState {
 
 fn emit(cx: &mut EventCx, msg: Msg) {
     cx.emit(&MsgFn::new(msg));
-}
-
-fn matching_cells(row: &Row, needle: &str) -> Vec<bool> {
-    let mut marked = vec![false; row.cells().len()];
-    if needle.is_empty() {
-        return marked;
-    }
-    let mut text = String::new();
-    let mut spans = Vec::new();
-    for (column, cell) in row.cells().iter().enumerate() {
-        if cell.width() == 0 {
-            continue;
-        }
-        let start = text.len();
-        if let Some(grapheme) = row.grapheme(column) {
-            text.push_str(grapheme);
-        } else {
-            text.push(cell.character());
-        }
-        spans.push((start, text.len(), column, cell.width()));
-    }
-    for (at, found) in text.match_indices(needle) {
-        for &(start, end, column, width) in &spans {
-            if start < at + found.len() && end > at {
-                for value in marked.iter_mut().skip(column).take(width) {
-                    *value = true;
-                }
-            }
-        }
-    }
-    marked
 }
 
 impl TerminalView {
@@ -177,21 +152,23 @@ impl TerminalView {
             height: state.size.height,
             cell_width: state.cell_width,
             cell_height: state.line_height,
-            padding: PAD,
+            padding: state.padding,
+            scale: state.font_metrics.map_or(state.scale, |metrics| metrics.scale),
             any_button: !state.buttons.is_empty(),
         }
     }
     fn point(&self, pos: Point, state: &ViewState) -> CellPoint {
         CellPoint {
-            row: (((pos.y - PAD).max(0.0) / state.line_height.max(1.0)) as usize)
+            row: (((pos.y - state.padding).max(0.0) / state.line_height.max(1.0)) as usize)
                 .min(self.snapshot.rows.saturating_sub(1)),
-            col: (((pos.x - PAD).max(0.0) / state.cell_width.max(1.0)).round() as usize).min(self.snapshot.cols),
+            col: (((pos.x - state.padding).max(0.0) / state.cell_width.max(1.0)).round() as usize)
+                .min(self.snapshot.cols),
         }
     }
     fn cursor_rect(&self, state: &ViewState) -> Rect {
         let c = &self.snapshot.cursor;
         Rect::from_origin_size(
-            (PAD + c.col as f64 * state.cell_width, PAD + c.row as f64 * state.line_height),
+            (state.padding + c.col as f64 * state.cell_width, state.padding + c.row as f64 * state.line_height),
             (state.cell_width, state.line_height),
         )
     }
@@ -202,18 +179,31 @@ impl Widget for TerminalView {
         "hotaru-terminal"
     }
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
-        let mut font = FontSpec::mono(self.font_size);
-        font.weight = f32::from(self.font_weight);
-        let measured = cx.measure("M", &TextSpec::new(font, cx.theme().text()));
-        let cell_width = measured.width.max(1.0);
-        let line_height = (self.font_size * 1.5).ceil().max(measured.height.ceil());
+        let scale = cx.scale();
+        let pad = (PAD * scale).round() / scale;
+        // Initial geometry only; real face metrics arrive from the worker.
+        let (cell_width, line_height) = self
+            .rendered
+            .as_ref()
+            .map_or((self.font_size * (96.0 / 72.0) * 0.6, self.font_size * (96.0 / 72.0) * 1.2), |frame| {
+                (frame.metrics.cell_width(), frame.metrics.cell_height())
+            });
         let size = bc.constrain(Size::new(
-            if bc.max.width.is_finite() { bc.max.width } else { 80.0 * cell_width + PAD * 2.0 },
-            if bc.max.height.is_finite() { bc.max.height } else { 24.0 * line_height + PAD * 2.0 },
+            if bc.max.width.is_finite() { bc.max.width } else { 80.0 * cell_width + pad * 2.0 },
+            if bc.max.height.is_finite() { bc.max.height } else { 24.0 * line_height + pad * 2.0 },
         ));
         let cursor = (self.snapshot.cursor.col, self.snapshot.cursor.row, self.snapshot.cursor.visible);
         let theme = (cx.theme().is_dark(), rgb(cx.theme().text()), rgb(cx.theme().surface()));
         let st = cx.state::<ViewState>();
+        let metrics = self.rendered.as_ref().map(|frame| frame.metrics);
+        st.resize_pending |= st.font_metrics != metrics;
+        st.font_metrics = metrics;
+        st.scale_pending |= st.scale != scale;
+        st.scale = scale;
+        st.padding = pad;
+        let epoch = self.rendered.as_ref().map(|frame| frame.epoch);
+        let font_changed = st.font_epoch != epoch;
+        st.font_epoch = epoch;
         let resized = st.size != size || st.cell_width != cell_width || st.line_height != line_height;
         let old_snapshot = st.snapshot.replace(self.snapshot.clone());
         let old_cursor = st.cursor.replace(cursor);
@@ -222,20 +212,21 @@ impl Widget for TerminalView {
         st.line_height = line_height;
         st.resize_pending |= resized;
         st.theme_pending |= st.theme.replace(theme) != Some(theme);
-        if resized || old_cursor != Some(cursor) || st.theme_pending {
+        if st.resize_pending || old_cursor != Some(cursor) || st.theme_pending || st.scale_pending {
             cx.request_tick(Duration::ZERO);
         }
         for (y, row) in self.snapshot.lines.iter().enumerate() {
-            if !old_snapshot
-                .as_ref()
-                .and_then(|s| s.lines.get(y))
-                .is_some_and(|old| hotaru_core::RowRef::ptr_eq(old, row))
+            if font_changed
+                || !old_snapshot
+                    .as_ref()
+                    .and_then(|s| s.lines.get(y))
+                    .is_some_and(|old| hotaru_core::RowRef::ptr_eq(old, row))
             {
                 cx.invalidate_rect(Rect::new(
                     0.0,
-                    PAD + y as f64 * line_height,
+                    pad + y as f64 * line_height,
                     size.width,
-                    PAD + (y + 1) as f64 * line_height,
+                    pad + (y + 1) as f64 * line_height,
                 ));
             }
         }
@@ -243,9 +234,9 @@ impl Widget for TerminalView {
             for (_, y, _) in old_cursor.into_iter().chain([cursor]) {
                 cx.invalidate_rect(Rect::new(
                     0.0,
-                    PAD + y as f64 * line_height,
+                    pad + y as f64 * line_height,
                     size.width,
-                    PAD + (y + 1) as f64 * line_height,
+                    pad + (y + 1) as f64 * line_height,
                 ));
             }
         }
@@ -255,58 +246,30 @@ impl Widget for TerminalView {
         h.add(&self.font_size.to_bits());
         h.add(&self.font_weight);
         h.add(&self.selection);
-        h.add(&self.search);
         h.add(&self.snapshot.palette);
         h.add(&self.snapshot.default_foreground);
         h.add(&self.snapshot.default_background);
         h.add(&(self.snapshot.cols, self.snapshot.rows));
+        h.add(&self.rendered.as_ref().map(|f| (f.epoch, f.metrics.scale.to_bits())));
     }
     fn paint(&self, cx: &mut PaintCx) {
         let Some(state) = cx.state::<ViewState>() else { return };
         let cw = state.cell_width;
         let lh = state.line_height;
+        let pad = state.padding;
         let theme = cx.theme();
         let bounds = cx.bounds();
         let background = self.snapshot.default_background;
         cx.canvas.fill_rect(bounds, Color::rgb8(background.0, background.1, background.2));
         cx.canvas.save();
         cx.canvas.clip_rect(bounds);
-        for (y, row) in self.snapshot.lines.iter().enumerate().take(self.snapshot.rows) {
-            let row_rect = Rect::new(PAD, PAD + y as f64 * lh, bounds.width() - PAD, PAD + (y + 1) as f64 * lh);
+        for (y, spans) in self.rendered.iter().flat_map(|frame| frame.rows.iter().enumerate()) {
+            let row_rect = Rect::new(pad, pad + y as f64 * lh, bounds.width() - pad, pad + (y + 1) as f64 * lh);
             if !cx.canvas.needs(row_rect) {
                 continue;
             }
-            let matches = matching_cells(row, &self.search);
-            let mut col = 0;
-            while col < row.cells().len().min(self.snapshot.cols) {
-                let first = row.cells()[col];
-                if first.width() == 0 {
-                    col += 1;
-                    continue;
-                }
-                let style = row.style(first);
-                let selected = self.selection.is_some_and(|s| s.contains(y, col));
-                let matched = matches[col];
-                let start = col;
-                let mut text = String::new();
-                loop {
-                    let cell = row.cells()[col];
-                    if cell.width() > 0 {
-                        if let Some(g) = row.grapheme(col) {
-                            text.push_str(g);
-                        } else {
-                            text.push(cell.character());
-                        }
-                    }
-                    col += 1;
-                    if col >= row.cells().len().min(self.snapshot.cols)
-                        || row.style(row.cells()[col]) != style
-                        || self.selection.is_some_and(|s| s.contains(y, col)) != selected
-                        || matches[col] != matched
-                    {
-                        break;
-                    }
-                }
+            for span in spans {
+                let style = span.style;
                 let color = |c: TerminalColor, foreground: bool| match c {
                     TerminalColor::Default => {
                         let c = if foreground {
@@ -327,33 +290,28 @@ impl Widget for TerminalView {
                 if style.attrs & attrs::INVERSE != 0 {
                     std::mem::swap(&mut fg, &mut bg);
                 }
-                if selected {
+                if span.selected || span.current_match {
                     bg = theme.selection();
                     fg = theme.on_selection();
-                } else if matched {
+                } else if span.matched {
                     bg = theme.focus().with_alpha(0.3);
                 }
                 if style.attrs & attrs::DIM != 0 {
                     fg = fg.with_alpha(0.6);
                 }
-                let r = Rect::new(PAD + start as f64 * cw, row_rect.y0, PAD + col as f64 * cw, row_rect.y1);
+                let r = Rect::new(pad + span.start as f64 * cw, row_rect.y0, pad + span.end as f64 * cw, row_rect.y1);
                 cx.canvas.fill_rect(r, bg);
                 if style.attrs & attrs::HIDDEN != 0 {
                     continue;
                 }
-                let mut font = FontSpec::mono(self.font_size);
-                font.weight = f32::from(self.font_weight);
-                if style.attrs & attrs::BOLD != 0 {
-                    font.weight = font.weight.max(700.0);
-                }
-                font.italic = style.attrs & attrs::ITALIC != 0;
-                let mut spec = TextSpec::new(font, fg);
-                spec.strikethrough = style.attrs & attrs::STRIKE != 0;
-                let layout = cx.layout_text(&text, &spec, None);
-                let top = r.y0 + ((lh - layout.size().height) / 2.0).floor();
                 cx.canvas.save();
                 cx.canvas.clip_rect(r);
-                cx.canvas.draw_text(&layout, Point::new(r.x0, top));
+                cx.canvas.draw_grid_text(&span.layout, Point::new(pad, r.y0), fg);
+                if style.attrs & attrs::STRIKE != 0 {
+                    let m = span.layout.metrics;
+                    let y = r.y0 + f64::from(m.strike_y_px) / m.scale;
+                    cx.canvas.fill_rect(Rect::new(r.x0, y, r.x1, y + f64::from(m.strike_thickness_px) / m.scale), fg);
+                }
                 if style.attrs & attrs::OVERLINE != 0 {
                     cx.canvas.fill_rect(Rect::new(r.x0, r.y0 + 1.0, r.x1, r.y0 + 2.0), fg);
                 }
@@ -362,7 +320,7 @@ impl Widget for TerminalView {
                 } else {
                     color(style.underline_color, true)
                 };
-                underline(cx.canvas, r, style.underline(), underline_color);
+                underline(cx.canvas, r, style.underline(), underline_color, span.layout.metrics);
                 cx.canvas.restore();
             }
         }
@@ -374,7 +332,7 @@ impl Widget for TerminalView {
                 aizome_kit::draw::border(cx.canvas, r, theme.text3(), 1.0);
             }
             if !state.preedit.is_empty() {
-                let mut spec = TextSpec::new(FontSpec::mono(self.font_size), theme.text());
+                let mut spec = TextSpec::new(FontSpec::mono(self.font_size * (96.0 / 72.0)), theme.text());
                 spec.underline = true;
                 let text = cx.layout_text(&state.preedit, &spec, None);
                 cx.canvas.fill_rect(Rect::from_origin_size(r.origin(), (text.size().width, lh)), theme.sunk());
@@ -399,9 +357,11 @@ impl Widget for TerminalView {
         match event {
             Event::Tick => {
                 let st = cx.state::<ViewState>();
-                let cols = ((st.size.width - PAD * 2.0) / st.cell_width).floor().max(1.0) as usize;
-                let rows = ((st.size.height - PAD * 2.0) / st.line_height).floor().max(1.0) as usize;
+                let cols = ((st.size.width - st.padding * 2.0) / st.cell_width).floor().max(1.0) as usize;
+                let rows = ((st.size.height - st.padding * 2.0) / st.line_height).floor().max(1.0) as usize;
                 let resized = std::mem::take(&mut st.resize_pending);
+                let scale_changed = std::mem::take(&mut st.scale_pending);
+                let scale = st.scale;
                 let theme_changed = std::mem::take(&mut st.theme_pending);
                 let rect = self.cursor_rect(st);
                 let window_rect = cx.window_rect();
@@ -414,7 +374,16 @@ impl Widget for TerminalView {
                     emit(cx, Msg::Theme(colors));
                 }
                 if resized {
-                    emit(cx, Msg::Resize(self.id, cols, rows));
+                    let (width, height) = self.rendered.as_ref().map_or((0, 0), |frame| {
+                        (
+                            cols.saturating_mul(frame.metrics.cell_width_px as usize).min(u16::MAX as usize) as u16,
+                            rows.saturating_mul(frame.metrics.cell_height_px as usize).min(u16::MAX as usize) as u16,
+                        )
+                    });
+                    emit(cx, Msg::ResizePixels(self.id, cols, rows, width, height));
+                }
+                if scale_changed {
+                    emit(cx, Msg::ShapeScale(self.id, scale));
                 }
                 if cx.is_focused() {
                     cx.set_text_input(true, Some(rect));
@@ -565,22 +534,29 @@ impl Widget for TerminalView {
     }
 }
 
-fn underline(canvas: &mut aizome_kit::sidestep_ui::Canvas, rect: Rect, kind: hotaru_core::Underline, color: Color) {
+fn underline(
+    canvas: &mut aizome_kit::sidestep_ui::Canvas,
+    rect: Rect,
+    kind: hotaru_core::Underline,
+    color: Color,
+    metrics: aizome_kit::sidestep_ui::grid::Metrics,
+) {
     use hotaru_core::Underline;
-    let y = rect.y1 - 2.0;
+    let thickness = f64::from(metrics.underline_thickness_px) / metrics.scale;
+    let y = (rect.y0 + f64::from(metrics.underline_y_px) / metrics.scale).min(rect.y1 - thickness);
     match kind {
         Underline::None => {}
-        Underline::Single => canvas.fill_rect(Rect::new(rect.x0, y, rect.x1, y + 1.0), color),
+        Underline::Single => canvas.fill_rect(Rect::new(rect.x0, y, rect.x1, y + thickness), color),
         Underline::Double => {
-            canvas.fill_rect(Rect::new(rect.x0, y, rect.x1, y + 1.0), color);
-            canvas.fill_rect(Rect::new(rect.x0, y - 2.0, rect.x1, y - 1.0), color);
+            canvas.fill_rect(Rect::new(rect.x0, y, rect.x1, y + thickness), color);
+            canvas.fill_rect(Rect::new(rect.x0, y - 2.0 * thickness, rect.x1, y - thickness), color);
         }
         Underline::Dotted | Underline::Dashed => {
-            let length = if kind == Underline::Dotted { 1.0 } else { 4.0 };
+            let length = thickness * if kind == Underline::Dotted { 1.0 } else { 4.0 };
             let mut x = rect.x0;
             while x < rect.x1 {
-                canvas.fill_rect(Rect::new(x, y, (x + length).min(rect.x1), y + 1.0), color);
-                x += length + 2.0;
+                canvas.fill_rect(Rect::new(x, y, (x + length).min(rect.x1), y + thickness), color);
+                x += length + 2.0 * thickness;
             }
         }
         Underline::Curly => {
@@ -592,7 +568,7 @@ fn underline(canvas: &mut aizome_kit::sidestep_ui::Canvas, rect: Rect, kind: hot
                 path.quad_to((x + 4.5, y + 2.0), ((x + 6.0).min(rect.x1), y));
                 x += 6.0;
             }
-            canvas.stroke(&path, &aizome_kit::sidestep_ui::StrokeStyle::new(1.0), color);
+            canvas.stroke(&path, &aizome_kit::sidestep_ui::StrokeStyle::new(thickness), color);
         }
     }
 }

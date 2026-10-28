@@ -209,6 +209,7 @@ pub struct MouseInput {
     pub cell_width: f64,
     pub cell_height: f64,
     pub padding: f64,
+    pub scale: f64,
     pub any_button: bool,
 }
 
@@ -222,25 +223,28 @@ impl MouseInput {
         tracking: vt::MouseTracking,
         format: vt::MouseFormat,
     ) -> Vec<u8> {
-        if ![self.width, self.height, self.cell_width, self.cell_height, self.padding]
+        if ![self.width, self.height, self.cell_width, self.cell_height, self.padding, self.scale]
             .iter()
             .all(|value| value.is_finite())
             || self.cell_width <= 0.0
             || self.cell_height <= 0.0
+            || self.scale <= 0.0
         {
             return Vec::new();
         }
         let mut event = self.event;
         let geometry = if format == vt::MouseFormat::SgrPixels {
+            event.x *= self.scale as f32;
+            event.y *= self.scale as f32;
             vt::MouseGeometry {
-                width: self.width as u32,
-                height: self.height as u32,
+                width: (self.width * self.scale).round() as u32,
+                height: (self.height * self.scale).round() as u32,
                 cell_width: 1,
                 cell_height: 1,
-                padding_left: self.padding as u32,
-                padding_top: self.padding as u32,
-                padding_right: self.padding as u32,
-                padding_bottom: self.padding as u32,
+                padding_left: (self.padding * self.scale).round() as u32,
+                padding_top: (self.padding * self.scale).round() as u32,
+                padding_right: (self.padding * self.scale).round() as u32,
+                padding_bottom: (self.padding * self.scale).round() as u32,
             }
         } else {
             let cols = ((self.width - 2.0 * self.padding) / self.cell_width).floor().max(1.0);
@@ -326,11 +330,17 @@ mod tests {
             cell_width: 8.4,
             cell_height: 21.0,
             padding: 10.0,
+            scale: 1.0,
             any_button: true,
         };
         assert_eq!(
             input.encode(&mut vt::MouseEncoder::default(), vt::MouseTracking::Normal, vt::MouseFormat::Sgr),
             b"\x1b[<0;10;1M"
+        );
+        let pixel = MouseInput { event: vt::MouseEvent { x: 15.5, y: 20.0, ..input.event }, scale: 2.0, ..input };
+        assert_eq!(
+            pixel.encode(&mut vt::MouseEncoder::default(), vt::MouseTracking::Normal, vt::MouseFormat::SgrPixels),
+            b"\x1b[<0;11;20M"
         );
     }
     #[test]

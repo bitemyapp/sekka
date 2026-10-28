@@ -11,7 +11,27 @@ const MAX_ROWS: usize = 64;
 const MAX_RAW_BYTES: usize = 4 * 1024 * 1024;
 const MAX_INSPECTED: usize = 8;
 const MAX_LINK_BYTES: usize = 2048;
-const ARCHIVE_MAGIC: &[u8; 4] = b"HHR2";
+const ARCHIVE_MAGIC: &[u8; 4] = b"HHR3";
+// Covers a full resident handle array, block/entry headers and amortized deque
+// capacity even when only one logical row remains after prefix eviction.
+const BLOCK_OVERHEAD: usize = 1024;
+pub const DEFAULT_HISTORY_BYTES: usize = 50_000_000;
+
+/// Both limits apply independently. Bytes charge uncompressed logical owned
+/// storage including active rows; active content is always allowed to fit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HistoryLimits {
+    pub rows: usize,
+    pub bytes: Option<usize>,
+}
+impl HistoryLimits {
+    pub const fn new(rows: usize) -> Self {
+        Self {
+            rows,
+            bytes: Some(DEFAULT_HISTORY_BYTES),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HistoryMemory {
@@ -24,6 +44,18 @@ pub struct HistoryMemory {
     /// and storage retained exclusively by outstanding content snapshots.
     pub compressed_bytes: usize,
     pub compressed_blocks: usize,
+    pub logical_bytes: usize,
+    pub active_bytes: usize,
+    pub limit_bytes: Option<usize>,
+    /// Conservative storage retained by the live terminal's blocks, including
+    /// shared evicted prefixes, excluding captures owning other blocks.
+    pub retained_bytes_estimate: usize,
+}
+
+#[derive(Clone, Copy)]
+struct RowMeta {
+    layout: crate::row::RecycleLayout,
+    logical_bytes: usize,
 }
 
 #[derive(Clone)]
@@ -35,14 +67,42 @@ enum Storage {
         bytes: Box<[u8]>,
         raw_len: usize,
         rows: usize,
-        recycle_widths: Box<[u16]>,
+        metadata: Box<[RowMeta]>,
     },
 }
-#[derive(Clone)]
 struct Block {
     storage: Storage,
+    logical_bytes: usize,
+}
+impl Clone for Block {
+    fn clone(&self) -> Self {
+        let storage = match &self.storage {
+            Storage::Resident(rows) => {
+                let mut copy = Vec::with_capacity(MAX_ROWS);
+                copy.extend(rows.iter().cloned());
+                Storage::Resident(copy)
+            }
+            storage => storage.clone(),
+        };
+        Self {
+            storage,
+            logical_bytes: self.logical_bytes,
+        }
+    }
 }
 impl Block {
+    fn retained_bytes(&self) -> usize {
+        match &self.storage {
+            Storage::Resident(_) => self.logical_bytes,
+            Storage::Compressed {
+                bytes, metadata, ..
+            } => {
+                crate::memory::allocation(size_of::<Self>() + size_of::<usize>())
+                    + crate::memory::allocation(bytes.len())
+                    + crate::memory::vector::<RowMeta>(metadata.len())
+            }
+        }
+    }
     fn len(&self) -> usize {
         match &self.storage {
             Storage::Resident(rows) => rows.len(),
@@ -73,7 +133,15 @@ impl Block {
         };
         let rows = &slots[skip..];
         let size_bound = size_bound.checked_add(8)?;
-        if size_bound > MAX_RAW_BYTES || rows.is_empty() {
+        let logical_bytes = rows
+            .iter()
+            .map(|row| row.as_ref().expect("live row slot").owned_bytes())
+            .sum::<usize>()
+            + BLOCK_OVERHEAD;
+        if size_bound > MAX_RAW_BYTES
+            || rows.is_empty()
+            || logical_bytes > crate::memory::MAX_LOGICAL_BLOCK_BYTES
+        {
             return None;
         }
         let mut raw = Vec::new();
@@ -94,23 +162,27 @@ impl Block {
         encoded.try_reserve_exact(budget).ok()?;
         encoded.resize(budget, 0);
         let written = lz4_flex::block::compress_into(&raw, &mut encoded).ok()?;
-        if written + rows.len() * size_of::<u16>() + 64 >= raw.len() {
+        if written + rows.len() * size_of::<RowMeta>() + 64 >= raw.len() {
             return None;
         }
         encoded.truncate(written);
-        let mut recycle_widths = Vec::new();
-        recycle_widths.try_reserve_exact(rows.len()).ok()?;
-        recycle_widths.extend(
-            rows.iter()
-                .map(|row| row.as_ref().expect("live row slot").recycle_width()),
-        );
+        let mut metadata = Vec::new();
+        metadata.try_reserve_exact(rows.len()).ok()?;
+        metadata.extend(rows.iter().map(|row| {
+            let row = row.as_ref().expect("live row slot");
+            RowMeta {
+                layout: row.recycle_layout(),
+                logical_bytes: row.owned_bytes(),
+            }
+        }));
         Some(Self {
             storage: Storage::Compressed {
                 bytes: encoded.into_boxed_slice(),
                 raw_len: raw.len(),
                 rows: rows.len(),
-                recycle_widths: recycle_widths.into_boxed_slice(),
+                metadata: metadata.into_boxed_slice(),
             },
+            logical_bytes,
         })
     }
 }
@@ -125,10 +197,15 @@ fn decode_block(encoded: &[u8], raw_len: usize, rows: usize) -> Option<Vec<RowRe
         return None;
     }
     let mut input = raw.as_slice();
-    let links = decode_links(&mut input)?;
+    let mut budget = crate::memory::MAX_DECODE_BYTES;
+    let links = decode_links_budget(&mut input, &mut budget)?;
     let mut result = Vec::with_capacity(rows);
     for _ in 0..rows {
-        result.push(RowRef::new(Row::decode_history(&mut input, &links)?));
+        result.push(RowRef::new(Row::decode_history_budget(
+            &mut input,
+            &links,
+            &mut budget,
+        )?));
     }
     input.is_empty().then_some(result)
 }
@@ -143,7 +220,7 @@ fn encode_links<'a>(
     raw.extend_from_slice(&0u32.to_le_bytes());
     let mut links = HashMap::new();
     for row in rows {
-        for (_, link) in row.hyperlink_runs() {
+        for link in row.archive_links() {
             if links.contains_key(link) {
                 continue;
             }
@@ -183,17 +260,25 @@ fn take_u16(input: &mut &[u8]) -> Option<usize> {
         take(input, 2)?.try_into().ok()?,
     )))
 }
+#[cfg(test)]
 fn decode_links(input: &mut &[u8]) -> Option<Vec<LinkRef>> {
+    {
+        let mut budget = crate::memory::MAX_DECODE_BYTES;
+        decode_links_budget(input, &mut budget)
+    }
+}
+fn decode_links_budget(input: &mut &[u8], budget: &mut usize) -> Option<Vec<LinkRef>> {
     if take(input, 4)? != ARCHIVE_MAGIC {
         return None;
     }
     let count = u32::from_le_bytes(take(input, 4)?.try_into().ok()?) as usize;
     // Even the smallest dictionary entry takes six bytes. Check this before
     // allocating; the raw block and maximum cell count provide further caps.
-    if count > MAX_ROWS * crate::MAX_COLS || count > input.len() / 6 {
+    if count > MAX_ROWS * (crate::MAX_COLS * 2 + 1) || count > input.len() / 6 {
         return None;
     }
     let mut links = Vec::new();
+    *budget = budget.checked_sub(crate::memory::vector::<LinkRef>(count))?;
     links.try_reserve_exact(count).ok()?;
     for _ in 0..count {
         let id = match take(input, 1)?[0] {
@@ -212,7 +297,9 @@ fn decode_links(input: &mut &[u8]) -> Option<Vec<LinkRef>> {
             return None;
         }
         let uri = take(input, len)?.into();
-        links.push(LinkRef::new(Hyperlink { id, uri }));
+        let link = Hyperlink { id, uri };
+        *budget = budget.checked_sub(link.owned_bytes())?;
+        links.push(LinkRef::new(link));
     }
     Some(links)
 }
@@ -230,23 +317,50 @@ impl Entry {
 
 #[derive(Default)]
 pub(crate) struct History {
+    epoch: crate::ContentEpoch,
+    origin: u64,
     blocks: VecDeque<Entry>,
     len: usize,
     scan: usize,
     scan_rows: usize,
+    logical_bytes: usize,
 }
 impl History {
+    pub fn position(&self, first_row: usize, active_rows: usize) -> crate::ContentPosition {
+        crate::ContentPosition {
+            epoch: self.epoch.clone(),
+            origin: self.origin,
+            first_row,
+            history_rows: self.len,
+            active_rows,
+        }
+    }
+    pub fn logical_bytes(&self) -> usize {
+        self.logical_bytes
+    }
+    pub fn over_limit(&self, rows: usize, bytes: Option<usize>) -> bool {
+        self.len > rows || bytes.is_some_and(|limit| self.logical_bytes > limit)
+    }
+    pub fn prune(&mut self, rows: usize, bytes: Option<usize>) {
+        while self.over_limit(rows, bytes) {
+            self.pop_front();
+        }
+    }
     pub fn len(&self) -> usize {
         self.len
     }
     pub fn clear(&mut self) {
+        self.epoch = crate::ContentEpoch::default();
+        self.origin = 0;
         self.blocks.clear();
         self.len = 0;
         self.scan = 0;
         self.scan_rows = 0;
+        self.logical_bytes = 0;
     }
     pub fn push_back(&mut self, row: RowRef) {
         let size = row.history_size_bound();
+        let charge = row.owned_bytes();
         if let Some(entry) = self.blocks.back_mut()
             && !entry.attempted
             && entry.block.len() < MAX_ROWS
@@ -254,7 +368,9 @@ impl History {
             && matches!(entry.block.storage, Storage::Resident(_))
         {
             // This is the only COW block mutation: at most 64 RowRef slots.
-            let Storage::Resident(rows) = &mut Arc::make_mut(&mut entry.block).storage else {
+            let block = Arc::make_mut(&mut entry.block);
+            block.logical_bytes += charge;
+            let Storage::Resident(rows) = &mut block.storage else {
                 unreachable!()
             };
             rows.push(Some(row));
@@ -263,13 +379,16 @@ impl History {
             self.blocks.push_back(Entry {
                 block: Arc::new(Block {
                     storage: Storage::Resident(vec![Some(row)]),
+                    logical_bytes: charge + BLOCK_OVERHEAD,
                 }),
                 skip: 0,
                 size_bound: size,
                 attempted: false,
             });
+            self.logical_bytes += BLOCK_OVERHEAD;
         }
         self.len += 1;
+        self.logical_bytes += charge;
     }
     pub fn pop_front(&mut self) -> Option<RowRef> {
         self.remove_front(false, 0)
@@ -280,6 +399,10 @@ impl History {
     fn remove_front(&mut self, recycle: bool, cols: usize) -> Option<RowRef> {
         let entry = self.blocks.front_mut()?;
         let index = entry.skip;
+        let charge = match &entry.block.storage {
+            Storage::Resident(rows) => rows[index].as_ref().expect("live row slot").owned_bytes(),
+            Storage::Compressed { metadata, .. } => metadata[index].logical_bytes,
+        };
         let result = match &entry.block.storage {
             Storage::Resident(rows) => {
                 entry.size_bound -= rows[index]
@@ -287,6 +410,7 @@ impl History {
                     .expect("live row slot")
                     .history_size_bound();
                 if let Some(block) = Arc::get_mut(&mut entry.block) {
+                    block.logical_bytes -= charge;
                     let Storage::Resident(rows) = &mut block.storage else {
                         unreachable!()
                     };
@@ -306,18 +430,27 @@ impl History {
                     None
                 }
             }
-            Storage::Compressed { recycle_widths, .. } => {
-                recycle.then(|| RowRef::new(Row::new_recycled(cols, recycle_widths[index])))
+            Storage::Compressed { metadata, .. } => {
+                recycle.then(|| RowRef::new(Row::with_recycle_layout(cols, metadata[index].layout)))
             }
         };
         entry.skip += 1;
         self.len -= 1;
+        self.logical_bytes -= charge;
         if self.scan > 0 {
             self.scan_rows = self.scan_rows.saturating_sub(1);
         }
         if entry.len() == 0 {
+            self.logical_bytes -= BLOCK_OVERHEAD;
             self.blocks.pop_front();
             self.scan = self.scan.saturating_sub(1);
+        }
+        if let Some(origin) = self.origin.checked_add(1) {
+            self.origin = origin;
+        } else {
+            // Even an exhausted stream counter cannot alias an old capture.
+            self.epoch = crate::ContentEpoch::default();
+            self.origin = 0;
         }
         result
     }
@@ -334,6 +467,7 @@ impl History {
             match Arc::try_unwrap(entry.block) {
                 Ok(Block {
                     storage: Storage::Resident(rows),
+                    ..
                 }) => result.extend(
                     rows.into_iter()
                         .skip(entry.skip)
@@ -393,11 +527,15 @@ impl History {
     }
     pub fn capture(&self) -> HistorySnapshot {
         let mut end = 0;
+        let mut retained_bytes = 0;
+        let mut logical_bytes = 0;
         let blocks = self
             .blocks
             .iter()
             .map(|entry| {
                 end += entry.len();
+                retained_bytes += entry.block.retained_bytes();
+                logical_bytes += entry.block.logical_bytes;
                 CapturedBlock {
                     block: entry.block.clone(),
                     skip: entry.skip,
@@ -405,30 +543,34 @@ impl History {
                 }
             })
             .collect();
+        let overhead =
+            crate::memory::allocation(size_of::<Vec<CapturedBlock>>() + size_of::<usize>())
+                + crate::memory::vector::<CapturedBlock>(self.blocks.len());
         HistorySnapshot {
             blocks: Arc::new(blocks),
             len: self.len,
+            retained_bytes: retained_bytes + overhead,
+            logical_bytes: logical_bytes + overhead,
         }
     }
     pub fn memory(&self) -> HistoryMemory {
         let mut memory = HistoryMemory {
             rows: self.len,
+            logical_bytes: self.logical_bytes(),
             ..HistoryMemory::default()
         };
         for entry in &self.blocks {
+            memory.retained_bytes_estimate += entry.block.retained_bytes();
             match &entry.block.storage {
                 Storage::Resident(_) => {
                     memory.resident_rows += entry.len();
                     memory.resident_size_bound += entry.size_bound;
                 }
                 Storage::Compressed {
-                    bytes,
-                    recycle_widths,
-                    ..
+                    bytes, metadata, ..
                 } => {
                     memory.compressed_rows += entry.len();
-                    memory.compressed_bytes +=
-                        bytes.len() + recycle_widths.len() * size_of::<u16>();
+                    memory.compressed_bytes += bytes.len() + metadata.len() * size_of::<RowMeta>();
                     memory.compressed_blocks += 1;
                 }
             }
@@ -447,12 +589,20 @@ struct CapturedBlock {
 pub struct HistorySnapshot {
     blocks: Arc<Vec<CapturedBlock>>,
     len: usize,
+    retained_bytes: usize,
+    logical_bytes: usize,
 }
 impl Default for HistorySnapshot {
     fn default() -> Self {
         Self {
             blocks: Arc::new(Vec::new()),
             len: 0,
+            retained_bytes: crate::memory::allocation(
+                size_of::<Vec<CapturedBlock>>() + size_of::<usize>(),
+            ),
+            logical_bytes: crate::memory::allocation(
+                size_of::<Vec<CapturedBlock>>() + size_of::<usize>(),
+            ),
         }
     }
 }
@@ -465,6 +615,14 @@ impl std::fmt::Debug for HistorySnapshot {
     }
 }
 impl HistorySnapshot {
+    /// Complete shared blocks, including any evicted prefix. Other snapshots
+    /// may share these bytes: summing estimates does not measure unique memory.
+    pub fn retained_bytes_estimate(&self) -> usize {
+        self.retained_bytes
+    }
+    pub fn logical_retained_bytes(&self) -> usize {
+        self.logical_bytes
+    }
     pub fn len(&self) -> usize {
         self.len
     }
@@ -713,15 +871,19 @@ mod tests {
     }
     #[test]
     fn oversized_hyperlink_rows_remain_resident_without_data_loss() {
-        let link = LinkRef::new(Hyperlink {
-            id: LinkIdentity::Implicit(1),
-            uri: vec![b'x'; MAX_LINK_BYTES].into(),
-        });
         let mut row = Row::new(crate::MAX_COLS);
         row.restore_hyperlink_runs(
             (0..crate::MAX_COLS)
                 .step_by(2)
-                .map(|col| (col..col + 1, link.clone()))
+                .map(|col| {
+                    (
+                        col..col + 1,
+                        LinkRef::new(Hyperlink {
+                            id: LinkIdentity::Implicit(col as u64),
+                            uri: vec![b'x'; MAX_LINK_BYTES].into(),
+                        }),
+                    )
+                })
                 .collect(),
         )
         .unwrap();
@@ -773,6 +935,28 @@ mod tests {
         }
         assert_eq!(history.len(), 0);
         assert!(history.pop_front_recycle(4).is_none());
+    }
+    #[test]
+    fn byte_pruning_never_decodes_cold_rows() {
+        let mut history = History::default();
+        for index in 0..256 {
+            history.push_back(row(index));
+        }
+        let charge = history.logical_bytes();
+        while history.compress_step(0) {}
+        assert_eq!(history.logical_bytes(), charge);
+        for entry in &mut history.blocks {
+            if let Storage::Compressed { bytes, .. } =
+                &mut Arc::get_mut(&mut entry.block).unwrap().storage
+            {
+                *bytes = vec![0xff].into_boxed_slice();
+            }
+        }
+        history.prune(usize::MAX, Some(charge / 2));
+        assert!(history.logical_bytes() <= charge / 2);
+        history.prune(usize::MAX, Some(0));
+        assert_eq!(history.logical_bytes(), 0);
+        assert_eq!(history.len(), 0);
     }
     #[test]
     fn compression_preserves_snapshots_partial_reads_eviction_and_restoration() {

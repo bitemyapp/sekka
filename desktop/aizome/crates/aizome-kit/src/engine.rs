@@ -121,6 +121,7 @@ pub(crate) struct Win {
     pub states: StateMap,
     pub snapshot: Snapshot,
     pub size: Size,
+    pub scale: f64,
     pub hot: Option<NodeId>,
     pub active: Option<NodeId>,
     pub focused: Option<NodeId>,
@@ -175,6 +176,7 @@ impl Win {
             states: StateMap::default(),
             snapshot: Snapshot::default(),
             size,
+            scale: 1.0,
             hot: None,
             active: None,
             focused: None,
@@ -489,6 +491,7 @@ impl Core {
             return false;
         }
         w.ahead = Some(crate::ahead::Drawing::new(scale));
+        w.scale = scale;
         w.refresh = true;
         w.dirty = true;
         platform.keep_picture(win, None);
@@ -674,6 +677,7 @@ impl Core {
         });
         let mut tree = Tree::new(root, base);
         let mut env = Env {
+            scale: w.scale,
             focus: w.active_focus(),
             theme: &self.theme,
             text: &mut self.text,
@@ -756,6 +760,7 @@ impl Core {
         }
         let size = w.size;
         let mut env = Env {
+            scale: w.scale,
             focus: w.active_focus(),
             theme: &self.theme,
             text: &mut self.text,
@@ -795,6 +800,7 @@ impl Core {
         let Some(w) = self.wins.get_mut(&win) else { return Size::ZERO };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
         let mut env = Env {
+            scale: w.scale,
             focus: w.active_focus(),
             theme: &self.theme,
             text: &mut self.text,
@@ -834,6 +840,21 @@ impl Core {
         }
     }
 
+    /// A fractional output-scale change also invalidates pixel-snapped layout.
+    pub fn scale_changed(&mut self, win: WinId, scale: f64) {
+        if !scale.is_finite() || scale <= 0.0 {
+            return;
+        }
+        if let Some(w) = self.wins.get_mut(&win)
+            && w.scale != scale
+        {
+            w.scale = scale;
+            w.dirty = true;
+            w.built = false;
+            w.refresh = true;
+        }
+    }
+
     /// A popup's rebuild without the program: lay its content out again
     /// (its states changed its layout).
     pub fn relayout_popup(&mut self, win: WinId, platform: &mut dyn Platform) {
@@ -848,6 +869,7 @@ impl Core {
         let Some(w) = self.wins.get_mut(&win) else { return };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
         let mut env = Env {
+            scale: w.scale,
             focus: w.active_focus(),
             theme: &self.theme,
             text: &mut self.text,
@@ -1400,6 +1422,7 @@ impl Core {
         let local = localize(event, origin);
         let status = {
             let mut env = Env {
+                scale: w.scale,
                 focus: w.active_focus(),
                 theme: &self.theme,
                 text: &mut self.text,
@@ -1578,6 +1601,7 @@ impl Core {
             let mut out = Out::default();
             {
                 let mut env = Env {
+                    scale: w.scale,
                     focus: w.active_focus(),
                     theme: &self.theme,
                     text: &mut self.text,
@@ -2104,6 +2128,7 @@ impl Core {
         let mut out = Out::default();
         let done = {
             let mut env = Env {
+                scale: w.scale,
                 focus: w.active_focus(),
                 theme: &self.theme,
                 text: &mut self.text,
@@ -2235,6 +2260,7 @@ impl Core {
         let mut out = Out::default();
         let done = {
             let mut env = Env {
+                scale: w.scale,
                 focus: w.active_focus(),
                 theme: &self.theme,
                 text: &mut self.text,

@@ -1,8 +1,10 @@
 pub mod app;
 mod clipboard;
+mod font;
 pub mod input;
 pub mod instance;
 pub mod panes;
+mod search;
 mod session;
 pub mod settings;
 mod terminal_view;

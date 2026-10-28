@@ -1,13 +1,101 @@
 # Terminal fonts and grid shaping
 
-This is the October 28, 2026 source audit and proposed next implementation,
-not a claim that the font port is complete. The behavioral reference is
+This records the October 28, 2026 source audit and the first grid-font
+implementation. It is not a claim that the font port is complete. The behavioral reference is
 Ghostty main `6ba144158577d033ccb6ed4b574e4013957c9161` (`1.4.1-dev`).
-The audit used the pinned source and the actual Rust dependency sources;
-no product code was changed for this document. See [the port ledger](upstream.md)
+The audit used the pinned source and the actual Rust dependency sources.
+See [the port ledger](upstream.md)
 and [the GUI probe's qualifications](gui-probe.md).
 
-## Current behavior and gaps
+## Implemented grid-font slice
+
+The fourth ordered toolkit patch, `upstream/sidestep-grid-font.patch`, adds
+`sidestep_ui::grid::{FontConfig, FontSet, Cell, Style, Metrics, Layout, Run}`
+and `Canvas::draw_grid_text`. The implementation follows the API boundary below,
+using harfrust directly while retaining Sidestep's existing font registry and
+swash raster cache. `Layout` owns registered face identities, logical glyph
+positions and physical grid metrics, with no window or terminal-core dependency.
+
+Hotaru owns one font worker per pane, with one active and one replaceable pending
+frame. Changing font/scale/selection cancels obsolete work; ordinary output may
+complete an older coherent snapshot so a continuous stream cannot starve painting.
+The displayed snapshot supplies hit testing. Discovery, shape-cache lookup and
+shaping run outside the mailbox mutex. Per-font-set limits are 128 faces, 2,048
+resolution entries/1 MiB of text, and 512 shape entries/8 MiB. An individual
+shape request is limited to 8,192 cells and 64 KiB of UTF-8 input. This bounds
+worker cache/scratch work; it is not a total process-memory or font-registry cap.
+
+Point size converts through 96/72 logical units and actual output scale. The
+primary face controls maximum ASCII advance, cell height, baseline and decoration
+metrics, rounded in physical pixels. Kit forwards native output-scale events to
+layout; PTY pixel dimensions use the resulting grid. A separate Harness
+`output_scale` event reproduces that path without image inspection mutating a
+hidden window's prepared geometry. The terminal padding is pixel-rounded.
+
+Configuration exposes `font_families`, `font_fallback`, `font_emoji` and
+`font_features`; bold/italic request matching styles and fontique synthesis.
+`HOTARU_FONT_DIR` process-registers two explicitly named files without replacing
+host fontconfig. The dedicated Nix bundle contains Noto Color Emoji 2.051
+(`NotoColorEmoji.ttf`, SHA256
+`3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d`)
+and Noto Sans CJK 2.004 (`NotoSansCJK-Regular.ttc`, SHA256
+`b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a`).
+The mono Japanese fallback is TTC face 5. Both OFL notices ship with the bundle.
+
+Seven explicit grid tests cover scales 1/1.25/2, following-column positions,
+combining marks, font identities, skin tone, ZWJ, VS15/VS16, keycaps, flags,
+feature disabling, cursor boundaries, legacy multi-cell emoji reservations,
+cancellation and cache-key equality. The ligature fixture is the pinned upstream
+`src/font/res/JetBrainsMonoNerdFont-Regular.ttf`. A native offscreen test asserts
+actual emoji color pixels; screenshots are in `artifacts/hotaru-font-grid`.
+Native tests cover scale changes and coalesced PTY pixel geometry. The Kit and
+Hako suites pass with the scale event extension.
+
+The private Sway font smoke (`tests/wayland/fonts.py`) also passes compositor
+scales 1 → 1.25 → 2 → 1, with IBM Plex Mono grids 11×24, 14×30 and 22×49 physical
+pixels. At every step the slave PTY reports pixel dimensions equal to the latest
+row/column count times those metrics. It records both fallback-file hashes and
+screenshots in `artifacts/hotaru-font-grid-native-scale-final`. The separate
+clipboard/input/split smoke remains exact at >1 MiB, with an explicit 40,000-row
+test history allowance so the correctly sized 14-point grid does not evict
+wrapped fixture text. These runs use the Cargo binary SHA256
+`494cc038595fa688b2ce291710d1389b26e3dc98ed257e517da85eeed4734a24`.
+
+The combined Unicode/font/search checkpoint also passes all three private
+Wayland smokes using the Nix package
+`/nix/store/9dxlk1kk1dma59z5d5a9lxq37vv4dfdd-hotaru-0.1.0`. Its inner ELF SHA256
+is `a2d9b3380266f30d0174c20f248cd21753bff705eb1ae855c519c744616078aa`;
+the wrapper SHA256 is
+`54f2b3aef74c0516a6d7b12f9d2ec917abe08e8016280ff43f71ec7721c02840`.
+Ambient font and library overrides were cleared, so the wrapper supplied the
+runtime inputs. All 93 captured source hashes match the local checkpoint; all
+88 entries present in the prepared Nix source match that source too. The other
+five are the standalone core lockfile and four patch inputs already applied to
+Sidestep. Font hashes, licenses, interpreter dependencies, scale screenshots,
+exact clipboard results and 120-match Find navigation are recorded in
+`artifacts/hotaru-native-checkpoint-nix`.
+
+Run the ignored font fixtures explicitly with `HOTARU_FONT_DIR` and
+`HOTARU_TEST_LIGATURE_FONT` pointing to those pinned inputs:
+
+```sh
+cargo test --manifest-path desktop/aizome/Cargo.toml -p sidestep-engine --lib text::grid -- --include-ignored --test-threads=1
+cargo test --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --test native packaged_color_emoji -- --ignored --test-threads=1
+```
+
+The core supports DEC2027 and the native app selects Unicode grapheme width
+before reading PTY output, matching Ghostty's application default. Legacy C API
+fixtures retain scalar cell reservations; the shaper supports both reservations
+and does not silently merge terminal cells. Remaining qualifications include
+full FreeType-hinted metric parity,
+all font-specific script/reordering cases, per-style family overrides, arbitrary
+variation settings, generated terminal sprites, system desktop text-DPI policy,
+and GPU rendering remain outside this slice. Color presentation matching currently
+uses face color-table presence; mixed monochrome/color fonts need glyph-level
+coverage qualification. IME preedit remains Kit paragraph text. These tests are
+not a whole-application efficiency comparison or a font-parity certificate.
+
+## Baseline audit before this slice
 
 | Area | Hotaru and Sidestep today | Pinned Ghostty Linux behavior |
 | --- | --- | --- |

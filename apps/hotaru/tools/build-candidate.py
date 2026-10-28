@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the native replay candidate and record exact source/toolchain provenance.
+"""Build a native candidate and record exact source/toolchain provenance.
 
 Run on the measurement host after syncing the desired source tree. The shared
 lock prevents cooperating builds/timers from overlapping. Source hashes are
@@ -40,10 +40,14 @@ def main():
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--toolchain", default="1.95.0")
     parser.add_argument("--jobs", type=int, default=8)
+    parser.add_argument("--package", choices=("hotaru-core", "hotaru-replay"), default="hotaru-replay")
+    parser.add_argument("--example", help="Build a named Cargo example instead of the replay executable")
     parser.add_argument("--lock", type=Path, default=Path.home() / ".cache/hotaru-workstation.lock")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.package == "hotaru-core" and not args.example:
+        parser.error("hotaru-core has no executable; supply --example")
     workspace = args.workspace.resolve()
     args.lock.parent.mkdir(parents=True, exist_ok=True)
     with args.lock.open("a") as lock:
@@ -68,11 +72,14 @@ def main():
                          "-p", "hotaru-core", "-p", "hotaru-replay"]
         subprocess.run(clean_command, cwd=workspace, env=environment, check=True)
         command = ["rustup", "run", args.toolchain, "cargo", "build", "--locked", "--release",
-                   "-p", "hotaru-replay", "-j", str(args.jobs)]
+                   "-p", args.package, "-j", str(args.jobs)]
+        if args.example:
+            command.extend(["--example", args.example])
         subprocess.run(command, cwd=workspace, env=environment, check=True)
         if before != sources(workspace):
             raise SystemExit("source tree changed during compilation; provenance invalid")
-        binary = workspace / "target/release/hotaru-replay"
+        binary = workspace / (f"target/release/examples/{args.example}" if args.example
+                              else "target/release/hotaru-replay")
         metadata = {"schema": 1, "build_confirmed": True,
                     "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     "revision": args.revision, "workspace": str(workspace),

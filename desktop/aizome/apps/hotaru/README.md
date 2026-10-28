@@ -7,12 +7,27 @@ window activation and accessibility labels. It does not use GTK or a web view.
 The native application is a separate Cargo workspace member from the portable
 Rust terminal engine in `apps/hotaru`. It is a working component of an ongoing
 Ghostty port, not a claim of Ghostty feature or performance parity. In particular,
-full scrollback search, graphics and renderer performance qualification remain
+graphics and renderer performance qualification remain
 outstanding. Tabs contain independently focused, draggable split panes. Keyboard
 and mouse protocols are encoded on the PTY owner using the running program's
 negotiated modes; component tests cover Kitty press/release and SGR mouse input.
 
 ## Ownership and responsiveness
+
+Find searches the active pane's captured scrollback and visible screen on a
+bounded worker. Matching folds ASCII case, includes overlaps and spans soft
+wraps and hard newlines. Next (❖G or Enter in Find) moves toward older matches;
+Previous (❖⇧G) moves toward newer matches, wrapping at either end. Counts include
+all matches, while navigation retains at most the newest 10,000. The selected
+match copies from its full owned capture even when it extends beyond the visible
+viewport. Ordinary pointer selection replaces that copy context.
+
+Live output refreshes through a coalesced timer. Historical anchors survive
+retained rows moving under append/eviction; changed active rows, reflow and
+cleared history require fresh results. The controller retains only primary and
+alternate captures for the active pane. Switching panes or queries cancels
+obsolete work. Projection and multiline/wide-cell highlights run on the font
+worker against the exact displayed snapshot.
 
 Each pane has one PTY worker. That worker owns terminal state, feeds output through
 the Rust parser, applies input and resize commands, and publishes immutable row
@@ -68,8 +83,12 @@ file edits; invalid settings leave the current configuration intact. Managed
 symbolic links are readable but are not replaced by automatic saves.
 
 ```toml
-font_size = 14.0
+font_size = 14.0 # Typographic points, before output scale.
 font_weight = 400
+font_families = ["IBM Plex Mono"]
+font_fallback = ["Noto Sans Mono CJK JP", "Noto Sans Symbols 2"]
+font_emoji = ["Noto Color Emoji"]
+font_features = [] # For example ["liga=0", "calt=0"].
 theme = "desktop" # desktop, night, day, high-contrast
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
@@ -80,8 +99,17 @@ copy_format = "mixed" # plain, vt, html, mixed
 "ctrl+shift+o" = "ignore"
 ```
 
-The font uses Aizome's native monospace family. Arbitrary font-family selection
-is not exposed by the current toolkit. Keybindings accept Super, Ctrl, Alt and
+Terminal fonts are discovered and shaped on a separate worker. The primary
+face controls a grid rounded in physical pixels; fallback faces, combining marks,
+emoji and ligatures retain their terminal cell positions. Explicit families,
+fallback order and OpenType features are configurable. The Nix wrapper supplies
+licensed CJK and color emoji files through `HOTARU_FONT_DIR`, registered only in
+this process without replacing system font discovery. Debug logs record the
+resolved primary family, physical grid and unavailable requested families.
+See [the font audit and implementation notes](../../../../apps/hotaru/docs/fonts.md)
+for remaining limitations and fixture provenance.
+
+Keybindings accept Super, Ctrl, Alt and
 Shift modifiers plus a character, named navigation key or F1–F35. Actions include
 `new-tab`, `close-pane`, `close-tab`, `split-right`, `split-down`, `previous-pane`,
 `next-pane`, `focus-left/right/up/down`, `copy`, `paste`, `copy-all`, `find`,
@@ -113,3 +141,15 @@ Wayland keyboard/mouse input. It records binary/source hashes,
 result hashes, a screenshot and logs, then terminates its private processes. It
 requires Sway, wl-clipboard, grim and the Wayland C development tools documented
 in the script. These component checks do not qualify an Aizome desktop VM or ISO.
+
+`tests/wayland/fonts.py BINARY EVIDENCE_DIRECTORY` changes the private
+compositor's scale through 1, 1.25, 2 and back to 1, verifies physical cell and
+PTY pixel dimensions, and records CJK/emoji font hashes and screenshots. It
+uses the wrapper's fallback bundle or an explicit `HOTARU_FONT_DIR` for Cargo
+builds. The ignored native color test and Sidestep grid fixtures exercise the
+same pinned fonts; see the linked font notes for their exact commands.
+
+`tests/wayland/search.py BINARY EVIDENCE_DIRECTORY` types a query using the native
+keyboard path, verifies whole-history counts, follows Next/Previous shortcuts
+through wraparound, copies the selected historical match, and replaces the query.
+It saves the native inspection, screenshots, binary hash and result evidence.

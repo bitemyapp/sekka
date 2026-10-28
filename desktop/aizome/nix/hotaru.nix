@@ -21,8 +21,13 @@
   clipboardPatch,
   inputPatch,
   mimePatch,
+  gridFontPatch,
+  ghosttyLicense,
+  uucodeLicense,
+  unicodeLicense,
   sidestep,
   fonts,
+  hotaruFonts,
   version,
 }:
 let
@@ -36,6 +41,7 @@ let
     patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
     patch -d $out/vendor/sidestep -p1 < ${inputPatch}
     patch -d $out/vendor/sidestep -p1 < ${mimePatch}
+    patch -d $out/vendor/sidestep -p1 < ${gridFontPatch}
     chmod u+w $out/desktop/aizome
     ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
@@ -76,6 +82,7 @@ rustPlatform.buildRustPackage {
     export XDG_CACHE_HOME=$TMPDIR/hotaru-test-cache
     mkdir -p "$XDG_CACHE_HOME"
     export AIZOME_FONT_DIR=${fonts}
+    export HOTARU_FONT_DIR=${hotaruFonts}
     export FONTCONFIG_FILE=${
       makeFontsConf {
         fontDirectories = [
@@ -99,11 +106,15 @@ rustPlatform.buildRustPackage {
     ln -s hotaru $out/bin/aizome-hotaru
     install -Dm644 apps/hotaru/data/org.aizome.Hotaru.desktop $out/share/applications/org.aizome.Hotaru.desktop
     install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
+    install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
+    install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
+    install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
     runHook postInstall
   '';
   postFixup = ''
     wrapProgram $out/bin/hotaru \
       --set-default AIZOME_FONT_DIR ${fonts} \
+      --set-default HOTARU_FONT_DIR ${hotaruFonts} \
       --prefix LD_LIBRARY_PATH : ${
         lib.makeLibraryPath [
           libglvnd

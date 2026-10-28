@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-28",
+  "host": "wx-workstation",
+  "rust_toolchain": "1.95.0",
+  "workspace": "/home/callen/work/hotaru-core-review-20261028",
+  "serialization": "exclusive flock /home/callen/.cache/hotaru-workstation.lock",
+  "commands": [
+    "cargo +1.95.0 clean -p hotaru-core",
+    "cargo +1.95.0 test -p hotaru-core --test search_positions --test anchor_audit_tmp --test anchor_min_tmp --test anchor_lookbehind_tmp",
+    "cargo +1.95.0 clippy -p hotaru-core --lib --test search_positions -- -D warnings"
+  ],
+  "results": {
+    "permanent_anchor_tests": 10,
+    "independent_tests": 6,
+    "invariant_seeds": 60,
+    "queries_per_seed": 8,
+    "retention_limits": [
+      0,
+      1,
+      2,
+      100
+    ],
+    "mutations_per_seed": 9,
+    "failed": 0,
+    "clippy": "pass"
+  },
+  "invariant": "After each mutation/prune, every old match accepted by resolve_match must occur at the same position in a fresh full search.",
+  "independent_tools": {
+    "tools/search-anchor-audit.rs": "Copy to crates/hotaru-core/tests/anchor_audit_tmp.rs in an isolated workspace; includes3minimal reproducers plus60-seed invariant.",
+    "tools/search-anchor-prefix-audit.rs": "Copy to crates/hotaru-core/tests/anchor_min_tmp.rs; exhaustive2..7-row combinations of empty,space,a thenone-rowpruning.",
+    "tools/search-anchor-lookbehind-audit.rs": "Copy to crates/hotaru-core/tests/anchor_lookbehind_tmp.rs; same scan preceded by a real text anchor."
+  },
+  "fixed_findings": [
+    "Synthetic final newline can map to immutable history but depend on active continuation.",
+    "Deferred spaces/newlines can map to history but depend on later active text flushing them.",
+    "Pruning earlier blank or text context can change Ghostty-compatible newline coordinates even if reported endpoints survive."
+  ],
+  "resolution": [
+    "Track generation-sensitive matches as a newest retained prefix; emission dependencies advance monotonically through rows.",
+    "Require refresh for newline-containing queries when origin changes; cache multiline classification once so resolve stays O(1).",
+    "Preserve epoch/origin rebase for stable historical single-line matches."
+  ],
+  "source_sha256": {
+    "src/search.rs": "51a7e7fbbce9615e87e46225c2dd22cb6d57fcb66854d65ab11015a3aaa51473",
+    "src/position.rs": "659b1c337ded105673b9edd23115a801b4db02b1db28982f5be2bcca2fd530e0",
+    "src/lib.rs": "2b30e73abb1d945a63e736d87de4999d51542135600dec0b4f9de9e9a378a710",
+    "src/history.rs": "88d05071db2a765c87ea8241d80f3ce2d3aa9854b45b7cdea3101584fcee9d53",
+    "src/screen.rs": "b0b084bbb2ee9e1ae1862e89f18613b334c878edb8f344021932f824b8f46de4",
+    "src/content.rs": "c2aaa4b24b0905855967c5944fbafbec8b6e672770e2981b61efeb9cd1a28dcc",
+    "tests/search_positions.rs": "d5123b4a0ca52ee36badc0309ef0b57b9c6e94980d448510d3d0a8e43e6d44c9",
+    "tests/anchor_audit_tmp.rs": "87d90c5eb522b2ec09affbcb4471d709f5be625de0eb7cf208b41917e403045c",
+    "tests/anchor_min_tmp.rs": "edcd7e419c7b5aa03a8160eb4ef02f5077a47f8bd871500acd02cc7c7ec6cd6f",
+    "tests/anchor_lookbehind_tmp.rs": "b44e6c2dd509922501a378f3fdd8e8381a5fef6e1d83d37a3ae32c2c399bbae4"
+  }
+}

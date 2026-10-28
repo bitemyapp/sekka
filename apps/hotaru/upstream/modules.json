@@ -5,8 +5,8 @@
   "status_rule": "pending remains pending until named Rust code and reproducible behavior evidence exist; excluded describes platform scope, not completed porting",
   "counts": {
     "build-replacement": 35,
-    "excluded-platform": 37,
-    "linux-port": 481,
+    "excluded-platform": 39,
+    "linux-port": 479,
     "native-ui-replacement": 58,
     "validation": 19
   },
@@ -326,10 +326,16 @@
       "blob": "52b6cd571f99ec35a44dd66b14b191eb4f9fa826",
       "bytes": 16702,
       "scope": "native-ui-replacement",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Aizome native replacement; preserve applicable user behavior"
+      "status": "partial",
+      "rust_paths": [
+        "desktop/aizome/apps/hotaru/src/app.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "desktop/aizome/apps/hotaru/tests/native.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Native Aizome Find field/count/navigation and full-match copy implemented; broader live interaction and accessibility qualification remain open"
     },
     {
       "path": "src/apprt/gtk/class/split_tree.zig",
@@ -2225,11 +2231,11 @@
       "path": "src/font/face/web_canvas.zig",
       "blob": "ab0aac28708c6b242afa8db7f319bcde410d6a00",
       "bytes": 20871,
-      "scope": "linux-port",
-      "status": "pending",
+      "scope": "excluded-platform",
+      "status": "excluded",
       "rust_paths": [],
       "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "note": "Browser canvas only; no product source imported"
     },
     {
       "path": "src/font/glyf_rasterize.zig",
@@ -2445,11 +2451,11 @@
       "path": "src/font/shaper/web_canvas.zig",
       "blob": "d16bd9681f206c88ec206e2c85de9c8a5ac68129",
       "bytes": 10788,
-      "scope": "linux-port",
-      "status": "pending",
+      "scope": "excluded-platform",
+      "status": "excluded",
       "rust_paths": [],
       "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "note": "Browser canvas only; no product source imported"
     },
     {
       "path": "src/font/sprite.zig",
@@ -4589,14 +4595,21 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/screen.rs"
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/terminal/UTF8Decoder.zig",
@@ -5029,10 +5042,20 @@
       "blob": "144513389590b909107d68355db09e2ee45ed2e5",
       "bytes": 2520,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/terminal/charsets.zig",
@@ -5552,7 +5575,10 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/screen.rs"
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
@@ -5561,9 +5587,13 @@
         "sgr-report.json",
         "input-fixtures.json",
         "input-report.json",
-        "../tools/input-oracle.py"
+        "../tools/input-oracle.py",
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
       ],
-      "note": "Keyboard/mouse negotiation, selected DECRQM modes and DECSTR resets verified against the pinned C API. Many terminal modes and mode-dependent behaviors remain unsupported."
+      "note": "Keyboard/mouse negotiation, selected DECRQM modes and DECSTR resets verified against the pinned C API. Many terminal modes and mode-dependent behaviors remain unsupported. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/terminal/mouse.zig",
@@ -5820,14 +5850,22 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/row.rs"
+        "crates/hotaru-core/src/row.rs",
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/terminal/parse_table.zig",
@@ -5890,80 +5928,152 @@
       "blob": "6913df2e22b4cf90cbd94980311986dc7f26e875",
       "bytes": 749,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/Thread.zig",
       "blob": "cdf016a9209f3ecf2622f7fa5a8ecf48ed896d3e",
       "bytes": 21895,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/active.zig",
       "blob": "b37f46d2bd824a4ac81eb975c2e99011547da231",
       "bytes": 6493,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/pagelist.zig",
       "blob": "80c0bf5932692ae24a4e2957420a6a580e5983e3",
       "bytes": 21443,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/screen.zig",
       "blob": "308a388e6dd6001ab99bbe76d528e428a0e5fc13",
       "bytes": 79151,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/sliding_window.zig",
       "blob": "7300f00272b94a295639681911d670b557ce0bd0",
       "bytes": 66745,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/terminal.zig",
       "blob": "e10d2aa1cc90c7ab259bd76bc6dc79a9c442f8e0",
       "bytes": 28893,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/search/viewport.zig",
       "blob": "93e63b88b61a19b34a932a6695ca95ffc062d082",
       "bytes": 16851,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "apps/hotaru/crates/hotaru-core/src/search.rs",
+        "apps/hotaru/crates/hotaru-core/src/position.rs",
+        "desktop/aizome/apps/hotaru/src/search.rs"
+      ],
+      "evidence": [
+        "apps/hotaru/docs/search.md",
+        "apps/hotaru/crates/hotaru-core/tests/search.rs",
+        "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+        "desktop/aizome/apps/hotaru/tests/wayland/search.py"
+      ],
+      "note": "Owned whole-history search and conservative live reconciliation implemented; incremental streaming equivalence and final performance remain open"
     },
     {
       "path": "src/terminal/selection_codepoints.zig",
@@ -6477,60 +6587,120 @@
       "blob": "f3afd795c16bb159950eef852d9fbd2d83309875",
       "bytes": 14638,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/lut.zig",
       "blob": "da90f1ee74bb50b24eb94fc76f47d9274a87804a",
       "bytes": 7277,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/main.zig",
       "blob": "fb18b7d13a8f2a593134d42ad85fbd15a5d786f0",
       "bytes": 2741,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/props.zig",
       "blob": "dd6a4dbb175a36b15b71e36d2c530c913158e28d",
       "bytes": 2350,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/props_table.zig",
       "blob": "dac7e6f5e90b495b7174e47738ac2e82eb03b545",
       "bytes": 648,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/props_uucode.zig",
       "blob": "211d1ac38112cf0711d49ff876118af3ecf19120",
       "bytes": 2601,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/unicode.rs",
+        "crates/hotaru-core/src/unicode_tables.rs",
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/tests/unicode_mode.rs"
+      ],
+      "evidence": [
+        "docs/unicode-mode.md",
+        "upstream/unicode-mode-fixtures.json",
+        "upstream/unicode-mode/kernel-report.json",
+        "upstream/unicode-mode/validation-combined.log"
+      ],
+      "note": "Linux or shared behavior requires port and differential evidence Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met."
     },
     {
       "path": "src/unicode/symbols_table.zig",

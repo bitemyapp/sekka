@@ -30,11 +30,12 @@ nix build .#hotaru --no-update-lock-file
 The focused Nix package builds Hotaru without compiling the Aizome compositor.
 The desktop's default terminal remains unchanged during qualification.
 Entering the Aizome development shell initializes Sidestep and applies the
-tracked `upstream/sidestep-clipboard.patch`, `sidestep-input.patch` and
-`sidestep-mime.patch` in order. A private temporary index recognizes an already
+tracked `upstream/sidestep-clipboard.patch`, `sidestep-input.patch`,
+`sidestep-mime.patch` and `sidestep-grid-font.patch` in order. A private temporary index recognizes an already
 applied prefix and validates the complete series before changing the worktree.
 Conflicts preserve both staged and unstaged local changes. Nix applies the same
-patches to its pinned copy.
+patches to its pinned copy. Added patch files are recognized without changing
+the developer's real index or adding unrelated untracked files to Git objects.
 
 The latest Ghostty checkout is an **external reference**, not part of Hotaru's
 source or build. `upstream/ghostty.json` pins its exact commit, the old fork's
@@ -92,10 +93,15 @@ together. See [hyperlinks and formatting](docs/hyperlinks.md) and
 [history capture](docs/history.md) for coverage and ownership details.
 The [GUI probe](docs/gui-probe.md) documents the full Linux reference build and
 the renderer/font gaps exposed by exploratory application measurements.
+The [owned search core](docs/search.md) has 249 real-library selection fixtures
+checked at three input chunk sizes. Native Find searches retained history on a
+worker, validates navigation against row identities and projects highlights onto
+the exact render snapshot. Broader live-search equivalence and final integrated
+latency/memory acceptance remain open.
 
 Major outstanding work includes page/arena and compressed-history performance
 parity, complete VT modes and replies, hyperlink activation, Kitty graphics/clipboard,
-tmux integration, search across history, complete selection behavior, Ghostty config/theme
+tmux integration, incremental live-search equivalence, complete selection behavior, Ghostty config/theme
 compatibility, shell integration, terminfo, accessibility and renderer/font
 behavior. Unhandled protocols must not be advertised as implemented.
 

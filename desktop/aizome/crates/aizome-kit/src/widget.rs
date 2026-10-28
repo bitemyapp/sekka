@@ -401,6 +401,7 @@ impl<'a> StateView<'a> {
 
 /// What layout, painting and events share.
 pub(crate) struct Env<'a> {
+    pub scale: f64,
     pub theme: &'a Theme,
     pub text: &'a mut TextCache,
     pub states: &'a mut StateMap,
@@ -426,6 +427,10 @@ pub struct LayoutCx<'a, 'e> {
 }
 
 impl LayoutCx<'_, '_> {
+    /// Device pixels per logical layout unit for this window.
+    pub fn scale(&self) -> f64 {
+        self.env.scale
+    }
     pub fn child_count(&self) -> usize {
         self.tree.nodes[self.node].children.len()
     }

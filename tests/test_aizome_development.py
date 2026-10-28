@@ -79,7 +79,80 @@ diff --git a/clipboard-writer.txt b/clipboard-writer.txt
     return patch
 
 
+def grid_patch(root):
+    patch = root / 'apps/hotaru/upstream/sidestep-grid-font.patch'
+    patch.write_text('''diff --git a/clipboard-writer.txt b/clipboard-writer.txt
+--- a/clipboard-writer.txt
++++ b/clipboard-writer.txt
+@@ -1 +1 @@
+-writer: bounded
++writer: bounded with glyphs
+diff --git a/new/grid.txt b/new/grid.txt
+new file mode 100644
+--- /dev/null
++++ b/new/grid.txt
+@@ -0,0 +1 @@
++terminal grid
+''')
+    return patch
+
+
 class DevelopmentEnvironment(unittest.TestCase):
+    def test_added_files_apply_and_repeat_preserving_real_index_and_untracked_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            grid_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            (checkout / 'notes.txt').write_text('staged unrelated work\n')
+            git(checkout, 'add', 'notes.txt')
+            staged = git(checkout, 'diff', '--cached')
+            (checkout / 'private-notes.txt').write_text('untracked unrelated work\n')
+            initial = hook(base, root, first)
+            self.assertIn('native grid-font patch', initial.stderr)
+            self.assertEqual((checkout / 'new/grid.txt').read_text(), 'terminal grid\n')
+            self.assertEqual(git(checkout, 'diff', '--cached'), staged)
+            before = git(checkout, 'status', '--porcelain')
+            self.assertNotIn('applied Hotaru', hook(base, root, first).stderr)
+            self.assertEqual(git(checkout, 'status', '--porcelain'), before)
+            self.assertEqual(git(checkout, 'diff', '--cached'), staged)
+            self.assertEqual((checkout / 'private-notes.txt').read_text(), 'untracked unrelated work\n')
+
+    def test_conflicting_untracked_addition_fails_before_earlier_patch_is_applied(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            clipboard_patch(root)
+            grid_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            (checkout / 'new').mkdir()
+            (checkout / 'new/grid.txt').write_text('developer grid implementation\n')
+            before = git(checkout, 'status', '--porcelain')
+            result = hook(base, root, first, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(git(checkout, 'status', '--porcelain'), before)
+            self.assertEqual((checkout / 'new/grid.txt').read_text(), 'developer grid implementation\n')
+            self.assertEqual((checkout / 'clipboard-reader.txt').read_text(), 'reader: synchronous\n')
+
+    def test_manually_applied_added_file_patch_is_recognized_without_staging_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root, first, _ = sekka(base)
+            first_patch = clipboard_patch(root)
+            last_patch = grid_patch(root)
+            git(root, 'submodule', 'update', '--init', '-q')
+            checkout = root / 'vendor/sidestep'
+            git(checkout, 'apply', str(first_patch))
+            git(checkout, 'apply', str(last_patch))
+            before = git(checkout, 'status', '--porcelain')
+            result = hook(base, root, first)
+            self.assertNotIn('applied Hotaru', result.stderr)
+            self.assertEqual(git(checkout, 'status', '--porcelain'), before)
+            self.assertEqual(git(checkout, 'diff', '--cached'), '')
+
     def test_dependent_native_patches_apply_and_repeat_without_changing_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

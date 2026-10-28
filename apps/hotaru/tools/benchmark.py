@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--rows", type=int, default=80)
     parser.add_argument("--cols", type=int, default=120)
     parser.add_argument("--chunk", type=int, default=65536)
+    parser.add_argument("--grapheme-width", choices=("legacy", "unicode"), default="legacy")
     parser.add_argument("--rounds", type=int, default=4)
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--warmup", type=int, default=3)
@@ -68,12 +69,15 @@ def main():
             parser.error(f"reference binary hash mismatch: {key}")
     command_args = ["--data", str(args.data.resolve()), "--rows", str(args.rows),
                     "--cols", str(args.cols), "--chunk", str(args.chunk)]
+    if args.grapheme_width == "unicode":
+        command_args += ["--grapheme-width", "unicode"]
     with args.lock.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         corpus_hash, candidate_hash = digest(args.data), digest(args.replay)
         data = args.data.read_bytes()
         oracle = Oracle(args.library)
-        expected = oracle.snapshot(data, args.rows, args.cols, args.chunk)
+        expected = oracle.snapshot(data, args.rows, args.cols, args.chunk,
+                                   {2027: True} if args.grapheme_width == "unicode" else None)
         candidate = subprocess.run([str(args.replay.resolve()), *command_args, "--format", "json"],
                                    check=True, capture_output=True, text=True, timeout=60)
         actual = json.loads(candidate.stdout)
@@ -105,6 +109,7 @@ def main():
             "library_sha256": digest(args.library), "data": str(args.data.resolve()),
             "data_bytes": len(data), "data_sha256": corpus_hash,
             "rows": args.rows, "cols": args.cols, "scrollback": 0, "chunk_bytes": args.chunk,
+            "grapheme_width_method": args.grapheme_width,
             "reference_state_sha256": state_hash(expected), "candidate_state_sha256": state_hash(actual),
             "state_matched": not delta, "differences": delta,
             "unsupported_workload_features": unsupported,
@@ -126,6 +131,8 @@ def main():
                 result = subprocess.run([*commands[engine], "--iterations", str(iterations)],
                                         check=True, capture_output=True, text=True, timeout=60)
                 value = json.loads(result.stdout)
+                if args.grapheme_width == "unicode" and value.get("grapheme_width_method") != "unicode":
+                    raise RuntimeError(f"Unicode benchmark configuration was not confirmed: {engine}")
                 for key, expected_value in (("schema", 1), ("engine", engine), ("timed_scope", "feed-only"),
                                             ("input_bytes", len(data)), ("rows", args.rows), ("cols", args.cols),
                                             ("scrollback", 0), ("chunk_bytes", args.chunk)):
