@@ -8,7 +8,8 @@ describes this branch's preserved checkpoint.
 
 Hotaru's terminal engine and Linux I/O live in this independent Cargo workspace.
 The native application lives in `desktop/aizome/apps/hotaru`, within Aizome's
-existing workspace, and uses `aizome-kit`/Sidestep for chrome and drawing.
+existing workspace, and uses `aizome-kit` and Sukumo (`desktop/aizome/sukumo`,
+Aizome's toolkit) for chrome and drawing.
 Maintain that boundary; the core has no UI dependencies. The core denies unsafe
 Rust except for its bounded SIMD byte scanner and whole-cell ASCII stores.
 The scanner's load bounds and CPU requirements are documented and tested
@@ -40,14 +41,11 @@ nix build .#hotaru --no-update-lock-file
 
 The focused Nix package builds Hotaru without compiling the Aizome compositor.
 The desktop's default terminal remains unchanged during qualification.
-Entering the Aizome development shell initializes Sidestep and applies the
-tracked `upstream/sidestep-clipboard.patch`, `sidestep-input.patch`,
-`sidestep-mime.patch`, `sidestep-grid-font.patch`, `sidestep-sprites.patch` and
-`sidestep-primary.patch` in order. A private temporary index recognizes an already
-applied prefix and validates the complete series before changing the worktree.
-Conflicts preserve both staged and unstaged local changes. Nix applies the same
-patches to its pinned copy. Added patch files are recognized without changing
-the developer's real index or adding unrelated untracked files to Git objects.
+What Hotaru needed of the toolkit, once six patches over Sidestep (clipboard
+MIME bundles and bounded reads, input, MIME, the font grid, sprites, and the
+primary selection with raw-byte clipboard text), now lives in Sukumo's own
+sources: edit them there, as any Aizome toolkit change. Git history keeps the
+former `upstream/sidestep-*.patch` files that historical receipts name.
 
 The latest Ghostty checkout is an **external reference**, not part of Hotaru's
 source or build. `upstream/ghostty.json` pins its exact commit, the old fork's

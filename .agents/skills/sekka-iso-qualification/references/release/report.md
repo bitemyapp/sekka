@@ -23,7 +23,6 @@ cannot pass validation):
     "iso_bytes": 123,
     "sekka_revision": "full Git commit",
     "flake_lock_sha256": "64 lowercase hex characters",
-    "sidestep_revision": "full locked Git commit",
     "iso_store_path": "/nix/store/...-sekka-....iso"
   },
   "workstation": {
@@ -47,7 +46,7 @@ HEAD is reachable from the fetched `origin/main`. Nix evaluates the ISO output
 at that exact Git revision; the chosen ISO must resolve inside that output's
 `iso/` directory. An ordinary `result/iso` symlink works. A copied arbitrary ISO
 does not establish source provenance. Keep the tested Nix output alive with a
-GC root; do not rebuild after testing. The source lock, Sidestep pin,
+GC root; do not rebuild after testing. The source lock,
 image size/hash and output path must all match `candidate` exactly.
 
 The hostname must match the workstation performing publication. CI environment

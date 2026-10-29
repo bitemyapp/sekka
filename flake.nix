@@ -9,18 +9,6 @@
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
   inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
-  # Sidestep's native toolkit, the `aizome` branch of bitemyapp's fork,
-  # which Aizome (desktop/aizome) builds against by path. Pinned by revision,
-  # as Aizome's own lock pinned it, so the nightly's input update leaves it
-  # alone: moving Sidestep is a reviewed change here. The vendor/sidestep
-  # submodule, which development builds use, records the same revision
-  # (tests/test_aizome_development.py); Nix can't use it, as GitHub's
-  # tarballs of Sekka leave submodules empty.
-  inputs.sidestep = {
-    url = "github:bitemyapp/sidestep/7bfacbbbc9cd70cf3442def70368e254f3c3712d";
-    flake = false;
-  };
-
   # Catalog applications packaged by other flakes, from forks under bitemyapp:
   # only commits there reach the nightly. Sekka builds them with the
   # applications' Nixpkgs and gives them to the catalog as its own packages
@@ -56,7 +44,7 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) sidestep superluminal tracy;
+        inherit (externalInputs) superluminal tracy;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -83,7 +71,6 @@
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
-        inherit (inputs) sidestep;
         source = inputs.calamares;
         fonts = inputs.aizome.packages.${system}.fonts;
       };
@@ -312,6 +299,12 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
+        # Aizome's toolkit's own tests, under a headless sway
+        # (desktop/aizome/sukumo).
+        sukumo = import ./nix/sukumo-test.nix {
+          inherit pkgs;
+          fonts = inputs.aizome.packages.${system}.fonts;
+        };
         ibus-wayland-serial = import ./nix/ibus-wayland-serial-test.nix { inherit pkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
         iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
@@ -622,7 +615,6 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
-        aizome-development = import ./nix/aizome-development-test.nix { inherit pkgs; };
         aizome-login = import ./nix/aizome-login-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

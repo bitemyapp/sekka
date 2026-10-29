@@ -32,6 +32,8 @@ pkgs.testers.runNixOSTest {
         description = "Alice Kimura";
         password = "alices-password";
         uid = 1000;
+        # A surviving user manager must not keep an ended desktop alive.
+        linger = true;
       };
       users.users.bob = {
         isNormalUser = true;
@@ -137,9 +139,29 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds(f"pgrep -u {user} -x {program}", timeout=120)
         machine.wait_until_fails("pgrep -u greeter -x aizome-greeter", timeout=60)
 
-    def log_out(user):
-        machine.succeed(f"loginctl terminate-user {user}")
+    def log_out(user, from_user_manager=False):
+        uid = machine.succeed(f"id -u {user}").strip()
+        session = machine.succeed(f"loginctl show-user {user} -p Display --value").strip()
+        assert session, f"{user} has no display session"
+        if from_user_manager:
+            # Like Yukimi, run outside the login scope and let logind's
+            # `auto` resolve it when no XDG_SESSION_ID is exported.
+            machine.succeed(as_user(user,
+                f"XDG_RUNTIME_DIR=/run/user/{uid} systemd-run --user --quiet --wait --pipe "
+                "loginctl terminate-session auto"))
+        else:
+            machine.succeed(f"loginctl terminate-session {shlex.quote(session)}")
         machine.wait_until_fails(f"pgrep -u {user} -x aizome", timeout=60)
+        machine.wait_until_fails(f"loginctl show-session {shlex.quote(session)}")
+        machine.wait_until_succeeds(as_user(user,
+            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user is-active default.target"))
+        machine.wait_until_fails(as_user(user,
+            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user is-active graphical-session.target"))
+        environment = machine.succeed(as_user(user,
+            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user show-environment"))
+        for name in ("WAYLAND_DISPLAY", "DISPLAY", "AIZOME_SOCKET", "AIZOME_SHELL_SOCKET",
+                     "XDG_SESSION_DESKTOP", "AIZOME_ENVIRONMENT_KEYS"):
+            assert not any(line.startswith(name + "=") for line in environment.splitlines()), environment
         machine.succeed(f"rm -f {INSPECT}/*.json")
 
     def key(k, n=1):
@@ -222,13 +244,22 @@ pkgs.testers.runNixOSTest {
         machine.succeed("systemctl restart accounts-daemon")
         assert scales("greeter", 1000)["outputs"][0]["scale"] == 2.0
 
-    with subtest("logging out brings the greeter back, at her password"):
+    with subtest("terminating only the login session cleans up the desktop and returns to the greeter"):
         log_out("alice")
         greeter_up()
         shows("Alice Kimura")
         shows("Log in as someone else")
         assert outputs("greeter")[0]["scale"] == 2.0
         machine.screenshot("05-back")
+
+    with subtest("the same user can log back in and sign out through Yukimi's logind command"):
+        machine.send_chars("alices-password\n")
+        session_of("alice", "aizome")
+        machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=60)
+        assert outputs("alice")[0]["scale"] == 2.0
+        log_out("alice", from_user_manager=True)
+        greeter_up()
+        shows("Alice Kimura")
 
     with subtest("someone else, and another session: Bob in sway"):
         key("esc")

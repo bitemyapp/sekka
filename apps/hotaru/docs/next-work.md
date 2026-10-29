@@ -7,36 +7,20 @@ application or establish complete Ghostty compatibility or performance parity.
 See [the usable checkpoint](usable-checkpoint.md) for launch instructions,
 package identities, test evidence and current limitations.
 
-## 1. Reconcile Sekka main before merging
+## 1. Reconciled with Sekka main's Sukumo (done 2026-10-29)
 
-Inspected `origin/main` at `ff1b15b0`. Commit `ad455d75` moved Aizome's toolkit
-into `desktop/aizome/sukumo` and removed the Sidestep submodule and development
-patch machinery. This branch still uses the earlier layout. A read-only merge
-check found conflicts in:
-
-- `desktop/aizome/Cargo.toml`
-- `desktop/aizome/nix/default.nix`
-- `desktop/aizome/nix/package.nix`
-- `desktop/aizome/scripts/dev-environment` (deleted on main)
-- `tests/test_aizome_development.py` (deleted on main)
-
-Keep the PR draft until this integration is complete. Port the behavior in the
-five tracked `upstream/sidestep-{clipboard,input,mime,grid-font,sprites}.patch`
-files into the first-party Sukumo sources, reconciling changes already supplied
-by Utsushi and Omperor. Sukumo retains the `sidestep-engine`/`sidestep-ui` crate
-names and `SIDESTEP_*` environment variables; that naming alone is not a reason
-to restore the deleted submodule. Preserve main's session teardown changes.
-
-Retain the independent terminal/I/O workspace, the native Aizome application,
-the focused Hotaru Nix package, dependency notices and packaged resources.
-The locally dirty `vendor/sidestep` is the applied tracked patch series, not a
-new submodule commit to stage. Its current gitlink is
-`7bfacbbbc9cd70cf3442def70368e254f3c3712d`.
-
-**Gate:** build and test the reconciled source on the workstation, run the
-focused package and six native Wayland suites, and publish fresh source,
-executable and package hashes. Historical receipts qualify only their recorded
-source. Check the combined Aizome package and applicable repository checks too.
+Main at `a6c6a624` is merged: Aizome's toolkit is Sukumo in
+`desktop/aizome/sukumo`, with no Sidestep submodule, flake input, development
+patch machinery or `aizome-development` check. The six tracked Sidestep patches
+(clipboard, input, MIME, grid font, sprites and the primary selection) were
+merged three ways onto Sukumo's `sidestep-engine` and `sidestep-ui` against
+their base Sidestep `7bfacbb`, beside Utsushi's and Omperor's changes. Two of
+Omperor's clipboard methods used the old clipboard record and now read this
+program's own MIME bundle. The patch files are gone; Git history keeps them for
+the receipts that name them. `aizome-comp-core`'s build script also finds path
+packages patched in `[patch.crates-io]`, such as Hotaru's vendored `simdutf8`,
+which the compositor's dependency closure includes. The focused Hotaru package
+and the Aizome package build from the in-tree toolkit.
 
 ## 2. Qualify the installed Aizome application
 

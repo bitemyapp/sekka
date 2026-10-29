@@ -1,12 +1,11 @@
 # Aizome's outputs, as its own flake gave them before it moved into Sekka:
 # its packages, its NixOS module, its VM checks and its development shell,
-# built with Sekka's Nixpkgs and Sekka's `sidestep` input
-# (nix/components.nix). The checks and their names are the flake's; Sekka
-# offers them as `aizome-checks` (`nix build .#aizome-checks.session`), and
-# the shell as `nix develop .#aizome`.
+# built with Sekka's Nixpkgs (nix/components.nix). The checks and their
+# names are the flake's; Sekka offers them as `aizome-checks`
+# (`nix build .#aizome-checks.session`), and the shell as
+# `nix develop .#aizome`.
 {
   nixpkgs,
-  sidestep,
   version ? "0.1.0",
   rev ? null,
 }:
@@ -17,7 +16,7 @@ let
     "aarch64-linux"
   ];
   forAll = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-  # Libraries the compositor (smithay), the toolkit (Sidestep) and the
+  # Libraries the compositor (smithay), the toolkit (Sukumo) and the
   # apps link against or load at run time.
   buildInputs =
     pkgs: with pkgs; [
@@ -50,6 +49,10 @@ let
       ../icons
       ../etc
       ../scripts
+      # Sukumo, the toolkit: its workspace manifest, for what its crates
+      # inherit, and the crates.
+      ../sukumo/Cargo.toml
+      ../sukumo/crates
       (lib.fileset.maybeMissing ../apps)
       (lib.fileset.maybeMissing ../session)
     ];
@@ -72,19 +75,13 @@ let
       ../../../apps/hotaru/vendor/simdutf8
     ];
   };
-  clipboardPatch = ../../../apps/hotaru/upstream/sidestep-clipboard.patch;
-  inputPatch = ../../../apps/hotaru/upstream/sidestep-input.patch;
-  mimePatch = ../../../apps/hotaru/upstream/sidestep-mime.patch;
-  gridFontPatch = ../../../apps/hotaru/upstream/sidestep-grid-font.patch;
-  spritePatch = ../../../apps/hotaru/upstream/sidestep-sprites.patch;
-  primaryPatch = ../../../apps/hotaru/upstream/sidestep-primary.patch;
   ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
   uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
   unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
-    inputs = { inherit nixpkgs sidestep; };
+    inputs = { inherit nixpkgs; };
 
     packages = forAll (pkgs: rec {
       aizome = pkgs.callPackage ./package.nix {
@@ -92,16 +89,9 @@ let
           src
           yukimiSrc
           hotaruSrc
-          clipboardPatch
-          inputPatch
-          mimePatch
-          gridFontPatch
-          spritePatch
-          primaryPatch
           ghosttyLicense
           uucodeLicense
           unicodeLicense
-          sidestep
           version
           rev
           fonts
@@ -113,16 +103,9 @@ let
           src
           yukimiSrc
           hotaruSrc
-          clipboardPatch
-          inputPatch
-          mimePatch
-          gridFontPatch
-          spritePatch
-          primaryPatch
           ghosttyLicense
           uucodeLicense
           unicodeLicense
-          sidestep
           fonts
           hotaruFonts
           version
@@ -143,6 +126,8 @@ let
     # Boots a VM, logs into the Aizome session and checks the desktop is
     # up (vm-test.nix).
     checks = forAll (pkgs: {
+      session-launcher = import ./session-launcher-test.nix { inherit pkgs; };
+      session-launcher-systemd = import ./session-launcher-systemd-test.nix { inherit pkgs; };
       session = import ./vm-test.nix { inherit pkgs self; };
       # Changes something in every pane of Settings and checks the
       # system took it (vm-settings-test.nix).
@@ -197,9 +182,6 @@ let
         # Vulkan build makes its own; package.nix).
         WHISPER_DONT_GENERATE_BINDINGS = "1";
         AIZOME_DEV_SHELL = "1";
-        # The Sidestep the package builds against, which the hook compares
-        # with the vendor/sidestep submodule.
-        AIZOME_SIDESTEP_REV = sidestep.rev or "";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
         HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
@@ -209,9 +191,6 @@ let
             tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
           ''
         }";
-        shellHook = ''
-          ${pkgs.bash}/bin/bash ${../scripts/dev-environment}
-        '';
         RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # The compositor's core is a Rust dylib that needs -C prefer-dynamic
         # (docs/reload.md); the wrapper adds it for that crate alone.

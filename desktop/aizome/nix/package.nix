@@ -1,12 +1,11 @@
 # Aizome: the compositor, the shell, aizomectl and the apps, from one
 # checkout of the workspace.
 #
-# The workspace depends on Sidestep's crates by path, through the
-# `sidestep` link to ../../vendor/sidestep, so the source here is a
-# directory retaining Sekka's desktop/aizome, apps/yukimi and
-# vendor/sidestep paths, with the flake's pinned Sidestep where the
-# submodule sits. Only Aizome, the shared Yukimi backend and Sidestep are
-# copied; unrelated Sekka components stay outside this source.
+# The workspace depends on the shared Yukimi backend by path, so the
+# source here is a directory retaining Sekka's desktop/aizome and
+# apps/yukimi paths. Sukumo, the toolkit, is inside desktop/aizome. Only
+# Aizome, Sukumo and the shared Yukimi backend are copied; unrelated Sekka
+# components stay outside this source.
 #
 # Two builds: the compositor with `release` (its core and logic are Rust
 # dylibs, which can't take part in LTO; docs/reload.md), everything else
@@ -23,7 +22,6 @@
   pkg-config,
   makeWrapper,
   ncurses,
-  patch,
   jq,
   wayland,
   libxkbcommon,
@@ -42,6 +40,7 @@
   libsecret,
   pam,
   systemd,
+  util-linux,
   cmake,
   shaderc,
   openblas,
@@ -50,16 +49,9 @@
   src,
   yukimiSrc,
   hotaruSrc,
-  clipboardPatch,
-  inputPatch,
-  mimePatch,
-  gridFontPatch,
-  spritePatch,
-  primaryPatch,
   ghosttyLicense,
   uucodeLicense,
   unicodeLicense,
-  sidestep,
   fonts,
   hotaruFonts,
   bash,
@@ -71,21 +63,11 @@
   rev ? null,
 }:
 let
-  source = runCommand "aizome-source" { nativeBuildInputs = [ patch ]; } ''
-    mkdir -p $out/desktop $out/apps $out/vendor
+  source = runCommand "aizome-source" { } ''
+    mkdir -p $out/desktop $out/apps
     cp -r ${src} $out/desktop/aizome
-    cp -r ${sidestep} $out/vendor/sidestep
     cp -r ${yukimiSrc} $out/apps/yukimi
     cp -r ${hotaruSrc} $out/apps/hotaru
-    chmod -R u+w $out/vendor/sidestep
-    patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
-    patch -d $out/vendor/sidestep -p1 < ${inputPatch}
-    patch -d $out/vendor/sidestep -p1 < ${mimePatch}
-    patch -d $out/vendor/sidestep -p1 < ${gridFontPatch}
-    patch -d $out/vendor/sidestep -p1 < ${spritePatch}
-    patch -d $out/vendor/sidestep -p1 < ${primaryPatch}
-    chmod u+w $out/desktop/aizome
-    ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
@@ -125,9 +107,6 @@ let
     cargo_store_path = split cargo;
     rustc_version = rustc.version;
     source_rev = rev;
-    # The Sidestep the core was built against (the flake's `sidestep`
-    # input): a checkout's vendor/sidestep must be at it.
-    sidestep_rev = sidestep.rev or null;
   };
 in
 rustPlatform.buildRustPackage {
@@ -257,6 +236,8 @@ rustPlatform.buildRustPackage {
 
     # Session: the login entry, the systemd user units and the portals.
     install -Dm755 session/aizome-session $out/bin/aizome-session
+    substituteInPlace $out/bin/aizome-session \
+      --replace-fail 'flock -n 9' '${util-linux}/bin/flock -n 9'
     install -Dm644 session/aizome.desktop $out/share/wayland-sessions/aizome.desktop
     shopt -s nullglob
     for unit in session/*.service session/*.target session/*.path apps/*/data/*.service; do
@@ -345,7 +326,7 @@ rustPlatform.buildRustPackage {
   };
 
   meta = {
-    description = "Aizome, Sekka's desktop environment, on Sidestep's native Rust toolkit";
+    description = "Aizome, Sekka's desktop environment, on Sukumo, its native Rust toolkit";
     homepage = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
     license = with lib.licenses; [
       mpl20

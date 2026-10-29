@@ -64,10 +64,12 @@ physical desktop were not newly qualified.
 ## Deferred work
 
 The [prioritized next work items](next-work.md) record acceptance gates and
-prototype recovery details. Reconcile Sekka main's Sukumo migration before
-merging this branch; the package evidence here qualifies the preserved source.
+prototype recovery details. Later commits reconciled Sekka main's Sukumo
+migration and turned OSC 52 on; the package evidence here qualifies only the
+preserved source.
 
-OSC 52 remains disabled in the application; ordinary user copy/paste is enabled.
+At this checkpoint OSC 52 was disabled in the application; ordinary user
+copy/paste was enabled.
 Full Ghostty compatibility, Kitty graphics/clipboard, broader shell/tmux
 integration, remaining sprites, accessibility, history memory and performance
 work remain unfinished. Remote hosts need the bundled terminfo or the documented

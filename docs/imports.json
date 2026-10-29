@@ -43,5 +43,17 @@
     "paths": [
       "."
     ]
+  },
+  {
+    "repository": "bitemyapp/sidestep",
+    "revision": "853fbb3cda7fa2a7843674432fd8962e6263524e",
+    "destination": "desktop/aizome/sukumo",
+    "paths": [
+      "crates/sidestep-engine",
+      "crates/sidestep-ui",
+      "scripts/headless-wayland",
+      "LICENSE-MIT",
+      "LICENSE-APACHE"
+    ]
   }
 ]

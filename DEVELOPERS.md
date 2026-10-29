@@ -9,8 +9,8 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `flake.nix`, `flake.lock` | Public outputs and the authoritative external dependency lock |
 | `installer/genkan/` | Genkan: backend and privileged helper (`rust/`), window on Aizome's kit (`ui/`), system modules, application catalog, storage tests |
 | `desktop/aizome/` | Sekka's own desktop: compositor, shell, apps, NixOS module, VM checks, its docs |
+| `desktop/aizome/sukumo/` | Sukumo, Aizome's toolkit: the Wayland engine and native Rust toolkit, from Sidestep |
 | `desktop/tatami/` | Desktop module, configuration, Rust commands, Displays app, wallpapers |
-| `vendor/sidestep/` | Git submodule: the Sidestep fork Aizome builds against in development |
 | `apps/yukimi/` | Privileged helper, CLI, and store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
@@ -20,9 +20,9 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
 
-The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no first-party submodules or remote first-party flake inputs; the one submodule, `vendor/sidestep`, is Sidestep's fork, which Aizome builds against ([Aizome](#aizome)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
+The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
-Sidestep, Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
+Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
 ## Build and check
 
@@ -50,7 +50,7 @@ python3 -m unittest discover -s tests -p test_release.py
 ```
 
 The installed lock's root names only the inputs in `templates/flake.nix.in`.
-Dependencies used only through Sekka, such as Sidestep, stay nested beneath Sekka;
+Dependencies used only through Sekka, such as Superluminal, stay nested beneath Sekka;
 adding one to the installed root makes Genkan reject every installation before
 disk writes. `checks.x86_64-linux.template-lock` runs the real backend parser.
 Genkan also seeds the selected time zone before the target's first activation.
@@ -727,7 +727,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `sidestep`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, Sidestep for Aizome's build and the others as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `sidestep` input names its revision, so the nightly's input update never moves it: a new Sidestep is a change to `flake.nix`, reviewed with the Aizome changes that need it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -974,13 +974,13 @@ Genkan is two Cargo workspaces in `installer/genkan`:
   `desktop/aizome/crates/aizome-kit` by path, and Cargo reads Aizome's
   workspace manifest for the versions the kit inherits. It isn't a member of
   Aizome's workspace, so Aizome's package doesn't carry the installer and
-  neither rebuilds the other except through the kit's crates and Sidestep.
-  Its lock was seeded from Aizome's, giving the kit and Sidestep the
+  neither rebuilds the other except through the kit's crates and Sukumo.
+  Its lock was seeded from Aizome's, giving the kit and Sukumo the
   versions Aizome builds them with; when Aizome's lock moves their
   dependencies, move Genkan's to match.
 
 `installer/genkan/nix/package.nix` builds the helper from `rust/`'s lock and
-the window from `ui/`'s with the flake's `sidestep` input, then installs the
+the window from `ui/`'s with the kit and Sukumo, then installs the
 helper beside the window: the window starts it through pkexec from its own
 directory, and the Polkit policy names that path. The package keeps the GTK
 interface's executable, desktop entry, application id and policy names.
@@ -1033,6 +1033,30 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+Aizome's session launcher owns desktop cleanup even when logind terminates
+only the login scope, as Yukimi's Sign Out does. The compositor runs in the
+user manager, outside that scope; HUP, INT and TERM must therefore stop the
+graphical session and clear its imported environment before the launcher
+exits. Its `systemctl --wait` runs asynchronously so the shell can handle
+signals immediately; cleanup terminates and reaps that client before stopping
+the session, including when it has not yet submitted its start request.
+The launcher holds a per-user runtime lock through startup and cleanup, and
+refuses active, activating or deactivating services left by older launchers.
+A rejected duplicate login never installs cleanup traps. See the
+[orphaned-session incident](docs/incidents/2026-10-28-aizome-orphaned-session.md).
+
+`nix build .#aizome-checks.session-launcher .#aizome-checks.session-launcher-systemd .#aizome-checks.greeter -L`
+checks the launcher with isolated service stand-ins, startup/cancellation
+ordering with real systemd and a stand-in compositor in a disposable VM,
+then real logind termination and password login in the graphical greeter VM.
+The startup check gates requests both before submission and before compositor
+readiness, rejects overlapping launches and verifies subsequent login.
+The greeter VM keeps the user manager alive, checks that the old desktop
+and its environment end, and
+logs the same user back in. These are component checks; they do not qualify
+an ISO or physical suspend/resume. An uncatchable SIGKILL or a dead user
+manager cannot run the launcher's cleanup trap.
+
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
@@ -1043,29 +1067,8 @@ The package version is a plain `0.1.0`. Aizome's flake added its own revision
 to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
 would rebuild Aizome. The source hash already tells the builds apart.
 
-The workspace depends on Sidestep's crates by path, through the
-`desktop/aizome/sidestep` link to `../../vendor/sidestep`, a Git submodule
-of the fork's `aizome` branch. Clone with `--recurse-submodules`, or run
-`git submodule update --init vendor/sidestep`; entering
-`nix develop .#aizome` does the latter when the submodule isn't checked out
-yet. The hook never moves a checked-out submodule, so Sidestep work there is
-kept, and it says when the submodule differs from the revision the package
-builds against. `git pull` doesn't update submodules: after one that moves
-Sidestep, run `git submodule update vendor/sidestep`. `aizome-dev` warns
-when the submodule differs from the Sidestep the running session was built
-against; the ABI check always refuses an incompatible logic library.
-
-Nix builds take Sidestep from the flake's `sidestep` input, not the
-submodule: installed systems fetch Sekka as a GitHub tarball, which leaves
-submodules empty. The submodule and the input must name the same commit,
-which `tests/test_aizome_development.py` checks in a Git checkout
-(`python3 -m unittest tests/test_aizome_development.py`; the
-`aizome-development` Nix check runs the rest without Git metadata and skips
-it). The input names its
-revision rather than the branch, so the nightly's `nix flake update` leaves
-it alone. To move Sidestep, check out the new revision in `vendor/sidestep`
-and stage it, put the same revision in `flake.nix`, run `nix flake lock`,
-and build Aizome and run its checks against it.
+The workspace builds against Sukumo, Aizome's toolkit, in
+`desktop/aizome/sukumo` ([Sukumo](#sukumo)).
 
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix
@@ -1092,8 +1095,8 @@ and the helper's Polkit action remain compatible. The app uses bundled SQLite;
 the helper workspace uses system SQLite. Slow reads and changes stay off the
 interface thread, and only the authenticated helper changes the system.
 
-Aizome's package still copies only its component, shared backend and workspace
-manifest, and pinned Sidestep. Helper-only changes do not rebuild the window.
+Aizome's package still copies only its component (with Sukumo), shared backend
+and workspace manifest. Helper-only changes do not rebuild the window.
 `aizome-dev watch` includes the shared backend. Component GUI checks run with
 `nix build .#checks.x86_64-linux.yukimi-tatami` and
 `nix build .#checks.x86_64-linux.yukimi-x11`; these are not ISO qualification.
@@ -1173,9 +1176,8 @@ Aizome's portal backend, `crates/aizome-portal`, answers
 found. Each request runs a chooser process built from Hako's library
 (model, sidebar rows, path bar, icons), which the frontend's
 `Request.Close` ends. It opens over the asking app's window through
-xdg-foreign v2: Sidestep's `WindowOptions::foreign_parent`, which the
-kit takes as `WindowSpec::foreign_parent`, so Aizome needs a Sidestep
-revision that has it. The behaviour and its limits are in
+xdg-foreign v2: Sukumo's `WindowOptions::foreign_parent`, which the
+kit takes as `WindowSpec::foreign_parent`. The behaviour and its limits are in
 [Aizome's apps](desktop/aizome/docs/apps.md#the-file-chooser-portal).
 
 ```sh
@@ -1190,6 +1192,40 @@ chooser in each mode on the kit's stand-in platform, and its goldens. The
 last runs the real chooser under a headless compositor over a test window
 that exported itself, and checks that it is that window's dialog and takes
 the keys. Neither runs a browser or the installed session.
+
+### Sukumo
+
+Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
+and native Rust toolkit from Sidestep's `aizome` branch, without Sidestep's
+Objective-C runtime and frameworks ([its README](desktop/aizome/sukumo/README.md),
+[migration record](docs/migration.md#sukumo)). Its crates keep their names,
+`sidestep-engine` and `sidestep-ui`, and so do its `SIDESTEP_*` environment
+variables. It is a Cargo workspace of its own, as Sidestep's was. Aizome's
+workspace excludes it and takes the crates by path, from inside its own
+directory so Cargo hashes them relative to the workspace, which the
+compositor's ABI fingerprint relies on ([reload](desktop/aizome/docs/reload.md)).
+A change to Sukumo is a change to the compositor's core: it can't reload,
+and runs at the next login.
+
+Sukumo's lock is the subset of Aizome's its crates use. When Aizome's lock
+moves one of their dependencies, prune a copy of it to make Sukumo's again
+(the README has the command). Aizome's and Genkan's packages copy
+`sukumo/Cargo.toml` and `sukumo/crates` with the kit. Its own tests run with:
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/sukumo/Cargo.toml
+nix build .#checks.x86_64-linux.sukumo -L
+```
+
+The check also runs the toolkit's Wayland tests under a headless sway, and
+fails if they skip. It replaces the Linux and Wayland jobs of Sidestep's CI
+for this code. The frame and image budgets only measure, and run by hand
+under `desktop/aizome/sukumo/scripts/headless-wayland`.
+
+Sidestep stays a separate product for objc2 programs. It is not kept in
+step with Sukumo. To bring a Sidestep change across, apply it with
+`git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
+same.
 
 ## Tatami Bluetooth
 

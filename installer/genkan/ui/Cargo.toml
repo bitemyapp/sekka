@@ -17,7 +17,7 @@ path = "src/main.rs"
 # The installer's backend: discovery, validation, the plan and the helper's
 # session protocol. The privileged helper is built from it alone.
 calamares-nixos = { path = "../rust" }
-# Aizome's widget kit, on Sidestep (desktop/aizome/crates/aizome-kit), with
+# Aizome's widget kit, on Sukumo (desktop/aizome/crates/aizome-kit), with
 # the workspace's own manifest for the versions it inherits.
 aizome-kit = { path = "../../../desktop/aizome/crates/aizome-kit" }
 anyhow = "=1.0.100"
@@ -26,7 +26,7 @@ jiff = "=0.2.38"
 zeroize = "=1.8.2"
 
 # tiny-skia's portable SIMD wraps 16-bit lanes on purpose (Aizome's and
-# Sidestep's workspace manifests turn the same checks off).
+# Sukumo's workspace manifests turn the same checks off).
 [profile.dev.package.tiny-skia]
 overflow-checks = false
 

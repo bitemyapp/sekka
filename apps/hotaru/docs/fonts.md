@@ -9,10 +9,11 @@ and [the GUI probe's qualifications](gui-probe.md).
 
 ## Implemented grid-font slice
 
-The fourth ordered toolkit patch, `upstream/sidestep-grid-font.patch`, adds
+The toolkit's grid-font slice (once `upstream/sidestep-grid-font.patch`, now in
+Sukumo's `sidestep-engine/src/text/grid.rs` and `sidestep-ui`) adds
 `sidestep_ui::grid::{FontConfig, FontSet, Cell, Style, Metrics, Layout, Run}`
 and `Canvas::draw_grid_text`. The implementation follows the API boundary below,
-using harfrust directly while retaining Sidestep's existing font registry and
+using harfrust directly while retaining the toolkit's existing font registry and
 swash raster cache. `Layout` owns registered face identities, logical glyph
 positions and physical grid metrics, with no window or terminal-core dependency.
 
@@ -79,7 +80,7 @@ Run the ignored font fixtures explicitly with `HOTARU_FONT_DIR` and
 `HOTARU_TEST_LIGATURE_FONT` pointing to those pinned inputs:
 
 ```sh
-cargo test --manifest-path desktop/aizome/Cargo.toml -p sidestep-engine --lib text::grid -- --include-ignored --test-threads=1
+cargo test --manifest-path desktop/aizome/sukumo/Cargo.toml -p sidestep-engine --lib text::grid -- --include-ignored --test-threads=1
 cargo test --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --test native packaged_color_emoji -- --ignored --test-threads=1
 ```
 

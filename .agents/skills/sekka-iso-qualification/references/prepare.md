@@ -5,9 +5,9 @@
    Continue confirmed live handles; do not restart a build because a tool's
    observation timed out. Preserve other people's working changes in an
    isolated topic worktree.
-2. Pin a clean source commit and all inputs. Read `flake.lock` for the actual
-   Aizome and Sidestep source; check those repositories' `main` for relevant
-   fixes, without assuming the pinned branch is `main`. Build with
+2. Pin a clean source commit and all inputs. Aizome and its toolkit, Sukumo,
+   are Sekka source (`desktop/aizome`); read `flake.lock` for the external
+   inputs. Build with
    `nix build .#iso --no-update-lock-file --out-link result-iso`. Store the
    build log and resulting store path. Do not change dependencies mid-run.
 3. Hash the single ISO with `sha256sum`, record `stat` size and lock hash, and

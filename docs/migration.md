@@ -103,7 +103,8 @@ keybinding/IPC launch patch is folded into the local source.
   product. It is now Sekka's `sidestep` input, at the revision Aizome's lock
   pinned. `flake.nix` names that revision, so the nightly's input update
   doesn't move it. The `vendor/sidestep` submodule records the same revision
-  for development, in place of the separate checkout beside Aizome's.
+  for development, in place of the separate checkout beside Aizome's. The
+  engine and toolkit Aizome used from it later moved in as [Sukumo](#sukumo).
 - The installed flake's lock loses its nested `aizome` node and keeps
   `sidestep` beneath Sekka. The ISO qualification report no longer records
   an Aizome revision: the Sekka revision includes Aizome's source.
@@ -112,3 +113,49 @@ keybinding/IPC launch patch is folded into the local source.
   there; the GTK and Aizome Cargo workspaces and package boundaries remain
   separate. Aizome's filtered package source includes only the shared backend
   and its workspace metadata, not Yukimi's GTK interface or privileged helper.
+
+## Sukumo
+
+Sukumo, Aizome's toolkit, joined Sekka on 28 October 2026. Until then Aizome
+built against Sidestep's `aizome` branch: the `vendor/sidestep` submodule
+for development, and the flake's `sidestep` input, pinned to the same
+revision, for Nix. Moving the toolkit took a reviewed pin change in both
+places, and in Sidestep first. Sidestep runs objc2 programs on Linux; Aizome
+used only the engine and the native toolkit on that branch, and none of
+Sidestep's Objective-C runtime, Foundation or AppKit.
+
+The import is Sidestep's `aizome-combined` branch at `853fbb3`: `aizome`
+through `7bfacbb`, the video subsurface Utsushi uses
+([bitemyapp/sidestep#6](https://github.com/bitemyapp/sidestep/pull/6)), and
+the clipboard and text attachments Omperor uses
+([bitemyapp/sidestep#7](https://github.com/bitemyapp/sidestep/pull/7)). It is a
+snapshot, as the others are. [imports.json](imports.json) records it, and
+bitemyapp/sidestep keeps the history.
+
+- `crates/sidestep-engine` and `crates/sidestep-ui` are in
+  `desktop/aizome/sukumo/crates`, under the names they had. Rust paths,
+  `SIDESTEP_*` variables and comments still say Sidestep, and changes to
+  Sidestep's `crates/` apply with `git apply --directory=desktop/aizome/sukumo`.
+- Three test fixtures (`DejaVuSans.ttf`, its license, and `huge.tiff`) moved
+  from Sidestep's `conformance/tests/fixtures` to `desktop/aizome/sukumo/fixtures`.
+  The three `include_bytes!` lines that read them are the only edits to the
+  crates.
+- `scripts/headless-wayland` came along for the toolkit's Wayland tests. The
+  sway patch Sidestep's Debian container needed did not: Nixpkgs' sway is
+  newer than the fix.
+- Sukumo is a workspace of its own, as Sidestep's was. Its manifest names
+  only the two crates and drops the objc2 crates and their build-time patch.
+  Its lock is Aizome's, pruned to what the two crates use. Sidestep's lock
+  was not imported, so Sukumo's tests run on the versions Aizome ships.
+- Not imported: Sidestep's runtime, Foundation, AppKit, CoreServices and
+  UniformTypeIdentifiers crates, the conformance suite, the examples, the
+  objc2 overlay tool, the Docker scripts, CI and the design notes.
+  Sukumo's README points to the notes that describe this code.
+- The flake's `sidestep` input, the submodule and `.gitmodules`, the
+  `desktop/aizome/sidestep` link, the development shell's submodule hook and
+  its test (`aizome-development`) are gone. `aizome-dev` no longer compares
+  a Sidestep revision; the core's ABI fingerprint already covers Sukumo's
+  sources. The installed flake's lock loses its nested `sidestep` node, and
+  the ISO qualification report no longer records a Sidestep revision.
+- `checks.x86_64-linux.sukumo` runs the tests Sidestep's Linux and Wayland
+  CI jobs ran for these crates, under a headless sway.

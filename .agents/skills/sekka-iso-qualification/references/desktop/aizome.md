@@ -11,7 +11,7 @@ persistence and recovery.
 
 ## Compositor and shell
 
-- Open native Sidestep, GTK, Qt and XWayland apps. Focus by click and keyboard,
+- Open native Aizome (Sukumo), GTK, Qt and XWayland apps. Focus by click and keyboard,
   type, select, copy/cut/paste, scroll, resize, move, maximize/fullscreen,
   minimize/restore, close and relaunch. No blank surfaces, lost input, stale
   pixels or crashes. Check integer scaling and software/GPU rendering cases.

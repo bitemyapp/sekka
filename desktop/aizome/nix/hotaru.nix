@@ -1,11 +1,11 @@
-# Focused native-terminal build; shares Aizome's toolkit, theme and lockfile.
+# Focused native-terminal build; shares Aizome's toolkit (Sukumo, inside
+# desktop/aizome), theme and lockfile.
 # Only the app and its required libraries are compiled, not the compositor.
 {
   lib,
   stdenv,
   rustPlatform,
   runCommand,
-  patch,
   pkg-config,
   makeWrapper,
   ncurses,
@@ -19,36 +19,19 @@
   src,
   yukimiSrc,
   hotaruSrc,
-  clipboardPatch,
-  inputPatch,
-  mimePatch,
-  gridFontPatch,
-  spritePatch,
-  primaryPatch,
   ghosttyLicense,
   uucodeLicense,
   unicodeLicense,
-  sidestep,
   fonts,
   hotaruFonts,
   version,
 }:
 let
-  source = runCommand "hotaru-source" { nativeBuildInputs = [ patch ]; } ''
-    mkdir -p $out/desktop $out/apps $out/vendor
+  source = runCommand "hotaru-source" { } ''
+    mkdir -p $out/desktop $out/apps
     cp -r ${src} $out/desktop/aizome
     cp -r ${yukimiSrc} $out/apps/yukimi
     cp -r ${hotaruSrc} $out/apps/hotaru
-    cp -r ${sidestep} $out/vendor/sidestep
-    chmod -R u+w $out/vendor/sidestep
-    patch -d $out/vendor/sidestep -p1 < ${clipboardPatch}
-    patch -d $out/vendor/sidestep -p1 < ${inputPatch}
-    patch -d $out/vendor/sidestep -p1 < ${mimePatch}
-    patch -d $out/vendor/sidestep -p1 < ${gridFontPatch}
-    patch -d $out/vendor/sidestep -p1 < ${spritePatch}
-    patch -d $out/vendor/sidestep -p1 < ${primaryPatch}
-    chmod u+w $out/desktop/aizome
-    ln -sfn ../../vendor/sidestep $out/desktop/aizome/sidestep
   '';
 in
 rustPlatform.buildRustPackage {

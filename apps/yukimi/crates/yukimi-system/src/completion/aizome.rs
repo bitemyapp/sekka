@@ -514,6 +514,8 @@ fn environment_file(path: &Path, required: bool) -> Result<Environment, String> 
                     | "started"
                     | "status"
                     | "result"
+                    | "wait_pid"
+                    | "pending_signal"
                     | "IFS"
             )
         })
@@ -938,7 +940,7 @@ mod tests {
             let environment = config.join("aizome/environment");
             std::fs::create_dir_all(environment.parent().unwrap()).unwrap();
             std::fs::write(&environment, format!(
-                "vars=forged\nuser_environment=/forged\nfile=/forged\nline=forged\nkey=forged\nIFS=broken\nstate=forged\nrestarts=forged\nstarted=forged\nstatus=forged\nresult=forged\nbad-key=ignored\n9bad=ignored\nUSER_ONLY=first\nUSER_ONLY=$literal=last\nSDL_VIDEODRIVER=x11\nXDG_CONFIG_HOME={}\nXDG_SESSION_DESKTOP=ignored\nXDG_SESSION_TYPE=ignored\nAIZOME_ENVIRONMENT_KEYS=forged\nAIZOME_ENVIRONMENT_FILE=/forged\nPATH={}:{}\n",
+                "vars=forged\nuser_environment=/forged\nfile=/forged\nline=forged\nkey=forged\nIFS=broken\nstate=forged\nrestarts=forged\nstarted=forged\nstatus=forged\nresult=forged\nwait_pid=forged\npending_signal=forged\nbad-key=ignored\n9bad=ignored\nUSER_ONLY=first\nUSER_ONLY=$literal=last\nSDL_VIDEODRIVER=x11\nXDG_CONFIG_HOME={}\nXDG_SESSION_DESKTOP=ignored\nXDG_SESSION_TYPE=ignored\nAIZOME_ENVIRONMENT_KEYS=forged\nAIZOME_ENVIRONMENT_FILE=/forged\nPATH={}:{}\n",
                 f.root.join("elsewhere").display(), f.root.join("bin").display(), std::env::var("PATH").unwrap()
             )).unwrap();
             for (name, script) in [
@@ -950,7 +952,7 @@ mod tests {
                     r#"#!/bin/sh
 case "$*" in
   '--user is-system-running') echo "$TEST_MANAGER" ;;
-  '--user -q is-active aizome.service') exit 1 ;;
+  '--user show -p ActiveState --value aizome.service') echo inactive ;;
   '--user import-environment '*) printf '%s\n' "$@" > "$TEST_IMPORT" ;;
   '--user --wait start aizome.service') exec aizome ;;
 esac
@@ -971,6 +973,7 @@ esac
                 .env_clear()
                 .env("HOME", &f.root)
                 .env("XDG_CONFIG_HOME", &config)
+                .env("XDG_RUNTIME_DIR", &f.root)
                 .env("PATH", format!("{}:{}", f.root.join("bin").display(), std::env::var("PATH").unwrap()))
                 .env("TEST_MANAGER", manager)
                 .env("TEST_RECORD", &record)
@@ -996,6 +999,8 @@ esac
                 "started",
                 "status",
                 "result",
+                "wait_pid",
+                "pending_signal",
             ] {
                 assert!(!running[ENVIRONMENT_KEYS].split(' ').any(|key| key == name));
             }

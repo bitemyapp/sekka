@@ -583,7 +583,6 @@
         "fh": "fh",
         "nixpkgs": "nixpkgs_5",
         "omp": "omp",
-        "sidestep": "sidestep",
         "superluminal": "superluminal",
         "tracy": "tracy"
       }
@@ -623,23 +622,6 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "sidestep": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1793172108,
-        "narHash": "sha256-mH8C+/dnySZCz5QGghYxMmTH3uotNHbMxExRfnYytZ4=",
-        "owner": "bitemyapp",
-        "repo": "sidestep",
-        "rev": "7bfacbbbc9cd70cf3442def70368e254f3c3712d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "bitemyapp",
-        "repo": "sidestep",
-        "rev": "7bfacbbbc9cd70cf3442def70368e254f3c3712d",
         "type": "github"
       }
     },

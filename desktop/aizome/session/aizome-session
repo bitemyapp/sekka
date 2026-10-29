@@ -15,6 +15,7 @@
 # A login shell's environment first (PATH, LANG and the rest), when started
 # by a display manager that gives none.
 if [ "$1" != --no-login-shell ] && [ -n "$SHELL" ] && grep -qx "$SHELL" /etc/shells 2>/dev/null; then
+  # shellcheck disable=SC2016
   case "$SHELL" in
     */nologin | */false) ;;
     *) exec "$SHELL" -l -c 'exec "$0" --no-login-shell "$@"' "$0" "$@" ;;
@@ -34,7 +35,7 @@ for file in /etc/xdg/aizome/environment "$user_environment"; do
         # Literal environment entries must not replace the shell's parser,
         # its bookkeeping, or the evidence recorded below.
         case "$key" in
-          '' | [0-9]* | *[!a-zA-Z0-9_]* | AIZOME_ENVIRONMENT_KEYS | AIZOME_ENVIRONMENT_FILE | vars | user_environment | file | line | key | state | restarts | started | status | result | IFS) continue ;;
+          '' | [0-9]* | *[!a-zA-Z0-9_]* | AIZOME_ENVIRONMENT_KEYS | AIZOME_ENVIRONMENT_FILE | vars | user_environment | file | line | key | state | restarts | started | status | result | wait_pid | pending_signal | IFS) continue ;;
         esac
         export "$key=${line#*=}"
         # Each name once: systemctl import-environment refuses the whole
@@ -62,14 +63,54 @@ vars="$vars AIZOME_ENVIRONMENT_KEYS AIZOME_ENVIRONMENT_FILE"
 state=$(systemctl --user is-system-running 2>/dev/null)
 case "$state" in
   running | degraded | starting)
-    # Nothing left over from an earlier session.
-    if systemctl --user -q is-active aizome.service; then
+    # Own the whole launch, including startup and teardown. An is-active
+    # check alone misses a compositor still waiting to announce readiness,
+    # and two launchers can both pass it before either starts the service.
+    # Keep the lock file: unlinking it would let new callers lock a new inode.
+    exec 9>"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/aizome-session.lock" || exit 1
+    if ! flock -n 9; then
       echo "Aizome is already running in this user's session." >&2
       exit 1
     fi
+    # Also refuse a service left by an older launcher or started directly,
+    # neither of which holds our lock. Only inactive/failed is ours to start.
+    state=$(systemctl --user show -p ActiveState --value aizome.service) || exit 1
+    case "$state" in
+      inactive | failed) ;;
+      *) echo "Aizome is already running in this user's session." >&2; exit 1 ;;
+    esac
+    # The compositor lives in the user manager, outside the login scope.
+    # logind (including Yukimi's Sign Out) can terminate that scope while
+    # leaving the manager alive. Always tear down the desktop when its
+    # launcher exits, including on a display-manager hangup or SIGTERM.
+    # Install this only after the duplicate-session check: a rejected login
+    # must not tear down the desktop that is already running.
+    # Invoked by the EXIT trap, including the signal handlers below.
+    # shellcheck disable=SC2329
+    cleanup() {
+      trap '' HUP INT TERM
+      # A child delayed before submitting StartUnit must not start the
+      # desktop after shutdown. End and reap it before stopping the units.
+      if [ -n "$wait_pid" ]; then
+        # Before exec, the forked shell can still have our signal handlers.
+        # KILL also covers that interval; this client owns no desktop state.
+        kill -KILL "$wait_pid" 2>/dev/null || :
+        wait "$wait_pid" 2>/dev/null || :
+      fi
+      systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
+      # shellcheck disable=SC2086
+      systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY AIZOME_SOCKET AIZOME_SHELL_SOCKET $vars
+    }
+    wait_pid=
+    pending_signal=0
+    trap 'cleanup' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     systemctl --user reset-failed
     # shellcheck disable=SC2086
     systemctl --user import-environment $vars
+    # shellcheck disable=SC2086
     dbus-update-activation-environment --systemd $vars 2>/dev/null
     # A compositor its watchdog stopped (its main loop stalled) starts
     # again, up to three times in a row; one that ran for five minutes
@@ -77,8 +118,23 @@ case "$state" in
     restarts=0
     while :; do
       started=$(date +%s)
-      systemctl --user --wait start aizome.service
+      # Waiting for a foreground command defers shell signal traps until
+      # it exits. An asynchronous command plus the wait builtin lets the
+      # launcher handle termination even while the compositor is alive.
+      # Defer exiting until the PID is recorded, including a signal between
+      # the fork and assignment. The child must not inherit our session lock.
+      trap 'pending_signal=129' HUP
+      trap 'pending_signal=130' INT
+      trap 'pending_signal=143' TERM
+      systemctl --user --wait start aizome.service 9>&- &
+      wait_pid=$!
+      trap 'exit 129' HUP
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      [ "$pending_signal" -eq 0 ] || exit "$pending_signal"
+      wait "$wait_pid"
       status=$?
+      wait_pid=
       result=$(systemctl --user show -p Result --value aizome.service 2>/dev/null)
       [ "$result" = watchdog ] || break
       [ $(($(date +%s) - started)) -ge 300 ] && restarts=0
@@ -87,9 +143,7 @@ case "$state" in
       echo "aizome-session: Aizome stopped responding; starting it again" >&2
       systemctl --user reset-failed aizome.service
     done
-    systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
-    systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY AIZOME_SOCKET AIZOME_SHELL_SOCKET $vars
-    exit $status
+    exit "$status"
     ;;
   *)
     # No systemd user manager: the compositor is the session.
