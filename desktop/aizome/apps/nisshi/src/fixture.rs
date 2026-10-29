@@ -107,8 +107,9 @@ impl Writer {
             },
             seq: 0,
             flags: 0,
+            styles: None,
         }
-        .classified();
+        .finish();
         self.out.push(e);
         self.out.last_mut().unwrap()
     }
@@ -405,7 +406,7 @@ pub fn journal() -> Vec<Entry> {
     );
     e.uid = Some(0);
     // The last minute: what the window opens on.
-    let recent: [(Who, Priority, &str); 12] = [
+    let recent: [(Who, Priority, &str); 14] = [
         (
             nm,
             Info,
@@ -428,6 +429,18 @@ pub fn journal() -> Vec<Entry> {
         (wpa, Info, "wlp14s0: CTRL-EVENT-CONNECTED - Connection to 74:83:c2:4a:91:0e completed [id=0 id_str=]"),
         (nm, Info, "<info>  [1793307854.0102] dhcp4 (wlp14s0): state changed new lease, address=192.168.1.23"),
         (shell, Info, "network: Kotatsu connected again after 3 s"),
+        // The compositor's own, through `tracing` with its colours, which
+        // journald files at Info whatever the line says.
+        (
+            comp,
+            Info,
+            "\u{1b}[2m2026-10-29T21:04:44.120311Z\u{1b}[0m \u{1b}[32m INFO\u{1b}[0m \u{1b}[2maizome_comp_core::shell\u{1b}[0m\u{1b}[2m:\u{1b}[0m window opened \u{1b}[3mid\u{1b}[0m\u{1b}[2m=\u{1b}[0m41 \u{1b}[3mapp_id\u{1b}[0m\u{1b}[2m=\u{1b}[0m\"org.aizome.Hako\"",
+        ),
+        (
+            comp,
+            Info,
+            "\u{1b}[2m2026-10-29T21:04:45.902517Z\u{1b}[0m \u{1b}[33m WARN\u{1b}[0m \u{1b}[2maizome_comp_logic::outputs\u{1b}[0m\u{1b}[2m:\u{1b}[0m HDMI-A-1: no EDID, assuming 60 Hz",
+        ),
         (
             telegram,
             Warning,
@@ -436,7 +449,7 @@ pub fn journal() -> Vec<Entry> {
         (pid1, Info, "Started AI background workload."),
     ];
     for (i, (who, p, m)) in recent.into_iter().enumerate() {
-        w.say(NOW - 60 * S + i as i64 * 4_700_000, who, p, m);
+        w.say(NOW - 60 * S + i as i64 * 4_200_000, who, p, m);
     }
     let mut out = w.out;
     out.sort_by_key(|e| e.time);
@@ -517,7 +530,12 @@ pub fn json(e: &Entry) -> String {
     if let Some(b) = &e.boot {
         put("_BOOT_ID", b.to_string());
     }
-    put("MESSAGE", e.message.to_string());
+    // With its colours as the program wrote them: bytes, as journald writes
+    // a message with control characters.
+    let styled = e.styles.as_deref().map(|runs| crate::ansi::encode(&e.message, runs));
+    if styled.is_none() {
+        put("MESSAGE", e.message.to_string());
+    }
     put("PRIORITY", e.priority.level().to_string());
     put("SYSLOG_IDENTIFIER", e.source.to_string());
     if let Some(f) = e.facility {
@@ -551,6 +569,9 @@ pub fn json(e: &Entry) -> String {
     }
     if let Some(id) = &e.message_id {
         put("MESSAGE_ID", id.to_string());
+    }
+    if let Some(raw) = styled {
+        m.insert("MESSAGE".into(), Value::Array(raw.bytes().map(Value::from).collect()));
     }
     Value::Object(m).to_string()
 }

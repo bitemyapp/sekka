@@ -244,19 +244,46 @@ pub struct Entry {
     /// Its place among the entries read (stable while they're kept: what
     /// a selection follows).
     pub seq: u64,
-    /// What it is, decided once as it's read ([`CRASH`], [`SECURITY`]).
+    /// What it is, decided once as it's read ([`CRASH`], [`SECURITY`],
+    /// [`WRITTEN_LEVEL`]).
     pub flags: u8,
+    /// The message's terminal styles, where it had any.
+    pub styles: Option<Box<[crate::ansi::Run]>>,
 }
 
 /// A crash report: a core dump, a segfault, a panic ([`crate::filter::is_crash`]).
 pub const CRASH: u8 = 1;
 /// Logins and authentication ([`crate::filter::is_security`]).
 pub const SECURITY: u8 = 2;
+/// Its level was read from its text ([`crate::ansi::written_level`]):
+/// journald had the one it files a service's output at.
+pub const WRITTEN_LEVEL: u8 = 4;
 
 impl Entry {
-    /// The entry with its [`flags`](Entry::flags) set.
-    pub fn classified(mut self) -> Entry {
+    /// The entry as it's kept: its message's plain text and styles
+    /// ([`crate::ansi`]), the level written in it where journald filed a
+    /// service's output at Info, its shape and its [`flags`](Entry::flags).
+    pub fn finish(mut self) -> Entry {
+        if let Some((plain, mut runs)) = crate::ansi::parse(&self.message) {
+            let plain = plain.trim_end();
+            let len = plain.len() as u32;
+            runs.retain_mut(|r| {
+                r.end = r.end.min(len);
+                r.start < r.end
+            });
+            self.message = plain.into();
+            self.styles = (!runs.is_empty()).then(|| runs.into_boxed_slice());
+        }
         self.flags = 0;
+        if self.priority == Priority::Info
+            && self.transport == Transport::Stdout
+            && let Some(p) = crate::ansi::written_level(&self.message)
+            && p != Priority::Info
+        {
+            self.priority = p;
+            self.flags |= WRITTEN_LEVEL;
+        }
+        self.shape = crate::shape::fingerprint(&self.message);
         if crate::filter::is_crash(&self) {
             self.flags |= CRASH;
         }
@@ -458,16 +485,30 @@ pub fn parse(line: &str, intern: &mut Interner) -> Option<Entry> {
             cursor: text(&raw.cursor).map_or(Cursor::None, |c| Cursor::parse(&c, intern)),
             seq: 0,
             flags: 0,
+            styles: None,
         }
-        .classified(),
+        .finish(),
     )
 }
 
 /// A log file's line as a message: its time where it starts with one,
 /// its level guessed from its words.
 pub fn from_line(line: &str, source: &Arc<str>, prev_time: i64, clock: &crate::time::Clock) -> Entry {
-    let (time, rest) = clock.leading(line).unwrap_or((prev_time, line));
+    // Its colours first, so that a coloured timestamp is still read.
+    let (plain, runs) = crate::ansi::parse(line).unwrap_or_else(|| (line.to_owned(), Vec::new()));
+    let (time, rest) = clock.leading(&plain).unwrap_or((prev_time, &plain));
     let message = rest.trim_end();
+    let cut = (plain.len() - rest.len()) as u32;
+    let runs: Vec<crate::ansi::Run> = runs
+        .into_iter()
+        .filter(|r| r.end > cut)
+        .map(|r| crate::ansi::Run {
+            start: r.start.saturating_sub(cut),
+            end: (r.end - cut).min(message.len() as u32),
+            ..r
+        })
+        .filter(|r| r.start < r.end)
+        .collect();
     Entry {
         time,
         mono: 0,
@@ -479,15 +520,16 @@ pub fn from_line(line: &str, source: &Arc<str>, prev_time: i64, clock: &crate::t
         about: None,
         pid: 0,
         uid: None,
-        shape: crate::shape::fingerprint(message),
+        shape: 0,
         message: message.into(),
         message_id: None,
         boot: None,
         cursor: Cursor::None,
         seq: 0,
         flags: 0,
+        styles: (!runs.is_empty()).then(|| runs.into_boxed_slice()),
     }
-    .classified()
+    .finish()
 }
 
 /// A file's line's level, from the words logs use: Xorg's (EE) and (WW),
@@ -551,7 +593,8 @@ mod tests {
             &mut i,
         )
         .unwrap();
-        assert_eq!(&*e.message, "héllo\u{7}");
+        // Bytes, as UTF-8; the bell, a control character, left out.
+        assert_eq!(&*e.message, "héllo");
         assert_eq!(&*e.source, "kernel");
         assert_eq!(e.cursor, Cursor::Text("weird".into()));
         assert!(e.priority.is_error());
@@ -559,6 +602,42 @@ mod tests {
         assert_eq!(&*e.message, "one");
         assert_eq!(e.message_id, None);
         assert_eq!(e.priority, Priority::Info);
+    }
+
+    #[test]
+    fn colours_and_the_level_a_service_wrote() {
+        let mut i = Interner::default();
+        // What Aizome's compositor writes to stdout, which journald files
+        // at Info: ESC is a control character, so JSON gives its bytes.
+        let raw = "\u{1b}[2m2026-10-29T21:04:01Z\u{1b}[0m \u{1b}[33m WARN\u{1b}[0m aizome: no EDID";
+        let bytes: Vec<String> = raw.bytes().map(|b| b.to_string()).collect();
+        let line = format!(
+            r#"{{"MESSAGE":[{}],"PRIORITY":"6","_TRANSPORT":"stdout","SYSLOG_IDENTIFIER":"env"}}"#,
+            bytes.join(",")
+        );
+        let e = parse(&line, &mut i).unwrap();
+        assert_eq!(&*e.message, "2026-10-29T21:04:01Z  WARN aizome: no EDID");
+        assert_eq!(e.priority, Priority::Warning);
+        assert!(e.flags & WRITTEN_LEVEL != 0);
+        let runs = e.styles.as_deref().unwrap();
+        assert_eq!(runs[1].style.hue, Some(crate::ansi::Hue::Yellow));
+        assert_eq!(e.shape, crate::shape::fingerprint(&e.message));
+        // A level journald was told isn't second-guessed.
+        let e = parse(r#"{"MESSAGE":"ERROR: but notice","PRIORITY":"5","_TRANSPORT":"stdout"}"#, &mut i).unwrap();
+        assert_eq!(e.priority, Priority::Notice);
+        // A file's line with a coloured timestamp.
+        let c = crate::time::Clock::fixed("UTC", 0);
+        let e = from_line("\u{1b}[2m2026-10-29T16:05:00Z\u{1b}[0m \u{1b}[31mfailed\u{1b}[0m", &"app.log".into(), 0, &c);
+        assert_eq!(&*e.message, "failed");
+        assert_eq!(e.time, 1_793_289_900_000_000);
+        assert_eq!(
+            e.styles.as_deref().unwrap()[0],
+            crate::ansi::Run {
+                start: 0,
+                end: 6,
+                style: crate::ansi::Style { hue: Some(crate::ansi::Hue::Red), ..Default::default() }
+            }
+        );
     }
 
     #[test]

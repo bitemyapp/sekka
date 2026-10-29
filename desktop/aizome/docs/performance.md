@@ -895,6 +895,9 @@ boot 190 times over, 2×, rasterising each damaged rectangle), three runs:
 | The search applied once typing pauses (filtering and drawing) | 5.9–6.9 ms | | n=3 |
 | Filtering alone (no drawing) | 3.35–3.38 ms | 3.4–3.6 ms | n=7 |
 
+Measured again once the other session's build had finished (load 0.7),
+after terminal colours were added: every row within the ranges above.
+
 With 3,983 messages, a desktop's boot (this one's had 3,629), search
 filters at each character: 2.2 ms at the median and 3.5–3.8 ms at the
 95th percentile, most of it drawing the rows that changed (n=24, two runs).

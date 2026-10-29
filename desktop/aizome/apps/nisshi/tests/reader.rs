@@ -94,6 +94,11 @@ fn reads_the_boot_then_follows_it() {
     let times: Vec<i64> = n.store.entries.iter().map(|e| e.time).collect();
     assert!(times.windows(2).all(|w| w[0] <= w[1]), "oldest first");
     assert_eq!(n.store.entries.last().unwrap().message.as_ref(), "Started AI background workload.");
+    // The compositor's colours came as journald gives them (bytes), and
+    // its WARN is a warning.
+    let edid = n.store.entries.iter().find(|e| e.message.contains("no EDID")).unwrap();
+    assert!(edid.styles.is_some() && !edid.message.contains('\u{1b}'));
+    assert_eq!(edid.priority, nisshi::entry::Priority::Warning);
     assert_eq!(n.boots.len(), 4);
     assert_eq!(n.boots[0].index, 0, "this boot first");
     let asked = stage.asked();

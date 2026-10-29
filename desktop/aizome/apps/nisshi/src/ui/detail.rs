@@ -34,7 +34,13 @@ pub fn view(n: &Nisshi) -> Element<Msg> {
         head.push(icon(glyph).size(15.0).role(role).into());
     }
     head.push(text(e.source.to_string()).semibold().size(14.0).into());
-    head.push(text(e.priority.word()).size(11.5).role(Role::Text3).into());
+    let level = if e.flags & crate::entry::WRITTEN_LEVEL != 0 {
+        // journald filed the service's output at Info; the line says more.
+        format!("{} (as written in the message)", e.priority.word())
+    } else {
+        e.priority.word().to_owned()
+    };
+    head.push(text(level).size(11.5).role(Role::Text3).into());
     if e.pid > 0 {
         head.push(text(format!("process {}", e.pid)).size(11.5).tabular().role(Role::Text3).into());
     }
@@ -68,7 +74,7 @@ pub fn view(n: &Nisshi) -> Element<Msg> {
     let mut parts: Vec<Element<Msg>> = vec![
         aizome_kit::widgets::layout::row(head).spacing(8.0).width(Length::Fill).into(),
         text(when).size(11.5).tabular().role(Role::Text3).into(),
-        container(text(e.message.to_string()).mono().size(12.0).wrap().selectable())
+        container(message(e))
             .padding([8.0, 10.0])
             .fill(Tone::Sunk)
             .border(Edge::Line)
@@ -101,7 +107,13 @@ pub fn view(n: &Nisshi) -> Element<Msg> {
 fn field_row(i: usize, k: &str, v: &str) -> Element<Msg> {
     let mut row: Vec<Element<Msg>> = vec![
         text(k.to_owned()).mono().size(11.0).role(Role::Text3).width(200.0).into(),
-        text(v.to_owned()).mono().size(11.5).wrap().selectable().width(Length::Fill).into(),
+        text(crate::ansi::parse(v).map_or_else(|| v.to_owned(), |(plain, _)| plain))
+            .mono()
+            .size(11.5)
+            .wrap()
+            .selectable()
+            .width(Length::Fill)
+            .into(),
     ];
     if !addressing(k) {
         row.push(
@@ -115,4 +127,17 @@ fn field_row(i: usize, k: &str, v: &str) -> Element<Msg> {
         );
     }
     aizome_kit::widgets::layout::row(row).spacing(10.0).width(Length::Fill).key(format!("{i} {k}")).into()
+}
+
+/// The message whole: selectable plain text, or in its terminal colours
+/// where it has them (Copy copies its plain text).
+fn message(e: &crate::entry::Entry) -> Element<Msg> {
+    match e.styles.as_deref() {
+        Some(runs) => rich_text(super::table::styled(&e.message, runs, &[], Role::Text))
+            .font(FontSpec::mono(12.0))
+            .wrap()
+            .width(Length::Fill)
+            .into(),
+        None => text(e.message.to_string()).mono().size(12.0).wrap().selectable().into(),
+    }
 }

@@ -11,6 +11,7 @@
 //! - [`shape`], [`known`], [`suggest`]: what Nisshi suggests;
 //! - [`app`] and `ui`: the window.
 
+pub mod ansi;
 pub mod app;
 pub mod backend;
 pub mod entry;

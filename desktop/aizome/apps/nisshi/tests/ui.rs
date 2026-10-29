@@ -324,3 +324,27 @@ fn launches_hand_over_what_to_show() {
     h.send(Msg::Launched(args(&["--cursor", "s=0123;i=1"])));
     assert!(h.program().notice.as_ref().is_some_and(|(n, _)| n.starts_with("That message isn't among those read")));
 }
+
+#[test]
+fn terminal_colours_and_the_level_written() {
+    let mut h = start();
+    let e = h.program().store.entries.iter().find(|e| e.message.contains("no EDID")).unwrap().clone();
+    // Its escapes are styles now, not text; its WARN a warning.
+    assert!(!e.message.contains('\u{1b}'));
+    assert!(e.styles.is_some());
+    assert_eq!(e.priority, Priority::Warning);
+    h.send(Msg::Scope(Scope::Problems));
+    assert!(shown(&h).iter().any(|m| m.contains("no EDID")));
+    // Search and copying see the plain text.
+    h.send(Msg::Scope(Scope::All));
+    h.send(Msg::Search("\"WARN aizome_comp_logic\"".into()));
+    assert_eq!(shown(&h).len(), 1);
+    h.send(Msg::Select(e.seq));
+    h.send(Msg::CopyMessage);
+    assert_eq!(
+        h.platform.clipboard.as_deref(),
+        Some("2026-10-29T21:04:45.902517Z  WARN aizome_comp_logic::outputs: HDMI-A-1: no EDID, assuming 60 Hz")
+    );
+    let w = h.window();
+    assert!(h.texts(w).iter().any(|t| t == "Warning (as written in the message)"), "{:?}", h.texts(w));
+}

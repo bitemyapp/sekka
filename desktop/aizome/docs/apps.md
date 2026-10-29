@@ -663,6 +663,14 @@ details below the list.
   foot of each bar, on a square-root scale so a few errors show beside
   thousands of messages. Dragging across it shows that stretch of time;
   a press selects the message nearest that moment.
+- **Terminal colours**: what programs write with escape sequences (Aizome's
+  compositor through `tracing`, test runners, build tools) shows in the
+  theme's colours, red, yellow, green and the rest as Night and Day draw
+  them, with bold, dim, italic and underline. Search, shapes, copying and
+  export see the plain text; cursor movement, titles and other control
+  characters are left out (`src/ansi.rs`). A service's output, which
+  journald files at Info, takes the level its line was written with
+  (`2026-…Z  WARN target: …`, `ERROR: …`, `[warn]`), and the details say so.
 - **Details**: the message whole (a core dump's stack trace included),
   when, how long ago, and every field the journal keeps with it, each
   with a button that filters by it. **Around This Time** clears every

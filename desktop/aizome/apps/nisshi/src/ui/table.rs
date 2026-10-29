@@ -2,10 +2,12 @@
 //! words searched for picked out in the focus colour. Only the rows that
 //! show are built.
 
+use std::ops::Range;
 use std::rc::Rc;
 
 use aizome_kit::prelude::*;
 
+use crate::ansi::{Hue, Run};
 use crate::app::{Msg, Nisshi};
 use crate::entry::{Entry, Priority};
 use crate::search::Search;
@@ -141,22 +143,73 @@ fn message(e: &Entry, search: &Search) -> Element<Msg> {
         _ => Role::Text,
     };
     let marks = search.highlights(first);
-    let mut spans: Vec<Span> = Vec::new();
-    let mut at = 0;
-    for m in marks {
-        if m.start > at {
-            spans.push(Span::new(&first[at..m.start]).role(role));
-        }
-        spans.push(Span::new(&first[m.start..m.end]).role(Role::Focus).weight(700.0));
-        at = m.end;
-    }
-    if at < first.len() || spans.is_empty() {
-        spans.push(Span::new(&first[at..]).role(role));
-    }
+    let mut spans = styled(first, e.styles.as_deref().unwrap_or_default(), &marks, role);
     if more > 0 {
         spans.push(
             Span::new(format!("   +{more} {}", if more == 1 { "line" } else { "lines" })).role(Role::Faint).size(11.0),
         );
     }
     rich_text(spans).into()
+}
+
+/// A terminal colour as the theme draws it.
+fn hue_role(h: Hue) -> Role {
+    match h {
+        Hue::Red => Role::Danger,
+        Hue::Green => Role::Success,
+        Hue::Yellow => Role::Warning,
+        Hue::Blue => Role::Accent,
+        Hue::Magenta => Role::Violet,
+        Hue::Cyan => Role::Cyan,
+        Hue::White => Role::Text,
+        Hue::Gray => Role::Text3,
+    }
+}
+
+/// The spans of `text`, the start of a message: its terminal styles in the
+/// theme's colours (`runs`, by byte in the message), and over them the
+/// search's matches (`marks`) in the focus colour.
+pub fn styled(text: &str, runs: &[Run], marks: &[Range<usize>], base: Role) -> Vec<Span> {
+    let len = text.len();
+    let mut cuts: Vec<usize> = vec![0, len];
+    for r in runs {
+        cuts.extend([r.start as usize, r.end as usize].into_iter().filter(|c| *c < len));
+    }
+    for m in marks {
+        cuts.extend([m.start, m.end].into_iter().filter(|c| *c < len));
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    let mut spans = Vec::with_capacity(cuts.len());
+    for w in cuts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        if a == b || !text.is_char_boundary(a) || !text.is_char_boundary(b) {
+            continue;
+        }
+        let mut s = Span::new(&text[a..b]);
+        let style =
+            runs.iter().find(|r| r.start as usize <= a && a < r.end as usize).map(|r| r.style).unwrap_or_default();
+        if marks.iter().any(|m| m.start <= a && a < m.end) {
+            s = s.role(Role::Focus).weight(700.0);
+        } else {
+            s = s.role(style.hue.map_or(base, hue_role));
+            if style.bold {
+                s = s.weight(650.0);
+            }
+            if style.dim {
+                s = s.alpha(0.62);
+            }
+        }
+        if style.italic {
+            s = s.italic();
+        }
+        if style.underline {
+            s = s.underline();
+        }
+        spans.push(s);
+    }
+    if spans.is_empty() {
+        spans.push(Span::new(text).role(base));
+    }
+    spans
 }

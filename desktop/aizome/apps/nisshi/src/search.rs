@@ -378,6 +378,7 @@ mod tests {
             cursor: Cursor::None,
             seq: 0,
             flags: 0,
+            styles: None,
         }
     }
 
