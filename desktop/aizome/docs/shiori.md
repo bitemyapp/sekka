@@ -85,9 +85,17 @@ sampled by runs of rows, a run of text's cached glyphs drawn as one image,
 decoding only the rows of a JPEG the page can show, skipping fully
 transparent paints) brings it to 5.9 seconds, 0.52 of PDFium's, faster on
 961 of the 1,189 pages and behind on the rest by 0.15 seconds in all; no
-page changed by more than 2 levels. It's still slower than PDFium on very
-large pages, patch meshes in CMYK, soft masks, Type 3 glyphs that are
-images and predefined CJK CMaps. Its pages differ from hayro's own
+page changed by more than 2 levels. A third (pixmaps of zeroed memory, Type
+3 glyphs cached as other glyphs are, soft masks drawn only where their
+groups draw, CID font widths kept as ranges, ICC transforms and gradient
+stops built only when and as often as needed) brings it to 5.6 seconds
+against PDFium's 11.3, faster on 1,068 pages and behind on the rest by 0.09
+seconds. Cached Type 3 glyphs are placed to a quarter pixel, which moves
+their edges on 16 pages; the other changes leave every page as it was. It's
+still slower than PDFium on free-form and CMYK patch meshes, soft masks over
+images and nested transparency groups, PostScript functions, predefined CJK
+CMaps, and Lab and ICC color spaces, whose transforms take milliseconds to
+build. Its pages differ from hayro's own
 references on under 1% of pixels by more than 48 levels, except one page
 where a hard edge in a gradient moved a pixel.
 
