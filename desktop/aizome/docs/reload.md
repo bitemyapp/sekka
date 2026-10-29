@@ -180,10 +180,9 @@ the core that's running, which for Rust means the same:
   clears the variable.
 
 The directory the build runs in doesn't matter: Cargo hashes a path
-dependency by its path relative to the workspace, which is why the
-workspace reaches Sidestep through a `sidestep` link inside it
-(`sidestep -> ../../vendor/sidestep`), and registry crates by their source,
-not where they're unpacked. Neither do the linker and its arguments.
+dependency by its path relative to the workspace, which is why Sukumo's
+crates are inside it (`sukumo/crates`), and registry crates by their
+source, not where they're unpacked. Neither do the linker and its arguments.
 
 The package records its side of this in
 `share/aizome/build-env.json` (the toolchain's store paths, split in two
@@ -207,9 +206,9 @@ fingerprint is the same, and the checkout's logic loaded into the
 packaged compositor, running headless with foot open, in 16 ms. A
 one-line change to the logic then rebuilt in 6 s and reloaded with foot
 still there and its tab drawn in the change's colour. The first attempt
-was refused, rightly: the Sidestep checkout beside it had moved on since
-the package's lock, and the fingerprint's `sources` part said so (now
-`aizome-dev` names the packages, and warns before building).
+was refused, rightly: the Sidestep checkout beside it (where the toolkit
+was then) had moved on since the package's lock, and the fingerprint's
+`sources` part said so (now `aizome-dev` names the packages).
 
 
 The ABI fingerprint (below) catches a mismatch in sources, lock file,
@@ -218,16 +217,12 @@ features resolved) shows as undefined symbols when the library is
 opened with `RTLD_NOW`, and the reload is refused with that said. Either
 way nothing half-loads.
 
-### Sidestep
+### Sukumo
 
-The checkout's `vendor/sidestep` submodule must be at the revision the
-package was built from (the flake's `sidestep` input): Sidestep's crates
-are part of the core. The development shell checks the submodule out when
-it isn't yet, and says when it is at another revision than the flake's.
-The package records it (`sidestep_rev` in
-`build-env.json`); `aizome-dev` says before building when the checkout's
-Sidestep is elsewhere or has changes, with the command that fixes it,
-and a refused reload names the packages whose sources differ.
+Sukumo's crates (`sukumo/crates`) are part of the core: a change to them
+runs at the next login, as any change to the core does. They are in the
+same checkout as the rest of Aizome, so they move with it, and a refused
+reload names the packages whose sources differ.
 
 ## How it's built
 

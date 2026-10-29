@@ -82,7 +82,6 @@ class Qualification(unittest.TestCase):
         self.candidate = {
             'iso_sha256': release.digest(self.iso), 'iso_bytes': self.iso.stat().st_size,
             'sekka_revision': 'a' * 40, 'flake_lock_sha256': release.digest(ROOT / 'flake.lock'),
-            'sidestep_revision': 'c' * 40,
             'iso_store_path': '/nix/store/synthetic-iso',
         }
         ids = sorted(release.CORE_IDS) + ['Q4.app.test.success', 'Q4.app.test.cancel',
