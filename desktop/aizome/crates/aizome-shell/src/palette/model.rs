@@ -30,6 +30,9 @@ pub struct Item {
     pub mono: bool,
     /// Added to its match score (frecency, being recent).
     pub boost: i64,
+    /// A mark after the title (an app's toolkit), and the toolkit's name
+    /// for the detail pane.
+    pub mark: Option<(aizome_kit::ItemMark, &'static str)>,
 }
 
 impl Item {
@@ -45,6 +48,7 @@ impl Item {
             action,
             mono: false,
             boost: 0,
+            mark: None,
         }
     }
 

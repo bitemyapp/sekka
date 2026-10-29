@@ -50,6 +50,8 @@ pub struct Entry {
     pub id: u64,
     /// What the item is to the system (`"quit"`, `"services"`).
     pub role: Option<String>,
+    /// A mark after the label: an app's toolkit.
+    pub mark: Option<aizome_kit::ItemMark>,
 }
 
 impl Entry {
@@ -99,6 +101,11 @@ impl Entry {
 
     pub fn detail(mut self, d: impl Into<String>) -> Entry {
         self.detail = Some(d.into());
+        self
+    }
+
+    pub fn mark(mut self, mark: Option<aizome_kit::ItemMark>) -> Entry {
+        self.mark = mark;
         self
     }
 
@@ -278,6 +285,7 @@ fn entries(items: &[proto::Item], pid: u32) -> Vec<Entry> {
                 items: entries(&i.items, pid),
                 id: u64::from(i.id),
                 role: i.role.clone(),
+                mark: None,
             }
         })
         .collect()
