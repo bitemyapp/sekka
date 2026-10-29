@@ -1,0 +1,2019 @@
+{
+  "suite": "raw",
+  "status": "observed",
+  "scope": "unchanged GTK app, private software Sway; behavioral observations, no performance claim",
+  "sources": {
+    "/home/callen/work/hotaru-osc52-reference-20261028/tools/gtk_probe.py": "c3e825e75778c1ca0940e1a8051a45ed4090fa85142004889e61f2ed13a81ed5",
+    "/home/callen/work/hotaru-region-frames-20261028/tools/frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+    "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+    "/home/callen/work/hotaru-frame-harness-20261028/build/frame-observer": "3bf2a4ba967c7526e4266b9fb48c730df205253afede449627f5bcdb83a8f1c3"
+  },
+  "cases": [
+    {
+      "name": "raw-write-00",
+      "input": {
+        "length": 13,
+        "sha256": "74fde303937b5836bb84a7451e877b188e2e39cf1ab3d8d4334a431a2bce9d10",
+        "hex": "1b5d35323b633b41413d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250319670
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "hex": "00"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "68fc767af845c83ae5e58bfde04d33ce0577a923d690de71815d70cb467e6e32",
+        "hex": "5052494d4152592d534545442d36"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-00",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250327471
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "hex": "00"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "68fc767af845c83ae5e58bfde04d33ce0577a923d690de71815d70cb467e6e32",
+        "hex": "5052494d4152592d534545442d36"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-00",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250341021
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "hex": "00"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "68fc767af845c83ae5e58bfde04d33ce0577a923d690de71815d70cb467e6e32",
+        "hex": "5052494d4152592d534545442d36"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-80",
+      "input": {
+        "length": 13,
+        "sha256": "ea4a8c7c10ea39f10185d3b22c1e416674a8f3cb1b8b3d65f4a97c5ed240a158",
+        "hex": "1b5d35323b633b67413d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250342664
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71",
+        "hex": "80"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "aec347f04d5a19c0ca0bff9da412ab90a7f42481a10517019c99cf3eb553fcc5",
+        "hex": "5052494d4152592d534545442d39"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-80",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "dd6eef765bf9641dfc1afafd8583e7cab872012698a3d6bf7e9573e1ba80143c",
+        "hex": "1b5d35323b633b584467771b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250315504
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71",
+        "hex": "80"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "aec347f04d5a19c0ca0bff9da412ab90a7f42481a10517019c99cf3eb553fcc5",
+        "hex": "5052494d4152592d534545442d39"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-80",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "dd6eef765bf9641dfc1afafd8583e7cab872012698a3d6bf7e9573e1ba80143c",
+        "hex": "1b5d35323b633b584467771b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250315342
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71",
+        "hex": "80"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "aec347f04d5a19c0ca0bff9da412ab90a7f42481a10517019c99cf3eb553fcc5",
+        "hex": "5052494d4152592d534545442d39"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-ff",
+      "input": {
+        "length": 13,
+        "sha256": "a301babf27148ca444d9c07474f6649be614a97b91700f8a486a8ed06894b8ef",
+        "hex": "1b5d35323b633b2f773d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250318338
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89",
+        "hex": "ff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c494e51adee4fe89861e84ba9eb52680ab1ac76beb382ac0e507c050efd0bc9c",
+        "hex": "5052494d4152592d534545442d3132"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-ff",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "09140b1df2545d480868d5595ed5820edeb4cfe0321abe179fae0a8cd6907727",
+        "hex": "1b5d35323b633b58455a471b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250330025
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89",
+        "hex": "ff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c494e51adee4fe89861e84ba9eb52680ab1ac76beb382ac0e507c050efd0bc9c",
+        "hex": "5052494d4152592d534545442d3132"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-ff",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "09140b1df2545d480868d5595ed5820edeb4cfe0321abe179fae0a8cd6907727",
+        "hex": "1b5d35323b633b58455a471b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250314662
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89",
+        "hex": "ff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c494e51adee4fe89861e84ba9eb52680ab1ac76beb382ac0e507c050efd0bc9c",
+        "hex": "5052494d4152592d534545442d3132"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-c0af",
+      "input": {
+        "length": 13,
+        "sha256": "268b656b8a559e514c0147f03e1768953863020a6e7e518b4c7755e7150225ef",
+        "hex": "1b5d35323b633b774b383d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250338458
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "caf573f0daa6960ecb26f8eddbc4e2059277ad5afc6f72ffd59a0ecead602a22",
+        "hex": "c0af"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d1ebda774ce0b8cc839d267db6a28189ef3b4abe1e34c0ebae091ed48cc42366",
+        "hex": "5052494d4152592d534545442d3135"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-c0af",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "11114bd05486d60fc497323002e6f697ca42dce5a1bdd7283f007b6a0e50cbfa",
+        "hex": "1b5d35323b633b58454d77584546471b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250322855
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "caf573f0daa6960ecb26f8eddbc4e2059277ad5afc6f72ffd59a0ecead602a22",
+        "hex": "c0af"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d1ebda774ce0b8cc839d267db6a28189ef3b4abe1e34c0ebae091ed48cc42366",
+        "hex": "5052494d4152592d534545442d3135"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-c0af",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "11114bd05486d60fc497323002e6f697ca42dce5a1bdd7283f007b6a0e50cbfa",
+        "hex": "1b5d35323b633b58454d77584546471b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250329274
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "caf573f0daa6960ecb26f8eddbc4e2059277ad5afc6f72ffd59a0ecead602a22",
+        "hex": "c0af"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d1ebda774ce0b8cc839d267db6a28189ef3b4abe1e34c0ebae091ed48cc42366",
+        "hex": "5052494d4152592d534545442d3135"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-eda080",
+      "input": {
+        "length": 13,
+        "sha256": "1258cb6e908538d035bacdd66b75eb928f6c11f4cca5b178928f35cf3a94a014",
+        "hex": "1b5d35323b633b376143411b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250261672
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "91a681b998555fb475479817b126c94e57e52011fa1842c5d188795a4a05226b",
+        "hex": "eda080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c410223bcd1e9f965970a9b4394d56d610962831249c68be4a17b65aa405856b",
+        "hex": "5052494d4152592d534545442d3138"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-eda080",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 21,
+        "sha256": "dde0e01f830309ff72ac56d9fd5c08837809f76698b32d754502b7b4428c59ec",
+        "hex": "1b5d35323b633b5845564558454577584467771b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250296545
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "91a681b998555fb475479817b126c94e57e52011fa1842c5d188795a4a05226b",
+        "hex": "eda080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c410223bcd1e9f965970a9b4394d56d610962831249c68be4a17b65aa405856b",
+        "hex": "5052494d4152592d534545442d3138"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-eda080",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 21,
+        "sha256": "dde0e01f830309ff72ac56d9fd5c08837809f76698b32d754502b7b4428c59ec",
+        "hex": "1b5d35323b633b5845564558454577584467771b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250294162
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "91a681b998555fb475479817b126c94e57e52011fa1842c5d188795a4a05226b",
+        "hex": "eda080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c410223bcd1e9f965970a9b4394d56d610962831249c68be4a17b65aa405856b",
+        "hex": "5052494d4152592d534545442d3138"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-f4908080",
+      "input": {
+        "length": 17,
+        "sha256": "f6ca47742d8d5af5df3b811718e3d5b55efa88b03596dab30af6a6f52a9b0ec6",
+        "hex": "1b5d35323b633b394a434167413d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250312179
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 4,
+        "sha256": "fb16995ef3b5d7c2c81b153f945979f1db35ebc62b17616cdc896f8e7836d371",
+        "hex": "f4908080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "e0c766121ac2a6fb0dc1e8f40544da9794e015a3c515c4889f27603ca84422fd",
+        "hex": "5052494d4152592d534545442d3231"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-f4908080",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "f6ca47742d8d5af5df3b811718e3d5b55efa88b03596dab30af6a6f52a9b0ec6",
+        "hex": "1b5d35323b633b394a434167413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250283535
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 4,
+        "sha256": "fb16995ef3b5d7c2c81b153f945979f1db35ebc62b17616cdc896f8e7836d371",
+        "hex": "f4908080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "e0c766121ac2a6fb0dc1e8f40544da9794e015a3c515c4889f27603ca84422fd",
+        "hex": "5052494d4152592d534545442d3231"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-f4908080",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "f6ca47742d8d5af5df3b811718e3d5b55efa88b03596dab30af6a6f52a9b0ec6",
+        "hex": "1b5d35323b633b394a434167413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250313070
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 4,
+        "sha256": "fb16995ef3b5d7c2c81b153f945979f1db35ebc62b17616cdc896f8e7836d371",
+        "hex": "f4908080"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "e0c766121ac2a6fb0dc1e8f40544da9794e015a3c515c4889f27603ca84422fd",
+        "hex": "5052494d4152592d534545442d3231"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-e282",
+      "input": {
+        "length": 13,
+        "sha256": "51badc54c7391bffbbdde9d6a3ca92cd00204488b4b879ed44e01d503d5481fb",
+        "hex": "1b5d35323b633b346f493d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250328393
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "eed0eb1f664e53388c1f00a4a9ba9b8da60fe792af9eb5f6f4b5ee852a91f03f",
+        "hex": "e282"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "efb52b78f74263db3ae3f9b47a8a6e8b8597a75a6655a72e35c0eebcae297283",
+        "hex": "5052494d4152592d534545442d3234"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-e282",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250298599
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "eed0eb1f664e53388c1f00a4a9ba9b8da60fe792af9eb5f6f4b5ee852a91f03f",
+        "hex": "e282"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "efb52b78f74263db3ae3f9b47a8a6e8b8597a75a6655a72e35c0eebcae297283",
+        "hex": "5052494d4152592d534545442d3234"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-e282",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250319500
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "eed0eb1f664e53388c1f00a4a9ba9b8da60fe792af9eb5f6f4b5ee852a91f03f",
+        "hex": "e282"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "efb52b78f74263db3ae3f9b47a8a6e8b8597a75a6655a72e35c0eebcae297283",
+        "hex": "5052494d4152592d534545442d3234"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-e282ac",
+      "input": {
+        "length": 13,
+        "sha256": "88f050ac9ed406e8ffa8c5ea295aef02d8bb12808737243baa4613da77ea541c",
+        "hex": "1b5d35323b633b346f4b731b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250313961
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "c4cc90ed3d26f12d4b08a75140970a7904035c31cbb4515a83f19b9003c00d1d",
+        "hex": "e282ac"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "19c7ebe58d0b9af848e43e37673f70087cdb68680f7b6bfd80b04f77f88b68c2",
+        "hex": "5052494d4152592d534545442d3237"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-e282ac",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "88f050ac9ed406e8ffa8c5ea295aef02d8bb12808737243baa4613da77ea541c",
+        "hex": "1b5d35323b633b346f4b731b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250295154
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "c4cc90ed3d26f12d4b08a75140970a7904035c31cbb4515a83f19b9003c00d1d",
+        "hex": "e282ac"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "19c7ebe58d0b9af848e43e37673f70087cdb68680f7b6bfd80b04f77f88b68c2",
+        "hex": "5052494d4152592d534545442d3237"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-e282ac",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "88f050ac9ed406e8ffa8c5ea295aef02d8bb12808737243baa4613da77ea541c",
+        "hex": "1b5d35323b633b346f4b731b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250326992
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "c4cc90ed3d26f12d4b08a75140970a7904035c31cbb4515a83f19b9003c00d1d",
+        "hex": "e282ac"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "19c7ebe58d0b9af848e43e37673f70087cdb68680f7b6bfd80b04f77f88b68c2",
+        "hex": "5052494d4152592d534545442d3237"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-610062",
+      "input": {
+        "length": 13,
+        "sha256": "917e5211a1422c2b94b399b0c2c022440d2ace74db7e2bd23e9770f026021ed5",
+        "hex": "1b5d35323b633b595142691b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250299320
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138",
+        "hex": "610062"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "bf040133d9d9dbe3b0c4514f47097a20fe5cd6ff8f51b990ed1c0c15d733b709",
+        "hex": "5052494d4152592d534545442d3330"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-610062",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "5cc0c7a8deca7ec6434c0497c3e594d5b402e9101a6dccc220aa5cf214276168",
+        "hex": "1b5d35323b633b59513d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250303566
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138",
+        "hex": "610062"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "bf040133d9d9dbe3b0c4514f47097a20fe5cd6ff8f51b990ed1c0c15d733b709",
+        "hex": "5052494d4152592d534545442d3330"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-610062",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "5cc0c7a8deca7ec6434c0497c3e594d5b402e9101a6dccc220aa5cf214276168",
+        "hex": "1b5d35323b633b59513d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250322855
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 3,
+        "sha256": "59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138",
+        "hex": "610062"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "bf040133d9d9dbe3b0c4514f47097a20fe5cd6ff8f51b990ed1c0c15d733b709",
+        "hex": "5052494d4152592d534545442d3330"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-5cff",
+      "input": {
+        "length": 13,
+        "sha256": "ab12323c6221cd94cf20ac1106a01403ca84dffdd6bf873580337db3330dc16a",
+        "hex": "1b5d35323b633b5850383d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250351429
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "3b40ca055575a3c8dd39e0b97328b8d109b7450a3c39c4e927e23b6c11127d50",
+        "hex": "5cff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "2d12817c403eb9d9b955268ab618f2315bdd8bea4b7c3181808e4694ea398097",
+        "hex": "5052494d4152592d534545442d3333"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-5cff",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "38d180b50ca9cd7738a889f4d0f27a20770aa309851d04fea77b1972c19a90bc",
+        "hex": "1b5d35323b633b5846784752673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250310657
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "3b40ca055575a3c8dd39e0b97328b8d109b7450a3c39c4e927e23b6c11127d50",
+        "hex": "5cff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "2d12817c403eb9d9b955268ab618f2315bdd8bea4b7c3181808e4694ea398097",
+        "hex": "5052494d4152592d534545442d3333"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-5cff",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "38d180b50ca9cd7738a889f4d0f27a20770aa309851d04fea77b1972c19a90bc",
+        "hex": "1b5d35323b633b5846784752673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250281644
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "3b40ca055575a3c8dd39e0b97328b8d109b7450a3c39c4e927e23b6c11127d50",
+        "hex": "5cff"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "2d12817c403eb9d9b955268ab618f2315bdd8bea4b7c3181808e4694ea398097",
+        "hex": "5052494d4152592d534545442d3333"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-7f",
+      "input": {
+        "length": 13,
+        "sha256": "f4523880897a3ee6fd14b2df4a33e94d11c8ee0e6719f4e01beddabc7cd8ed8a",
+        "hex": "1b5d35323b633b66773d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250349226
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "620bfdaa346b088fb49998d92f19a7eaf6bfc2fb0aee015753966da1028cb731",
+        "hex": "7f"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1d551dbfde9fe687dc8fc57552635f9142f3082f1265416aa3a5cfcbd16a03a6",
+        "hex": "5052494d4152592d534545442d3336"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-7f",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "f4523880897a3ee6fd14b2df4a33e94d11c8ee0e6719f4e01beddabc7cd8ed8a",
+        "hex": "1b5d35323b633b66773d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250330447
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "620bfdaa346b088fb49998d92f19a7eaf6bfc2fb0aee015753966da1028cb731",
+        "hex": "7f"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1d551dbfde9fe687dc8fc57552635f9142f3082f1265416aa3a5cfcbd16a03a6",
+        "hex": "5052494d4152592d534545442d3336"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-7f",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "f4523880897a3ee6fd14b2df4a33e94d11c8ee0e6719f4e01beddabc7cd8ed8a",
+        "hex": "1b5d35323b633b66773d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250328414
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "620bfdaa346b088fb49998d92f19a7eaf6bfc2fb0aee015753966da1028cb731",
+        "hex": "7f"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1d551dbfde9fe687dc8fc57552635f9142f3082f1265416aa3a5cfcbd16a03a6",
+        "hex": "5052494d4152592d534545442d3336"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-1b",
+      "input": {
+        "length": 13,
+        "sha256": "f51e110fddc7e6f1d9c198cf4bba1f57b0585f0d45a9a25af2fd80c3343f60e1",
+        "hex": "1b5d35323b633b47773d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250332551
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "77adfc95029e73b173f60e556f915b0cd8850848111358b1c370fb7c154e61fd",
+        "hex": "1b"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "fd2d4e9b788246703141d0056a6c54626a76d35b71b6f1e05f0d360773f1360b",
+        "hex": "5052494d4152592d534545442d3339"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-1b",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "f51e110fddc7e6f1d9c198cf4bba1f57b0585f0d45a9a25af2fd80c3343f60e1",
+        "hex": "1b5d35323b633b47773d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250330768
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "77adfc95029e73b173f60e556f915b0cd8850848111358b1c370fb7c154e61fd",
+        "hex": "1b"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "fd2d4e9b788246703141d0056a6c54626a76d35b71b6f1e05f0d360773f1360b",
+        "hex": "5052494d4152592d534545442d3339"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-1b",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "f51e110fddc7e6f1d9c198cf4bba1f57b0585f0d45a9a25af2fd80c3343f60e1",
+        "hex": "1b5d35323b633b47773d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250339421
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "77adfc95029e73b173f60e556f915b0cd8850848111358b1c370fb7c154e61fd",
+        "hex": "1b"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "fd2d4e9b788246703141d0056a6c54626a76d35b71b6f1e05f0d360773f1360b",
+        "hex": "5052494d4152592d534545442d3339"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-0a",
+      "input": {
+        "length": 13,
+        "sha256": "51e4e7a8bb54b985f5a444981961a293c4054a5a659aae8c750b0cea85841d00",
+        "hex": "1b5d35323b633b43673d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250307062
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "hex": "0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1bd9be013cf4ce5c1cc6a246d438466001e55af7c35938a14be32eebe7b8a1a6",
+        "hex": "5052494d4152592d534545442d3432"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-0a",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "51e4e7a8bb54b985f5a444981961a293c4054a5a659aae8c750b0cea85841d00",
+        "hex": "1b5d35323b633b43673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250331179
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "hex": "0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1bd9be013cf4ce5c1cc6a246d438466001e55af7c35938a14be32eebe7b8a1a6",
+        "hex": "5052494d4152592d534545442d3432"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-0a",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "51e4e7a8bb54b985f5a444981961a293c4054a5a659aae8c750b0cea85841d00",
+        "hex": "1b5d35323b633b43673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250240902
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "hex": "0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1bd9be013cf4ce5c1cc6a246d438466001e55af7c35938a14be32eebe7b8a1a6",
+        "hex": "5052494d4152592d534545442d3432"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-0d",
+      "input": {
+        "length": 13,
+        "sha256": "fcb62ab5a060f0a833a4fd6ccd333721e5599fb6d1ade7d64e0521e8fccc7bd1",
+        "hex": "1b5d35323b633b44513d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250338400
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "9d1e0e2d9459d06523ad13e28a4093c2316baafe7aec5b25f30eba2e113599c4",
+        "hex": "0d"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "b2940ea0068ed93ee76067638841ce9fa97bb001e3b39273c84788c1a780d8dd",
+        "hex": "5052494d4152592d534545442d3435"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-0d",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "fcb62ab5a060f0a833a4fd6ccd333721e5599fb6d1ade7d64e0521e8fccc7bd1",
+        "hex": "1b5d35323b633b44513d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250273331
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "9d1e0e2d9459d06523ad13e28a4093c2316baafe7aec5b25f30eba2e113599c4",
+        "hex": "0d"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "b2940ea0068ed93ee76067638841ce9fa97bb001e3b39273c84788c1a780d8dd",
+        "hex": "5052494d4152592d534545442d3435"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-0d",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "fcb62ab5a060f0a833a4fd6ccd333721e5599fb6d1ade7d64e0521e8fccc7bd1",
+        "hex": "1b5d35323b633b44513d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250328956
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 1,
+        "sha256": "9d1e0e2d9459d06523ad13e28a4093c2316baafe7aec5b25f30eba2e113599c4",
+        "hex": "0d"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "b2940ea0068ed93ee76067638841ce9fa97bb001e3b39273c84788c1a780d8dd",
+        "hex": "5052494d4152592d534545442d3435"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-0d0a",
+      "input": {
+        "length": 13,
+        "sha256": "38068e0c5e605b20d50463705aa67d95a3c29c8f26980be6c0b4d387e072e518",
+        "hex": "1b5d35323b633b44516f3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250326282
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+        "hex": "0d0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "ae660f40494da0a008341e101ddfbfd3c1e676ada438f9a9cfe757bcac240476",
+        "hex": "5052494d4152592d534545442d3438"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-0d0a",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "38068e0c5e605b20d50463705aa67d95a3c29c8f26980be6c0b4d387e072e518",
+        "hex": "1b5d35323b633b44516f3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250331099
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+        "hex": "0d0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "ae660f40494da0a008341e101ddfbfd3c1e676ada438f9a9cfe757bcac240476",
+        "hex": "5052494d4152592d534545442d3438"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-0d0a",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "38068e0c5e605b20d50463705aa67d95a3c29c8f26980be6c0b4d387e072e518",
+        "hex": "1b5d35323b633b44516f3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250327834
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 2,
+        "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+        "hex": "0d0a"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "ae660f40494da0a008341e101ddfbfd3c1e676ada438f9a9cfe757bcac240476",
+        "hex": "5052494d4152592d534545442d3438"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-write-0076616c6964",
+      "input": {
+        "length": 17,
+        "sha256": "e5be3616d2015bec69e4b3d86d6e27ab82aa86034bf92c716a44392ba7202dd4",
+        "hex": "1b5d35323b633b41485a6862476c6b1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250340353
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 6,
+        "sha256": "d755cbee2ab86ee7db1bd4396028991665e1133fae6b5a12c3a05ed6423bb3bd",
+        "hex": "0076616c6964"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1178b1149ceacf922db95f15da40f308145cce6699532649561e7be1d182c7d7",
+        "hex": "5052494d4152592d534545442d3531"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-own-read-0076616c6964",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250322536
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 6,
+        "sha256": "d755cbee2ab86ee7db1bd4396028991665e1133fae6b5a12c3a05ed6423bb3bd",
+        "hex": "0076616c6964"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1178b1149ceacf922db95f15da40f308145cce6699532649561e7be1d182c7d7",
+        "hex": "5052494d4152592d534545442d3531"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "raw-foreign-read-0076616c6964",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250300072
+      },
+      "producer_write_chunk": 65536,
+      "standard": {
+        "length": 6,
+        "sha256": "d755cbee2ab86ee7db1bd4396028991665e1133fae6b5a12c3a05ed6423bb3bd",
+        "hex": "0076616c6964"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1178b1149ceacf922db95f15da40f308145cce6699532649561e7be1d182c7d7",
+        "hex": "5052494d4152592d534545442d3531"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    }
+  ],
+  "private_environment": {
+    "WAYLAND_DISPLAY": "wayland-1",
+    "XDG_RUNTIME_DIR": "/tmp/osc52-2smbzido",
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman"
+  },
+  "keyboard_ready": "{\"event\":\"ready\",\"time_ns\":4085766733146194}\n",
+  "fixture": {
+    "ready": true,
+    "pid": 2303922
+  },
+  "focused_window": {
+    "id": 5,
+    "type": "con",
+    "orientation": "none",
+    "percent": 1.0,
+    "urgent": false,
+    "marks": [],
+    "focused": true,
+    "layout": "none",
+    "border": "none",
+    "current_border_width": 2,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "deco_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "window_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 600
+    },
+    "name": "/usr/bin/python3",
+    "window": null,
+    "nodes": [],
+    "floating_nodes": [],
+    "focus": [],
+    "fullscreen_mode": 0,
+    "sticky": false,
+    "pid": 2303733,
+    "app_id": "com.mitchellh.ghostty",
+    "visible": true,
+    "max_render_time": 0,
+    "shell": "xdg_shell",
+    "inhibit_idle": false,
+    "idle_inhibitors": {
+      "user": "none",
+      "application": "none"
+    }
+  },
+  "primary_selection_available": true,
+  "keyboard_probe": {
+    "length": 1,
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "hex": "61"
+  },
+  "initial_external_read": {
+    "length": 29,
+    "sha256": "b20de5d5ff35ea38013613d35d53c9488d9b850cd704b9dff8a3d49e465707f5",
+    "hex": "1b5d35323b633b55315242546b5242556b51745530564652413d3d1b5c"
+  },
+  "app_alive": true,
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "process_returns": [
+    0,
+    0,
+    0,
+    -15,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -15,
+    -15
+  ]
+}
