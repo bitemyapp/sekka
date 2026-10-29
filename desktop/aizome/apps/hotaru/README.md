@@ -71,9 +71,19 @@ claim of reduced resident memory.
 File → Split Right/Down divides the focused pane equally and focuses the new
 session. Native dividers resize the panes. Close Pane removes just that session
 and focuses its previous neighbor, or its next neighbor when it was first.
-Close Tab removes all panes in that tab. View contains directional and sequential
-pane focus actions. Shift-drag selects text while a running program captures the
-mouse; Shift-wheel scrolls local history.
+Close Tab removes all panes in that tab. Window → Zoom Pane lets the focused
+pane fill its tab until it's toggled again, a pane is split or closed, or focus
+moves to another pane; the status bar says so while it lasts. The Window menu
+also steps through tabs and panes and lists the tabs by title. Shift-drag
+selects text while a running program captures the mouse; Shift-wheel scrolls
+local history.
+
+Edit → Clear Screen (❖K) does what Ghostty's `clear_screen` does: the scrollback
+goes, and at a prompt marked by shell integration so does the screen, with a
+form feed asking the shell to draw its prompt again; otherwise the cursor's
+line moves to the top. A program's alternate screen is left alone. View →
+Reset Terminal (⌥❖R) is a hard reset (RIS) for a terminal a program left in a
+strange state, including any escape sequence it was partway through.
 
 Packaged sessions use Hotaru's private terminfo entry. Default Bash, Zsh and
 Fish shells can report their working directory without changing user dotfiles;
@@ -82,21 +92,43 @@ keep their arguments and startup behavior. See the [shell integration notes](../
 for startup details and the after-config fallback for Zsh frameworks that
 replace prompt hooks.
 
+Hotaru → Settings… (❖,) opens a window of four pages, laid out as Settei's:
+General (shell integration, scrollback, copy format, the file itself), Text
+(family, size, weight, ligatures, fallback), Appearance (Follow Desktop, Night,
+Day or High Contrast, each shown as a small terminal in its colours; cursor
+shape and blinking) and Shortcuts. Changes reach every pane as they're made and
+are saved at once. The family list holds the monospaced families installed,
+found on a worker the first time Settings opens. ❖W in Settings closes Settings.
+
+Shortcuts lists every command with its keys. The pencil opens a command's row:
+the next key pressed with ❖, ⌃ or ⌥ (or a function key, or ⇧ with Page Up/Down,
+Home or End) is added, taken from any other command that had it; × takes a key
+away (a default is written as `ignore`); Escape or Done closes the row. While a
+row is open the menus give their shortcuts up, so ❖T can be typed rather than
+opening a tab. Keys the desktop keeps (⌥❖ and the arrows, ❖Tab, ❖Space, ⌃❖ with
+digits…) and plain ⌃ letters, which programs need, are refused with a reason.
+Restore Defaults empties `[keybindings]`.
+
 Settings live at `$XDG_CONFIG_HOME/aizome/hotaru.toml`, falling back to
 `~/.config/aizome/hotaru.toml`. `--config-file FILE` selects the configuration for
-the initial application instance. View saves text size, weight and appearance
-changes through a bounded background worker. File → Reload Configuration applies
-file edits; invalid settings leave the current configuration intact. Managed
-symbolic links are readable but are not replaced by automatic saves.
+the initial application instance. Settings and the View menu's weight and
+appearance choices save through a bounded background worker. ❖+ and ❖− zoom
+the window's text for now, as Ghostty and foot do; Actual Size (❖0) returns to
+the size Settings keeps. Hotaru → Reload Configuration (⇧❖,) applies file
+edits; invalid settings leave the current configuration intact. A managed
+symbolic link (a system configuration's) is read, never replaced: Settings says
+changes last until Hotaru quits.
 
 ```toml
-font_size = 14.0 # Typographic points, before output scale.
+font_size = 13.0 # Typographic points, before output scale; Ghostty's default.
 font_weight = 400
 font_families = ["IBM Plex Mono"]
 font_fallback = ["Noto Sans Mono CJK JP", "Noto Sans Symbols 2"]
 font_emoji = ["Noto Color Emoji"]
-font_features = [] # For example ["liga=0", "calt=0"].
+font_features = [] # For example ["liga=0", "calt=0"], what Ligatures off writes.
 theme = "desktop" # desktop, night, day, high-contrast
+cursor_style = "block" # block, bar, underline; programs may choose another.
+cursor_blink = true
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
 shell_integration = true # Future default-shell panes only.
@@ -117,13 +149,31 @@ resolved primary family, physical grid and unavailable requested families.
 See [the font audit and implementation notes](../../../../apps/hotaru/docs/fonts.md)
 for remaining limitations and fixture provenance.
 
-Keybindings accept Super, Ctrl, Alt and
-Shift modifiers plus a character, named navigation key or F1–F35. Actions include
-`new-tab`, `close-pane`, `close-tab`, `split-right`, `split-down`, `previous-pane`,
-`next-pane`, `focus-left/right/up/down`, `copy`, `paste`, `copy-all`, `find`,
-`larger-text`, `smaller-text`, `actual-size`, `reload-config` and `ignore`.
-Aizome's Super shortcuts are the defaults; familiar Linux Ctrl-Shift-O/E and
-Ctrl-Shift-C/V aliases are also available. Plain Control-C remains terminal input.
+Keybindings accept Super, Ctrl, Alt and Shift modifiers plus a character, named
+navigation key or F1–F35; shifted punctuation is named by its unshifted key
+(`super+shift+[` is ⇧❖[, whatever the layout types). Aizome's Super shortcuts are
+the defaults; familiar Linux aliases (Ghostty's, GNOME Terminal's and those of
+Aizome's foot configuration) also work. Plain Control-C remains terminal input.
+⌥❖ and the arrows fill and split windows on Aizome's desktop, so moving between
+panes is ⇧❖ and the arrows.
+
+| Action | Default keys |
+|---|---|
+| `settings`, `reload-config` | ❖, · ⇧❖, |
+| `new-tab`, `split-right`, `split-down` | ❖T, ⌃⇧T · ❖D, ⌃⇧O · ⇧❖D, ⌃⇧E |
+| `close-pane`, `close-tab`, `zoom-pane` | ❖W, ⌃⇧W · ⌥❖W · ⇧❖↩ |
+| `previous-tab`, `next-tab` | ⇧❖[, ❖PgUp, ⌃⇧Tab, ⌃PgUp · ⇧❖], ❖PgDn, ⌃Tab, ⌃PgDn |
+| `select-tab-1` … `select-tab-8`, `last-tab` | ❖1 … ❖8 · ❖9 |
+| `previous-pane`, `next-pane` | ❖[ · ❖] |
+| `focus-left/right/up/down` | ⇧❖←→↑↓, ⌃⌥←→↑↓ |
+| `copy`, `paste`, `copy-screen`, `copy-all` | ❖C, ⌃⇧C · ❖V, ⌃⇧V · none · ⇧❖C |
+| `find`, `find-next`, `find-previous`, `find-selection` | ❖F, ⌃⇧F · ❖G · ⇧❖G · ❖E |
+| `clear-screen`, `reset-terminal` | ❖K · ⌥❖R |
+| `larger-text`, `smaller-text`, `actual-size` | ❖+, ❖=, ⌃+, ⌃= · ❖−, ⌃− · ❖0, ⌃0 |
+| `scroll-to-top`, `scroll-to-bottom` | ❖Home · ❖End |
+| `scroll-page-up`, `scroll-page-down` | ⇧PgUp · ⇧PgDn |
+
+`ignore` silences a key, and Settings' × writes it for a default.
 
 Hover an OSC 8 hyperlink to see its actual target in the status bar; hold Super
 to underline it and click to open it in the desktop handler. Both mouse edges
@@ -155,6 +205,7 @@ cargo build --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --locked
 ```
 
 Tests cover native Night/Day rendering, explicit terminal colors, tabs and splits,
+the Settings window and shortcut recording, tab and pane navigation, zoom,
 large asynchronous plain/HTML copies, cancellation and stale results, output delivery before shell exit,
 copying after exit, settings validation/persistence, negotiated input and 50,000
 terminal queries under PTY backpressure. Ignored child fixtures are executed as
@@ -191,3 +242,14 @@ installed resources and compares the private terminfo with a fresh compilation.
 including from a wide cell's continuation; plain clicks, movement, stale frames
 and malformed UTF-8 do not open it. The fixture records hover rendering and
 verifies a failed opener's status, without launching external applications.
+
+`tests/wayland/settings.py BINARY EVIDENCE_DIRECTORY` drives the shortcuts and
+the Settings window through a real XKB keymap and a virtual pointer: ❖K clears
+history (checked through Copy All), ❖1, ❖2, ❖9, ⇧❖[, ⇧❖] (which type braces) and
+⌃Tab move between three tabs, ⇧❖↩ zooms a split, ❖, opens Settings, the Day card
+is clicked and the terminal window beside it is checked by its pixels, ⌥❖R is
+recorded for New Tab and then opens one, ❖W in Settings leaves both panes, and
+⇧❖, reloads an edited file into a new grid size. It saves screenshots, the
+inspection of both windows and the result. For a Cargo build, pass a wrapper
+that sets the development shell's `LD_LIBRARY_PATH` for Hotaru alone, and run
+the script itself outside that shell so the system's Sway starts.

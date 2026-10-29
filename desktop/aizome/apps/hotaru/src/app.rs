@@ -8,7 +8,8 @@ use hotaru_io::PtyCommand;
 
 use crate::clipboard::{ClipboardWorker, CopySource, Job};
 use crate::panes::{Axis, Direction, PaneTree};
-use crate::session::{Command, Session};
+use crate::preferences::{Notice, Page};
+use crate::session::{Command, Defaults, Session};
 use crate::settings::{self, Action, Bindings, Settings};
 use crate::terminal_view::{Selection, colors_for, terminal_view};
 
@@ -28,6 +29,24 @@ pub enum Msg {
     SetTheme(settings::Theme),
     SetWeight(u16),
     SetCopyFormat(settings::CopyFormat),
+    SetFontSize(f64),
+    SetFontFamily(String),
+    SetLigatures(bool),
+    SetCursorStyle(settings::CursorStyle),
+    SetCursorBlink(bool),
+    SetScrollback(usize),
+    SetShellIntegration(bool),
+    SettingsPage(Page),
+    MonospaceFamilies(Arc<[String]>),
+    OpenConfigFile,
+    ConfigOpened(Result<(), aizome_kit::urls::OpenUrlError>),
+    /// Settings waits for a new shortcut for the action, or stops waiting.
+    RecordShortcut(Action),
+    StopRecording(Action),
+    Recorded(Action, Shortcut),
+    RemoveShortcut(Action, Shortcut),
+    RestoreShortcuts,
+    RestoredShortcuts,
     ConfigLoaded(u64, Result<Settings, String>),
     ConfigSaved(u64, Result<(), String>),
     Frame(u64, Arc<Snapshot>),
@@ -115,12 +134,15 @@ pub struct Tab {
     pub id: u64,
     pub tree: PaneTree,
     pub active: u64,
+    /// The active pane fills the tab, its splits set aside until unzoomed.
+    pub zoomed: bool,
 }
 
 pub struct Hotaru {
     pub tabs: Vec<Tab>,
     pub panes: Vec<Pane>,
     pub active: u64,
+    /// The size text is drawn at: the configured size, zoomed by ❖+ and ❖−.
     pub font_size: f64,
     pub find: bool,
     pub search: String,
@@ -151,6 +173,17 @@ pub struct Hotaru {
     automatic_hit: Option<crate::links::Link>,
     resolver_worker: Option<crate::link_resolver::Worker>,
     resolver_request: Option<Arc<crate::link_resolver::Request>>,
+    /// The Settings window, while it's open.
+    pub settings_window: Option<WindowKey>,
+    pub settings_page: Page,
+    pub(crate) settings_notice: Option<Notice>,
+    /// The configuration is a symbolic link (a system's): changes aren't saved.
+    pub settings_managed: bool,
+    /// Monospaced families installed, once looked for.
+    pub(crate) monospace: Option<Arc<[String]>>,
+    /// The action a shortcut is being typed for in Settings.
+    pub recording: Option<Action>,
+    open_after_save: bool,
 }
 
 impl Hotaru {
@@ -159,7 +192,7 @@ impl Hotaru {
             tabs: Vec::new(),
             panes: Vec::new(),
             active: 0,
-            font_size: 14.0,
+            font_size: settings::DEFAULT_FONT_SIZE,
             find: false,
             search: String::new(),
             find_state: crate::search::State::default(),
@@ -189,6 +222,13 @@ impl Hotaru {
             automatic_hit: None,
             resolver_worker: None,
             resolver_request: None,
+            settings_window: None,
+            settings_page: Page::default(),
+            settings_notice: None,
+            settings_managed: false,
+            monospace: None,
+            recording: None,
+            open_after_save: false,
         }
     }
 
@@ -206,6 +246,29 @@ impl Hotaru {
     pub fn active_pane(&self) -> Option<&Pane> {
         let pane = self.active_tab()?.active;
         self.panes.iter().find(|p| p.id == pane)
+    }
+
+    pub fn bindings(&self) -> &Bindings {
+        &self.bindings
+    }
+
+    /// The desktop's appearance, whatever theme Hotaru keeps to.
+    pub fn desktop_appearance(&self) -> aizome_kit::theme::Appearance {
+        self.desktop_appearance
+    }
+
+    /// The families Settings offers: those found, with the configured one
+    /// and Aizome's own even before they are (or if the search can't see
+    /// fonts installed for this process only).
+    pub fn monospace_families(&self) -> Arc<[String]> {
+        let mut families: Vec<String> = self.monospace.as_deref().unwrap_or_default().to_vec();
+        for name in [self.settings.primary_family(), "IBM Plex Mono"] {
+            if !families.iter().any(|family| family.eq_ignore_ascii_case(name)) {
+                families.push(name.to_owned());
+            }
+        }
+        families.sort_by_key(|family| family.to_lowercase());
+        families.into()
     }
 
     fn focus_active(&self, cx: &mut Cx<Msg>) {
@@ -234,6 +297,8 @@ impl Hotaru {
         self.next_id += 1;
         let mut terminal = Terminal::new(80, 24, self.settings.scrollback);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
+        let cursor = (self.settings.cursor_style.shape(), self.settings.cursor_blink);
+        terminal.set_default_cursor(cursor.0, cursor.1);
         let colors = colors_for(cx.theme());
         terminal.set_default_colors(colors.clone());
         if self.demo {
@@ -251,7 +316,8 @@ impl Hotaru {
         let (session, status) = if self.demo {
             (None, "Preview".into())
         } else {
-            match Session::spawn(id, command, colors, self.settings.scrollback, cx.stream()) {
+            let defaults = Defaults { colors, scrollback: self.settings.scrollback, cursor };
+            match Session::spawn(id, command, defaults, cx.stream()) {
                 Ok(session) => (Some(session), "Shell".into()),
                 Err(e) => (None, format!("Could not start shell: {e}")),
             }
@@ -289,8 +355,33 @@ impl Hotaru {
             return;
         }
         let id = self.new_pane(cx, inherit_cwd);
-        self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id });
+        self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id, zoomed: false });
         self.active = id;
+        self.focus_after_rebuild(cx);
+    }
+
+    /// The tab at `index` (0-based), or the last for `None`.
+    fn select_tab_at(&mut self, index: Option<usize>, cx: &mut Cx<Msg>) {
+        let tab = match index {
+            Some(index) => self.tabs.get(index),
+            None => self.tabs.last(),
+        };
+        if let Some(id) = tab.map(|tab| tab.id) {
+            self.update(Msg::SelectTab(id), cx);
+        }
+    }
+
+    /// The tab `step` places along, round from the last to the first.
+    fn step_tab(&mut self, step: isize, cx: &mut Cx<Msg>) {
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == self.active) else { return };
+        let count = self.tabs.len() as isize;
+        self.select_tab_at(Some((index as isize + step).rem_euclid(count) as usize), cx);
+    }
+
+    fn toggle_zoom(&mut self, cx: &mut Cx<Msg>) {
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) else { return };
+        // A lone pane already fills its tab.
+        tab.zoomed = !tab.zoomed && matches!(tab.tree, PaneTree::Split { .. });
         self.focus_after_rebuild(cx);
     }
 
@@ -306,6 +397,7 @@ impl Hotaru {
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
             tab.tree.split(target, id, split, axis);
             tab.active = id;
+            tab.zoomed = false;
         }
         self.focus_after_rebuild(cx);
     }
@@ -316,6 +408,11 @@ impl Hotaru {
         let removed = self.tabs.remove(index).tree.leaves();
         self.panes.retain(|pane| !removed.contains(&pane.id));
         if self.tabs.is_empty() {
+            // Settings alone would be a terminal without a terminal.
+            if let Some(window) = self.settings_window.take() {
+                self.recording = None;
+                cx.close_window(window);
+            }
             if self.settings_pending {
                 self.closing = true;
             } else {
@@ -341,6 +438,7 @@ impl Hotaru {
         let tab = self.tabs.iter_mut().find(|tab| tab.id == self.active).unwrap();
         tab.tree = std::mem::replace(&mut tab.tree, PaneTree::Leaf(0)).remove(id).unwrap();
         tab.active = next;
+        tab.zoomed = false;
         self.panes.retain(|pane| pane.id != id);
         self.focus_after_rebuild(cx);
     }
@@ -407,11 +505,16 @@ impl Hotaru {
     fn focus_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.tree.leaves().contains(&id)) {
             self.active = tab.id;
+            // Going to another pane brings the tab's splits back, as Ghostty does.
+            let unzoomed = tab.zoomed && tab.active != id;
+            if unzoomed {
+                tab.zoomed = false;
+            }
             tab.active = id;
             if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
                 pane.bell = false;
             }
-            self.focus_active(cx);
+            if unzoomed { self.focus_after_rebuild(cx) } else { self.focus_active(cx) }
         }
     }
 
@@ -659,11 +762,152 @@ impl Hotaru {
     }
 
     fn apply_settings(&mut self, settings: Settings, cx: &mut Cx<Msg>) {
+        let cursor = (settings.cursor_style, settings.cursor_blink);
+        let cursor_changed = cursor != (self.settings.cursor_style, self.settings.cursor_blink);
         self.font_size = settings.font_size;
         self.bindings = Arc::new(Bindings::new(&settings));
         self.settings = settings;
         self.apply_appearance(cx);
+        if cursor_changed {
+            self.apply_cursor();
+        }
         self.shape_all();
+    }
+
+    /// Every pane's default cursor; a program's own choice stays in force.
+    fn apply_cursor(&mut self) {
+        let (shape, blinking) = (self.settings.cursor_style.shape(), self.settings.cursor_blink);
+        let demo = self.demo;
+        for pane in &mut self.panes {
+            if let Some(session) = &pane.session {
+                if let Err(error) = session.command(Command::Cursor(shape, blinking)) {
+                    pane.status = error.into();
+                }
+            } else if demo {
+                let snapshot = Arc::make_mut(&mut pane.snapshot);
+                snapshot.cursor.shape = shape;
+                snapshot.cursor.blinking = blinking;
+            }
+        }
+        if demo {
+            self.shape_all();
+        }
+    }
+
+    fn show_settings(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(window) = self.settings_window {
+            cx.activate(window);
+            return;
+        }
+        let spec = WindowSpec::new("Hotaru Settings").size(720.0, 560.0).min_size(560.0, 400.0);
+        let window = cx.open_window(spec);
+        if window == WindowKey::NONE {
+            return;
+        }
+        self.settings_window = Some(window);
+        self.settings_notice = None;
+        if self.monospace.is_none() {
+            cx.spawn(|| Msg::MonospaceFamilies(crate::font::monospaced_families()));
+        }
+    }
+
+    fn close_settings(&mut self, cx: &mut Cx<Msg>) {
+        self.recording = None;
+        if let Some(window) = self.settings_window.take() {
+            cx.close_window(window);
+        }
+    }
+
+    /// A shortcut-changing edit is made: use it, and keep it.
+    fn rebind(&mut self, notice: Notice) {
+        self.bindings = Arc::new(Bindings::new(&self.settings));
+        self.save_settings();
+        self.settings_notice = Some(notice);
+    }
+
+    fn record(&mut self, action: Action, shortcut: Shortcut) {
+        use aizome_kit::ShortcutKey as K;
+        let label = shortcut.label();
+        let held = shortcut.command || shortcut.ctrl || shortcut.alt;
+        let moves = matches!(shortcut.key, K::PageUp | K::PageDown | K::Home | K::End | K::Up | K::Down);
+        let refusal = if !held && !matches!(shortcut.key, K::F(_)) && !(shortcut.shift && moves) {
+            Some(format!("{label} is typing: hold ❖, ⌃ or ⌥ with the key."))
+        } else if shortcut.ctrl
+            && !(shortcut.command || shortcut.alt || shortcut.shift)
+            && matches!(shortcut.key, K::Char(_) | K::Space)
+        {
+            Some(format!("{label} belongs to the programs in the terminal."))
+        } else if settings::desktop_shortcut(shortcut) {
+            Some(format!("{label} is the desktop's: Hotaru never hears it."))
+        } else {
+            None
+        };
+        if let Some(refusal) = refusal {
+            self.settings_notice = Some(Notice::failed(refusal));
+            return;
+        }
+        let previous = self.bindings.bound(shortcut);
+        if previous == Some(action) {
+            self.settings_notice = Some(Notice::done(format!("{label} already runs {}.", action.label())));
+            return;
+        }
+        let key = settings::format_shortcut(shortcut);
+        if self.settings.keybindings.len() >= 128 && !self.settings.keybindings.contains_key(&key) {
+            self.settings_notice = Some(Notice::failed("hotaru.toml holds at most 128 shortcut changes."));
+            return;
+        }
+        self.settings.keybindings.retain(|written, _| settings::parse_shortcut(written) != Ok(shortcut));
+        self.settings.keybindings.insert(key, action);
+        self.rebind(Notice::done(match previous {
+            Some(other) => format!("{label} runs {} now, not {}.", action.label(), other.label()),
+            None => format!("{label} runs {} now.", action.label()),
+        }));
+    }
+
+    fn unbind(&mut self, action: Action, shortcut: Shortcut) {
+        // What the file says goes; a default is silenced with `ignore`.
+        self.settings
+            .keybindings
+            .retain(|written, bound| !(settings::parse_shortcut(written) == Ok(shortcut) && *bound == action));
+        if Bindings::is_default(shortcut, action) {
+            self.settings.keybindings.insert(settings::format_shortcut(shortcut), Action::Ignore);
+        }
+        self.rebind(Notice::done(format!("{} no longer runs {}.", shortcut.label(), action.label())));
+    }
+
+    fn open_config_file(&mut self, cx: &mut Cx<Msg>) {
+        let Some(path) = self.settings_path.clone() else { return };
+        // An editor wants a file to open: write the settings out first.
+        if !self.settings_managed && !path.exists() {
+            self.open_after_save = true;
+            self.save_settings();
+            return;
+        }
+        let uri = crate::preferences::file_uri(&path);
+        if let Err(error) = cx.open_url_with_result(&uri, Msg::ConfigOpened) {
+            cx.send(Msg::ConfigOpened(Err(error)));
+        }
+    }
+
+    fn find_selection(&mut self, cx: &mut Cx<Msg>) {
+        let Some(pane) = self.active_pane() else { return };
+        let Some(selection) = pane.selection.filter(|selection| !selection.is_empty()) else { return };
+        let text = selection.text(pane.displayed_snapshot().unwrap_or(&pane.snapshot));
+        let needle: String = text.trim_end_matches(['\r', '\n']).chars().take(4096).collect();
+        if needle.trim().is_empty() {
+            return;
+        }
+        self.find = true;
+        self.update(Msg::Search(needle), cx);
+    }
+
+    fn pane_command(&mut self, command: Command) {
+        let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+        if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+            pane.selection = None;
+        }
+        self.send(id, command);
+        self.shape_pane(id, true);
     }
 
     fn apply_appearance(&self, cx: &mut Cx<Msg>) {
@@ -682,6 +926,9 @@ impl Hotaru {
 
     fn save_settings(&mut self) {
         self.settings_token = self.settings_token.wrapping_add(1);
+        if self.settings_managed {
+            return;
+        }
         if let Some(worker) = &self.settings_worker {
             self.settings_pending = true;
             worker.save(self.settings_token, self.settings.clone());
@@ -689,33 +936,98 @@ impl Hotaru {
     }
 
     fn action(&mut self, action: Action, cx: &mut Cx<Msg>) {
+        if self.settings_window.is_some() && cx.key_window() == self.settings_window {
+            match action {
+                // ❖W closes the window it's pressed in, as everywhere.
+                Action::ClosePane | Action::CloseTab => {
+                    self.close_settings(cx);
+                    return;
+                }
+                Action::NewTab | Action::SplitRight | Action::SplitDown => cx.activate(self.window),
+                _ => {}
+            }
+        }
+        let page = self.active_pane().map(|pane| (pane.id, pane.snapshot.rows as i32));
         let message = match action {
             Action::Ignore => return,
+            Action::Settings => {
+                self.show_settings(cx);
+                return;
+            }
             Action::NewTab => Msg::NewTab,
             Action::ClosePane => Msg::ClosePane,
             Action::CloseTab => Msg::CloseTab,
             Action::SplitRight => Msg::Split(Axis::Right),
             Action::SplitDown => Msg::Split(Axis::Down),
+            Action::ZoomPane => {
+                self.toggle_zoom(cx);
+                return;
+            }
             Action::PreviousPane => Msg::MoveFocus(Direction::Previous),
             Action::NextPane => Msg::MoveFocus(Direction::Next),
             Action::FocusLeft => Msg::MoveFocus(Direction::Left),
             Action::FocusRight => Msg::MoveFocus(Direction::Right),
             Action::FocusUp => Msg::MoveFocus(Direction::Up),
             Action::FocusDown => Msg::MoveFocus(Direction::Down),
+            Action::PreviousTab | Action::NextTab => {
+                self.step_tab(if action == Action::PreviousTab { -1 } else { 1 }, cx);
+                return;
+            }
+            Action::SelectTab1
+            | Action::SelectTab2
+            | Action::SelectTab3
+            | Action::SelectTab4
+            | Action::SelectTab5
+            | Action::SelectTab6
+            | Action::SelectTab7
+            | Action::SelectTab8 => {
+                if let Some(index) = Action::SELECT_TAB.iter().position(|tab| *tab == action) {
+                    self.select_tab_at(Some(index), cx);
+                }
+                return;
+            }
+            Action::LastTab => {
+                self.select_tab_at(None, cx);
+                return;
+            }
             Action::Copy => Msg::Copy,
             Action::Paste => Msg::Paste,
+            Action::CopyScreen => Msg::CopyScreen,
             Action::CopyAll => Msg::CopyAll,
             Action::Find => Msg::Find,
             Action::FindNext => Msg::SearchStep(false),
             Action::FindPrevious => Msg::SearchStep(true),
+            Action::FindSelection => {
+                self.find_selection(cx);
+                return;
+            }
+            Action::ClearScreen => {
+                self.pane_command(Command::Clear);
+                return;
+            }
+            Action::ResetTerminal => {
+                self.pane_command(Command::Reset);
+                if let Some((id, _)) = page {
+                    self.notice(id, "Terminal reset");
+                }
+                return;
+            }
             Action::LargerText => Msg::FontSize(1),
             Action::SmallerText => Msg::FontSize(-1),
             Action::ActualSize => {
-                self.font_size = 14.0;
-                self.settings.font_size = 14.0;
-                self.save_settings();
+                self.font_size = self.settings.font_size;
                 self.shape_all();
                 return;
+            }
+            Action::ScrollToTop | Action::ScrollToBottom | Action::ScrollPageUp | Action::ScrollPageDown => {
+                let Some((id, rows)) = page else { return };
+                let lines = match action {
+                    Action::ScrollToTop => i32::MAX,
+                    Action::ScrollToBottom => i32::MIN,
+                    Action::ScrollPageUp => rows,
+                    _ => -rows,
+                };
+                Msg::Scroll(id, lines)
             }
             Action::ReloadConfig => {
                 self.settings_token = self.settings_token.wrapping_add(1);
@@ -729,9 +1041,29 @@ impl Hotaru {
         self.update(message, cx);
     }
 
+    /// A menu item for an action, with its shortcut unless Settings is
+    /// waiting for a new one (which the menus mustn't take first).
     fn item(&self, label: &str, action: Action) -> MenuItem<Msg> {
         let item = MenuItem::new(label, Msg::Action(action));
-        if let Some(shortcut) = self.bindings.shortcut(action) { item.shortcut(shortcut) } else { item }
+        match self.bindings.shortcut(action) {
+            Some(shortcut) if self.recording.is_none() => item.shortcut(shortcut),
+            _ => item,
+        }
+    }
+
+    /// A tooltip naming the shortcut as it's bound now.
+    fn tip(&self, tip: &str, action: Action) -> String {
+        match self.bindings.shortcut(action) {
+            Some(shortcut) => format!("{tip} · {}", shortcut.label()),
+            None => tip.to_owned(),
+        }
+    }
+
+    fn keyed(&self, item: MenuItem<Msg>, shortcut: Option<Shortcut>) -> MenuItem<Msg> {
+        match shortcut {
+            Some(shortcut) if self.recording.is_none() => item.shortcut(shortcut),
+            _ => item,
+        }
     }
 }
 
@@ -785,17 +1117,119 @@ impl Program for Hotaru {
                 self.settings.copy_format = format;
                 self.save_settings();
             }
+            Msg::SetFontSize(points) => {
+                let points = ((points * 2.0).round() / 2.0).clamp(8.0, 72.0);
+                if points.is_finite() {
+                    self.settings.font_size = points;
+                    self.font_size = points;
+                    self.save_settings();
+                    self.shape_all();
+                }
+            }
+            Msg::SetFontFamily(family) => {
+                if family.is_empty() || family == self.settings.primary_family() {
+                    return;
+                }
+                let mut changed = self.settings.clone();
+                changed.set_primary_family(&family);
+                match changed.validate() {
+                    Ok(()) => {
+                        self.settings = changed;
+                        self.save_settings();
+                        self.shape_all();
+                    }
+                    Err(error) => self.settings_notice = Some(Notice::failed(error)),
+                }
+            }
+            Msg::SetLigatures(on) => {
+                self.settings.set_ligatures(on);
+                self.save_settings();
+                self.shape_all();
+            }
+            Msg::SetCursorStyle(style) => {
+                self.settings.cursor_style = style;
+                self.apply_cursor();
+                self.save_settings();
+            }
+            Msg::SetCursorBlink(on) => {
+                self.settings.cursor_blink = on;
+                self.apply_cursor();
+                self.save_settings();
+            }
+            Msg::SetScrollback(rows) => {
+                if rows != self.settings.scrollback {
+                    self.settings.scrollback = rows;
+                    self.save_settings();
+                    self.settings_notice = Some(Notice::done("New tabs and splits keep the new scrollback."));
+                }
+            }
+            Msg::SetShellIntegration(on) => {
+                self.settings.shell_integration = on;
+                self.save_settings();
+            }
+            Msg::SettingsPage(page) => {
+                self.settings_page = page;
+                self.recording = None;
+            }
+            Msg::MonospaceFamilies(families) => self.monospace = Some(families),
+            Msg::OpenConfigFile => self.open_config_file(cx),
+            Msg::ConfigOpened(result) => {
+                if let Err(error) = result {
+                    self.settings_notice = Some(Notice::failed(format!("Could not open hotaru.toml: {error}")));
+                }
+            }
+            Msg::RecordShortcut(action) => {
+                self.recording = Some(action);
+                self.settings_notice = None;
+                cx.focus(crate::preferences::RECORDER);
+            }
+            Msg::StopRecording(action) => {
+                if self.recording == Some(action) {
+                    self.recording = None;
+                }
+            }
+            Msg::Recorded(action, shortcut) => {
+                if self.recording == Some(action) {
+                    self.record(action, shortcut);
+                }
+            }
+            Msg::RemoveShortcut(action, shortcut) => self.unbind(action, shortcut),
+            Msg::RestoreShortcuts => {
+                let Some(window) = self.settings_window else { return };
+                let count = self.settings.keybindings.len();
+                cx.alert(
+                    window,
+                    Alert::new(
+                        "Restore the default shortcuts?",
+                        format!(
+                            "The {count} shortcut change{} in hotaru.toml will be gone.",
+                            if count == 1 { "" } else { "s" }
+                        ),
+                    )
+                    .destructive_button("Restore Defaults", Msg::RestoredShortcuts)
+                    .cancel_button("Cancel"),
+                );
+            }
+            Msg::RestoredShortcuts => {
+                self.recording = None;
+                self.settings.keybindings.clear();
+                self.rebind(Notice::done("Every shortcut is as Hotaru comes."));
+            }
             Msg::ConfigLoaded(token, result) => {
                 if token != self.settings_token {
                     return;
                 }
                 self.settings_pending = false;
                 match result {
-                    Ok(settings) => self.apply_settings(settings, cx),
+                    Ok(settings) => {
+                        self.apply_settings(settings, cx);
+                        self.settings_notice = Some(Notice::done("Read hotaru.toml again."));
+                    }
                     Err(error) => {
                         if let Some(id) = self.active_pane().map(|pane| pane.id) {
                             self.notice(id, &format!("Configuration not loaded: {error}"));
                         }
+                        self.settings_notice = Some(Notice::failed(format!("Not loaded: {error}")));
                     }
                 }
             }
@@ -804,13 +1238,28 @@ impl Program for Hotaru {
                     return;
                 }
                 self.settings_pending = false;
-                if let Err(error) = result {
-                    log::warn!("Configuration not saved: {error}");
-                    if let Some(id) = self.active_pane().map(|pane| pane.id) {
-                        self.notice(id, &format!("Configuration not saved: {error}"));
+                match result {
+                    Err(error) => {
+                        log::warn!("Configuration not saved: {error}");
+                        if let Some(id) = self.active_pane().map(|pane| pane.id) {
+                            self.notice(id, &format!("Configuration not saved: {error}"));
+                        }
+                        // Made a link since Hotaru started: stop trying.
+                        self.settings_managed |= self.settings_path.as_deref().is_some_and(std::path::Path::is_symlink);
+                        self.settings_notice = Some(Notice::failed(format!("Not saved: {error}")));
+                        self.open_after_save = false;
+                    }
+                    Ok(()) => {
+                        if self.settings_notice.as_ref().is_some_and(|notice| notice.error) {
+                            self.settings_notice = None;
+                        }
+                        if std::mem::take(&mut self.open_after_save) {
+                            self.open_config_file(cx);
+                        }
                     }
                 }
                 if self.closing {
+                    self.close_settings(cx);
                     cx.close_window(self.window);
                 }
             }
@@ -1349,11 +1798,9 @@ impl Program for Hotaru {
                 self.focus_active(cx);
             }
             Msg::FontSize(delta) => {
+                // ❖+ and ❖− zoom for now, as other terminals do; Actual Size (❖0)
+                // comes back to the size Settings keeps.
                 self.font_size = (self.font_size + f64::from(delta)).clamp(8.0, 72.0);
-                if delta != 0 {
-                    self.settings.font_size = self.font_size;
-                    self.save_settings();
-                }
                 self.shape_all();
             }
         }
@@ -1367,7 +1814,10 @@ impl Program for Hotaru {
         }
         self.sync_search(cx);
     }
-    fn view(&self, _window: WindowKey) -> Element<Msg> {
+    fn view(&self, window: WindowKey) -> Element<Msg> {
+        if Some(window) == self.settings_window {
+            return crate::preferences::view(self);
+        }
         let mut tabs: Vec<Element<Msg>> = self
             .tabs
             .iter()
@@ -1385,8 +1835,12 @@ impl Program for Hotaru {
             })
             .collect();
         tabs.push(spacer().into());
-        tabs.push(icon_button(Icon::Plus).toolbar().on_press(Msg::NewTab).tooltip("New Tab · ❖T").into());
-        tabs.push(icon_button(Icon::Search).toolbar().on_press(Msg::Find).tooltip("Find · ❖F").into());
+        tabs.push(
+            icon_button(Icon::Plus).toolbar().on_press(Msg::NewTab).tooltip(self.tip("New Tab", Action::NewTab)).into(),
+        );
+        tabs.push(
+            icon_button(Icon::Search).toolbar().on_press(Msg::Find).tooltip(self.tip("Find", Action::Find)).into(),
+        );
         let mut contents: Vec<Element<Msg>> = vec![toolbar(tabs)];
         if self.find {
             contents.push(
@@ -1397,8 +1851,10 @@ impl Program for Hotaru {
                         .id("find")
                         .width(Fill),
                     status_text(self.search_status()),
-                    button("Previous").on_press(Msg::SearchStep(true)).tooltip("Previous match · ❖⇧G"),
-                    button("Next").on_press(Msg::SearchStep(false)).tooltip("Next match · ❖G"),
+                    button("Previous")
+                        .on_press(Msg::SearchStep(true))
+                        .tooltip(self.tip("Previous match", Action::FindPrevious)),
+                    button("Next").on_press(Msg::SearchStep(false)).tooltip(self.tip("Next match", Action::FindNext)),
                     button("Done").on_press(Msg::CloseFind)
                 ]
                 .padding([6.0, 10.0])
@@ -1407,29 +1863,59 @@ impl Program for Hotaru {
             );
         }
         if let Some(tab) = self.active_tab() {
-            contents.push(self.pane_tree_view(&tab.tree));
+            // Zoomed, the active pane stands alone; its splits wait in the tree.
+            contents.push(if tab.zoomed {
+                self.pane_tree_view(&PaneTree::Leaf(tab.active))
+            } else {
+                self.pane_tree_view(&tab.tree)
+            });
         }
-        if let Some(tab) = self.active_pane() {
-            contents.push(status_bar(vec![
-                status_text(tab.hovered_link.as_ref().map_or(tab.status.as_str(), |link| link.target.as_ref())),
+        if let Some(pane) = self.active_pane() {
+            let mut bar = vec![
+                status_text(pane.hovered_link.as_ref().map_or(pane.status.as_str(), |link| link.target.as_ref())),
                 spacer().into(),
-                status_text(format!("{} × {}", tab.snapshot.cols, tab.snapshot.rows)),
-            ]));
+            ];
+            if let Some(tab) = self.active_tab().filter(|tab| tab.zoomed) {
+                let count = tab.tree.leaves().len();
+                bar.push(status_text(format!("Zoomed: 1 of {count} panes")));
+            }
+            if (self.font_size - self.settings.font_size).abs() > f64::EPSILON {
+                bar.push(status_text(format!("{} pt", self.font_size)));
+            }
+            bar.push(status_text(format!("{} × {}", pane.snapshot.cols, pane.snapshot.rows)));
+            contents.push(status_bar(bar));
         }
         aizome_kit::widgets::layout::column(contents).width(Fill).height(Fill).into()
     }
     fn menus(&self) -> MenuBar<Msg> {
         let selected = self.find_state.copy.is_some()
             || self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
+        let selection = self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
+        let tab = self.active_tab();
+        let split = tab.is_some_and(|tab| matches!(tab.tree, PaneTree::Split { .. }));
+        let zoomed = tab.is_some_and(|tab| tab.zoomed);
+        let several = self.tabs.len() > 1;
+        let role = |label: &str, role: MenuRole| MenuItem::<Msg>::role_item(label, role);
+        // The app menu as standard, with Settings… and the file behind it.
+        let app = Menu::new("Hotaru")
+            .item(role("About Hotaru", MenuRole::About))
+            .separator()
+            .item(self.item("Settings…", Action::Settings))
+            .item(self.item("Reload Configuration", Action::ReloadConfig).enabled(self.settings_path.is_some()))
+            .separator()
+            .submenu(Menu::new("Services").item(role("No Services Apply", MenuRole::Services).enabled(false)))
+            .separator()
+            .item(self.keyed(role("Hide Hotaru", MenuRole::Hide), Some(Shortcut::cmd('H'))))
+            .item(self.keyed(role("Hide Others", MenuRole::HideOthers), Some(Shortcut::cmd('H').alt())))
+            .separator()
+            .item(self.keyed(role("Quit Hotaru", MenuRole::Quit), Some(Shortcut::cmd('Q'))));
         let file = Menu::new("File")
             .item(self.item("New Tab", Action::NewTab))
             .item(self.item("Split Right", Action::SplitRight))
             .item(self.item("Split Down", Action::SplitDown))
             .separator()
             .item(self.item("Close Pane", Action::ClosePane))
-            .item(self.item("Close Tab", Action::CloseTab))
-            .separator()
-            .item(self.item("Reload Configuration", Action::ReloadConfig).enabled(self.settings_path.is_some()));
+            .item(self.item("Close Tab", Action::CloseTab));
         let mut copy_format = Menu::new("Copy Format");
         for (name, format) in [
             ("Plain Text", settings::CopyFormat::Plain),
@@ -1440,53 +1926,102 @@ impl Program for Hotaru {
             copy_format = copy_format
                 .item(MenuItem::new(name, Msg::SetCopyFormat(format)).checked(self.settings.copy_format == format));
         }
+        let searching = self.find && !self.search.is_empty();
         let edit = Menu::new("Edit")
             .item(self.item("Copy", Action::Copy).enabled(selected))
             .item(self.item("Paste", Action::Paste))
-            .item(MenuItem::new("Copy Visible Screen", Msg::CopyScreen))
+            .item(self.item("Copy Visible Screen", Action::CopyScreen))
             .item(self.item("Copy All Output", Action::CopyAll))
             .submenu(copy_format)
             .separator()
             .item(self.item("Find…", Action::Find))
-            .item(self.item("Find Next", Action::FindNext).enabled(self.find && !self.search.is_empty()))
-            .item(self.item("Find Previous", Action::FindPrevious).enabled(self.find && !self.search.is_empty()));
-        let appearance = Menu::new("Appearance")
-            .item(
-                MenuItem::new("Follow Desktop", Msg::SetTheme(settings::Theme::Desktop))
-                    .checked(self.settings.theme == settings::Theme::Desktop),
-            )
-            .item(
-                MenuItem::new("Night", Msg::SetTheme(settings::Theme::Night))
-                    .checked(self.settings.theme == settings::Theme::Night),
-            )
-            .item(
-                MenuItem::new("Day", Msg::SetTheme(settings::Theme::Day))
-                    .checked(self.settings.theme == settings::Theme::Day),
-            )
-            .item(
-                MenuItem::new("High Contrast", Msg::SetTheme(settings::Theme::HighContrast))
-                    .checked(self.settings.theme == settings::Theme::HighContrast),
-            );
-        let weight = Menu::new("Text Weight")
-            .item(MenuItem::new("Regular", Msg::SetWeight(400)).checked(self.settings.font_weight == 400))
-            .item(MenuItem::new("Medium", Msg::SetWeight(500)).checked(self.settings.font_weight == 500))
-            .item(MenuItem::new("Semibold", Msg::SetWeight(600)).checked(self.settings.font_weight == 600));
-        let view = Menu::new("View")
-            .item(self.item("Previous Pane", Action::PreviousPane))
-            .item(self.item("Next Pane", Action::NextPane))
-            .item(self.item("Focus Left", Action::FocusLeft))
-            .item(self.item("Focus Right", Action::FocusRight))
-            .item(self.item("Focus Up", Action::FocusUp))
-            .item(self.item("Focus Down", Action::FocusDown))
+            .item(self.item("Find Next", Action::FindNext).enabled(searching))
+            .item(self.item("Find Previous", Action::FindPrevious).enabled(searching))
+            .item(self.item("Use Selection for Find", Action::FindSelection).enabled(selection))
             .separator()
+            .item(self.item("Clear Screen", Action::ClearScreen));
+        let mut appearance = Menu::new("Appearance");
+        for (name, theme) in [
+            ("Follow Desktop", settings::Theme::Desktop),
+            ("Night", settings::Theme::Night),
+            ("Day", settings::Theme::Day),
+            ("High Contrast", settings::Theme::HighContrast),
+        ] {
+            appearance =
+                appearance.item(MenuItem::new(name, Msg::SetTheme(theme)).checked(self.settings.theme == theme));
+        }
+        let mut weight = Menu::new("Text Weight");
+        for (value, name) in crate::preferences::WEIGHTS {
+            weight =
+                weight.item(MenuItem::new(name, Msg::SetWeight(value)).checked(self.settings.font_weight == value));
+        }
+        let view = Menu::new("View")
             .item(self.item("Larger Text", Action::LargerText))
             .item(self.item("Smaller Text", Action::SmallerText))
-            .item(self.item("Actual Size", Action::ActualSize))
+            .item(
+                self.item("Actual Size", Action::ActualSize)
+                    .enabled((self.font_size - self.settings.font_size).abs() > f64::EPSILON),
+            )
             .submenu(weight)
-            .submenu(appearance);
-        MenuBar::standard(&self.info()).with_file_menu(file).replace("Edit", edit).with_menu(view)
+            .submenu(appearance)
+            .separator()
+            .item(self.item("Scroll to Top", Action::ScrollToTop))
+            .item(self.item("Scroll to Bottom", Action::ScrollToBottom))
+            .item(self.item("Page Up", Action::ScrollPageUp))
+            .item(self.item("Page Down", Action::ScrollPageDown))
+            .separator()
+            .item(self.item("Reset Terminal", Action::ResetTerminal));
+        let select_pane = Menu::new("Select Pane")
+            .item(self.item("Left", Action::FocusLeft).enabled(split))
+            .item(self.item("Right", Action::FocusRight).enabled(split))
+            .item(self.item("Above", Action::FocusUp).enabled(split))
+            .item(self.item("Below", Action::FocusDown).enabled(split));
+        let mut window = Menu::new("Window")
+            .item(self.keyed(role("Minimise", MenuRole::Minimise), Some(Shortcut::cmd('M'))))
+            .item(role("Fill", MenuRole::Fill))
+            .item(role("Stack with…", MenuRole::StackWith))
+            .separator()
+            .item(self.item("Previous Tab", Action::PreviousTab).enabled(several))
+            .item(self.item("Next Tab", Action::NextTab).enabled(several))
+            .separator()
+            .item(self.item("Zoom Pane", Action::ZoomPane).checked(zoomed).enabled(split))
+            .item(self.item("Previous Pane", Action::PreviousPane).enabled(split))
+            .item(self.item("Next Pane", Action::NextPane).enabled(split))
+            .submenu(select_pane)
+            .separator();
+        // The tabs by their titles, ❖1 to ❖8 and the last ❖9, as in Ghostty.
+        let last = self.tabs.len().saturating_sub(1);
+        for (index, tab) in self.tabs.iter().enumerate() {
+            let title =
+                self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
+            let title: String = title.chars().take(48).collect();
+            let shortcut = match Action::SELECT_TAB.get(index) {
+                Some(action) => self.bindings.shortcut(*action),
+                None if index == last => self.bindings.shortcut(Action::LastTab),
+                None => None,
+            };
+            window = window.item(
+                self.keyed(MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active), shortcut),
+            );
+        }
+        let window = window
+            .separator()
+            .item(role("Bring All to Front", MenuRole::BringAllToFront))
+            .separator()
+            .item(role("Windows", MenuRole::WindowList).enabled(false));
+        MenuBar::standard(&self.info())
+            .replace("Hotaru", app)
+            .with_file_menu(file)
+            .replace("Edit", edit)
+            .with_menu(view)
+            .replace("Window", window)
     }
-    fn close_requested(&mut self, _window: WindowKey, _cx: &mut Cx<Msg>) -> bool {
+    fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if Some(window) == self.settings_window {
+            self.settings_window = None;
+            self.recording = None;
+            return true;
+        }
         self.cancel_automatic();
         self.automatic_worker = None;
         self.resolver_worker = None;
@@ -1494,6 +2029,7 @@ impl Program for Hotaru {
             self.closing = true;
             return false;
         }
+        self.close_settings(cx);
         self.clipboard_request();
         self.clipboard = None;
         self.tabs.clear();

@@ -515,16 +515,184 @@ fn native_settings_changes_are_saved_and_invalid_reload_preserves_current_config
     let mut app = Hotaru::preview();
     app.settings_path = Some(path.clone());
     let mut h = Harness::new(app);
-    h.send(Msg::FontSize(3));
+    assert_eq!(h.program().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE);
+    h.send(Msg::SetFontSize(17.0));
     assert!(
         h.settle(Duration::from_secs(3), |_| Settings::load(&path).is_ok_and(|settings| settings.font_size == 17.0))
     );
+    // Zooming is for now: ❖0 comes back to the size Settings keeps.
+    h.send(Msg::Action(Action::LargerText));
+    h.send(Msg::Action(Action::LargerText));
+    assert_eq!(h.program().font_size, 19.0);
+    h.send(Msg::Action(Action::ActualSize));
+    assert_eq!(h.program().font_size, 17.0);
+    h.send(Msg::Action(Action::SmallerText));
+    h.advance(Duration::from_millis(50));
+    assert_eq!(Settings::load(&path).unwrap().font_size, 17.0);
     std::fs::write(&path, "font_size = 999999").unwrap();
     h.send(Msg::Action(Action::ReloadConfig));
     assert!(h.settle(Duration::from_secs(3), |app| app.active_pane().unwrap().status.contains("not loaded")));
-    assert_eq!(h.program().font_size, 17.0);
+    assert_eq!(h.program().font_size, 16.0);
     drop(h);
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+fn temporary_config(name: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    let directory = std::env::temp_dir().join(format!(
+        "hotaru-{name}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    std::fs::create_dir(&directory).unwrap();
+    let path = directory.join("hotaru.toml");
+    (directory, path)
+}
+
+#[test]
+fn settings_window_opens_once_changes_everything_live_and_saves() {
+    use aizome_hotaru::preferences::Page;
+    use aizome_hotaru::settings::{CursorStyle, Settings, Theme};
+    let (directory, path) = temporary_config("settings-window");
+    let mut app = Hotaru::preview();
+    app.settings_path = Some(path.clone());
+    let mut h = Harness::new(app);
+    let terminal = h.window();
+    h.command(terminal, ',');
+    let settings = h.program().settings_window.expect("❖, opens Settings");
+    h.command(terminal, ',');
+    assert_eq!(h.windows().len(), 2, "a second ❖, brings the same window forward");
+    for page in [Page::General, Page::Text, Page::Appearance, Page::Shortcuts] {
+        h.send(Msg::SettingsPage(page));
+        h.advance(Duration::from_millis(1));
+        assert!(!h.texts(settings).is_empty());
+        if let Some(directory) = std::env::var_os("HOTARU_SCREENSHOTS") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            h.save_png(settings, directory.join(format!("settings-{page:?}.png").to_lowercase()), 2.0);
+        }
+    }
+    h.send(Msg::SettingsPage(Page::Appearance));
+    assert!(h.click_text(settings, "Day"));
+    if let Some(directory) = std::env::var_os("HOTARU_SCREENSHOTS") {
+        h.advance(Duration::from_millis(1));
+        h.save_png(settings, std::path::PathBuf::from(directory).join("settings-appearance-day.png"), 2.0);
+    }
+    h.send(Msg::SetCursorStyle(CursorStyle::Underline));
+    h.send(Msg::SetCursorBlink(false));
+    h.send(Msg::SettingsPage(Page::Text));
+    h.send(Msg::SetLigatures(false));
+    h.send(Msg::SetFontSize(15.5));
+    h.send(Msg::SettingsPage(Page::General));
+    h.send(Msg::SetScrollback(100_000));
+    assert!(h.settle(Duration::from_secs(3), |_| Settings::load(&path).is_ok_and(|saved| {
+        saved.theme == Theme::Day
+            && saved.cursor_style == CursorStyle::Underline
+            && !saved.cursor_blink
+            && !saved.ligatures()
+            && saved.font_size == 15.5
+            && saved.scrollback == 100_000
+    })));
+    let pane = h.program().active_pane().unwrap();
+    assert_eq!(pane.snapshot.cursor.shape, hotaru_core::CursorShape::Underline);
+    assert!(!pane.snapshot.cursor.blinking);
+    assert_eq!(h.program().font_size, 15.5);
+    // ❖W in Settings closes Settings, not the pane behind it.
+    h.focus_window(settings, true);
+    h.command(settings, 'w');
+    assert_eq!(h.program().settings_window, None);
+    assert_eq!(h.program().panes.len(), 1);
+    assert_eq!(h.windows(), [terminal]);
+    drop(h);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn shortcuts_are_recorded_refused_removed_and_restored() {
+    use aizome_hotaru::preferences::Page;
+    use aizome_hotaru::settings::{Action, Settings, parse_shortcut};
+    use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+    let (directory, path) = temporary_config("shortcuts");
+    let mut app = Hotaru::preview();
+    app.settings_path = Some(path.clone());
+    let mut h = Harness::new(app);
+    h.send(Msg::Action(Action::Settings));
+    let settings = h.program().settings_window.unwrap();
+    h.send(Msg::SettingsPage(Page::Shortcuts));
+    h.focus_window(settings, true);
+    h.send(Msg::RecordShortcut(Action::ClearScreen));
+    h.advance(Duration::from_millis(1));
+    assert_eq!(h.focused_name(settings).as_deref(), Some(aizome_hotaru::preferences::RECORDER));
+    if let Some(directory) = std::env::var_os("HOTARU_SCREENSHOTS") {
+        h.save_png(settings, std::path::PathBuf::from(directory).join("settings-shortcuts-editing.png"), 2.0);
+    }
+    // Typing alone isn't a shortcut, and ⌃C is the programs'.
+    h.key(settings, Key::Character("k".into()), Modifiers::NONE);
+    assert_eq!(h.program().recording, Some(Action::ClearScreen));
+    h.key(settings, Key::Character("c".into()), Modifiers::CONTROL);
+    assert_eq!(h.program().recording, Some(Action::ClearScreen));
+    // The menus give way while a shortcut is typed: ❖T isn't New Tab now.
+    h.key(settings, Key::Character("t".into()), Modifiers::SUPER | Modifiers::ALT);
+    assert_eq!(h.program().tabs.len(), 1);
+    // The row stays open for taking the old one away, until Done or Escape.
+    assert_eq!(h.program().recording, Some(Action::ClearScreen));
+    h.advance(Duration::from_millis(1));
+    assert_eq!(h.focused_name(settings).as_deref(), Some(aizome_hotaru::preferences::RECORDER));
+    h.named(settings, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.program().recording, None);
+    let new = parse_shortcut("super+alt+t").unwrap();
+    assert_eq!(h.program().bindings().bound(new), Some(Action::ClearScreen));
+    assert!(h.settle(Duration::from_secs(3), |_| {
+        Settings::load(&path).is_ok_and(|saved| saved.keybindings.get("super+alt+t") == Some(&Action::ClearScreen))
+    }));
+    // Taking a default away silences it in the file.
+    let close = parse_shortcut("super+w").unwrap();
+    h.send(Msg::RemoveShortcut(Action::ClosePane, close));
+    assert_eq!(h.program().bindings().bound(close), None);
+    assert_eq!(h.program().settings.keybindings.get("super+w"), Some(&Action::Ignore));
+    // Escape gives up without a change.
+    h.send(Msg::RecordShortcut(Action::NewTab));
+    h.advance(Duration::from_millis(1));
+    h.named(settings, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.program().recording, None);
+    h.send(Msg::RestoredShortcuts);
+    assert!(h.program().settings.keybindings.is_empty());
+    assert_eq!(h.program().bindings().bound(close), Some(Action::ClosePane));
+    drop(h);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn tabs_are_reached_by_number_and_in_turn_and_panes_zoom() {
+    use aizome_hotaru::settings::Action;
+    let mut h = Harness::new(Hotaru::preview());
+    let window = h.window();
+    let first = h.program().active;
+    h.send(Msg::NewTab);
+    h.send(Msg::NewTab);
+    let third = h.program().active;
+    h.command(window, '1');
+    assert_eq!(h.program().active, first);
+    h.command(window, '9');
+    assert_eq!(h.program().active, third);
+    h.send(Msg::Action(Action::NextTab));
+    assert_eq!(h.program().active, first, "Next Tab goes round");
+    h.send(Msg::Action(Action::PreviousTab));
+    assert_eq!(h.program().active, third);
+    // A lone pane has nothing to zoom over.
+    h.send(Msg::Action(Action::ZoomPane));
+    assert!(!h.program().active_tab().unwrap().zoomed);
+    h.send(Msg::Split(Axis::Right));
+    let right = h.program().active_pane().unwrap().id;
+    h.send(Msg::Action(Action::ZoomPane));
+    assert!(h.program().active_tab().unwrap().zoomed);
+    h.advance(Duration::from_millis(1));
+    assert_eq!(h.focused_name(window), Some(format!("terminal-{right}")));
+    assert!(h.texts(window).iter().any(|text| text.contains("Zoomed")));
+    // Going to the other pane brings the split back.
+    h.send(Msg::MoveFocus(Direction::Previous));
+    assert!(!h.program().active_tab().unwrap().zoomed);
+    h.advance(Duration::from_millis(1));
+    assert_ne!(h.program().active_pane().unwrap().id, right);
 }
 
 #[test]
@@ -809,7 +977,7 @@ fn large_copy_finishes_off_thread_and_stale_reply_is_ignored() {
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
     h.send(Msg::CopyScreen);
     h.send(Msg::FontSize(1));
-    assert_eq!(h.program().font_size, 15.0);
+    assert_eq!(h.program().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE + 1.0);
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.is_none() && Instant::now() < until {
         h.send(Msg::FontSize(0));

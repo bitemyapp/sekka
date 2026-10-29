@@ -29,6 +29,19 @@ pub enum Command {
     CopyAll(u64),
     Search(SearchControl),
     Colors(Arc<TerminalColors>),
+    // The cursor programs get until they ask for another, and whether it blinks.
+    Cursor(hotaru_core::CursorShape, bool),
+    // Clear the scrollback and screen; at a marked prompt the shell redraws it.
+    Clear,
+    // A hard reset of the terminal, as RIS.
+    Reset,
+}
+/// What a new pane's terminal starts with.
+#[derive(Clone)]
+pub struct Defaults {
+    pub colors: TerminalColors,
+    pub scrollback: usize,
+    pub cursor: (hotaru_core::CursorShape, bool),
 }
 pub enum SearchControl {
     Capture { token: u64, cancel: Arc<AtomicBool> },
@@ -45,6 +58,7 @@ struct Shared {
 struct Controls {
     resize: Option<(usize, usize, u16, u16)>,
     colors: Option<Arc<TerminalColors>>,
+    cursor: Option<(hotaru_core::CursorShape, bool)>,
     search_capture: Option<SearchControl>,
     search_navigation: Option<SearchControl>,
 }
@@ -67,17 +81,11 @@ impl Shared {
     }
 }
 impl Session {
-    pub fn spawn(
-        id: u64,
-        command: PtyCommand,
-        colors: TerminalColors,
-        scrollback: usize,
-        tx: MsgSender<Msg>,
-    ) -> io::Result<Self> {
+    pub fn spawn(id: u64, command: PtyCommand, defaults: Defaults, tx: MsgSender<Msg>) -> io::Result<Self> {
         let (session, receiver) = Self::channel()?;
         let worker = session.shared.clone();
         std::thread::Builder::new().name(format!("hotaru-pty-{id}")).spawn(move || {
-            if let Err(e) = run(id, command, colors, scrollback, tx.clone(), receiver, worker.clone()) {
+            if let Err(e) = run(id, command, defaults, tx.clone(), receiver, worker.clone()) {
                 tx.send(Msg::Failed(id, e.to_string()));
             }
             worker.stopping.store(true, Ordering::Release);
@@ -124,6 +132,11 @@ impl Session {
                 self.shared.wake();
                 return Ok(());
             }
+            Command::Cursor(shape, blinking) => {
+                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).cursor = Some((shape, blinking));
+                self.shared.wake();
+                return Ok(());
+            }
             Command::Search(control) => {
                 let old = {
                     let mut controls = self.shared.controls.lock().unwrap_or_else(|e| e.into_inner());
@@ -145,6 +158,8 @@ impl Session {
             Command::Mouse(_) => 128,
             Command::Wheel(_, _) => 4096,
             Command::Focus(_) => 3,
+            // The form feed a prompt's redraw takes.
+            Command::Clear => 1,
             _ => 0,
         };
         if self
@@ -248,8 +263,7 @@ fn publish_events(
 fn run(
     id: u64,
     command: PtyCommand,
-    colors: TerminalColors,
-    history: usize,
+    defaults: Defaults,
     tx: MsgSender<Msg>,
     commands: mpsc::Receiver<Command>,
     shared: Arc<Shared>,
@@ -257,10 +271,10 @@ fn run(
     let mut pty = Pty::spawn(command, PtySize::default())?;
     let hostname = hotaru_io::launch::local_hostname();
     let mut seen_title = false;
-    let mut terminal = Terminal::new(80, 24, history);
-    terminal.set_default_cursor(hotaru_core::CursorShape::Block, true);
+    let mut terminal = Terminal::new(80, 24, defaults.scrollback);
+    terminal.set_default_cursor(defaults.cursor.0, defaults.cursor.1);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
-    terminal.set_default_colors(colors);
+    terminal.set_default_colors(defaults.colors);
     let mut output = VecDeque::<PendingWrite>::new();
     let (mut output_at, mut reply_bytes) = (0usize, 0usize);
     let mut buffer = [0u8; 65_536];
@@ -293,6 +307,10 @@ fn run(
         }
         if let Some(colors) = controls.colors {
             terminal.set_default_colors((*colors).clone());
+            changed = true;
+        }
+        if let Some((shape, blinking)) = controls.cursor {
+            terminal.set_default_cursor(shape, blinking);
             changed = true;
         }
         for control in controls.search_navigation.into_iter().chain(controls.search_capture) {
@@ -402,7 +420,25 @@ fn run(
                 Ok(Command::CopyAll(token)) => {
                     tx.send(Msg::CopySnapshot(token, id, Arc::new(terminal.content_snapshot())));
                 }
-                Ok(Command::Resize { .. } | Command::ResizePixels { .. } | Command::Colors(_) | Command::Search(_)) => {
+                Ok(Command::Clear) => {
+                    // Control-L asks the shell to clear and draw its prompt.
+                    let redraw = terminal.clear_screen() && !eof && !hung_up;
+                    encoded_input(&mut output, &shared, if redraw { vec![0x0c] } else { Vec::new() }, 1)?;
+                    scrollback = 0;
+                    changed = true;
+                }
+                Ok(Command::Reset) => {
+                    terminal.reset();
+                    scrollback = 0;
+                    changed = true;
+                }
+                Ok(
+                    Command::Resize { .. }
+                    | Command::ResizePixels { .. }
+                    | Command::Colors(_)
+                    | Command::Cursor(..)
+                    | Command::Search(_),
+                ) => {
                     unreachable!("controls use the mailbox")
                 }
             }
@@ -665,8 +701,12 @@ mod tests {
                 .map(Into::into)
                 .collect();
         child.env.push(("HOTARU_RESIZE_CONTROL_CHILD".into(), "1".into()));
-        let worker =
-            std::thread::spawn(move || run(1, child, TerminalColors::default(), 100, sender, commands, shared));
+        let defaults = Defaults {
+            colors: TerminalColors::default(),
+            scrollback: 100,
+            cursor: (hotaru_core::CursorShape::Block, true),
+        };
+        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
         assert!(harness.settle(Duration::from_secs(5), |probe| probe.exited));
         let frame = harness.program().frame.as_ref().unwrap();
         assert_eq!((frame.cols, frame.rows), (201, 51));

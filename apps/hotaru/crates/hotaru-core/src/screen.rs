@@ -643,6 +643,70 @@ impl State {
             events: Vec::new(),
         }
     }
+    /// RIS: everything but the configured defaults and OSC 10/11 overrides.
+    pub fn full_reset(&mut self) {
+        let cols = self.screen().cols;
+        let rows = self.screen().lines.len();
+        let limits = HistoryLimits {
+            rows: self.primary.max_history,
+            bytes: self.primary.byte_limit,
+        };
+        let colors = self.default_colors.clone();
+        let grapheme_cluster = self.default_grapheme_cluster;
+        let cursor_default = (self.default_cursor_shape, self.default_cursor_blinking);
+        let foreground = self.foreground_overridden.then_some(self.foreground);
+        let background = self.background_overridden.then_some(self.background);
+        let generation = self.generation;
+        *self = Self::new(cols, rows, limits);
+        self.generation = generation.wrapping_add(1);
+        self.set_default_cursor(cursor_default.0, cursor_default.1);
+        self.default_grapheme_cluster = grapheme_cluster;
+        self.modes.grapheme_cluster = grapheme_cluster;
+        self.set_default_colors(colors);
+        // Ghostty's RIS resets indexed colors but preserves OSC 10/11
+        // dynamic overrides. Only OSC 110/111 clear those overrides.
+        if let Some(color) = foreground {
+            self.foreground = color;
+            self.foreground_overridden = true;
+        }
+        if let Some(color) = background {
+            self.background = color;
+            self.background_overridden = true;
+        }
+    }
+    /// Ghostty's `clear_screen`: the scrollback goes, then the whole screen
+    /// when the cursor is on a marked shell prompt (true: the caller sends
+    /// the shell a form feed so it draws its prompt again), else only the
+    /// rows above the cursor, which moves to the top. A program's alternate
+    /// screen is its own and stays as it is.
+    pub fn clear_screen(&mut self) -> bool {
+        if self.modes.alternate_screen {
+            return false;
+        }
+        let at_prompt = self.semantic_markers_seen
+            && self.primary.lines[self.primary.cursor.row].prompt != RowPrompt::None;
+        let screen = &mut self.primary;
+        screen.history.clear();
+        if at_prompt {
+            let cols = screen.cols;
+            for line in &mut screen.lines {
+                Arc::make_mut(line).reset(cols, Style::default());
+            }
+            screen.wrap_pending = false;
+        } else if screen.cursor.row > 0 {
+            let count = screen.cursor.row;
+            let (top, bottom) = (screen.top, screen.bottom);
+            screen.top = 0;
+            screen.bottom = screen.lines.len() - 1;
+            screen.scroll_up(count, false, Style::default());
+            screen.top = top;
+            screen.bottom = bottom;
+            screen.cursor.row = 0;
+        }
+        screen.enforce_budget();
+        self.generation = self.generation.wrapping_add(1);
+        at_prompt
+    }
     pub fn set_default_cursor(&mut self, shape: CursorShape, blinking: bool) {
         self.default_cursor_shape = shape;
         self.default_cursor_blinking = blinking;
@@ -1856,34 +1920,7 @@ impl Handler for State {
             b'=' => self.modes.application_keypad = true,
             b'>' => self.modes.application_keypad = false,
             b'Z' => self.reply(b"\x1b[?62;22c"),
-            b'c' => {
-                let cols = self.screen().cols;
-                let rows = self.screen().lines.len();
-                let limits = HistoryLimits {
-                    rows: self.primary.max_history,
-                    bytes: self.primary.byte_limit,
-                };
-                let colors = self.default_colors.clone();
-                let grapheme_cluster = self.default_grapheme_cluster;
-                let cursor_default = (self.default_cursor_shape, self.default_cursor_blinking);
-                let foreground = self.foreground_overridden.then_some(self.foreground);
-                let background = self.background_overridden.then_some(self.background);
-                *self = Self::new(cols, rows, limits);
-                self.set_default_cursor(cursor_default.0, cursor_default.1);
-                self.default_grapheme_cluster = grapheme_cluster;
-                self.modes.grapheme_cluster = grapheme_cluster;
-                self.set_default_colors(colors);
-                // Ghostty's RIS resets indexed colors but preserves OSC 10/11
-                // dynamic overrides. Only OSC 110/111 clear those overrides.
-                if let Some(color) = foreground {
-                    self.foreground = color;
-                    self.foreground_overridden = true;
-                }
-                if let Some(color) = background {
-                    self.background = color;
-                    self.background_overridden = true;
-                }
-            }
+            b'c' => self.full_reset(),
             _ => {}
         }
     }

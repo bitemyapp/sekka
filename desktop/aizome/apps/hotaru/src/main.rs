@@ -80,6 +80,8 @@ fn main() {
                 std::process::exit(2);
             }
         }
+        // A system's configuration (Home Manager, NixOS) links it from the store.
+        app.settings_managed = path.is_symlink();
     }
     app.settings_path = settings_path;
     app.instance = instance;

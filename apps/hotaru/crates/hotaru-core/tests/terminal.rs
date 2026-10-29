@@ -310,3 +310,55 @@ fn bell_flood_keeps_latest_semantic_notifications() {
             .any(|e| matches!(e, TerminalEvent::Clipboard { .. }))
     );
 }
+
+#[test]
+fn clear_screen_at_a_marked_prompt_erases_everything_and_asks_for_a_redraw() {
+    let mut t = Terminal::new(20, 4, 100);
+    t.feed(b"one\r\ntwo\r\nthree\r\nfour\r\nfive\r\n\x1b]133;A\x07$ \x1b]133;B\x07ls");
+    assert!(t.scrollback_len() > 0);
+    assert!(t.clear_screen());
+    let s = t.snapshot();
+    assert_eq!(t.scrollback_len(), 0);
+    assert_eq!(s.plain_text().trim(), "");
+    check_invariants(&s);
+}
+
+#[test]
+fn clear_screen_while_a_program_runs_keeps_the_cursor_row_at_the_top() {
+    let mut t = Terminal::new(20, 4, 100);
+    t.feed(b"one\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix");
+    assert!(!t.clear_screen());
+    let s = t.snapshot();
+    assert_eq!(t.scrollback_len(), 0);
+    assert_eq!((s.cursor.row, s.cursor.col), (0, 3));
+    assert_eq!(text(&s, 0).trim_end(), "six");
+    assert_eq!(s.plain_text().trim(), "six");
+    t.feed(b"\r\nseven");
+    assert_eq!(text(&t.snapshot(), 1).trim_end(), "seven");
+    check_invariants(&t.snapshot());
+}
+
+#[test]
+fn clear_screen_leaves_the_alternate_screen_alone() {
+    let mut t = Terminal::new(20, 4, 100);
+    t.feed(b"shell\r\n\x1b[?1049hfull screen app");
+    assert!(!t.clear_screen());
+    assert!(t.snapshot().plain_text().contains("full screen app"));
+}
+
+#[test]
+fn reset_discards_a_partial_escape_sequence_and_keeps_generation_moving() {
+    let mut t = Terminal::new(20, 4, 100);
+    t.feed(b"\x1b[31mred\x1b[?1049h\x1b]0;half a ti");
+    let before = t.generation();
+    t.reset();
+    assert!(t.generation() > before);
+    assert!(!t.modes().alternate_screen);
+    t.feed(b"plain");
+    let s = t.snapshot();
+    assert_eq!(text(&s, 0).trim_end(), "plain");
+    assert_eq!(
+        s.lines[0].style(s.lines[0].cells()[0]).foreground,
+        Color::Default
+    );
+}

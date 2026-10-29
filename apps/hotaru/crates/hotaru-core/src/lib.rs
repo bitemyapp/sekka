@@ -170,6 +170,18 @@ impl Terminal {
     pub fn set_default_grapheme_width(&mut self, method: GraphemeWidthMethod) {
         self.state.set_default_grapheme_width(method);
     }
+    /// A hard reset asked for by the user rather than the program: RIS, and
+    /// any escape sequence the parser was partway through.
+    pub fn reset(&mut self) {
+        self.parser = parser::Parser::default();
+        self.state.full_reset();
+    }
+    /// Clear the scrollback and the screen as Ghostty's `clear_screen` does.
+    /// True when the cursor was at a marked shell prompt: send the shell a
+    /// form feed (Control-L) so it draws the prompt again at the top.
+    pub fn clear_screen(&mut self) -> bool {
+        self.state.clear_screen()
+    }
     fn feed_inner(&mut self, mut bytes: &[u8], reply_budget: usize) -> usize {
         let original = bytes.len();
         // A failed UTF-8 sequence may leave a long printable byte suffix.

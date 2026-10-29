@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
         if (strstr(argv[at + 1], "super")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
         if (strstr(argv[at + 1], "shift")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_SHIFT);
         if (strstr(argv[at + 1], "ctrl")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_CTRL);
+        if (strstr(argv[at + 1], "alt")) modifiers |= 1u << xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_ALT);
         zwp_virtual_keyboard_v1_modifiers(keyboard, modifiers, 0, 0, 0);
         zwp_virtual_keyboard_v1_key(keyboard, (uint32_t)at, (uint32_t)strtoul(argv[at], NULL, 10), WL_KEYBOARD_KEY_STATE_PRESSED);
         zwp_virtual_keyboard_v1_key(keyboard, (uint32_t)at + 1, (uint32_t)strtoul(argv[at], NULL, 10), WL_KEYBOARD_KEY_STATE_RELEASED);

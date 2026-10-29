@@ -7,7 +7,8 @@ macOS application code or Zig runtime.
 
 **The Ghostty rewrite is in progress. Hotaru is not yet a feature-complete or
 performance-qualified replacement.** The current app provides shell sessions,
-tabs, split panes, saved settings, selection, scrollback and native text input.
+tabs, split panes that zoom, a Settings window (❖,) for text, colours, the
+cursor and every keyboard shortcut, selection, scrollback and native text input.
 The port targets the pinned
 Ghostty `1.4.1-dev` source, including the large-clipboard behavior identified
 in bitemyapp's fork. A limited passing terminal test suite is not full Ghostty

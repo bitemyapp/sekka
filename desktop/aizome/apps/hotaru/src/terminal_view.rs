@@ -7,7 +7,7 @@ use aizome_kit::element::MsgFn;
 use aizome_kit::hash::PaintHasher;
 use aizome_kit::layout::Constraints;
 use aizome_kit::prelude::*;
-use aizome_kit::sidestep_ui::{Cursor as PointerCursor, Ime, Key, PointerButton};
+use aizome_kit::sidestep_ui::{Cursor as PointerCursor, Ime, PointerButton};
 use aizome_kit::text::TextSpec;
 use aizome_kit::widget::{
     EditCommand, Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, SemanticRole, Semantics, StateView, Status,
@@ -1029,18 +1029,6 @@ impl Widget for TerminalView {
                 {
                     emit(cx, Msg::Action(action));
                     return Status::Handled;
-                }
-                if key.pressed && key.modifiers.shift() {
-                    use aizome_kit::sidestep_ui::NamedKey;
-                    let lines = match key.key {
-                        Key::Named(NamedKey::PageUp) => Some(self.snapshot.rows as i32),
-                        Key::Named(NamedKey::PageDown) => Some(-(self.snapshot.rows as i32)),
-                        _ => None,
-                    };
-                    if let Some(lines) = lines {
-                        emit(cx, Msg::Scroll(self.id, lines));
-                        return Status::Handled;
-                    }
                 }
                 let normalized = input::key_event(key);
                 let state = cx.state::<ViewState>();

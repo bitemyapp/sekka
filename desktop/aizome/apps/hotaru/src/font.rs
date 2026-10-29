@@ -81,6 +81,17 @@ fn install_fonts() {
     });
 }
 
+/// The families a terminal can be set in: those whose faces have one
+/// advance for every glyph. Resolving each family reads its files, so this
+/// runs off the interface thread, once, when Settings first opens.
+pub fn monospaced_families() -> Arc<[String]> {
+    install_fonts();
+    Font::families()
+        .into_iter()
+        .filter(|family| Font::named(family, 13.0).is_some_and(|font| font.is_monospaced()))
+        .collect()
+}
+
 impl Worker {
     pub fn new(id: u64, tx: MsgSender<Msg>) -> std::io::Result<Self> {
         let pending = Arc::new((Mutex::new(Pending::default()), Condvar::new()));

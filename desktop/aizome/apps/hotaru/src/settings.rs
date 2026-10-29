@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::app::Msg;
 
 const LIMIT: u64 = 64 * 1024;
+/// Typographic points (17⅓ px at 1×), as Ghostty starts: a little under the 14 it was.
+pub const DEFAULT_FONT_SIZE: f64 = 13.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -45,31 +47,169 @@ impl CopyFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// The cursor programs get until they ask for another (DECSCUSR).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CursorStyle {
+    #[default]
+    Block,
+    Bar,
+    Underline,
+}
+
+impl CursorStyle {
+    pub fn shape(self) -> hotaru_core::CursorShape {
+        match self {
+            Self::Block => hotaru_core::CursorShape::Block,
+            Self::Bar => hotaru_core::CursorShape::Bar,
+            Self::Underline => hotaru_core::CursorShape::Underline,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
     Ignore,
+    Settings,
     NewTab,
     ClosePane,
     CloseTab,
     SplitRight,
     SplitDown,
+    ZoomPane,
     PreviousPane,
     NextPane,
     FocusLeft,
     FocusRight,
     FocusUp,
     FocusDown,
+    PreviousTab,
+    NextTab,
+    #[serde(rename = "select-tab-1")]
+    SelectTab1,
+    #[serde(rename = "select-tab-2")]
+    SelectTab2,
+    #[serde(rename = "select-tab-3")]
+    SelectTab3,
+    #[serde(rename = "select-tab-4")]
+    SelectTab4,
+    #[serde(rename = "select-tab-5")]
+    SelectTab5,
+    #[serde(rename = "select-tab-6")]
+    SelectTab6,
+    #[serde(rename = "select-tab-7")]
+    SelectTab7,
+    #[serde(rename = "select-tab-8")]
+    SelectTab8,
+    LastTab,
     Copy,
     Paste,
+    CopyScreen,
     CopyAll,
     Find,
     FindNext,
     FindPrevious,
+    FindSelection,
+    ClearScreen,
+    ResetTerminal,
     LargerText,
     SmallerText,
     ActualSize,
+    ScrollToTop,
+    ScrollToBottom,
+    ScrollPageUp,
+    ScrollPageDown,
     ReloadConfig,
+}
+
+impl Action {
+    pub const SELECT_TAB: [Action; 8] = [
+        Action::SelectTab1,
+        Action::SelectTab2,
+        Action::SelectTab3,
+        Action::SelectTab4,
+        Action::SelectTab5,
+        Action::SelectTab6,
+        Action::SelectTab7,
+        Action::SelectTab8,
+    ];
+
+    /// Every action the Shortcuts pane lists, by group, as menus name them.
+    pub fn groups() -> [(&'static str, &'static [(Action, &'static str)]); 5] {
+        use Action::*;
+        [
+            (
+                "Tabs and panes",
+                &[
+                    (NewTab, "New Tab"),
+                    (SplitRight, "Split Right"),
+                    (SplitDown, "Split Down"),
+                    (ClosePane, "Close Pane"),
+                    (CloseTab, "Close Tab"),
+                    (ZoomPane, "Zoom Pane"),
+                ],
+            ),
+            (
+                "Moving around",
+                &[
+                    (PreviousTab, "Previous Tab"),
+                    (NextTab, "Next Tab"),
+                    (SelectTab1, "Tab 1"),
+                    (SelectTab2, "Tab 2"),
+                    (SelectTab3, "Tab 3"),
+                    (SelectTab4, "Tab 4"),
+                    (SelectTab5, "Tab 5"),
+                    (SelectTab6, "Tab 6"),
+                    (SelectTab7, "Tab 7"),
+                    (SelectTab8, "Tab 8"),
+                    (LastTab, "Last Tab"),
+                    (PreviousPane, "Previous Pane"),
+                    (NextPane, "Next Pane"),
+                    (FocusLeft, "Pane on the Left"),
+                    (FocusRight, "Pane on the Right"),
+                    (FocusUp, "Pane Above"),
+                    (FocusDown, "Pane Below"),
+                ],
+            ),
+            (
+                "Edit",
+                &[
+                    (Copy, "Copy"),
+                    (Paste, "Paste"),
+                    (CopyScreen, "Copy Visible Screen"),
+                    (CopyAll, "Copy All Output"),
+                    (Find, "Find…"),
+                    (FindNext, "Find Next"),
+                    (FindPrevious, "Find Previous"),
+                    (FindSelection, "Use Selection for Find"),
+                    (ClearScreen, "Clear Screen"),
+                ],
+            ),
+            (
+                "View",
+                &[
+                    (LargerText, "Larger Text"),
+                    (SmallerText, "Smaller Text"),
+                    (ActualSize, "Actual Size"),
+                    (ScrollToTop, "Scroll to Top"),
+                    (ScrollToBottom, "Scroll to Bottom"),
+                    (ScrollPageUp, "Page Up"),
+                    (ScrollPageDown, "Page Down"),
+                    (ResetTerminal, "Reset Terminal"),
+                ],
+            ),
+            ("Hotaru", &[(Settings, "Settings…"), (ReloadConfig, "Reload Configuration")]),
+        ]
+    }
+
+    pub fn label(self) -> &'static str {
+        Self::groups()
+            .into_iter()
+            .flat_map(|(_, actions)| actions.iter())
+            .find(|(action, _)| *action == self)
+            .map_or("Nothing", |(_, label)| label)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -82,6 +222,9 @@ pub struct Settings {
     pub font_emoji: Vec<String>,
     pub font_features: Vec<String>,
     pub theme: Theme,
+    pub cursor_style: CursorStyle,
+    /// Programs may still turn blinking on or off (DECSCUSR, DEC mode 12).
+    pub cursor_blink: bool,
     pub scrollback: usize,
     pub copy_format: CopyFormat,
     /// Applies only to future default-shell panes; explicit commands bypass it.
@@ -92,13 +235,15 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            font_size: 14.0,
+            font_size: DEFAULT_FONT_SIZE,
             font_weight: 400,
             font_families: vec!["IBM Plex Mono".into()],
             font_fallback: vec!["Noto Sans Mono CJK JP".into(), "Noto Sans Symbols 2".into()],
             font_emoji: vec!["Noto Color Emoji".into()],
             font_features: Vec::new(),
             theme: Theme::Desktop,
+            cursor_style: CursorStyle::Block,
+            cursor_blink: true,
             scrollback: 10_000,
             copy_format: CopyFormat::Mixed,
             shell_integration: true,
@@ -106,6 +251,9 @@ impl Default for Settings {
         }
     }
 }
+
+/// OpenType features that turn programming ligatures off.
+const NO_LIGATURES: [&str; 2] = ["calt=0", "liga=0"];
 
 #[derive(Clone, Debug)]
 pub struct Bindings {
@@ -124,6 +272,28 @@ pub fn default_path() -> Option<PathBuf> {
 }
 
 impl Settings {
+    /// The family the terminal asks for first.
+    pub fn primary_family(&self) -> &str {
+        self.font_families.first().map_or("IBM Plex Mono", String::as_str)
+    }
+
+    /// Put `family` first, keeping the rest of the list behind it.
+    pub fn set_primary_family(&mut self, family: &str) {
+        self.font_families.retain(|name| !name.eq_ignore_ascii_case(family));
+        self.font_families.insert(0, family.to_owned());
+    }
+
+    pub fn ligatures(&self) -> bool {
+        !NO_LIGATURES.iter().all(|off| self.font_features.iter().any(|feature| feature == off))
+    }
+
+    pub fn set_ligatures(&mut self, on: bool) {
+        self.font_features.retain(|feature| !NO_LIGATURES.contains(&feature.as_str()));
+        if !on {
+            self.font_features.extend(NO_LIGATURES.iter().map(|feature| (*feature).to_owned()));
+        }
+    }
+
     pub fn fonts(&self, size: f64) -> aizome_kit::sidestep_ui::grid::FontConfig {
         aizome_kit::sidestep_ui::grid::FontConfig {
             families: self.font_families.clone(),
@@ -266,33 +436,163 @@ pub fn parse_shortcut(value: &str) -> Result<Shortcut, String> {
     Ok(shortcut)
 }
 
+/// The configuration's spelling of `shortcut`, which `parse_shortcut` reads.
+pub fn format_shortcut(shortcut: Shortcut) -> String {
+    let mut out = String::new();
+    for (held, name) in
+        [(shortcut.command, "super"), (shortcut.ctrl, "ctrl"), (shortcut.alt, "alt"), (shortcut.shift, "shift")]
+    {
+        if held {
+            out.push_str(name);
+            out.push('+');
+        }
+    }
+    match shortcut.key {
+        ShortcutKey::Char('+') => out.push_str("plus"),
+        ShortcutKey::Char(c) => out.extend(c.to_lowercase()),
+        ShortcutKey::Enter => out.push_str("enter"),
+        ShortcutKey::Tab => out.push_str("tab"),
+        ShortcutKey::Space => out.push_str("space"),
+        ShortcutKey::Escape => out.push_str("escape"),
+        ShortcutKey::Backspace => out.push_str("backspace"),
+        ShortcutKey::Delete => out.push_str("delete"),
+        ShortcutKey::Up => out.push_str("up"),
+        ShortcutKey::Down => out.push_str("down"),
+        ShortcutKey::Left => out.push_str("left"),
+        ShortcutKey::Right => out.push_str("right"),
+        ShortcutKey::Home => out.push_str("home"),
+        ShortcutKey::End => out.push_str("end"),
+        ShortcutKey::PageUp => out.push_str("pageup"),
+        ShortcutKey::PageDown => out.push_str("pagedown"),
+        ShortcutKey::F(n) => out.push_str(&format!("f{n}")),
+    }
+    out
+}
+
+/// The shortcut a key press makes, as a binding names it: punctuation typed
+/// with Shift by its unshifted key (⇧❖[ rather than ❖{). None for a press
+/// of a modifier alone, or a key no shortcut can name.
+pub fn shortcut_for(event: &KeyEvent) -> Option<Shortcut> {
+    use aizome_kit::sidestep_ui::{Key, NamedKey};
+    let m = event.modifiers;
+    let key = match &event.key {
+        Key::Character(text) => {
+            let mut chars = text.chars();
+            let (Some(c), None) = (chars.next(), chars.next()) else { return None };
+            match event.native.unshifted.filter(|_| m.shift() && !c.is_alphabetic()) {
+                Some(' ') => ShortcutKey::Space,
+                Some(unshifted) => ShortcutKey::Char(unshifted),
+                None if c == ' ' => ShortcutKey::Space,
+                None => ShortcutKey::Char(c.to_lowercase().next().unwrap_or(c)),
+            }
+        }
+        Key::Named(named) => match named {
+            NamedKey::Enter => ShortcutKey::Enter,
+            NamedKey::Tab => ShortcutKey::Tab,
+            NamedKey::Escape => ShortcutKey::Escape,
+            NamedKey::Backspace => ShortcutKey::Backspace,
+            NamedKey::Delete => ShortcutKey::Delete,
+            NamedKey::ArrowUp => ShortcutKey::Up,
+            NamedKey::ArrowDown => ShortcutKey::Down,
+            NamedKey::ArrowLeft => ShortcutKey::Left,
+            NamedKey::ArrowRight => ShortcutKey::Right,
+            NamedKey::Home => ShortcutKey::Home,
+            NamedKey::End => ShortcutKey::End,
+            NamedKey::PageUp => ShortcutKey::PageUp,
+            NamedKey::PageDown => ShortcutKey::PageDown,
+            NamedKey::F(n) if (1..=35).contains(n) => ShortcutKey::F(*n),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(Shortcut { key, command: m.super_key(), shift: m.shift(), alt: m.alt(), ctrl: m.control() })
+}
+
+/// Shortcuts Aizome's compositor keeps for the desktop: Hotaru never hears
+/// them (`aizome-comp-logic`'s default bindings).
+pub fn desktop_shortcut(shortcut: Shortcut) -> bool {
+    const DESKTOP: [&str; 28] = [
+        "super+space",
+        "super+alt+space",
+        "super+alt+m",
+        "super+tab",
+        "super+shift+tab",
+        "super+`",
+        "super+h",
+        "super+alt+h",
+        "super+m",
+        "super+ctrl+left",
+        "super+ctrl+right",
+        "super+ctrl+shift+left",
+        "super+ctrl+shift+right",
+        "super+ctrl+up",
+        "super+alt+up",
+        "super+alt+down",
+        "super+alt+left",
+        "super+alt+right",
+        "super+alt+s",
+        "super+alt+[",
+        "super+alt+]",
+        "super+ctrl+f",
+        "super+enter",
+        "super+ctrl+q",
+        "super+ctrl+r",
+        "super+shift+3",
+        "super+shift+4",
+        "super+shift+5",
+    ];
+    // ⌃❖1–9 go to a Desk, and with ⇧ take the window there.
+    let desk =
+        shortcut.command && shortcut.ctrl && !shortcut.alt && matches!(shortcut.key, ShortcutKey::Char('1'..='9'));
+    desk || DESKTOP.iter().any(|reserved| parse_shortcut(reserved) == Ok(shortcut))
+}
+
 fn defaults() -> Vec<(Shortcut, Action)> {
     use Action::*;
-    [
+    let mut defaults = vec![
+        ("super+,", Settings),
+        ("super+shift+,", ReloadConfig),
         ("super+t", NewTab),
         ("super+w", ClosePane),
         ("super+alt+w", CloseTab),
         ("super+d", SplitRight),
         ("super+shift+d", SplitDown),
+        ("super+shift+enter", ZoomPane),
         ("super+[", PreviousPane),
         ("super+]", NextPane),
-        ("super+alt+left", FocusLeft),
-        ("super+alt+right", FocusRight),
-        ("super+alt+up", FocusUp),
-        ("super+alt+down", FocusDown),
+        // ⌥❖ and the arrows fill and split windows on Aizome's desktop.
+        ("super+shift+left", FocusLeft),
+        ("super+shift+right", FocusRight),
+        ("super+shift+up", FocusUp),
+        ("super+shift+down", FocusDown),
+        ("super+shift+[", PreviousTab),
+        ("super+shift+]", NextTab),
+        // As a browser's tabs answer the command key and Page Up/Down.
+        ("super+pageup", PreviousTab),
+        ("super+pagedown", NextTab),
+        ("super+9", LastTab),
         ("super+c", Copy),
         ("super+v", Paste),
         ("super+shift+c", CopyAll),
         ("super+f", Find),
         ("super+g", FindNext),
         ("super+shift+g", FindPrevious),
+        ("super+e", FindSelection),
+        ("super+k", ClearScreen),
+        ("super+alt+r", ResetTerminal),
         ("super+plus", LargerText),
+        ("super+=", LargerText),
         ("super+-", SmallerText),
         ("super+0", ActualSize),
-        ("super+shift+,", ReloadConfig),
-        // Familiar Linux terminal aliases coexist with Aizome's command key.
+        ("super+home", ScrollToTop),
+        ("super+end", ScrollToBottom),
+        ("shift+pageup", ScrollPageUp),
+        ("shift+pagedown", ScrollPageDown),
+        // Familiar Linux terminal aliases coexist with Aizome's command key,
+        // with foot's (Aizome's other terminal) for find and text size.
         ("ctrl+shift+c", Copy),
         ("ctrl+shift+v", Paste),
+        ("ctrl+shift+f", Find),
         ("ctrl+shift+o", SplitRight),
         ("ctrl+shift+e", SplitDown),
         ("ctrl+shift+t", NewTab),
@@ -301,10 +601,18 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         ("ctrl+alt+right", FocusRight),
         ("ctrl+alt+up", FocusUp),
         ("ctrl+alt+down", FocusDown),
-    ]
-    .into_iter()
-    .map(|(key, action)| (parse_shortcut(key).unwrap(), action))
-    .collect()
+        ("ctrl+tab", NextTab),
+        ("ctrl+shift+tab", PreviousTab),
+        ("ctrl+pagedown", NextTab),
+        ("ctrl+pageup", PreviousTab),
+        ("ctrl+plus", LargerText),
+        ("ctrl+=", LargerText),
+        ("ctrl+-", SmallerText),
+        ("ctrl+0", ActualSize),
+    ];
+    const DIGITS: [&str; 8] = ["super+1", "super+2", "super+3", "super+4", "super+5", "super+6", "super+7", "super+8"];
+    defaults.extend(DIGITS.into_iter().zip(Action::SELECT_TAB));
+    defaults.into_iter().map(|(key, action)| (parse_shortcut(key).unwrap(), action)).collect()
 }
 
 impl Bindings {
@@ -323,7 +631,13 @@ impl Bindings {
     }
 
     pub fn action(&self, key: &KeyEvent) -> Option<Action> {
-        self.bindings.iter().rev().find(|(shortcut, _)| shortcut.matches(key)).map(|(_, action)| *action)
+        let found = self.bindings.iter().rev().find(|(shortcut, _)| shortcut.matches(key)).map(|(_, action)| *action);
+        // ⇧❖[ types `{`: a shifted binding names its key by the unshifted
+        // punctuation, which the kit's matching doesn't know.
+        found.or_else(|| {
+            let pressed = shortcut_for(key).filter(|shortcut| shortcut.shift && key.pressed)?;
+            self.bindings.iter().rev().find(|(shortcut, _)| *shortcut == pressed).map(|(_, action)| *action)
+        })
     }
 
     pub fn shortcut(&self, action: Action) -> Option<Shortcut> {
@@ -333,6 +647,32 @@ impl Bindings {
             .chain(self.bindings.iter())
             .find(|(_, candidate)| *candidate == action)
             .map(|(key, _)| *key)
+    }
+
+    /// Every shortcut that runs `action`, the one menus show first.
+    pub fn shortcuts(&self, action: Action) -> Vec<Shortcut> {
+        let mut all: Vec<Shortcut> = self.shortcut(action).into_iter().collect();
+        for (key, candidate) in &self.bindings {
+            if *candidate == action && !all.contains(key) {
+                all.push(*key);
+            }
+        }
+        all
+    }
+
+    /// The action `shortcut` runs now, if any.
+    pub fn bound(&self, shortcut: Shortcut) -> Option<Action> {
+        self.bindings
+            .iter()
+            .rev()
+            .find(|(key, _)| *key == shortcut)
+            .map(|(_, action)| *action)
+            .filter(|action| *action != Action::Ignore)
+    }
+
+    /// Whether `shortcut` runs `action` without the configuration's help.
+    pub fn is_default(shortcut: Shortcut, action: Action) -> bool {
+        defaults().contains(&(shortcut, action))
     }
 }
 
@@ -433,6 +773,70 @@ mod tests {
         assert_eq!(bindings.action(&key("c", Modifiers::CONTROL)), None);
         assert_eq!(Settings::parse(&toml::to_string(&settings).unwrap()).unwrap(), settings);
     }
+    fn press(key: aizome_kit::sidestep_ui::Key, modifiers: aizome_kit::sidestep_ui::Modifiers) -> KeyEvent {
+        KeyEvent {
+            key,
+            text: None,
+            pressed: true,
+            repeat: false,
+            code: 0,
+            modifiers,
+            composing: None,
+            native: Default::default(),
+        }
+    }
+
+    #[test]
+    fn defaults_avoid_the_desktops_shortcuts_and_round_trip_through_the_file() {
+        for (shortcut, action) in defaults() {
+            assert!(!desktop_shortcut(shortcut), "{action:?} on {}", format_shortcut(shortcut));
+            assert_eq!(parse_shortcut(&format_shortcut(shortcut)), Ok(shortcut));
+        }
+        assert!(desktop_shortcut(parse_shortcut("super+alt+left").unwrap()));
+        assert!(desktop_shortcut(parse_shortcut("ctrl+super+4").unwrap()));
+        assert!(!desktop_shortcut(parse_shortcut("super+4").unwrap()));
+        let bindings = Bindings::new(&Settings::default());
+        for (_, actions) in Action::groups() {
+            for (action, _) in actions.iter().filter(|(action, _)| *action != Action::CopyScreen) {
+                assert!(!bindings.shortcuts(*action).is_empty(), "{action:?} has no shortcut");
+            }
+        }
+    }
+
+    #[test]
+    fn shifted_punctuation_matches_by_its_unshifted_key() {
+        use aizome_kit::sidestep_ui::{Key, Modifiers};
+        let bindings = Bindings::new(&Settings::default());
+        let mut brace = press(Key::Character("{".into()), Modifiers::SUPER | Modifiers::SHIFT);
+        brace.native.unshifted = Some('[');
+        assert_eq!(bindings.action(&brace), Some(Action::PreviousTab));
+        assert_eq!(shortcut_for(&brace).map(format_shortcut).as_deref(), Some("super+shift+["));
+        let mut less = press(Key::Character("<".into()), Modifiers::SUPER | Modifiers::SHIFT);
+        less.native.unshifted = Some(',');
+        assert_eq!(bindings.action(&less), Some(Action::ReloadConfig));
+        assert_eq!(bindings.action(&press(Key::Character("[".into()), Modifiers::SUPER)), Some(Action::PreviousPane));
+        assert_eq!(bindings.action(&press(Key::Character("=".into()), Modifiers::SUPER)), Some(Action::LargerText));
+        assert_eq!(bindings.action(&press(Key::Character("3".into()), Modifiers::SUPER)), Some(Action::SelectTab3));
+        let capital = press(Key::Character("T".into()), Modifiers::SUPER | Modifiers::SHIFT);
+        assert_eq!(shortcut_for(&capital).map(format_shortcut).as_deref(), Some("super+shift+t"));
+    }
+
+    #[test]
+    fn ligatures_and_primary_family_edit_only_their_part_of_the_lists() {
+        let mut settings = Settings { font_features: vec!["cv01=2".into()], ..Settings::default() };
+        assert!(settings.ligatures());
+        settings.set_ligatures(false);
+        assert!(!settings.ligatures());
+        assert_eq!(settings.font_features, ["cv01=2", "calt=0", "liga=0"]);
+        settings.set_ligatures(true);
+        assert_eq!(settings.font_features, ["cv01=2"]);
+        settings.font_families = vec!["IBM Plex Mono".into(), "DejaVu Sans Mono".into()];
+        settings.set_primary_family("dejavu sans mono");
+        assert_eq!(settings.font_families, ["dejavu sans mono", "IBM Plex Mono"]);
+        assert!(settings.validate().is_ok());
+        assert_eq!(Settings::default().font_size, DEFAULT_FONT_SIZE);
+    }
+
     #[test]
     fn saving_is_atomic_and_preserves_managed_symlinks() {
         let directory = std::env::temp_dir().join(format!(

@@ -42,8 +42,10 @@ source. Check the combined Aizome package and applicable repository checks too.
 
 The checkpoint passed private Sway tests; it has not newly qualified an Aizome
 VM, installed ISO or physical desktop. Test the packaged menu entry and command,
-fonts/resources, scaling, shell startup and terminfo, tabs/splits, settings,
-search and link activation in Aizome. Exercise large plain/HTML copy and paste
+fonts/resources, scaling, shell startup and terminfo, tabs/splits, the Settings
+window and shortcut recording (`tests/wayland/settings.py`, so far in private
+Sway only), search and link activation in Aizome. Exercise large
+plain/HTML copy and paste
 while output and UI input continue, including stalled readers, cancellation,
 pane closure and session shutdown. Keep the existing default terminal until
 replacement is explicitly requested and qualified.
