@@ -127,9 +127,14 @@ parser what PDFium gave it:
   PDFium drew them; filling them in isn't done (nor was it with PDFium).
 - **Fonts** a document names but doesn't carry: hayro's built-in Foxit
   fonts stand in for the standard 14 and for Latin ones; for Chinese,
-  Japanese and Korean collections the worker asks fontconfig for a font of
-  that language (Noto Sans CJK in Aizome's session), as PDFium's font
-  folders did (`fonts.rs`).
+  Japanese and Korean collections the worker takes the first outline font
+  fontconfig lists for the language that has its characters (Noto Sans
+  CJK in Aizome's session), as PDFium's font folders gave it (`fonts.rs`).
+  hayro finds glyphs there through their Unicode, and a font without
+  them gave the wrong glyphs: fontconfig's best match for `lang=ja` can be
+  a Latin font. A variable font (Noto Sans CJK's is) is drawn at its
+  default instance, as PDFium drew it, and vertical text doesn't take the
+  font's vertical forms yet (a wave dash stays level).
 
 Through Shiori's own path (`examples/corpus.rs`: each file opened, its
 first three pages drawn at 1.5×, their text and links read, ten pages
