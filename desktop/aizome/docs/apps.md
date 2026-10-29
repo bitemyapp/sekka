@@ -664,10 +664,10 @@ reads with, and SVG through resvg, rendered at the zoom.
 
 ### Shiori (Documents)
 
-The PDF reader the desktop opens documents with. PDFium (Chrome's PDF
-engine; BSD-3-Clause and Apache-2.0, built from source by nixpkgs) reads
-and draws them, in a process of its own for each document; why PDFium,
-and how the reader is put together, is in `docs/shiori.md`.
+The PDF reader the desktop opens documents with. hayro (a PDF renderer
+in Rust, Apache-2.0 OR MIT; bitemyapp's fork of it) reads and draws them,
+in a process of its own for each document; why hayro, and how the reader
+is put together, is in `docs/shiori.md`.
 
 - **The window**: the pages in one column on `sunk`, each on a hard
   shadow, fitted to the window's width at first. Zoom with ❖+/❖−,
@@ -695,10 +695,10 @@ and how the reader is put together, is in `docs/shiori.md`.
   400). A file that changes while open (a LaTeX build, a download
   finishing) is read again where you are; one that's half written leaves
   the last version showing.
-- **Robustness**: a document that crashes PDFium, or keeps it busy over
-  20 seconds on one page, costs that page ("This page couldn't be
-  drawn"), not the window: Shiori starts another worker, says so in the
-  toolbar for a few seconds, and carries on.
+- **Robustness**: a page that makes hayro panic, keeps it busy over 20
+  seconds, or brings its worker down costs that page ("This page couldn't
+  be drawn"), not the window. When a worker goes, Shiori starts another,
+  says so in the toolbar for a few seconds, and carries on.
 - **Speed**: tiles of 1024 device pixels, drawn for exactly the zoom and
   the screen's scale and copied one to one; the page above and the page
   below drawn ahead and kept; scrolling moves what was drawn and draws

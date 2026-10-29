@@ -1,5 +1,5 @@
 //! The app's side of a document's worker: it starts `aizome-shiori
-//! --pdfium-worker`, hands it requests, turns its drawings into images off
+//! --worker`, hands it requests, turns its drawings into images off
 //! the interface thread, and watches it. A worker that dies, or spends too
 //! long on one thing, is replaced; what it was doing is reported, so the
 //! app can leave that page (or that search) alone, and the new worker
@@ -70,7 +70,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Start a worker (`exe --pdfium-worker`) for `path`; `sink` hears
+    /// Start a worker (`exe --worker`) for `path`; `sink` hears
     /// everything it says, on threads of the engine's.
     pub fn start(
         exe: PathBuf,
@@ -127,12 +127,7 @@ impl Drop for Engine {
 }
 
 fn spawn(exe: &PathBuf) -> std::io::Result<Child> {
-    Command::new(exe)
-        .arg("--pdfium-worker")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
+    Command::new(exe).arg("--worker").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn()
 }
 
 /// Run workers one after another while the document is open.
@@ -145,7 +140,7 @@ fn supervise(exe: PathBuf, open: Request, shared: Arc<Shared>, sink: Arc<dyn Fn(
         let mut child = match spawn(&exe) {
             Ok(c) => c,
             Err(e) => {
-                sink(Event::Reply(Reply::OpenFailed(OpenError::Library(format!("{}: {e}", exe.display())))));
+                sink(Event::Reply(Reply::OpenFailed(OpenError::Worker(format!("{}: {e}", exe.display())))));
                 return;
             }
         };
@@ -177,7 +172,7 @@ fn supervise(exe: PathBuf, open: Request, shared: Arc<Shared>, sink: Arc<dyn Fn(
         // A document that can't even be opened, or that keeps failing,
         // isn't tried again.
         let gave_up = job == Some(Job::Open) || failures.len() >= MOST_FAILURES;
-        log::warn!("the PDFium worker stopped ({why:?}) while on {job:?}");
+        log::warn!("the worker stopped ({why:?}) while on {job:?}");
         sink(Event::Failed { job, why, gave_up });
         if gave_up {
             return;

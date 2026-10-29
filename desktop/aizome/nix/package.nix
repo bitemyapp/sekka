@@ -45,7 +45,6 @@
   openblas,
   vulkan-headers,
   vulkan-loader,
-  pdfium,
   src,
   yukimiSrc,
   fonts,
@@ -65,10 +64,10 @@ let
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
-  # fontconfig for the text engine, xkbcommon for smithay's keymaps, and
-  # PDFium for Shiori's worker (apps/shiori/src/worker.rs).
+  # fontconfig for the text engine (and for the fonts Shiori's worker finds
+  # for documents: apps/shiori/src/fonts.rs), and xkbcommon for smithay's
+  # keymaps.
   runtimeLibs = [
-    pdfium
     libglvnd
     libpulseaudio
     libsecret
@@ -115,7 +114,16 @@ rustPlatform.buildRustPackage {
   ];
   src = source;
   sourceRoot = "aizome-source/desktop/aizome";
-  cargoLock.lockFile = "${src}/Cargo.lock";
+  cargoLock = {
+    lockFile = "${src}/Cargo.lock";
+    # Shiori's hayro, and the zune-jpeg and moxcms it draws with, from
+    # bitemyapp's forks (apps/shiori/Cargo.toml, Cargo.toml).
+    outputHashes = {
+      "hayro-0.8.0" = "sha256-Qpc3lVVWP5q1cYtnk5BMos8S6ZNoHBHapOyu4VKDZdU=";
+      "moxcms-0.8.1" = "sha256-maZpl7F96rBxYzU7fSXc5KhS8WaCC6RslipjIM5qLtw=";
+      "zune-jpeg-0.5.16-rc3" = "sha256-yfYZiAH26WW11qZkPw+9QwJE0qpmK2W/uekkM6s7RBQ=";
+    };
+  };
 
   nativeBuildInputs = [
     pkg-config

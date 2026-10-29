@@ -1,5 +1,5 @@
-# Real packaged Shiori in the Aizome session: it opens a document with its
-# PDFium worker (found through the package's run path), finds text through
+# Real packaged Shiori in the Aizome session: it opens a document, its
+# worker drawing it with hayro (no PDFium), finds text through
 # that worker, carries on when the worker is killed, and is the session's
 # PDF reader.
 { pkgs, self }:

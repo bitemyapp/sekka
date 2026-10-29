@@ -37,8 +37,6 @@ let
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
       libsecret
-      # Shiori's worker loads it (nixpkgs builds it from source).
-      pdfium
     ];
   # Only what the build reads: the workspace and the files the package
   # installs.
@@ -111,7 +109,7 @@ let
       koyomi-session = import ./vm-koyomi-session-test.nix { inherit pkgs self; };
       koyomi-modal = import ./vm-koyomi-modal-test.nix { inherit pkgs self; };
       shashin-modal = import ./vm-shashin-modal-test.nix { inherit pkgs self; };
-      # Packaged Shiori: a document opened, found through its PDFium
+      # Packaged Shiori: a document opened, drawn and found through its
       # worker, the worker killed and replaced (vm-shiori-test.nix).
       shiori = import ./vm-shiori-test.nix { inherit pkgs self; };
       file-panel-multiple = import ./vm-file-panel-multiple-test.nix { inherit pkgs self; };

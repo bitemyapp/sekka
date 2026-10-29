@@ -1,6 +1,6 @@
 //! Selecting text: where a point falls between characters, what a
 //! selection covers on each page, the rectangles that show it, and the
-//! text it copies. Characters come from PDFium in reading order with
+//! text it copies. Characters come from the worker in reading order with
 //! their boxes (`protocol::PageText`); those it made up (the spaces
 //! between words, line ends) have no box.
 

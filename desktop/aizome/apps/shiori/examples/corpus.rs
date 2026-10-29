@@ -36,6 +36,11 @@ fn one(exe: &Path, path: PathBuf) -> String {
                     // still coming.
                     continue;
                 }
+                if info.pages.is_empty() {
+                    // Nothing to draw, read or search.
+                    out.push("0 pages".into());
+                    break;
+                }
                 let pages = info.pages.len().min(3);
                 let keys: Vec<TileKey> = (0..pages)
                     .map(|i| {

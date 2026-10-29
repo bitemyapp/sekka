@@ -1138,17 +1138,29 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
-Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages with
-nixpkgs' `pdfium`, which builds PDFium from source (BSD-3-Clause and
-Apache-2.0; system FreeType, libjpeg, OpenJPEG, lcms2 and ICU; no V8 or
-XFA). It isn't linked: the package adds it to the run path with the other
-libraries opened at run time, the development shell to `LD_LIBRARY_PATH`,
-and `AIZOME_PDFIUM_LIBRARY` names another build. Only the worker process,
-`aizome-shiori --pdfium-worker`, one for each open document, loads it; the
-reader restarts a worker that crashes or spends too long on a page and
-marks that page unreadable. Its tests start real workers over generated
-documents and a qpdf-encrypted fixture, so run them where PDFium is found
-(the Aizome shell, or with `AIZOME_PDFIUM_LIBRARY` set):
+Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
+reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
+PDF renderer in Rust, from [bitemyapp/hayro](https://github.com/bitemyapp/hayro)'s
+`aizome-perf` branch. The fork is about twice as fast as PDFium over the
+pdf.js corpus and gives an encrypted document's permissions
+([record](docs/test-results/hayro-fork-2026-10-28.json)). Shiori's
+`Cargo.toml` pins it by revision; it brings bitemyapp/zune-image's
+`scaled-idct` zune-jpeg (pinned by `Cargo.lock`), and Aizome's workspace
+patches moxcms to bitemyapp/moxcms's `gamma-table-cache-0.8`
+(awxkee/moxcms#209). Each git dependency has a hash in `cargoLock.outputHashes`
+in `desktop/aizome/nix/package.nix`. To move the fork, push it, change both
+revisions in Shiori's `Cargo.toml`, run `cargo update -p hayro`, and put the
+new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
+--fetch-submodules` hash in `outputHashes`.
+
+Only the worker process, `aizome-shiori --worker`, one for each open
+document, runs hayro. A panic costs the job it was on (a page it was
+drawing shows as unreadable; one whose text it was reading has none); the
+reader restarts a worker that dies or spends too long on a
+page. Fonts a document names but doesn't carry come from hayro's built-in
+Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
+fontconfig for. Its tests start real workers over generated documents and a
+qpdf-encrypted fixture:
 
 ```sh
 cargo test -p aizome-shiori
@@ -1161,8 +1173,8 @@ The last runs the packaged reader in an Aizome VM, including a worker
 killed and replaced.
 
 The engine evaluation (PDFium against hayro over the pdf.js corpus, and
-why MuPDF and Poppler were ruled out by licence) and the reader's design
-are in [Shiori's notes](desktop/aizome/docs/shiori.md).
+why MuPDF and Poppler were ruled out by licence), the fork's work, and the
+reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing

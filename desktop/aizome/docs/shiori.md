@@ -1,8 +1,8 @@
 # Shiori
 
 Shiori 栞 (Documents) is Aizome's PDF reader; what it does is in
-[apps.md](apps.md#shiori-documents). This is how it's put together, and
-why PDFium draws its pages.
+[apps.md](apps.md#shiori-documents). This is how it's put together, why
+hayro draws its pages, and why PDFium did at first.
 
 ## Which engine
 
@@ -42,11 +42,13 @@ isn't embedded; hayro is right on a subsampled JPEG 2000 image PDFium
 left out, colorimetric CalGray and a Type 3 glyph error after which
 PDFium drew nothing. Most of the rest is antialiasing.
 
-What decided it is what a reader needs besides drawing: PDFium gives each
-character's box, search with the rectangles of each hit, links and their
-destinations, the outline, forms, annotations, metadata and permissions.
-With hayro each of those would be written on its parsing crates. hayro is
-the one to watch: memory-safe, and already close.
+What decided it then was what a reader needs besides drawing: PDFium gives
+each character's box, search with the rectangles of each hit, links and
+their destinations, the outline, forms, annotations, metadata and
+permissions. With hayro each of those would be written on its parsing
+crates. So Shiori drew with PDFium first, while hayro, memory-safe and
+already close, was made faster (below); then those were written on its
+parser, and hayro replaced PDFium (`Moving to hayro`).
 
 ### Other Rust renderers, and a faster hayro
 
@@ -105,18 +107,61 @@ hayro's own
 references on under 1% of pixels by more than 48 levels, except one page
 where a hard edge in a gradient moved a pixel.
 
-Shiori still draws with PDFium. To move to hayro it would need character
-boxes (hayro hands each glyph's Unicode and transform to a drawing device),
-search, links and the outline read from hayro's parser, and forms.
+### Moving to hayro
+
+Shiori now draws with the fork, pinned by revision, and reads with hayro's
+parser what PDFium gave it:
+
+- **Text**: hayro hands each glyph's Unicode (its `ToUnicode`, else its
+  name) and transform to a drawing device; `pdftext.rs` keeps them as
+  boxes a line high, in the order the page draws them, and infers the
+  spaces and line ends between them (see Text).
+- **Find** searches that text in the worker (`pdftext::find`).
+- **Links, destinations and the outline** (`document.rs`): Link
+  annotations' rectangles and their `/Dest` or GoTo and URI actions;
+  explicit destinations and names from the catalog's `/Dests` and name
+  tree; the outline's items, depth and count bounded for damaged files.
+- **Metadata, permissions and passwords**: the information dictionary,
+  and `Pdf::permissions`, which the fork added (copying follows its bit 5).
+- **Forms and annotations** are drawn from their appearance streams, as
+  PDFium drew them; filling them in isn't done (nor was it with PDFium).
+- **Fonts** a document names but doesn't carry: hayro's built-in Foxit
+  fonts stand in for the standard 14 and for Latin ones; for Chinese,
+  Japanese and Korean collections the worker asks fontconfig for a font of
+  that language (Noto Sans CJK in Aizome's session), as PDFium's font
+  folders did (`fonts.rs`).
+
+Through Shiori's own path (`examples/corpus.rs`: each file opened, its
+first three pages drawn at 1.5×, their text and links read, ten pages
+searched), over the same 1,012 files, on the same laptop, back to back:
+
+| | PDFium's worker | hayro's |
+|---|---|---|
+| Files opened, drawn, read and searched | 985 | 993 |
+| A file, p50 / p90 / p99 / slowest | 24 / 42 / 176 / 918 ms | 14 / 25 / 78 / 373 ms |
+| The 981 files both did | 30.7 s | 16.4 s |
+| Stopped at 20 s / crashed / tiles not drawn | 2 / 1 / 2 | none |
+
+hayro reads eleven files PDFium couldn't use (it found no pages, or
+refused, crashed on or was stopped by them: `jpx_numcomps`, the two
+tiling-pattern files, `crypt_filters` among them). Four go the other way:
+two encrypted only for their attachments (`auth-event-ef-open` asks for
+a password, `encrypted-attachment` won't open), `issue15590` won't open,
+and `poppler-85140-0` has no pages. Where the drawings differ, PDFium is
+still right on knockout groups, a blend mode, transfer functions and some
+fonts that aren't embedded (the evaluation above); that is the fork's
+next work. The package no longer carries `libpdfium` or loads it.
 
 ## A worker per document
 
-PDFium is a large C++ library reading files from anywhere, and it stops
-its process on purpose when one of its checks fails (`jpx_numcomps.pdf`
-does that). Shiori is one program with a window per document, so a bad
-file in the same process would close every document. Each document has
-its own worker instead, `aizome-shiori --pdfium-worker` (`worker.rs`),
-started by `engine.rs` in the app:
+hayro is memory-safe, but it reads files from anywhere: a document can
+still make it panic, or keep it busy for seconds on a page, and a page can
+ask for more memory than there is. Shiori is one program with a window per
+document, so a bad file in the same process would hold up or close every
+document. Each document has its own worker instead, `aizome-shiori
+--worker` (`worker.rs`), started by `engine.rs` in the app (it was written
+for PDFium, which stops its process on purpose when one of its checks
+fails):
 
 - They speak over the worker's stdin and stdout (`protocol.rs`): frames of
   a length and JSON, with a drawing's RGBA after its frame. Geometry is in
@@ -130,20 +175,21 @@ started by `engine.rs` in the app:
   "couldn't be drawn" (or that page's text empty, or that page searched)
   and asks for the rest again. After four failures in a minute it stops
   trying.
+- A panic costs only the job it was on: the worker catches it, answers as
+  if that tile couldn't be drawn (so the page is marked) or the page had
+  no text, lets go of what hayro had cached, and carries on with the
+  document open.
 - The worker dies with the app (`PR_SET_PDEATHSIG`), can't gain
   privileges (`PR_SET_NO_NEW_PRIVS`) and may map at most 8 GiB.
-- PDFium finds fonts a document names but doesn't carry, Japanese say, in
-  fontconfig's folders, which the worker asks fontconfig for (NixOS keeps
-  fonts in the store, not under `/usr/share/fonts` where PDFium looks).
-- Running a worker per document also lets documents draw at the same time;
-  PDFium allows one caller per process.
+- It reads the document once, and keeps it for its life, with what hayro
+  keeps of it: parsed fonts, decoded images, glyphs drawn, and the text of
+  the last 16 pages asked about (text, links and find share it).
+- Running a worker per document also lets documents draw at the same time.
 
-Over the pdf.js corpus through this path (`examples/corpus.rs`), 987 of
-1,012 files opened, drew, gave their text and links and were searched in
-44 ms at the median (200 ms p99); the two tiling-pattern files were
-stopped at 20 seconds and the JPEG 2000 file crashed its worker, each
-costing one page, and the rest were refused at once (passwords, files that
-aren't PDFs) or have no pages PDFium can read.
+Over the pdf.js corpus through this path, 993 of 1,012 files opened, drew,
+gave their text and links and were searched, in 14 ms at the median (78 ms
+p99; the table above); none was stopped or crashed its worker, and the rest
+were refused at once (passwords, files that aren't PDFs) or have no pages.
 
 Not done: a seccomp or Landlock sandbox for the worker. It reads only the
 document it was started for, so the system calls it needs are few; that's
@@ -182,46 +228,63 @@ the next step for hostile files.
 
 At 2880 × 1800 (scale 2), release, with the drawings there
 (`cargo test -p aizome-shiori --release --test budget -- --nocapture`), at
-load average 10:
+load average 2 to 3:
 
 | Interaction | p50 | p95 | Of the window drawn |
 |---|---|---|---|
-| Scrolling a wheel's notch | 0.23 ms | 0.27 ms | 5% |
-| Moving the pointer over text | 0.01 ms | 0.01 ms | 0% |
-| Page Down | 5.7 ms | 8.0 ms | 100% |
+| Scrolling a wheel's notch | 0.17 ms | 0.20 ms | 5% |
+| Moving the pointer over text | 0.00 ms | 0.00 ms | 0% |
+| Page Down | 3.2 ms | 3.8 ms | 100% |
 
 Page Down shows a window of drawings never drawn before; Shiori's own part
-of it is 0.07 ms, the rest is Sidestep copying 21 MB of new tiles. A
-canvas redrawing everything took 9.9 ms for a notch of scrolling.
+of it is 0.04 ms, the rest is the toolkit copying 21 MB of new tiles (at
+load average 10 with PDFium drawing, it was 5.7 ms). A canvas redrawing
+everything took 9.9 ms for a notch of scrolling. These measure the window,
+not the engine: the drawings are there before they start.
 
 ## Text
 
 The worker gives each page's characters in reading order with their boxes
-(PDFium's loose boxes, a line high; spaces and line ends it inferred have
-none). `text.rs` places a press between two characters (by the nearest on
-the nearest line), joins boxes along each line for the selection, finds
-words and lines for double and triple clicks, and copies across pages.
-Copy follows the document's permission. Find is PDFium's, page by page
-from the page being read, round to it; hits come as rectangles and step in
-document order.
+(`pdftext.rs`). They come in the order the page draws its glyphs, which is
+the reading order of almost every document; each glyph's box runs along
+its baseline for its advance, from 0.22 em below it to 0.88 em above (a
+line high, as readers select), and is split evenly among the characters of
+a ligature. Between glyphs the worker infers a space where the gap is over
+0.15 em, and a line end where the next glyph is half an em off the line or
+runs another way; these have no box. Vertical text reads down. A glyph
+drawn again in nearly the same place (bold made by overprinting) counts
+once, and `/ActualText` takes the place of the glyphs it covers. Invisible
+text (a scan's recognized words) counts like any other.
+
+`text.rs` places a press between two characters (by the nearest on the
+nearest line), joins boxes along each line for the selection, finds words
+and lines for double and triple clicks, and copies across pages. Copy
+follows the document's permission. Find runs in the worker on that text,
+page by page from the page being read, round to it: runs of white space
+(line ends included) match one another, ligatures match their letters,
+soft hyphens are skipped, and case is ignored unless asked. Hits come as
+rectangles, one for each line they cross, and step in document order.
 
 ## Testing
 
-`cargo test -p aizome-shiori`: the geometry, text and protocol alone; the
-worker through the engine (`tests/worker.rs`: opening, drawing where the
-text is on a turned page, links, find, passwords, a killed worker
-replaced); the app headless with real workers (`tests/shiori.rs`: drawing
-exactly, moving and zooming in place, find, selecting and copying, links,
-the sidebar, a locked document, a dying worker, your place, a file
-changing, drawing ahead) and its look in Night and Day (`tests/golden`).
-Documents are written by `tests/common` from text; `tests/fixtures/locked.pdf`
-is the sample encrypted by qpdf 12.4 (the command is in `tests/worker.rs`).
+`cargo test -p aizome-shiori`: the geometry, text and protocol alone,
+and the worker's parts (laying glyphs out into text, finding, PDF text
+strings, fonts); the worker through the engine (`tests/worker.rs`:
+opening, drawing where the text is on a turned page, links, find,
+passwords, a killed worker replaced); the app headless with real workers
+(`tests/shiori.rs`: drawing exactly, moving and zooming in place, find,
+selecting and copying, links, the sidebar, a locked document, a dying
+worker, your place, a file changing, drawing ahead) and its look in Night
+and Day (`tests/golden`: made when PDFium drew the pages, and hayro's
+drawings match them within the kit's tolerance). Documents are written by
+`tests/common` from text; `tests/fixtures/locked.pdf` is the sample
+encrypted by qpdf 12.4 (the command is in `tests/worker.rs`).
 
 `nix build .#aizome-checks.shiori -L` runs the packaged reader in an
 Aizome session in a VM (`nix/vm-shiori-test.py`): it opens a document,
-its worker has the package's `libpdfium` mapped, ❖F and typing find two
-hits and Return goes to the second, a worker killed with `SIGKILL` is
-replaced with the window open and the notice shown, and the session's
-`application/pdf` default is Shiori.
+its worker is the package's own program and loads no PDFium, ❖F and
+typing find two hits and Return goes to the second, a worker killed with
+`SIGKILL` is replaced with the window open and the notice shown, and the
+session's `application/pdf` default is Shiori.
 
 Not yet tested on hardware.

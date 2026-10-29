@@ -902,7 +902,7 @@ impl Shiori {
                     Some(Job::Open) | None => {}
                 }
                 d.asked.retain(|j| Some(j) != job.as_ref());
-                d.trouble = Some(format!("PDFium {what}; Shiori started it again."));
+                d.trouble = Some(format!("The page reader {what}; Shiori started it again."));
                 // About ten seconds, then the page number again.
                 d.trouble_until = Some(ticks + 7);
                 if gave_up {
@@ -913,9 +913,11 @@ impl Shiori {
                         // The changed file broke it: what showed stays.
                         d.unreadable_now();
                     } else if matches!(d.load, Load::Opening) || job == Some(Job::Open) {
-                        d.load = Load::Failed(format!("PDFium {what} while opening it."));
+                        d.load = Load::Failed(format!("The page reader {what} while opening it."));
                     } else {
-                        d.trouble = Some(format!("PDFium {what} too often; the rest of this document can't be drawn."));
+                        d.trouble = Some(format!(
+                            "The page reader {what} too often; the rest of this document can't be drawn."
+                        ));
                         d.trouble_until = None;
                     }
                 }
@@ -943,7 +945,7 @@ impl Shiori {
             return;
         }
         if info.pages.is_empty() {
-            // PDFium read it and found no pages it can show (a damaged
+            // hayro read it and found no pages it can show (a damaged
             // page tree, a filter it doesn't have; a file still being
             // written, when it changed while open).
             if reloading {

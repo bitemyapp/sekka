@@ -100,7 +100,7 @@ def type_text(text):
 
 
 def workers():
-    return machine.succeed("pgrep -u alice -f -- '--pdfium-worker' || true").split()
+    return machine.succeed("pgrep -u alice -f -- 'aizome-shiori --worker' || true").split()
 
 
 machine.start()
@@ -114,8 +114,9 @@ until("the document open", lambda: any(t.startswith("Page 1 of 3") for t in text
 first = until("its worker", workers)
 machine.screenshot("01-document")
 
-with subtest("the worker draws with the packaged PDFium"):
-    machine.succeed(f"grep -q 'pdfium.*/lib/libpdfium.so' /proc/{first[0]}/maps")
+with subtest("the worker is Shiori's own program, drawing with hayro"):
+    machine.succeed(f"readlink /proc/{first[0]}/exe | grep -q aizome-shiori")
+    machine.fail(f"grep -q libpdfium /proc/{first[0]}/maps")
 
 with subtest("find goes through the worker"):
     click(name="pages")

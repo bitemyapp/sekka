@@ -82,3 +82,11 @@ codegen-units = 4
 [profile.release-lto]
 inherits = "release"
 lto = "thin"
+
+# moxcms with the gamma tables of transfer characteristics computed once
+# rather than for every color transform (bitemyapp/moxcms branch
+# gamma-table-cache-0.8, 0.8.1 with that one change, which gives the same
+# tables; proposed as awxkee/moxcms#209). Shiori's hayro makes one for each
+# ICC-based or Lab color space a document uses.
+[patch.crates-io]
+moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }

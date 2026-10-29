@@ -1,4 +1,4 @@
-//! What Shiori and its PDFium worker say to each other, over the worker's
+//! What Shiori and its worker say to each other, over the worker's
 //! stdin and stdout: each frame is a little-endian `u32` length and that
 //! much JSON, and a drawing's pixels follow its frame.
 //!
@@ -97,8 +97,8 @@ pub enum OpenError {
     Format(String),
     /// The file couldn't be read.
     Io(String),
-    /// PDFium itself wasn't found.
-    Library(String),
+    /// The worker couldn't be started.
+    Worker(String),
 }
 
 impl OpenError {
@@ -107,7 +107,7 @@ impl OpenError {
             OpenError::Password { .. } => "It's protected by a password.".into(),
             OpenError::Format(e) => format!("It isn't a PDF Shiori can read ({e})."),
             OpenError::Io(e) => e.clone(),
-            OpenError::Library(e) => format!("PDFium couldn't be loaded: {e}"),
+            OpenError::Worker(e) => format!("Shiori's worker couldn't be started: {e}"),
         }
     }
 }
@@ -158,7 +158,7 @@ pub struct Link {
 }
 
 /// A page's characters in reading order, and each one's box (all zero
-/// for those PDFium made up: spaces between words, line ends).
+/// for those the worker inferred: spaces between words, line ends).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PageText {
     pub chars: Vec<char>,
