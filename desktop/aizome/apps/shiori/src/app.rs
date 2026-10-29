@@ -36,13 +36,28 @@ const MOST_WANTED: usize = 64;
 /// How often an open file is looked at for changes.
 const WATCH: Duration = Duration::from_millis(1500);
 
-/// The pointer over the pages: on a link, on text, or neither.
+/// How many pages' text (and links) a document keeps: always those in view
+/// and either side and those a selection ends on, then the nearest.
+pub const KEPT_TEXTS: usize = 48;
+
+/// How far a press on a link may move and still follow it, in points:
+/// further, and it's choosing the link's text.
+const LINK_SLOP: f64 = 4.0;
+
+/// How often a selection dragged past the view's edge scrolls on.
+const AUTOSCROLL: Duration = Duration::from_millis(50);
+
+/// The pointer over the pages: on a link (the `index`th of page `page`'s),
+/// on text, or neither.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Hover {
     #[default]
     None,
     Text,
-    Link,
+    Link {
+        page: u32,
+        index: usize,
+    },
 }
 
 /// The sidebar's pages that showed lately, and the rows either side of
@@ -83,6 +98,29 @@ pub enum Drag {
     Select,
     /// The scroll bar's thumb, taken this far down it (points).
     Bar(f64),
+    /// The horizontal one's, taken this far along.
+    HBar(f64),
+    /// Moving the pages with the middle button, from where it was pressed
+    /// and how they were scrolled then.
+    Pan { from: Point, scroll: (f64, f64) },
+}
+
+/// A copy waiting for the text of the pages it covers that hadn't come:
+/// it's put on the clipboard once they have.
+#[derive(Clone, Debug)]
+pub struct Copying {
+    pub selection: Selection,
+    /// Each page's part, in page order (`None`: the selection covers none
+    /// of its text).
+    pub parts: BTreeMap<u32, Option<String>>,
+    pub missing: HashSet<u32>,
+}
+
+impl Copying {
+    pub fn text(&self) -> String {
+        let parts: Vec<&str> = self.parts.values().flatten().map(String::as_str).collect();
+        parts.join("\n")
+    }
 }
 
 /// Where a document is in being opened.
@@ -114,6 +152,8 @@ pub struct Find {
     pub jump: bool,
     /// Changes to the query (each waits a moment before searching).
     pub typed: u64,
+    /// The worker gave up before the search was done.
+    pub stopped: bool,
 }
 
 impl Find {
@@ -122,7 +162,7 @@ impl Find {
     }
 
     pub fn done(&self) -> bool {
-        self.results.len() >= self.pages
+        self.stopped || self.results.len() >= self.pages
     }
 
     /// The hit's place among all, from 1.
@@ -238,13 +278,22 @@ pub struct Doc {
     pub tiles: Tiles,
     /// What was last asked to be drawn and hasn't been.
     pub sent: Vec<TileKey>,
-    /// Pages that couldn't be drawn.
-    pub broken: HashSet<u32>,
+    /// Drawings that couldn't be made: each page's, by the size it was
+    /// drawn at (see `broken_at`).
+    pub broken: HashMap<u32, HashSet<(u32, u32)>>,
     pub texts: HashMap<u32, Rc<PageText>>,
     pub links: HashMap<u32, Rc<Vec<Link>>>,
     pub asked: HashSet<Job>,
     pub selection: Option<Selection>,
     pub drag: Option<Drag>,
+    /// Where a drag is (view points), for scrolling on while it's held
+    /// past the view's edge; and whether that's due.
+    pub drag_at: Option<Point>,
+    pub autoscrolling: bool,
+    /// A link pressed and where: followed when the press ends, unless
+    /// it's become a drag over its text.
+    pub link_press: Option<(Target, Point)>,
+    pub copying: Option<Copying>,
     pub hover: Hover,
     pub find: Option<Find>,
     pub sidebar: bool,
@@ -311,7 +360,73 @@ impl Doc {
             return None;
         }
         let a = Anchor::of(&self.layout, self.scroll, (0.0, 0.0));
-        Some(Place { page: a.page, y: a.at.1.max(0.0), zoom: self.zoom.into() })
+        Some(Place {
+            page: a.page,
+            y: a.at.1.max(0.0),
+            zoom: self.zoom.into(),
+            sidebar: Some((self.sidebar, self.sidebar_tab)),
+        })
+    }
+
+    /// Whether page `p` drawn `size` large can't be drawn: it failed at
+    /// that size, or at two sizes already. A page that's too much at one
+    /// zoom may draw at another, but one that fails whatever its size costs
+    /// two failures, not one at every zoom.
+    pub fn broken_at(&self, p: u32, size: (u32, u32)) -> bool {
+        self.broken.get(&p).is_some_and(|s| s.len() >= 2 || s.contains(&size))
+    }
+
+    fn draw_failed(&mut self, k: &TileKey) {
+        self.broken.entry(k.page).or_default().insert(k.size);
+    }
+
+    /// Ask for the text of the pages a copy waits on (again, after the
+    /// worker's started again).
+    fn ask_copy_text(&mut self) {
+        let (Some(c), Some(e)) = (&self.copying, &self.engine) else { return };
+        let mut missing: Vec<u32> = c.missing.iter().copied().collect();
+        missing.sort_unstable();
+        for p in missing {
+            if self.asked.insert(Job::Text(p)) {
+                e.send(Request::Text(p));
+            }
+        }
+    }
+
+    /// Let go of the text and links of pages far from the view.
+    fn prune_texts(&mut self) {
+        let near = self.neighbours();
+        let ends: Vec<u32> = self.selection.map(|s| vec![s.anchor.page, s.focus.page]).unwrap_or_default();
+        let keep = |p: u32| near.contains(&(p as usize)) || ends.contains(&p);
+        let here = self.current_page() as u32;
+        prune(&mut self.texts, here, &keep);
+        prune(&mut self.links, here, &keep);
+    }
+
+    /// The contents' entry for where the view's top is: the one that
+    /// starts last at or before it, or, if that's in a closed branch, the
+    /// branch that shows.
+    pub fn current_entry(&self) -> Option<u64> {
+        let info = self.info()?;
+        if self.layout.is_empty() {
+            return None;
+        }
+        let top = self.scroll.1 + 2.0 * layout::MARGIN;
+        let page = self.layout.page_at(top);
+        let y = (top - self.layout.page_rect(page).y0) / self.layout.zoom;
+        let here = (page as u32, y as f32);
+        let mut best: Option<((u32, f32), u64)> = None;
+        let mut next = 1;
+        each_entry(&info.outline, &mut next, None, &self.expanded, &mut |shown, o| {
+            if let Some(Target::Page { page, y }) = &o.target {
+                let at = (*page, y.unwrap_or(0.0));
+                let before = at.0 < here.0 || (at.0 == here.0 && at.1 <= here.1);
+                if before && best.is_none_or(|(b, _)| at.0 > b.0 || (at.0 == b.0 && at.1 >= b.1)) {
+                    best = Some((at, shown));
+                }
+            }
+        });
+        best.map(|(_, id)| id)
     }
 
     /// Lay the pages out again (a new zoom, view or document), keeping
@@ -458,9 +573,16 @@ pub enum Msg {
         shift: bool,
     },
     DragTo(WindowKey, Point),
+    /// A selection held past the view's edge scrolls on.
+    DragTick(WindowKey),
     Release(WindowKey),
     Hover(WindowKey, Hover),
     BarPress(WindowKey, Point),
+    HBarPress(WindowKey, Point),
+    /// The middle button pressed: the pages move with the pointer.
+    PanStart(WindowKey, Point),
+    /// Escape: Find goes, else the selection, else full screen.
+    Escape(WindowKey),
     Copy,
     SelectAll,
     Find,
@@ -521,6 +643,45 @@ impl Default for Shiori {
 fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
     let m = std::fs::metadata(path).ok()?;
     Some((m.modified().ok()?, m.len()))
+}
+
+/// Keep at most `KEPT_TEXTS` of `map`'s pages: those `keep` says, then the
+/// nearest `here`.
+pub fn prune<T>(map: &mut HashMap<u32, T>, here: u32, keep: &dyn Fn(u32) -> bool) {
+    if map.len() <= KEPT_TEXTS {
+        return;
+    }
+    let mut far: Vec<u32> = map.keys().copied().filter(|p| !keep(*p)).collect();
+    far.sort_by_key(|p| std::cmp::Reverse(p.abs_diff(here)));
+    let extra = map.len() - KEPT_TEXTS;
+    for p in far.into_iter().take(extra) {
+        map.remove(&p);
+    }
+}
+
+/// Each of the outline's entries, depth first and numbered as
+/// `outline_items` numbers them, with the id of what shows it in the tree:
+/// its own, or that of the closed branch it's in.
+fn each_entry(
+    outline: &[crate::protocol::Outline],
+    next: &mut u64,
+    closed: Option<u64>,
+    expanded: &HashSet<u64>,
+    visit: &mut dyn FnMut(u64, &crate::protocol::Outline),
+) {
+    for o in outline {
+        let id = *next;
+        *next += 1;
+        visit(closed.unwrap_or(id), o);
+        let inner = closed.or((!expanded.contains(&id)).then_some(id));
+        each_entry(&o.children, next, inner, expanded, visit);
+    }
+}
+
+/// Whether Shiori opens `uri`: what a browser or mail program should have.
+pub fn opens(uri: &str) -> bool {
+    let lower = uri.to_ascii_lowercase();
+    ["http://", "https://", "mailto:"].iter().any(|s| lower.starts_with(s))
 }
 
 /// The outline as the sidebar's tree: ids are places in a depth-first
@@ -596,6 +757,7 @@ impl Shiori {
                 && !d.settling
                 && d.find.as_ref().is_none_or(|f| f.query.is_empty() || f.done())
                 && d.asked.is_empty()
+                && d.copying.is_none()
         })
     }
 
@@ -640,12 +802,16 @@ impl Shiori {
                 pending,
                 tiles: Tiles::default(),
                 sent: Vec::new(),
-                broken: HashSet::new(),
+                broken: HashMap::new(),
                 texts: HashMap::new(),
                 links: HashMap::new(),
                 asked: HashSet::new(),
                 selection: None,
                 drag: None,
+                drag_at: None,
+                autoscrolling: false,
+                link_press: None,
+                copying: None,
                 hover: Hover::None,
                 find: None,
                 sidebar: false,
@@ -722,7 +888,7 @@ impl Shiori {
         let centre = view.center();
         let shown = d.layout.visible(view.y0, view.y1);
         let mut want: Vec<TileKey> = Vec::new();
-        let missing = |d: &Doc, k: &TileKey| !d.tiles.has(k) && !d.broken.contains(&k.page);
+        let missing = |d: &Doc, k: &TileKey| !d.tiles.has(k) && !d.broken_at(k.page, k.size);
         let add = |d: &Doc, want: &mut Vec<TileKey>, k: TileKey| {
             if missing(d, &k) && !want.contains(&k) {
                 want.push(k);
@@ -831,7 +997,7 @@ impl Shiori {
             Event::Reply(Reply::DrawFailed(key)) => {
                 if let Some(d) = self.doc_mut(w) {
                     d.sent.retain(|k| *k != key);
-                    d.broken.insert(key.page);
+                    d.draw_failed(&key);
                 }
                 self.request(w);
             }
@@ -857,11 +1023,13 @@ impl Shiori {
                     d.asked.remove(&Job::Text(page));
                     d.texts.insert(page, Rc::new(text));
                 }
+                self.text_came(w, page, cx);
             }
             Event::Reply(Reply::Links { page, links }) => {
                 if let Some(d) = self.doc_mut(w) {
                     d.asked.remove(&Job::Links(page));
                     d.links.insert(page, Rc::new(links));
+                    d.prune_texts();
                 }
             }
             Event::Reply(Reply::Found { serial, page, hits }) => {
@@ -884,12 +1052,14 @@ impl Shiori {
                     Failure::Crashed => "stopped",
                 };
                 d.sent.clear();
+                let mut no_text = None;
                 match job {
                     Some(Job::Draw(k)) => {
-                        d.broken.insert(k.page);
+                        d.draw_failed(&k);
                     }
                     Some(Job::Text(p)) => {
                         d.texts.insert(p, Rc::new(PageText::default()));
+                        no_text = Some(p);
                     }
                     Some(Job::Links(p)) => {
                         d.links.insert(p, Rc::new(Vec::new()));
@@ -909,6 +1079,11 @@ impl Shiori {
                     d.engine = None;
                     d.asked.clear();
                     d.trouble = None;
+                    // What was waiting on the worker won't come.
+                    d.copying = None;
+                    if let Some(f) = d.find.as_mut().filter(|f| !f.done()) {
+                        f.stopped = true;
+                    }
                     if d.reloading && job == Some(Job::Open) {
                         // The changed file broke it: what showed stays.
                         d.unreadable_now();
@@ -920,6 +1095,9 @@ impl Shiori {
                         ));
                         d.trouble_until = None;
                     }
+                }
+                if let Some(p) = no_text {
+                    self.text_came(w, p, cx);
                 }
             }
         }
@@ -941,6 +1119,7 @@ impl Shiori {
                 let pages = (0..d.layout.len() as u32).filter(|p| !results.contains_key(p)).collect();
                 e.send(Request::Find { serial, query, case, pages });
             }
+            d.ask_copy_text();
             self.request(w);
             return;
         }
@@ -964,13 +1143,15 @@ impl Shiori {
             d.links.clear();
             d.asked.clear();
             d.selection = None;
+            d.copying = None;
             d.trouble = None;
         }
         let first = !again;
         d.load = Load::Open(Rc::new(info));
         d.relayout((0.0, 0.0));
         if first {
-            match d.pending.take() {
+            let pending = d.pending.take();
+            match pending {
                 Some(p) => d.go(p.page, Some(p.y + layout::MARGIN / d.layout.zoom)),
                 None => d.scroll = (d.scroll.0, 0.0),
             }
@@ -979,8 +1160,16 @@ impl Shiori {
             if extra > 0.0 {
                 d.scroll.0 = (extra / 2.0).round();
             }
-            d.sidebar = d.info().is_some_and(|i| !i.outline.is_empty()) && d.view.width >= 700.0;
-            d.sidebar_tab = if d.sidebar { 1 } else { 0 };
+            // The sidebar as it was left; else, the contents if there are
+            // some and there's room.
+            let outline = d.info().is_some_and(|i| !i.outline.is_empty());
+            (d.sidebar, d.sidebar_tab) = match pending.and_then(|p| p.sidebar) {
+                Some((shown, tab)) => (shown, if outline { tab.min(1) } else { 0 }),
+                None => {
+                    let shown = outline && d.view.width >= 700.0;
+                    (shown, usize::from(shown))
+                }
+            };
         }
         cx.set_title(w, d.title());
         let rerun = d.find.as_ref().is_some_and(|f| !f.query.is_empty());
@@ -1031,9 +1220,7 @@ impl Shiori {
                 self.request(w);
             }
             Target::Uri(u) => {
-                // Only what a browser or mail program should have.
-                let lower = u.to_ascii_lowercase();
-                if !["http://", "https://", "mailto:"].iter().any(|s| lower.starts_with(s)) {
+                if !opens(&u) {
                     return;
                 }
                 if self.dry_run {
@@ -1100,16 +1287,14 @@ impl Shiori {
             .map(|l| l.target.clone())
     }
 
-    fn press(&mut self, w: WindowKey, at: Point, clicks: u32, shift: bool, cx: &mut Cx<Msg>) {
-        if clicks == 1
-            && !shift
-            && let Some(t) = self.link_at(w, at)
-        {
-            self.go_target(w, t, cx);
-            return;
-        }
+    fn press(&mut self, w: WindowKey, at: Point, clicks: u32, shift: bool) {
+        // A link is followed when the press ends where it began
+        // (`Msg::Release`); dragged from, it's text to choose.
+        let link = if clicks == 1 && !shift { self.link_at(w, at) } else { None };
         let caret = self.caret(w, at);
         let Some(d) = self.doc_mut(w) else { return };
+        d.link_press = link.map(|t| (t, at));
+        d.drag_at = Some(at);
         let p = Point::new(d.scroll.0 + at.x, d.scroll.1 + at.y);
         let Some(c) = caret.filter(|_| d.layout.hit(p).is_some() || d.hover == Hover::Text) else {
             d.selection = None;
@@ -1136,16 +1321,30 @@ impl Shiori {
         d.drag = Some(Drag::Select);
     }
 
-    fn drag_to(&mut self, w: WindowKey, at: Point) {
-        let Some(d) = self.doc(w) else { return };
-        match d.drag {
+    fn drag_to(&mut self, w: WindowKey, at: Point, cx: &mut Cx<Msg>) {
+        let ticks = self.ticks;
+        let Some(d) = self.doc_mut(w) else { return };
+        d.drag_at = Some(at);
+        let drag = d.drag;
+        match drag {
             Some(Drag::Select) => {
-                // Past the view's top or bottom, it scrolls.
+                // A link pressed and barely moved from is still a click.
+                if let Some((_, from)) = d.link_press {
+                    if (at - from).hypot() <= LINK_SLOP {
+                        return;
+                    }
+                    d.link_press = None;
+                }
+                // Past the view's top or bottom, it scrolls, and goes on
+                // scrolling while it's held there (`Msg::DragTick`).
                 let over = if at.y < 0.0 { at.y } else { (at.y - d.view.height).max(0.0) };
                 if over != 0.0 {
-                    let d = self.doc_mut(w).expect("the document");
                     let s = (d.scroll.0, d.scroll.1 + over.clamp(-aizome_kit::LINE, aizome_kit::LINE));
                     d.scroll_to(s);
+                    if !d.autoscrolling {
+                        d.autoscrolling = true;
+                        cx.after(AUTOSCROLL, Msg::DragTick(w));
+                    }
                 }
                 let caret = self.caret(w, at);
                 let Some(d) = self.doc_mut(w) else { return };
@@ -1157,14 +1356,27 @@ impl Shiori {
                 }
             }
             Some(Drag::Bar(grab)) => {
-                let ticks = self.ticks;
-                let d = self.doc_mut(w).expect("the document");
                 let track = d.view.height;
                 let thumb = (track * d.view.height / d.layout.size.height).clamp(24.0, track);
                 let room = (track - thumb).max(1.0);
                 let t = ((at.y - grab) / room).clamp(0.0, 1.0);
                 let y = t * (d.layout.size.height - d.view.height);
                 d.scroll_to((d.scroll.0, y));
+                d.bar_until = ticks + 1;
+                self.request(w);
+            }
+            Some(Drag::HBar(grab)) => {
+                let track = d.view.width;
+                let thumb = (track * d.view.width / d.layout.size.width).clamp(24.0, track);
+                let room = (track - thumb).max(1.0);
+                let t = ((at.x - grab) / room).clamp(0.0, 1.0);
+                let x = t * (d.layout.size.width - d.view.width);
+                d.scroll_to((x, d.scroll.1));
+                d.bar_until = ticks + 1;
+                self.request(w);
+            }
+            Some(Drag::Pan { from, scroll }) => {
+                d.scroll_to((scroll.0 - (at.x - from.x), scroll.1 - (at.y - from.y)));
                 d.bar_until = ticks + 1;
                 self.request(w);
             }
@@ -1177,6 +1389,64 @@ impl Shiori {
         let sel = d.selection.filter(|s| !s.is_empty())?;
         let s = text::copy(&sel, |p| d.texts.get(&p).map(|t| t.as_ref()));
         (!s.is_empty()).then_some(s)
+    }
+
+    /// Copy the selection, if its author allows it. Pages it covers whose
+    /// text hasn't come (passed over with the scroll bar, say) are asked
+    /// for first, and the copy waits for them.
+    fn copy(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(d) = self.doc_mut(w) else { return };
+        let Some(sel) = d.selection.filter(|s| !s.is_empty()) else { return };
+        if !d.info().is_some_and(|i| i.can_copy) {
+            return;
+        }
+        let (a, b) = sel.ordered();
+        let mut c = Copying { selection: sel, parts: BTreeMap::new(), missing: HashSet::new() };
+        for p in a.page..=b.page {
+            match d.texts.get(&p) {
+                Some(t) => {
+                    c.parts.insert(p, text::page_part(&sel, p, t));
+                }
+                None => {
+                    c.missing.insert(p);
+                }
+            }
+        }
+        if c.missing.is_empty() {
+            d.copying = None;
+            cx.set_clipboard_text(&c.text());
+            return;
+        }
+        d.copying = Some(c);
+        d.ask_copy_text();
+    }
+
+    /// Page `page`'s text has come (or won't: it's empty): a copy waiting
+    /// on it takes its part, and is made once it has them all.
+    fn text_came(&mut self, w: WindowKey, page: u32, cx: &mut Cx<Msg>) {
+        let Some(d) = self.doc_mut(w) else { return };
+        if let Some(c) = d.copying.as_mut()
+            && c.missing.remove(&page)
+        {
+            let part = d.texts.get(&page).and_then(|t| text::page_part(&c.selection, page, t));
+            c.parts.insert(page, part);
+            if c.missing.is_empty() {
+                let text = c.text();
+                d.copying = None;
+                cx.set_clipboard_text(&text);
+            }
+        }
+        d.prune_texts();
+    }
+
+    fn close_find(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        if let Some(d) = self.doc_mut(w) {
+            d.find = None;
+            if let Some(e) = d.engine.as_ref() {
+                e.send(Request::StopFind);
+            }
+        }
+        cx.focus("pages");
     }
 
     fn open_find(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
@@ -1202,7 +1472,12 @@ impl Shiori {
         f.current = None;
         f.jump = true;
         f.pages = n;
-        let Some(e) = d.engine.as_ref() else { return };
+        f.stopped = false;
+        let Some(e) = d.engine.as_ref() else {
+            // No worker to search with (it gave up).
+            f.stopped = !f.query.is_empty();
+            return;
+        };
         if f.query.is_empty() {
             f.pages = 0;
             e.send(Request::StopFind);
@@ -1460,14 +1735,42 @@ impl Program for Shiori {
             }
             Msg::GoPage(w, p) => self.go_page(w, p),
             Msg::GoTarget(w, t) => self.go_target(w, t, cx),
-            Msg::Press { window, at, clicks, shift } => self.press(window, at, clicks, shift, cx),
-            Msg::DragTo(w, at) => self.drag_to(w, at),
+            Msg::Press { window, at, clicks, shift } => self.press(window, at, clicks, shift),
+            Msg::DragTo(w, at) => self.drag_to(w, at, cx),
+            Msg::DragTick(w) => {
+                let Some(d) = self.doc_mut(w) else { return };
+                d.autoscrolling = false;
+                if d.drag == Some(Drag::Select)
+                    && let Some(at) = d.drag_at
+                {
+                    self.drag_to(w, at, cx);
+                }
+            }
             Msg::Release(w) => {
+                let Some(d) = self.doc_mut(w) else { return };
+                d.drag = None;
+                d.drag_at = None;
+                if d.selection.is_some_and(|s| s.is_empty()) {
+                    d.selection = None;
+                }
+                if let Some((t, _)) = d.link_press.take() {
+                    self.go_target(w, t, cx);
+                }
+            }
+            Msg::PanStart(w, at) => {
                 if let Some(d) = self.doc_mut(w) {
-                    d.drag = None;
-                    if d.selection.is_some_and(|s| s.is_empty()) {
-                        d.selection = None;
-                    }
+                    d.link_press = None;
+                    d.drag = Some(Drag::Pan { from: at, scroll: d.scroll });
+                }
+            }
+            Msg::Escape(w) => {
+                let Some(d) = self.doc_mut(w) else { return };
+                if d.find.is_some() {
+                    self.close_find(w, cx);
+                } else if d.selection.is_some() {
+                    d.selection = None;
+                } else if d.fullscreen {
+                    cx.set_fullscreen(w, false);
                 }
             }
             Msg::Hover(w, h) => {
@@ -1484,11 +1787,22 @@ impl Program for Shiori {
                 let grab = if at.y >= top && at.y <= top + thumb { at.y - top } else { thumb / 2.0 };
                 d.drag = Some(Drag::Bar(grab));
                 d.bar_until = ticks + 1;
-                self.drag_to(w, at);
+                self.drag_to(w, at, cx);
+            }
+            Msg::HBarPress(w, at) => {
+                let ticks = self.ticks;
+                let Some(d) = self.doc_mut(w) else { return };
+                let track = d.view.width;
+                let thumb = (track * d.view.width / d.layout.size.width.max(1.0)).clamp(24.0, track);
+                let left = (track - thumb) * (d.scroll.0 / (d.layout.size.width - d.view.width).max(1.0));
+                let grab = if at.x >= left && at.x <= left + thumb { at.x - left } else { thumb / 2.0 };
+                d.drag = Some(Drag::HBar(grab));
+                d.bar_until = ticks + 1;
+                self.drag_to(w, at, cx);
             }
             Msg::Copy => {
-                if let Some(s) = target.and_then(|w| self.selected_text(w)) {
-                    cx.set_clipboard_text(&s);
+                if let Some(w) = target {
+                    self.copy(w, cx);
                 }
             }
             Msg::SelectAll => {
@@ -1528,15 +1842,7 @@ impl Program for Shiori {
                 self.run_find(w, typed);
             }
             Msg::FindRun(w, typed) => self.run_find(w, typed),
-            Msg::FindClose(w) => {
-                if let Some(d) = self.doc_mut(w) {
-                    d.find = None;
-                    if let Some(e) = d.engine.as_ref() {
-                        e.send(Request::StopFind);
-                    }
-                }
-                cx.focus("pages");
-            }
+            Msg::FindClose(w) => self.close_find(w, cx),
             Msg::ToggleSidebar => {
                 let Some(w) = target else { return };
                 if let Some(d) = self.doc_mut(w) {
@@ -1660,5 +1966,26 @@ impl Program for Shiori {
         }
         self.close_doc(window);
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn far_pages_text_goes_first() {
+        let mut map: HashMap<u32, ()> = (0..KEPT_TEXTS as u32 + 10).map(|p| (p, ())).collect();
+        prune(&mut map, 20, &|p| p == 0);
+        assert_eq!(map.len(), KEPT_TEXTS);
+        // The farthest went, but not page 0, which was asked to stay.
+        assert!(map.contains_key(&0) && map.contains_key(&20));
+        assert!(!map.contains_key(&(KEPT_TEXTS as u32 + 9)));
+    }
+
+    #[test]
+    fn web_and_mail_links_open_and_no_others() {
+        assert!(opens("https://sekka.computer/") && opens("MAILTO:a@b.c"));
+        assert!(!opens("file:///etc/passwd") && !opens("javascript:alert(1)"));
     }
 }

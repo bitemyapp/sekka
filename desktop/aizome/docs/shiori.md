@@ -16,8 +16,9 @@ engine. Parsing libraries such as lopdf don't draw pages. Two remain:
   `pdfium-render` (MIT OR Apache-2.0). nixpkgs builds it from source (build
   8066) against the system's FreeType, libjpeg, OpenJPEG, lcms2 and ICU,
   without V8 or XFA; `libpdfium.so` is 4.8 MiB and cache.nixos.org has it.
-- **hayro** (Apache-2.0 OR MIT), a renderer in Rust that forbids unsafe
-  code, from Typst's PDF author.
+- **hayro** (Apache-2.0 OR MIT), a renderer in Rust whose crates forbid
+  unsafe code (bar the SIMD decoding Shiori turns on: see
+  `A worker per document`), from Typst's PDF author.
 
 Both drew the pdf.js test corpus (1,012 files, many of them broken on
 purpose), the first five pages of each at 2× in a process per file. The
@@ -162,11 +163,15 @@ carries `libpdfium` or loads it.
 
 ## A worker per document
 
-hayro is memory-safe, but it reads files from anywhere: a document can
-still make it panic, or keep it busy for seconds on a page, and a page can
-ask for more memory than there is. Shiori is one program with a window per
-document, so a bad file in the same process would hold up or close every
-document. Each document has its own worker instead, `aizome-shiori
+hayro's own code forbids `unsafe`, but not all of what it reads a
+document with does: Shiori turns on hayro-syntax's `unsafe` feature, which
+decodes Flate through flate2 and JPEG through zune-jpeg's x86 and NEON
+code, and the JPEG 2000 and JBIG2 decoders use `fearless_simd`; each of
+those has `unsafe` inside, run on the document's bytes. And it reads files
+from anywhere: a document can make it panic, or keep it busy for seconds
+on a page, and a page can ask for more memory than there is. Shiori is
+one program with a window per document, so a bad file in the same
+process would hold up or close every document. Each document has its own worker instead, `aizome-shiori
 --worker` (`worker.rs`), started by `engine.rs` in the app (it was written
 for PDFium, which stops its process on purpose when one of its checks
 fails):
@@ -180,9 +185,17 @@ fails):
   20 seconds on one drawing (10 on a page's text, links or search, 30
   opening); a worker that crashes or is stopped is reported with what it
   was doing, and another opens the document. The app marks that page
-  "couldn't be drawn" (or that page's text empty, or that page searched)
-  and asks for the rest again. After four failures in a minute it stops
-  trying.
+  "couldn't be drawn" at that size (or that page's text empty, or that
+  page searched) and asks for the rest again. A page that couldn't be
+  drawn at one zoom is asked for at another, as zoomed far in it may be
+  more than the worker can do, but one that's failed at two sizes isn't
+  asked for again until the document is reloaded. After four failures in
+  a minute the app stops trying, and says so; a search it gave up on says
+  it stopped.
+- The app takes no drawing on the worker's word: one wider or taller
+  than 4096 pixels (a tile is 1024) is treated as the worker going wrong,
+  and it's stopped, rather than the app making room for it; a page's
+  text whose characters and boxes don't pair up is cut to the shorter.
 - A panic costs only the job it was on: the worker catches it, answers as
   if that tile couldn't be drawn (so the page is marked) or the page had
   no text, lets go of what hayro had cached, and carries on with the
@@ -222,7 +235,9 @@ the next step for hostile files.
   current zoom, nor the previews around them and in the sidebar. A page
   larger than 64 MiB at the zoom (zoomed far in) has a view's height
   either side drawn ahead instead of the whole of it. So scrolling a
-  little either way and back asks the worker for nothing (tested).
+  little either way and back asks the worker for nothing (tested). The
+  text and links of 48 pages are kept: always those in view and either
+  side and those a selection ends on, then the nearest.
 - **The sidebar** is the kit's `virtual_list`, which builds only the rows
   that show. Each row, as it's built, notes itself and the three rows
   either side, and asks for any of their previews missing; the last 48
@@ -267,11 +282,14 @@ text (a scan's recognized words) counts like any other.
 `text.rs` places a press between two characters (by the nearest on the
 nearest line), joins boxes along each line for the selection, finds words
 and lines for double and triple clicks, and copies across pages. Copy
-follows the document's permission. Find runs in the worker on that text,
-page by page from the page being read, round to it: runs of white space
-(line ends included) match one another, ligatures match their letters,
-soft hyphens are skipped, and case is ignored unless asked. Hits come as
-rectangles, one for each line they cross, and step in document order.
+follows the document's permission; a selection over pages whose text
+hasn't come (passed over with the scroll bar) has them read first, the
+toolbar counting them down, and is copied once they have. Find runs in
+the worker on that text, page by page from the page being read, round to
+it: runs of white space (line ends included) match one another, ligatures
+match their letters, soft hyphens are skipped, and case is ignored unless
+asked. Hits come as rectangles, one for each line they cross, and step in
+document order.
 
 ## Testing
 
@@ -281,12 +299,14 @@ strings, fonts); the worker through the engine (`tests/worker.rs`:
 opening, drawing where the text is on a turned page, links, find,
 passwords, a killed worker replaced); the app headless with real workers
 (`tests/shiori.rs`: drawing exactly, moving and zooming in place, find,
-selecting and copying, links, the sidebar, a locked document, a dying
-worker, your place, a file changing, drawing ahead) and its look in Night
-and Day (`tests/golden`: made when PDFium drew the pages, and hayro's
-drawings match them within the kit's tolerance). Documents are written by
-`tests/common` from text; `tests/fixtures/locked.pdf` is the sample
-encrypted by qpdf 12.4 (the command is in `tests/worker.rs`).
+selecting and copying, copying pages not yet read, links clicked and
+dragged from, the sidebar and the contents following the page, a locked
+document, a dying worker, a page failing at one size, your place and
+sidebar, a file changing, drawing ahead, Escape, panning and selecting
+past the edge) and its look in Night and Day (`tests/golden`, drawn with
+hayro). Documents are written by `tests/common` from text;
+`tests/fixtures/locked.pdf` is the sample encrypted by qpdf 12.4 (the
+command is in `tests/worker.rs`).
 
 `nix build .#aizome-checks.shiori -L` runs the packaged reader in an
 Aizome session in a VM (`nix/vm-shiori-test.py`): it opens a document,

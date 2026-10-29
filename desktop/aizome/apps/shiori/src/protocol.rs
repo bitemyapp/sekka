@@ -18,6 +18,11 @@ pub type PageRect = [f32; 4];
 /// The most a frame's JSON may be (a page's text is the largest).
 const MAX_FRAME: usize = 256 << 20;
 
+/// The widest or tallest drawing a worker sends: a tile is 1024 device
+/// pixels and a preview narrower. The app takes no larger one on a
+/// worker's word, as the worker reads what a document gives it.
+pub const MOST_SIDE: u32 = 4096;
+
 /// A drawing of part of a page: the page drawn `size` device pixels large,
 /// and the part of that at `at`, `w` × `h`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -32,6 +37,11 @@ pub struct TileKey {
 impl TileKey {
     pub fn bytes(&self) -> usize {
         self.w as usize * self.h as usize * 4
+    }
+
+    /// Whether it's a drawing the app could have asked for.
+    pub fn plausible(&self) -> bool {
+        (1..=MOST_SIDE).contains(&self.w) && (1..=MOST_SIDE).contains(&self.h)
     }
 }
 
@@ -165,6 +175,16 @@ pub struct PageText {
     pub boxes: Vec<PageRect>,
 }
 
+impl PageText {
+    /// A box for each character, as the worker sends them: a reply where
+    /// the two disagree is cut to the shorter.
+    pub fn agree(&mut self) {
+        let n = self.chars.len().min(self.boxes.len());
+        self.chars.truncate(n);
+        self.boxes.truncate(n);
+    }
+}
+
 /// Send `msg`, then `pixels`.
 pub fn write_frame<T: Serialize>(w: &mut impl Write, msg: &T, pixels: Option<&[u8]>) -> io::Result<()> {
     let json = serde_json::to_vec(msg).map_err(io::Error::other)?;
@@ -222,5 +242,17 @@ mod tests {
     fn a_huge_length_is_refused() {
         let buf = (u32::MAX).to_le_bytes();
         assert!(read_frame::<Reply>(&mut &buf[..]).is_err());
+    }
+
+    #[test]
+    fn only_drawings_the_app_asks_for_are_taken() {
+        let key = |w, h| TileKey { page: 0, size: (w, h), at: (0, 0), w, h };
+        assert!(key(1024, 1024).plausible());
+        assert!(key(224, 896).plausible());
+        assert!(!key(0, 10).plausible());
+        assert!(!key(u32::MAX, u32::MAX).plausible());
+        let mut t = PageText { chars: vec!['a', 'b'], boxes: vec![[0.0; 4]] };
+        t.agree();
+        assert_eq!((t.chars.len(), t.boxes.len()), (1, 1));
     }
 }

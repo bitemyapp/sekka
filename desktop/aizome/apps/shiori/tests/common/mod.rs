@@ -163,6 +163,9 @@ pub fn pdf(pages: &[Page], outline: &[Mark]) -> Vec<u8> {
         assert_eq!(id, objs.len() + 1);
         objs.push(d);
     }
+    // The information dictionary, last: when it was made and changed.
+    objs.push("<< /CreationDate (D:20261028093000Z) /ModDate (D:20261029101500Z) >>".to_owned());
+    let info = objs.len();
     let mut out = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets = Vec::new();
     for (i, o) in objs.iter().enumerate() {
@@ -175,7 +178,8 @@ pub fn pdf(pages: &[Page], outline: &[Mark]) -> Vec<u8> {
         out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
     }
     out.extend_from_slice(
-        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes(),
+        format!("trailer\n<< /Size {} /Root 1 0 R /Info {info} 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1)
+            .as_bytes(),
     );
     out
 }

@@ -191,12 +191,23 @@ fn read_replies(mut out: BufReader<std::process::ChildStdout>, shared: &Shared, 
                 *shared.busy.lock().unwrap_or_else(|e| e.into_inner()) = Some((job, Instant::now()));
             }
             Reply::Drawn(key) => {
+                // A drawing no one asked for: the worker's gone wrong, and
+                // what follows can't be read. It's stopped, as if it crashed.
+                if !key.plausible() {
+                    log::warn!("the worker sent a drawing of {} × {}", key.w, key.h);
+                    return;
+                }
                 let Ok(px) = read_pixels(&mut out, &key) else { return };
                 done(shared);
                 match Image::from_rgba(key.w, key.h, &px) {
                     Some(img) => sink(Event::Drawn(key, img)),
                     None => sink(Event::Reply(Reply::DrawFailed(key))),
                 }
+            }
+            Reply::Text { page, mut text } => {
+                done(shared);
+                text.agree();
+                sink(Event::Reply(Reply::Text { page, text }));
             }
             r => {
                 done(shared);

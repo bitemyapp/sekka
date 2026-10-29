@@ -674,31 +674,44 @@ is put together, is in `docs/shiori.md`.
   ❖-scroll and pinches about the pointer, ❖0 for 100% (a page point to a
   screen point), ❖8 to fit the width, ❖9 the page. The toolbar has the
   sidebar, the previous and next page, the zoom and Find, with
-  `Page 12 of 340 · 125%` at its right.
+  `Page 12 of 340 · 125%` at its right, which asks which page to go to
+  when pressed. Full Screen (⌃❖F) shows the pages alone, and Find while
+  it's open; Escape leaves it.
 - **Moving about**: scrolling, Space and ⇧Space, Page Up and Down, the
   arrows (← and → turn pages when the page fits across), Home and End;
-  Go ▸ First, Last, Previous and Next Page, and Go to Page… (⌥❖G). The
-  sidebar (⌥❖S) shows each page small, or the document's contents (its
-  outline), which it opens with when it has one.
-- **Text**: drag to select (across pages), double-click a word,
-  triple-click a line, ⇧-click to extend; ❖C copies (unless the author
-  forbade it), ❖A selects the page's text. Find (❖F) searches the whole
-  document from the page being read, case-sensitively if asked, and
-  shows each hit; ❖G and ⇧❖G go through them.
+  dragging with the middle button, for pages zoomed wider than the
+  window; Go ▸ First, Last, Previous and Next Page, and Go to Page…
+  (⌥❖G). Scroll bars show along the right and, for wide pages, the
+  bottom, while scrolling. The sidebar (⌥❖S) shows each page small, or
+  the document's contents (its outline), which it opens with when it has
+  one; the entry being read is marked as you go.
+- **Text**: drag to select (across pages, scrolling on while held past
+  the window's edge), double-click a word, triple-click a line, ⇧-click
+  to extend; ❖C copies (unless the author forbade it), reading first the
+  text of pages passed over, ❖A selects the page's text, and Escape lets
+  the selection go. Find (❖F) searches the whole document from the page
+  being read, case-sensitively if asked, and shows each hit in yellow and
+  the current one in orange; ❖G and ⇧❖G go through them, and Escape
+  empties the field, then closes it.
 - **Links** within the document go to their place; web and mail links
-  open in their apps (no others: a document can't start programs).
+  open in their apps (no others: a document can't start programs). The
+  toolbar says where the link under the pointer goes. A click follows
+  it; a drag from it selects its text.
 - **Locked documents** ask for their password; Get Info (❖I) shows the
-  title, author, pages, page size, PDF version, what made it and whether
-  it's encrypted.
+  title, author, pages, page size, PDF version, what made it, when it was
+  made and changed, and whether it's encrypted.
 - **Your place**: each document opens where you left it, at the zoom
-  you left it at (`$XDG_STATE_HOME/aizome/shiori/places.json`, the newest
-  400). A file that changes while open (a LaTeX build, a download
-  finishing) is read again where you are; one that's half written leaves
-  the last version showing.
+  and with the sidebar you left it with
+  (`$XDG_STATE_HOME/aizome/shiori/places.json`, the newest 400). A file
+  that changes while open (a LaTeX build, a download finishing) is read
+  again where you are; one that's half written leaves the last version
+  showing.
 - **Robustness**: a page that makes hayro panic, keeps it busy over 20
-  seconds, or brings its worker down costs that page ("This page couldn't
-  be drawn"), not the window. When a worker goes, Shiori starts another,
-  says so in the toolbar for a few seconds, and carries on.
+  seconds, or brings its worker down costs that drawing of that page
+  ("This page couldn't be drawn"), not the window; it's tried again at
+  another zoom, unless it's failed at two already. When a worker goes,
+  Shiori starts another, says so in the toolbar for a few seconds, and
+  carries on; if it gives up, Find says the search stopped.
 - **Speed**: tiles of 1024 device pixels, drawn for exactly the zoom and
   the screen's scale and copied one to one; the page above and the page
   below drawn ahead and kept; scrolling moves what was drawn and draws

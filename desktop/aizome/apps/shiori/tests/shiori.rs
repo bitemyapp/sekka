@@ -1,4 +1,4 @@
-//! Shiori run headlessly over generated documents, with real PDFium
+//! Shiori run headlessly over generated documents, with real hayro
 //! workers: opening, drawing exactly, moving about, zooming, finding,
 //! selecting and copying, links, passwords, a worker crashing, your
 //! place kept and a file changing.
@@ -8,13 +8,17 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use aizome_kit::Appearance;
 use aizome_kit::prelude::*;
+use aizome_kit::sidestep_ui::{Modifiers, NamedKey, PointerButton};
 use aizome_kit::testing::{Harness, assert_golden};
 use aizome_kit::theme::ThemeChoice;
-use aizome_shiori::app::{Load, Msg, Shiori};
+use aizome_kit::{Appearance, WindowState};
+use aizome_shiori::app::{Load, Msg, Sheet, Shiori};
+use aizome_shiori::engine::{Event, Failure};
 use aizome_shiori::layout::Zoom;
 use aizome_shiori::places::Places;
+use aizome_shiori::protocol::{Reply, TileKey};
+use aizome_shiori::text::{Caret, Selection};
 
 struct Rig {
     h: Harness<Shiori>,
@@ -223,7 +227,9 @@ fn follows_links() {
     let (a, _) = text_span(&r, 0, "Go to page three");
     let at = view_point(&r, 0, a);
     r.h.move_to(w, at);
-    assert_eq!(doc(&r).hover, aizome_shiori::app::Hover::Link);
+    assert!(matches!(doc(&r).hover, aizome_shiori::app::Hover::Link { page: 0, .. }));
+    // The toolbar says where it goes.
+    assert!(r.h.texts(w).iter().any(|t| t == "Go to page 3"), "{:?}", r.h.texts(w));
     r.h.click(w, at);
     settle(&mut r);
     assert_eq!(doc(&r).current_page(), 2);
@@ -423,4 +429,225 @@ fn says_when_a_document_has_no_pages() {
     let w = r.h.window();
     assert!(matches!(&doc(&r).load, Load::Failed(why) if why.contains("no pages")), "{:?}", doc(&r).load);
     assert!(r.h.texts(w).iter().any(|t| t == "Shiori can't open “empty.pdf”"));
+}
+
+#[test]
+fn a_drag_from_a_link_chooses_its_text() {
+    let mut r = rig("link-drag", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let w = r.h.window();
+    let (a, b) = text_span(&r, 0, "Visit sekka.computer");
+    // Pointed at, it says where it goes; dragged over, it's text.
+    r.h.move_to(w, view_point(&r, 0, a));
+    assert!(r.h.texts(w).iter().any(|t| t == "https://sekka.computer/"), "{:?}", r.h.texts(w));
+    r.h.drag(w, view_point(&r, 0, (a.0 - 3.0, a.1)), view_point(&r, 0, (b.0 + 3.0, b.1)), 6);
+    settle(&mut r);
+    assert!(r.h.program().opened.is_empty(), "the link was followed");
+    r.h.command(w, 'c');
+    assert_eq!(r.h.platform.clipboard.as_deref(), Some("Visit sekka.computer"));
+    // A press that barely moves is still a click.
+    let at = view_point(&r, 0, a);
+    r.h.press(w, at, PointerButton::Left, 1);
+    r.h.move_to(w, at + Vec2::new(2.0, 1.0));
+    r.h.release(w, at + Vec2::new(2.0, 1.0), PointerButton::Left);
+    assert_eq!(r.h.program().opened, vec!["https://sekka.computer/".to_owned()]);
+}
+
+#[test]
+fn escape_empties_find_closes_it_and_leaves_full_screen() {
+    let mut r = rig("escape", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let w = r.h.window();
+    r.h.window_state(w, WindowState { fullscreen: true, maximized: false });
+    settle(&mut r);
+    assert!(r.h.find_id(w, "page-number").is_none(), "the toolbar showed in full screen");
+    // Find shows in full screen too, and has the keys.
+    r.h.command(w, 'f');
+    settle(&mut r);
+    assert!(r.h.find_id(w, "find").is_some(), "no find field in full screen");
+    r.h.type_text(w, "needle");
+    r.h.advance(Duration::from_millis(250));
+    settle(&mut r);
+    assert_eq!(doc(&r).find.as_ref().map(|f| f.count()), Some(4));
+    r.h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(doc(&r).find.as_ref().map(|f| f.query.as_str()), Some(""));
+    r.h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(doc(&r).find.is_none());
+    r.h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(r.h.fullscreen_asked(w), Some(false));
+}
+
+#[test]
+fn copies_pages_whose_text_hadnt_come() {
+    let mut r = rig("copy-far", &[("long.pdf", common::long(80))], &["long.pdf"]);
+    let w = r.h.window();
+    // From the first page to the seventieth, gone to straight away: the
+    // pages between were never read.
+    r.h.send(Msg::GoPage(w, 69));
+    settle(&mut r);
+    let end = doc(&r).texts.get(&69).expect("the page's text").chars.len();
+    assert!(!doc(&r).texts.contains_key(&30));
+    r.h.program_mut().docs[0].selection =
+        Some(Selection { anchor: Caret { page: 0, index: 0 }, focus: Caret { page: 69, index: end } });
+    r.h.send(Msg::Copy);
+    assert!(doc(&r).copying.is_some(), "it copied what it had");
+    assert!(r.h.platform.clipboard.is_none());
+    assert!(r.h.texts(w).iter().any(|t| t.starts_with("Reading ") && t.ends_with(" to copy…")), "{:?}", r.h.texts(w));
+    settle(&mut r);
+    let copied = r.h.platform.clipboard.clone().expect("a copy");
+    let lines: Vec<&str> = copied.lines().collect();
+    assert_eq!(lines.len(), 70, "{copied}");
+    assert_eq!(lines[30], "This is page 31 of 80.");
+    // What it read to copy isn't all kept.
+    assert!(doc(&r).texts.len() <= aizome_shiori::app::KEPT_TEXTS);
+    assert!(doc(&r).texts.contains_key(&69));
+}
+
+#[test]
+fn a_page_that_fails_at_one_size_is_drawn_at_another() {
+    let mut r = rig("fail-size", &[("long.pdf", common::long(3))], &["long.pdf"]);
+    let fail = |r: &mut Rig| {
+        let d = doc(r);
+        let size = d.layout.device_size(0, d.scale);
+        let key = TileKey { page: 0, size, at: (0, 0), w: size.0.min(1024), h: size.1.min(1024) };
+        let serial = d.serial;
+        r.h.send(Msg::Worker(serial, Event::Reply(Reply::DrawFailed(key))));
+        settle(r);
+        size
+    };
+    let first = fail(&mut r);
+    assert!(doc(&r).broken_at(0, first));
+    // Zoomed in, it's drawn.
+    r.h.send(Msg::ZoomIn);
+    settle(&mut r);
+    let d = doc(&r);
+    let second = d.layout.device_size(0, d.scale);
+    assert_ne!(second, first);
+    assert!(!d.broken_at(0, second));
+    assert!(d.tiles.of_page(0).any(|(k, _)| k.size == second));
+    // Failing there too, it isn't tried at a third size.
+    fail(&mut r);
+    r.h.send(Msg::ZoomIn);
+    settle(&mut r);
+    let d = doc(&r);
+    let third = d.layout.device_size(0, d.scale);
+    assert!(d.broken_at(0, third));
+    assert!(!d.tiles.of_page(0).any(|(k, _)| k.size == third));
+    assert!(!d.broken_at(1, third), "only that page");
+}
+
+#[test]
+fn find_says_when_it_cant_search() {
+    let mut r = rig("find-stopped", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let w = r.h.window();
+    let serial = doc(&r).serial;
+    r.h.send(Msg::Worker(serial, Event::Failed { job: None, why: Failure::Crashed, gave_up: true }));
+    r.h.send(Msg::Find);
+    r.h.send(Msg::FindQuery(w, "needle".into()));
+    r.h.advance(Duration::from_millis(250));
+    settle(&mut r);
+    assert!(r.h.texts(w).iter().any(|t| t == "Search stopped"), "{:?}", r.h.texts(w));
+}
+
+#[test]
+fn the_contents_show_where_you_are() {
+    let mut r = rig("contents-here", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let w = r.h.window();
+    // Introduction (1), Wide (2) and in it Turned (3).
+    assert_eq!(doc(&r).current_entry(), Some(1));
+    r.h.send(Msg::ZoomPick(w, 8));
+    r.h.send(Msg::GoPage(w, 3));
+    settle(&mut r);
+    // Wide is closed, and stands for Turned.
+    assert_eq!(doc(&r).current_entry(), Some(2));
+    r.h.send(Msg::OutlineToggle(w, 2, true));
+    assert_eq!(doc(&r).current_entry(), Some(3));
+    r.h.send(Msg::GoPage(w, 2));
+    settle(&mut r);
+    assert_eq!(doc(&r).current_entry(), Some(2));
+}
+
+#[test]
+fn keeps_the_sidebar_with_your_place() {
+    let mut r = rig("sidebar-kept", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let w = r.h.window();
+    assert_eq!((doc(&r).sidebar, doc(&r).sidebar_tab), (true, 1));
+    r.h.send(Msg::SidebarTab(w, 0));
+    settle(&mut r);
+    r.h.request_close(w);
+    let dir = r.dir.clone();
+    drop(r);
+    let mut r = rig_in(dir, ThemeChoice::Night, &["sample.pdf"]);
+    assert_eq!((doc(&r).sidebar, doc(&r).sidebar_tab), (true, 0));
+    r.h.send(Msg::ToggleSidebar);
+    settle(&mut r);
+    let w = r.h.window();
+    r.h.request_close(w);
+    let dir = r.dir.clone();
+    drop(r);
+    let r = rig_in(dir, ThemeChoice::Night, &["sample.pdf"]);
+    assert!(!doc(&r).sidebar);
+}
+
+#[test]
+fn the_middle_button_moves_the_pages() {
+    let mut r = rig("pan", &[("long.pdf", common::long(3))], &["long.pdf"]);
+    let w = r.h.window();
+    r.h.send(Msg::ZoomPick(w, 8));
+    settle(&mut r);
+    let before = doc(&r).scroll;
+    let mid = r.h.find_id(w, "pages").unwrap().center();
+    let to = mid - Vec2::new(100.0, 50.0);
+    r.h.press(w, mid, PointerButton::Middle, 1);
+    r.h.move_to(w, to);
+    r.h.release(w, to, PointerButton::Middle);
+    let after = doc(&r).scroll;
+    assert_eq!((after.0 - before.0, after.1 - before.1), (100.0, 50.0));
+    assert!(doc(&r).drag.is_none());
+}
+
+#[test]
+fn a_selection_held_past_the_edge_scrolls_on() {
+    let mut r = rig("autoscroll", &[("long.pdf", common::long(10))], &["long.pdf"]);
+    let w = r.h.window();
+    let (a, _) = text_span(&r, 0, "This");
+    let from = view_point(&r, 0, a);
+    let below = Point::new(from.x, r.h.find_id(w, "pages").unwrap().y1 + 30.0);
+    r.h.press(w, from, PointerButton::Left, 1);
+    r.h.move_to(w, below);
+    let first = doc(&r).scroll.1;
+    for _ in 0..10 {
+        r.h.advance(Duration::from_millis(60));
+    }
+    let later = doc(&r).scroll.1;
+    assert!(later > first + 100.0, "{first} then {later}");
+    r.h.release(w, below, PointerButton::Left);
+    let stopped = doc(&r).scroll.1;
+    r.h.advance(Duration::from_millis(300));
+    assert_eq!(doc(&r).scroll.1, stopped);
+    assert!(doc(&r).selection.is_some_and(|s| s.focus.page > 0), "{:?}", doc(&r).selection);
+}
+
+#[test]
+fn the_page_number_asks_where_to_go() {
+    let mut r = rig("page-number", &[("long.pdf", common::long(12))], &["long.pdf"]);
+    let w = r.h.window();
+    let at = r.h.find_id(w, "page-number").expect("the page number").center();
+    r.h.click(w, at);
+    let sheet = *r.h.program().sheets.keys().next().expect("Go to Page");
+    assert!(matches!(r.h.program().sheets.get(&sheet), Some(Sheet::GoTo { .. })));
+    r.h.type_text(sheet, "7");
+    r.h.named(sheet, NamedKey::Enter, Modifiers::NONE);
+    settle(&mut r);
+    assert_eq!(doc(&r).current_page(), 6);
+}
+
+#[test]
+fn get_info_says_when_it_was_made() {
+    let mut r = rig("info", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    r.h.send(Msg::Info);
+    settle(&mut r);
+    let sheet = *r.h.program().sheets.keys().next().expect("Get Info");
+    let texts = r.h.texts(sheet);
+    for t in ["Created", "2026-10-28 09:30", "Modified", "2026-10-29 10:15"] {
+        assert!(texts.iter().any(|s| s == t), "no {t} in {texts:?}");
+    }
 }

@@ -157,17 +157,19 @@ pub fn extract(text: &PageText, s: usize, e: usize) -> String {
     text.chars.get(s..e.min(text.chars.len())).unwrap_or(&[]).iter().filter(|c| **c != '\0').collect()
 }
 
+/// What `sel` copies of page `page`, whose text is `t` (`None` if it
+/// covers none of it).
+pub fn page_part(sel: &Selection, page: u32, t: &PageText) -> Option<String> {
+    let (s, e) = sel.on_page(page, t.chars.len())?;
+    Some(extract(t, s, e).trim_end_matches('\n').to_owned())
+}
+
 /// What `sel` copies from the pages `texts` gives (in page order; pages
-/// whose text hasn't come are left out).
+/// whose text hasn't come are left out, so the program asks for them
+/// before it copies: `app::Copying`).
 pub fn copy<'a>(sel: &Selection, texts: impl Fn(u32) -> Option<&'a PageText>) -> String {
     let (a, b) = sel.ordered();
-    let mut parts: Vec<String> = Vec::new();
-    for page in a.page..=b.page {
-        let Some(t) = texts(page) else { continue };
-        if let Some((s, e)) = sel.on_page(page, t.chars.len()) {
-            parts.push(extract(t, s, e).trim_end_matches('\n').to_owned());
-        }
-    }
+    let parts: Vec<String> = (a.page..=b.page).filter_map(|p| page_part(sel, p, texts(p)?)).collect();
     parts.join("\n")
 }
 

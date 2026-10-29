@@ -1,4 +1,4 @@
-//! The PDFium worker, through the engine the app uses: a real process
+//! The worker, through the engine the app uses: a real process
 //! reading generated documents.
 
 mod common;
@@ -80,7 +80,7 @@ fn draws_tiles_where_the_text_is() {
             Some(())
         });
     }
-    // Each character PDFium found is over ink in the drawing.
+    // Each character the worker found is over ink in the drawing.
     for (page, text) in &texts {
         let (key, img) = images.iter().find(|(k, _)| k.page == *page).unwrap();
         let rgba = img.to_rgba8().expect("pixels");

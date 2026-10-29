@@ -160,12 +160,21 @@ impl<'a> Device<'a> for Collector {
         if self.actual.iter().any(Option::is_some) || at >= self.glyphs.len() {
             return;
         }
-        let covered: Vec<Shown> = self.glyphs.drain(at..).collect();
-        let (first, last) = (&covered[0], &covered[covered.len() - 1]);
-        if text.is_empty() || first.flow.dot(last.flow) < 0.95 {
+        let (first, last) = (&self.glyphs[at], &self.glyphs[self.glyphs.len() - 1]);
+        // Glyphs that turn can't share one box: they're kept as they are.
+        if first.flow.dot(last.flow) < 0.95 {
             return;
         }
-        self.glyphs.push(Shown { text: text.chars().collect(), end: last.end, to: last.to, ..first.clone() });
+        // An empty `/ActualText` says the glyphs aren't text (a hyphen
+        // only there for the line's end, say).
+        let actual = (!text.is_empty()).then(|| Shown {
+            text: text.chars().collect(),
+            end: last.end,
+            to: last.to,
+            ..first.clone()
+        });
+        self.glyphs.truncate(at);
+        self.glyphs.extend(actual);
     }
 }
 
@@ -372,6 +381,28 @@ mod tests {
         let t = lay_out(&[at("fi", 0.0, 50.0, 10.0, 600.0)]);
         assert_eq!(joined(&t), "fi");
         assert!((t.boxes[0][2] - 3.0).abs() < 1e-4 && (t.boxes[1][0] - 3.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn actual_text_takes_the_place_of_its_glyphs() {
+        let mut c = Collector { glyphs: word("x", 0.0, 100.0), actual: Vec::new() };
+        c.actual.push(Some(("ﬁ".into(), 1)));
+        c.glyphs.extend(word("fi", 6.0, 100.0));
+        c.end_marked_content();
+        assert_eq!(joined(&lay_out(&c.glyphs)), "xﬁ");
+        // Empty: what it covers isn't text.
+        c.actual.push(Some((String::new(), 2)));
+        c.glyphs.extend(word("-", 18.0, 100.0));
+        c.end_marked_content();
+        assert_eq!(joined(&lay_out(&c.glyphs)), "xﬁ");
+        // Glyphs that turn on the way keep their own text.
+        c.actual.push(Some(("ab".into(), 2)));
+        c.glyphs.push(at("a", 20.0, 100.0, 10.0, 600.0));
+        let turned = Affine::new([0.0, -0.01, -0.01, 0.0, 30.0, 100.0]);
+        c.glyphs.push(Shown::new(vec!['b'], turned, 600.0, false).unwrap());
+        c.end_marked_content();
+        assert_eq!(c.glyphs.len(), 4);
+        assert_eq!(c.glyphs[3].text, vec!['b']);
     }
 
     #[test]

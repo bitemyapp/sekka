@@ -10,8 +10,9 @@ use std::sync::Arc;
 use aizome_kit::column;
 use aizome_kit::prelude::*;
 
-use crate::app::{Doc, Find, Load, Msg, Sheet, Shiori, outline_items};
+use crate::app::{Doc, Find, Hover, Load, Msg, Sheet, Shiori, outline_items};
 use crate::layout::Zoom;
+use crate::protocol::Target;
 
 /// The zoom pop-up's choices.
 pub const ZOOM_CHOICES: [Zoom; 10] = [
@@ -42,20 +43,22 @@ pub fn percent(z: f64) -> String {
 pub fn window(app: &Shiori, w: WindowKey) -> Element<Msg> {
     let Some(d) = app.doc(w) else { return empty() };
     let pages = crate::pages::pages_area(app, d);
-    if d.fullscreen {
-        return aizome_kit::widgets::layout::column(vec![pages]).into();
-    }
-    let body: Element<Msg> = if d.sidebar && d.info().is_some() {
+    // Full screen is the pages alone, and Find while it's open.
+    let body: Element<Msg> = if d.sidebar && d.info().is_some() && !d.fullscreen {
         sidebar_layout(sidebar(app, d), pages).first_size(196.0).into()
     } else {
         pages
     };
-    let mut parts = vec![top_bar(d)];
+    let mut parts = Vec::new();
+    if !d.fullscreen {
+        parts.push(top_bar(d));
+    }
     if let Some(f) = &d.find {
         parts.push(find_bar(d, f));
     }
     parts.push(body);
-    aizome_kit::widgets::layout::column(parts).into()
+    let escapable = d.find.is_some() || d.selection.is_some() || d.fullscreen;
+    crate::pages::escapes(aizome_kit::widgets::layout::column(parts).into(), w, escapable)
 }
 
 /// A window with nothing open.
@@ -95,12 +98,29 @@ fn top_bar(d: &Doc) -> Element<Msg> {
             (0, 1)
         }
     };
-    let status = match (&d.load, &d.trouble) {
-        (_, Some(t)) => text(t.clone()).role(Role::Warning).into(),
-        (Load::Open(_), None) => {
-            status_text(format!("Page {} of {n} · {}", (d.current_page() + 1).min(n.max(1)), percent(d.layout.zoom)))
+    // What's wrong, else where the link under the pointer goes, else a
+    // copy under way, else the page: pressed, it asks which to go to.
+    let link = match d.hover {
+        Hover::Link { page, index } => d.links.get(&page).and_then(|l| l.get(index)).map(|l| link_label(&l.target)),
+        _ => None,
+    };
+    let status: Element<Msg> = match (&d.load, &d.trouble, link, &d.copying) {
+        (_, Some(t), _, _) => text(t.clone()).role(Role::Warning).into(),
+        (_, None, Some(l), _) => text(l).role(Role::Text2).max_width(460.0).into(),
+        (_, None, None, Some(c)) => {
+            let left = c.missing.len();
+            status_text(format!("Reading {left} {} to copy…", if left == 1 { "page" } else { "pages" }))
         }
-        (Load::Opening, None) => status_text("Opening…"),
+        (Load::Open(_), None, None, None) => {
+            button(format!("Page {} of {n} · {}", (d.current_page() + 1).min(n.max(1)), percent(d.layout.zoom)))
+                .toolbar()
+                .mono()
+                .on_press(Msg::GoToPanel)
+                .tooltip("Go to Page…  ⌥❖G")
+                .id("page-number")
+                .into()
+        }
+        (Load::Opening, ..) => status_text("Opening…"),
         _ => status_text(""),
     };
     toolbar(vec![
@@ -112,8 +132,8 @@ fn top_bar(d: &Doc) -> Element<Msg> {
             .tooltip("Sidebar  ⌥❖S")
             .into(),
         toolbar_separator(),
-        tool(Icon::ChevronUp, "Previous Page", Msg::PreviousPage, open && d.current_page() > 0),
-        tool(Icon::ChevronDown, "Next Page", Msg::NextPage, open && d.current_page() + 1 < n),
+        tool(Icon::ChevronUp, "Previous Page  ⌥❖↑", Msg::PreviousPage, open && d.current_page() > 0),
+        tool(Icon::ChevronDown, "Next Page  ⌥❖↓", Msg::NextPage, open && d.current_page() + 1 < n),
         toolbar_separator(),
         tool(Icon::ZoomOut, "Zoom Out  ❖−", Msg::ZoomOut, open),
         dropdown(labels, selected)
@@ -137,19 +157,35 @@ fn top_bar(d: &Doc) -> Element<Msg> {
     ])
 }
 
+/// Where a link goes, as the toolbar says while the pointer's over it.
+pub fn link_label(t: &Target) -> String {
+    match t {
+        Target::Page { page, .. } => format!("Go to page {}", page + 1),
+        Target::Uri(u) if crate::app::opens(u) => u.clone(),
+        Target::Uri(u) => format!("Not opened (Shiori opens web and mail links): {u}"),
+    }
+}
+
 fn find_bar(d: &Doc, f: &Find) -> Element<Msg> {
     let w = d.window;
     let count = f.count();
     let status = if f.query.is_empty() {
         String::new()
     } else if count == 0 {
-        if f.done() { "Not found".into() } else { "Searching…".into() }
+        if f.stopped {
+            "Search stopped".into()
+        } else if f.done() {
+            "Not found".into()
+        } else {
+            "Searching…".into()
+        }
     } else {
         let more = if f.done() { "" } else { "+" };
-        match f.ordinal() {
+        let found = match f.ordinal() {
             Some(i) => format!("{i} of {count}{more}"),
             None => format!("{count}{more} found"),
-        }
+        };
+        if f.stopped { format!("{found} (search stopped)") } else { found }
     };
     let field = search_field(&f.query)
         .placeholder("Find in document")
@@ -168,7 +204,11 @@ fn find_bar(d: &Doc, f: &Find) -> Element<Msg> {
             icon_button(Icon::ChevronDown).toolbar().enabled(count > 0).on_press(Msg::FindNext).tooltip("Next  ❖G"),
             checkbox("Match Case", f.case).on_toggle(move |on| Msg::FindCase(w, on)),
             spacer(),
-            text(status).role(if count == 0 && f.done() && !f.query.is_empty() { Role::Danger } else { Role::Text2 }),
+            text(status).role(if (count == 0 && f.done() && !f.query.is_empty()) || f.stopped {
+                Role::Danger
+            } else {
+                Role::Text2
+            }),
             button("Done").compact().on_press(Msg::FindClose(w)),
         ]
         .spacing(8.0),
@@ -257,8 +297,13 @@ fn contents(d: &Doc) -> Element<Msg> {
     let Some(info) = d.info() else { return space(0.0) };
     let mut targets = HashMap::new();
     let items = outline_items(&info.outline, &mut 1, &mut targets);
-    tree(Arc::new(items))
-        .expanded(Arc::new(d.expanded.clone()))
+    // Where the view is, as it moves.
+    let here = d.current_entry();
+    let mut t = tree(Arc::new(items)).selected(here);
+    if let Some(id) = here {
+        t = t.reveal(id);
+    }
+    t.expanded(Arc::new(d.expanded.clone()))
         .on_toggle(move |id, open| Msg::OutlineToggle(w, id, open))
         .on_activate(move |id| Msg::Outline(w, id))
         .on_select(move |ids| ids.first().map_or(Msg::Nothing, |id| Msg::Outline(w, *id)))
@@ -362,7 +407,12 @@ pub fn sheet(app: &Shiori, s: WindowKey, sheet: &Sheet) -> Element<Msg> {
             if !info.version.is_empty() {
                 rows.push(("PDF version".into(), info.version.clone()));
             }
-            for (key, label) in [("Creator", "Made with"), ("Producer", "Written by")] {
+            for (key, label) in [
+                ("Creator", "Made with"),
+                ("Producer", "Written by"),
+                ("CreationDate", "Created"),
+                ("ModificationDate", "Modified"),
+            ] {
                 if let Some(v) = info.meta(key) {
                     rows.push((label.into(), v.to_owned()));
                 }

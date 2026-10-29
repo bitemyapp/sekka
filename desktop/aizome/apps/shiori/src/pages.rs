@@ -22,6 +22,7 @@ use aizome_kit::theme::FontSpec;
 use aizome_kit::widget::{
     Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, SemanticRole, Semantics, Status, Widget,
 };
+use aizome_kit::widgets::layout::Axis;
 use aizome_kit::{MsgSender, column};
 
 use crate::app::{Doc, Drag, Hover, Load, Msg, Nav, Seen, Shiori};
@@ -58,9 +59,10 @@ pub struct Pages {
     /// Found text (document points), and whether it's the current hit.
     pub hits: Rc<Vec<(Rect, bool)>>,
     pub selection: Rc<Vec<Rect>>,
-    /// Where links and lines of text are (document points), for the
-    /// pointer's shape.
-    pub links: Rc<Vec<Rect>>,
+    /// Where links (each with its page, and its place among the page's)
+    /// and lines of text are (document points), for the pointer's shape
+    /// and what the toolbar says.
+    pub links: Rc<Vec<(Rect, u32, usize)>>,
     pub lines: Rc<Vec<Rect>>,
     pub hover: Hover,
     pub dragging: bool,
@@ -132,18 +134,40 @@ impl Pages {
         out
     }
 
-    /// The scroll bar's track and thumb (view points), when it shows.
-    fn bar_rects(&self, size: Size) -> Option<(Rect, Rect)> {
-        let (content, view) = (self.layout.size.height, size.height);
-        if !self.bar || content <= view + 0.5 {
-            return None;
+    /// The scroll bars' thumbs (view points), when they show: the vertical
+    /// one, and the horizontal one when the pages are wider than the view.
+    fn bar_rects(&self, size: Size) -> [Option<Rect>; 2] {
+        if !self.bar {
+            return [None, None];
         }
-        let track = Rect::new(size.width - 6.0, 2.0, size.width - 2.0, size.height - 2.0);
-        let len = (track.height() * view / content).clamp(24.0, track.height());
-        let y = track.y0 + (track.height() - len) * (self.scroll.1 / (content - view)).clamp(0.0, 1.0);
-        Some((track, Rect::new(track.x0, y.round(), track.x1, (y + len).round())))
+        let (content, view) = (self.layout.size, size);
+        let tall = content.height > view.height + 0.5;
+        let wide = content.width > view.width + 0.5;
+        let vertical = tall.then(|| {
+            let track = Rect::new(size.width - 6.0, 2.0, size.width - 2.0, size.height - 2.0);
+            let len = (track.height() * view.height / content.height).clamp(24.0, track.height());
+            let t = (self.scroll.1 / (content.height - view.height)).clamp(0.0, 1.0);
+            let y = track.y0 + (track.height() - len) * t;
+            Rect::new(track.x0, y.round(), track.x1, (y + len).round())
+        });
+        let horizontal = wide.then(|| {
+            let end = size.width - if tall { 8.0 } else { 2.0 };
+            let track = Rect::new(2.0, size.height - 6.0, end, size.height - 2.0);
+            let len = (track.width() * view.width / content.width).clamp(24.0, track.width());
+            let t = (self.scroll.0 / (content.width - view.width)).clamp(0.0, 1.0);
+            let x = track.x0 + (track.width() - len) * t;
+            Rect::new(x.round(), track.y0, (x + len).round(), track.y1)
+        });
+        [vertical, horizontal]
     }
 }
+
+/// What the found text and the current hit are drawn in, multiplied over
+/// the page: colours for paper, which pages are whatever the theme, so the
+/// current hit is the stronger in Night and Day alike.
+const HIT: Color = Color::rgb8(0xff, 0xe8, 0x80);
+const CURRENT_HIT: Color = Color::rgb8(0xff, 0xa8, 0x3c);
+const CURRENT_EDGE: Color = Color::rgb8(0xd9, 0x6a, 0x00);
 
 /// Where tile `k` of a page at `r` (document points) is.
 fn tile_rect(r: Rect, k: &TileKey) -> Rect {
@@ -189,9 +213,9 @@ pub fn pages_of(app: &Shiori, d: &Doc) -> Pages {
             needed.iter().filter_map(|k| d.tiles.get(k).map(|img| (*k, img.clone()))).collect();
         exact_tiles.sort_by_key(|(k, _)| k.at);
         tiles.extend(exact_tiles);
-        shown.push(PageDraw { page: i, tiles, complete: all_there, broken: d.broken.contains(&p) });
+        shown.push(PageDraw { page: i, tiles, complete: all_there, broken: d.broken_at(p, exact) });
         if let Some(ls) = d.links.get(&p) {
-            links.extend(ls.iter().map(|l| layout.rect_to_doc(i, &l.rect)));
+            links.extend(ls.iter().enumerate().map(|(n, l)| (layout.rect_to_doc(i, &l.rect), p, n)));
         }
         if let Some(t) = d.texts.get(&p) {
             lines.extend(text::rects(t, 0, t.chars.len()).iter().map(|r| layout.rect_to_doc(i, r)));
@@ -232,10 +256,11 @@ fn middle(content: Element<Msg>) -> Element<Msg> {
 /// The pages, and over them what's wrong if something is.
 pub fn pages_area(app: &Shiori, d: &Doc) -> Element<Msg> {
     let st = pages_of(app, d);
-    let cursor = match d.hover {
-        Hover::Link => Cursor::Pointer,
-        Hover::Text => Cursor::Text,
-        Hover::None => Cursor::Default,
+    let cursor = match (d.drag, d.hover) {
+        (Some(Drag::Pan { .. }), _) => Cursor::Grabbing,
+        (_, Hover::Link { .. }) => Cursor::Pointer,
+        (_, Hover::Text) => Cursor::Text,
+        (_, Hover::None) => Cursor::Default,
     };
     let whole = st.whole_hash();
     let pages = Element::new(PagesWidget { st, whole }, Vec::new()).width(Fill).height(Fill).id("pages").label("Pages");
@@ -278,7 +303,7 @@ struct Laid {
     whole: u64,
     scroll: (f64, f64),
     parts: Vec<(Rect, u64)>,
-    bar: Option<(Rect, Rect)>,
+    bar: [Option<Rect>; 2],
 }
 
 struct PagesWidget {
@@ -311,12 +336,25 @@ impl Widget for PagesWidget {
             return size;
         }
         let view = |r: &Rect| Rect::new(r.x0 - scroll.0, r.y0 - scroll.1, r.x1 - scroll.0, r.y1 - scroll.1);
-        let track = Rect::new(size.width - 10.0, 0.0, size.width, size.height);
+        // The bars' tracks, where they can show, are drawn again rather
+        // than moved.
+        let content = self.st.layout.size;
+        let tracks = [
+            (content.height > size.height + 0.5).then(|| Rect::new(size.width - 10.0, 0.0, size.width, size.height)),
+            (content.width > size.width + 0.5).then(|| Rect::new(0.0, size.height - 10.0, size.width, size.height)),
+        ];
         if old_scroll != scroll {
             let delta = Vec2::new(old_scroll.0 - scroll.0, old_scroll.1 - scroll.1);
-            cx.scrolled(Rect::from_origin_size(Point::ZERO, size), delta, &[track]);
-        } else if old_bar != bar {
-            cx.invalidate_rect(track);
+            let fixed: Vec<Rect> = tracks.iter().flatten().copied().collect();
+            cx.scrolled(Rect::from_origin_size(Point::ZERO, size), delta, &fixed);
+        } else {
+            for (i, track) in tracks.iter().enumerate() {
+                if let Some(t) = track
+                    && old_bar[i] != bar[i]
+                {
+                    cx.invalidate_rect(*t);
+                }
+            }
         }
         let gone = before.iter().filter(|p| !parts.contains(p));
         let came = parts.iter().filter(|p| !before.contains(p));
@@ -375,15 +413,63 @@ impl Widget for PagesWidget {
     }
 }
 
-/// Whether `pos` (view points) is on the scroll bar's track.
-fn on_bar(st: &Pages, size: Size, pos: Point) -> bool {
-    st.layout.size.height > size.height + 0.5 && pos.x >= size.width - 12.0
+/// Round a window: Escape that nothing in it took (the find field takes
+/// the first, to empty itself) is `Msg::Escape`, when there's something
+/// for it to do.
+pub fn escapes(child: Element<Msg>, w: WindowKey, on: bool) -> Element<Msg> {
+    Element::new(Escapes { w, on }, vec![child]).width(Fill).height(Fill)
+}
+
+struct Escapes {
+    w: WindowKey,
+    on: bool,
+}
+
+impl Widget for Escapes {
+    fn name(&self) -> &'static str {
+        "shiori-escape"
+    }
+
+    fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
+        let mut size = Size::ZERO;
+        for i in 0..cx.child_count() {
+            let s = cx.layout_child(i, bc);
+            cx.place_child(i, Point::ZERO);
+            size = Size::new(size.width.max(s.width), size.height.max(s.height));
+        }
+        bc.constrain(size)
+    }
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
+        if let Event::Key(k) = event
+            && k.pressed
+            && self.on
+            && k.key == Key::Named(NamedKey::Escape)
+            && !(k.modifiers.super_key() || k.modifiers.control() || k.modifiers.alt() || k.modifiers.shift())
+        {
+            cx.emit(&MsgFn::new(Msg::Escape(self.w)));
+            return Status::Handled;
+        }
+        Status::Ignored
+    }
+}
+
+/// Which scroll bar's track `pos` (view points) is on: the vertical one
+/// along the right, the horizontal one along the bottom.
+fn on_bar(st: &Pages, size: Size, pos: Point) -> Option<Axis> {
+    if st.layout.size.height > size.height + 0.5 && pos.x >= size.width - 12.0 {
+        Some(Axis::Vertical)
+    } else if st.layout.size.width > size.width + 0.5 && pos.y >= size.height - 12.0 {
+        Some(Axis::Horizontal)
+    } else {
+        None
+    }
 }
 
 fn hover_at(st: &Pages, pos: Point) -> Hover {
     let p = Point::new(st.scroll.0 + pos.x, st.scroll.1 + pos.y);
-    if st.links.iter().any(|r| r.contains(p)) {
-        Hover::Link
+    if let Some((_, page, index)) = st.links.iter().find(|(r, _, _)| r.contains(p)) {
+        Hover::Link { page: *page, index: *index }
     } else if st.lines.iter().any(|r| r.inflate(2.0, 2.0).contains(p)) {
         Hover::Text
     } else {
@@ -394,19 +480,23 @@ fn hover_at(st: &Pages, pos: Point) -> Hover {
 fn pages_event(ev: &Event, size: Size, st: &Pages) -> Option<Msg> {
     let w = st.window;
     match ev {
-        Event::PointerDown { pos, button: PointerButton::Left, clicks, mods } => {
-            if on_bar(st, size, *pos) {
-                return Some(Msg::BarPress(w, *pos));
-            }
-            Some(Msg::Press { window: w, at: *pos, clicks: *clicks, shift: mods.shift() })
-        }
+        Event::PointerDown { pos, button: PointerButton::Left, clicks, mods } => match on_bar(st, size, *pos) {
+            Some(Axis::Vertical) => Some(Msg::BarPress(w, *pos)),
+            Some(Axis::Horizontal) => Some(Msg::HBarPress(w, *pos)),
+            None => Some(Msg::Press { window: w, at: *pos, clicks: *clicks, shift: mods.shift() }),
+        },
+        // The middle button takes hold of the pages, for moving about
+        // them zoomed in without a sideways wheel.
+        Event::PointerDown { pos, button: PointerButton::Middle, .. } if !st.dragging => Some(Msg::PanStart(w, *pos)),
         Event::PointerMove { pos, .. } if st.dragging => Some(Msg::DragTo(w, *pos)),
         Event::PointerMove { pos, .. } => {
-            let h = if on_bar(st, size, *pos) { Hover::None } else { hover_at(st, *pos) };
+            let h = if on_bar(st, size, *pos).is_some() { Hover::None } else { hover_at(st, *pos) };
             (h != st.hover).then_some(Msg::Hover(w, h))
         }
         Event::PointerLeave if st.hover != Hover::None && !st.dragging => Some(Msg::Hover(w, Hover::None)),
-        Event::PointerUp { button: PointerButton::Left, .. } if st.dragging => Some(Msg::Release(w)),
+        Event::PointerUp { button: PointerButton::Left | PointerButton::Middle, .. } if st.dragging => {
+            Some(Msg::Release(w))
+        }
         Event::Scroll { pos, delta, mods, .. } => {
             if mods.super_key() || mods.control() {
                 // A wheel's notch zooms by a tenth.
@@ -538,14 +628,12 @@ pub fn paint_pages(c: &mut Canvas, bounds: Rect, st: &Pages, theme: &Theme) {
             c.draw_label(label, &style, Point::new(v.center().x - width / 2.0, v.center().y + 18.0));
         }
     }
-    // Found text in amber, the current hit in the focus colour, the
-    // selection in the selection's: multiplied over the page, so the text
-    // stays legible.
+    // Found text in a highlighter's yellow, the current hit in orange (see
+    // `HIT`), the selection in the selection's colour: multiplied over the
+    // page, so the text stays legible.
     c.set_blend_mode(BlendMode::Multiply);
-    let amber = theme.role(Role::Warning).with_alpha(0.35);
-    let current = theme.focus().with_alpha(0.7);
     for (r, cur) in st.hits.iter() {
-        fill(c, to_view(r.inflate(1.0, 1.0)), if *cur { current } else { amber });
+        fill(c, to_view(r.inflate(1.0, 1.0)), if *cur { CURRENT_HIT } else { HIT });
     }
     let sel = theme.selection().with_alpha(0.45);
     for r in st.selection.iter() {
@@ -557,11 +645,11 @@ pub fn paint_pages(c: &mut Canvas, bounds: Rect, st: &Pages, theme: &Theme) {
     for (r, _) in st.hits.iter().filter(|(_, cur)| *cur) {
         let v = to_view(r.inflate(2.0, 2.0));
         if c.needs(v.inflate(1.0, 1.0)) {
-            c.stroke(&v, &edge, theme.focus());
+            c.stroke(&v, &edge, CURRENT_EDGE);
         }
     }
-    // The scroll bar, while scrolling.
-    if let Some((_, thumb)) = st.bar_rects(bounds.size()) {
+    // The scroll bars, while scrolling.
+    for thumb in st.bar_rects(bounds.size()).into_iter().flatten() {
         let t = Rect::new(bounds.x0 + thumb.x0, bounds.y0 + thumb.y0, bounds.x0 + thumb.x1, bounds.y0 + thumb.y1);
         fill(c, t, theme.line2().mix(theme.text3(), 0.35));
     }

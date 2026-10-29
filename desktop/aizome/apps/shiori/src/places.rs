@@ -1,5 +1,5 @@
 //! Your place in each document — what a 栞 keeps: the page and where on
-//! it, and the zoom, by the file's path, in
+//! it, the zoom and the sidebar, by the file's path, in
 //! `$XDG_STATE_HOME/aizome/shiori/places.json`. The newest few hundred.
 
 use std::path::{Path, PathBuf};
@@ -44,6 +44,9 @@ pub struct Place {
     /// How far down the page the view's top was, in page points.
     pub y: f64,
     pub zoom: Zoomed,
+    /// Whether the sidebar showed, and its tab (pages 0, contents 1).
+    #[serde(default)]
+    pub sidebar: Option<(bool, usize)>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -107,7 +110,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("shiori-places-{}", std::process::id()));
         let file = dir.join("places.json");
         let mut p = Places::load(file.clone());
-        let place = |page| Place { page, y: 10.5, zoom: Zoomed::Fixed(1.5) };
+        let place = |page| Place { page, y: 10.5, zoom: Zoomed::Fixed(1.5), sidebar: Some((true, 1)) };
         for i in 0..KEPT + 3 {
             p.set(Path::new(&format!("/d/{i}.pdf")), place(i));
         }
@@ -118,5 +121,12 @@ mod tests {
         assert_eq!(q.get(Path::new("/d/0.pdf")), None);
         assert_eq!(q.get(Path::new(&format!("/d/{}.pdf", KEPT + 2))), Some(place(KEPT + 2)));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn places_kept_before_the_sidebar_was_still_read() {
+        let old: Places =
+            serde_json::from_str(r#"{"places":[["/d/a.pdf",{"page":3,"y":2.0,"zoom":"FitWidth"}]]}"#).unwrap();
+        assert_eq!(old.get(Path::new("/d/a.pdf")).map(|p| (p.page, p.sidebar)), Some((3, None)));
     }
 }

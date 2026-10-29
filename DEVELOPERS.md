@@ -1154,10 +1154,12 @@ new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
 --fetch-submodules` hash in `outputHashes`.
 
 Only the worker process, `aizome-shiori --worker`, one for each open
-document, runs hayro. A panic costs the job it was on (a page it was
-drawing shows as unreadable; one whose text it was reading has none); the
-reader restarts a worker that dies or spends too long on a
-page. Fonts a document names but doesn't carry come from hayro's built-in
+document, runs hayro: a document can panic it or keep it busy, and the
+SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
+`unsafe` code on the document's bytes. A panic costs the job it was on (a page it was drawing shows as
+unreadable at that size; one whose text it was reading has none); the
+reader restarts a worker that dies or spends too long on a page, and
+refuses a drawing larger than it could have asked for. Fonts a document names but doesn't carry come from hayro's built-in
 Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
 fontconfig for. Its tests start real workers over generated documents and a
 qpdf-encrypted fixture:

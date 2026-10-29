@@ -1,10 +1,12 @@
 //! The worker: `aizome-shiori --worker`, one process for each open
 //! document. It reads requests on stdin and answers on stdout (`protocol`).
-//! hayro (memory-safe Rust) draws the pages, and reads their text, links
-//! and the outline with its parser. A document can still panic it or keep
-//! it busy for seconds on a page: a panic costs that job (the tile isn't
-//! drawn, the page has no text), and a page taking too long, or a worker
-//! dying, has the app start another and carry on without that page.
+//! hayro draws the pages, and reads their text, links and the outline with
+//! its parser. Its own code forbids `unsafe`, but the SIMD decoding Shiori
+//! turns on (`Cargo.toml`) runs some on the document's bytes, and any
+//! document can still panic it or keep it busy for seconds on a page: a
+//! panic costs that job (the tile isn't drawn, the page has no text), and a
+//! page taking too long, or a worker dying, has the app start another and
+//! carry on without that page.
 //!
 //! One thread interprets and draws; another reads requests, so new ones
 //! replace what's waiting while a page draws.
