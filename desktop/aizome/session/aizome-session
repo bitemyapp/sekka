@@ -15,6 +15,7 @@
 # A login shell's environment first (PATH, LANG and the rest), when started
 # by a display manager that gives none.
 if [ "$1" != --no-login-shell ] && [ -n "$SHELL" ] && grep -qx "$SHELL" /etc/shells 2>/dev/null; then
+  # shellcheck disable=SC2016
   case "$SHELL" in
     */nologin | */false) ;;
     *) exec "$SHELL" -l -c 'exec "$0" --no-login-shell "$@"' "$0" "$@" ;;
@@ -67,9 +68,28 @@ case "$state" in
       echo "Aizome is already running in this user's session." >&2
       exit 1
     fi
+    # The compositor lives in the user manager, outside the login scope.
+    # logind (including Yukimi's Sign Out) can terminate that scope while
+    # leaving the manager alive. Always tear down the desktop when its
+    # launcher exits, including on a display-manager hangup or SIGTERM.
+    # Install this only after the duplicate-session check: a rejected login
+    # must not tear down the desktop that is already running.
+    # Invoked by the EXIT trap, including the signal handlers below.
+    # shellcheck disable=SC2329
+    cleanup() {
+      trap '' HUP INT TERM
+      systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
+      # shellcheck disable=SC2086
+      systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY AIZOME_SOCKET AIZOME_SHELL_SOCKET $vars
+    }
+    trap 'cleanup' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     systemctl --user reset-failed
     # shellcheck disable=SC2086
     systemctl --user import-environment $vars
+    # shellcheck disable=SC2086
     dbus-update-activation-environment --systemd $vars 2>/dev/null
     # A compositor its watchdog stopped (its main loop stalled) starts
     # again, up to three times in a row; one that ran for five minutes
@@ -77,7 +97,11 @@ case "$state" in
     restarts=0
     while :; do
       started=$(date +%s)
-      systemctl --user --wait start aizome.service
+      # Waiting for a foreground command defers shell signal traps until
+      # it exits. An asynchronous command plus the wait builtin lets the
+      # launcher handle termination even while the compositor is alive.
+      systemctl --user --wait start aizome.service &
+      wait $!
       status=$?
       result=$(systemctl --user show -p Result --value aizome.service 2>/dev/null)
       [ "$result" = watchdog ] || break
@@ -87,9 +111,7 @@ case "$state" in
       echo "aizome-session: Aizome stopped responding; starting it again" >&2
       systemctl --user reset-failed aizome.service
     done
-    systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
-    systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY AIZOME_SOCKET AIZOME_SHELL_SOCKET $vars
-    exit $status
+    exit "$status"
     ;;
   *)
     # No systemd user manager: the compositor is the session.

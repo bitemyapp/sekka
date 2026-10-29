@@ -93,6 +93,7 @@ let
     # Boots a VM, logs into the Aizome session and checks the desktop is
     # up (vm-test.nix).
     checks = forAll (pkgs: {
+      session-launcher = import ./session-launcher-test.nix { inherit pkgs; };
       session = import ./vm-test.nix { inherit pkgs self; };
       # Changes something in every pane of Settings and checks the
       # system took it (vm-settings-test.nix).

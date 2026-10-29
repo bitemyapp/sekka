@@ -1033,6 +1033,22 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+Aizome's session launcher owns desktop cleanup even when logind terminates
+only the login scope, as Yukimi's Sign Out does. The compositor runs in the
+user manager, outside that scope; HUP, INT and TERM must therefore stop the
+graphical session and clear its imported environment before the launcher
+exits. Its `systemctl --wait` runs asynchronously so the shell can handle
+signals immediately. A rejected duplicate login never installs those cleanup
+traps. See the [orphaned-session incident](docs/incidents/2026-10-28-aizome-orphaned-session.md).
+
+`nix build .#aizome-checks.session-launcher .#aizome-checks.greeter -L`
+checks the launcher with isolated service stand-ins, then real logind
+termination and password login in a disposable greeter VM. The VM keeps the
+user manager alive, checks that the old desktop and its environment end, and
+logs the same user back in. These are component checks; they do not qualify
+an ISO or physical suspend/resume. An uncatchable SIGKILL or a dead user
+manager cannot run the launcher's cleanup trap.
+
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
