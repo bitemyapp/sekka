@@ -1,5 +1,11 @@
 # Developing Hotaru
 
+Start with the [usable checkpoint](docs/usable-checkpoint.md) and
+[next work items](docs/next-work.md). The latter records the required migration
+to Sekka main's first-party Sukumo toolkit before this branch can merge, along
+with deferred prototype recovery and validation gates. The build layout below
+describes this branch's preserved checkpoint.
+
 Hotaru's terminal engine and Linux I/O live in this independent Cargo workspace.
 The native application lives in `desktop/aizome/apps/hotaru`, within Aizome's
 existing workspace, and uses `aizome-kit`/Sidestep for chrome and drawing.
