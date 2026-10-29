@@ -2,8 +2,9 @@
 
 This slice adds REP (`CSI Ps b`) and one saved slot for each of the 24 DEC
 modes already implemented by Hotaru. It also corrects alternate-screen
-transitions and decoded C1 handling. Horizontal margins, reverse wrap, graphics
-and other protocol families remain separate work.
+transitions and decoded C1 handling. Reverse wrap, graphics and other protocol
+families remain separate work; horizontal margins came later (see
+`upstream/horizontal-margins`).
 
 `tools/vt-controls-oracle.py` combines 415 targeted cases with 739 independent
 adversarial cases from `tools/vt-controls-review.py`. All 1,154 streams match the

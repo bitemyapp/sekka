@@ -99,7 +99,7 @@ pub enum Msg {
     /// A program's own clipboard request (OSC 52), from its PTY worker.
     Clipboard(crate::selections::Request),
     /// What a read will be answered with, captured before anyone is asked.
-    ClipboardCaptured(crate::selections::Request, Arc<[u8]>, crate::selections::Preview),
+    ClipboardCaptured(crate::selections::Request, Option<Arc<[u8]>>, crate::selections::Preview),
     /// The request being asked about is allowed, or not.
     ClipboardAnswer(u64, bool),
     /// A program's notification (OSC 9 or 777): its title and body.
@@ -1903,11 +1903,13 @@ impl Program for Hotaru {
             }
             Msg::Clipboard(request) => self.program_clipboard(request, cx),
             Msg::ClipboardCaptured(request, reply, preview) => {
-                // Settings may have changed while the read was captured.
-                match self.settings.clipboard_read {
-                    Access::Allow => self.send(request.pane, Command::Reply(reply)),
-                    Access::Ask => self.ask(request, Some(reply), &preview, cx),
-                    Access::Deny => {}
+                // Settings may have changed while the read was captured. With
+                // nothing to read there's nothing to ask about: it's answered empty.
+                match (self.settings.clipboard_read, reply) {
+                    (Access::Deny, _) => {}
+                    (_, None) => self.send(request.pane, Command::Reply(crate::selections::reply(request.tag, b""))),
+                    (Access::Allow, Some(reply)) => self.send(request.pane, Command::Reply(reply)),
+                    (Access::Ask, Some(reply)) => self.ask(request, Some(reply), &preview, cx),
                 }
             }
             Msg::ClipboardAnswer(token, allowed) => {

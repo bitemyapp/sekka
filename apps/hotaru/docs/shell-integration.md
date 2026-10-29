@@ -18,9 +18,10 @@ does not copy terminfo to SSH servers or wrap SSH/sudo commands.
 
 The entry is a documented subset of pinned Ghostty's MIT-licensed
 `src/terminfo/ghostty.zig`. It advertises implemented grid, color, underline,
-keyboard, bracketed-paste, focus and mouse capabilities. It omits OSC52,
-synchronized output, horizontal margins, cursor shape/blink and character
-repeat capabilities whose native behavior is not yet qualified. The name does
+keyboard, bracketed-paste, focus and mouse capabilities. It advertises OSC 52
+(`Ms`, which tmux's `set-clipboard` relies on) and horizontal margins, and omits
+synchronized output, cursor shape/blink and character repeat capabilities whose
+native behavior is not yet qualified. The name does
 not claim full Ghostty compatibility. On a remote machine without Hotaru's
 entry, explicitly use an available terminal description such as
 `TERM=xterm-256color ssh host` or install the entry there.

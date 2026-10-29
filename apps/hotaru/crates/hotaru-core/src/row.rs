@@ -607,6 +607,73 @@ impl Row {
         self.repair_wide(style);
         self.refresh_memory_charge();
     }
+    /// Normalize glyphs cut by a rectangular vertical move without erasing
+    /// their styling, protection, hyperlink, or semantic classification.
+    pub(crate) fn prepare_margin_shift(&mut self, left: usize, right: usize) {
+        if right == self.cells.len() || left < 2 {
+            self.clear_spacer_head();
+        }
+        for edge in [left, right] {
+            if edge > 0 && edge < self.cells.len() && self.cells[edge].width == 0 {
+                self.cells[edge - 1].scalar = 0;
+                self.cells[edge - 1].width = 1;
+                self.cells[edge].width = 1;
+                self.graphemes.remove(&(edge - 1));
+                self.dirty_end = self.dirty_end.max((edge + 1) as u16);
+            }
+        }
+        self.refresh_memory_charge();
+    }
+    /// Copy a normalized rectangular row slice. The row-level wrap and prompt
+    /// markers belong to the destination, unlike a full-width row move.
+    pub(crate) fn copy_margin_from(
+        &mut self,
+        source: &Row,
+        left: usize,
+        right: usize,
+        style: Style,
+    ) {
+        self.prepare_write(left, right, style);
+        for col in left..right {
+            self.copy_cell(col, source, col);
+        }
+    }
+    pub(crate) fn shift_margin(
+        &mut self,
+        col: usize,
+        right: usize,
+        count: usize,
+        insert: bool,
+        style: Style,
+    ) {
+        let count = count.min(right - col);
+        // Split every boundary before moving. The independent owned source
+        // preserves row-local styles and sparse metadata while destinations
+        // are overwritten; no alias survives a COW or table compaction.
+        for edge in [col, right, if insert { right - count } else { col + count }] {
+            // Valid rows never start with a wide tail: print creates it at
+            // head+1, edits/reflow repair boundaries, and the decoder rejects
+            // orphan tails. Keep the subtraction guarded independently.
+            if edge > 0 && edge < self.cells.len() && self.cells[edge].width == 0 {
+                self.erase(edge - 1, edge + 1, style);
+            }
+        }
+        let source = self.clone();
+        self.prepare_write(col, right, style);
+        if insert {
+            // Clear before copying: a stale tail in the vacated range must
+            // not make erase() expand into a newly copied wide glyph.
+            self.erase(col, col + count, style);
+            for dest in col + count..right {
+                self.copy_cell(dest, &source, dest - count);
+            }
+        } else {
+            self.erase(right - count, right, style);
+            for dest in col..right - count {
+                self.copy_cell(dest, &source, dest + count);
+            }
+        }
+    }
     /// Trailing erased cells are nonsemantic, unlike explicitly printed spaces.
     /// A background fill is meaningful even without a codepoint.
     pub(crate) fn reflow_len(&self) -> usize {

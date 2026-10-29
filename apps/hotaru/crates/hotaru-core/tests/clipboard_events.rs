@@ -95,6 +95,10 @@ fn non_streaming_event_flood_keeps_bounded_ordered_prefix_and_ui_notifications()
     );
     terminal.feed(b"\x1b]52;c;?\x07");
     assert_eq!(terminal.take_events(), vec![request(b'c', b"?")]);
+    // Reads past the prefix get an empty answer at once.
+    terminal.feed(&b"\x1b]52;p;?\x07".repeat(70));
+    assert_eq!(terminal.take_events().len(), 64);
+    assert_eq!(terminal.take_responses(), b"\x1b]52;p;\x1b\\".repeat(6));
 }
 
 #[test]

@@ -118,7 +118,7 @@ struct SavedCursor {
 // Unsaved slots use protocol defaults, including when the application's
 // configured default for mode 2027 differs. Keep unknown modes unrecognized.
 const SAVED_MODE_NUMBERS: &[u16] = &[
-    1, 6, 7, 9, 12, 25, 47, 66, 67, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035,
+    1, 6, 7, 9, 12, 25, 47, 66, 67, 69, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035,
     1036, 1047, 1048, 1049, 2004, 2027,
 ];
 
@@ -162,6 +162,8 @@ struct Screen {
     wrap_pending: bool,
     top: usize,
     bottom: usize,
+    left: usize,
+    right: usize,
     kitty_keyboard: KittyKeyboard,
     active_link: Option<LinkRef>,
     // The old destination pen is used to erase on 1049 entry, before the
@@ -187,6 +189,8 @@ impl Screen {
             wrap_pending: false,
             top: 0,
             bottom: rows - 1,
+            left: 0,
+            right: cols - 1,
             kitty_keyboard: KittyKeyboard::default(),
             active_link: None,
             inactive_style: Style::default(),
@@ -248,28 +252,34 @@ impl Screen {
         }
     }
     fn scroll_up(&mut self, count: usize, history: bool, style: Style) {
+        if !self.full_width() {
+            self.scroll_rectangle(count, false, style);
+            return;
+        }
         for _ in 0..count.min(self.bottom - self.top + 1) {
             self.enforce_budget();
-            let full_screen = self.top == 0 && self.bottom + 1 == self.lines.len();
+            let starts_at_top = self.top == 0;
             let old = self.lines.remove(self.top).expect("valid scroll region");
             let old_charge = old.owned_bytes();
-            let recycled =
-                if history && full_screen && self.max_history > 0 && self.history_budget != Some(0)
+            let recycled = if history
+                && starts_at_top
+                && self.max_history > 0
+                && self.history_budget != Some(0)
+            {
+                self.history.push_back(old);
+                if self
+                    .history
+                    .over_limit(self.max_history, self.history_budget)
                 {
-                    self.history.push_back(old);
-                    if self
-                        .history
-                        .over_limit(self.max_history, self.history_budget)
-                    {
-                        let row = self.history.pop_front_recycle(self.cols);
-                        self.history.prune(self.max_history, self.history_budget);
-                        row
-                    } else {
-                        None
-                    }
+                    let row = self.history.pop_front_recycle(self.cols);
+                    self.history.prune(self.max_history, self.history_budget);
+                    row
                 } else {
-                    Some(old)
-                };
+                    None
+                }
+            } else {
+                Some(old)
+            };
             let mut blank = recycled.unwrap_or_else(|| Arc::new(Row::new(self.cols)));
             self.budget_signal.pause();
             Arc::make_mut(&mut blank).reset(self.cols, style);
@@ -283,6 +293,10 @@ impl Screen {
         }
     }
     fn scroll_down(&mut self, count: usize, style: Style) {
+        if !self.full_width() {
+            self.scroll_rectangle(count, true, style);
+            return;
+        }
         for _ in 0..count.min(self.bottom - self.top + 1) {
             let mut line = self.lines.remove(self.bottom).expect("valid scroll region");
             Arc::make_mut(&mut line).reset(self.cols, style);
@@ -290,10 +304,13 @@ impl Screen {
         }
     }
     fn linefeed(&mut self, style: Style) {
+        self.linefeed_in_columns(style, self.inside_columns());
+    }
+    fn linefeed_in_columns(&mut self, style: Style, inside_columns: bool) {
         self.wrap_pending = false;
-        if self.cursor.row == self.bottom {
+        if self.cursor.row == self.bottom && inside_columns {
             self.scroll_up(1, true, style);
-        } else {
+        } else if self.cursor.row != self.bottom {
             self.cursor.row = (self.cursor.row + 1).min(self.lines.len() - 1);
         }
         if self.semantic_clear_eol {
@@ -313,6 +330,57 @@ impl Screen {
         if semantic == SemanticContent::Prompt {
             self.row().prompt = RowPrompt::Continuation;
         }
+    }
+    fn full_width(&self) -> bool {
+        self.left == 0 && self.right + 1 == self.cols
+    }
+    fn inside_columns(&self) -> bool {
+        (self.left..=self.right).contains(&self.cursor.col)
+    }
+    fn right_limit(&self) -> usize {
+        if self.cursor.col > self.right {
+            self.cols
+        } else {
+            self.right + 1
+        }
+    }
+    fn carriage_return(&mut self, origin: bool) {
+        self.cursor.col = if origin || self.cursor.col >= self.left {
+            self.left
+        } else {
+            0
+        };
+        self.wrap_pending = false;
+    }
+    fn scroll_rectangle(&mut self, count: usize, down: bool, style: Style) {
+        let count = count.min(self.bottom - self.top + 1);
+        if count == 0 {
+            return;
+        }
+        let (left, right) = (self.left, self.right + 1);
+        for r in self.top..=self.bottom {
+            Arc::make_mut(&mut self.lines[r]).prepare_margin_shift(left, right);
+        }
+        if down {
+            for dest in (self.top + count..=self.bottom).rev() {
+                let source = self.lines[dest - count].clone();
+                Arc::make_mut(&mut self.lines[dest]).copy_margin_from(&source, left, right, style);
+                self.enforce_budget();
+            }
+            for r in self.top..self.top + count {
+                Arc::make_mut(&mut self.lines[r]).erase(left, right, style);
+            }
+        } else {
+            for dest in self.top..self.bottom + 1 - count {
+                let source = self.lines[dest + count].clone();
+                Arc::make_mut(&mut self.lines[dest]).copy_margin_from(&source, left, right, style);
+                self.enforce_budget();
+            }
+            for r in self.bottom + 1 - count..=self.bottom {
+                Arc::make_mut(&mut self.lines[r]).erase(left, right, style);
+            }
+        }
+        self.enforce_budget();
     }
     fn resize(&mut self, cols: usize, rows: usize, reflow: bool) {
         self.budget_signal.pause();
@@ -385,6 +453,8 @@ impl Screen {
         self.cols = cols;
         self.top = 0;
         self.bottom = rows - 1;
+        self.left = 0;
+        self.right = cols - 1;
         self.rebase_budget();
     }
 }
@@ -578,6 +648,7 @@ pub(crate) struct State {
     mouse_format_modes: u8,
     style: Style,
     origin: bool,
+    left_right_margin_mode: bool,
     autowrap: bool,
     insert: bool,
     newline: bool,
@@ -624,6 +695,7 @@ impl State {
             mouse_format_modes: 0,
             style: Style::default(),
             origin: false,
+            left_right_margin_mode: false,
             autowrap: true,
             insert: false,
             newline: false,
@@ -701,13 +773,16 @@ impl State {
             }
             screen.wrap_pending = false;
         } else if screen.cursor.row > 0 {
+            // The whole screen moves, whatever scroll region or left and
+            // right margins a program set.
             let count = screen.cursor.row;
-            let (top, bottom) = (screen.top, screen.bottom);
+            let region = (screen.top, screen.bottom, screen.left, screen.right);
             screen.top = 0;
             screen.bottom = screen.lines.len() - 1;
+            screen.left = 0;
+            screen.right = screen.cols - 1;
             screen.scroll_up(count, false, Style::default());
-            screen.top = top;
-            screen.bottom = bottom;
+            (screen.top, screen.bottom, screen.left, screen.right) = region;
             screen.cursor.row = 0;
         }
         screen.enforce_budget();
@@ -890,8 +965,52 @@ impl State {
     pub fn content_snapshot(&self) -> crate::ContentSnapshot {
         crate::ContentSnapshot::capture(self.snapshot(0), self.screen().history.capture())
     }
+    #[inline(never)]
+    fn execute_horizontal(&mut self, byte: u8) {
+        match byte {
+            7 => self.event(TerminalEvent::Bell),
+            8 => {
+                let s = self.screen_mut();
+                let left = if s.cursor.col < s.left { 0 } else { s.left };
+                s.cursor.col = s.cursor.col.saturating_sub(1).max(left);
+                s.wrap_pending = false;
+            }
+            9 => {
+                let current = self.screen().cursor.col;
+                let end = self.screen().right;
+                if current >= end {
+                    return;
+                }
+                let next = (current + 1..=end).find(|&i| self.tabs[i]).unwrap_or(end);
+                let s = self.screen_mut();
+                s.cursor.col = next;
+            }
+            10..=12 => {
+                let style = self.style;
+                let nl = self.newline;
+                let origin = self.origin;
+                let s = self.screen_mut();
+                s.linefeed(style);
+                if nl {
+                    s.carriage_return(origin);
+                }
+            }
+            13 => {
+                let origin = self.origin;
+                let s = self.screen_mut();
+                s.carriage_return(origin);
+            }
+            14 => self.active_charset = 1,
+            15 => self.active_charset = 0,
+            _ => {}
+        }
+    }
     pub fn print_ascii(&mut self, mut bytes: &[u8]) {
-        if self.insert || self.charset[self.active_charset] != 0 || self.single_shift.is_some() {
+        if self.insert
+            || self.charset[self.active_charset] != 0
+            || self.single_shift.is_some()
+            || (self.left_right_margin_mode && !self.screen().full_width())
+        {
             for &b in bytes {
                 self.print(b as char);
             }
@@ -949,16 +1068,141 @@ impl State {
     }
     fn prepare_wrap(&mut self) {
         if self.screen().wrap_pending {
-            let auto = self.autowrap;
-            let style = self.style;
-            let s = self.screen_mut();
-            s.wrap_pending = false;
-            if auto {
+            self.wrap();
+        }
+    }
+    // Rare beside the check: out of the print loops.
+    #[cold]
+    #[inline(never)]
+    fn wrap(&mut self) {
+        let auto = self.autowrap;
+        let style = self.style;
+        let s = self.screen_mut();
+        s.wrap_pending = false;
+        if auto {
+            let mark_wrap = s.cursor.col == s.cols - 1;
+            if mark_wrap {
                 s.row().wrapped = true;
-                s.cursor.col = 0;
-                s.soft_linefeed(style);
+            }
+            s.soft_linefeed(style);
+            s.cursor.col = s.left;
+            if mark_wrap {
                 s.row().wrap_continuation = true;
             }
+        }
+    }
+    /// `print` while DEC69 is set: the cursor's margins bound the line.
+    #[inline(never)]
+    fn print_within_margins(&mut self, mut ch: char) {
+        // The reference stream ignores decoded C1 controls. They must not
+        // consume a single shift or become REP's previous printed scalar.
+        if matches!(ch, '\u{80}'..='\u{9f}') {
+            return;
+        }
+        let original = ch;
+        match self.charset[self.single_shift.take().unwrap_or(self.active_charset)] {
+            1 => ch = dec_graphic(ch),
+            2 if ch == '#' => ch = '£',
+            _ => {}
+        }
+        if ch as u32 > 255 && self.modes.grapheme_cluster && self.try_grapheme_within_margins(ch) {
+            return;
+        }
+        // Ghostty's default (non-grapheme-clustering) width policy treats each
+        // regional indicator as a wide scalar, including an unpaired one.
+        let width = if self.modes.grapheme_cluster {
+            unicode_char_width(ch)
+        } else {
+            char_width(ch)
+        };
+        if width == 0 {
+            if self.modes.grapheme_cluster {
+                return;
+            }
+            let auto = self.autowrap;
+            let s = self.screen_mut();
+            if s.cursor.col == 0 && !(auto && s.wrap_pending) {
+                return;
+            }
+            let mut col = if auto && s.wrap_pending {
+                s.cursor.col
+            } else {
+                s.cursor.col - 1
+            };
+            if s.lines[s.cursor.row].cells[col].width() == 0 {
+                col = col.saturating_sub(1);
+            }
+            let cell = s.lines[s.cursor.row].cells[col];
+            if !cell.has_text()
+                || (matches!(ch, '\u{fe0e}' | '\u{fe0f}')
+                    && !crate::unicode::properties(cell.character()).extended_pictographic())
+            {
+                return;
+            }
+            s.row().combine(col, ch);
+            s.enforce_budget();
+            return;
+        }
+        self.previous_char = Some(original);
+        self.prepare_wrap();
+        let style = self.style;
+        let insert = self.insert;
+        let auto = self.autowrap;
+        let protected = self.protected;
+        let s = self.screen_mut();
+        let link = s.active_link.clone();
+        let semantic = s.semantic;
+        let right_limit = s.right_limit();
+        let mut width = width;
+        if width == 2 && s.cursor.col + 1 >= right_limit {
+            if auto && right_limit - s.left > 1 {
+                let col = s.cursor.col;
+                let mark_wrap = right_limit == s.cols;
+                if mark_wrap {
+                    s.row().erase(col, col + 1, style);
+                    s.row().set_spacer_head(col, style);
+                    s.row().wrapped = true;
+                } else {
+                    s.row()
+                        .put_semantic(col, '\0', 1, style, protected, semantic);
+                }
+                s.row().cells[col] = s.row().cells[col].semantic(semantic);
+                if let Some(link) = &link {
+                    s.row().set_hyperlink_range(col..col + 1, Some(link));
+                }
+                s.soft_linefeed(style);
+                s.cursor.col = s.left;
+                if mark_wrap {
+                    s.row().wrap_continuation = true;
+                }
+            } else if right_limit - s.left == 1 {
+                ch = '\0';
+                width = 1;
+            } else {
+                return;
+            }
+        }
+        let col = s.cursor.col;
+        if insert {
+            if s.full_width() {
+                s.row().shift_right(col, width, style);
+            } else if s.inside_columns() {
+                let right = s.right + 1;
+                s.row().shift_margin(col, right, width, true, style);
+            }
+        }
+        if col <= 1 && s.row().cells[col].width() != width && s.row().cells[col].width() != 1 {
+            s.clear_previous_spacer();
+        }
+        s.row()
+            .put_semantic(col, ch, width, style, protected, semantic);
+        if let Some(link) = &link {
+            s.row().set_hyperlink_range(col..col + width, Some(link));
+        }
+        s.cursor.col += width;
+        if s.cursor.col >= right_limit {
+            s.cursor.col = right_limit - 1;
+            s.wrap_pending = true;
         }
     }
     /// Append a scalar only when the pinned terminal grapheme rules join it.
@@ -1062,8 +1306,122 @@ impl State {
         screen.enforce_budget();
         true
     }
+    /// `try_grapheme` while DEC69 is set.
+    #[inline(never)]
+    fn try_grapheme_within_margins(&mut self, ch: char) -> bool {
+        use crate::unicode::{BreakState, WidthEffect, grapheme_break, width_effect};
+        let screen = self.screen();
+        if screen.cursor.col == 0 {
+            return false;
+        }
+        let row = &screen.lines[screen.cursor.row];
+        let right_limit = screen.right_limit();
+        let left = if self.autowrap {
+            usize::from(!screen.wrap_pending)
+        } else if screen.cursor.col + 1 != right_limit {
+            1
+        } else {
+            usize::from(!row.cells[screen.cursor.col].has_text())
+        };
+        let mut col = screen.cursor.col - left;
+        if row.cells[col].width() == 0 {
+            col = col.saturating_sub(1);
+        }
+        let base = row.cells[col];
+        if !base.has_text() {
+            return false;
+        }
+        let mut previous = base.character();
+        let mut state = BreakState::default();
+        if let Some(text) = row.grapheme(col) {
+            for next in text.chars().skip(1) {
+                grapheme_break(previous, next, &mut state);
+                previous = next;
+            }
+        }
+        if grapheme_break(previous, ch, &mut state) {
+            return false;
+        }
+        let effect = width_effect(previous, ch);
+        if effect == WidthEffect::Ignore {
+            return true;
+        }
+        let style = self.style;
+        let protected = self.protected;
+        let auto = self.autowrap;
+        let screen = self.screen_mut();
+        let semantic = screen.semantic;
+        match effect {
+            WidthEffect::Wide if base.width() != 2 => {
+                screen.cursor.col = col;
+                let link = screen.active_link.clone();
+                if col + 1 == right_limit {
+                    if !auto {
+                        return true;
+                    }
+                    let old = screen.lines[screen.cursor.row]
+                        .grapheme(col)
+                        .map(compact_str::CompactString::from);
+                    let mark_wrap = right_limit == screen.cols;
+                    if mark_wrap {
+                        screen.row().wrapped = true;
+                        screen.row().set_spacer_head(col, style);
+                    } else {
+                        screen
+                            .row()
+                            .put_semantic(col, '\0', 1, style, protected, semantic);
+                    }
+                    screen.row().cells[col] = screen.row().cells[col].semantic(semantic);
+                    if let Some(link) = &link {
+                        screen.row().set_hyperlink_range(col..col + 1, Some(link));
+                    }
+                    screen.soft_linefeed(style);
+                    if mark_wrap {
+                        screen.row().wrap_continuation = true;
+                    }
+                    col = screen.left;
+                    screen.cursor.col = col;
+                    screen
+                        .row()
+                        .put_semantic(col, base.character(), 2, style, protected, semantic);
+                    if let Some(link) = &link {
+                        screen.row().set_hyperlink_range(col..col + 2, Some(link));
+                    }
+                    if let Some(old) = old {
+                        for scalar in old.chars().skip(1) {
+                            screen.row().combine(col, scalar);
+                        }
+                    }
+                } else {
+                    if col == 0 && screen.lines[screen.cursor.row].cells[col + 1].width() == 2 {
+                        screen.clear_previous_spacer();
+                    }
+                    screen
+                        .row()
+                        .widen_grapheme(col, style, protected, semantic, link.as_ref());
+                }
+                screen.cursor.col = (col + 2).min(right_limit - 1);
+                if col + 2 == right_limit {
+                    screen.wrap_pending = true;
+                }
+            }
+            WidthEffect::Narrow if base.width() == 2 => {
+                screen.row().narrow_grapheme(col);
+                screen.wrap_pending = false;
+                screen.cursor.col = (col + 1).min(right_limit - 1);
+            }
+            _ => {}
+        }
+        screen.row().combine(col, ch);
+        screen.enforce_budget();
+        true
+    }
     pub fn print_utf8(&mut self, text: &str) {
-        if self.insert || self.charset[self.active_charset] != 0 || self.single_shift.is_some() {
+        if self.insert
+            || self.charset[self.active_charset] != 0
+            || self.single_shift.is_some()
+            || (self.left_right_margin_mode && !self.screen().full_width())
+        {
             for ch in text.chars() {
                 self.print(ch);
             }
@@ -1278,7 +1636,11 @@ impl State {
         } else {
             row.min(s.lines.len() - 1)
         };
-        s.cursor.col = col.min(s.cols - 1);
+        s.cursor.col = if origin {
+            (col + s.left).min(s.right)
+        } else {
+            col.min(s.cols - 1)
+        };
         s.wrap_pending = false;
     }
     fn reply(&mut self, bytes: &[u8]) {
@@ -1326,6 +1688,11 @@ impl State {
                 }
             });
         if count >= MAX_EVENTS || data.len() > MAX_BYTES.saturating_sub(bytes) {
+            // A read past the bounds is answered empty, so the program
+            // asking doesn't wait for an answer that won't come.
+            if data == b"?" {
+                self.reply(&[b"\x1b]52;", &[selection][..], b";\x1b\\"].concat());
+            }
             return;
         }
         let mut owned = Vec::new();
@@ -1354,10 +1721,16 @@ impl State {
         // Options are byte strings; malformed UTF-8 in an unknown option does
         // not invalidate the command. Prompt kind affects row navigation, not
         // the per-cell classification implemented here.
-        if matches!(action, b'A' | b'N' | b'L') && self.screen().cursor.col != 0 {
+        let left = if self.screen().cursor.col < self.screen().left {
+            0
+        } else {
+            self.screen().left
+        };
+        if matches!(action, b'A' | b'N' | b'L') && self.screen().cursor.col != left {
             let style = self.style;
+            let origin = self.origin;
             let screen = self.screen_mut();
-            screen.cursor.col = 0;
+            screen.carriage_return(origin);
             screen.linefeed(style);
         }
         let screen = self.screen_mut();
@@ -1450,6 +1823,8 @@ impl State {
             self.screen_mut().inactive_style = self.style;
             let top = self.screen().top;
             let bottom = self.screen().bottom;
+            let left = self.screen().left;
+            let right = self.screen().right;
             self.screen_mut().set_active_link(None);
             self.modes.alternate_screen = set;
             let screen = self.screen_mut();
@@ -1466,6 +1841,8 @@ impl State {
             // Scroll margins are terminal state shared by the two screens.
             screen.top = top;
             screen.bottom = bottom;
+            screen.left = left;
+            screen.right = right;
         }
         if value == 1049 {
             if set {
@@ -1493,6 +1870,14 @@ impl State {
             1 => self.modes.application_cursor = set,
             66 => self.modes.application_keypad = set,
             67 => self.modes.backarrow = set,
+            69 => {
+                self.left_right_margin_mode = set;
+                if !set {
+                    let screen = self.screen_mut();
+                    screen.left = 0;
+                    screen.right = screen.cols - 1;
+                }
+            }
             1035 => self.modes.ignore_keypad_with_numlock = set,
             1036 => self.modes.alt_esc_prefix = set,
             9 | 1000 | 1002 | 1003 => {
@@ -1574,6 +1959,7 @@ impl State {
                 1 => Some(self.modes.application_cursor),
                 66 => Some(self.modes.application_keypad),
                 67 => Some(self.modes.backarrow),
+                69 => Some(self.left_right_margin_mode),
                 1035 => Some(self.modes.ignore_keypad_with_numlock),
                 1036 => Some(self.modes.alt_esc_prefix),
                 9 | 1000 | 1002 | 1003 => Some(
@@ -1643,6 +2029,8 @@ impl State {
         let screen = self.screen_mut();
         screen.top = 0;
         screen.bottom = screen.lines.len() - 1;
+        screen.left = 0;
+        screen.right = screen.cols - 1;
         screen.cursor.row = 0;
         screen.cursor.col = 0;
         screen.wrap_pending = false;
@@ -1661,6 +2049,7 @@ impl State {
         self.modes.modify_other_keys = false;
         self.origin = false;
         self.autowrap = true;
+        self.left_right_margin_mode = false;
         self.insert = false;
         self.style = Style::default();
         self.protected = false;
@@ -1672,6 +2061,8 @@ impl State {
         screen.cursor.visible = true;
         screen.top = 0;
         screen.bottom = screen.lines.len() - 1;
+        screen.left = 0;
+        screen.right = screen.cols - 1;
         screen.saved = SavedCursor::default();
         screen.saved_valid = false;
         self.palette = self.default_colors.palette;
@@ -1783,6 +2174,12 @@ impl State {
 
 impl Handler for State {
     fn print(&mut self, mut ch: char) {
+        // With DEC69 off the margins are the screen's edges, and this,
+        // the pre-margin path, stays the hot one, as `execute` splits too.
+        if self.left_right_margin_mode {
+            self.print_within_margins(ch);
+            return;
+        }
         // The reference stream ignores decoded C1 controls. They must not
         // consume a single shift or become REP's previous printed scalar.
         if matches!(ch, '\u{80}'..='\u{9f}') {
@@ -1881,6 +2278,13 @@ impl Handler for State {
         }
     }
     fn execute(&mut self, byte: u8) {
+        // Mode reset, resize and screen switches keep full-width margins when
+        // DEC69 is disabled. Keep its coordinate work out of the common C0 path.
+        if self.left_right_margin_mode {
+            self.execute_horizontal(byte);
+            return;
+        }
+        debug_assert!(self.screen().full_width());
         match byte {
             7 => self.event(TerminalEvent::Bell),
             8 => {
@@ -1899,7 +2303,7 @@ impl Handler for State {
                 let style = self.style;
                 let nl = self.newline;
                 let s = self.screen_mut();
-                s.linefeed(style);
+                s.linefeed_in_columns(style, true);
                 if nl {
                     s.cursor.col = 0;
                 }
@@ -1943,18 +2347,20 @@ impl Handler for State {
             }
             b'E' => {
                 let style = self.style;
+                let origin = self.origin;
                 let s = self.screen_mut();
-                s.cursor.col = 0;
+                s.carriage_return(origin);
                 s.linefeed(style);
             }
             b'M' => {
                 let style = self.style;
                 let s = self.screen_mut();
                 s.wrap_pending = false;
-                if s.cursor.row == s.top {
+                if s.cursor.row == s.top && s.inside_columns() {
                     s.scroll_down(1, style);
                 } else {
-                    s.cursor.row = s.cursor.row.saturating_sub(1);
+                    let top = if s.cursor.row < s.top { 0 } else { s.top };
+                    s.cursor.row = s.cursor.row.saturating_sub(1).max(top);
                 }
             }
             b'H' => {
@@ -2081,31 +2487,58 @@ impl Handler for State {
         let origin = self.origin;
         match csi.final_byte {
             b'b' if csi.params.len() == 1 && !csi.params[0].colon => self.print_repeat(p(0, 1)),
-            b'A' | b'B' | b'C' | b'D' | b'E' | b'F' | b'a' | b'e' => {
+            b'A' | b'B' | b'C' | b'D' | b'E' | b'F' => {
                 let s = self.screen_mut();
                 let n = p(0, 1);
-                let top = if origin { s.top } else { 0 };
-                let bottom = if origin { s.bottom } else { s.lines.len() - 1 };
+                let top = if s.cursor.row >= s.top { s.top } else { 0 };
+                let bottom = if s.cursor.row <= s.bottom {
+                    s.bottom
+                } else {
+                    s.lines.len() - 1
+                };
+                let left = if s.cursor.col >= s.left { s.left } else { 0 };
+                let right = if s.cursor.col <= s.right {
+                    s.right
+                } else {
+                    s.cols - 1
+                };
                 match csi.final_byte {
                     b'A' | b'F' => s.cursor.row = s.cursor.row.saturating_sub(n).max(top),
-                    b'B' | b'E' | b'e' => s.cursor.row = (s.cursor.row + n).min(bottom),
-                    b'C' | b'a' => s.cursor.col = (s.cursor.col + n).min(s.cols - 1),
-                    b'D' => s.cursor.col = s.cursor.col.saturating_sub(n),
+                    b'B' | b'E' => s.cursor.row = (s.cursor.row + n).min(bottom),
+                    b'C' => s.cursor.col = (s.cursor.col + n).min(right),
+                    b'D' => s.cursor.col = s.cursor.col.saturating_sub(n).max(left),
                     _ => {}
                 }
                 if matches!(csi.final_byte, b'E' | b'F') {
-                    s.cursor.col = 0;
+                    s.carriage_return(origin);
                 }
                 s.wrap_pending = false;
             }
+            b'a' | b'e' => {
+                // These position-relative controls use the same coordinate
+                // conversion as CUP, including both axes of a restored cursor
+                // that lies outside newly established origin margins.
+                let s = self.screen();
+                let row = s.cursor.row.saturating_sub(if origin { s.top } else { 0 });
+                let col = s.cursor.col.saturating_sub(if origin { s.left } else { 0 });
+                if csi.final_byte == b'a' {
+                    self.move_to(row, col + p(0, 1));
+                } else {
+                    self.move_to(row + p(0, 1), col);
+                }
+            }
             b'G' | b'`' => {
-                let s = self.screen_mut();
-                s.cursor.col = (p(0, 1) - 1).min(s.cols - 1);
-                s.wrap_pending = false;
+                let s = self.screen();
+                let row = s.cursor.row.saturating_sub(if origin { s.top } else { 0 });
+                self.move_to(row, p(0, 1) - 1);
             }
             b'H' | b'f' => self.move_to(p(0, 1) - 1, p(1, 1) - 1),
             b'd' => {
-                let col = self.screen().cursor.col;
+                let col = self.screen().cursor.col.saturating_sub(if origin {
+                    self.screen().left
+                } else {
+                    0
+                });
                 self.move_to(p(0, 1) - 1, col);
             }
             b'J' => {
@@ -2134,11 +2567,17 @@ impl Handler for State {
                             .map_or(0, |row| row + 1);
                         let top = screen.top;
                         let bottom = screen.bottom;
+                        let left = screen.left;
+                        let right = screen.right;
                         screen.top = 0;
                         screen.bottom = screen.lines.len() - 1;
+                        screen.left = 0;
+                        screen.right = screen.cols - 1;
                         screen.scroll_up(count, true, Style::default());
                         screen.top = top;
                         screen.bottom = bottom;
+                        screen.left = left;
+                        screen.right = right;
                         if screen.cursor.row < count {
                             screen.cursor.col = 0;
                             screen.cursor.row = 0;
@@ -2234,7 +2673,17 @@ impl Handler for State {
             b'@' | b'P' => {
                 let s = self.screen_mut();
                 let col = s.cursor.col;
-                if csi.final_byte == b'@' {
+                if !s.inside_columns() {
+                    if csi.final_byte == b'@' {
+                        s.wrap_pending = false;
+                    }
+                    return;
+                }
+                if !s.full_width() {
+                    let right = s.right + 1;
+                    s.row()
+                        .shift_margin(col, right, p(0, 1), csi.final_byte == b'@', style);
+                } else if csi.final_byte == b'@' {
                     s.row().shift_right(col, p(0, 1), style);
                 } else {
                     s.row().shift_left(col, p(0, 1), style);
@@ -2243,7 +2692,7 @@ impl Handler for State {
             }
             b'L' | b'M' => {
                 let s = self.screen_mut();
-                if s.cursor.row >= s.top && s.cursor.row <= s.bottom {
+                if s.cursor.row >= s.top && s.cursor.row <= s.bottom && s.inside_columns() {
                     let top = s.top;
                     s.top = s.cursor.row;
                     if csi.final_byte == b'L' {
@@ -2252,7 +2701,7 @@ impl Handler for State {
                         s.scroll_up(p(0, 1), false, style);
                     }
                     s.top = top;
-                    s.cursor.col = 0;
+                    s.cursor.col = s.left;
                     s.wrap_pending = false;
                 }
             }
@@ -2269,7 +2718,20 @@ impl Handler for State {
                 }
             }
             b'm' => self.sgr(csi.params),
-            b's' => self.save_cursor(),
+            b's' => {
+                if self.left_right_margin_mode && csi.params.len() <= 2 {
+                    let left = p(0, 1) - 1;
+                    let right = p(1, self.screen().cols).min(self.screen().cols) - 1;
+                    if left < right {
+                        let s = self.screen_mut();
+                        s.left = left;
+                        s.right = right;
+                        self.move_to(0, 0);
+                    }
+                } else if !self.left_right_margin_mode && !csi.has_parameters {
+                    self.save_cursor();
+                }
+            }
             b'u' => self.restore_cursor(),
             b'g' => {
                 let col = self.screen().cursor.col;
@@ -2287,7 +2749,11 @@ impl Handler for State {
             b'Z' => {
                 for _ in 0..p(0, 1).min(self.screen().cols) {
                     let col = self.screen().cursor.col;
-                    let previous = (0..col).rev().find(|&c| self.tabs[c]).unwrap_or(0);
+                    let left = if origin { self.screen().left } else { 0 };
+                    if col <= left {
+                        break;
+                    }
+                    let previous = (left..col).rev().find(|&c| self.tabs[c]).unwrap_or(left);
                     let s = self.screen_mut();
                     s.cursor.col = previous;
                     s.wrap_pending = false;
@@ -2308,7 +2774,11 @@ impl Handler for State {
                     let prefix = if csi.private.is_some() { "?" } else { "" };
                     let page = if csi.private.is_some() { ";1" } else { "" };
                     self.reply(
-                        format!("\x1b[{prefix}{row};{}{page}R", s.cursor.col + 1).as_bytes(),
+                        format!(
+                            "\x1b[{prefix}{row};{}{page}R",
+                            s.cursor.col.saturating_sub(if origin { s.left } else { 0 }) + 1
+                        )
+                        .as_bytes(),
                     );
                 }
                 _ => {}
@@ -2472,6 +2942,11 @@ impl Handler for State {
                 "{};{}r",
                 self.screen().top + 1,
                 self.screen().bottom + 1
+            )),
+            b"s" if self.left_right_margin_mode => Some(format!(
+                "{};{}s",
+                self.screen().left + 1,
+                self.screen().right + 1
             )),
             b" q" => Some(format!("{} q", self.cursor_style())),
             _ => None,

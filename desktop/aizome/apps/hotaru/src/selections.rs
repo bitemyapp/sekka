@@ -208,9 +208,11 @@ fn run(jobs: mpsc::Receiver<Job>, tx: MsgSender<Msg>) {
     for job in jobs {
         let sent = match job {
             Job::Read { request, read } => {
-                let bytes = read.read_bytes(READ_TIMEOUT, READ_LIMIT);
+                // Nothing came (empty, unreadable, too large or too slow):
+                // there's no answer to ask about.
+                let bytes = read.read_bytes(READ_TIMEOUT, READ_LIMIT).filter(|bytes| !bytes.is_empty());
                 let preview = bytes.as_deref().map(Preview::of).unwrap_or_default();
-                let answer = reply(request.tag, bytes.as_deref().unwrap_or_default());
+                let answer = bytes.map(|bytes| reply(request.tag, &bytes));
                 tx.send(Msg::ClipboardCaptured(request, answer, preview))
             }
             Job::Primary { token, pane, source, cancel } => {

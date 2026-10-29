@@ -1233,6 +1233,25 @@ fn reads_are_asked_about_showing_what_they_would_get_and_answered_exactly() {
     assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
     assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;c;Y29waWVk\x1b\\");
 
+    // The answer is what the clipboard held when the program asked, even if
+    // it changes while the question is up.
+    let mut h = Harness::new(osc52_reader("c"));
+    h.platform.clipboard = Some("asked".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    h.platform.clipboard = Some("changed since".into());
+    let win = h.window();
+    assert!(h.click_text(win, "Allow"));
+    assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
+    assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;c;YXNrZWQ=\x1b\\");
+
+    // Nothing to read: answered empty, without a question about nothing.
+    let mut h = Harness::new(osc52_reader("c"));
+    h.platform.clipboard = None;
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
+    assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;c;\x1b\\");
+
     // Refused: an empty answer, so the program doesn't wait forever.
     let mut h = Harness::new(osc52_reader("c"));
     h.platform.clipboard = Some("secret".into());

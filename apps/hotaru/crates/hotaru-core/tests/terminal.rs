@@ -347,6 +347,19 @@ fn clear_screen_leaves_the_alternate_screen_alone() {
 }
 
 #[test]
+fn clear_screen_moves_whole_lines_past_left_and_right_margins() {
+    let mut t = Terminal::new(12, 4, 100);
+    t.feed(b"one\r\ntwo\r\nthree\r\nfour longer");
+    // Margins at columns 3-5 (DECSLRM homes the cursor), then back down.
+    t.feed(b"\x1b[?69h\x1b[3;5s\x1b[4;1H");
+    assert!(!t.clear_screen());
+    let s = t.snapshot();
+    assert_eq!(text(&s, 0), "four longer");
+    assert_eq!(text(&s, 1), "");
+    assert_eq!(s.cursor.row, 0);
+}
+
+#[test]
 fn reset_discards_a_partial_escape_sequence_and_keeps_generation_moving() {
     let mut t = Terminal::new(20, 4, 100);
     t.feed(b"\x1b[31mred\x1b[?1049h\x1b]0;half a ti");

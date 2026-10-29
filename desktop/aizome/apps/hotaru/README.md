@@ -62,7 +62,9 @@ Ghostty; Settings → General chooses Ask, Allow or Never for each. The question
 names the program by its title and shows the first line of what it would get
 or put, with its size. Return doesn't answer it, since it can arrive while
 you're typing; Escape refuses. Refused reads get an empty answer so programs
-don't wait; reads refused in Settings get none, as Ghostty's. The question is
+don't wait; reads refused in Settings get none, as Ghostty's. A read with nothing
+to read, an empty clipboard or an owner that sends nothing within 2 seconds, is
+answered empty without a question, as are reads past a pane's bounds. The question is
 about the bytes captured when the program asked: a read captures the
 clipboard first, on a worker, so changing the clipboard while the question is
 up doesn't change the answer. `c` names the clipboard; `p` and `s` name the
@@ -306,6 +308,10 @@ in each pane, driven through a FIFO, against the private compositor's real
 clipboard and primary selection (wl-clipboard): OSC 52 writes arrive byte for
 byte, `61 00 62 ff` included, and `p` on the primary selection; a read is asked
 about with its preview, then allowed and answered exactly, then refused and
-answered empty; a double click puts a word on the primary selection and a
-middle click pastes another program's; Control-D closes a split, then a tab,
-then Hotaru, which exits with status zero. The same Cargo-build wrapper applies.
+answered empty. Under stress: the clipboard changing under a question (the
+captured answer is sent), 200 reads at once, an owner that never sends
+(`stall.c`, a data-control client) with a new tab opened meanwhile, a pane closed
+and Hotaru quit with reads pending, and 48 one-MiB writes with resident memory
+recorded. A double click puts a word on the primary selection and a middle click
+pastes another program's; Control-D closes a split, then a tab, then Hotaru,
+which exits with status zero. The same Cargo-build wrapper applies.

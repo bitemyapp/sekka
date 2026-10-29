@@ -228,6 +228,7 @@ fn publish_events(
     hostname: Option<&str>,
     seen_title: &mut bool,
     clipboard: &Arc<crate::selections::Bounds>,
+    replies: &mut Vec<u8>,
 ) {
     let (mut title, mut directory, mut bell, mut notification) = (None, None, false, None);
     for event in terminal.take_events() {
@@ -250,10 +251,15 @@ fn publish_events(
                 }
             }
             TerminalEvent::Bell => bell = true,
-            // In order, as they came; past the pane's bounds, refused.
+            // In order, as they came. Past the pane's bounds a write is
+            // dropped and a read answered empty, so its program doesn't wait.
             TerminalEvent::Clipboard { selection, data } => {
-                if let Some(request) = crate::selections::request(id, selection, &data, clipboard) {
-                    tx.send(Msg::Clipboard(request));
+                match crate::selections::request(id, selection, &data, clipboard) {
+                    Some(request) => {
+                        tx.send(Msg::Clipboard(request));
+                    }
+                    None if data == b"?" => replies.extend_from_slice(&crate::selections::reply(selection, b"")),
+                    None => {}
                 }
             }
             TerminalEvent::Notification { title, body } => notification = Some((title, body)),
@@ -496,8 +502,8 @@ fn run(
             buffered_at += consumed;
             fed += consumed;
             changed |= consumed != 0;
-            publish_events(&mut terminal, id, &tx, hostname.as_deref(), &mut seen_title, &clipboard);
-            let replies = terminal.take_responses();
+            let mut replies = terminal.take_responses();
+            publish_events(&mut terminal, id, &tx, hostname.as_deref(), &mut seen_title, &clipboard, &mut replies);
             if !hung_up && !replies.is_empty() {
                 reply_bytes += replies.len();
                 output.push_back(PendingWrite { bytes: replies.into(), user: false });

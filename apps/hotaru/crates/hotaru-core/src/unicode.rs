@@ -65,6 +65,9 @@ pub(crate) enum WidthEffect {
     Narrow,
 }
 
+// Called per scalar on the grapheme path, from the margin-free and the margin
+// copies of `try_grapheme`; with two callers it would otherwise stop inlining.
+#[inline(always)]
 pub(crate) fn width_effect(previous: char, current: char) -> WidthEffect {
     if matches!(current, '\u{fe0e}' | '\u{fe0f}') {
         if !properties(previous).emoji_vs_base() {

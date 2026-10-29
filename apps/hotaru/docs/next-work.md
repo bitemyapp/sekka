@@ -57,7 +57,7 @@ artifacts and runtime roots in the original worktree; it is not a portable
 installation supplied by a fresh clone. Remote shells require Hotaru terminfo
 or the documented `TERM=xterm-256color ssh host` fallback.
 
-## 3. Qualify OSC 52 under stress
+## 3. Add Kitty's clipboard protocol beside OSC 52
 
 Updated 2026-10-29. OSC 52 is on in the application: writes allowed and reads
 asked by default, with Allow, Ask and Never for each in Settings. The core takes
@@ -80,31 +80,44 @@ both selections, the policies, asked reads allowed and refused, refusal past a
 pane's bounds and tag routing. Use the committed [actual Ghostty reference
 observations](osc52-reference.md) to tell compatibility from correction.
 
-**Gate:** test what remains in the real application: offers changing while a
-question is up, request floods, a stalled or vanished selection owner during a
-read, retained memory under floods, output and input progress meanwhile, and
-pane closure and shutdown with reads pending. Kitty's clipboard protocol
-(OSC 5522) remains a separate task.
+The stress cases are now tested in the real application (`selections.py`):
+the clipboard changing while a question is up (the captured answer is sent), 200
+reads at once (one asked, 199 answered empty: past the core's prefix, a pane's
+bounds or the queue, or while the question waits), an owner that never sends
+(answered empty without a question, the UI working meanwhile), a pane closed and
+Hotaru quit with reads pending, and 48 one-MiB writes (the PTY kept being read,
+the last write won, resident memory 41 to 50 MiB). An empty or unreadable
+clipboard is answered at once without asking. Byte reads wait out a new owner's
+read-ahead rather than answering from the previous owner's cached bytes, a race
+the stalled-owner case found in the toolkit.
 
-## 4. Integrate horizontal margins and validate the C0 fast path
+**Gate:** Kitty's clipboard protocol (OSC 5522: several MIME types, chunked
+writes, aliases, remembered permission and mode 5522 paste events), which the
+pinned Ghostty implements, is the remaining clipboard protocol.
 
-The preserved margin implementation adds DEC mode 69/DECSLRM and associated
-scrolling, origin, tab/CR, query, reset and saved-mode behavior. Integrate the
-original implementation, wide-character DCH correction and final C0 change as
-narrow hunks. The DCH fix erases vacated cells before copying the owned snapshot.
-Preserve the current `Row::wrap_continuation` getter; the older prototype lacks
-it. Applying only the final C0 optimization does not add margin support.
+## 4. Recover the last horizontal-margin cost on Unicode text
 
-The prototype passed 167 tests in both debug and release and strict Clippy.
-Its 5,184 reference comparisons had no ordinary failures and recorded 30 named
-pending-wrap differences where the reference depended on input chunking.
-The final eight-case timing sample was promising, but the full 40-case follow-up
-was never started. It does not establish broad parity.
+Updated 2026-10-29. DEC mode 69/DECSLRM is integrated: the preserved candidate's
+margins, wide-tail DCH correction and C0 fast path, merged three ways onto this
+branch with the `Row::wrap_continuation` getter kept, and `clear_screen` moving
+whole lines past a program's margins. On the integrated source the oracle again
+makes 5,184 comparisons against the pinned library with no failures and the 30
+named pending-wrap reference differences, and the core suite passes. Beside the
+candidate's C0 split, `print`, `try_grapheme` and `prepare_wrap`'s wrap now keep
+the pre-margin code on the margin-free path, with margin copies out of line, and
+`width_effect` is always inlined. Instruction counts match the previous head.
 
-**Gate:** rerun correctness on the integrated source, retain the named reference
-differences, and run the complete 40-case follow-up with equal workloads and
-recorded CPU/load conditions. Reject or revise regressions before advertising
-the optimization. Preserve raw timings and failed trials.
+Paired feed timings ([evidence](../upstream/horizontal-margins/README.md)) on wx
+put ASCII at parity and styled and cursor-heavy input 1–6 % faster, but mixed
+Unicode text 3 % slower in legacy width and 12 % slower with mode 2027, which
+native panes use; on the Intel laptop that case is +2 % cycles. Both are
+instruction-equal: the Intel counters show more decoded-uop-cache misses, so
+the cost is code layout around the bulk UTF-8 and grapheme paths.
+
+**Gate:** find the layout cause (unprivileged `perf` is unavailable on wx; the
+laptop allows it) and bring mode-2027 Unicode within noise without moving the
+other cases, then run the full 40-case comparison with equal workloads and
+recorded CPU/load conditions. Preserve raw timings and failed trials.
 
 ## 5. Resume the GPU prototype separately
 

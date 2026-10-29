@@ -21,7 +21,7 @@ import time
 from smoke import wait
 
 # Linux evdev codes.
-D, T, ENTER = 32, 20, 28
+D, T, Q, W, ENTER = 32, 20, 16, 17, 28
 
 
 def run(binary, evidence):
@@ -34,6 +34,8 @@ def run(binary, evidence):
          ".cargo/registry/src/*/wayland-protocols-misc-*/protocols/virtual-keyboard-unstable-v1.xml"),
         ("pointer", "pointer.c", "virtual-pointer",
          ".cargo/registry/src/*/wayland-protocols-wlr-*/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml"),
+        ("stall", "stall.c", "data-control",
+         ".cargo/registry/src/*/wayland-protocols-wlr-*/wlr-protocols/unstable/wlr-data-control-unstable-v1.xml"),
     ]:
         protocol = next(Path.home().glob(xml))
         subprocess.run(["wayland-scanner", "client-header", str(protocol), str(build / f"{header}-client.h")], check=True)
@@ -70,6 +72,14 @@ def commands():
                 os.write(1, b'\x1b]52;' + tag.encode() + b';' + base64.b64encode(bytes.fromhex(data[0])) + b'\x07')
             elif verb == 'read':
                 os.write(1, b'\x1b]52;' + tag.encode() + b';?\x07')
+            elif verb == 'flood-read':
+                os.write(1, (b'\x1b]52;' + tag.encode() + b';?\x07') * int(data[0]))
+            elif verb == 'flood-write':
+                count, size = int(data[0]), int(data[1])
+                for n in range(count):
+                    os.write(1, b'\x1b]52;' + tag.encode() + b';' + base64.b64encode(bytes([65 + n % 26]) * size) + b'\x07')
+                # Every byte was taken: Hotaru kept reading its PTY.
+                (here / 'flooded').write_text(str(count))
 threading.Thread(target=commands, daemon=True).start()
 pending, replies = b'', 0
 while True:
@@ -201,6 +211,78 @@ while True:
         point(element(lambda item: item.get("text") == "Don’t Allow"))
         assert wait("refused reply", lambda: reply(first, 2)) == b"\x1b]52;c;\x1b\\"
         result["checks"]["reads"] = {"allowed": expected.decode(), "refused": "empty answer"}
+        empty = b"\x1b]52;c;\x1b\\"
+        answered = lambda: len(list((panes / first).glob("reply-*")))
+
+        # The answer is what the clipboard held when the program asked, even
+        # if the clipboard changes while the question is up.
+        copy("asked about")
+        time.sleep(.3)
+        command(first, "read c")
+        wait("third question", lambda: any("read the clipboard?" in text for text in texts()))
+        copy("changed meanwhile")
+        time.sleep(.3)
+        point(element(lambda item: item.get("text") == "Allow"))
+        captured = b"\x1b]52;c;" + base64.b64encode(b"asked about") + b"\x1b\\"
+        assert wait("captured reply", lambda: reply(first, 3)) == captured, reply(first, 3)
+        result["checks"]["changed_during_question"] = {"answer": "asked about"}
+
+        # A flood of reads: one question, and every other read answered empty
+        # at once (while the question waits, or past the pane's bounds).
+        command(first, "flood-read c 200")
+        wait("flood question", lambda: any("read the clipboard?" in text for text in texts()))
+        wait("199 refused", lambda: answered() == 3 + 199)
+        point(element(lambda item: item.get("text") == "Allow"))
+        wait("all 200 answered", lambda: answered() == 3 + 200)
+        full = [n for n in range(4, 204) if reply(first, n) != empty]
+        assert len(full) == 1 and reply(first, full[0]).endswith(base64.b64encode(b"changed meanwhile") + b"\x1b\\")
+        result["checks"]["read_flood"] = {"reads": 200, "answered_empty": 199, "allowed": 1}
+
+        # A clipboard owner that never sends: the read is answered empty, with
+        # neither the last owner's bytes nor a question, while the terminal
+        # works on. (It gives up at its deadline, or sooner when the compositor
+        # offers the selection again, as a focus change makes it.)
+        stall = subprocess.Popen([str(build / "stall")], env=env)
+        processes.append(stall)
+        time.sleep(.5)
+        started = time.monotonic()
+        command(first, "read c")
+        keys((T, "super"))
+        during = wait("tab during the stalled read", lambda: (pid := front()) and pid != first and pid)
+        tab_seconds = time.monotonic() - started
+        assert wait("stalled read answered", lambda: reply(first, 204), timeout=5) == empty
+        stalled_seconds = time.monotonic() - started
+        assert not any("read the clipboard?" in text for text in texts())
+        keys((D, "ctrl"))
+        wait("extra tab closed", lambda: front() == first)
+        # A pane closed while its read waits on the stalled owner.
+        keys((D, "super"))
+        closing = wait("split for a pending read", lambda: (pid := front()) and pid not in (first, during) and pid)
+        command(closing, "read c")
+        time.sleep(.2)
+        keys((W, "super"))
+        wait("split closed with its read pending", lambda: front() == first)
+        time.sleep(2.5)
+        assert app.poll() is None
+        result["checks"]["stalled_owner"] = {"new_tab_seconds": round(tab_seconds, 2),
+                                             "answered_empty_seconds": round(stalled_seconds, 2),
+                                             "pane_closed_while_pending": closing}
+
+        # A flood of 1 MiB writes: the PTY keeps being read, the clipboard ends
+        # with one of them, and memory stays within the pane's bounds.
+        def status(key):
+            line = next(l for l in Path(f"/proc/{app.pid}/status").read_text().splitlines() if l.startswith(key))
+            return int(line.split()[1])
+        before = status("VmRSS:")
+        command(first, "flood-write c 48 1048576")
+        wait("flood written", lambda: (panes / first / "flooded").exists(), timeout=60)
+        last = wait("a flooded write on the clipboard", lambda: (data := paste()) and len(data) == 1048576 and data)
+        assert last == last[:1] * len(last) and last[:1].isalpha()
+        peak = status("VmHWM:")
+        result["checks"]["write_flood"] = {"writes": 48, "bytes_each": 1048576, "rss_before_kib": before,
+                                           "peak_rss_kib": peak, "rss_after_kib": status("VmRSS:"),
+                                           "clipboard_holds": last[:1].decode()}
+        assert peak - before < 512 * 1024, result["checks"]["write_flood"]
 
         # Copy on select: a double click puts the word on the primary selection;
         # a middle click pastes the primary selection into the program.
@@ -229,9 +311,32 @@ while True:
         assert wait("Hotaru exited", lambda: app.poll() is not None) is not None
         result["checks"]["control_d"] = {"split": second, "tab": third, "exit_status": app.returncode}
         assert app.returncode == 0
+
+        # Quitting while a read waits on a stalled owner exits at once.
+        log = open(evidence / "hotaru-quit.log", "wb"); files.append(log)
+        app = subprocess.Popen([str(binary), "--", sys.executable, str(fixture)], env=env, stdout=log, stderr=subprocess.STDOUT)
+        processes.append(app)
+        last_pane = wait("second launch", lambda: (pid := front()) and pid)
+        wait("second launch inspection", terminal)
+        stall = subprocess.Popen([str(build / "stall")], env=env)
+        processes.append(stall)
+        time.sleep(.5)
+        command(last_pane, "read c")
+        time.sleep(.2)
+        started = time.monotonic()
+        keys((Q, "super"))
+        wait("quit with a read pending", lambda: app.poll() is not None, timeout=5)
+        result["checks"]["quit_while_pending"] = {"seconds": round(time.monotonic() - started, 2),
+                                                  "exit_status": app.returncode}
+        assert app.returncode == 0
         result["status"] = "passed"
     except Exception as error:
         result.update(status="failed", error=repr(error))
+        try:
+            subprocess.run(["grim", str(evidence / "failure.png")], env=env, timeout=3)
+            result["failure_texts"] = texts()
+        except Exception as detail:
+            result["failure_capture"] = repr(detail)
         raise
     finally:
         for process in reversed(processes):
