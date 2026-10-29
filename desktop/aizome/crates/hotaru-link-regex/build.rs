@@ -31,7 +31,9 @@ fn main() {
     fs::write(output.join("config.h"), config).unwrap();
     let source = PathBuf::from("vendor/oniguruma/src");
     let mut build = cc::Build::new();
-    build.include(&source).include(output).warnings(false);
+    // This pinned C dependency uses pre-C23 unspecified-argument declarations.
+    // GCC 15+ defaults to C23, where those declarations mean no arguments.
+    build.std("gnu17").include(&source).include(output).warnings(false);
     for file in include_str!("vendor/oniguruma/sources.txt").lines() {
         build.file(source.join(file));
     }

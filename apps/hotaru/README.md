@@ -17,6 +17,10 @@ Copy formatting runs on a bounded worker with owned snapshots; clipboard
 publication and paste delivery are ordered by request and session identity.
 Slow or abandoned clipboard peers must not block the interface thread.
 
+On Aizome built from this branch, open **Hotaru** in the application launcher
+or run `aizome-hotaru`. See the [usable checkpoint](docs/usable-checkpoint.md)
+for the ready-to-run development launcher, packaged validation and deferred work.
+
 See [development and remaining work](DEVELOPERS.md) and the
 [upstream audit and coverage ledger](docs/upstream.md) for build commands,
 validation evidence, the memory design and the unresolved port scope.
