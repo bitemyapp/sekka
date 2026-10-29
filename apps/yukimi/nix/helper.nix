@@ -4,6 +4,7 @@
   rustPlatform,
   pkg-config,
   sqlite,
+  util-linux,
 }:
 let
   # Content-addressed source: the same derivation wherever the checkout is.
@@ -30,6 +31,7 @@ rustPlatform.buildRustPackage {
   '';
   cargoLock.lockFile = ../Cargo.lock;
   nativeBuildInputs = [ pkg-config ];
+  nativeCheckInputs = [ util-linux ];
   buildInputs = [ sqlite ];
   postInstall = ''
     # Names this exact helper, so polkit's prompt says what Yukimi is asking for.
