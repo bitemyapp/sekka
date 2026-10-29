@@ -40,6 +40,7 @@
   libsecret,
   pam,
   systemd,
+  util-linux,
   cmake,
   shaderc,
   openblas,
@@ -234,6 +235,8 @@ rustPlatform.buildRustPackage {
 
     # Session: the login entry, the systemd user units and the portals.
     install -Dm755 session/aizome-session $out/bin/aizome-session
+    substituteInPlace $out/bin/aizome-session \
+      --replace-fail 'flock -n 9' '${util-linux}/bin/flock -n 9'
     install -Dm644 session/aizome.desktop $out/share/wayland-sessions/aizome.desktop
     shopt -s nullglob
     for unit in session/*.service session/*.target session/*.path apps/*/data/*.service; do

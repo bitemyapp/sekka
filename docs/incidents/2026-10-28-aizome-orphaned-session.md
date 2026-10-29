@@ -45,6 +45,27 @@ logins are rejected before installing the trap, so they cannot stop a valid
 existing desktop. The watchdog restart loop and normal compositor exit
 status are retained.
 
+Review of PR #140 found two startup gaps in that first fix. A delayed
+background `systemctl` could submit its start request after the launcher's
+cleanup had finished. A second launcher could also pass `is-active` while
+the first compositor was still activating; ending the second login then
+stopped the first session. Both were reproduced with real systemd and a
+stand-in compositor, and the second case left the first session running
+with the pre-PR launcher.
+
+The launcher now holds an exclusive per-user lock from before the service
+check through cleanup. It also refuses activating/deactivating services
+that do not hold that lock, such as one started by an older launcher.
+Cleanup terminates and reaps the background client before stopping the
+session. Signals arriving between spawning the client and recording its
+PID are deferred until it can be reaped; the child does not inherit the
+lock. Cleanup uses SIGKILL for this client because a forked shell that has
+not yet executed `systemctl` can still have the launcher's signal handlers
+and survive TERM. A deterministic signal injection between fork and PID
+capture checks that cleanup cannot hang there. The lock file stays in the
+runtime directory so all launches lock the same inode, and the kernel
+releases ownership when the launcher exits.
+
 ## Regression checks and limits
 
 `aizome-checks.session-launcher` uses isolated stand-ins for systemctl and
@@ -52,6 +73,15 @@ D-Bus activation. It covers normal exit, HUP, INT, TERM to just the launcher,
 TERM to its process group, logging back in, duplicate-login isolation, and
 the watchdog restart limit. Against the old launcher, signal tests reproduce
 the missing cleanup; the interrupt case also demonstrates a deferred wait.
+The expanded tests also cover signals before start submission, startup and
+cleanup ownership, and an activating service without a launcher lock.
+
+`aizome-checks.session-launcher-systemd` runs the shipped launcher and unit
+dependencies with real systemd in a disposable VM. A stand-in compositor
+lets it gate readiness independently of the start client. It checks HUP,
+TERM and process-group INT before submission, termination after submission,
+duplicate rejection on both sides of submission, refusal of unowned active
+and activating services, and successful subsequent login.
 
 `aizome-checks.greeter` terminates only the graphical login with real logind,
 keeps the user manager alive, checks compositor and graphical-target
@@ -65,6 +95,12 @@ and the complete greeter VM check passed. The old launcher failed the
 isolated termination tests with the stand-in service still active. The
 reported workstation's orphaned desktop was left running at the user's
 request; the fix was not deployed there during this investigation.
+
+The follow-up startup fixes passed fifteen launcher tests and ShellCheck,
+the real-systemd startup VM, and Yukimi's packaged helper tests. The two
+startup regressions fail against PR #140's initial `ec52f8e7` launcher.
+The fork/PID-capture injection also caught a TERM-only cancellation hang;
+the final client cleanup uses SIGKILL and passes all three signal cases.
 
 These checks do not establish physical suspend/resume or exact-ISO behavior.
 SIGKILL cannot run a shell trap. A session already orphaned by the previous

@@ -4,6 +4,7 @@ pkgs.runCommand "aizome-session-launcher"
     nativeBuildInputs = [
       pkgs.python3
       pkgs.shellcheck
+      pkgs.util-linux
     ];
     AIZOME_SESSION_LAUNCHER = ../session/aizome-session;
   }
