@@ -1,0 +1,2 @@
+00:00:00.001 [ERROR] [sway/main.c:62] !!! Proprietary Nvidia drivers are in use !!!
+00:00:00.564 [ERROR] [wlr] [types/wlr_layer_shell_v1.c:295] A configure is sent to an uninitialized wlr_layer_surface_v1 0x5d9969636c40

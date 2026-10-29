@@ -1,0 +1,117 @@
+{
+  "scope": "compact frozen admission evidence",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3517,
+      "sha256": "ec78efc9a01b6c82ea39bd074965c3ce4ce1f7ccfbb8596d79018284322edc38"
+    },
+    {
+      "path": "native-build.log",
+      "bytes": 292,
+      "sha256": "3315e46b149399e1d955f376e24b83932de0a029777dfdaa5240256fade0b180"
+    },
+    {
+      "path": "native-scenes.json.gz",
+      "bytes": 1511,
+      "sha256": "f7df35400b74527189f4d7941ebdb34c30e10882df8d0b3e0fb1a312a397d092"
+    },
+    {
+      "path": "native.patch",
+      "bytes": 8856,
+      "sha256": "c16b5063e24506dd66c23087b9a808b52250dd0d422f2f2da03efd225fee0777"
+    },
+    {
+      "path": "patch-replay.json",
+      "bytes": 2512,
+      "sha256": "a31708f954d4f285ef7a26b68e27c6ed4369307eea4ae9ed73b77dfe79e5e0d5"
+    },
+    {
+      "path": "preparation-tests.log",
+      "bytes": 1161,
+      "sha256": "e4b55e61d7827ca576abb53f4ba51dafc90291a972fda66d992aaa5ff5a21f05"
+    },
+    {
+      "path": "qualification.json",
+      "bytes": 2041,
+      "sha256": "b9d74fbbaa4cc72ac5d3438ff9e7b8828caacd589b35add71ff8982c558cd142"
+    },
+    {
+      "path": "review.md",
+      "bytes": 2031,
+      "sha256": "651b51e1c928065e9b45b37ac1eef0f8492468feb9d9ad7c8b7778a7e4475d10"
+    },
+    {
+      "path": "source-manifest.json",
+      "bytes": 189989,
+      "sha256": "c66c8c2c6d319722e6c9226d3f7835f0d811be0f739d4fb13fd91c0e51b76eea"
+    },
+    {
+      "path": "verify-replay.py",
+      "bytes": 1323,
+      "sha256": "d426b1c4d23c227aae636997ac0d0a9de207838da1c50cfd77a8702e22796809"
+    },
+    {
+      "path": "wayland/native.log",
+      "bytes": 165,
+      "sha256": "d33650f230a307937e3b7eb8fa8657f805314a4af9e10cd09ac3d3d6573d233c"
+    },
+    {
+      "path": "wayland/ready.json",
+      "bytes": 85,
+      "sha256": "734bf54cf5c67746b14b513a2ddb94a4fc0fbc4fd5d690d17c3421e0a42121a6"
+    },
+    {
+      "path": "wayland/released.json",
+      "bytes": 58,
+      "sha256": "8b35f33d98a2bfa6d8d638d02a70af572f75c915f3005d09ee6072c9c7f2e388"
+    },
+    {
+      "path": "wayland/result.json",
+      "bytes": 991,
+      "sha256": "ce792cd1ceb1df3d11094fd84553df271e53b3868a2a796808da696accc3df16"
+    },
+    {
+      "path": "wayland/sway.log",
+      "bytes": 220,
+      "sha256": "8e0644088c28c2502f475bf7a175b75999c70318b8d086092de1e21bd8afb339"
+    },
+    {
+      "path": "wayland-admission.py",
+      "bytes": 5424,
+      "sha256": "eab8daa5e99a3a1b23aec4ee71ba2732d3caea09f7803897ff7987694bd0e3b6"
+    },
+    {
+      "path": "worker-clippy.log",
+      "bytes": 3850,
+      "sha256": "f9f193c3f8404f60bc7e9fc16c2c38b2a9a0540c21260b5cf9ca572d3241f6ba"
+    },
+    {
+      "path": "worker-tests.log",
+      "bytes": 8206,
+      "sha256": "91b8789489e8e8bd89cb6732658458163d6f561fa6f1f70a814190e64d77faac"
+    },
+    {
+      "path": "worker.patch",
+      "bytes": 130351,
+      "sha256": "5bf19d1bb0e62d4da4b94709937f0238654fd0d66000cf1b4520a506e8a64835"
+    },
+    {
+      "path": "write-seal-failure/native.log",
+      "bytes": 85,
+      "sha256": "d188463d24fc227d2da6f9a2ed02e9ca2e3591801b326dc4716cdcc022151d0b"
+    },
+    {
+      "path": "write-seal-failure/result.json",
+      "bytes": 592,
+      "sha256": "f1d7392b848c3a454054433ce8f674403055798a91a61b8b04a9f9e7913c58e7"
+    },
+    {
+      "path": "write-seal-failure/sway.log",
+      "bytes": 200,
+      "sha256": "e227119b40bc5300b95179d21dd7a80892648298d9a14738ae6f55fbd3a84d21"
+    }
+  ],
+  "file_count": 22,
+  "total_bytes": 363460
+}
