@@ -10,7 +10,7 @@ use crate::clipboard::{ClipboardWorker, CopySource, Job};
 use crate::panes::{Axis, Direction, PaneTree};
 use crate::preferences::{Notice, Page};
 use crate::session::{Command, Defaults, Session};
-use crate::settings::{self, Action, Bindings, Settings};
+use crate::settings::{self, Access, Action, Bindings, Settings};
 use crate::terminal_view::{Selection, colors_for, terminal_view};
 
 #[derive(Clone)]
@@ -36,6 +36,11 @@ pub enum Msg {
     SetCursorBlink(bool),
     SetScrollback(usize),
     SetShellIntegration(bool),
+    SetClipboardRead(settings::Access),
+    SetClipboardWrite(settings::Access),
+    SetCopyOnSelect(bool),
+    SetNotifications(bool),
+    SetWaitAfterCommand(bool),
     SettingsPage(Page),
     MonospaceFamilies(Arc<[String]>),
     OpenConfigFile,
@@ -55,7 +60,8 @@ pub enum Msg {
     FontFailed(u64, u64, String),
     Title(u64, String),
     WorkingDirectory(u64, std::path::PathBuf),
-    Exited(u64, String),
+    /// The program ended: its status, and whether it failed as it started.
+    Exited(u64, String, bool),
     Failed(u64, String),
     Notice(u64, String),
     MatchLink(u64, Option<Arc<crate::automatic_links::Request>>),
@@ -63,6 +69,7 @@ pub enum Msg {
     ResolvedLink,
     HoverLink(u64, Option<crate::links::Link>),
     OpenLink(u64, crate::links::Link),
+    CopyLink(Arc<str>),
     LinkOpened(u64, Result<(), aizome_kit::urls::OpenUrlError>),
     Bell(u64),
     Input(u64, Vec<u8>),
@@ -83,6 +90,20 @@ pub enum Msg {
     CopyFailed(u64, u64, String),
     PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
     Paste,
+    /// A pointer selection in the pane is finished: with copy on select,
+    /// it becomes the primary selection.
+    Selected(u64),
+    PrimaryReady(u64, PreparedClipboard),
+    /// Paste the primary selection, as a middle click does.
+    PastePrimary(u64),
+    /// A program's own clipboard request (OSC 52), from its PTY worker.
+    Clipboard(crate::selections::Request),
+    /// What a read will be answered with, captured before anyone is asked.
+    ClipboardCaptured(crate::selections::Request, Arc<[u8]>, crate::selections::Preview),
+    /// The request being asked about is allowed, or not.
+    ClipboardAnswer(u64, bool),
+    /// A program's notification (OSC 9 or 777): its title and body.
+    Notify(u64, String, String),
     Find,
     Search(String),
     SearchRefresh(u64),
@@ -184,6 +205,17 @@ pub struct Hotaru {
     /// The action a shortcut is being typed for in Settings.
     pub recording: Option<Action>,
     open_after_save: bool,
+    /// The primary selection and programs' clipboard requests (OSC 52).
+    selections: Option<crate::selections::Worker>,
+    primary_token: u64,
+    primary_cancel: Arc<AtomicBool>,
+    /// A program's clipboard request being asked about.
+    asking: Option<crate::selections::Question>,
+    ask_token: u64,
+    /// The pane with the keyboard, while the window has it.
+    focused_pane: Option<u64>,
+    /// When a program's notification last reached the desktop.
+    notified: Option<std::time::Instant>,
 }
 
 impl Hotaru {
@@ -229,6 +261,13 @@ impl Hotaru {
             monospace: None,
             recording: None,
             open_after_save: false,
+            selections: None,
+            primary_token: 0,
+            primary_cancel: Arc::new(AtomicBool::new(false)),
+            asking: None,
+            ask_token: 0,
+            focused_pane: None,
+            notified: None,
         }
     }
 
@@ -405,7 +444,13 @@ impl Hotaru {
     fn close_tab(&mut self, cx: &mut Cx<Msg>) {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == self.active) else { return };
         self.clipboard_request();
-        let removed = self.tabs.remove(index).tree.leaves();
+        self.remove_tab(index, cx);
+    }
+
+    /// Take away the tab at `index`; the window goes with the last.
+    fn remove_tab(&mut self, index: usize, cx: &mut Cx<Msg>) {
+        let tab = self.tabs.remove(index);
+        let removed = tab.tree.leaves();
         self.panes.retain(|pane| !removed.contains(&pane.id));
         if self.tabs.is_empty() {
             // Settings alone would be a terminal without a terminal.
@@ -418,29 +463,40 @@ impl Hotaru {
             } else {
                 cx.close_window(self.window);
             }
-        } else {
+        } else if tab.id == self.active {
             self.active = self.tabs[index.min(self.tabs.len() - 1)].id;
             self.focus_after_rebuild(cx);
         }
     }
 
     fn close_pane(&mut self, cx: &mut Cx<Msg>) {
-        let Some(tab) = self.active_tab() else { return };
-        let leaves = tab.tree.leaves();
+        let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+        self.clipboard_request();
+        self.remove_pane(id, cx);
+    }
+
+    /// Take pane `id` out of whichever tab holds it, and that tab away with
+    /// its last pane. Another tab's pane leaves the one in front alone.
+    fn remove_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
+        let Some(index) = self.tabs.iter().position(|tab| tab.tree.leaves().contains(&id)) else { return };
+        let leaves = self.tabs[index].tree.leaves();
         if leaves.len() == 1 {
-            self.close_tab(cx);
+            self.remove_tab(index, cx);
             return;
         }
-        let id = tab.active;
-        let index = leaves.iter().position(|pane| *pane == id).unwrap();
-        let next = leaves[if index == 0 { 1 } else { index - 1 }];
-        self.clipboard_request();
-        let tab = self.tabs.iter_mut().find(|tab| tab.id == self.active).unwrap();
+        let at = leaves.iter().position(|pane| *pane == id).unwrap();
+        let tab = &mut self.tabs[index];
         tab.tree = std::mem::replace(&mut tab.tree, PaneTree::Leaf(0)).remove(id).unwrap();
-        tab.active = next;
-        tab.zoomed = false;
+        if tab.active == id {
+            tab.active = leaves[if at == 0 { 1 } else { at - 1 }];
+            tab.zoomed = false;
+        }
+        tab.zoomed &= matches!(tab.tree, PaneTree::Split { .. });
+        let shown = tab.id == self.active;
         self.panes.retain(|pane| pane.id != id);
-        self.focus_after_rebuild(cx);
+        if shown {
+            self.focus_after_rebuild(cx);
+        }
     }
 
     fn cancel_automatic(&mut self) {
@@ -678,6 +734,11 @@ impl Hotaru {
         self.shape_pane(id, true);
     }
 
+    /// Whether a program's clipboard request waits for an answer.
+    pub fn asking_about_clipboard(&self) -> bool {
+        self.asking.is_some()
+    }
+
     pub fn search_status(&self) -> String {
         self.find_state.label(self.active_pane().is_some_and(|pane| pane.snapshot.modes.alternate_screen))
     }
@@ -731,6 +792,151 @@ impl Hotaru {
         }
     }
 
+    /// Copy on select: the pane's finished selection becomes the primary
+    /// selection, as plain text, on the selection worker.
+    fn copy_to_primary(&mut self, id: u64) {
+        if !self.settings.copy_on_select {
+            return;
+        }
+        let Some(pane) = self.panes.iter().find(|pane| pane.id == id) else { return };
+        let Some(selection) = pane.selection.filter(|s| !s.is_empty()) else { return };
+        let snapshot = pane.rendered.as_ref().map_or_else(|| pane.snapshot.clone(), |frame| frame.snapshot.clone());
+        self.primary_cancel.store(true, Ordering::Release);
+        self.primary_cancel = Arc::new(AtomicBool::new(false));
+        self.primary_token = self.primary_token.wrapping_add(1);
+        let job = crate::selections::Job::Primary {
+            token: self.primary_token,
+            pane: id,
+            source: CopySource::Viewport { snapshot, selection: Some(selection) },
+            cancel: self.primary_cancel.clone(),
+        };
+        if let Some(worker) = &self.selections {
+            // Behind a full queue of reads, this selection isn't offered.
+            worker.submit(job);
+        }
+    }
+
+    /// A program asks to read or write the clipboard (OSC 52): settings say
+    /// whether it may, whether to ask, or not.
+    fn program_clipboard(&mut self, request: crate::selections::Request, cx: &mut Cx<Msg>) {
+        use crate::selections::{Kind, Target};
+        if !self.panes.iter().any(|pane| pane.id == request.pane && !pane.ended) {
+            return;
+        }
+        match &request.kind {
+            Kind::Write { data, preview } => match self.settings.clipboard_write {
+                Access::Allow => publish(request.target, data.clone(), cx),
+                Access::Ask => {
+                    let preview = preview.clone();
+                    self.ask(request, None, &preview, cx);
+                }
+                Access::Deny => {}
+            },
+            Kind::Read => {
+                if self.settings.clipboard_read == Access::Deny {
+                    // A refused read gets no answer, as Ghostty's.
+                    return;
+                }
+                let read = match request.target {
+                    Target::Clipboard => cx.clipboard_read(),
+                    Target::Primary => cx.primary_read(),
+                };
+                let (pane, tag) = (request.pane, request.tag);
+                let job = crate::selections::Job::Read { request, read };
+                if !self.selections.as_ref().is_some_and(|worker| worker.submit(job)) {
+                    self.send(pane, Command::Reply(crate::selections::reply(tag, b"")));
+                }
+            }
+        }
+    }
+
+    /// Ask whether a program may have `request`; one question at a time.
+    fn ask(
+        &mut self,
+        request: crate::selections::Request,
+        reply: Option<Arc<[u8]>>,
+        preview: &crate::selections::Preview,
+        cx: &mut Cx<Msg>,
+    ) {
+        use crate::selections::Kind;
+        let Some(pane) = self.panes.iter().find(|pane| pane.id == request.pane) else { return };
+        if self.asking.is_some() {
+            let id = pane.id;
+            self.notice(id, "A clipboard request was refused while another waits for an answer.");
+            self.answer(request, reply, false, cx);
+            return;
+        }
+        let program = pane.title.chars().take(60).collect::<String>();
+        let place = request.target.name();
+        let shown = if preview.text.is_empty() { String::new() } else { format!(":\n\n“{}”", preview.text) };
+        let (title, message, allow) = match request.kind {
+            Kind::Read => {
+                (format!("Let “{program}” read {place}?"), format!("It holds {}{shown}", preview.size()), "Allow")
+            }
+            Kind::Write { .. } => (
+                format!("Let “{program}” replace {place}?"),
+                format!("It would hold {}{shown}", preview.size()),
+                "Replace",
+            ),
+        };
+        self.ask_token = self.ask_token.wrapping_add(1);
+        let token = self.ask_token;
+        // The question comes while someone may be typing: Return doesn't
+        // answer it; Escape refuses.
+        cx.alert(
+            self.window,
+            Alert::new(title, format!("{message}\n\nSettings → General chooses what programs may do."))
+                .button(allow, Msg::ClipboardAnswer(token, true))
+                .cancel_with("Don’t Allow", Msg::ClipboardAnswer(token, false)),
+        );
+        self.asking = Some(crate::selections::Question { token, request, reply });
+    }
+
+    /// Carry out the answer about `request`: publish a write, send a read
+    /// its captured answer, or refuse it (a read gets an empty answer).
+    fn answer(
+        &mut self,
+        request: crate::selections::Request,
+        reply: Option<Arc<[u8]>>,
+        allowed: bool,
+        cx: &mut Cx<Msg>,
+    ) {
+        use crate::selections::Kind;
+        if !self.panes.iter().any(|pane| pane.id == request.pane && !pane.ended) {
+            return;
+        }
+        match request.kind {
+            Kind::Write { data, .. } if allowed => publish(request.target, data, cx),
+            Kind::Write { .. } => {}
+            Kind::Read => {
+                let reply = reply.filter(|_| allowed).unwrap_or_else(|| crate::selections::reply(request.tag, b""));
+                self.send(request.pane, Command::Reply(reply));
+            }
+        }
+    }
+
+    /// A program's notification reaches the desktop while its pane is out
+    /// of sight (another tab, or the window not in use), once a second at most.
+    fn notify(&mut self, id: u64, title: &str, body: &str, cx: &mut Cx<Msg>) {
+        if !self.settings.desktop_notifications || self.focused_pane == Some(id) {
+            return;
+        }
+        if self.notified.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(1)) {
+            return;
+        }
+        let Some(pane) = self.panes.iter().find(|pane| pane.id == id) else { return };
+        let clean = |text: &str, limit: usize| text.chars().filter(|c| !c.is_control()).take(limit).collect::<String>();
+        let (summary, body) = match (clean(title, 120), clean(body, 1000)) {
+            (title, body) if title.is_empty() => (clean(&pane.title, 120), body),
+            other => other,
+        };
+        if summary.is_empty() && body.is_empty() {
+            return;
+        }
+        self.notified = Some(std::time::Instant::now());
+        cx.notify(&summary, &body);
+    }
+
     fn pane_tree_view(&self, tree: &PaneTree) -> Element<Msg> {
         match tree {
             PaneTree::Leaf(id) => {
@@ -747,6 +953,7 @@ impl Hotaru {
                         .as_ref()
                         .filter(|link| link.request().is_some_and(|request| request.pane == pane.id))
                         .cloned(),
+                    self.context_menu(pane),
                 )
                 .id(format!("terminal-{}", pane.id))
                 .key(pane.id)
@@ -1051,6 +1258,32 @@ impl Hotaru {
         }
     }
 
+    /// What a right click in `pane` shows; a link under the pointer first.
+    fn context_menu(&self, pane: &Pane) -> Menu<Msg> {
+        let mut menu = Menu::new("Terminal");
+        if let Some(link) = &pane.hovered_link {
+            menu = menu
+                .item(MenuItem::new("Open Link", Msg::OpenLink(pane.id, link.clone())))
+                .item(MenuItem::new("Copy Link", Msg::CopyLink(link.target.clone())))
+                .separator();
+        }
+        let selected = pane.selection.is_some_and(|s| !s.is_empty());
+        let alone = self.tabs.iter().any(|tab| tab.tree.leaves() == [pane.id]);
+        menu.item(self.item("Copy", Action::Copy).enabled(selected))
+            .item(self.item("Paste", Action::Paste))
+            .separator()
+            .item(self.item("Split Right", Action::SplitRight))
+            .item(self.item("Split Down", Action::SplitDown))
+            .separator()
+            .item(self.item("Clear Screen", Action::ClearScreen))
+            .item(self.item("Reset Terminal", Action::ResetTerminal))
+            .separator()
+            .item(self.item("New Tab", Action::NewTab))
+            .item(self.item(if alone { "Close Tab" } else { "Close Pane" }, Action::ClosePane))
+            .separator()
+            .item(self.item("Settings…", Action::Settings))
+    }
+
     /// A tooltip naming the shortcut as it's bound now.
     fn tip(&self, tip: &str, action: Action) -> String {
         match self.bindings.shortcut(action) {
@@ -1094,6 +1327,8 @@ impl Program for Hotaru {
                 }
             }
         }
+        self.selections =
+            crate::selections::Worker::new(cx.stream()).map_err(|error| log::warn!("Selection worker: {error}")).ok();
         if let Some(instance) = self.instance.take()
             && let Err(e) = instance.serve(cx.stream())
         {
@@ -1165,6 +1400,26 @@ impl Program for Hotaru {
             }
             Msg::SetShellIntegration(on) => {
                 self.settings.shell_integration = on;
+                self.save_settings();
+            }
+            Msg::SetClipboardRead(access) => {
+                self.settings.clipboard_read = access;
+                self.save_settings();
+            }
+            Msg::SetClipboardWrite(access) => {
+                self.settings.clipboard_write = access;
+                self.save_settings();
+            }
+            Msg::SetCopyOnSelect(on) => {
+                self.settings.copy_on_select = on;
+                self.save_settings();
+            }
+            Msg::SetNotifications(on) => {
+                self.settings.desktop_notifications = on;
+                self.save_settings();
+            }
+            Msg::SetWaitAfterCommand(on) => {
+                self.settings.wait_after_command = on;
                 self.save_settings();
             }
             Msg::SettingsPage(page) => {
@@ -1470,6 +1725,7 @@ impl Program for Hotaru {
                     });
                 }
             }
+            Msg::CopyLink(target) => cx.set_clipboard_text(&target),
             Msg::OpenLink(id, link) => {
                 if self.valid_link_activation(id, &link) {
                     if link.is_automatic() {
@@ -1557,9 +1813,17 @@ impl Program for Hotaru {
                     }
                 }
             }
-            Msg::Exited(id, status) => {
-                if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
-                    tab.status = format!("Session ended: {status}");
+            Msg::Exited(id, status, abnormal) => {
+                // As Control-D at the prompt: the pane goes, and with the
+                // last of them, its tab and then the window.
+                if !abnormal && !self.settings.wait_after_command {
+                    self.remove_pane(id, cx);
+                } else if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
+                    tab.status = if abnormal {
+                        format!("The program failed as it started ({status}). Press a key to close.")
+                    } else {
+                        format!("Session ended: {status}. Press a key to close.")
+                    };
                     tab.ended = true;
                 }
             }
@@ -1596,8 +1860,18 @@ impl Program for Hotaru {
                 self.shape_pane(id, true);
             }
             Msg::Key(id, event) => {
+                let mut ended = false;
                 if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
                     pane.selection = None;
+                    ended = pane.ended;
+                }
+                // A kept pane whose program ended closes on any key.
+                if ended
+                    && event.action == hotaru_core::input::KeyAction::Press
+                    && !matches!(event.key, hotaru_core::input::Key::Modifier(_))
+                {
+                    self.remove_pane(id, cx);
+                    return;
                 }
                 self.send(id, Command::Key(event));
                 self.shape_pane(id, true);
@@ -1605,7 +1879,43 @@ impl Program for Hotaru {
             Msg::PasteText(id, text) => self.send(id, Command::Paste(text)),
             Msg::Mouse(id, event) => self.send(id, Command::Mouse(event)),
             Msg::Wheel(id, event, lines) => self.send(id, Command::Wheel(event, lines)),
-            Msg::TerminalFocus(id, focused) => self.send(id, Command::Focus(focused)),
+            Msg::TerminalFocus(id, focused) => {
+                if focused {
+                    self.focused_pane = Some(id);
+                } else if self.focused_pane == Some(id) {
+                    self.focused_pane = None;
+                }
+                self.send(id, Command::Focus(focused));
+            }
+            Msg::Selected(id) => self.copy_to_primary(id),
+            Msg::PrimaryReady(token, data) => {
+                if token == self.primary_token {
+                    cx.set_prepared_primary(data);
+                }
+            }
+            Msg::PastePrimary(id) => {
+                let token = self.clipboard_request();
+                let read = cx.primary_read();
+                self.clipboard_read = Some(read.clone());
+                if let Some(worker) = &self.clipboard {
+                    worker.submit(Job::Paste { token, tab: id, read });
+                }
+            }
+            Msg::Clipboard(request) => self.program_clipboard(request, cx),
+            Msg::ClipboardCaptured(request, reply, preview) => {
+                // Settings may have changed while the read was captured.
+                match self.settings.clipboard_read {
+                    Access::Allow => self.send(request.pane, Command::Reply(reply)),
+                    Access::Ask => self.ask(request, Some(reply), &preview, cx),
+                    Access::Deny => {}
+                }
+            }
+            Msg::ClipboardAnswer(token, allowed) => {
+                let Some(question) = self.asking.take_if(|question| question.token == token) else { return };
+                self.answer(question.request, question.reply, allowed, cx);
+                self.focus_active(cx);
+            }
+            Msg::Notify(id, title, body) => self.notify(id, &title, &body, cx),
             Msg::Resize(id, cols, rows) => self.send(id, Command::Resize { cols, rows }),
             Msg::ResizePixels(id, cols, rows, width, height) => {
                 self.send(id, Command::ResizePixels { cols, rows, width, height })
@@ -2041,9 +2351,18 @@ impl Program for Hotaru {
 impl Drop for Hotaru {
     fn drop(&mut self) {
         self.clipboard_cancel.store(true, Ordering::Release);
+        self.primary_cancel.store(true, Ordering::Release);
         if let Some(read) = &self.clipboard_read {
             read.cancel();
         }
+    }
+}
+
+/// Put a program's write on the selection it named.
+fn publish(target: crate::selections::Target, data: PreparedClipboard, cx: &mut Cx<Msg>) {
+    match target {
+        crate::selections::Target::Clipboard => cx.set_prepared_clipboard(data),
+        crate::selections::Target::Primary => cx.set_prepared_primary(data),
     }
 }
 

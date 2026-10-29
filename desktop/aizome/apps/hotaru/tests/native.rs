@@ -8,6 +8,14 @@ use hotaru_core::Terminal;
 use hotaru_io::PtyCommand;
 use std::time::{Duration, Instant};
 
+/// Hotaru keeping panes whose program has ended, for tests that read what
+/// a finished command left on its screen.
+fn keeping(command: PtyCommand) -> Hotaru {
+    let mut app = Hotaru::new(command);
+    app.settings.wait_after_command = true;
+    app
+}
+
 fn settle_frame(h: &mut Harness<Hotaru>) {
     assert!(
         h.settle(Duration::from_secs(5), |app| app
@@ -98,7 +106,7 @@ fn osc8_gesture_consumes_both_mouse_edges_and_preserves_other_clicks() {
         .map(Into::into)
         .collect();
     command.env.push(("HOTARU_LINK_CHILD".into(), "1".into()));
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     h.advance(Duration::ZERO);
     assert!(
         h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("LINK-READY"))
@@ -159,6 +167,35 @@ fn osc8_mouse_child() {
     println!("LINK-INPUT-OK");
 }
 
+/// Wait until the pane shows its fonts and its grid holds still.
+fn settle_grid(h: &mut Harness<Hotaru>) {
+    settle_frame(h);
+    let grid = |h: &Harness<Hotaru>| h.program().active_pane().map(|pane| (pane.snapshot.cols, pane.snapshot.rows));
+    let until = Instant::now() + Duration::from_secs(5);
+    let (mut last, mut steady) = (grid(h), 0);
+    while steady < 6 && Instant::now() < until {
+        h.advance(Duration::from_millis(50));
+        h.settle(Duration::from_millis(20), |_| false);
+        let now = grid(h);
+        steady = if now == last { steady + 1 } else { 0 };
+        last = now;
+    }
+}
+
+/// Wait for `done`, letting the harness clock run: a search refresh after
+/// output waits on a timer, which `settle` alone never fires.
+fn advancing(h: &mut Harness<Hotaru>, done: impl Fn(&Hotaru) -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(5);
+    while !done(h.program()) {
+        if Instant::now() > until {
+            return false;
+        }
+        h.advance(Duration::from_millis(50));
+        h.settle(Duration::from_millis(10), &done);
+    }
+    true
+}
+
 fn settle_search(h: &mut Harness<Hotaru>, expected: &str) {
     let until = Instant::now() + Duration::from_secs(5);
     loop {
@@ -196,20 +233,20 @@ fn internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory()
 fn actor_accepts_local_cwd_without_overwriting_an_explicit_title() {
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec!["-c".into(), "printf '\\033]2;User title\\007\\033]7;file://localhost/tmp/a%%20b\\007'".into()];
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
     let pane = h.program().active_pane().unwrap();
     assert_eq!(pane.title, "User title");
     assert_eq!(pane.working_directory.as_deref(), Some(std::path::Path::new("/tmp/a b")));
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec!["-c".into(), "printf '\\033]7;file://remote/ignored\\007'".into()];
-    let mut remote = Harness::new(Hotaru::new(command));
+    let mut remote = Harness::new(keeping(command));
     assert!(remote.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
     assert!(remote.program().active_pane().unwrap().working_directory.is_none());
     let mut command = PtyCommand::new("/bin/sh");
     command.cwd = Some("/tmp".into());
     command.args = vec!["-c".into(), "printf '\\033]7;\\007'".into()];
-    let mut cleared = Harness::new(Hotaru::new(command));
+    let mut cleared = Harness::new(keeping(command));
     assert!(cleared.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
     assert!(cleared.program().active_pane().unwrap().working_directory.is_none());
 }
@@ -222,7 +259,7 @@ fn find_navigates_owned_history_and_wraps_in_both_directions() {
         "i=0; while [ $i -lt 120 ]; do printf 'Needle %03d\\n' \"$i\"; i=$((i + 1)); done; printf 'history-ready\\n'"
             .into(),
     ];
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
     h.send(Msg::Find);
     h.send(Msg::Search("needle".into()));
@@ -329,12 +366,16 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         .map(Into::into)
         .collect();
     command.env.push(("HOTARU_SEARCH_CHILD".into(), "1".into()));
-    let mut app = Hotaru::new(command);
+    let mut app = keeping(command);
     app.settings.scrollback = 60;
     let mut h = Harness::new(app);
     assert!(h.settle(Duration::from_secs(5), |app| {
         app.active_pane().unwrap().snapshot.plain_text().contains("ready-initial")
     }));
+    // Search once the grid has its final size. On a loaded machine the fonts
+    // can arrive after the output, and the resize they bring reflows, which
+    // rightly drops a selected match's anchor.
+    settle_grid(&mut h);
     h.send(Msg::Find);
     h.send(Msg::Search("Mark".into()));
     for _ in 0..20 {
@@ -345,7 +386,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
     for _ in 0..30 {
         h.send(Msg::SearchStep(false));
     }
-    assert!(h.settle(Duration::from_secs(3), |app| {
+    assert!(advancing(&mut h, |app| {
         app.search_selected()
             .is_some_and(|found| found.start.row < app.active_pane().unwrap().snapshot.position.history_rows)
     }));
@@ -360,6 +401,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         h.advance(Duration::from_millis(150));
         h.settle(Duration::from_millis(20), |_| false);
     }
+    assert!(advancing(&mut h, |app| app.search_selected().is_some()), "the match survives appended output");
     let pane = h.program().active_pane().unwrap();
     assert_eq!(pane.snapshot.position.origin + h.program().search_selected().unwrap().start.row as u64, absolute);
     h.send(Msg::Search("Mark".into()));
@@ -368,7 +410,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         h.settle(Duration::from_millis(20), |_| false);
     }
     h.send(Msg::SearchStep(true));
-    assert!(h.settle(Duration::from_secs(3), |app| app.search_selected().is_some_and(|found| found.start.row == 0)));
+    assert!(advancing(&mut h, |app| app.search_selected().is_some_and(|found| found.start.row == 0)));
     h.send(Msg::Input(id, b"prune\n".to_vec()));
     assert!(h.settle(Duration::from_secs(3), |app| {
         app.active_pane().unwrap().snapshot.plain_text().contains("ready-prune")
@@ -379,7 +421,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
     }
     assert!(h.program().search_selected().is_none(), "an evicted match cannot remain selected");
     h.send(Msg::SearchStep(false));
-    assert!(h.settle(Duration::from_secs(3), |app| app.search_selected().is_some()));
+    assert!(advancing(&mut h, |app| app.search_selected().is_some()));
     h.send(Msg::Input(id, b"alternate\n".to_vec()));
     assert!(h.settle(Duration::from_secs(3), |app| app.active_pane().unwrap().snapshot.modes.alternate_screen));
     settle_search(&mut h, "1 of 1");
@@ -399,7 +441,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         h.settle(Duration::from_millis(20), |_| false);
     }
     h.send(Msg::SearchStep(false));
-    assert!(h.settle(Duration::from_secs(3), |app| app.search_selected().is_some()));
+    assert!(advancing(&mut h, |app| app.search_selected().is_some()));
 }
 
 #[test]
@@ -657,6 +699,10 @@ fn shortcuts_are_recorded_refused_removed_and_restored() {
     h.send(Msg::RestoredShortcuts);
     assert!(h.program().settings.keybindings.is_empty());
     assert_eq!(h.program().bindings().bound(close), Some(Action::ClosePane));
+    // The defaults are saved too, before the folder they're saved in goes.
+    assert!(
+        h.settle(Duration::from_secs(3), |_| Settings::load(&path).is_ok_and(|saved| saved.keybindings.is_empty()))
+    );
     drop(h);
     std::fs::remove_dir_all(directory).unwrap();
 }
@@ -826,7 +872,7 @@ fn semantic_underlines_use_their_own_color_and_overline_is_visible() {
 fn pty_worker_publishes_final_output_before_exit() {
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec!["-c".into(), r"printf '\033[32mPTY ready\033[0m\n'".into()];
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().is_some_and(|t| t.ended)));
     assert!(h.program().active_pane().unwrap().snapshot.plain_text().contains("PTY ready"));
     h.send(Msg::CopyAll);
@@ -842,7 +888,7 @@ fn pty_worker_publishes_final_output_before_exit() {
 fn native_sessions_choose_unicode_grapheme_width_before_output() {
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec!["-c".into(), "printf '👍🏽👩\u{200d}💻🇯🇵M'".into()];
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
     let snapshot = &h.program().active_pane().unwrap().snapshot;
     assert!(snapshot.modes.grapheme_cluster);
@@ -862,7 +908,7 @@ fn pty_worker_encodes_keyboard_and_mouse_using_negotiated_modes() {
         .map(Into::into)
         .collect();
     command.env.push(("HOTARU_INPUT_CHILD".into(), "1".into()));
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| {
         app.active_pane().is_some_and(|pane| pane.snapshot.modes.kitty_flags.0 == 31)
     }));
@@ -932,7 +978,7 @@ fn reply_flood_resumes_without_losing_responses() {
         .map(Into::into)
         .collect();
     command.env.push(("HOTARU_REPLY_CHILD".into(), "1".into()));
-    let mut h = Harness::new(Hotaru::new(command));
+    let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(10), |app| app.active_pane().is_some_and(|t| t.ended)));
     let text = h.program().active_pane().unwrap().snapshot.plain_text();
     assert!(text.contains("REPLY-FLOOD-OK"), "{text}");
@@ -1045,4 +1091,246 @@ fn html_only_copy_has_no_stale_plain_text_fallback() {
     assert!(data.data("text/html").is_some());
     assert!(data.data("text/plain").is_none());
     assert!(h.platform.clipboard.is_none());
+}
+
+/// Pump workers until `done` holds of the harness, for up to five seconds.
+fn pump(h: &mut Harness<Hotaru>, done: impl Fn(&Harness<Hotaru>) -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(5);
+    while !done(h) {
+        if Instant::now() > until {
+            return false;
+        }
+        h.advance(Duration::from_millis(5));
+        h.settle(Duration::from_millis(5), |_| false);
+    }
+    true
+}
+
+fn shell(script: &str) -> PtyCommand {
+    let mut command = PtyCommand::new("/bin/sh");
+    command.args = vec!["-c".into(), script.into()];
+    command
+}
+
+#[test]
+fn an_ended_shell_closes_its_pane_then_its_tab_then_the_window() {
+    use aizome_hotaru::settings::Action;
+    let mut h = Harness::new(Hotaru::new(shell("read line")));
+    let first = h.program().active_pane().unwrap().id;
+    h.send(Msg::Split(Axis::Right));
+    let second = h.program().active_pane().unwrap().id;
+    h.send(Msg::Action(Action::NewTab));
+    let third = h.program().active_pane().unwrap().id;
+    // A pane in the tab behind ends: the tab in front keeps the keyboard.
+    h.send(Msg::Input(first, b"\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.panes.len() == 2));
+    assert_eq!(h.program().active_pane().unwrap().id, third);
+    assert_eq!(h.program().tabs[0].tree.leaves(), [second]);
+    // The tab in front loses its last pane: the other comes forward.
+    h.send(Msg::Input(third, b"\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.tabs.len() == 1));
+    assert_eq!(h.program().active_pane().unwrap().id, second);
+    // The last pane ends, and the window goes with it.
+    h.send(Msg::Input(second, b"\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.tabs.is_empty()));
+    assert!(h.windows().is_empty());
+}
+
+#[test]
+fn a_program_failing_as_it_starts_keeps_its_pane_until_a_key() {
+    // The PTY worker calls a non-zero exit within 250 ms abnormal. A loaded
+    // machine can't promise a real one that soon, so this is its report.
+    let mut h = Harness::new(Hotaru::preview());
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Exited(id, "exit status: 3".into(), true));
+    let pane = h.program().active_pane().unwrap();
+    assert!(pane.ended && pane.status.contains("failed as it started"), "{}", pane.status);
+    // Modifiers alone leave it be.
+    let shift = hotaru_core::input::KeyEvent::new(hotaru_core::input::Key::Modifier(
+        hotaru_core::input::ModifierKey::ShiftLeft,
+    ));
+    h.send(Msg::Key(id, Arc::new(shift)));
+    assert_eq!(h.program().panes.len(), 1);
+    h.send(Msg::Key(id, Arc::new(hotaru_core::input::KeyEvent::new(hotaru_core::input::Key::Character('q')))));
+    assert!(h.program().tabs.is_empty());
+    assert!(h.windows().is_empty());
+}
+
+#[test]
+fn programs_write_the_clipboard_and_primary_selection_and_asking_waits_for_an_answer() {
+    use aizome_hotaru::settings::Access;
+    let script = "printf '\\033]52;c;aGVsbG8=\\007\\033]52;p;d29ybGQ\\007'; read line";
+    let mut h = Harness::new(Hotaru::new(shell(script)));
+    assert!(pump(&mut h, |h| h.platform.clipboard.is_some() && h.platform.primary.is_some()));
+    assert_eq!(h.platform.clipboard.as_deref(), Some("hello"));
+    assert_eq!(h.platform.primary.as_deref(), Some("world"));
+    assert!(!h.program().asking_about_clipboard());
+
+    let mut app = Hotaru::new(shell("printf '\\033]52;c;cmVwbGFjZWQ=\\007'; read line"));
+    app.settings.clipboard_write = Access::Ask;
+    let mut h = Harness::new(app);
+    h.platform.clipboard = Some("mine".into());
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    let win = h.window();
+    let texts = h.texts(win).join("\n");
+    assert!(texts.contains("replace the clipboard?") && texts.contains("“replaced”"), "{texts}");
+    assert_eq!(h.platform.clipboard.as_deref(), Some("mine"), "nothing changes before the answer");
+    assert!(h.click_text(win, "Replace"));
+    assert!(!h.program().asking_about_clipboard());
+    assert_eq!(h.platform.clipboard.as_deref(), Some("replaced"));
+
+    let mut app = Hotaru::new(shell("printf '\\033]52;c;bm8=\\007'; read line"));
+    app.settings.clipboard_write = Access::Deny;
+    let mut h = Harness::new(app);
+    h.platform.clipboard = Some("mine".into());
+    for _ in 0..40 {
+        h.advance(Duration::from_millis(5));
+        h.settle(Duration::from_millis(5), |_| false);
+    }
+    assert!(!h.program().asking_about_clipboard());
+    assert_eq!(h.platform.clipboard.as_deref(), Some("mine"));
+}
+
+fn osc52_reader(selection: &str) -> Hotaru {
+    let mut command = PtyCommand::new(std::env::current_exe().unwrap());
+    command.args = ["--ignored", "--exact", "osc52_read_child", "--nocapture", "--test-threads=1"]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    command.env.push(("HOTARU_OSC52_CHILD".into(), selection.into()));
+    keeping(command)
+}
+
+/// Tell the reader to ask, once the clipboard is set up.
+fn go(h: &mut Harness<Hotaru>) {
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Input(id, b"g".to_vec()));
+}
+
+fn reply_shown(app: &Hotaru) -> Option<String> {
+    let text = app.active_pane()?.snapshot.plain_text();
+    let line = text.lines().find(|line| line.starts_with("REPLY "))?;
+    Some(line["REPLY ".len()..].to_owned())
+}
+
+#[test]
+fn reads_are_asked_about_showing_what_they_would_get_and_answered_exactly() {
+    // Asked, by default, and allowed: the program gets the clipboard's bytes.
+    let mut h = Harness::new(osc52_reader("c"));
+    h.platform.clipboard = Some("copied".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    let win = h.window();
+    let texts = h.texts(win).join("\n");
+    assert!(
+        texts.contains("read the clipboard?") && texts.contains("6 bytes") && texts.contains("“copied”"),
+        "{texts}"
+    );
+    // Return doesn't answer a question that may come while you type.
+    h.named(win, aizome_kit::sidestep_ui::NamedKey::Enter, aizome_kit::sidestep_ui::Modifiers::NONE);
+    assert!(h.program().asking_about_clipboard());
+    assert!(h.click_text(win, "Allow"));
+    assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
+    assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;c;Y29waWVk\x1b\\");
+
+    // Refused: an empty answer, so the program doesn't wait forever.
+    let mut h = Harness::new(osc52_reader("c"));
+    h.platform.clipboard = Some("secret".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    let win = h.window();
+    assert!(h.click_text(win, "Don’t Allow"));
+    assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
+    assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;c;\x1b\\");
+
+    // Allowed outright, from the primary selection, answering under `p`.
+    let mut app = osc52_reader("p");
+    app.settings.clipboard_read = aizome_hotaru::settings::Access::Allow;
+    let mut h = Harness::new(app);
+    h.platform.primary = Some("picked".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| reply_shown(app).is_some()));
+    assert!(!h.program().asking_about_clipboard());
+    assert_eq!(reply_shown(h.program()).unwrap(), r"\x1b]52;p;cGlja2Vk\x1b\\");
+}
+
+#[test]
+#[ignore]
+fn osc52_read_child() {
+    let Some(selection) = std::env::var_os("HOTARU_OSC52_CHILD") else { return };
+    use std::io::{Read, Write};
+    let mut attributes = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: this isolated subprocess owns its PTY; termios is initialized
+    // before access and each libc call receives a live, correctly sized value.
+    unsafe {
+        assert_eq!(libc::tcgetattr(0, attributes.as_mut_ptr()), 0);
+        let mut attributes = attributes.assume_init();
+        libc::cfmakeraw(&mut attributes);
+        assert_eq!(libc::tcsetattr(0, libc::TCSANOW, &attributes), 0);
+    }
+    let mut out = std::io::stdout();
+    // Ask once the test has set up the clipboard and says so.
+    std::io::stdin().read_exact(&mut [0]).unwrap();
+    write!(out, "\x1b]52;{};?\x07", selection.to_str().unwrap()).unwrap();
+    out.flush().unwrap();
+    let mut reply = Vec::new();
+    while !reply.ends_with(b"\x1b\\") && reply.len() < 1 << 20 {
+        let mut byte = [0];
+        std::io::stdin().read_exact(&mut byte).unwrap();
+        reply.push(byte[0]);
+    }
+    write!(out, "\r\nREPLY {}\r\n", reply.escape_ascii()).unwrap();
+    out.flush().unwrap();
+}
+
+#[test]
+fn selecting_words_and_lines_fills_the_primary_selection_and_a_middle_click_pastes_it() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::PointerButton;
+    let mut h = Harness::new(Hotaru::new(PtyCommand::new("cat")));
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Input(id, b"hello world\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("hello")));
+    settle_frame(&mut h);
+    let win = h.window();
+    let pane = h.program().active_pane().unwrap();
+    let metrics = pane.font_metrics().unwrap();
+    let origin = h.find_id(win, &format!("terminal-{id}")).unwrap().origin() + Vec2::new(10., 10.);
+    let at = |col: f64| origin + Vec2::new(col * metrics.cell_width(), metrics.cell_height() * 0.4);
+    // A double click takes the word.
+    h.press(win, at(8.5), PointerButton::Left, 2);
+    h.release(win, at(8.5), PointerButton::Left);
+    assert!(pump(&mut h, |h| h.platform.primary.is_some()));
+    assert_eq!(h.platform.primary.as_deref(), Some("world"));
+    assert!(h.platform.clipboard.is_none(), "selecting leaves the clipboard alone");
+    // A triple click, the line.
+    h.press(win, at(2.5), PointerButton::Left, 3);
+    h.release(win, at(2.5), PointerButton::Left);
+    assert!(pump(&mut h, |h| h.platform.primary.as_deref() == Some("hello world")));
+    // A middle click pastes it.
+    h.press(win, at(2.5), PointerButton::Middle, 1);
+    h.release(win, at(2.5), PointerButton::Middle);
+    assert!(h.settle(Duration::from_secs(5), |app| {
+        app.active_pane().unwrap().snapshot.plain_text().matches("hello world").count() == 3
+    }));
+}
+
+#[test]
+fn a_right_click_opens_the_pane_menu_and_dropped_files_paste_as_quoted_paths() {
+    use aizome_kit::sidestep_ui::PointerButton;
+    let mut h = Harness::new(Hotaru::new(PtyCommand::new("cat")));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().font_metrics().is_some()));
+    settle_frame(&mut h);
+    let win = h.window();
+    let id = h.program().active_pane().unwrap().id;
+    let centre = h.find_id(win, &format!("terminal-{id}")).unwrap().center();
+    assert!(h.popups(win).is_empty());
+    h.press(win, centre, PointerButton::Right, 1);
+    h.release(win, centre, PointerButton::Right);
+    assert_eq!(h.popups(win).len(), 1);
+    h.named(win, aizome_kit::sidestep_ui::NamedKey::Escape, aizome_kit::sidestep_ui::Modifiers::NONE);
+    assert!(h.drop(win, centre, vec!["file:///tmp/two%20words.txt".into(), "file:///etc/hosts".into()], None));
+    assert!(h.settle(Duration::from_secs(5), |app| {
+        app.active_pane().unwrap().snapshot.plain_text().contains("'/tmp/two words.txt' /etc/hosts")
+    }));
 }

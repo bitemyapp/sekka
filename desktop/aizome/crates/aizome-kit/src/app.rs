@@ -576,6 +576,14 @@ impl Platform for SidestepPlatform<'_> {
         self.sx.set_prepared_clipboard(data);
     }
 
+    fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
+        self.sx.primary_read()
+    }
+
+    fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.sx.set_prepared_primary(data);
+    }
+
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
         let tid = if repeat { self.sx.set_repeating_timer(after) } else { self.sx.set_timer(after) };
         self.maps.next_token += 1;

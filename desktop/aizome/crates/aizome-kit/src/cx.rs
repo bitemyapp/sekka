@@ -266,6 +266,18 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         self.platform.set_prepared_clipboard(data);
     }
 
+    /// Snapshot the primary selection (what was last selected anywhere, which
+    /// a middle click pastes) for a worker, as `clipboard_read` does.
+    pub fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
+        self.platform.primary_read()
+    }
+
+    /// Make worker-prepared contents the primary selection. Where the
+    /// compositor has none, nothing happens.
+    pub fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.platform.set_prepared_primary(data);
+    }
+
     /// Open a link or a file in its app (xdg-open).
     pub fn open_url(&mut self, url: &str) {
         if let Err(error) = self.platform.open_url(

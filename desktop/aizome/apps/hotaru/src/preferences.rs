@@ -19,7 +19,7 @@ use aizome_kit::{column, row};
 use hotaru_core::{Rgb, TerminalColors};
 
 use crate::app::{Hotaru, Msg};
-use crate::settings::{self, Action, CopyFormat, CursorStyle};
+use crate::settings::{self, Access, Action, CopyFormat, CursorStyle};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Page {
@@ -82,6 +82,7 @@ pub const WEIGHTS: [(u16, &str); 5] =
     [(300, "Light"), (400, "Regular"), (500, "Medium"), (600, "Semibold"), (700, "Bold")];
 const CURSORS: [(CursorStyle, &str); 3] =
     [(CursorStyle::Block, "Block"), (CursorStyle::Bar, "Bar"), (CursorStyle::Underline, "Underline")];
+const ACCESS: [(Access, &str); 3] = [(Access::Ask, "Ask"), (Access::Allow, "Allow"), (Access::Deny, "Never")];
 
 pub fn view(app: &Hotaru) -> Element<Msg> {
     let mut side: Vec<Element<Msg>> = vec![aizome_kit::caption("Hotaru")];
@@ -169,6 +170,8 @@ fn general(app: &Hotaru) -> Vec<Element<Msg>> {
     });
     let custom = s.scrollback;
     let copy = COPY_FORMATS.iter().position(|(format, _)| *format == s.copy_format);
+    let read = ACCESS.iter().position(|(access, _)| *access == s.clipboard_read);
+    let write = ACCESS.iter().position(|(access, _)| *access == s.clipboard_write);
     vec![
         form_section(
             "New tabs and splits",
@@ -189,6 +192,23 @@ fn general(app: &Hotaru) -> Vec<Element<Msg>> {
             ],
         ),
         form_section(
+            "Programs",
+            vec![
+                form_row("Keep ended panes", toggle(s.wait_after_command).on_toggle(Msg::SetWaitAfterCommand))
+                    .description(
+                        "When the shell or program in a pane ends, its pane closes, then its tab and window with \
+                         the last. Keep them to read what they said last; a key closes them.",
+                    )
+                    .into(),
+                form_row("Notifications", toggle(s.desktop_notifications).on_toggle(Msg::SetNotifications))
+                    .description(
+                        "Programs can tell you when something finishes (OSC 9 and 777) while you're in another \
+                         tab or window.",
+                    )
+                    .into(),
+            ],
+        ),
+        form_section(
             "Clipboard",
             vec![
                 form_row(
@@ -198,9 +218,29 @@ fn general(app: &Hotaru) -> Vec<Element<Msg>> {
                 )
                 .description("Plain text pastes anywhere; HTML keeps colours in documents and mail.")
                 .into(),
-                form_row("Access by programs", text("Off").role(Role::Text3))
-                    .description("Programs can't read or set the clipboard with OSC 52; you copy and paste.")
+                form_row("Copy on select", toggle(s.copy_on_select).on_toggle(Msg::SetCopyOnSelect))
+                    .description(
+                        "What you select becomes the primary selection, which a middle click pastes, here and in \
+                         other programs.",
+                    )
                     .into(),
+                form_row(
+                    "Programs reading it",
+                    segmented(ACCESS.map(|(_, name)| name), read)
+                        .on_select(|i| Msg::SetClipboardRead(ACCESS[i.min(2)].0)),
+                )
+                .description(
+                    "Editors and tmux, even over SSH, can ask for the clipboard (OSC 52). Hotaru shows you what \
+                     they'd get first.",
+                )
+                .into(),
+                form_row(
+                    "Programs writing it",
+                    segmented(ACCESS.map(|(_, name)| name), write)
+                        .on_select(|i| Msg::SetClipboardWrite(ACCESS[i.min(2)].0)),
+                )
+                .description("They copy for you that way too, into the clipboard or the primary selection.")
+                .into(),
             ],
         ),
         form_section(

@@ -219,8 +219,8 @@ fn osc_clipboard_is_event_only_and_title_is_bounded() {
         t.take_events(),
         vec![
             TerminalEvent::Clipboard {
-                selection: "c".into(),
-                data: "aGVsbG8=".into()
+                selection: b'c',
+                data: b"aGVsbG8=".to_vec()
             },
             TerminalEvent::Title("Hotaru".into())
         ]

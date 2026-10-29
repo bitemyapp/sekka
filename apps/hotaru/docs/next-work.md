@@ -43,8 +43,9 @@ source. Check the combined Aizome package and applicable repository checks too.
 The checkpoint passed private Sway tests; it has not newly qualified an Aizome
 VM, installed ISO or physical desktop. Test the packaged menu entry and command,
 fonts/resources, scaling, shell startup and terminfo, tabs/splits, the Settings
-window and shortcut recording (`tests/wayland/settings.py`, so far in private
-Sway only), search and link activation in Aizome. Exercise large
+window and shortcut recording (`tests/wayland/settings.py`), programs' clipboard
+use, the primary selection and panes ending (`tests/wayland/selections.py`),
+both so far in private Sway only, search and link activation in Aizome. Exercise large
 plain/HTML copy and paste
 while output and UI input continue, including stalled readers, cancellation,
 pane closure and session shutdown. Keep the existing default terminal until
@@ -56,35 +57,34 @@ artifacts and runtime roots in the original worktree; it is not a portable
 installation supplied by a fresh clone. Remote shells require Hotaru terminfo
 or the documented `TERM=xterm-256color ssh host` fallback.
 
-## 3. Finish native OSC 52 without weakening clipboard responsiveness
+## 3. Qualify OSC 52 under stress
 
-Ordinary user copy/paste is enabled and qualified. OSC 52 remains disabled in
-the shipped application. The isolated prototype contains tested codecs and
-ordered core events, but no completed native permission/transport integration.
-Use the committed [actual Ghostty reference observations](osc52-reference.md)
-to distinguish compatibility from deliberate corrections.
+Updated 2026-10-29. OSC 52 is on in the application: writes allowed and reads
+asked by default, with Allow, Ask and Never for each in Settings. The core takes
+the prototype's raw one-byte selectors, byte payloads, sentinel-inclusive
+capture bound and ordered prefix (64 requests and 8 MiB per bounded feed, which
+the PTY worker drains after each). `feed_until_event` was not brought over:
+nothing in the application needs it while that prefix holds. The PTY worker
+decodes writes (padding optional, trailing bits accepted, as Ghostty's) and
+prepares their exact bytes; each pane may have 16 requests holding 32 MiB in
+waiting, counted by tickets that free their place when a request is answered or
+dropped. Reads are captured on the selection worker before anyone is asked,
+answer with at most 6 MiB, and go to the PTY as one reserved write. Approval is
+bound to the request it shows; the preview is display-only. The toolkit gained
+the primary selection (`zwp_primary_selection_device_v1`) and raw-byte offers
+and reads in `upstream/sidestep-primary.patch`; `p` and `s` read and write the
+primary selection, a deliberate difference from Ghostty, which reads the
+clipboard for all three. Unit, harness and private-Sway tests
+(`tests/wayland/selections.py`) cover exact bytes with NUL and invalid UTF-8,
+both selections, the policies, asked reads allowed and refused, refusal past a
+pane's bounds and tag routing. Use the committed [actual Ghostty reference
+observations](osc52-reference.md) to tell compatibility from correction.
 
-- Reconcile the prototype plan first: its later coalescing checklist predates
-  the ordered `feed_until_event` API described at its beginning.
-- Bound total queued ownership, request counts and retained bytes. Preserve
-  request ordering, raw selection tags and original payloads; reserve complete
-  PTY responses so congestion cannot leave a partial escape sequence.
-- Implement read/write allow, ask and deny policies, with read-ask/write-allow
-  defaults. Bind approval to the original pane, request and bytes. A bounded
-  lossy preview is display-only and must not replace the authorized payload.
-- Capture the read offer before replacement destroys it; approved reads must
-  still return the captured bytes after external clipboard changes. Enforce
-  caps before cloning a potentially large cached local clipboard payload.
-- Keep pipe I/O and conversion on workers. Implement raw-byte and PRIMARY
-  plumbing: writes to `c` use the clipboard, `s`/`p` use PRIMARY; reference reads
-  use the standard clipboard and retain the requested response tag. Document
-  normalization of unsupported tags from the reference evidence.
-
-**Gate:** test exact bytes, policy outcomes, changing offers during approval,
-request floods, stalled peers, bounded retained memory, output/input progress,
-cancellation and teardown in the real native application. Preserve invalid
-UTF-8 and NUL bytes through approval and reply; this intentionally fixes the
-reference GTK conversion behavior. Codec/core tests alone do not enable OSC 52.
+**Gate:** test what remains in the real application: offers changing while a
+question is up, request floods, a stalled or vanished selection owner during a
+read, retained memory under floods, output and input progress meanwhile, and
+pane closure and shutdown with reads pending. Kitty's clipboard protocol
+(OSC 5522) remains a separate task.
 
 ## 4. Integrate horizontal margins and validate the C0 fast path
 
@@ -160,9 +160,9 @@ the tracked application and evidence available to a fresh clone.
 | Work | External source / handoff |
 | --- | --- |
 | Margins and C0 | `/home/callen/work/hotaru-margin-controls-20261028`; `/home/callen/work/hotaru-margin-attribution-20261028/README.md` |
-| OSC 52 | `/home/callen/work/hotaru-osc52-native-isolated/artifacts/PLAN.md` |
+| OSC 52 | Integrated (section 3); its codec and comparisons remain in `/home/callen/work/hotaru-osc52-native-isolated/artifacts/PLAN.md` |
 | GPU | `/home/callen/work/hotaru-gpu-native-isolated/artifacts/GPU-HANDOFF.md` |
-| PRIMARY API | `/home/callen/work/hotaru-primary-clipboard-isolated` is a copied baseline only; implementation was not started |
+| PRIMARY API | Superseded: `upstream/sidestep-primary.patch` implements it in this branch; `/home/callen/work/hotaru-primary-clipboard-isolated` was a copied baseline only |
 
 Frozen archive SHA-256 values, checked locally when writing this handoff:
 

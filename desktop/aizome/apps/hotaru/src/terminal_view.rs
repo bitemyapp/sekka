@@ -143,11 +143,23 @@ pub fn terminal_view(
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
     automatic: Option<crate::links::Link>,
+    menu: Menu<Msg>,
 ) -> Element<Msg> {
     let snapshot = rendered.as_ref().map_or(snapshot, |frame| frame.snapshot.clone());
     let (font_size, font_weight) = font;
     Element::new(
-        TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered, input_activity, automatic },
+        TerminalView {
+            id,
+            snapshot,
+            font_size,
+            font_weight,
+            selection,
+            bindings,
+            rendered,
+            input_activity,
+            automatic,
+            menu,
+        },
         vec![],
     )
 }
@@ -162,6 +174,54 @@ struct TerminalView {
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
     automatic: Option<crate::links::Link>,
+    /// What a right click shows, when the program isn't taking the mouse.
+    menu: Menu<Msg>,
+}
+
+/// Ghostty's word boundaries (`selection-word-chars`), beside spaces.
+const WORD_BOUNDARIES: &str = "\t'\"│`|:;,()[]{}<>$";
+
+/// The word, run of spaces or boundary character at `cell`, as a double
+/// click selects it.
+fn word_at(snapshot: &Snapshot, cell: CellPoint) -> Selection {
+    let row = cell.row.min(snapshot.lines.len().saturating_sub(1));
+    let cells = snapshot.lines.get(row).map_or(&[][..], |line| line.cells());
+    let cols = cells.len().min(snapshot.cols);
+    if cols == 0 {
+        return Selection { anchor: CellPoint { row, col: 0 }, end: CellPoint { row, col: 0 } };
+    }
+    let col = cell.col.min(cols - 1);
+    // A wide character's second cell belongs with its first.
+    let class = |i: usize| match cells[i].character() {
+        _ if cells[i].width() == 0 => 2,
+        c if c.is_whitespace() => 0,
+        c if WORD_BOUNDARIES.contains(c) => 1,
+        _ => 2,
+    };
+    let at = class(col);
+    let (mut start, mut end) = (col, col + 1);
+    if at != 1 {
+        while start > 0 && class(start - 1) == at {
+            start -= 1;
+        }
+        while end < cols && class(end) == at {
+            end += 1;
+        }
+    }
+    Selection { anchor: CellPoint { row, col: start }, end: CellPoint { row, col: end } }
+}
+
+/// The whole line at `row`, across soft wraps, as a triple click selects it.
+fn line_at(snapshot: &Snapshot, row: usize) -> Selection {
+    let last = snapshot.lines.len().saturating_sub(1);
+    let (mut start, mut end) = (row.min(last), row.min(last));
+    while start > 0 && snapshot.lines[start - 1].wrapped() {
+        start -= 1;
+    }
+    while end < last && snapshot.lines[end].wrapped() {
+        end += 1;
+    }
+    Selection { anchor: CellPoint { row: start, col: 0 }, end: CellPoint { row: end, col: snapshot.cols } }
 }
 
 #[derive(Default)]
@@ -458,6 +518,14 @@ impl TerminalView {
                 .min(self.snapshot.rows.saturating_sub(1)),
             col: (((pos.x - state.padding).max(0.0) / state.cell_width.max(1.0)).round() as usize)
                 .min(self.snapshot.cols),
+        }
+    }
+    /// The cell under `pos`, where `point` is the edge between cells nearest it.
+    fn cell(&self, pos: Point, state: &ViewState) -> CellPoint {
+        CellPoint {
+            col: (((pos.x - state.padding).max(0.0) / state.cell_width.max(1.0)) as usize)
+                .min(self.snapshot.cols.saturating_sub(1)),
+            ..self.point(pos, state)
         }
     }
     fn blink_eligible(&self, focused: bool, state: &ViewState) -> bool {
@@ -1052,8 +1120,21 @@ impl Widget for TerminalView {
                 self.reset_blink(cx);
                 cx.invalidate();
             }
-            Event::PointerDown { pos, button, mods, .. } => {
+            Event::PointerDown { pos, button, clicks, mods } => {
                 self.hover(cx, Some(*pos), mods.super_key());
+                // The program has the mouse while it tracks it; Shift takes
+                // it back for the menu, the primary selection and selecting.
+                let ours = mods.shift() || self.snapshot.modes.mouse_tracking == vt::MouseTracking::None;
+                if ours && matches!(button, PointerButton::Right | PointerButton::Middle) {
+                    cx.request_focus();
+                    emit(cx, Msg::FocusPane(self.id));
+                    if *button == PointerButton::Right {
+                        cx.open_context_menu(self.menu.spec().clone(), *pos);
+                    } else {
+                        emit(cx, Msg::PastePrimary(self.id));
+                    }
+                    return Status::Handled;
+                }
                 if *button == PointerButton::Left
                     && mods.super_key()
                     && let Some(link) = cx.state::<ViewState>().hovered.clone()
@@ -1075,9 +1156,14 @@ impl Widget for TerminalView {
                     st.buttons.push(button);
                 }
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Press, mouse_button);
-                let select = *button == PointerButton::Left
-                    && (mods.shift() || self.snapshot.modes.mouse_tracking == vt::MouseTracking::None);
-                if select {
+                let select = *button == PointerButton::Left && ours;
+                // A double click takes the word, a triple click the line.
+                let picked = match clicks {
+                    2 if select => Some(word_at(&self.snapshot, self.cell(*pos, st))),
+                    3.. if select => Some(line_at(&self.snapshot, p.row)),
+                    _ => None,
+                };
+                if select && picked.is_none() {
                     st.drag = Some(p);
                 }
                 cx.request_focus();
@@ -1086,7 +1172,10 @@ impl Widget for TerminalView {
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
-                if select {
+                if let Some(selection) = picked {
+                    emit(cx, Msg::Select(self.id, selection));
+                    emit(cx, Msg::Selected(self.id));
+                } else if select {
                     emit(cx, Msg::Select(self.id, Selection { anchor: p, end: p }));
                 }
             }
@@ -1121,10 +1210,13 @@ impl Widget for TerminalView {
                 let st = cx.state::<ViewState>();
                 let button = input::mouse_button(*button);
                 st.buttons.retain(|held| Some(*held) != button);
-                st.drag = None;
+                let dragged = st.drag.take().is_some();
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Release, button);
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
+                }
+                if dragged {
+                    emit(cx, Msg::Selected(self.id));
                 }
                 cx.release_pointer();
             }
@@ -1170,6 +1262,11 @@ impl Widget for TerminalView {
                     }
                 }
                 emit(cx, Msg::TerminalFocus(self.id, *focused));
+            }
+            // Files and text dropped here paste; say so while they're over it.
+            Event::DragOver { urls, has_text, .. } if !urls.is_empty() || *has_text => {}
+            Event::Drop { urls, .. } if !urls.is_empty() => {
+                emit(cx, Msg::PasteText(self.id, Arc::from(crate::selections::dropped(urls))));
             }
             Event::Drop { text: Some(text), .. } => {
                 if text.len() > 32 * 1024 * 1024 - 12 {
@@ -1596,6 +1693,7 @@ mod sprite_paint_tests {
                 Some(self.frame.clone()),
                 0,
                 None,
+                Menu::new("Terminal"),
             )
             .id("grid")
         }

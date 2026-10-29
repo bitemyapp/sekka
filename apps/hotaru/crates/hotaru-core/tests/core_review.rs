@@ -122,28 +122,30 @@ fn osc_palette_stops_at_invalid_pair_and_ignores_empty_fields() {
 }
 
 #[test]
-fn clipboard_osc_uses_separate_eight_mebibyte_body_limit() {
+fn clipboard_osc_cap_includes_selector_delimiter_and_reference_sentinel() {
     const LIMIT: usize = 8 * 1024 * 1024;
-    for extra in [0, 1] {
-        let mut terminal = Terminal::new(80, 24, 0);
-        // The c/p/s selection selector and its delimiter occupy four bytes of
-        // the body; the remainder is syntactically valid base64 at the boundary.
-        let mut bytes = b"\x1b]52;cps;".to_vec();
-        bytes.extend(std::iter::repeat_n(b'A', LIMIT - 4 + extra));
-        bytes.extend_from_slice(b"\x07x");
-        for chunk in bytes.chunks(65536) {
-            terminal.feed(chunk);
+    for selector in [b"c;".as_slice(), b";"] {
+        for extra in [0, 1] {
+            let mut terminal = Terminal::new(80, 24, 0);
+            let length = LIMIT - selector.len() - 1 + extra;
+            let mut bytes = b"\x1b]52;".to_vec();
+            bytes.extend_from_slice(selector);
+            bytes.extend(std::iter::repeat_n(b'A', length));
+            bytes.extend_from_slice(b"\x07x");
+            for chunk in bytes.chunks(65536) {
+                terminal.feed(chunk);
+            }
+            let events = terminal.take_events();
+            if extra == 0 {
+                assert!(
+                    matches!(&events[..], [TerminalEvent::Clipboard { selection: b'c', data }]
+                    if data.len() == length)
+                );
+            } else {
+                assert!(events.is_empty());
+            }
+            assert_eq!(terminal.snapshot().lines[0].cells()[0].character(), 'x');
         }
-        let events = terminal.take_events();
-        if extra == 0 {
-            assert!(
-                matches!(&events[..], [TerminalEvent::Clipboard { selection, data }]
-                if selection == "cps" && data.len() == LIMIT - 4)
-            );
-        } else {
-            assert!(events.is_empty());
-        }
-        assert_eq!(terminal.snapshot().lines[0].cells()[0].character(), 'x');
     }
 }
 

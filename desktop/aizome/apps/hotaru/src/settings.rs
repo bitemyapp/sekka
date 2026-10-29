@@ -67,6 +67,16 @@ impl CursorStyle {
     }
 }
 
+/// What a program gets when it reads or writes the clipboard itself (OSC 52),
+/// as Ghostty's `clipboard-read` and `clipboard-write`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Access {
+    Allow,
+    Ask,
+    Deny,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
@@ -229,6 +239,19 @@ pub struct Settings {
     pub copy_format: CopyFormat,
     /// Applies only to future default-shell panes; explicit commands bypass it.
     pub shell_integration: bool,
+    /// Programs reading the clipboard (OSC 52); asked by default.
+    pub clipboard_read: Access,
+    /// Programs writing the clipboard (OSC 52); allowed by default.
+    pub clipboard_write: Access,
+    /// A finished selection also becomes the primary selection, which a
+    /// middle click pastes, as other Linux programs do.
+    pub copy_on_select: bool,
+    /// Programs' notifications (OSC 9 and OSC 777) reach the desktop while
+    /// their pane isn't the one in front.
+    pub desktop_notifications: bool,
+    /// Keep a pane whose program has ended, until a key closes it. Otherwise
+    /// it closes, its tab with its last pane, and the window with its last tab.
+    pub wait_after_command: bool,
     pub keybindings: BTreeMap<String, Action>,
 }
 
@@ -247,6 +270,11 @@ impl Default for Settings {
             scrollback: 10_000,
             copy_format: CopyFormat::Mixed,
             shell_integration: true,
+            clipboard_read: Access::Ask,
+            clipboard_write: Access::Allow,
+            copy_on_select: true,
+            desktop_notifications: true,
+            wait_after_command: false,
             keybindings: BTreeMap::new(),
         }
     }
@@ -749,9 +777,22 @@ mod tests {
             "font_sizee = 14",
             "font_weight = 9",
             "[keybindings]\n'ctrl+wrong+q' = 'copy'",
+            "clipboard_read = 'sometimes'",
         ] {
             assert!(Settings::parse(text).is_err(), "{text}");
         }
+    }
+    #[test]
+    fn programs_clipboard_access_and_pane_endings_read_from_the_file() {
+        let defaults = Settings::default();
+        assert_eq!((defaults.clipboard_read, defaults.clipboard_write), (Access::Ask, Access::Allow));
+        assert!(defaults.copy_on_select && defaults.desktop_notifications && !defaults.wait_after_command);
+        let text = "clipboard_read = 'deny'\nclipboard_write = 'ask'\ncopy_on_select = false\n\
+                    desktop_notifications = false\nwait_after_command = true";
+        let settings = Settings::parse(text).unwrap();
+        assert_eq!((settings.clipboard_read, settings.clipboard_write), (Access::Deny, Access::Ask));
+        assert!(!settings.copy_on_select && !settings.desktop_notifications && settings.wait_after_command);
+        assert_eq!(Settings::parse(&toml::to_string(&settings).unwrap()).unwrap(), settings);
     }
     #[test]
     fn configured_binding_replaces_a_default_without_stealing_control_c() {

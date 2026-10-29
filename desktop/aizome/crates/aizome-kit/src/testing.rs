@@ -57,6 +57,9 @@ pub struct TestPlatform {
     pub clock: Duration,
     pub clipboard: Option<String>,
     pub clipboard_data: Option<sidestep_ui::PreparedClipboard>,
+    /// The primary selection, likewise.
+    pub primary: Option<String>,
+    pub primary_data: Option<sidestep_ui::PreparedClipboard>,
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
@@ -110,6 +113,8 @@ impl TestPlatform {
             clock: Duration::ZERO,
             clipboard: None,
             clipboard_data: None,
+            primary: None,
+            primary_data: None,
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
@@ -249,6 +254,15 @@ impl Platform for TestPlatform {
     fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
         self.clipboard = data.text().map(str::to_owned);
         self.clipboard_data = Some(data);
+    }
+
+    fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
+        sidestep_ui::ClipboardRead::from_text(self.primary.as_deref().map(Arc::from))
+    }
+
+    fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.primary = data.text().map(str::to_owned);
+        self.primary_data = Some(data);
     }
 
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {

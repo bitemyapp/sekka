@@ -61,7 +61,13 @@ pub struct ClipboardWorker {
     pending: Arc<(Mutex<Pending>, Condvar)>,
 }
 
-fn prepare_copy(token: u64, pane: u64, source: CopySource, format: CopyFormat, cancel: &AtomicBool) -> Option<Msg> {
+pub(crate) fn prepare_copy(
+    token: u64,
+    pane: u64,
+    source: CopySource,
+    format: CopyFormat,
+    cancel: &AtomicBool,
+) -> Option<Msg> {
     if cancel.load(Ordering::Acquire) {
         return None;
     }

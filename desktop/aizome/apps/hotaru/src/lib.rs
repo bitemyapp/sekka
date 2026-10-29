@@ -14,6 +14,7 @@ pub fn resolve_link_helper(args: impl Iterator<Item = std::ffi::OsString>) -> Re
 pub mod panes;
 pub mod preferences;
 mod search;
+mod selections;
 mod session;
 pub mod settings;
 mod terminal_view;

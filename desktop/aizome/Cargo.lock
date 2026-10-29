@@ -192,6 +192,7 @@ name = "aizome-hotaru"
 version = "0.1.0"
 dependencies = [
  "aizome-kit",
+ "base64 0.22.1",
  "env_logger",
  "hotaru-core",
  "hotaru-io",

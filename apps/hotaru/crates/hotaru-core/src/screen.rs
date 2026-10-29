@@ -88,11 +88,18 @@ pub enum TerminalEvent {
     /// local working directory. Never execute or trust it as a shell command.
     WorkingDirectory(String),
     Bell,
-    /// Base64 text from OSC 52, not an instruction to accept clipboard access.
+    /// Raw OSC 52 bytes, not an instruction to accept clipboard access.
     /// The application applies its policy before decoding or requesting data.
     Clipboard {
-        selection: String,
-        data: String,
+        selection: u8,
+        data: Vec<u8>,
+    },
+    /// A desktop notification a program asks for: OSC 9 carries only its
+    /// body, OSC 777 `notify` a title and body. The application decides
+    /// whether and when to show it.
+    Notification {
+        title: String,
+        body: String,
     },
 }
 
@@ -1278,8 +1285,8 @@ impl State {
         self.responses.extend_from_slice(bytes);
     }
     fn event(&mut self, event: TerminalEvent) {
-        // One pending notification of each kind. Bell floods must not consume
-        // slots needed by a later title or clipboard-policy notification.
+        // Coalesce UI state notifications. Clipboard transactions are ordered
+        // separately; a later write must not replace an earlier query.
         self.events.retain(|existing| {
             !matches!(
                 (existing, &event),
@@ -1290,12 +1297,49 @@ impl State {
                         TerminalEvent::WorkingDirectory(_)
                     )
                     | (
-                        TerminalEvent::Clipboard { .. },
-                        TerminalEvent::Clipboard { .. }
+                        TerminalEvent::Notification { .. },
+                        TerminalEvent::Notification { .. }
                     )
             )
         });
         self.events.push(event);
+    }
+    fn clipboard_event(&mut self, body: &[u8]) {
+        let (selection, data) = match body {
+            [b';', data @ ..] => (b'c', data),
+            [selection, b';', data @ ..] if *selection != b';' => (*selection, data),
+            _ => return,
+        };
+        // Requests keep their order, up to a bounded prefix per feed: callers
+        // drain events after each bounded feed, as the PTY worker does. Limits
+        // apply before copying; other UI events retain their own slots.
+        const MAX_EVENTS: usize = 64;
+        const MAX_BYTES: usize = 8 * 1024 * 1024;
+        let (count, bytes) = self
+            .events
+            .iter()
+            .fold((0usize, 0usize), |(count, bytes), event| {
+                if let TerminalEvent::Clipboard { data, .. } = event {
+                    (count + 1, bytes.saturating_add(data.capacity()))
+                } else {
+                    (count, bytes)
+                }
+            });
+        if count >= MAX_EVENTS || data.len() > MAX_BYTES.saturating_sub(bytes) {
+            return;
+        }
+        let mut owned = Vec::new();
+        if owned.try_reserve_exact(data.len()).is_err()
+            || owned.capacity() > MAX_BYTES.saturating_sub(bytes)
+            || self.events.try_reserve(1).is_err()
+        {
+            return;
+        }
+        owned.extend_from_slice(data);
+        self.events.push(TerminalEvent::Clipboard {
+            selection,
+            data: owned,
+        });
     }
     fn semantic_prompt(&mut self, data: &[u8]) {
         let Some(&action) = data.first() else { return };
@@ -2278,6 +2322,10 @@ impl Handler for State {
         }
     }
     fn osc(&mut self, bytes: &[u8], bell_terminated: bool) {
+        if let Some(body) = bytes.strip_prefix(b"52;") {
+            self.clipboard_event(body);
+            return;
+        }
         if let Some(body) = bytes.strip_prefix(b"133;") {
             self.semantic_prompt(body);
             return;
@@ -2341,6 +2389,19 @@ impl Handler for State {
             "7" if data.len() <= 16 * 1024 => {
                 self.event(TerminalEvent::WorkingDirectory(data.to_owned()));
             }
+            "9" if !conemu_command(data) => self.event(TerminalEvent::Notification {
+                title: String::new(),
+                body: data.to_owned(),
+            }),
+            "777" => {
+                if let Some(rest) = data.strip_prefix("notify;") {
+                    let (title, body) = rest.split_once(';').unwrap_or((rest, ""));
+                    self.event(TerminalEvent::Notification {
+                        title: title.to_owned(),
+                        body: body.to_owned(),
+                    });
+                }
+            }
             "4" => {
                 // Ghostty/xterm ignore empty fields and stop at the first
                 // invalid pair, keeping operations that preceded that pair.
@@ -2377,17 +2438,6 @@ impl Handler for State {
                 } else if let Some(color) = parse_color(data) {
                     self.background = color;
                     self.background_overridden = true;
-                }
-            }
-            "52" => {
-                if let Some((selection, data)) = data.split_once(';') {
-                    // At most one large clipboard request survives a feed batch.
-                    self.events
-                        .retain(|e| !matches!(e, TerminalEvent::Clipboard { .. }));
-                    self.event(TerminalEvent::Clipboard {
-                        selection: selection.chars().take(16).collect(),
-                        data: data.to_owned(),
-                    });
                 }
             }
             "104" => {
@@ -2432,6 +2482,13 @@ impl Handler for State {
             self.reply(b"\x1bP0$r\x1b\\");
         }
     }
+}
+
+/// ConEmu's OSC 9 commands (sleep, message box, tab title, progress, wait,
+/// macro), which share the number with iTerm2's notification text.
+fn conemu_command(data: &str) -> bool {
+    let bytes = data.as_bytes();
+    matches!(bytes.first(), Some(b'1'..=b'6')) && matches!(bytes.get(1), None | Some(b';'))
 }
 
 fn parse_color(value: &str) -> Option<Rgb> {

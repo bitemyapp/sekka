@@ -13,6 +13,7 @@ aizome-kit.workspace = true
 hotaru-sprites = { path = "../../../../apps/hotaru/crates/hotaru-sprites" }
 hotaru-core = { path = "../../../../apps/hotaru/crates/hotaru-core" }
 hotaru-io = { path = "../../../../apps/hotaru/crates/hotaru-io" }
+base64 = "0.22"
 libc = "0.2"
 log.workspace = true
 env_logger.workspace = true

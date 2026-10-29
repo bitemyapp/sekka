@@ -24,8 +24,15 @@ static void removed(void *data, struct wl_registry *registry, uint32_t name) {
 }
 static const struct wl_registry_listener listener = { global, removed };
 
+/* pointer X Y WIDTH HEIGHT [left|middle|right [CLICKS]] */
 int main(int argc, char **argv) {
-    if (argc != 5) return 2;
+    if (argc < 5 || argc > 7) return 2;
+    uint32_t button = BTN_LEFT;
+    if (argc > 5 && !strcmp(argv[5], "middle")) button = BTN_MIDDLE;
+    else if (argc > 5 && !strcmp(argv[5], "right")) button = BTN_RIGHT;
+    else if (argc > 5 && strcmp(argv[5], "left")) return 2;
+    int clicks = argc > 6 ? atoi(argv[6]) : 1;
+    if (clicks < 1 || clicks > 3) return 2;
     struct wl_display *display = wl_display_connect(NULL);
     if (!display) return 3;
     struct wl_registry *registry = wl_display_get_registry(display);
@@ -41,12 +48,15 @@ int main(int argc, char **argv) {
         (uint32_t)strtoul(argv[3], NULL, 10), (uint32_t)strtoul(argv[4], NULL, 10));
     zwlr_virtual_pointer_v1_frame(pointer);
     wl_display_roundtrip(display);
-    zwlr_virtual_pointer_v1_button(pointer, 2, BTN_LEFT, WL_POINTER_BUTTON_STATE_PRESSED);
-    zwlr_virtual_pointer_v1_frame(pointer);
-    wl_display_roundtrip(display);
-    zwlr_virtual_pointer_v1_button(pointer, 3, BTN_LEFT, WL_POINTER_BUTTON_STATE_RELEASED);
-    zwlr_virtual_pointer_v1_frame(pointer);
-    wl_display_roundtrip(display);
+    /* Clicks in quick succession, as a double or triple click. */
+    for (int i = 0; i < clicks; i++) {
+        zwlr_virtual_pointer_v1_button(pointer, 2 + 2 * i, button, WL_POINTER_BUTTON_STATE_PRESSED);
+        zwlr_virtual_pointer_v1_frame(pointer);
+        wl_display_roundtrip(display);
+        zwlr_virtual_pointer_v1_button(pointer, 3 + 2 * i, button, WL_POINTER_BUTTON_STATE_RELEASED);
+        zwlr_virtual_pointer_v1_frame(pointer);
+        wl_display_roundtrip(display);
+    }
     zwlr_virtual_pointer_v1_destroy(pointer);
     zwlr_virtual_pointer_manager_v1_destroy(manager);
     wl_seat_destroy(seat);

@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 const FRAME: Duration = Duration::from_millis(8);
 const INPUT_LIMIT: usize = 32 * 1024 * 1024;
 const REPLY_LIMIT: usize = 64 * 1024;
+// A failing command that ends this soon is abnormal (Ghostty's
+// `abnormal-command-exit-runtime` on Linux): its pane stays to be read.
+const ABNORMAL_EXIT: Duration = Duration::from_millis(250);
 
 pub enum Command {
     Input(Arc<[u8]>),
@@ -35,6 +38,8 @@ pub enum Command {
     Clear,
     // A hard reset of the terminal, as RIS.
     Reset,
+    // A program's answer from the clipboard (OSC 52), written whole.
+    Reply(Arc<[u8]>),
 }
 /// What a new pane's terminal starts with.
 #[derive(Clone)]
@@ -160,6 +165,7 @@ impl Session {
             Command::Focus(_) => 3,
             // The form feed a prompt's redraw takes.
             Command::Clear => 1,
+            Command::Reply(bytes) => bytes.len(),
             _ => 0,
         };
         if self
@@ -221,8 +227,9 @@ fn publish_events(
     tx: &MsgSender<Msg>,
     hostname: Option<&str>,
     seen_title: &mut bool,
+    clipboard: &Arc<crate::selections::Bounds>,
 ) {
-    let (mut title, mut directory, mut bell, mut clipboard) = (None, None, false, false);
+    let (mut title, mut directory, mut bell, mut notification) = (None, None, false, None);
     for event in terminal.take_events() {
         match event {
             TerminalEvent::Title(value) => {
@@ -243,7 +250,13 @@ fn publish_events(
                 }
             }
             TerminalEvent::Bell => bell = true,
-            TerminalEvent::Clipboard { .. } => clipboard = true,
+            // In order, as they came; past the pane's bounds, refused.
+            TerminalEvent::Clipboard { selection, data } => {
+                if let Some(request) = crate::selections::request(id, selection, &data, clipboard) {
+                    tx.send(Msg::Clipboard(request));
+                }
+            }
+            TerminalEvent::Notification { title, body } => notification = Some((title, body)),
         }
     }
     if let Some(title) = title {
@@ -255,8 +268,8 @@ fn publish_events(
     if bell {
         tx.send(Msg::Bell(id));
     }
-    if clipboard {
-        tx.send(Msg::Notice(id, "A program requested clipboard access; OSC 52 is disabled.".into()));
+    if let Some((title, body)) = notification {
+        tx.send(Msg::Notify(id, title, body));
     }
 }
 
@@ -269,6 +282,8 @@ fn run(
     shared: Arc<Shared>,
 ) -> io::Result<()> {
     let mut pty = Pty::spawn(command, PtySize::default())?;
+    let started = Instant::now();
+    let clipboard = Arc::new(crate::selections::Bounds::default());
     let hostname = hotaru_io::launch::local_hostname();
     let mut seen_title = false;
     let mut terminal = Terminal::new(80, 24, defaults.scrollback);
@@ -432,6 +447,13 @@ fn run(
                     scrollback = 0;
                     changed = true;
                 }
+                Ok(Command::Reply(bytes)) => {
+                    if eof || hung_up {
+                        shared.input_bytes.fetch_sub(bytes.len(), Ordering::AcqRel);
+                    } else if !bytes.is_empty() {
+                        output.push_back(PendingWrite { bytes, user: true });
+                    }
+                }
                 Ok(
                     Command::Resize { .. }
                     | Command::ResizePixels { .. }
@@ -474,7 +496,7 @@ fn run(
             buffered_at += consumed;
             fed += consumed;
             changed |= consumed != 0;
-            publish_events(&mut terminal, id, &tx, hostname.as_deref(), &mut seen_title);
+            publish_events(&mut terminal, id, &tx, hostname.as_deref(), &mut seen_title, &clipboard);
             let replies = terminal.take_responses();
             if !hung_up && !replies.is_empty() {
                 reply_bytes += replies.len();
@@ -544,7 +566,7 @@ fn run(
             && !notified_exit
             && let Some(status) = pty.try_wait()?
         {
-            tx.send(Msg::Exited(id, status.to_string()));
+            tx.send(Msg::Exited(id, status.to_string(), !status.success() && started.elapsed() < ABNORMAL_EXIT));
             notified_exit = true;
             // Retain history for copying/scrolling until the tab is closed.
         }

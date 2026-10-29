@@ -8,7 +8,8 @@ const MAX_PARAMS: usize = 32;
 const MAX_OSC_BODY: usize = 2048;
 // A Linux PATH_MAX path can expand threefold when percent-encoded in OSC 7.
 const MAX_CWD_BODY: usize = 16 * 1024;
-const MAX_CLIPBOARD_BODY: usize = 8 * 1024 * 1024;
+// The pinned allocating capture also needs one byte for its sentinel NUL.
+const MAX_CLIPBOARD_BODY: usize = 8 * 1024 * 1024 - 1;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Param {

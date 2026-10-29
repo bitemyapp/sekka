@@ -56,7 +56,37 @@ copy or a closed pane cancels obsolete work. Copies exceeding 128 MiB across all
 requested formats report an error without replacing the clipboard or truncating
 the selection. Plain aliases and the local text cache share one allocation.
 
-OSC 52 requests are reported but do not grant programs clipboard access.
+Programs can use the clipboard themselves with OSC 52, as editors and tmux do,
+even over SSH. Writing is allowed and reading is asked about by default, as in
+Ghostty; Settings → General chooses Ask, Allow or Never for each. The question
+names the program by its title and shows the first line of what it would get
+or put, with its size. Return doesn't answer it, since it can arrive while
+you're typing; Escape refuses. Refused reads get an empty answer so programs
+don't wait; reads refused in Settings get none, as Ghostty's. The question is
+about the bytes captured when the program asked: a read captures the
+clipboard first, on a worker, so changing the clipboard while the question is
+up doesn't change the answer. `c` names the clipboard; `p` and `s` name the
+primary selection, for reads as well as writes (Ghostty reads the clipboard for
+all three). Writes are decoded on the pane's PTY worker and offered byte for
+byte, invalid UTF-8 and NUL included; reads answer with the selection's bytes as
+offered. Each pane may have 16 requests waiting, holding 32 MiB at most, and a
+read answers with 6 MiB at most (8 MiB once encoded, the most a write carries).
+One question shows at a time; another program's request meanwhile is refused.
+
+Selecting text with the pointer makes it the primary selection, which a middle
+click pastes, here and in other programs; Copy on select in Settings turns
+that off. A double click selects a word (Ghostty's word boundaries), a triple
+click the whole line across soft wraps. A right click opens a menu of the
+pane's commands, with Open Link and Copy Link over a link. While a program
+tracks the mouse, these clicks are the program's; Shift takes them back.
+Files dropped on a pane paste as their paths, quoted for the shell; dropped
+text pastes as typed.
+
+Programs can notify the desktop with OSC 9 (iTerm2's form) or OSC 777
+`notify`, as long-running commands often do when they finish. Hotaru passes a
+notification on while its pane isn't the one in use, once a second at most,
+titled by the program or its pane; Settings turns them off.
+
 Colors are configured in the terminal engine itself, so OSC queries and rendered
 colors agree. Aizome appearance changes preserve explicit program overrides;
 OSC color resets restore the current configured defaults.
@@ -78,6 +108,13 @@ also steps through tabs and panes and lists the tabs by title. Shift-drag
 selects text while a running program captures the mouse; Shift-wheel scrolls
 local history.
 
+When the shell or program in a pane ends, Control-D at the prompt for one,
+its pane closes, then its tab with its last pane, and the window with its last
+tab; the panes beside it and the tab in front stay as they were. A program that
+fails as it starts (a non-zero status within 250 ms, as Ghostty reckons it)
+leaves its pane, so its error can be read, until a key is pressed. Keep ended
+panes in Settings keeps every pane that way.
+
 Edit → Clear Screen (❖K) does what Ghostty's `clear_screen` does: the scrollback
 goes, and at a prompt marked by shell integration so does the screen, with a
 form feed asking the shell to draw its prompt again; otherwise the cursor's
@@ -93,7 +130,9 @@ for startup details and the after-config fallback for Zsh frameworks that
 replace prompt hooks.
 
 Hotaru → Settings… (❖,) opens a window of four pages, laid out as Settei's:
-General (shell integration, scrollback, copy format, the file itself), Text
+General (shell integration, scrollback, keeping ended panes, notifications,
+copy format, copy on select, what programs may do with the clipboard, the file
+itself), Text
 (family, size, weight, ligatures, fallback), Appearance (Follow Desktop, Night,
 Day or High Contrast, each shown as a small terminal in its colours; cursor
 shape and blinking) and Shortcuts. Changes reach every pane as they're made and
@@ -132,6 +171,11 @@ cursor_blink = true
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
 shell_integration = true # Future default-shell panes only.
+clipboard_read = "ask" # allow, ask, deny: programs reading it (OSC 52).
+clipboard_write = "allow" # allow, ask, deny: programs writing it.
+copy_on_select = true # Selections become the primary selection.
+desktop_notifications = true # OSC 9 and OSC 777 notify.
+wait_after_command = false # Keep panes whose program ended, until a key.
 
 [keybindings]
 "super+d" = "split-right"
@@ -206,6 +250,9 @@ cargo build --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --locked
 
 Tests cover native Night/Day rendering, explicit terminal colors, tabs and splits,
 the Settings window and shortcut recording, tab and pane navigation, zoom,
+panes closing as their programs end, OSC 52 policies and exact answers, word and
+line selection into the primary selection, middle-click paste, the pane menu,
+dropped files,
 large asynchronous plain/HTML copies, cancellation and stale results, output delivery before shell exit,
 copying after exit, settings validation/persistence, negotiated input and 50,000
 terminal queries under PTY backpressure. Ignored child fixtures are executed as
@@ -253,3 +300,12 @@ recorded for New Tab and then opens one, ❖W in Settings leaves both panes, and
 inspection of both windows and the result. For a Cargo build, pass a wrapper
 that sets the development shell's `LD_LIBRARY_PATH` for Hotaru alone, and run
 the script itself outside that shell so the system's Sway starts.
+
+`tests/wayland/selections.py BINARY EVIDENCE_DIRECTORY` runs a raw-mode fixture
+in each pane, driven through a FIFO, against the private compositor's real
+clipboard and primary selection (wl-clipboard): OSC 52 writes arrive byte for
+byte, `61 00 62 ff` included, and `p` on the primary selection; a read is asked
+about with its preview, then allowed and answered exactly, then refused and
+answered empty; a double click puts a word on the primary selection and a
+middle click pastes another program's; Control-D closes a split, then a tab,
+then Hotaru, which exits with status zero. The same Cargo-build wrapper applies.
