@@ -19,6 +19,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Tansu 箪笥 | Disks | `apps/tansu` | `aizome-tansu` | `org.aizome.Tansu` | chest of drawers (partitions as drawers) |
 | Kura 蔵 | Disk Usage | `apps/kura` | `aizome-kura` | `org.aizome.Kura` | storehouse |
 | Myaku 脈 | Activity | `apps/myaku` | `aizome-myaku` | `org.aizome.Myaku` | pulse |
+| Nisshi 日誌 | Logs | `apps/nisshi` | `aizome-nisshi` | `org.aizome.Nisshi` | log book, a day's record (a ship keeps a 航海日誌) |
 | Shashin 写真 | Images | `apps/shashin` | `aizome-shashin` | `org.aizome.Shashin` | photograph |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
@@ -618,6 +619,118 @@ smallest window; `--test look` holds its pictures in Night and Day, and
 test -p aizome-myaku --test gpu live_ -- --ignored --nocapture` compares the
 sampler with `nvidia-smi` (allowing allocations to change between readings)
 and checks that idle amdgpu clients read as idle.
+
+### Nisshi (Logs)
+
+The system journal and the text logs under /var/log, filtered as you type,
+with filters suggested by what wrote each message. Console's model in
+Aizome's look: places in a sidebar, search with tokens, a message's
+details below the list.
+
+- **Places**: All Messages, Errors & Warnings, My Session (your own
+  units and processes), Kernel, Crashes (core dumps, segfaults, traps,
+  Rust panics), Logins & Security (the auth facilities, sudo, polkit, ssh,
+  logind and the login screens), each counted; then the **Sources** that
+  wrote the most, counted with the rest of the filter (one with errors
+  has a warning glyph), and the **Log Files** under /var/log.
+- **Search** matches a message, what wrote it and its unit, in any case
+  unless a capital letter is typed. `-word` leaves out, `"a phrase"`,
+  `/regex/` (Rust's syntax, over the message), and keys: `app:`, `unit:`
+  (`.service` may be left out, `*` matches anything), `pid:`, `level:`
+  (that level or worse), `since:` and `until:` (`10m`, `2h`, `14:30`,
+  `yesterday`, `2026-10-28T14:30`), `id:` (the catalog id) and
+  `FIELD=value`, which the journal itself matches (the boot is read again).
+  Words found are drawn in the focus colour. While a key's value is being
+  typed, the strip offers the values there are, counted, and Return takes
+  the first.
+- **Suggestions**: the strip under the toolbar. With nothing selected it
+  says what stands out (errors and who wrote most of them, units that
+  failed, what crashed, out-of-memory kills, a burst of errors, a message
+  so frequent it's a fifth of what shows). With a message selected, it
+  offers what fits that message: only its source, its source's
+  problems, the topics Nisshi knows its program writes about
+  (`src/known.rs`, 21 kinds of program: NetworkManager's Wi-Fi and DHCP,
+  the kernel's USB, storage and graphics, sshd's failed logins,
+  systemd's failed units, Aizome's displays and input, and more), this
+  message's own topics first. Then messages like it and hiding them
+  (a message's *shape* is its first line with numbers, addresses, ids and
+  quoted names taken out: `src/shape.rs`), its process where its source
+  ran as several, its unit, and for a program Nisshi doesn't know, the
+  words it uses often and the rest of the journal rarely. Each is counted
+  on what's read and offered only when it would narrow what shows.
+  Applied, a suggestion is a chip; × removes it.
+- **The timeline**: messages over the boot, errors and warnings at the
+  foot of each bar, on a square-root scale so a few errors show beside
+  thousands of messages. Dragging across it shows that stretch of time;
+  a press selects the message nearest that moment.
+- **Details**: the message whole (a core dump's stack trace included),
+  when, how long ago, and every field the journal keeps with it, each
+  with a button that filters by it. **Around This Time** clears every
+  filter and shows a minute either side; **Activity** opens Myaku on its
+  process while it runs.
+- **Live**: new messages of the running boot come in as they're
+  written, and the list follows the newest until a message is selected
+  (the status line then counts what's new, and goes to it). The toolbar
+  picks the boot (this one, the ones before, all of them) and the level.
+  A boot with more than 50,000 messages is read newest first; **Read
+  Earlier** reads 50,000 more, and **Search the Whole Boot** (Return in
+  search) asks the journal for every match (`journalctl --grep`) rather
+  than only those read.
+- **Copy** (❖C) copies the selected messages as journal lines; **Export**
+  (⇧❖E) writes what shows as text, or JSON lines for a `.json` file.
+- `aizome-nisshi --search TEXT --source NAME --unit NAME --level LEVEL
+  --scope problems|mine|kernel|crashes|security --boot N --file PATH
+  --cursor CURSOR` opens on that, in the running window if there is one;
+  `--cursor` selects one message, by the cursor `journalctl --show-cursor`
+  prints (another app's "show this in Logs").
+
+As built: the window reads through `aizome-nisshi-helper`, which it runs
+as you, and which runs `journalctl --output=json` (only the fields the
+list uses; a message's others when it's selected, by its cursor) and
+reads /var/log. Each request is data (`src/query.rs`, `src/protocol.rs`):
+the helper checks it and builds every argument itself from options that
+only read, with journal fields and cursors checked, the environment
+cleared and journalctl taken from the system profile. Files are read only
+when their real path is under /var/log, opened without following links,
+the last 8 MiB of them.
+
+Someone who isn't in `wheel`, `adm` or `systemd-journal` can read only
+their own session's journal. The banner says so and offers **Unlock…**:
+the window starts a second helper through
+`/run/wrappers/bin/pkexec --disable-internal-agent` under the
+`org.aizome.Nisshi.read-system-logs` action (`auth_admin_keep`), whose
+policy names the helper by its store path in `libexec`. Aizome's polkit
+dialog asks for an administrator's password once. That helper reads as
+root until **Lock** or the window closes (closing its input ends it and
+its reads), and a root-only file (`/var/log/boot.log`) asks the same
+way. Cancelling, a refusal and an unavailable dialog are told apart
+from pkexec's exit status and its whole message, as Yukimi does. The
+Aizome module turns on NixOS's pkexec wrapper for it.
+
+A large boot stays quick: messages are parsed on the reader's thread,
+each is classified once as it's read, live arrivals add to the view
+rather than making it again, and the overview's suggestions are tallied
+as the view is made. A selection's topics are counted a moment after it
+shows, and past 30,000 messages search waits for typing to pause before
+it filters them all (the field shows each character at once).
+`docs/performance.md` has the numbers.
+
+`cargo test -p aizome-nisshi` covers the parser, search, shapes, the
+helper's checks and the suggestions on a made-up boot
+(`src/fixture.rs`: no message on the machine running the tests is shown),
+the window headlessly (`--test ui`), its pictures in Night and Day
+(`--test look`), and the real helper over a stand-in journalctl and a
+stand-in pkexec (`--test reader`: reading, following, fields, a log
+file, and unlocking cancelled, refused and given).
+`cargo run -p aizome-nisshi --example sample -- DIR` makes that stand-in
+and prints the line to open Nisshi on it. `nix build
+.#aizome-checks.nisshi` boots a disposable VM: a user who isn't an
+administrator reads only their own journal; with polkit's yes the
+installed reader runs as root through the real pkexec wrapper and reads
+the system's; another user, with no agent to ask, is refused before it
+runs; and as root the reader refuses options, cursors and paths that
+aren't reads under /var/log. Real polkit dialogs, and a person typing a
+password, are the `polkit-recovery` check's and a desktop's.
 
 ### Shashin (Images)
 

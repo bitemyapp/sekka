@@ -33,6 +33,20 @@ automatic login. The UEFI captures include the emergency console the initrd
 left before the fix; the BIOS run's restart and shutdown frames were
 byte-identical to the UEFI run's and aren't repeated.
 
+The captures in `desktop/aizome/docs/screenshots/nisshi/` are original
+1440 × 900 `grim` captures, at scale 1, of Nisshi's release build from
+29 October 2026. Each window ran alone under a private headless sway
+(`desktop/aizome/sukumo/scripts/headless-wayland`, pixman), drawing its own
+menu bar since no Aizome shell was running. It read through its real
+helper, but from a stand-in journalctl that answers from the made-up boot
+of `apps/nisshi/src/fixture.rs` (`cargo run -p aizome-nisshi --example
+sample`). No message of a real computer is shown. The window was moved
+between views by launching `aizome-nisshi` again with `--cursor`,
+`--search` and `--scope`, which hand those to the running window, not by
+pointer input. They are not cropped or scaled. The Night and Day goldens
+in `desktop/aizome/apps/nisshi/tests/snapshots/` are headless renders from
+the kit's offscreen renderer, not window captures.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of

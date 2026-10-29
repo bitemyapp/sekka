@@ -1,0 +1,36 @@
+[package]
+name = "aizome-nisshi"
+description = "Nisshi 日誌, Aizome's log viewer: the system journal and log files, searched as you type, with filters suggested by what wrote them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "nisshi"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-nisshi"
+path = "src/main.rs"
+
+# The reader: runs journalctl and reads /var/log for the window, as you or,
+# through pkexec, as root. It uses only the library's protocol and query
+# modules, not the toolkit.
+[[bin]]
+name = "aizome-nisshi-helper"
+path = "src/bin/helper.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+log.workspace = true
+env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex = "1"
+# Words searched for, found faster than by a regular expression.
+aho-corasick = "1"
+memchr = "2"
+jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+libc = "0.2"

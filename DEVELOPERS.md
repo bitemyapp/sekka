@@ -1227,6 +1227,34 @@ step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
 same.
 
+Nisshi (`desktop/aizome/apps/nisshi`), Aizome's log viewer, reads the
+journal and /var/log through `aizome-nisshi-helper`, a second binary of the
+same crate that uses only the library's `query` and `protocol` modules.
+The window runs it as the user. **Unlock** runs another copy through
+`/run/wrappers/bin/pkexec --disable-internal-agent` under
+`org.aizome.Nisshi.read-system-logs`, whose policy the package writes to
+`share/polkit-1/actions` naming `$out/libexec/aizome-nisshi-helper`, the
+path the window finds beside itself. Keep that boundary: the window sends
+data, never arguments. The helper checks each query and builds journalctl's
+arguments itself from options that only read. It reads files only under
+/var/log, honours `NISSHI_JOURNALCTL` and `NISSHI_LOG_DIR` only when it
+isn't root, and ends when its input closes. The Aizome module turns on
+NixOS's pkexec wrapper (`security.polkit.enablePkexecWrapper`, where the
+option exists).
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi
+nix develop .#aizome -c cargo test --release --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi --test perf -- --nocapture
+nix build .#aizome-checks.nisshi -L
+```
+
+The first runs the real helper over a stand-in journalctl and pkexec
+(`tests/reader.rs`), besides the headless window and its pictures. The
+last boots a disposable VM to check the installed policy, the setuid
+wrapper and the helper as root through real polkit. Neither types a
+password into a desktop's dialog.
+
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,

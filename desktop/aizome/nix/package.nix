@@ -252,6 +252,12 @@ rustPlatform.buildRustPackage {
     for icon in icons/apps/*.svg; do
       install -Dm644 "$icon" "$out/share/icons/hicolor/scalable/apps/$(basename "$icon")"
     done
+    # Nisshi's reader, run as root only through pkexec under its own
+    # polkit action, which names it by this path.
+    mkdir -p $out/libexec $out/share/polkit-1/actions
+    mv $out/bin/aizome-nisshi-helper $out/libexec/
+    substitute apps/nisshi/data/org.aizome.Nisshi.policy.in $out/share/polkit-1/actions/org.aizome.Nisshi.policy \
+      --subst-var-by helper $out/libexec/aizome-nisshi-helper
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
     mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps
