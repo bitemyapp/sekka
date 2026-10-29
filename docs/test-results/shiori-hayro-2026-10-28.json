@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-28",
+  "scope": "Shiori's worker with hayro (bitemyapp/hayro aizome-perf a2e9e62b) against its worker with PDFium (Sekka 52a7ee29), through Shiori's own path over the pdf.js corpus. Component evidence on a laptop; not VM, ISO or hardware qualification.",
+  "follows": "hayro-fork-2026-10-28.json",
+  "machine": "ganymede (Intel Core Ultra 7 365, 30 GiB RAM), shared with other sessions, one-minute load average 1.2 to 5.8 across the runs",
+  "corpus": "the 1,012 files of the pdf.js test corpus used for the engine evaluation (many broken on purpose)",
+  "method": "cargo run --release -p aizome-shiori --example corpus -- DIR 4: four files at a time, each opened by a worker through the engine the app uses, its first three pages drawn at 1.5× (a 900-point window's width) in tiles of at most 1024 pixels, their text and links read, and its first ten pages searched for \"the\"; a file's time is from starting its worker to the last answer. The PDFium build is the merge commit before the change, built the same way; the two ran back to back, PDFium first.",
+  "results": {
+    "files_opened_drawn_read_and_searched": {"pdfium": 985, "hayro": 995},
+    "per_file_ms": {
+      "columns": ["p50", "p90", "p99", "max"],
+      "pdfium": [24, 41, 136, 931],
+      "hayro": [15, 26, 82, 356]
+    },
+    "the_983_files_both_did_s": {"pdfium": 29.9, "hayro": 17.4},
+    "pdfium_otherwise": "11 asked for a password, 7 refused as damaged, 4 opened with no pages (Brotli-Prototype-FileA, issue19484_1, issue19484_2, poppler-395-0-fuzzed); the tiling-pattern-tiny-steps files stopped at 20 s, jpx_numcomps crashed its worker, and Pages-tree-refs and poppler-937-0-fuzzed had a page that couldn't be drawn",
+    "hayro_otherwise": "8 asked for a password, 8 refused as damaged, poppler-85140-0 opened with no pages (qpdf finds none either); no worker stopped or crashed, no tile failed, no panic",
+    "only_hayro": "bug1250079, bug1606566, bug1980958, crypt_filters, issue19484_1, issue19484_2, jpx_numcomps, Pages-tree-refs, poppler-395-0-fuzzed, pr6531_2 and the two tiling-pattern-tiny-steps files",
+    "only_pdfium": "issue15590 (its objects have lost their << and >>) and poppler-85140-0",
+    "fixed_on_the_way": "auth-event-ef-open and encrypted-attachment, encrypted only for their attachments, asked for a password or wouldn't open until the fork read documents whose stream and string filters are Identity without a key (94ea14ab)"
+  },
+  "earlier_hayro_run": "the same comparison with hayro at 144be58c, before that fix and with the laptop less loaded: 993 files, 14 / 25 / 78 / 373 ms, 16.4 s over the 981 both did against PDFium's 30.7 s",
+  "also_checked": {
+    "cargo test -p aizome-shiori": "21 unit, 6 worker and 15 headless tests pass, the Night and Day goldens (made when PDFium drew) included",
+    "budget": "scrolling a notch 0.17 / 0.20 ms p50 / p95, Page Down 3.2 / 3.8 ms, at 2880 × 1800 scale 2 (the window, not the engine)",
+    "cjk_fallback": "vertical_rotated_fallback_glyphs, whose Japanese font isn't embedded, draws in Noto Sans CJK down its columns (looked at); the wave dash isn't turned for vertical text"
+  },
+  "not_covered": "no VM or hardware runs in this record; one laptop under shared load; drawings compared only through the goldens and the engine records, not page by page against PDFium here"
+}

@@ -138,7 +138,8 @@ parser what PDFium gave it:
 
 Through Shiori's own path (`examples/corpus.rs`: each file opened, its
 first three pages drawn at 1.5×, their text and links read, ten pages
-searched), over the same 1,012 files, on the same laptop, back to back:
+searched), over the same 1,012 files, on the same laptop, back to back
+([`shiori-hayro-2026-10-28.json`](../../../docs/test-results/shiori-hayro-2026-10-28.json)):
 
 | | PDFium's worker | hayro's |
 |---|---|---|
