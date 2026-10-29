@@ -3,6 +3,15 @@
 README and website images are original PNG captures with links to the full
 files. They are not upscaled, composited, or generated illustrations.
 
+The [application-startup review images](test-results/application-startup/README.md)
+were captured on 2026-10-29 for PR #144. Four are original 1280 × 800 `grim`
+captures of the actual shell and integrated Koe under a private headless
+Aizome compositor; the failures use deliberate test entries. Two are
+explicitly labeled 900 × 600 UI mocks rendered by the real toolkit with
+synthetic lifecycle events. They are separate from the gallery and from
+ISO qualification. The linked record contains reproduction commands,
+executable identities, observed outcomes and hashes; no pixels were edited.
+
 The validation captures in `test-results/luks-gui-uefi/` are separate from the
 README and website gallery. They are original 1280 × 800 QEMU screendumps from
 the [2026-10-21 encrypted GUI installation](test-results/luks-gui-uefi.json),

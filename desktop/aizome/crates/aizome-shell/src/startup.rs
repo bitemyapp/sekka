@@ -548,6 +548,19 @@ mod tests {
         )));
     }
 
+    /// Optional illustrations rendered by the actual UI with synthetic events.
+    /// These are mocks, not evidence of an application or compositor running.
+    fn save_mock(h: &mut Harness<Shell>, name: &str) {
+        let Some(dir) = std::env::var_os("AIZOME_STARTUP_SCREENSHOTS") else { return };
+        h.program_mut().startup.attempts.get_mut(&1).unwrap().name = "Koe (mock)".into();
+        h.send(Msg::Startup(Event::Select(1)));
+        assert!(h.settle(Duration::from_secs(7), |s| s.startup.attempts[&1].logs != "Reading application output…"));
+        h.send(Msg::Startup(Event::Logs(1, "Mock: synthetic lifecycle events; no application output.".into())));
+        std::fs::create_dir_all(&dir).unwrap();
+        let w = h.program().startup.window.unwrap();
+        h.save_png(w, PathBuf::from(dir).join(name), 1.0);
+    }
+
     #[test]
     fn failure_is_visible_and_details_show_the_error_and_copyable_output() {
         let mut h = fixture();
@@ -586,11 +599,13 @@ mod tests {
         h.send(Msg::Startup(Event::Check(1)));
         assert!(!h.program().startup.attempts[&1].failed);
         assert!(h.program().notes.list.last().unwrap().summary.contains("waiting for a window"));
+        save_mock(&mut h, "mock-waiting.png");
         h.send(Msg::Ipc(crate::ipc::IpcEvent::Event(aizome_ipc::Event::WindowOpened {
             window: aizome_ipc::WindowInfo { id: 42, app_id: "org.aizome.Koe".into(), ..Default::default() },
         })));
         assert!(h.program().startup.attempts[&1].ready);
         assert_eq!(h.program().startup.attempts[&1].outcome, "Window opened");
+        save_mock(&mut h, "mock-window-opened.png");
     }
 
     #[test]
