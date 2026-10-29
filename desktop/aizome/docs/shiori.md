@@ -80,11 +80,16 @@ runs on one CCD's cores), the fork takes 6.6 seconds over those pages
 against PDFium's 11.4 and master's 13.0, and is the faster on 857 of them.
 hayro's code does relatively better on that machine (master takes 1.14
 times PDFium's time there, 1.31 on the laptop), so compare builds on one
-machine. It's still slower than PDFium on free-form meshes, some gradients
-and JPEGs drawn larger than the page, and spends about 7 ms building its
-CMYK transform the first time a document needs it. Its pages differ from
-hayro's own references on under 1% of pixels by more than 48 levels,
-except one page where a hard edge in a gradient moved a pixel.
+machine. A further round there (a CMYK table built ahead of time, meshes
+sampled by runs of rows, a run of text's cached glyphs drawn as one image,
+decoding only the rows of a JPEG the page can show, skipping fully
+transparent paints) brings it to 5.9 seconds, 0.52 of PDFium's, faster on
+961 of the 1,189 pages and behind on the rest by 0.15 seconds in all; no
+page changed by more than 2 levels. It's still slower than PDFium on very
+large pages, patch meshes in CMYK, soft masks, Type 3 glyphs that are
+images and predefined CJK CMaps. Its pages differ from hayro's own
+references on under 1% of pixels by more than 48 levels, except one page
+where a hard edge in a gradient moved a pixel.
 
 Shiori still draws with PDFium. To move to hayro it would need character
 boxes (hayro hands each glyph's Unicode and transform to a drawing device),

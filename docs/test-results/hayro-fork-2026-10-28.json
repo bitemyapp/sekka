@@ -55,6 +55,7 @@
     "robustness": "every JPEG in zune-image's test images at every scale, and 13,500 truncated or corrupted variants (release and debug builds), without a panic",
     "speed": "7680 by 4320 4:4:4: 62 ms at full size, 40 ms at 1/2, 24 ms at 1/8; Huffman decoding, about half of a full decode, is the floor",
     "restart_regression": "zune-jpeg's development branch tore grayscale JPEGs whose restart interval doesn't divide an MCU row (pdfbox 2244 in hayro's suite): a latched RST was handled at the end of a row with the segment's last MCUs still buffered. Bisected to babf5c25 (May 2026, after the 0.5.15 release); fixed with a test on the fork (branch fix-restart-across-rows, and in scaled-idct)",
+    "row_limit": "JpegDecoder::set_row_limit (13f18bce, on scaled-idct): a sequential image whose first scan holds all its components decodes as though it were that many rows tall, stopping after the MCU row holding the last; a test checks the rows against the whole image's (exact more than 16 rows above the cut, where chroma isn't upsampled from undecoded rows). zune-jpeg's tests pass but for the failure already on its development branch",
     "other_difference_from_0_5_15": "a truncated JPEG in hayro's corpus/0942791 shows one fewer row of decoded padding, filled with neutral grey: the development branch's deliberate handling of incomplete data",
     "not_proposed": "neither branch has been proposed to zune-image yet"
   },
@@ -95,7 +96,42 @@
     "machines_differ": "the ratios depend on the machine: on ganymede master took 1.31 times PDFium's total and the fork before reduced-size JPEGs 0.75; here 1.14 and 0.59. Compare builds within one machine's runs",
     "furthest_behind_pdfium": "issue12841_reduced (114 ms against 63), issue2948 (50 against 8.8), axial_shading_many_inputs (19 against 1.7), radial_gradients pages 3-5 (25-28 against 13), bug1755507 (25 against 10), issue14497 (41 against 28), issue12798_page1_reduced (17 against 4.7), personwithdog (76 against 66), issue18032 (15 against 6.6), issue20513 (19 against 10)"
   },
+  "fork_changes_after_reduced_size_jpegs": {
+    "range": "04aecd3c to ad5920e6 on aizome-perf; times pinned on wx-workstation, five or seven runs each, against the build before; instruction counts from callgrind where the machine was loaded",
+    "DeviceCMYK table (833ab0b3)": "36 corpus files built moxcms's CMYK transform the first time they used DeviceCMYK, about 7 ms each (269 ms in all, most on pages PDFium draws in under 5 ms). The 17^4 table moxcms builds is now an asset (250 KB), interpolated as its fixed-point executor does; a test checks it against moxcms on 6.8 million colors (identical on AMD and Intel). moxcms is three times faster per pixel once built, so after 2^19 pixels its transform is built and used instead. devicen-none-zero-domain 7.8 to 0.19 ms (PDFium 0.15); the 36 files 1,397 to 1,154 ms",
+    "mesh sampling (1b2a797b, b949ec0d, 7b88de94, ad5920e6)": "a triangle covers one run of each row (each of kurbo's side tests changes sign at most once along a row), so runs are found from where the edges cross the row and their ends confirmed with the same test; weights are stepped along a run; runs are filled at a time; a mesh texture's rows are read as slices of the samples. issue2948: 852 to 238 million instructions, 50 to 18 ms (PDFium 8.0)",
+    "premultiplied texels (1b2a797b)": "shading textures went through floats for every texel and were rounded again by the renderer; the gradient table now holds finished premultiplied texels and opaque gray and RGB meshes are quantized straight to bytes. radial_gradients 85 to 50 ms over its five pages (PDFium 59)",
+    "glyph runs as one image (96f4ac00)": "each cached glyph was drawn with a rectangle of its own, a few thousand instructions in vello_cpu before any pixel; a run's cached glyphs now go into one coverage image drawn once. tracemonkey 46.5 to 38.5 ms (PDFium 39.4), and its seven variants alike",
+    "decompressors per thread (12774fa1)": "every Flate stream set up a decompressor, zeroing a 32 KiB window (about 40,000 instructions, more than many small streams take); each thread now keeps one zlib and one deflate decompressor, with read_to_end's results (all of a stream, or nothing if it's corrupt or ends early). issue918 286 to 205 million instructions",
+    "CMap destinations inline (dcea7506)": "each bf range's destination was a vector of its own, so parsing a predefined CMap allocated one per entry; destinations are now inline (SmallVec of 4). vertical_rotated_fallback_glyphs 139 to 76 million instructions, 8.4 to 6.9 ms",
+    "invisible paints skipped (43b6164f)": "a paint whose every color is fully transparent, composited over the target, changes no pixel; fills, strokes, glyph runs and stencils with one aren't drawn. axial_shading_many_inputs (16 page-sized shadings whose function wants 18 inputs where one is given) 18.7 to 1.7 ms (PDFium 1.6)",
+    "JPEG rows the page can show (a1666484)": "the renderer hints the image's last row that can be seen on the page (the page's bounds and clips, the same for every tile) plus 16, and JPEGs stop decoding after it (zune_jpeg row_limit below); only for images resampling won't make smaller, whose pixels a cut can't change, and without a mask of another stream. issue12841_reduced (a 5280 by 3792 photograph at 1:1, 39% of its rows on the page) 137 to 55 ms (PDFium 70)",
+    "one-input mesh functions in a table (8c463d81)": "meshes whose colors are a function's values at one input evaluated it at every texel; texels now come from a table of the function at 65,536 inputs between the least and greatest sampled, as for axial and radial shadings. coons-allflags-withfunction 25.5 to 12.4 ms and tensor-allflags-withfunction 24.9 to 12.6 (PDFium 18); the only change of these that moves pixels on purpose, by 1 level",
+    "tried and dropped": "a lookup table for the CMap Huffman decoder (its codes are short, so walking the tree cost the same); cutting JPEGs that are resampled smaller (resampling depends on the height, so the whole image shifted by a fraction of a pixel)"
+  },
+  "results_at_ad5920e6": {
+    "workstation": "wx-workstation as above, 8 files at a time on CPUs 16-23 (CCD 2; 56-63 carried another session's nix evaluation that hour), their SMT siblings 0-2% busy, load average 18-20",
+    "method": "as results_with_reduced_size_jpegs, five runs, each page's time the median; PDFium 8066, master 8558a8a5, the fork at 04aecd3c and the fork at ad5920e6 back to back on each file",
+    "pages_all_three_drew_under_5_s": 1189,
+    "total_ms": {"pdfium": 11353, "hayro_master": 13102, "fork_04aecd3c": 6553, "hayro_fork": 5918},
+    "per_page_ms": {
+      "columns": ["pages drawn", "p50", "p90", "p99", "max"],
+      "pdfium": [1193, 2.29, 10.9, 100.3, 1803.3],
+      "hayro_master": [1206, 2.01, 12.9, 126.2, 9124.3],
+      "fork_04aecd3c": [1206, 1.98, 9.7, 61.2, 7258.8],
+      "hayro_fork": [1206, 1.92, 7.7, 58.1, 7256.6]
+    },
+    "fork_over_pdfium": "0.521 of the total (0.577 for 04aecd3c in the same runs); per page p50 0.78, p90 1.08, p99 2.36",
+    "fork_faster_than_pdfium_on": "961 of 1189 pages",
+    "fork_behind_pdfium": "on 214 pages by 149 ms in all (598 ms at 04aecd3c); ahead on the rest by 5,584 ms",
+    "against_04aecd3c": "faster by more than 10% on 84 pages, slower on 3: page_with_number's pages 3-5 by about 0.8 ms each, where glibc now trims the heap between pages and the next page's buffer is faulted in again (with MALLOC_TRIM_THRESHOLD_ raised, both builds take 0.22 ms); an artifact of the harness allocating a buffer per page, which appeared with the decompressor change",
+    "run_to_run": "fork over PDFium 0.518-0.523 in the five runs",
+    "failures": "as before: PDFium timed out on the two tiny-step tiling-pattern files and stopped itself on jpx_numcomps in every run; no hayro build crashed or timed out",
+    "layout_sensitivity": "pages dominated by PostScript functions (colorspace_cos, colorspace_sin, colorspace_atan, function_based_shading) took up to 40% longer or shorter between builds of the same source in different directories, with the same instruction counts: code layout. Small differences on single files were checked with instruction counts or many alternating runs before being believed"
+  },
   "quality": {
+    "corpus_pixels_ad5920e6_against_04aecd3c": "144 of 1,206 pages change: 138 by at most 1 level and 6 by 2, none by more than 16; every change was checked page by page against the build before it, and all but the glyph-run and mesh-function ones leave every page identical",
+    "hayro_test_suite_at_ad5920e6": "894 passed, 884 failed, 73 ignored, no panics; the seven newly failing are tests checked by hash with no reference image to download for the tolerant comparison (pattern_shading_type4_1, pattern_shading_type6, pattern_shading_type7, pattern_shading_type7_background, pdfium 413635900_4, _6 and _7), moved by the mesh function table: 107 to 299 pixels each by 1 level",
     "hayro_test_suite_with_jpeg_reduction": "901 passed, 877 failed, 73 ignored, no panics; of 1,291 differing pages, 1,267 have pixels off by more than 48 on under 0.01% of the page, 19 on 0.01-0.1%, 4 on 0.1-1% (one is corpus/0942791, under zune_jpeg), and pdfbox 4913 as below",
     "hayro_test_suite": "before the JPEG change: 934 passed, 844 failed, 73 ignored, no panics; the suite allows 3 levels per channel against CI's references, which the glyph cache's quarter-pixel placement exceeds on text (as in the second pass)",
     "graded": "of the 1,249 pages that differ from CI's references, 1,242 have pixels off by more than 48 on under 0.01% of the page and 6 on 0.01-0.1%; pdfbox 4913 has a hard edge in a gradient one pixel row higher (1% of its 200 by 200 pixels); the largest single-pixel difference is 231",
@@ -106,11 +142,14 @@
     }
   },
   "remaining_gaps_to_pdfium": {
-    "JPEG": "issue12841_reduced (136 ms against 68) draws a 5280 by 3792 JPEG larger than itself, mostly outside the page: the whole image is converted and premultiplied where a tenth of it shows. Reduced-size decoding doesn't apply; cropping to what shows would",
-    "free-form and lattice meshes": "types 4 and 5 are sampled pixel by pixel with a winding test per triangle (issue2948 49 ms against 9)",
-    "gradients": "vello_cpu's gradient painter with many stops (axial_shading_many_inputs 24 ms against 2.9) and radial gradients drawn as textures (radial_gradients 26 ms against 12)",
-    "start-up per document": "building the CMYK ICC transform takes about 7 ms the first time anything is CMYK (moxcms samples a 17^4 grid through the profile); PDFium uses a compiled-in table",
-    "smaller": "function-based shadings (function_based_shading 56 ms against 44), bug1755507, issue12798_page1_reduced"
+    "as_of": "ad5920e6, the final runs above; the gaps listed at 04aecd3c (JPEGs drawn larger than the page, free-form meshes, many-stop and radial gradients, the CMYK transform at start-up) are closed or narrowed by the changes above",
+    "very large pages": "issue14497 (40 ms against 29) is 6740 by 4768 pixels: clearing, filling and copying the 128 MB target is most of it",
+    "CMYK patch meshes": "personwithdog (75 against 65): patches cut into cells of about two pixels, then a CMYK conversion per pixel",
+    "free-form meshes": "issue2948 (18 against 8.0): a pixel's weights and color per triangle covering it, triangles overlapping",
+    "soft masks": "bug1755507 (17.5 against 10, a JPEG inside a soft mask) and issue12798_page1_reduced (10.3 against 4.7, nested transparency groups, where vello_cpu clears layer buffers per tile)",
+    "Type 3 image glyphs": "issue918 (11.8 against 5.7): glyphs that are images, drawn one by one with bicubic filtering",
+    "predefined CJK CMaps": "vertical_rotated_fallback_glyphs (7.0 against 1.7): parsing the binary CMaps; PDFium compiles its in",
+    "smaller": "function_based_shading (58 against 52, PostScript functions), issue8092 (12 against 8.4), issue5044 (6.0 against 2.6)"
   },
   "not_covered": "the fork isn't in Shiori; no VM or hardware runs; machines under shared load; JPEG 2000 pages were checked and are on par with PDFium (865 ms against 974 over the 14 corpus pages that have them)"
 }
