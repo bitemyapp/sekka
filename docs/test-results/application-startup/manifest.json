@@ -1,0 +1,56 @@
+{
+  "captured_date": "2026-10-29",
+  "shell_runtime_source": "f44342e693678bc28956ec59a594bb9d5a5388b2",
+  "shell_binary_sha256": "ceb5a9385d5b5fa021c31c51f76d551218aa083040b1f8a5132d20a6e66414b0",
+  "scope": "Component evidence and explicitly labeled UI mocks; not ISO or physical hardware qualification.",
+  "images": [
+    {
+      "file": "startup-details-live.png",
+      "kind": "private compositor screenshot",
+      "width": 1280,
+      "height": 800,
+      "bytes": 139329,
+      "sha256": "8b9269bbb7831838f47b1c7c8d365d0986e7b6ea46fc083d3ac39a8306c485c8"
+    },
+    {
+      "file": "startup-missing-live.png",
+      "kind": "private compositor screenshot",
+      "width": 1280,
+      "height": 800,
+      "bytes": 146184,
+      "sha256": "c4d40f9dfdcbcb197e64c21cbdc37da3ec6926040c88693a758ea7ef7b6f5e39"
+    },
+    {
+      "file": "koe-window-live.png",
+      "kind": "private compositor screenshot",
+      "width": 1280,
+      "height": 800,
+      "bytes": 484369,
+      "sha256": "96c0b9b90feda4495e3afd23c6a9abdcc15a03108699afbc522d762bacf01d8b"
+    },
+    {
+      "file": "startup-success-live.png",
+      "kind": "private compositor screenshot",
+      "width": 1280,
+      "height": 800,
+      "bytes": 489926,
+      "sha256": "173d2f9272e596ef4684d13891313f15ab620f308ae287fc9cbdde99413c7917"
+    },
+    {
+      "file": "mock-waiting.png",
+      "kind": "synthetic UI mock",
+      "width": 900,
+      "height": 600,
+      "bytes": 43578,
+      "sha256": "7da0537ba44f811281e72982caabb219d681a5e0ae0b3f15d9720d58ae68db7e"
+    },
+    {
+      "file": "mock-window-opened.png",
+      "kind": "synthetic UI mock",
+      "width": 900,
+      "height": 600,
+      "bytes": 46301,
+      "sha256": "40411d60e76f7341f439f1700344d50741dc60ff97a16d30688db15b40722782"
+    }
+  ]
+}

@@ -89,6 +89,17 @@ def main():
         def inspected_text():
             return "\n".join(p.read_text() for p in (root / "inspect").glob("*.json"))
 
+        def capture(name):
+            if shutil.which("grim"):
+                time.sleep(0.2)  # Commit the inspected view before capturing the output.
+                subprocess.run(["grim", str(args.evidence / name)], env=env, check=True)
+
+        def details(expected):
+            message({"request": "open", "what": "launches"})
+            until("details window", lambda: "Startup" in state()["surfaces"])
+            until("details rendered", lambda: expected in inspected_text()
+                  and "Reading application output" not in inspected_text())
+
         try:
             with (args.evidence / "compositor.log").open("w") as log:
                 children.append(subprocess.Popen([executables["compositor"], "--backend", "headless", "--renderer", "pixman",
@@ -103,19 +114,28 @@ def main():
             launch("Startup Delayed Failure")
             failure_result = until("delayed exit reported", lambda: outcome("Startup Delayed Failure", "23"))
             assert any("could not open" in n for n in state()["notes"])
-            message({"request": "open", "what": "launches"})
-            until("details window", lambda: "Startup" in state()["surfaces"])
-            until("actual stderr visible", lambda: "startup-fixture: daemon did not become ready" in inspected_text())
-            if shutil.which("grim"):
-                subprocess.run(["grim", str(args.evidence / "startup-details-live.png")], env=env, check=True)
+            details("startup-fixture: daemon did not become ready")
+            capture("startup-details-live.png")
             # Close only the test shell's details window through its ordinary close button shortcut.
             run([executables["ctl"], "input", "key", "Escape"])
 
             launch("Startup Missing Program")
             until("missing executable reported", lambda: outcome("Startup Missing Program", "Could not start"))
+            details("/definitely/missing/startup-fixture")
+            capture("startup-missing-live.png")
+            run([executables["ctl"], "input", "key", "Escape"])
+            # Dismiss the two cards through their visible button on the fixed
+            # 1280x800 test output. Launch history must remain available.
+            for remaining in (1, 0):
+                run([executables["ctl"], "input", "motion", "990", "107"])
+                run([executables["ctl"], "input", "click", "left"])
+                until("failure card dismissed", lambda: len(state()["notes"]) == remaining)
             launch("Startup Window")
             until("real Koe window observed", lambda: outcome("Startup Window", "Window opened"))
             assert not (root / "config/aizome/koe.toml").exists(), "opening the window enabled dictation"
+            capture("koe-window-live.png")
+            details("Compositor observed a window for org.aizome.Koe")
+            capture("startup-success-live.png")
             report = {"executables": executables, "delayed_failure": failure_result, "state": state(),
                       "coverage": "private headless compositor; actual palette, shell, launcher and integrated Koe window"}
             (args.evidence / "result.json").write_text(json.dumps(report, indent=2) + "\n")
