@@ -107,6 +107,17 @@ pub struct Layout {
     pub ssd: bool,
     pub focused: bool,
     pub tabs: Vec<TabLayout>,
+    /// The room the strip parts for tabs dragged over it: where they'd go.
+    pub slot: Option<Rect>,
+}
+
+/// Room for dragged tabs in a group's strip, before its `at`th tab (after
+/// them all when past the end).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gap {
+    pub at: usize,
+    /// The dragged tabs' titles' widths.
+    pub titles: Vec<f64>,
 }
 
 impl Layout {
@@ -122,7 +133,8 @@ impl Layout {
 
 /// Lays out a window's frame and its group's tabs. `members` are the
 /// group's windows in tab order with their titles' widths; `active` is the
-/// one showing.
+/// one showing. A `gap` parts the tabs for dragged ones, laid out as
+/// though they'd joined.
 pub fn layout(
     content: Rect,
     ssd: bool,
@@ -130,15 +142,30 @@ pub fn layout(
     members: &[(WinId, f64)],
     active: WinId,
     strip_offset: i32,
+    gap: Option<&Gap>,
 ) -> Layout {
     let frame = if ssd { content.outset(Insets::new(BORDER + RAIL, BORDER, BORDER, BORDER)) } else { content };
-    let widths = tab_widths(frame.w, &members.iter().map(|(_, w)| *w).collect::<Vec<_>>());
+    let at = gap.map_or(members.len(), |g| g.at.min(members.len()));
+    let parted = gap.map_or(&[][..], |g| &g.titles[..]);
+    let titles: Vec<f64> = members[..at]
+        .iter()
+        .map(|(_, w)| *w)
+        .chain(parted.iter().copied())
+        .chain(members[at..].iter().map(|(_, w)| *w))
+        .collect();
+    let widths = tab_widths(frame.w, &titles);
     let total: i32 = widths.iter().sum();
     let offset = strip_offset.clamp(0, (frame.w - total).max(0));
     let mut x = frame.x + offset;
     let y = frame.y - TAB_H;
+    let room: i32 = widths[at..at + parted.len()].iter().sum();
+    let slot = gap.map(|_| Rect::new(x + widths[..at].iter().sum::<i32>(), y, room, TAB_H));
     let mut tabs = Vec::with_capacity(members.len());
-    for ((win, _), w) in members.iter().zip(widths) {
+    let own = widths[..at].iter().chain(&widths[at + parted.len()..]);
+    for (i, ((win, _), &w)) in members.iter().zip(own).enumerate() {
+        if i == at {
+            x += room;
+        }
         let look = if *win != active {
             TabLook::Background
         } else if focused {
@@ -155,7 +182,7 @@ pub fn layout(
         tabs.push(TabLayout { win: *win, rect, look, close, zoom, title_x, title_max_w });
         x += w;
     }
-    Layout { win: active, content, frame, ssd, focused, tabs }
+    Layout { win: active, content, frame, ssd, focused, tabs, slot }
 }
 
 /// What a point on the decorations does.
@@ -373,7 +400,7 @@ mod tests {
     use super::*;
 
     fn single(ssd: bool, focused: bool) -> Layout {
-        layout(Rect::new(100, 100, 400, 300), ssd, focused, &[(1, 100.0)], 1, 0)
+        layout(Rect::new(100, 100, 400, 300), ssd, focused, &[(1, 100.0)], 1, 0, None)
     }
 
     #[test]
@@ -395,9 +422,9 @@ mod tests {
     fn tabs_are_as_wide_as_their_titles_within_bounds() {
         assert_eq!(tab_width(0.0), 64);
         assert_eq!(tab_width(100.0), 152);
-        let l = layout(Rect::new(0, 50, 120, 100), true, true, &[(1, 500.0)], 1, 0);
+        let l = layout(Rect::new(0, 50, 120, 100), true, true, &[(1, 500.0)], 1, 0, None);
         assert_eq!(l.tabs[0].rect.w, 122 - TAB_SPARE, "leaves some of the top edge");
-        let l = layout(Rect::new(0, 50, 1200, 100), true, true, &[(1, 900.0)], 1, 0);
+        let l = layout(Rect::new(0, 50, 1200, 100), true, true, &[(1, 900.0)], 1, 0, None);
         assert_eq!(l.tabs[0].rect.w, TAB_MAX, "never wider than the cap");
         assert_eq!(l.tabs[0].title_max_w, TAB_MAX as f64 - TAB_CHROME);
     }
@@ -416,7 +443,7 @@ mod tests {
 
     #[test]
     fn stacked_tabs_sit_side_by_side() {
-        let l = layout(Rect::new(0, 50, 800, 400), true, false, &[(1, 60.0), (2, 80.0), (3, 40.0)], 2, 0);
+        let l = layout(Rect::new(0, 50, 800, 400), true, false, &[(1, 60.0), (2, 80.0), (3, 40.0)], 2, 0, None);
         assert_eq!(l.tabs.len(), 3);
         assert_eq!(l.tabs[1].rect.x, l.tabs[0].rect.right());
         assert_eq!(l.tabs[2].rect.x, l.tabs[1].rect.right());
@@ -425,10 +452,49 @@ mod tests {
     }
 
     #[test]
+    fn a_gap_parts_the_tabs_where_dragged_ones_would_go() {
+        let content = Rect::new(0, 50, 800, 400);
+        let members = [(1, 60.0), (2, 80.0)];
+        let plain = layout(content, true, false, &members, 2, 0, None);
+        assert_eq!(plain.slot, None);
+        let parted = |at, titles: &[f64]| {
+            layout(content, true, false, &members, 2, 0, Some(&Gap { at, titles: titles.to_vec() }))
+        };
+        // Before the first: both move along by the dragged tab's width.
+        let l = parted(0, &[40.0]);
+        let slot = l.slot.unwrap();
+        assert_eq!((slot.x, slot.y, slot.w, slot.h), (plain.tabs[0].rect.x, plain.tabs[0].rect.y, 92, TAB_H));
+        assert_eq!(l.tabs[0].rect.x, slot.right());
+        assert_eq!(l.tabs[1].rect.x, l.tabs[0].rect.right());
+        // Between them.
+        let l = parted(1, &[40.0]);
+        assert_eq!(l.tabs[0].rect, plain.tabs[0].rect);
+        assert_eq!(l.slot.unwrap().x, l.tabs[0].rect.right());
+        assert_eq!(l.tabs[1].rect.x, l.slot.unwrap().right());
+        // Past the end is after them all; a group takes a tab's room each.
+        let l = parted(9, &[40.0, 30.0]);
+        assert_eq!(l.tabs[1].rect, plain.tabs[1].rect);
+        assert_eq!(l.slot.unwrap().x, plain.tabs[1].rect.right());
+        assert_eq!(l.slot.unwrap().w, 92 + 82);
+    }
+
+    #[test]
+    fn a_gap_is_where_the_tab_lands() {
+        // Too narrow for all three: they shrink as they will once it joins.
+        let content = Rect::new(0, 50, 260, 400);
+        let gap = Gap { at: 1, titles: vec![40.0] };
+        let l = layout(content, true, true, &[(1, 60.0), (2, 80.0)], 2, 0, Some(&gap));
+        let joined = layout(content, true, true, &[(1, 60.0), (3, 40.0), (2, 80.0)], 3, 0, None);
+        assert_eq!(l.tabs[0].rect, joined.tabs[0].rect);
+        assert_eq!(l.slot, Some(joined.tabs[1].rect));
+        assert_eq!(l.tabs[1].rect, joined.tabs[2].rect);
+    }
+
+    #[test]
     fn tab_offset_slides_but_stays_on_the_frame() {
-        let l = layout(Rect::new(0, 50, 800, 400), true, true, &[(1, 100.0)], 1, 300);
+        let l = layout(Rect::new(0, 50, 800, 400), true, true, &[(1, 100.0)], 1, 300, None);
         assert_eq!(l.tabs[0].rect.x, -1 + 300);
-        let l = layout(Rect::new(0, 50, 800, 400), true, true, &[(1, 100.0)], 1, 5000);
+        let l = layout(Rect::new(0, 50, 800, 400), true, true, &[(1, 100.0)], 1, 5000, None);
         assert_eq!(l.tabs[0].rect.right(), l.frame.right());
     }
 

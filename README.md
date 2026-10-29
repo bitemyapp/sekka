@@ -44,8 +44,10 @@ Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
 choice. It is written from the compositor up in Rust, on its own native
 toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 
-- Every window wears a tab only as wide as its title. Drop one tab on another
-  and the windows stack into a group, from any apps; slide a tab along the
+- Every window wears a tab only as wide as its title. Drop one tab among
+  another window's and the windows stack into a group, from any apps, the
+  tab going where you dropped it; drag a group's tab back in elsewhere to
+  reorder it (**Alt**-drag for the one showing), and slide a tab along the
   top edge with **Shift**.
 - One menu bar shows the focused app's menus. **Super + right-click**
   anywhere opens the whole menu at the pointer, and any menu tears off into

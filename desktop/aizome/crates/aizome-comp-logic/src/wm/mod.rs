@@ -801,6 +801,13 @@ impl Model {
     /// Stacks `b` (and its group, if any) into `a`'s group, after `a`'s
     /// tabs, and shows `b`. Returns the members whose rect changed.
     pub fn stack(&mut self, a: WinId, b: WinId) -> Option<Vec<WinId>> {
+        self.stack_at(a, b, None)
+    }
+
+    /// Stacks `b` (and its group) into `a`'s group before the `at`th of
+    /// `a`'s tabs (after them all when `None` or past the end), and shows
+    /// `b`. Returns the members whose rect changed.
+    pub fn stack_at(&mut self, a: WinId, b: WinId, at: Option<usize>) -> Option<Vec<WinId>> {
         self.generation += 1;
         if a == b || !self.wins.contains_key(&a) || !self.wins.contains_key(&b) {
             return None;
@@ -840,7 +847,8 @@ impl Model {
             w.home = home;
         }
         let g = self.groups.get_mut(&gid).unwrap();
-        g.members.extend(incoming.iter().copied());
+        let at = at.unwrap_or(g.members.len()).min(g.members.len());
+        g.members.splice(at..at, incoming.iter().copied());
         g.active = b;
         // The group sits together in the stack, where `a` was.
         let members = g.members.clone();
