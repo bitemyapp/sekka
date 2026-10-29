@@ -204,6 +204,9 @@ rustPlatform.buildRustPackage {
     }
     export TZDIR=${tzdata}/share/zoneinfo
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
+    # A successful spawn is not a successful application launch. Gate the
+    # shipped shell on process outcomes and its failure/details interface.
+    cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell --lib
     runHook postCheck
   '';
 

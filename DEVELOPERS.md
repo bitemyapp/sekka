@@ -1033,6 +1033,49 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+The shell observes application launch attempts through `aizome-sys`:
+process creation and exit are separate events, and only a compositor window
+event confirms that a window opened. D-Bus acceptance and successful
+single-instance handoffs keep their narrower meaning. Desktop-entry launches
+and commands launched by the shell share this path. Raw compositor `spawn`
+bindings and processes started from terminals remain outside it.
+Toolchest ▸ System ▸ Application Launches shows the last 64 attempts; early
+failures and unconfirmed graphical launches offer Show Details. The shell
+also exposes outcomes through `aizome-shell msg state`; `aizome-shell msg
+'{"request":"open","what":"launches"}'` opens the same details window.
+
+Each observed launch writes directly to journald with a unique
+`SYSLOG_IDENTIFIER=aizome-launch-…`. The details window queries that exact
+identifier on a worker, capped at 200 entries and 64 KiB with a five-second
+deadline. It never displays other attempts' output, captures the user's
+environment, or pipes application output through the shell. The latter
+preserves application lifetime when the shell is replaced. Accepted D-Bus
+activation may have no output here because the bus owns that process.
+History is bounded in memory and resets with the shell; the journal keeps
+output according to its own retention. Failure details are local to the
+user and are copied only on request.
+
+The Aizome package's mandatory check phase runs the shell and system-library
+unit tests, including delayed process failure, literal command arguments,
+notification actions, details rendering and handoffs. For focused checks:
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-sys -p aizome-shell --lib
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell --lib journal_output_is_isolated -- --ignored
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#grim -c python3 desktop/aizome/scripts/test-startup.py \
+  --shell desktop/aizome/target/debug/aizome-shell --evidence .work/startup-evidence
+```
+
+The journal check writes only uniquely identified fixture output. The last
+command uses the named shell with installed Aizome and Koe (override
+`--compositor`, `--ctl`, `--koe` for other binaries), private home and runtime
+directories, and disconnected session/system buses. It launches a delayed
+failure and a missing program through the real palette, checks that stderr
+is visible in Details, then opens a real Koe window without enabling
+dictation. Its screenshots and JSON identify component evidence, not an ISO
+or physical-hardware qualification.
+
 Aizome's session launcher owns desktop cleanup even when logind terminates
 only the login scope, as Yukimi's Sign Out does. The compositor runs in the
 user manager, outside that scope; HUP, INT and TERM must therefore stop the
