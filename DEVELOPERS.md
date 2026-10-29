@@ -727,7 +727,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `sidestep`, `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, Sidestep for Aizome's and Uta's builds and the others as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `sidestep` input names its revision, so the nightly's input update never moves it: a new Sidestep is a change to `flake.nix`, reviewed with the Aizome changes that need it. The `uta` input names its revision for the same reason: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -1072,11 +1072,11 @@ The workspace builds against Sukumo, Aizome's toolkit, in
 
 The catalog's Uta, from [bitemyapp/uta](https://github.com/bitemyapp/uta),
 depends on `aizome-kit` by path, and Sekka builds it against the kit here
-and Sekka's Sidestep (`nix/uta.nix`), with Uta's own `Cargo.lock`. A change
-to the kit's interface or its dependencies, or a new Sidestep, must keep
+and Sukumo (`nix/uta.nix`), with Uta's own `Cargo.lock`. A change to the
+interface or dependencies of the kit or Sukumo must keep
 `nix build .#uta` building; the `applications` check builds it too. Uta's
-source holds only the kit's crates, so a crate the kit comes to depend on
-joins the list in `nix/uta.nix`.
+source holds only the kit's and Sukumo's crates, so a crate the kit comes to
+depend on joins the list in `nix/uta.nix`.
 
 Uta is an optional download in Genkan and Yukimi, with RustyPipe enabled. Its
 catalog `preload: false` excludes it from `application-cache` and the ISO's

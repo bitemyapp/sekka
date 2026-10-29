@@ -47,7 +47,7 @@ rec {
     # With the session's fonts, which it draws with too.
     uta = import ./uta.nix {
       pkgs = applications.legacyPackages.${system};
-      inherit uta sidestep;
+      inherit uta;
       inherit (aizome.packages.${system}) fonts;
     };
   };

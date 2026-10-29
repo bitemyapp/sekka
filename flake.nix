@@ -20,9 +20,9 @@
   inputs.tracy.inputs.nixpkgs.follows = "applications";
   # Uta, the YouTube Music client, as source: Sekka builds it against
   # Aizome's kit from this checkout (nix/uta.nix), not the Aizome its own
-  # lock names. Pinned by revision, as Sidestep is, so the nightly's input
-  # update doesn't move it: a Uta that needs a different Aizome would fail
-  # the nightly's checks and hold back every other input.
+  # lock names. Pinned by revision, so the nightly's input update doesn't
+  # move it: a Uta that needs a different Aizome would fail the nightly's
+  # checks and hold back every other input.
   inputs.uta = {
     url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
     flake = false;

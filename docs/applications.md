@@ -89,7 +89,7 @@ from source, so `push-cache` publishes it.
 Uta, a YouTube Music client from [bitemyapp/uta](https://github.com/bitemyapp/uta),
 draws its windows with Aizome's widget kit. Sekka takes Uta's source and
 builds it with Uta's own package definition and the applications' Nixpkgs, but
-with the kit from `desktop/aizome` and Sekka's Sidestep rather than the
+with the kit and Sukumo from `desktop/aizome` rather than the
 Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
 revision, so the nightly's input update doesn't move it: a Uta built for a
 different Aizome would fail the nightly's checks and hold back every other
@@ -114,7 +114,7 @@ Optional downloads still require the corresponding source and notices when
 distributing binaries; excluding the package from an ISO does not waive those
 requirements. See [GPLv3 section 6](https://www.gnu.org/licenses/gpl-3.0.html#section6).
 The Uta pin, its vendored RustyPipe sources, Sekka's `nix/uta.nix`, the local
-Aizome kit and locked Sidestep identify the sources and build recipe used here.
+Aizome kit and Sukumo identify the sources and build recipe used here.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
