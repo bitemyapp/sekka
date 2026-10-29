@@ -104,8 +104,15 @@ impl Shell {
     /// Open, size or close the cards' surface.
     pub fn sync_cards(&mut self, cx: &mut Cx<Msg>) {
         let n = if self.locked() { 0 } else { self.card_views().len() };
+        // Beside the Deskbar when it hangs at the right (one that hides
+        // itself overlays them while it shows, as it does windows).
+        let beside = self.deskbar.is_some()
+            && !self.deskbar_cfg.auto_hide
+            && self.deskbar_cfg.side == aizome_config::DeskbarSide::Right;
+        let right = if beside { self.deskbar_width() + crate::deskbar::SHADOW + 12.0 } else { 12.0 };
+        let margins = Margins::new(crate::menubar::HEIGHT as i32 + 8, right as i32, 0, 0);
         match (n, self.cards) {
-            (0, Some((w, _))) => {
+            (0, Some((w, _, _))) => {
                 cx.close_window(w);
                 self.surfaces.remove(&w);
                 self.cards = None;
@@ -113,24 +120,26 @@ impl Shell {
             (0, None) => {}
             (n, None) => {
                 let Some(output) = self.primary().map(|s| s.output.id) else { return };
-                // Beside the Deskbar when it hangs at the right too.
-                let beside = self.deskbar.is_some() && self.deskbar_cfg.side == aizome_config::DeskbarSide::Right;
-                let right = if beside { self.deskbar_width() + crate::deskbar::SHADOW + 12.0 } else { 12.0 };
                 let opts = LayerOptions::new(Layer::Top, "aizome-notifications")
                     .anchors(Anchors::TOP | Anchors::RIGHT)
                     .exclusive_zone(-1)
-                    .margins(Margins::new(crate::menubar::HEIGHT as i32 + 8, right as i32, 0, 0))
+                    .margins(margins)
                     .keyboard(KeyboardInteractivity::None)
                     .output(output);
                 let w = cx.open_window(layer(opts, WIDTH + 3.0, height(n), "Notifications"));
                 self.surfaces.insert(w, Surface::Cards);
-                self.cards = Some((w, n));
+                self.cards = Some((w, n, right));
             }
-            (n, Some((w, had))) if n != had => {
-                cx.set_layer_size(w, Size::new(WIDTH + 3.0, height(n)));
-                self.cards = Some((w, n));
+            (n, Some((w, had, at))) => {
+                if n != had {
+                    cx.set_layer_size(w, Size::new(WIDTH + 3.0, height(n)));
+                }
+                // The Deskbar moved, widened or folded while they're up.
+                if right != at {
+                    cx.set_layer_margins(w, margins);
+                }
+                self.cards = Some((w, n, right));
             }
-            _ => {}
         }
     }
 

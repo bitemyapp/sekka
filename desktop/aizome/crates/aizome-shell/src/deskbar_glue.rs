@@ -224,9 +224,11 @@ impl Shell {
         // opens again, there (and the compositor refits windows the way it
         // does for any Deskbar arriving).
         let moved = self.deskbar_output.is_some() && self.deskbar_output != self.primary().map(|s| s.output.id);
+        let mut reopened = false;
         if (moved || self.deskbar_transient != self.deskbar_cfg.auto_hide || self.deskbar_side != self.deskbar_cfg.side)
             && let Some(k) = self.deskbar.take()
         {
+            reopened = true;
             cx.close_window(k);
             self.surfaces.remove(&k);
             self.deskbar_size = None;
@@ -276,6 +278,11 @@ impl Shell {
                 self.deskbar_transient = self.deskbar_cfg.auto_hide;
                 self.deskbar_output = Some(output);
                 self.deskbar_side = self.deskbar_cfg.side;
+                // Revealed and moved away from the pointer (the old surface
+                // can't say it left): hide unless the pointer comes in.
+                if reopened {
+                    self.arm_deskbar_hide(cx);
+                }
             }
             (true, Some(k)) => {
                 let model = self.deskbar_model();
@@ -442,16 +449,26 @@ impl Shell {
             }
             DeskbarMsg::Grip(_) => {}
             DeskbarMsg::Edge(phase) => {
-                let (DragPhase::Move(p) | DragPhase::End(p)) = phase else { return };
-                let Some((left, screen)) = self.deskbar_left() else { return };
-                let x = left + p.x;
+                // By how far the pointer has gone since the press: while the
+                // button's held, the compositor reports the pointer from where
+                // the surface was at the press, and a Deskbar at the right
+                // moves away from there as it widens.
+                let p = match phase {
+                    DragPhase::Start(p) => {
+                        self.deskbar_resize = Some((self.deskbar_width(), p.x));
+                        return;
+                    }
+                    DragPhase::Move(p) | DragPhase::End(p) => p,
+                };
+                let Some((from, x)) = self.deskbar_resize else { return };
                 let w = match self.deskbar_cfg.side {
-                    DeskbarSide::Left => x,
-                    DeskbarSide::Right => screen - x,
+                    DeskbarSide::Left => from + (p.x - x),
+                    DeskbarSide::Right => from - (p.x - x),
                 };
                 // Live while dragging; saved when let go.
                 self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
                 if matches!(phase, DragPhase::End(_)) {
+                    self.deskbar_resize = None;
                     self.run(Action::PlaceDeskbar { side: None, width: Some(w) }, cx);
                 }
             }
@@ -466,12 +483,7 @@ impl Shell {
                     Entry::action("At the Right", place(DeskbarSide::Right)).checked(side == DeskbarSide::Right),
                     Entry::separator(),
                 ];
-                for (label, w) in [
-                    ("Icons Only", crate::deskbar::RAIL_WIDTH),
-                    ("Slim", 150.0),
-                    ("Standard", crate::deskbar::WIDTH),
-                    ("Wide", 300.0),
-                ] {
+                for (label, w) in aizome_config::DESKBAR_SIZES {
                     entries.push(Entry::action(label, size(w)).checked(width == w));
                 }
                 let menu = ShellMenu::new("Deskbar".to_owned(), entries);

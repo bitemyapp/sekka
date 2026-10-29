@@ -413,3 +413,147 @@ fn deskbar_widths_stay_in_range() {
     assert_eq!(clamp_width(301.4), 301.0);
     assert_eq!(clamp_width(f64::NAN), WIDTH);
 }
+
+/// Moves the Deskbar to the left, as Settei would.
+fn to_the_left(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, auto_hide: bool) {
+    let mut d = h.program().settings.deskbar_settings();
+    d.side = aizome_config::DeskbarSide::Left;
+    d.auto_hide = auto_hide;
+    h.program_mut().settings.set_shell_section("deskbar", &d);
+    h.send(Msg::SettingsChanged);
+}
+
+#[test]
+fn the_edge_follows_the_pointer_from_where_it_was_pressed() {
+    use aizome_shell::widgets::drawn::DragPhase::{End, Move, Start};
+    let edge = |phase| Msg::Deskbar(DeskbarMsg::Edge(phase));
+    // While the button's held, the compositor reports the pointer from
+    // where the surface was at the press: a Deskbar at the right widens
+    // away from there, and only how far the pointer went counts.
+    let mut h = scene(false);
+    h.send(edge(Start(Point::new(5.0, 100.0))));
+    for dx in [20.0, 44.0, 66.0, 88.0] {
+        h.send(edge(Move(Point::new(5.0 - dx, 100.0))));
+        assert_eq!(h.program().deskbar_model().width, 232.0 + dx, "{dx} left of the press");
+    }
+    h.send(edge(End(Point::new(5.0 - 88.0, 100.0))));
+    assert_eq!(h.program().settings.deskbar_settings().width, 320.0, "saved where it was let go");
+
+    // At the left the surface stays put, and the edge follows the same way.
+    to_the_left(&mut h, false);
+    h.send(edge(Start(Point::new(318.0, 100.0))));
+    h.send(edge(Move(Point::new(258.0, 100.0))));
+    h.send(edge(End(Point::new(238.0, 100.0))));
+    assert_eq!(h.program().settings.deskbar_settings().width, 240.0);
+}
+
+#[test]
+fn desktop_icons_make_room_for_a_deskbar_at_the_left_that_stays() {
+    use aizome_shell::actions::Action;
+    let mut h = scene(false);
+    let output = h.program().screens[0].output.id;
+    to_the_left(&mut h, false);
+    assert_eq!(h.program().desktop_left(output), 232.0 + aizome_shell::deskbar::SHADOW);
+    // One that hides itself overlays them while it shows, as it does windows.
+    to_the_left(&mut h, true);
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(false)));
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"), "revealed");
+    assert_eq!(h.program().desktop_left(output), 0.0);
+}
+
+#[test]
+fn the_deskbar_controls_follow_it_to_the_left() {
+    use aizome_shell::menubar::Slot;
+    let mut h = scene(false);
+    to_the_left(&mut h, false);
+    // The settings read again, the sample tray back.
+    h.program_mut().tray = tray();
+    h.send(Msg::Nothing);
+    let bar = window_titled(&h, "Menu bar");
+    // After the Toolchest, over the Deskbar.
+    let hide = h.find(bar, "Hide Deskbar").expect("the hide control");
+    assert!(hide.x1 < 232.0, "{hide:?}");
+    h.click(bar, hide.center());
+    assert!(h.program().deskbar_cfg.collapsed);
+    let show = h.find(bar, "5 apps").expect("the show control");
+    assert!(show.x1 < 232.0, "{show:?}");
+    // The header keeps its widgets, and the menus start past the control,
+    // where the bar's geometry says.
+    assert!(h.find(bar, "Network").is_some(), "{:?}", h.texts(bar));
+    let theme = h.theme().clone();
+    let titles = h.program_mut().title_rects(bar, &theme);
+    let app = titles.iter().find(|(s, _)| *s == Slot::Menu(0)).expect("the app's name").1;
+    assert!(app.x0 >= show.x1, "{app:?} after {show:?}");
+    assert_eq!(
+        h.find(bar, "Format").map(|r| (r.x0, r.x1)),
+        titles.iter().find(|(s, _)| *s == Slot::Menu(4)).map(|t| (t.1.x0, t.1.x1))
+    );
+    // A window dragged up onto the strip still finds its Desk.
+    let mail = h.find(bar, "1 Mail").expect("Desk 1 in the strip");
+    assert_eq!(h.program().desk_at_deskbar_point(Point::new(mail.center().x, -12.0)), Some(1));
+    h.click(bar, show.center());
+    assert!(!h.program().deskbar_cfg.collapsed);
+}
+
+#[test]
+fn critical_cards_stay_beside_the_deskbar_as_it_moves() {
+    use aizome_kit::platform::LayerChange;
+    use aizome_shell::notifications::server::NoteEvent;
+    use aizome_shell::notifications::store::{Incoming, Urgency};
+    let mut h = scene(false);
+    let n = Incoming {
+        app_name: "Power".into(),
+        summary: "Battery low".into(),
+        urgency: Urgency::Critical,
+        ..Default::default()
+    };
+    h.send(Msg::Note(NoteEvent::Notify(40, Box::new(n))));
+    let right = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| h.program().cards.map(|c| c.2);
+    assert_eq!(right(&h), Some(232.0 + aizome_shell::deskbar::SHADOW + 12.0), "beside the Deskbar");
+    to_the_left(&mut h, false);
+    assert_eq!(right(&h), Some(12.0), "the Deskbar went left");
+    // The only layer to change its margins: the cards', moving over.
+    let margins = h.platform.layer_changes.iter().rev().find_map(|(_, c)| match c {
+        LayerChange::Margins(m) => Some(*m),
+        _ => None,
+    });
+    assert_eq!(margins.map(|m| m.right), Some(12), "{margins:?}");
+}
+
+#[test]
+fn a_revealed_deskbar_moved_by_its_grip_still_hides() {
+    use aizome_shell::actions::Action;
+    use aizome_shell::widgets::drawn::DragPhase;
+    use std::time::Duration;
+    let mut h = scene(false);
+    h.program_mut().deskbar_cfg.auto_hide = true;
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(false)));
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    h.enter(db, Point::new(116.0, 5.0));
+    // Let go over the left half: it opens again there, away from the
+    // pointer, and the surface it left can't say the pointer went.
+    h.send(Msg::Deskbar(DeskbarMsg::Grip(DragPhase::End(Point::new(-900.0, 5.0)))));
+    assert_eq!(h.program().deskbar_cfg.side, aizome_config::DeskbarSide::Left);
+    assert!(h.program().deskbar.is_some(), "still revealed");
+    h.advance(Duration::from_secs(1));
+    assert!(h.program().deskbar.is_none(), "hidden again");
+}
+
+#[test]
+fn the_compact_deskbar_ends_under_its_shelf() {
+    for width in [150.0, 48.0] {
+        let mut h = scene(false);
+        with_mail_and_shelf(&mut h);
+        let mut d = h.program().settings.deskbar_settings();
+        d.width = width;
+        h.program_mut().settings.set_shell_section("deskbar", &d);
+        h.send(Msg::SettingsChanged);
+        let db = window_titled(&h, "Deskbar");
+        let m = h.program().deskbar_model();
+        h.resize(db, aizome_shell::deskbar::size(&m));
+        let drop = h.find(db, "Drop to park").expect("the drop target");
+        // Its 6pt of padding, then the shadow.
+        assert_eq!(drop.y1 + 6.0 + aizome_shell::deskbar::SHADOW, m.height(), "{width} wide");
+    }
+}

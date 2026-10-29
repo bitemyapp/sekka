@@ -46,6 +46,44 @@ fn real_deskbar_autohides_after_leaving_its_app_rows() {
     assert_eq!(c.window("deskbar-repro").unwrap().geometry, before);
 }
 
+/// The real shell's Deskbar edge, dragged out 90pt at either side, makes
+/// it 90pt wider. While the button's held, the compositor reports the
+/// pointer from where the surface was at the press, which a Deskbar at the
+/// right moves away from as it widens.
+#[test]
+#[ignore = "requires AIZOME_LAYOUT_TEST_SHELL pointing at the shell under test"]
+fn real_deskbar_edge_resizes_at_either_side() {
+    let shell = std::env::var("AIZOME_LAYOUT_TEST_SHELL").expect("shell binary");
+    for side in ["right", "left"] {
+        let settings = format!("[appearance]\neffects = \"austere\"\n[deskbar]\nside = \"{side}\"\n");
+        let c = Compositor::start(Options { settings: &settings, ..Default::default() });
+        let _shell = program(&c, &shell, &[], "shell");
+        wait("the shell's Deskbar", || {
+            shell_state(&c, &shell)
+                .is_some_and(|s| s["surfaces"].as_array().is_some_and(|ss| ss.iter().any(|v| v == "Deskbar")))
+        });
+        c.settle();
+        // On a 1280pt output, 2pt inside the 232pt face's inner edge, under
+        // the grip.
+        let y = 24.0 + 10.0 + 6.0;
+        let (from, to) = if side == "left" { (230.0, 320.0) } else { (1050.0, 960.0) };
+        let button = |pressed| Synthetic::PointerButton { button: "left".into(), pressed };
+        c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: from, y }] });
+        c.settle();
+        c.ok(Request::Synthesize { events: vec![button(true)] });
+        for i in 1..=30 {
+            let x = from + (to - from) * f64::from(i) / 30.0;
+            c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x, y }] });
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        c.settle();
+        c.ok(Request::Synthesize { events: vec![button(false)] });
+        let saved = || std::fs::read_to_string(c.dir.join("config/aizome/settings.toml")).unwrap_or_default();
+        wait("a new width saved", || saved().contains("width = ") && !saved().contains("width = 232.0"));
+        assert!(saved().contains("width = 322.0"), "at the {side}:\n{}", saved());
+    }
+}
+
 /// The real palette and compositor, with a desktop ID different from the
 /// window's app ID. The Exec marker catches accidental duplicate launches.
 #[test]

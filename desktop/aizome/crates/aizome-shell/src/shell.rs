@@ -299,8 +299,9 @@ pub struct Shell {
     pub confirm: Option<crate::confirm::Confirm>,
     /// The session verb last carried out (tests: nothing happens).
     pub session_done: Option<SessionVerb>,
-    /// The critical notifications' cards, and how many.
-    pub cards: Option<(WindowKey, usize)>,
+    /// The critical notifications' cards, how many, and their margin at the
+    /// right.
+    pub cards: Option<(WindowKey, usize, f64)>,
     /// What the shell's own notifications' actions do.
     pub note_actions: HashMap<(u32, String), Action>,
     /// Actions to carry out once the update in hand is done.
@@ -314,6 +315,9 @@ pub struct Shell {
     pub(crate) deskbar_output: Option<u32>,
     /// The edge the open Deskbar was anchored to.
     pub(crate) deskbar_side: aizome_config::DeskbarSide,
+    /// An edge drag under way: the width at the press, and the pointer's x
+    /// then.
+    pub(crate) deskbar_resize: Option<(f64, f64)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -443,6 +447,7 @@ impl Shell {
             deskbar_transient: false,
             deskbar_output: None,
             deskbar_side: aizome_config::DeskbarSide::Right,
+            deskbar_resize: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -648,6 +653,7 @@ impl Shell {
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
             header: self.header_width(),
+            deskbar_left: self.deskbar_cfg.side == aizome_config::DeskbarSide::Left,
         }
     }
 

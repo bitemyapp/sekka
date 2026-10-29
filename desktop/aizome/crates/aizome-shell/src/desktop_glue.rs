@@ -135,10 +135,15 @@ impl Shell {
     }
 
     /// How far in from the output's left the icons line up: past the
-    /// Deskbar when it stands there.
+    /// Deskbar when it stands there (one that hides itself overlays them
+    /// while it shows, as it does windows).
     pub fn desktop_left(&self, output: u32) -> f64 {
         let primary = self.primary().is_some_and(|s| s.output.id == output);
-        if primary && self.deskbar.is_some() && self.deskbar_cfg.side == aizome_config::DeskbarSide::Left {
+        if primary
+            && self.deskbar.is_some()
+            && !self.deskbar_cfg.auto_hide
+            && self.deskbar_cfg.side == aizome_config::DeskbarSide::Left
+        {
             self.deskbar_width() + crate::deskbar::SHADOW
         } else {
             0.0

@@ -85,7 +85,9 @@ Aizome's look.
   its own when it has none; a middle click is its secondary action.
 - **The clock**, IBM Plex Mono 600, tabular digits, 24h by default (config).
 - When the Deskbar is collapsed: `N apps ⌄` before the clock, which expands
-  it, in place of the widgets and status items.
+  it, in place of the widgets and status items. With the Deskbar at the
+  left (`[deskbar] side`), this control and Hide Deskbar sit after the
+  Toolchest instead, above the Deskbar, and the widgets stay.
 
 Each systray widget opens a panel (a popup under it, `raised`, hard 3pt
 shadow, 320pt wide) of quick controls, and its last row opens the matching

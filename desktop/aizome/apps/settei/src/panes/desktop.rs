@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use aizome_config::{DeskConfig, DeskbarSide, FocusFollows};
+use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows};
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use aizome_sys::apps::AppIndex;
@@ -15,14 +15,10 @@ use crate::extra;
 use crate::form;
 use crate::pane::{Confirm, Group, Pane, PaneCx, SettingEntry, Tile, ViewCx};
 
-/// The Deskbar's widths offered: today's, and two wider steps.
-const DESKBAR_WIDTHS: [(&str, f64); 3] = [("Standard", 232.0), ("Wide", 296.0), ("Wider", 360.0)];
-
-/// The offered width nearest a configured one.
-fn width_index(w: f64) -> usize {
-    (0..DESKBAR_WIDTHS.len())
-        .min_by(|a, b| (DESKBAR_WIDTHS[*a].1 - w).abs().total_cmp(&(DESKBAR_WIDTHS[*b].1 - w).abs()))
-        .unwrap_or(0)
+/// The named width a configured one is, if any: none after the Deskbar's
+/// edge was dragged to another, so that any of them can be picked.
+fn width_index(w: f64) -> Option<usize> {
+    DESKBAR_SIZES.iter().position(|s| (s.1 - w).abs() < 0.5)
 }
 
 #[derive(Default)]
@@ -254,7 +250,7 @@ impl Pane for Desktop {
             }),
             Msg::Width(i) => cx.change(|s| {
                 let mut d = s.deskbar_settings();
-                d.width = DESKBAR_WIDTHS[i.min(DESKBAR_WIDTHS.len() - 1)].1;
+                d.width = DESKBAR_SIZES[i.min(DESKBAR_SIZES.len() - 1)].1;
                 s.set_shell_section("deskbar", &d);
             }),
             Msg::Pin(i) => {
@@ -356,9 +352,9 @@ impl Pane for Desktop {
             )
             .entry("deskbar-side")
             .help("The edge of the screen it hangs from, under the menu bar."),
-            form::row("Width", form::segments(&DESKBAR_WIDTHS.map(|w| w.0), width_index(db.width), Msg::Width))
+            form::row("Width", form::segments(&DESKBAR_SIZES.map(|w| w.0), width_index(db.width), Msg::Width))
                 .entry("deskbar-width")
-                .help("Wider shows more of long window titles and notifications."),
+                .help("Wider shows more of long window titles; Slim and Icons Only leave more of the screen."),
         ];
         let pin_list: Vec<String> =
             names.iter().filter(|(id, _)| !db.pinned.contains(id)).map(|(_, n)| n.clone()).collect();
@@ -448,5 +444,17 @@ impl Pane for Desktop {
             vcx.section("Desktop Icons", icons),
             vcx.section("Windows", windows),
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_deskbar_width_shows_as_its_name_or_none() {
+        assert_eq!(width_index(48.0), Some(0), "Icons Only shows, and Standard can be picked from it");
+        assert_eq!(width_index(232.0), Some(2));
+        assert_eq!(width_index(263.0), None, "a dragged width lights none, so any can be picked");
     }
 }

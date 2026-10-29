@@ -104,6 +104,15 @@ pub enum DeskbarSide {
     Right,
 }
 
+/// The Deskbar's named widths, the same in its grip's menu and in Settei.
+pub const DESKBAR_SIZES: [(&str, f64); 5] = [
+    ("Icons Only", 48.0),
+    ("Slim", 150.0),
+    ("Standard", aizome_theme::metrics::DESKBAR_WIDTH),
+    ("Wide", 300.0),
+    ("Wider", 360.0),
+];
+
 /// `[desktop]`: the desktop's icons.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

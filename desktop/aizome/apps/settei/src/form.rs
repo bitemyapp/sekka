@@ -260,10 +260,10 @@ pub fn choice<Msg: Clone + Send + 'static>(
     dropdown(options.iter().map(|s| (*s).to_owned()), selected).on_select(f).min_width(160.0).into()
 }
 
-/// A segmented control of `options`.
+/// A segmented control of `options`, none lit when `selected` is `None`.
 pub fn segments<Msg: Clone + Send + 'static>(
     options: &[&str],
-    selected: usize,
+    selected: impl Into<Option<usize>>,
     f: impl Fn(usize) -> Msg + 'static,
 ) -> Element<Msg> {
     segmented(options.iter().copied(), selected).on_select(f).into()

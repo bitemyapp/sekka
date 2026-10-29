@@ -46,6 +46,8 @@ pub const HEIGHT: f64 = 24.0;
 pub const ITEM: f64 = 16.0;
 /// The Deskbar's header at the bar's right: as wide as the Deskbar.
 pub const HEADER: f64 = aizome_theme::metrics::DESKBAR_WIDTH;
+/// Room left and right of the Deskbar's controls after the Toolchest.
+const LEAD: (f64, f64) = (12.0, 2.0);
 
 /// Something in the bar that opens a menu or a panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -274,6 +276,10 @@ pub struct BarModel {
     /// The systray header's least width: the Deskbar's when it hangs under
     /// it at the right ([`HEADER`] otherwise).
     pub header: f64,
+    /// The Deskbar hangs at the left: its controls (`N apps ⌄`, Hide
+    /// Deskbar) follow it, after the Toolchest, and the header keeps its
+    /// widgets.
+    pub deskbar_left: bool,
 }
 
 fn ui_spec(t: &aizome_kit::Theme, size: f64, weight: f32, c: aizome_kit::Color) -> aizome_kit::text::TextSpec {
@@ -814,6 +820,79 @@ fn apps_control(n: usize, unread: usize, open: bool, visible: bool, auto_hide: b
     .into()
 }
 
+/// Hide Deskbar: the chevron that folds it into `N apps ⌄`.
+fn hide_deskbar() -> Element<BarMsg> {
+    drawn(16.0, HEIGHT, "hide-deskbar", |cx| {
+        let t = cx.theme();
+        if cx.is_hovered() {
+            cx.canvas.fill_rect(cx.bounds(), t.hover(t.bar()));
+        }
+        Icon::ChevronUp.draw(cx.canvas, Point::new(2.0, 6.0), 12.0, t.text3());
+    })
+    .on_click(BarMsg::Run(Action::SetDeskbarCollapsed(true)))
+    .text("Hide Deskbar", SemanticRole::Button)
+    .tooltip("Hide Deskbar")
+    .key("hide-deskbar")
+    .into()
+}
+
+/// The Deskbar's own controls: `N apps ⌄` while it's folded or hides
+/// itself, Hide Deskbar while it shows.
+fn deskbar_controls(model: &BarModel) -> Vec<Element<BarMsg>> {
+    let mut items = Vec::new();
+    if let Some(n) = model.folded_apps {
+        items.push(apps_control(
+            n,
+            model.unread,
+            model.open == Some(Slot::Apps),
+            model.deskbar_visible,
+            model.deskbar_auto_hide,
+        ));
+    }
+    if model.primary && model.deskbar_visible {
+        items.push(hide_deskbar());
+    }
+    items
+}
+
+/// Their widths, as `deskbar_controls` lays them out.
+fn deskbar_control_widths(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) -> Vec<f64> {
+    let mut items = Vec::new();
+    if let Some(n) = model.folded_apps {
+        let label = if n == 1 { "1 app".to_owned() } else { format!("{n} apps") };
+        let mut w = m(&label, &ui_spec(t, 12.0, typeface::WEIGHT_SEMIBOLD, t.text2())) + 21.0;
+        if model.unread > 0 {
+            w += 6.0 + 8.0 * model.unread.to_string().len() as f64;
+        }
+        items.push(w.ceil());
+    }
+    if model.primary && model.deskbar_visible {
+        items.push(16.0);
+    }
+    items
+}
+
+/// The Deskbar's controls after the Toolchest, over a Deskbar at the left
+/// (`LEAD` padding them).
+fn lead(model: &BarModel) -> Option<Element<BarMsg>> {
+    let items = deskbar_controls(model);
+    (model.primary && model.deskbar_left && !items.is_empty()).then(|| {
+        aizome_kit::container(row(items).spacing(9.0).align(Align::Center).height(HEIGHT))
+            .padding([0.0, LEAD.1, 0.0, LEAD.0])
+            .key("deskbar-controls")
+            .into()
+    })
+}
+
+/// `lead`'s width (0 without it).
+fn lead_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) -> f64 {
+    let items = deskbar_control_widths(t, m, model);
+    if !model.primary || !model.deskbar_left || items.is_empty() {
+        return 0.0;
+    }
+    LEAD.0 + items.iter().sum::<f64>() + 9.0 * (items.len() - 1) as f64 + LEAD.1
+}
+
 /// The systray region: the Deskbar's header, `model.header` wide (more if its
 /// widgets need it), its left edge in line with the Deskbar's.
 fn header(model: &BarModel) -> Element<BarMsg> {
@@ -835,15 +914,9 @@ fn header(model: &BarModel) -> Element<BarMsg> {
     if tray.memory {
         items.push(memory_meter(&model.meters));
     }
-    if let Some(n) = model.folded_apps {
-        items.push(apps_control(
-            n,
-            model.unread,
-            model.open == Some(Slot::Apps),
-            model.deskbar_visible,
-            model.deskbar_auto_hide,
-        ));
-    } else {
+    // Folded, the Deskbar's control stands in for the widgets, unless it
+    // follows a Deskbar at the left.
+    if model.folded_apps.is_none() || model.deskbar_left {
         for item in &tray.items {
             items.push(status_item(item, model.open == Some(Slot::Item(item.slot))));
         }
@@ -888,21 +961,8 @@ fn header(model: &BarModel) -> Element<BarMsg> {
             ));
         }
     }
-    if model.primary && model.deskbar_visible {
-        items.push(
-            drawn(16.0, HEIGHT, "hide-deskbar", |cx| {
-                let t = cx.theme();
-                if cx.is_hovered() {
-                    cx.canvas.fill_rect(cx.bounds(), t.hover(t.bar()));
-                }
-                Icon::ChevronUp.draw(cx.canvas, Point::new(2.0, 6.0), 12.0, t.text3());
-            })
-            .on_click(BarMsg::Run(Action::SetDeskbarCollapsed(true)))
-            .text("Hide Deskbar", SemanticRole::Button)
-            .tooltip("Hide Deskbar")
-            .key("hide-deskbar")
-            .into(),
-        );
+    if !model.deskbar_left {
+        items.extend(deskbar_controls(model));
     }
     let left = row(items).spacing(9.0).align(Align::Center).height(HEIGHT).into();
     let content = split(left, clock(&model.clock, open(TrayWidget::Clock)), model.header, 16.0, (11.0, 10.0));
@@ -920,6 +980,7 @@ fn header(model: &BarModel) -> Element<BarMsg> {
 pub fn view(model: &BarModel) -> Element<BarMsg> {
     let menu_open = matches!(model.open, Some(Slot::Menu(_) | Slot::Toolchest));
     let mut left: Vec<Element<BarMsg>> = vec![toolchest(model.open == Some(Slot::Toolchest), menu_open)];
+    left.extend(lead(model));
     match &model.banner {
         Some(b) => left.push(banner(b)),
         None => {
@@ -998,17 +1059,7 @@ pub fn header_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) ->
     if tray.memory {
         items.push(4.0);
     }
-    if let Some(_n) = model.folded_apps {
-        let label = model
-            .folded_apps
-            .map(|n| if n == 1 { "1 app".to_owned() } else { format!("{n} apps") })
-            .unwrap_or_default();
-        let mut w = m(&label, &ui_spec(t, 12.0, typeface::WEIGHT_SEMIBOLD, t.text2())) + 21.0;
-        if model.unread > 0 {
-            w += 6.0 + 8.0 * model.unread.to_string().len() as f64;
-        }
-        items.push(w.ceil());
-    } else {
+    if model.folded_apps.is_none() || model.deskbar_left {
         items.extend(tray.items.iter().map(|_| ITEM));
         for on in [tray.network.is_some(), tray.sound.is_some(), tray.bluetooth.is_some(), tray.display.is_some()] {
             if on {
@@ -1026,8 +1077,8 @@ pub fn header_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) ->
             );
         }
     }
-    if model.primary && model.deskbar_visible {
-        items.push(16.0);
+    if !model.deskbar_left {
+        items.extend(deskbar_control_widths(t, m, model));
     }
     let row: f64 = items.iter().sum::<f64>() + 9.0 * (items.len().saturating_sub(1)) as f64;
     let clock = m(&model.clock, &look::digits(12.5 * t.metrics.factor, typeface::WEIGHT_SEMIBOLD, t.text())).ceil();
@@ -1074,9 +1125,10 @@ pub fn desk_rects(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel, widt
 }
 
 /// Where the bar's titles are, as `view` lays them out: the Toolchest
-/// button, then (unless a notification has the line) the app's name and
-/// its menus.
+/// button, then (past the Deskbar's controls when it hangs at the left, and
+/// unless a notification has the line) the app's name and its menus.
 pub fn title_rects(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) -> Vec<(Slot, Rect)> {
+    let lead = lead_width(t, m, model);
     let mut widths = vec![(
         Slot::Toolchest,
         (32.0
@@ -1105,6 +1157,9 @@ pub fn title_rects(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) -> 
         .map(|(s, w)| {
             let r = Rect::new(x, 0.0, x + w, HEIGHT);
             x += w;
+            if s == Slot::Toolchest {
+                x += lead;
+            }
             (s, r)
         })
         .collect()

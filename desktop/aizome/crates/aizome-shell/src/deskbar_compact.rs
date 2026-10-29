@@ -71,7 +71,9 @@ pub fn height(m: &DeskbarModel, rail: bool) -> f64 {
     }
     h += 2.0 + CAPTION;
     let (row, gap) = if rail { (RAIL_TILE, GAP) } else { (SLIM_SHELF, 3.0) };
-    h + (m.shelf.len() + 1) as f64 * (row + gap) + 6.0
+    // The items and "Drop to park", a gap between each.
+    let n = m.shelf.len() as f64;
+    h + (n + 1.0) * row + n * gap + 6.0
 }
 
 /// The rows, top to bottom.
