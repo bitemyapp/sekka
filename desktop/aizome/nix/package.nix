@@ -280,6 +280,7 @@ rustPlatform.buildRustPackage {
     done
     install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
     install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
+    install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt
     install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
     install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.MPL-2.0 $out/share/licenses/hotaru/z2d-MPL-2.0.txt
@@ -346,6 +347,7 @@ rustPlatform.buildRustPackage {
     homepage = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
     license = with lib.licenses; [
       mpl20
+      bsd2
       mit
       asl20
     ];

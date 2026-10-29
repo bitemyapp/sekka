@@ -39,6 +39,9 @@ pub enum Msg {
     Exited(u64, String),
     Failed(u64, String),
     Notice(u64, String),
+    MatchLink(u64, Option<Arc<crate::automatic_links::Request>>),
+    MatchedLink,
+    ResolvedLink,
     HoverLink(u64, Option<crate::links::Link>),
     OpenLink(u64, crate::links::Link),
     LinkOpened(u64, Result<(), aizome_kit::urls::OpenUrlError>),
@@ -79,6 +82,8 @@ pub struct Pane {
     pub title: String,
     /// Last bounded local directory reported by this shell via OSC 7.
     pub working_directory: Option<std::path::PathBuf>,
+    /// Automatic paths use only an accepted OSC 7 report, not launch guesses.
+    link_directory: Option<std::path::PathBuf>,
     pub snapshot: Arc<Snapshot>,
     pub session: Option<Session>,
     pub selection: Option<Selection>,
@@ -141,6 +146,11 @@ pub struct Hotaru {
     desktop_appearance: aizome_kit::theme::Appearance,
     focus_timer: Option<TimerHandle>,
     focus_generation: u64,
+    automatic_worker: Option<crate::automatic_links::Worker>,
+    automatic_request: Option<Arc<crate::automatic_links::Request>>,
+    automatic_hit: Option<crate::links::Link>,
+    resolver_worker: Option<crate::link_resolver::Worker>,
+    resolver_request: Option<Arc<crate::link_resolver::Request>>,
 }
 
 impl Hotaru {
@@ -174,6 +184,11 @@ impl Hotaru {
             desktop_appearance: aizome_kit::theme::Appearance::default(),
             focus_timer: None,
             focus_generation: 0,
+            automatic_worker: None,
+            automatic_request: None,
+            automatic_hit: None,
+            resolver_worker: None,
+            resolver_request: None,
         }
     }
 
@@ -245,6 +260,7 @@ impl Hotaru {
             id,
             title: "Shell".into(),
             working_directory,
+            link_directory: None,
             snapshot: Arc::new(terminal.snapshot()),
             session,
             selection: None,
@@ -329,6 +345,28 @@ impl Hotaru {
         self.focus_after_rebuild(cx);
     }
 
+    fn cancel_automatic(&mut self) {
+        if let Some(worker) = &self.resolver_worker {
+            worker.cancel();
+        }
+        self.resolver_request = None;
+        if let Some(worker) = &self.automatic_worker {
+            worker.cancel();
+        }
+        self.automatic_request = None;
+        self.automatic_hit = None;
+    }
+    fn current_link_request(&self, link: &crate::links::Link) -> bool {
+        link.request()
+            .is_none_or(|request| self.automatic_request.as_ref().is_some_and(|current| Arc::ptr_eq(request, current)))
+    }
+    fn valid_link_activation(&self, id: u64, link: &crate::links::Link) -> bool {
+        self.current_link_request(link)
+            && self.active_pane().is_some_and(|pane| pane.id == id)
+            && self.panes.iter().any(|pane| {
+                pane.id == id && pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
+            })
+    }
     fn notice(&mut self, id: u64, message: &str) {
         if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
             pane.status = message.into();
@@ -602,6 +640,10 @@ impl Hotaru {
                     self.bindings.clone(),
                     pane.rendered.clone(),
                     pane.input_activity,
+                    self.automatic_hit
+                        .as_ref()
+                        .filter(|link| link.request().is_some_and(|request| request.pane == pane.id))
+                        .cloned(),
                 )
                 .id(format!("terminal-{}", pane.id))
                 .key(pane.id)
@@ -922,7 +964,57 @@ impl Program for Hotaru {
                     pane.status = format!("Could not prepare terminal text: {error}");
                 }
             }
+            Msg::MatchLink(id, request) => {
+                if let Some(request) = request {
+                    let valid = request.pane == id
+                        && self.panes.iter().any(|pane| {
+                            pane.id == id
+                                && pane
+                                    .displayed_snapshot()
+                                    .is_some_and(|snapshot| Arc::ptr_eq(snapshot, &request.snapshot))
+                        });
+                    if valid {
+                        self.cancel_automatic();
+                        self.automatic_request = Some(request.clone());
+                        if self.automatic_worker.is_none() {
+                            let tx = cx.stream();
+                            self.automatic_worker =
+                                crate::automatic_links::Worker::new(move || tx.send(Msg::MatchedLink))
+                                    .map_err(|error| log::warn!("Automatic link worker: {error}"))
+                                    .ok();
+                        }
+                        if let Some(worker) = &self.automatic_worker
+                            && let Err(error) = worker.submit(request)
+                        {
+                            log::debug!("Automatic link admission: {error:?}");
+                        }
+                    }
+                } else if self.automatic_request.as_ref().is_some_and(|request| request.pane == id) {
+                    self.cancel_automatic();
+                }
+            }
+            Msg::MatchedLink => {
+                if let Some(response) = self.automatic_worker.as_ref().and_then(|worker| worker.take_response())
+                    && self.automatic_request.as_ref().is_some_and(|request| Arc::ptr_eq(request, &response.request))
+                    && self.panes.iter().any(|pane| {
+                        pane.id == response.request.pane
+                            && pane
+                                .displayed_snapshot()
+                                .is_some_and(|snapshot| Arc::ptr_eq(snapshot, &response.request.snapshot))
+                    })
+                {
+                    self.automatic_hit = match response.result {
+                        Ok(Some(found)) => crate::links::Link::automatic(response.request, found),
+                        Ok(None) => None,
+                        Err(error) => {
+                            log::debug!("Automatic link match: {error:?}");
+                            None
+                        }
+                    };
+                }
+            }
             Msg::HoverLink(id, link) => {
+                let link = link.filter(|link| self.current_link_request(link));
                 if let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) {
                     pane.hovered_link = link.filter(|link| {
                         pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
@@ -930,14 +1022,63 @@ impl Program for Hotaru {
                 }
             }
             Msg::OpenLink(id, link) => {
-                if self.active_pane().is_some_and(|pane| pane.id == id)
-                    && self.panes.iter().any(|pane| {
-                        pane.id == id
-                            && pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
-                    })
-                    && let Err(error) = cx.open_url_with_result(&link.target, move |result| Msg::LinkOpened(id, result))
+                if self.valid_link_activation(id, &link) {
+                    if link.is_automatic() {
+                        let request = Arc::new(crate::link_resolver::Request {
+                            pane: id,
+                            link,
+                            cwd: self.panes.iter().find(|p| p.id == id).and_then(|p| p.link_directory.clone()),
+                        });
+                        self.resolver_request = Some(request.clone());
+                        if self.resolver_worker.is_none() {
+                            let tx = cx.stream();
+                            self.resolver_worker =
+                                crate::link_resolver::Worker::new(move || tx.send(Msg::ResolvedLink))
+                                    .map_err(|error| log::warn!("Link path worker: {error}"))
+                                    .ok();
+                        }
+                        if let Some(worker) = &self.resolver_worker {
+                            worker.submit(request);
+                        } else {
+                            self.notice(id, "Could not resolve link");
+                            if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                                pane.hovered_link = None;
+                            }
+                        }
+                    } else if let Err(error) =
+                        cx.open_url_with_result(&link.target, move |result| Msg::LinkOpened(id, result))
+                    {
+                        cx.send(Msg::LinkOpened(id, Err(error)));
+                    }
+                }
+            }
+            Msg::ResolvedLink => {
+                let Some(response) = self.resolver_worker.as_ref().and_then(|worker| worker.take_response()) else {
+                    return;
+                };
+                let request = &response.request;
+                if self.resolver_request.as_ref().is_some_and(|current| Arc::ptr_eq(current, request))
+                    && self.valid_link_activation(request.pane, &request.link)
+                    && self.panes.iter().any(|p| p.id == request.pane && p.link_directory == request.cwd)
                 {
-                    cx.send(Msg::LinkOpened(id, Err(error)));
+                    self.resolver_request = None;
+                    let id = request.pane;
+                    match response.result {
+                        Ok(target) => {
+                            if let Err(error) =
+                                cx.open_url_with_result(&target, move |result| Msg::LinkOpened(id, result))
+                            {
+                                cx.send(Msg::LinkOpened(id, Err(error)));
+                            }
+                        }
+                        Err(error) => {
+                            log::debug!("Link path resolution: {error:?}");
+                            self.notice(id, "Could not resolve link");
+                            if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                                pane.hovered_link = None;
+                            }
+                        }
+                    }
                 }
             }
             Msg::LinkOpened(id, result) => {
@@ -953,6 +1094,7 @@ impl Program for Hotaru {
             Msg::WorkingDirectory(id, directory) => {
                 if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
                     pane.working_directory = (!directory.as_os_str().is_empty()).then_some(directory);
+                    pane.link_directory = pane.working_directory.clone();
                 }
             }
             Msg::Title(id, title) => {
@@ -1215,6 +1357,14 @@ impl Program for Hotaru {
                 self.shape_all();
             }
         }
+        if self.automatic_request.as_ref().is_some_and(|request| {
+            !self.panes.iter().any(|pane| {
+                pane.id == request.pane
+                    && pane.displayed_snapshot().is_some_and(|snapshot| Arc::ptr_eq(snapshot, &request.snapshot))
+            })
+        }) {
+            self.cancel_automatic();
+        }
         self.sync_search(cx);
     }
     fn view(&self, _window: WindowKey) -> Element<Msg> {
@@ -1337,6 +1487,9 @@ impl Program for Hotaru {
         MenuBar::standard(&self.info()).with_file_menu(file).replace("Edit", edit).with_menu(view)
     }
     fn close_requested(&mut self, _window: WindowKey, _cx: &mut Cx<Msg>) -> bool {
+        self.cancel_automatic();
+        self.automatic_worker = None;
+        self.resolver_worker = None;
         if self.settings_pending {
             self.closing = true;
             return false;
@@ -1355,5 +1508,68 @@ impl Drop for Hotaru {
         if let Some(read) = &self.clipboard_read {
             read.cancel();
         }
+    }
+}
+
+#[cfg(test)]
+mod automatic_link_tests {
+    use super::*;
+    use aizome_kit::testing::Harness;
+    use hotaru_link_regex::{CellPoint, Limits, Matcher};
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+    fn link(snapshot: Arc<Snapshot>, pane: u64) -> crate::links::Link {
+        let cell = CellPoint { row: 0, col: 2 };
+        let mapped = crate::automatic_links::mapping::extract(
+            &snapshot,
+            cell,
+            &AtomicBool::new(false),
+            Instant::now() + Duration::from_secs(5),
+        )
+        .unwrap();
+        let matched = Matcher::new()
+            .unwrap()
+            .find_at(
+                &mapped.source,
+                cell,
+                &Limits { deadline: Instant::now() + Duration::from_secs(5), ..Default::default() },
+                &AtomicBool::new(false),
+            )
+            .unwrap()
+            .unwrap();
+        crate::links::Link::automatic(
+            Arc::new(crate::automatic_links::Request { pane, snapshot, cell, retained_bytes: 1024 }),
+            matched,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn accepted_activation_requires_exact_displayed_frame_pane_and_request() {
+        let mut h = Harness::new(Hotaru::preview());
+        h.advance(Duration::ZERO);
+        let id = h.program().active_pane().unwrap().id;
+        let mut term = Terminal::new(80, 4, 0);
+        term.feed(b"https://example.test/path");
+        let snapshot = Arc::new(term.snapshot());
+        h.send(Msg::Frame(id, snapshot.clone()));
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().displayed_snapshot().is_some_and(|s| Arc::ptr_eq(s, &snapshot))
+        }));
+        let first = link(snapshot.clone(), id);
+        h.send(Msg::MatchLink(id, first.request().cloned()));
+        assert!(h.program().valid_link_activation(id, &first));
+        assert!(!h.program().valid_link_activation(id + 1, &first));
+        let replacement = link(snapshot, id);
+        h.send(Msg::MatchLink(id, replacement.request().cloned()));
+        assert!(!h.program().valid_link_activation(id, &first));
+        assert!(h.program().valid_link_activation(id, &replacement));
+        h.send(Msg::MatchLink(id, None));
+        assert!(!h.program().valid_link_activation(id, &replacement));
+        h.send(Msg::MatchLink(id, replacement.request().cloned()));
+        h.send(Msg::Frame(id, Arc::new(term.snapshot())));
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().displayed_snapshot().is_some_and(|s| !Arc::ptr_eq(s, &replacement.snapshot))
+        }));
+        assert!(!h.program().valid_link_activation(id, &replacement));
     }
 }

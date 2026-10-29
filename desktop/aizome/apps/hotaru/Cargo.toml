@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+hotaru-link-regex = { path = "../../crates/hotaru-link-regex" }
 aizome-kit.workspace = true
 hotaru-sprites = { path = "../../../../apps/hotaru/crates/hotaru-sprites" }
 hotaru-core = { path = "../../../../apps/hotaru/crates/hotaru-core" }

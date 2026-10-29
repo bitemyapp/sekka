@@ -5,6 +5,13 @@ use aizome_hotaru::app::Hotaru;
 use hotaru_io::PtyCommand;
 
 fn main() {
+    let mut helper_args = std::env::args_os().skip(1);
+    if helper_args.next().as_deref() == Some(std::ffi::OsStr::new("--hotaru-resolve-link")) {
+        if aizome_hotaru::resolve_link_helper(helper_args).is_err() {
+            std::process::exit(2);
+        }
+        return;
+    }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let mut command = PtyCommand::shell();
     let mut settings_path = aizome_hotaru::settings::default_path();

@@ -320,6 +320,9 @@ impl Row {
     pub fn grapheme(&self, col: usize) -> Option<&str> {
         self.graphemes.get(&col).map(CompactString::as_str)
     }
+    pub fn wrap_continuation(&self) -> bool {
+        self.wrap_continuation
+    }
     pub fn wrapped(&self) -> bool {
         self.wrapped
     }

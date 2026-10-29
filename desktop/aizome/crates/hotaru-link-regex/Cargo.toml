@@ -1,0 +1,16 @@
+[package]
+name = "hotaru-link-regex"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT AND BSD-2-Clause"
+description = "Bounded native Hotaru URL matching over immutable mapped logical lines"
+
+[build-dependencies]
+cc = "=1.8.0"
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "deny"

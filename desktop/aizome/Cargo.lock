@@ -195,6 +195,7 @@ dependencies = [
  "env_logger",
  "hotaru-core",
  "hotaru-io",
+ "hotaru-link-regex",
  "hotaru-sprites",
  "libc",
  "log",
@@ -1950,6 +1951,14 @@ name = "hotaru-io"
 version = "0.1.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "hotaru-link-regex"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
 ]
 
 [[package]]

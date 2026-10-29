@@ -146,6 +146,13 @@ handling. Native OSC 8 activation uses the displayed snapshot and a bounded
 desktop-opener worker; [its scope and tests](../../desktop/aizome/apps/hotaru/README.md)
 remain distinct from full selection/URL-detection compatibility.
 
+[Automatic URL and path detection](docs/automatic-links.md) now uses the pinned
+default rule on bounded logical context from the exact displayed snapshot.
+Worker results and path-helper completion are checked against the original
+request and gesture before opening. Clipped scrollback context and configurable
+rules remain open; the software Wayland qualification is not a new combined
+package or whole-application performance checkpoint.
+
 The [combined package checkpoint](docs/links-vt-checkpoint.md) records the
 exact package and source hashes for this slice, 38 ordinary native tests and
 five independent Wayland suites. Its software-compositor qualification does

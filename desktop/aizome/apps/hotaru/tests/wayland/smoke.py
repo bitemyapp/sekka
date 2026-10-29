@@ -39,6 +39,7 @@ def run(binary, evidence):
         source_paths.update(path for path in (root / directory).rglob("*")
                             if path.is_file() and path.suffix in {".rs", ".c", ".py", ".toml"})
     source_paths.update(path for path in (root / "apps/hotaru/crates/hotaru-sprites").rglob("*") if path.is_file())
+    source_paths.update(path for path in (root / "desktop/aizome/crates/hotaru-link-regex").rglob("*") if path.is_file())
     source_paths.update(root / path for path in [
         "vendor/sidestep/crates/sidestep-engine/src/raster.rs",
         "vendor/sidestep/crates/sidestep-engine/src/raster/masks.rs",

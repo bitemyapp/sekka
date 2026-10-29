@@ -137,9 +137,16 @@ spawns/reaps them off the UI thread. Queue rejection and opener failures appear
 in the status bar. Closing the application cancels queued opens; already started
 desktop handlers are not terminated during normal shutdown.
 
+Plain URLs and paths can also be opened with Super-click after their hover
+match appears. Relative paths use the shell's last accepted working-directory
+report. Detection follows complete logical lines within the displayed text;
+clipped lines and lines beyond the matching limits are unavailable. Explicit
+OSC 8 links take precedence. See the [automatic-link coverage and limits](../../../../apps/hotaru/docs/automatic-links.md).
+
 ## Component validation
 
-Run from the repository root, using the repository's Rust toolchain:
+Run on `wx-workstation` through SSH, from its repository mirror and using the
+repository's Rust toolchain:
 
 ```sh
 SIDESTEP_BACKEND=null cargo test --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --locked -- --test-threads=1

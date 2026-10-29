@@ -133,6 +133,7 @@ impl Selection {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // The terminal's immutable view inputs travel together.
 pub fn terminal_view(
     id: u64,
     snapshot: Arc<Snapshot>,
@@ -141,11 +142,12 @@ pub fn terminal_view(
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
+    automatic: Option<crate::links::Link>,
 ) -> Element<Msg> {
     let snapshot = rendered.as_ref().map_or(snapshot, |frame| frame.snapshot.clone());
     let (font_size, font_weight) = font;
     Element::new(
-        TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered, input_activity },
+        TerminalView { id, snapshot, font_size, font_weight, selection, bindings, rendered, input_activity, automatic },
         vec![],
     )
 }
@@ -159,6 +161,7 @@ struct TerminalView {
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
+    automatic: Option<crate::links::Link>,
 }
 
 #[derive(Default)]
@@ -189,6 +192,9 @@ struct ViewState {
     keys: Vec<(u32, vt::KeyEvent)>,
     buttons: Vec<vt::MouseButton>,
     hovered: Option<crate::links::Link>,
+    auto_request: Option<Arc<crate::automatic_links::Request>>,
+    auto_revision: Option<Arc<crate::automatic_links::Request>>,
+    auto_refresh_pending: bool,
     link_press: Option<crate::links::Press>,
     pointer: Option<Point>,
     link_modifier: bool,
@@ -365,8 +371,39 @@ impl TerminalView {
     }
     fn hover(&self, cx: &mut EventCx, pos: Option<Point>, modifier: bool) {
         let st = cx.state::<ViewState>();
-        let hit =
-            pos.and_then(|pos| self.link_point(pos, st)).and_then(|cell| crate::links::Link::at(&self.snapshot, cell));
+        let cell = pos.and_then(|pos| self.link_point(pos, st));
+        let explicit = cell.and_then(|cell| crate::links::Link::at(&self.snapshot, cell));
+        let wanted =
+            cell.filter(|cell| self.snapshot.lines[cell.row].hyperlink(cell.col).is_none()).zip(self.rendered.as_ref());
+        let request_change = match wanted {
+            Some((cell, frame)) => {
+                let point = hotaru_link_regex::CellPoint { row: cell.row as u64, col: cell.col as u16 };
+                if st.auto_request.as_ref().is_some_and(|request| request.same_location(self.id, &self.snapshot, point))
+                {
+                    None
+                } else {
+                    let request = Arc::new(crate::automatic_links::Request {
+                        pane: self.id,
+                        snapshot: self.snapshot.clone(),
+                        cell: point,
+                        retained_bytes: frame.retention_bytes,
+                    });
+                    st.auto_request = Some(request.clone());
+                    Some(Some(request))
+                }
+            }
+            None => st.auto_request.take().map(|_| None),
+        };
+        let hit = explicit.or_else(|| {
+            self.automatic
+                .as_ref()
+                .filter(|hit| {
+                    Some(hit.cell) == cell
+                        && hit.matches_snapshot(&self.snapshot)
+                        && hit.request().zip(st.auto_request.as_ref()).is_some_and(|(a, b)| Arc::ptr_eq(a, b))
+                })
+                .cloned()
+        });
         let changed = match (&st.hovered, &hit) {
             (None, None) => false,
             (Some(a), Some(b)) => !a.same(b),
@@ -382,6 +419,9 @@ impl TerminalView {
         cx.set_cursor(if modifier && hit.is_some() { PointerCursor::Pointer } else { PointerCursor::Text });
         if paint {
             cx.invalidate();
+        }
+        if let Some(request) = request_change {
+            emit(cx, Msg::MatchLink(self.id, request));
         }
         if changed {
             emit(cx, Msg::HoverLink(self.id, hit));
@@ -506,9 +546,21 @@ impl Widget for TerminalView {
         let font_changed = st.font_epoch != epoch;
         st.font_epoch = epoch;
         let resized = st.size != size || st.cell_width != cell_width || st.line_height != line_height;
+        let revision = self.automatic.as_ref().and_then(|link| link.request()).cloned();
+        let revision_changed = match (&st.auto_revision, &revision) {
+            (None, None) => false,
+            (Some(a), Some(b)) => !Arc::ptr_eq(a, b),
+            _ => true,
+        };
+        st.auto_revision = revision;
+        st.auto_refresh_pending |= revision_changed;
         let old_snapshot = st.snapshot.replace(self.snapshot.clone());
         if old_snapshot.as_ref().is_some_and(|old| !Arc::ptr_eq(old, &self.snapshot)) {
             st.hover_clear_pending |= st.hovered.take().is_some();
+            // Continue only an automatic lookup. Explicit OSC8 hover keeps
+            // its existing clear-until-pointer-move behavior on a new frame.
+            st.auto_refresh_pending |= st.auto_request.is_some();
+            st.auto_request = None;
             if let Some(press) = &mut st.link_press {
                 press.cancelled = true;
             }
@@ -562,6 +614,7 @@ impl Widget for TerminalView {
             || st.theme_pending
             || st.scale_pending
             || st.hover_clear_pending
+            || st.auto_refresh_pending
         {
             cx.request_tick(Duration::ZERO);
         }
@@ -790,10 +843,21 @@ impl Widget for TerminalView {
             && hovered.matches_snapshot(&self.snapshot)
             && let Some(frame) = &self.rendered
         {
+            for row in 0..self.snapshot.rows {
+                if let Some(span) = hovered.automatic_span(row, self.snapshot.cols) {
+                    let r = Rect::new(
+                        pad + span.start as f64 * cw,
+                        pad + row as f64 * lh,
+                        pad + span.end as f64 * cw,
+                        pad + (row + 1) as f64 * lh,
+                    );
+                    underline(cx.canvas, r, hotaru_core::Underline::Single, theme.focus(), frame.metrics);
+                }
+            }
             for span in &frame.links {
                 if self.snapshot.lines[span.row]
                     .hyperlink(span.start)
-                    .is_some_and(|link| link.id == hovered.identity && link.uri.as_ref() == hovered.target.as_bytes())
+                    .is_some_and(|link| hovered.explicit_matches(link))
                 {
                     let r = Rect::new(
                         pad + span.start as f64 * cw,
@@ -912,6 +976,9 @@ impl Widget for TerminalView {
             Event::Tick => {
                 let st = cx.state::<ViewState>();
                 let clear_hover = std::mem::take(&mut st.hover_clear_pending);
+                let refresh_hover = std::mem::take(&mut st.auto_refresh_pending);
+                let hover_position = st.pointer;
+                let hover_modifier = st.link_modifier;
                 let cols = ((st.size.width - st.padding * 2.0) / st.cell_width).floor().max(1.0) as usize;
                 let rows = ((st.size.height - st.padding * 2.0) / st.line_height).floor().max(1.0) as usize;
                 let resized = std::mem::take(&mut st.resize_pending);
@@ -922,6 +989,9 @@ impl Widget for TerminalView {
                 if clear_hover {
                     cx.set_cursor(PointerCursor::Text);
                     emit(cx, Msg::HoverLink(self.id, None));
+                }
+                if refresh_hover {
+                    self.hover(cx, hover_position, hover_modifier);
                 }
                 let window_rect = cx.window_rect();
                 if cx.state::<ViewState>().window_rect != window_rect {
@@ -1537,6 +1607,7 @@ mod sprite_paint_tests {
                 Arc::new(Bindings::new(&crate::settings::Settings::default())),
                 Some(self.frame.clone()),
                 0,
+                None,
             )
             .id("grid")
         }

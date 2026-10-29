@@ -1,0 +1,362 @@
+[
+  {
+    "input": "hello https://example.com world",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "https://example.com/foo(bar) more",
+    "expected": "https://example.com/foo(bar)"
+  },
+  {
+    "input": "https://example.com/foo(bar)baz more",
+    "expected": "https://example.com/foo(bar)baz"
+  },
+  {
+    "input": "Link inside (https://example.com) parens",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "Link period https://example.com. More text.",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "Link trailing comma https://example.com, more text.",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "Link in double quotes \"https://example.com\" and more",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "Link in single quotes 'https://example.com' and more",
+    "expected": "https://example.com"
+  },
+  {
+    "input": "some file with https://google.com https://duckduckgo.com links.",
+    "expected": "https://google.com"
+  },
+  {
+    "input": "and links in it. links https://yahoo.com mailto:test@example.com ssh://1.2.3.4",
+    "expected": "https://yahoo.com"
+  },
+  {
+    "input": "also match http://example.com non-secure links",
+    "expected": "http://example.com"
+  },
+  {
+    "input": "match tel://+12123456789 phone numbers",
+    "expected": "tel://+12123456789"
+  },
+  {
+    "input": "match with query url https://example.com?query=1&other=2 and more text.",
+    "expected": "https://example.com?query=1&other=2"
+  },
+  {
+    "input": "url with dashes [mode 2027](https://github.com/contour-terminal/terminal-unicode-core) for better unicode support",
+    "expected": "https://github.com/contour-terminal/terminal-unicode-core"
+  },
+  {
+    "input": "dot.http://example.com",
+    "expected": "http://example.com"
+  },
+  {
+    "input": "weird characters https://example.com/~user/?query=1&other=2#hash and more",
+    "expected": "https://example.com/~user/?query=1&other=2#hash"
+  },
+  {
+    "input": "square brackets https://example.com/[foo] and more",
+    "expected": "https://example.com/[foo]"
+  },
+  {
+    "input": "[13]:TooManyStatements: TempFile#assign_temp_file_to_entity has approx 7 statements [https://example.com/docs/Too-Many-Statements.md]",
+    "expected": "https://example.com/docs/Too-Many-Statements.md"
+  },
+  {
+    "input": "match ftp://example.com ftp links",
+    "expected": "ftp://example.com"
+  },
+  {
+    "input": "match file://example.com file links",
+    "expected": "file://example.com"
+  },
+  {
+    "input": "match ssh://example.com ssh links",
+    "expected": "ssh://example.com"
+  },
+  {
+    "input": "match git://example.com git links",
+    "expected": "git://example.com"
+  },
+  {
+    "input": "/tmp/test.txt http://www.google.com",
+    "expected": "/tmp/test.txt"
+  },
+  {
+    "input": "match tel:+18005551234 tel links",
+    "expected": "tel:+18005551234"
+  },
+  {
+    "input": "match magnet:?xt=urn:btih:1234567890 magnet links",
+    "expected": "magnet:?xt=urn:btih:1234567890"
+  },
+  {
+    "input": "match ipfs://QmSomeHashValue ipfs links",
+    "expected": "ipfs://QmSomeHashValue"
+  },
+  {
+    "input": "match ipns://QmSomeHashValue ipns links",
+    "expected": "ipns://QmSomeHashValue"
+  },
+  {
+    "input": "match gemini://example.com gemini links",
+    "expected": "gemini://example.com"
+  },
+  {
+    "input": "match gopher://example.com gopher links",
+    "expected": "gopher://example.com"
+  },
+  {
+    "input": "match news:comp.infosystems.www.servers.unix news links",
+    "expected": "news:comp.infosystems.www.servers.unix"
+  },
+  {
+    "input": "/Users/ghostty.user/code/example.py",
+    "expected": "/Users/ghostty.user/code/example.py"
+  },
+  {
+    "input": "/Users/ghostty.user/code/../example.py",
+    "expected": "/Users/ghostty.user/code/../example.py"
+  },
+  {
+    "input": "/Users/ghostty.user/code/../example.py hello world",
+    "expected": "/Users/ghostty.user/code/../example.py"
+  },
+  {
+    "input": "../example.py",
+    "expected": "../example.py"
+  },
+  {
+    "input": "../example.py ",
+    "expected": "../example.py"
+  },
+  {
+    "input": "first time ../example.py contributor ",
+    "expected": "../example.py"
+  },
+  {
+    "input": "[link](/home/user/ghostty.user/example)",
+    "expected": "/home/user/ghostty.user/example"
+  },
+  {
+    "input": "Serving HTTP on :: port 8000 (http://[::]:8000/)",
+    "expected": "http://[::]:8000/"
+  },
+  {
+    "input": "IPv6 address https://[2001:db8::1]:8080/path",
+    "expected": "https://[2001:db8::1]:8080/path"
+  },
+  {
+    "input": "IPv6 localhost http://[::1]:3000",
+    "expected": "http://[::1]:3000"
+  },
+  {
+    "input": "Complex IPv6 https://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443/",
+    "expected": "https://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443/"
+  },
+  {
+    "input": "IPv6 with path https://[2001:db8::1]/path/to/resource",
+    "expected": "https://[2001:db8::1]/path/to/resource"
+  },
+  {
+    "input": "IPv6 with query https://[2001:db8::1]:8080/api?param=value&other=123",
+    "expected": "https://[2001:db8::1]:8080/api?param=value&other=123"
+  },
+  {
+    "input": "IPv6 compressed http://[2001:db8::]:80/",
+    "expected": "http://[2001:db8::]:80/"
+  },
+  {
+    "input": "IPv6 multiple zeros http://[2001:0:0:0:0:0:0:1]",
+    "expected": "http://[2001:0:0:0:0:0:0:1]"
+  },
+  {
+    "input": "IPv6 link-local https://[fe80::1234:5678:9abc]",
+    "expected": "https://[fe80::1234:5678:9abc]"
+  },
+  {
+    "input": "IPv6 multicast http://[ff02::1]/stream",
+    "expected": "http://[ff02::1]/stream"
+  },
+  {
+    "input": "IPv6 in markdown [link](http://[2001:db8::1]/docs)",
+    "expected": "http://[2001:db8::1]/docs"
+  },
+  {
+    "input": "./spaces-end.   ",
+    "expected": "./spaces-end."
+  },
+  {
+    "input": "./space middle",
+    "expected": "./space middle"
+  },
+  {
+    "input": "../test folder/file.txt",
+    "expected": "../test folder/file.txt"
+  },
+  {
+    "input": "/tmp/test folder/file.txt",
+    "expected": "/tmp/test folder/file.txt"
+  },
+  {
+    "input": "/tmp/test  folder/file.txt",
+    "expected": "/tmp/test"
+  },
+  {
+    "input": "diff --git a/src/font/shaper/harfbuzz.zig b/src/font/shaper/harfbuzz.zig",
+    "expected": "a/src/font/shaper/harfbuzz.zig"
+  },
+  {
+    "input": "/tmp/foo /tmp/bar",
+    "expected": "/tmp/foo"
+  },
+  {
+    "input": "/tmp/foo.txt /tmp/bar.txt",
+    "expected": "/tmp/foo.txt"
+  },
+  {
+    "input": "src/config/url.zig",
+    "expected": "src/config/url.zig"
+  },
+  {
+    "input": "app/folder/file.rb:1",
+    "expected": "app/folder/file.rb:1"
+  },
+  {
+    "input": "modified:   src/config/url.zig",
+    "expected": "src/config/url.zig"
+  },
+  {
+    "input": "lib/ghostty/terminal.zig:42:10",
+    "expected": "lib/ghostty/terminal.zig:42:10"
+  },
+  {
+    "input": "some-pkg/src/file.txt more text",
+    "expected": "some-pkg/src/file.txt"
+  },
+  {
+    "input": "src/foo.c,baz.txt",
+    "expected": "src/foo.c"
+  },
+  {
+    "input": "~/foo/bar.txt",
+    "expected": "~/foo/bar.txt"
+  },
+  {
+    "input": "open ~/Documents/notes.md please",
+    "expected": "~/Documents/notes.md"
+  },
+  {
+    "input": "~/.config/ghostty/config",
+    "expected": "~/.config/ghostty/config"
+  },
+  {
+    "input": "directory: ~/src/ghostty-org/ghostty",
+    "expected": "~/src/ghostty-org/ghostty"
+  },
+  {
+    "input": "$HOME/src/config/url.zig",
+    "expected": "$HOME/src/config/url.zig"
+  },
+  {
+    "input": "project dir: $PWD/src/ghostty/main.zig",
+    "expected": "$PWD/src/ghostty/main.zig"
+  },
+  {
+    "input": "foo/$BAR/baz",
+    "expected": "foo/$BAR/baz"
+  },
+  {
+    "input": ".foo/bar/$VAR",
+    "expected": ".foo/bar/$VAR"
+  },
+  {
+    "input": ".config/ghostty/config",
+    "expected": ".config/ghostty/config"
+  },
+  {
+    "input": "loaded from .local/share/ghostty/state.db now",
+    "expected": ".local/share/ghostty/state.db"
+  },
+  {
+    "input": "../some/where",
+    "expected": "../some/where"
+  },
+  {
+    "input": "  - shared/src/foo/SomeItem.m:12, shared/src/",
+    "expected": "shared/src/foo/SomeItem.m:12"
+  },
+  {
+    "input": "foo.local/share",
+    "expected": "foo.local/share"
+  },
+  {
+    "input": "2024/report.txt",
+    "expected": "2024/report.txt"
+  },
+  {
+    "input": "./foo bar,baz",
+    "expected": "./foo bar"
+  },
+  {
+    "input": "/tmp/foo bar,baz",
+    "expected": "/tmp/foo bar"
+  },
+  {
+    "input": "./.config/ghostty: Needs upstream (main)",
+    "expected": "./.config/ghostty"
+  },
+  {
+    "input": "./Downloads: Operation not permitted",
+    "expected": "./Downloads"
+  },
+  {
+    "input": "input/output",
+    "expected": null
+  },
+  {
+    "input": "foo/bar",
+    "expected": null
+  },
+  {
+    "input": "$10/bar",
+    "expected": null
+  },
+  {
+    "input": "$10/$20",
+    "expected": null
+  },
+  {
+    "input": "$10/bar.txt",
+    "expected": null
+  },
+  {
+    "input": "foo/bar,baz.txt",
+    "expected": null
+  },
+  {
+    "input": "foo$BAR/baz.txt",
+    "expected": null
+  },
+  {
+    "input": "foo~/bar.txt",
+    "expected": null
+  },
+  {
+    "input": "// foo bar",
+    "expected": null
+  },
+  {
+    "input": "//foo",
+    "expected": null
+  }
+]
