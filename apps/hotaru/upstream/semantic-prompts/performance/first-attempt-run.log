@@ -1,0 +1,7 @@
+{"status": "failed_or_contaminated_not_acceptance", "report": "/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/native-forty-a/summary.json"}
+Traceback (most recent call last):
+  File "/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/tools/native-forty.py", line 245, in <module>
+    main()
+  File "/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/tools/native-forty.py", line 164, in main
+    raise RuntimeError('compiler process appeared before workload')
+RuntimeError: compiler process appeared before workload

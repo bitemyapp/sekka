@@ -1,6 +1,6 @@
 //! Explicit, bounded archive representation. No raw Rust layout or pointer bytes
 //! enter the codec, and decoding validates every offset before constructing Row.
-use super::{Cell, CompactString, GraphemeMap, Row, RowLinks};
+use super::{Cell, CompactString, GraphemeMap, Row, RowLinks, RowPrompt};
 use crate::hyperlink::{LinkIdentity, LinkRef};
 use crate::{Color, MAX_COLS, Rgb, Style};
 use std::collections::HashMap;
@@ -68,6 +68,7 @@ impl Row {
             graphemes: GraphemeMap::with_capacity(usize::from(layout.graphemes)),
             wrapped: false,
             wrap_continuation: false,
+            prompt: RowPrompt::None,
             retained_cols: layout.retained_cols.max(cols as u16),
             dirty_end: cols as u16,
             links: None,
@@ -111,7 +112,8 @@ impl Row {
         bytes.push(
             u8::from(self.wrapped)
                 | (u8::from(self.wrap_continuation) << 1)
-                | (u8::from(table.is_some()) << 2),
+                | (u8::from(table.is_some()) << 2)
+                | ((self.prompt as u8) << 3),
         );
         for value in [
             self.styles.len() as u16,
@@ -186,7 +188,8 @@ impl Row {
         if !(1..=MAX_COLS).contains(&cols)
             || usize::from(retained_cols) < cols
             || usize::from(retained_cols) > MAX_COLS
-            || flags > 7
+            || flags & !31 != 0
+            || flags & 24 == 24
             || styles == 0
             || styles > MAX_COLS * 2 + 1
             || usize::from(last_style) >= styles
@@ -241,6 +244,11 @@ impl Row {
         row.retained_cols = retained_cols;
         row.wrapped = flags & 1 != 0;
         row.wrap_continuation = flags & 2 != 0;
+        row.prompt = match (flags >> 3) & 3 {
+            1 => RowPrompt::Prompt,
+            2 => RowPrompt::Continuation,
+            _ => RowPrompt::None,
+        };
         for col in 0..cols {
             let scalar = r.u32()?;
             let style = r.u16()?;
@@ -249,7 +257,8 @@ impl Row {
             if char::from_u32(scalar).is_none()
                 || usize::from(style) >= styles
                 || width > 2
-                || reserved > 7
+                || reserved & !31 != 0
+                || reserved & 24 == 24
                 || (reserved & 2 != 0 && (width != 1 || col + 1 != cols))
             {
                 return None;

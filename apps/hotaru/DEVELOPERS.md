@@ -111,8 +111,10 @@ latency/memory acceptance remain open.
 The [shell integration slice](docs/shell-integration.md) provides opt-out
 Bash, Zsh and Fish hooks, validated local OSC 7 working directories and a
 qualified terminfo subset. Default shell tabs and splits inherit the last
-accepted local working directory. Remote shell installation, complete semantic
-prompt markers and broader terminfo capabilities remain open. The packaged
+accepted local working directory. The [semantic metadata slice](docs/semantic-prompts.md)
+now retains observed OSC 133 cell/row markers through edits, history and reflow,
+and implements DECALN. Semantic shell hook emission, command navigation, complete semantic
+extensions, remote shell installation and broader terminfo remain open. The packaged
 checkpoint and four independent Wayland suites are recorded in
 [`upstream/nix-shell-checkpoint.json`](upstream/nix-shell-checkpoint.json) and
 [`upstream/native-shell/`](upstream/native-shell/).

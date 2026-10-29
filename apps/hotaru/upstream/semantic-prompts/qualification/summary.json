@@ -1,0 +1,32 @@
+{
+  "status": "passed",
+  "candidate_path": "/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru",
+  "baseline_path": "/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru",
+  "scope": "Conservative terminal-wide OSC133 marker guard for ED2 heuristic; two Cell query visibility changes; no shared product edits.",
+  "validation": {
+    "debug_targeted_tests": 7,
+    "debug_scope": "before visibility-only Cell query changes",
+    "release_targeted_tests": 7,
+    "release_scope": "final source",
+    "clippy": "cargo +1.95.0 clippy --locked --workspace --all-targets -- -D warnings",
+    "actual_library_comparisons": 3120,
+    "cases": 520,
+    "modes": [
+      "legacy",
+      "unicode"
+    ],
+    "chunks": [
+      1,
+      7,
+      65536
+    ],
+    "failures": 0
+  },
+  "provenance": {
+    "core_manifest": "source.json",
+    "scope": "core source files and exact semantic adapter ELF hashes; parent native build supplies full Cargo/vendor provenance",
+    "reference_library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639"
+  },
+  "original_dec_aln_evidence": "/home/callen/work/hotaru-semantic-prompts-20261028/artifacts/independent-decaln-audit",
+  "native_performance": "pending parent exact-source build and 40-case comparison; no speed claim"
+}

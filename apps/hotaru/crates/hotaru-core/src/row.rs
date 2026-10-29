@@ -12,6 +12,26 @@ mod ascii;
 mod history;
 pub(crate) use history::RecycleLayout;
 
+/// OSC 133 content classification retained by each immutable cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SemanticContent {
+    #[default]
+    Output = 0,
+    Input = 1,
+    Prompt = 2,
+}
+
+/// Row boundary recorded by shell prompt markers (independent of cell text).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum RowPrompt {
+    #[default]
+    None = 0,
+    Prompt = 1,
+    Continuation = 2,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Cell {
@@ -31,7 +51,7 @@ mod tests {
         let mut row = Row::new(8);
         let style = Style::default();
         for col in [0, 1, 3] {
-            row.put(col, 'e', 1, style, false);
+            row.put_semantic(col, 'e', 1, style, false, SemanticContent::Output);
             row.combine(col, '\u{301}');
         }
         for _ in 0..24 {
@@ -44,20 +64,20 @@ mod tests {
         signal.rebase(before);
         signal.take_change();
 
-        row.put(0, 'x', 1, style, false);
+        row.put_semantic(0, 'x', 1, style, false, SemanticContent::Output);
         assert_eq!(row.owned_bytes(), before);
         assert_eq!(row.owned_bytes(), row.uncached_owned_bytes());
         assert_eq!(signal.current(), before);
         assert_eq!(signal.take_change(), None);
 
-        row.put(3, 'y', 1, style, false);
+        row.put_semantic(3, 'y', 1, style, false, SemanticContent::Output);
         let after_heap = row.owned_bytes();
         assert!(after_heap < before);
         assert_eq!(after_heap, row.uncached_owned_bytes());
         assert_eq!(signal.current(), after_heap);
         assert_eq!(signal.take_change(), Some((after_heap, before)));
 
-        row.put(1, 'z', 1, style, false);
+        row.put_semantic(1, 'z', 1, style, false, SemanticContent::Output);
         assert!(row.graphemes.is_empty());
         assert!(row.graphemes.capacity() > 0);
         assert_eq!(row.owned_bytes(), after_heap);
@@ -95,8 +115,10 @@ mod tests {
                 6 => row.combine(col, '\u{301}'),
                 7 => row.set_spacer_head(row.cells.len() - 1, style),
                 8 => row.clear_spacer_head(),
-                9 if col + 1 < row.cells.len() => row.put(col, '雪', 2, style, step % 2 == 0),
-                _ => row.put(col, 'x', 1, style, step % 2 == 0),
+                9 if col + 1 < row.cells.len() => {
+                    row.put_semantic(col, '雪', 2, style, step % 2 == 0, SemanticContent::Output)
+                }
+                _ => row.put_semantic(col, 'x', 1, style, step % 2 == 0, SemanticContent::Output),
             };
             eager.dirty_end = eager.cells.len() as u16;
             mutate(&mut actual);
@@ -153,10 +175,10 @@ impl Cell {
             _reserved: 4,
         }
     }
-    pub(crate) fn is_spacer_head(self) -> bool {
+    pub fn is_spacer_head(self) -> bool {
         self._reserved & 2 != 0
     }
-    pub(crate) fn has_text(self) -> bool {
+    pub fn has_text(self) -> bool {
         self.scalar != 0
     }
     pub(crate) fn background_only(self) -> bool {
@@ -170,6 +192,17 @@ impl Cell {
     }
     pub fn width(self) -> usize {
         self.width as usize
+    }
+    pub fn semantic_content(self) -> SemanticContent {
+        match (self._reserved >> 3) & 3 {
+            1 => SemanticContent::Input,
+            2 => SemanticContent::Prompt,
+            _ => SemanticContent::Output,
+        }
+    }
+    pub(crate) fn semantic(mut self, value: SemanticContent) -> Self {
+        self._reserved = (self._reserved & !24) | ((value as u8) << 3);
+        self
     }
     pub fn is_protected(self) -> bool {
         self._reserved & 1 != 0
@@ -188,6 +221,7 @@ pub struct Row {
     pub(crate) graphemes: GraphemeMap,
     pub(crate) wrapped: bool,
     pub(crate) wrap_continuation: bool,
+    pub(crate) prompt: RowPrompt,
     retained_cols: u16,
     // Cells at/after this bound equal Cell::blank(0). Reset can leave that
     // already-blank suffix untouched even when style 0's value changes.
@@ -205,6 +239,7 @@ impl Clone for Row {
             graphemes: self.graphemes.clone(),
             wrapped: self.wrapped,
             wrap_continuation: self.wrap_continuation,
+            prompt: self.prompt,
             retained_cols: self.retained_cols,
             dirty_end: self.dirty_end,
             links: self.links.clone(),
@@ -222,6 +257,7 @@ impl Row {
             graphemes: GraphemeMap::new(),
             wrapped: false,
             wrap_continuation: false,
+            prompt: RowPrompt::None,
             retained_cols: cols as u16,
             dirty_end: 0,
             links: None,
@@ -358,7 +394,11 @@ impl Row {
         self.last_style = 0;
         self.refresh_memory_charge();
     }
+    pub fn semantic_prompt(&self) -> RowPrompt {
+        self.prompt
+    }
     pub(crate) fn reset(&mut self, cols: usize, style: Style) {
+        self.prompt = RowPrompt::None;
         self.styles.clear();
         self.styles.push(style.erased());
         self.last_style = 0;
@@ -434,6 +474,7 @@ impl Row {
             );
         }
     }
+    #[cfg(test)]
     pub(crate) fn put(
         &mut self,
         col: usize,
@@ -442,11 +483,26 @@ impl Row {
         style: Style,
         protected: bool,
     ) {
+        self.put_semantic(col, ch, width, style, protected, SemanticContent::Output);
+    }
+    pub(crate) fn put_semantic(
+        &mut self,
+        col: usize,
+        ch: char,
+        width: usize,
+        style: Style,
+        protected: bool,
+        semantic: SemanticContent,
+    ) {
         self.prepare_write(col, col + width, style);
         let id = self.style_id(style);
-        self.cells[col] = Cell::new(ch, id, width as u8).protected(protected);
+        self.cells[col] = Cell::new(ch, id, width as u8)
+            .protected(protected)
+            .semantic(semantic);
         if width == 2 {
-            self.cells[col + 1] = Cell::new(' ', id, 0).protected(protected);
+            self.cells[col + 1] = Cell::new(' ', id, 0)
+                .protected(protected)
+                .semantic(semantic);
         }
     }
     /// Finish a positive-width print run after its interior cells were replaced.
@@ -498,13 +554,16 @@ impl Row {
         col: usize,
         style: Style,
         protected: bool,
+        semantic: SemanticContent,
         link: Option<&LinkRef>,
     ) {
         debug_assert!(col + 1 < self.cells.len());
         self.prepare_write(col + 1, col + 2, style);
         let id = self.style_id(style);
         self.cells[col].width = 2;
-        self.cells[col + 1] = Cell::new('\0', id, 0).protected(protected);
+        self.cells[col + 1] = Cell::new('\0', id, 0)
+            .protected(protected)
+            .semantic(semantic);
         if let Some(link) = link {
             self.set_hyperlink_range(col + 1..col + 2, Some(link));
         }
@@ -560,7 +619,7 @@ impl Row {
                     || (cell._reserved & 4 != 0
                         && self.style(*cell).background != crate::Color::Default)
             })
-            .map_or(0, |col| col + 1)
+            .map_or(usize::from(self.prompt != RowPrompt::None), |col| col + 1)
     }
     pub(crate) fn has_text(&self) -> bool {
         self.cells

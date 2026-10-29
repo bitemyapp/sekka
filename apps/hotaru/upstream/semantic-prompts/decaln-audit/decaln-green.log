@@ -1,0 +1,26 @@
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running tests/decaln.rs (/home/callen/.cache/hotaru-semantic-target/debug/deps/decaln-292d3669d988f731)
+
+running 3 tests
+test alignment_resets_origin_margins_and_pending_wrap_but_not_rep ... ok
+test alignment_is_local_to_active_screen_and_exact_escape_sequence ... ok
+test alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes ... FAILED
+
+failures:
+
+---- alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes stdout ----
+
+thread 'alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes' (1470773) panicked at crates/hotaru-core/tests/decaln.rs:30:13:
+assertion `left == right` failed
+  left: 'o'
+ right: 'E'
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p hotaru-core --test decaln`

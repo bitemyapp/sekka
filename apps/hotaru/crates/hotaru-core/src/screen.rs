@@ -1,9 +1,13 @@
+use crate::RowPrompt;
 use crate::history::{History, HistoryLimits};
 use crate::hyperlink::{Hyperlink, LinkIdentity, LinkRef};
 use crate::input::{KeyboardOptions, KittyFlags, KittyKeyboard, MouseFormat, MouseTracking};
 use crate::parser::{Csi, Handler, Param};
 use crate::style::Underline;
-use crate::{Cell, Color, MAX_COLS, MAX_ROWS, Rgb, Row, Snapshot, Style, TerminalColors, attrs};
+use crate::{
+    Cell, Color, MAX_COLS, MAX_ROWS, Rgb, Row, SemanticContent, Snapshot, Style, TerminalColors,
+    attrs,
+};
 use std::collections::VecDeque;
 use triomphe::Arc;
 use unicode_width::UnicodeWidthChar;
@@ -156,6 +160,8 @@ struct Screen {
     // The old destination pen is used to erase on 1049 entry, before the
     // source cursor/pen is copied. State::style owns the active pen.
     inactive_style: Style,
+    semantic: SemanticContent,
+    semantic_clear_eol: bool,
 }
 
 impl Screen {
@@ -177,6 +183,8 @@ impl Screen {
             kitty_keyboard: KittyKeyboard::default(),
             active_link: None,
             inactive_style: Style::default(),
+            semantic: SemanticContent::Output,
+            semantic_clear_eol: false,
         };
         screen.rebase_budget();
         screen
@@ -280,6 +288,23 @@ impl Screen {
             self.scroll_up(1, true, style);
         } else {
             self.cursor.row = (self.cursor.row + 1).min(self.lines.len() - 1);
+        }
+        if self.semantic_clear_eol {
+            self.semantic = SemanticContent::Output;
+            self.semantic_clear_eol = false;
+        } else if self.semantic != SemanticContent::Output {
+            self.row().prompt = RowPrompt::Continuation;
+        }
+    }
+    fn soft_linefeed(&mut self, style: Style) {
+        // OSC 133 I ends on an explicit index, never on an automatic wrap.
+        let semantic = self.semantic;
+        let clear = self.semantic_clear_eol;
+        self.linefeed(style);
+        self.semantic = semantic;
+        self.semantic_clear_eol = clear;
+        if semantic == SemanticContent::Prompt {
+            self.row().prompt = RowPrompt::Continuation;
         }
     }
     fn resize(&mut self, cols: usize, rows: usize, reflow: bool) {
@@ -460,11 +485,13 @@ impl ResizeRows {
                 pending = false;
                 new_rows = 0;
             }
+            Arc::make_mut(self.lines.back_mut().unwrap()).prompt = row.prompt;
             let mut source_col = 0;
             while source_col < len {
                 if pending {
                     Arc::make_mut(self.lines.back_mut().unwrap()).wrapped = true;
                     self.push_blank(true);
+                    Arc::make_mut(self.lines.back_mut().unwrap()).prompt = row.prompt;
                     col = 0;
                     pending = false;
                 }
@@ -485,6 +512,7 @@ impl ResizeRows {
                 if cell.width() == 2 && cols > 1 && col == cols - 1 {
                     let target = Arc::make_mut(self.lines.back_mut().unwrap());
                     target.set_spacer_head(col, Style::default());
+                    target.cells[col] = target.cells[col].semantic(cell.semantic_content());
                     target.set_hyperlink_range(col..col + 1, row.hyperlink_ref(source_col));
                     pending = true;
                     continue;
@@ -555,6 +583,10 @@ pub(crate) struct State {
     default_cursor_blinking: bool,
     cursor_is_default: bool,
     next_link_id: u64,
+    // Conservative terminal-wide guard: either screen or retained rows may
+    // carry prompt metadata after the cursor returns to ordinary output.
+    // Only a hard reset can prove that all such state is gone.
+    semantic_markers_seen: bool,
     tabs: Vec<bool>,
     default_colors: TerminalColors,
     palette: [Rgb; 256],
@@ -597,6 +629,7 @@ impl State {
             default_cursor_blinking: false,
             cursor_is_default: true,
             next_link_id: 0,
+            semantic_markers_seen: false,
             tabs: (0..cols).map(|c| c != 0 && c % 8 == 0).collect(),
             default_colors: TerminalColors::default(),
             palette: crate::style::default_palette(),
@@ -809,6 +842,7 @@ impl State {
             let protected = self.protected;
             let s = self.screen_mut();
             let link = s.active_link.clone();
+            let semantic = s.semantic;
             let col = s.cursor.col;
             let count = bytes.len().min(s.cols - col);
             let row = s.row();
@@ -824,6 +858,7 @@ impl State {
                 &bytes[..count],
                 id,
                 protected,
+                semantic,
             );
             if let Some(link) = &link {
                 row.set_hyperlink_range(col..col + count, Some(link));
@@ -850,7 +885,7 @@ impl State {
             if auto {
                 s.row().wrapped = true;
                 s.cursor.col = 0;
-                s.linefeed(style);
+                s.soft_linefeed(style);
                 s.row().wrap_continuation = true;
             }
         }
@@ -899,6 +934,7 @@ impl State {
         let protected = self.protected;
         let auto = self.autowrap;
         let screen = self.screen_mut();
+        let semantic = screen.semantic;
         match effect {
             WidthEffect::Wide if base.width() != 2 => {
                 screen.cursor.col = col;
@@ -912,14 +948,17 @@ impl State {
                         .map(compact_str::CompactString::from);
                     screen.row().wrapped = true;
                     screen.row().set_spacer_head(col, style);
+                    screen.row().cells[col] = screen.row().cells[col].semantic(semantic);
                     if let Some(link) = &link {
                         screen.row().set_hyperlink_range(col..col + 1, Some(link));
                     }
                     screen.cursor.col = 0;
-                    screen.linefeed(style);
+                    screen.soft_linefeed(style);
                     screen.row().wrap_continuation = true;
                     col = 0;
-                    screen.row().put(col, base.character(), 2, style, protected);
+                    screen
+                        .row()
+                        .put_semantic(col, base.character(), 2, style, protected, semantic);
                     if let Some(link) = &link {
                         screen.row().set_hyperlink_range(col..col + 2, Some(link));
                     }
@@ -934,7 +973,7 @@ impl State {
                     }
                     screen
                         .row()
-                        .widen_grapheme(col, style, protected, link.as_ref());
+                        .widen_grapheme(col, style, protected, semantic, link.as_ref());
                 }
                 screen.cursor.col = (col + 2).min(screen.cols - 1);
                 if col + 2 == screen.cols {
@@ -975,6 +1014,7 @@ impl State {
             let auto = self.autowrap;
             let s = self.screen_mut();
             let mut col = s.cursor.col;
+            let semantic = s.semantic;
             let link = s.active_link.clone();
             let mut pending = s.wrap_pending;
             let mut clear_previous_spacer = false;
@@ -1009,9 +1049,13 @@ impl State {
                     previous = Some(ch);
                     clear_previous_spacer |=
                         col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
-                    row.cells[col] = Cell::new(ch, id, width as u8).protected(protected);
+                    row.cells[col] = Cell::new(ch, id, width as u8)
+                        .protected(protected)
+                        .semantic(semantic);
                     if width == 2 {
-                        row.cells[col + 1] = Cell::new(' ', id, 0).protected(protected);
+                        row.cells[col + 1] = Cell::new(' ', id, 0)
+                            .protected(protected)
+                            .semantic(semantic);
                     }
                     col += width;
                     if col == s.cols {
@@ -1075,6 +1119,7 @@ impl State {
             return 0;
         }
         let link = screen.active_link.clone();
+        let semantic = screen.semantic;
         let mut col = screen.cursor.col;
         let mut consumed = 0;
         let mut previous = None;
@@ -1096,7 +1141,7 @@ impl State {
             previous = Some(ch);
             clear_previous_spacer |=
                 col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
-            row.put(col, ch, width, style, protected);
+            row.put_semantic(col, ch, width, style, protected, semantic);
             if let Some(link) = &link {
                 row.set_hyperlink_range(col..col + width, Some(link));
             }
@@ -1188,6 +1233,48 @@ impl State {
         });
         self.events.push(event);
     }
+    fn semantic_prompt(&mut self, data: &[u8]) {
+        let Some(&action) = data.first() else { return };
+        if !matches!(
+            action,
+            b'A' | b'B' | b'C' | b'D' | b'I' | b'L' | b'N' | b'P'
+        ) || (data.len() > 1 && (action == b'L' || data[1] != b';'))
+        {
+            return;
+        }
+        self.semantic_markers_seen = true;
+        // Options are byte strings; malformed UTF-8 in an unknown option does
+        // not invalidate the command. Prompt kind affects row navigation, not
+        // the per-cell classification implemented here.
+        if matches!(action, b'A' | b'N' | b'L') && self.screen().cursor.col != 0 {
+            let style = self.style;
+            let screen = self.screen_mut();
+            screen.cursor.col = 0;
+            screen.linefeed(style);
+        }
+        let screen = self.screen_mut();
+        screen.semantic = match action {
+            b'A' | b'N' | b'P' => SemanticContent::Prompt,
+            b'B' | b'I' => SemanticContent::Input,
+            b'C' | b'D' => SemanticContent::Output,
+            _ => return,
+        };
+        screen.semantic_clear_eol = action == b'I';
+        if screen.semantic == SemanticContent::Prompt {
+            let kind = data
+                .get(2..)
+                .unwrap_or_default()
+                .split(|&b| b == b';')
+                .find_map(|field| field.strip_prefix(b"k="));
+            screen.row().prompt = if matches!(kind, Some(b"c" | b"s")) {
+                RowPrompt::Continuation
+            } else {
+                RowPrompt::Prompt
+            };
+        } else if action == b'C' && screen.cursor.col == 0 {
+            screen.row().prompt = RowPrompt::None;
+        }
+    }
     fn save_cursor(&mut self) {
         let saved = SavedCursor {
             cursor: self.screen().cursor,
@@ -1244,6 +1331,8 @@ impl State {
         let changed = self.modes.alternate_screen != set;
         let old_cursor = self.screen().cursor;
         let old_wrap = self.screen().wrap_pending;
+        let old_semantic = self.screen().semantic;
+        let old_clear_eol = self.screen().semantic_clear_eol;
         let destination_style = if changed && set {
             self.alternate.inactive_style
         } else {
@@ -1262,6 +1351,10 @@ impl State {
                 screen.cursor.shape = shape;
             }
             screen.wrap_pending = old_wrap;
+            if value != 1049 || set {
+                screen.semantic = old_semantic;
+                screen.semantic_clear_eol = old_clear_eol;
+            }
             // Scroll margins are terminal state shared by the two screens.
             screen.top = top;
             screen.bottom = bottom;
@@ -1426,6 +1519,32 @@ impl State {
             Some(true) => 1,
             Some(false) => 2,
             None => 0,
+        }
+    }
+    fn alignment_pattern(&mut self) {
+        // DECALN keeps the pen's foreground/background, but clears its other
+        // SGR attributes. The cursor's protection, link and semantic state
+        // survive; the pattern itself carries none of those attributes.
+        self.style = Style {
+            foreground: self.style.foreground,
+            background: self.style.background,
+            ..Style::default()
+        };
+        self.origin = false;
+        let style = self.style;
+        let screen = self.screen_mut();
+        screen.top = 0;
+        screen.bottom = screen.lines.len() - 1;
+        screen.cursor.row = 0;
+        screen.cursor.col = 0;
+        screen.wrap_pending = false;
+        for index in 0..screen.lines.len() {
+            let row = Arc::make_mut(&mut screen.lines[index]);
+            row.reset(screen.cols, style);
+            row.prepare_write(0, screen.cols, style);
+            let id = row.style_id(style);
+            row.cells.fill(Cell::new('E', id, 1));
+            screen.enforce_budget();
         }
     }
     fn soft_reset(&mut self) {
@@ -1613,18 +1732,20 @@ impl Handler for State {
         let protected = self.protected;
         let s = self.screen_mut();
         let link = s.active_link.clone();
+        let semantic = s.semantic;
         let mut width = width;
         if width == 2 && s.cursor.col + 1 >= s.cols {
             if auto && s.cols > 1 {
                 let col = s.cursor.col;
                 s.row().erase(col, col + 1, style);
                 s.row().set_spacer_head(col, style);
+                s.row().cells[col] = s.row().cells[col].semantic(semantic);
                 if let Some(link) = &link {
                     s.row().set_hyperlink_range(col..col + 1, Some(link));
                 }
                 s.row().wrapped = true;
                 s.cursor.col = 0;
-                s.linefeed(style);
+                s.soft_linefeed(style);
                 s.row().wrap_continuation = true;
             } else if s.cols == 1 {
                 ch = '\0';
@@ -1640,7 +1761,8 @@ impl Handler for State {
         if col <= 1 && s.row().cells[col].width() != width && s.row().cells[col].width() != 1 {
             s.clear_previous_spacer();
         }
-        s.row().put(col, ch, width, style, protected);
+        s.row()
+            .put_semantic(col, ch, width, style, protected, semantic);
         if let Some(link) = &link {
             s.row().set_hyperlink_range(col..col + width, Some(link));
         }
@@ -1685,6 +1807,10 @@ impl Handler for State {
         }
     }
     fn esc(&mut self, intermediates: &[u8], final_byte: u8) {
+        if intermediates == b"#" && final_byte == b'8' {
+            self.alignment_pattern();
+            return;
+        }
         if let [which @ (b'(' | b')' | b'*' | b'+')] = intermediates {
             self.charset[(*which - b'(') as usize] = match final_byte {
                 b'0' => 1,
@@ -1902,6 +2028,44 @@ impl Handler for State {
                 self.move_to(p(0, 1) - 1, col);
             }
             b'J' => {
+                // Prompt-marked ED2 preserves prior content in scrollback,
+                // including when the shell first homes the cursor.
+                if first == 2 && self.semantic_markers_seen && !self.modes.alternate_screen {
+                    let at_prompt = self
+                        .screen()
+                        .lines
+                        .iter()
+                        .rev()
+                        .find(|row| row.prompt != RowPrompt::None || row.has_text())
+                        .is_some_and(|row| row.prompt != RowPrompt::None);
+                    if at_prompt {
+                        let screen = self.screen_mut();
+                        let count = screen
+                            .lines
+                            .iter()
+                            .rposition(|row| {
+                                row.cells.iter().any(|cell| {
+                                    cell.has_text()
+                                        || (cell.background_only()
+                                            && row.style(*cell).background != Color::Default)
+                                })
+                            })
+                            .map_or(0, |row| row + 1);
+                        let top = screen.top;
+                        let bottom = screen.bottom;
+                        screen.top = 0;
+                        screen.bottom = screen.lines.len() - 1;
+                        screen.scroll_up(count, true, Style::default());
+                        screen.top = top;
+                        screen.bottom = bottom;
+                        if screen.cursor.row < count {
+                            screen.cursor.col = 0;
+                            screen.cursor.row = 0;
+                        } else {
+                            screen.cursor.row -= count;
+                        }
+                    }
+                }
                 let s = self.screen_mut();
                 let col = s.cursor.col;
                 let row = s.cursor.row;
@@ -2077,6 +2241,10 @@ impl Handler for State {
         }
     }
     fn osc(&mut self, bytes: &[u8], bell_terminated: bool) {
+        if let Some(body) = bytes.strip_prefix(b"133;") {
+            self.semantic_prompt(body);
+            return;
+        }
         if let Some(body) = bytes.strip_prefix(b"8;") {
             // The reference OSC 8 parser reserves one fixed-buffer byte for
             // its sentinel NUL. Invalid commands retain the active link.

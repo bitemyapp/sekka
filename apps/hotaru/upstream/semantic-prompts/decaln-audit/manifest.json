@@ -1,0 +1,21 @@
+{
+  "decaln-clippy.log": "67263d2d3bce6419728fae833b8e920c47f85feb996bd462016188b49edca49c",
+  "decaln-adapter.log": "2103d4febe8cdefd27a0e5be779575522c71c4dc550c761d4238c3a501efa4ef",
+  "summary.json": "735bba471943fdfaa17cb0d54b5cd517f4999f96dc447fa4e121f0ab9cbdb32d",
+  "decaln-red.log": "db4ee2c80a22472e19246dd3b3865fb9b61dc49a4e361bd2d56c4e2cc3aa70cf",
+  "decaln.patch": "4e286572a2d221913bfb39731c2e224c996359f71f56cf3f996668e8b82310a6",
+  "adapter-sha256.txt": "0fefb7a49fb81295c3c588adb88bd02f24406267d0500d9ca561d024c4c21dd6",
+  "decaln-green.log": "a3f0e5be93836834be6f3da7061033734db6b85200b434495edfd72c1d26b1f2",
+  "decaln-workspace.log": "9de829478a5089c00fa2680eda76e9e3856f6f6bfd52374dc757a813c82bc40b",
+  "adapter-sha256-before-decaln.txt": "7934bc589928ccf066e8b99ab09f963ae4bdff9d044deab2246396d4c08c48d7",
+  "check-decaln.sh": "2ba8639660b3e3b0c2bea7b7314edd25a21b90f28e26f5dcc9685fac0fc74043",
+  "decaln-green-2.log": "53c513452b1360ccf11f8add18d3966998e46c01d2537ecc053569ca890ffaea",
+  "before/result.json.gz": "caed06b1f343aae3b52740799f590053ae7be1a8a7eaf957c1c263e97d26efd9",
+  "before/audit.log": "6163cee4b129ab6587e3e35dc9472d3a7871accefab6317961d62e6fcdceca62",
+  "before/source.json": "aca45364c264f34fcb93e3b6697beece68f0c3db9a729fec8c60469f4b6b9234",
+  "before/audit.py": "75a66b3d470bfa816685f47fe7aa8a4011873934b6cccf6e8cdce34c5026234a",
+  "after/result.json.gz": "6474f31015273b38febc04e22e344d7978dfef319dea1651a0b7dba4c9256a77",
+  "after/audit.log": "55e45f45b4658e39dc6239fc40adbd902db1ab0995a6924c60baf44bb1af5a63",
+  "after/source.json": "fd202600d50dd80e0d2dea08a6646bd2be9bd0f3d17aa2ffca98a0ea1deb3c94",
+  "after/audit.py": "bb2ab11a5297978701e7c4b4cb4d2404b5c1819509578b00650323bbbbd4abea"
+}

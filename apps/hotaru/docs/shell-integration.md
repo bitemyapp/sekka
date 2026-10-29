@@ -103,6 +103,8 @@ HOTARU_TEST_FISH=/path/to/fish cargo test --manifest-path apps/hotaru/Cargo.toml
 Focused Rust tests cover missing/corrupt terminfo fallback, private/default
 database lookup, explicit overrides, URI decoding/control rejection, OSC7
 boundary/overflow behavior across chunks, local/remote actor handling, title
-precedence and pane cwd inheritance. Full shell semantic markers, command
+precedence and pane cwd inheritance. The later [semantic metadata slice](semantic-prompts.md)
+retains observed OSC 133 cell/row markers and prompt-preserving clear behavior.
+These hooks still emit only cwd information. Complete marker emission, command
 navigation, remote terminfo transport, login-shell automatic injection and
 framework-wide automatic-hook compatibility remain separate work.

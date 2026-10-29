@@ -1,0 +1,4 @@
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-core)
+    Checking hotaru-io v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-io)
+    Checking hotaru-replay v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-replay)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.64s

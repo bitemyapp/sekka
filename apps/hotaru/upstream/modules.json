@@ -4529,14 +4529,21 @@
       "scope": "linux-port",
       "status": "partial",
       "rust_paths": [
-        "crates/hotaru-core/src/screen.rs"
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/src/row.rs",
+        "crates/hotaru-core/tests/semantic.rs",
+        "crates/hotaru-core/tests/decaln.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
         "differential-report.json",
-        "../tools/differential.py"
+        "../tools/differential.py",
+        "docs/semantic-prompts.md",
+        "upstream/semantic-fixtures.json",
+        "upstream/semantic-prompts/qualification/summary.json",
+        "upstream/semantic-prompts/performance/summary.json"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. OSC133 observed A/B/C/D/I/L/N/P cell/row metadata, prompt-preserving ED2 and DECALN now have actual-library fixtures, retained-history checks and native replay cost measurements. Full command tracking, redraw policy and native semantic navigation remain incomplete."
     },
     {
       "path": "src/terminal/ScreenSet.zig",
@@ -4619,7 +4626,10 @@
         "crates/hotaru-core/src/unicode.rs",
         "crates/hotaru-core/src/unicode_tables.rs",
         "crates/hotaru-core/tests/unicode_mode.rs",
-        "crates/hotaru-core/tests/vt_controls.rs"
+        "crates/hotaru-core/tests/vt_controls.rs",
+        "crates/hotaru-core/src/row.rs",
+        "crates/hotaru-core/tests/semantic.rs",
+        "crates/hotaru-core/tests/decaln.rs"
       ],
       "evidence": [
         "fixtures/reference-report.json",
@@ -4634,9 +4644,13 @@
         "tools/vt-controls-oracle.py",
         "tools/vt-controls-review.py",
         "upstream/vt-controls-fixtures.json",
-        "upstream/vt-controls/combined/controls-report.json"
+        "upstream/vt-controls/combined/controls-report.json",
+        "docs/semantic-prompts.md",
+        "upstream/semantic-fixtures.json",
+        "upstream/semantic-prompts/qualification/summary.json",
+        "upstream/semantic-prompts/performance/summary.json"
       ],
-      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial."
+      "note": "Initial Rust behavior subset has differential evidence; this is not full module parity. See report compared and not_compared fields. Page layout, advanced protocols and many modes remain incomplete. Unicode 18/DEC 2027 slice: exact pinned property/transition kernel, 484 real terminal cases at 11,866 byte splits, 65-scalar/260-byte cluster bounds; horizontal-margin/graphics interactions and complete ABI/module parity remain unverified. Legacy scalar width outside named fixtures remains earlier policy; performance parity is not met. REP, 24 supported DEC saved-mode slots, alternate transitions and decoded C1 have 1,154 real-library cases at three chunks. Other modes/protocols remain partial. OSC133 observed A/B/C/D/I/L/N/P cell/row metadata, prompt-preserving ED2 and DECALN now have actual-library fixtures, retained-history checks and native replay cost measurements. Full command tracking, redraw policy and native semantic navigation remain incomplete."
     },
     {
       "path": "src/terminal/UTF8Decoder.zig",
@@ -5865,10 +5879,20 @@
       "blob": "ea2510393ae28b9ff9011310da7aa1b1d427ccf4",
       "bytes": 43211,
       "scope": "linux-port",
-      "status": "pending",
-      "rust_paths": [],
-      "evidence": [],
-      "note": "Linux or shared behavior requires port and differential evidence"
+      "status": "partial",
+      "rust_paths": [
+        "crates/hotaru-core/src/screen.rs",
+        "crates/hotaru-core/src/row.rs",
+        "crates/hotaru-core/tests/semantic.rs",
+        "crates/hotaru-core/tests/decaln.rs"
+      ],
+      "evidence": [
+        "docs/semantic-prompts.md",
+        "upstream/semantic-fixtures.json",
+        "upstream/semantic-prompts/qualification/summary.json",
+        "upstream/semantic-prompts/performance/summary.json"
+      ],
+      "note": "Observed OSC133 A/B/C/D/I/L/N/P cell/row metadata and prompt-preserving ED2 have actual-library fixtures, retained-history checks and native replay cost measurements. Full command tracking, redraw policy and native semantic navigation remain incomplete."
     },
     {
       "path": "src/terminal/osc/parsers/unknown.zig",

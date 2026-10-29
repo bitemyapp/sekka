@@ -23,7 +23,7 @@ mod unicode;
 pub use content::{ContentCancelled, ContentRetention, ContentRows, ContentSnapshot};
 pub use history::{DEFAULT_HISTORY_BYTES, HistoryLimits, HistoryMemory, HistorySnapshot};
 pub use position::{ContentEpoch, ContentPosition};
-pub use row::{Cell, Row};
+pub use row::{Cell, Row, RowPrompt, SemanticContent};
 pub use screen::{Cursor, CursorShape, Modes, TerminalEvent};
 pub use style::{Color, Rgb, Style, Underline, attrs};
 

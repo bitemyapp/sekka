@@ -1,0 +1,42 @@
+   Compiling zmij v1.0.23
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling libc v0.2.191
+   Compiling serde_json v1.0.154
+   Compiling static_assertions v1.1.0
+   Compiling cfg-if v1.0.5
+   Compiling lz4_flex v0.14.0
+   Compiling memchr v2.8.3
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling unicode-width v0.2.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.40s
+     Running tests/decaln.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/decaln-292d3669d988f731)
+
+running 3 tests
+test alignment_resets_origin_margins_and_pending_wrap_but_not_rep ... ok
+test alignment_is_local_to_active_screen_and_exact_escape_sequence ... ok
+test alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/semantic.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/semantic-8cdf2ba5b7ff3e38)
+
+running 2 tests
+test retained_semantic_rows_survive_overwrite_reflow_compression_and_drop ... ok
+test semantic_cells_rows_and_clear_behavior_match_pinned_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/semantic_fastgate.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/semantic_fastgate-167511e1c13c2bd8)
+
+running 2 tests
+test ended_input_keeps_existing_prompt_row_but_ris_clears_it ... ok
+test prompt_erasure_remains_enabled_after_soft_reset_alternate_use_and_reflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

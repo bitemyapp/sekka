@@ -1,0 +1,28 @@
+Preparing a sysroot for Miri (target: x86_64-unknown-linux-gnu)... done
+   Compiling zmij v1.0.23
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.191
+   Compiling serde_json v1.0.154
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.5
+   Compiling static_assertions v1.1.0
+   Compiling memchr v2.8.3
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/vendor/simdutf8)
+   Compiling unicode-width v0.2.3
+   Compiling triomphe v0.1.17
+   Compiling lz4_flex v0.14.0
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-semantic-target/miri/x86_64-unknown-linux-gnu/debug/deps/hotaru_core-e00a26febd56cfb9)
+
+running 4 tests
+test row::ascii::tests::four_byte_aligned_cells_offsets_and_tails_keep_neighbors ... ok
+test row::ascii::tests::mismatched_lengths_fail_before_any_store ... ok
+test row::ascii::tests::semantic_template_matches_safe_cells_and_preserves_adjacent_flags ... ok
+test row::ascii::tests::whole_cell_store_matches_constructor_for_all_styles_and_bytes ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 5.34s
+

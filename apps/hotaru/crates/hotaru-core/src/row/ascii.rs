@@ -1,5 +1,5 @@
 //! Whole-cell stores for the existing ASCII run path. No row metadata changes.
-use super::Cell;
+use super::{Cell, SemanticContent};
 
 // The native-endian template below describes exactly these initialized fields.
 // No padding, niche, reference, enum discriminant or destructor is involved.
@@ -21,10 +21,25 @@ const _: fn(&Cell) = |cell| {
 impl Cell {
     #[inline]
     #[allow(unsafe_code)] // One exact, possibly unaligned, eight-byte Cell store.
-    pub(crate) fn write_ascii(cells: &mut [Self], bytes: &[u8], style: u16, protected: bool) {
+    pub(crate) fn write_ascii(
+        cells: &mut [Self],
+        bytes: &[u8],
+        style: u16,
+        protected: bool,
+        semantic: SemanticContent,
+    ) {
         assert_eq!(cells.len(), bytes.len());
         let style = style.to_ne_bytes();
-        let template = u64::from_ne_bytes([0, 0, 0, 0, style[0], style[1], 1, u8::from(protected)]);
+        let template = u64::from_ne_bytes([
+            0,
+            0,
+            0,
+            0,
+            style[0],
+            style[1],
+            1,
+            u8::from(protected) | ((semantic as u8) << 3),
+        ]);
         for (cell, &byte) in cells.iter_mut().zip(bytes) {
             let scalar = if cfg!(target_endian = "little") {
                 u64::from(byte)
@@ -34,7 +49,7 @@ impl Cell {
             // SAFETY: Cell is repr(C) and the layout assertions prove that it
             // occupies exactly these eight initialized bytes. The template
             // encodes the same native-endian fields as Cell::new(byte as char,
-            // style, 1).protected(protected); every u8 is a valid Unicode scalar.
+            // style, 1).protected(protected).semantic(semantic); every u8 is a valid Unicode scalar.
             // Each pointer is derived from its exclusive, live Cell reference,
             // and the store touches only that Cell. No u64 reference is created:
             // Cell requires only four-byte alignment, so use write_unaligned.
@@ -62,7 +77,13 @@ mod tests {
         let mut cells = [Cell::default(); 4];
         for style in styles {
             for protected in [false, true] {
-                Cell::write_ascii(&mut cells, &bytes, style, protected);
+                Cell::write_ascii(
+                    &mut cells,
+                    &bytes,
+                    style,
+                    protected,
+                    SemanticContent::Output,
+                );
                 for (cell, &byte) in cells.iter().zip(&bytes) {
                     assert_eq!(
                         *cell,
@@ -73,7 +94,7 @@ mod tests {
         }
         let bytes: Vec<u8> = (0..=u8::MAX).collect();
         let mut cells = vec![Cell::default(); bytes.len()];
-        Cell::write_ascii(&mut cells, &bytes, 0xa57e, true);
+        Cell::write_ascii(&mut cells, &bytes, 0xa57e, true, SemanticContent::Output);
         for (cell, &byte) in cells.iter().zip(&bytes) {
             assert_eq!(*cell, Cell::new(byte as char, 0xa57e, 1).protected(true));
         }
@@ -106,6 +127,7 @@ mod tests {
                     &bytes,
                     0x1234,
                     false,
+                    SemanticContent::Output,
                 );
                 assert_eq!(storage.prefix, 0xabcdef12);
                 assert!(storage.cells[..offset].iter().all(|cell| *cell == sentinel));
@@ -122,11 +144,45 @@ mod tests {
     }
 
     #[test]
+    fn semantic_template_matches_safe_cells_and_preserves_adjacent_flags() {
+        let sentinel = Cell::new('雪', 0xbeef, 2)
+            .protected(true)
+            .semantic(SemanticContent::Prompt);
+        let input: Vec<_> = (0..=255_u8).collect();
+        for semantic in [
+            SemanticContent::Output,
+            SemanticContent::Input,
+            SemanticContent::Prompt,
+        ] {
+            for protected in [false, true] {
+                let mut cells = vec![sentinel; input.len() + 2];
+                Cell::write_ascii(
+                    &mut cells[1..input.len() + 1],
+                    &input,
+                    0x7f80,
+                    protected,
+                    semantic,
+                );
+                assert_eq!(cells[0], sentinel);
+                assert_eq!(cells[input.len() + 1], sentinel);
+                for (cell, &byte) in cells[1..input.len() + 1].iter().zip(&input) {
+                    assert_eq!(
+                        *cell,
+                        Cell::new(byte as char, 0x7f80, 1)
+                            .protected(protected)
+                            .semantic(semantic)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn mismatched_lengths_fail_before_any_store() {
         let mut cells = [Cell::new('x', 0x1234, 2); 2];
         let old = cells;
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            Cell::write_ascii(&mut cells, b"a", 0, false);
+            Cell::write_ascii(&mut cells, b"a", 0, false, SemanticContent::Output);
         }));
         assert!(result.is_err());
         assert_eq!(cells, old);
