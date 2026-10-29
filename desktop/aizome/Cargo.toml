@@ -88,5 +88,11 @@ lto = "thin"
 # gamma-table-cache-0.8, 0.8.1 with that one change, which gives the same
 # tables; proposed as awxkee/moxcms#209). Shiori's hayro makes one for each
 # ICC-based or Lab color space a document uses.
+#
+# zune-core from bitemyapp's zune-image too (the branch Shiori's zune-jpeg
+# comes from, named as hayro names it; Cargo.lock pins its commit), so that
+# the image crate's zune-jpeg uses the same zune-core 0.5.3: Nix's vendoring
+# can't hold two crates of one name and version.
 [patch.crates-io]
 moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
+zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }

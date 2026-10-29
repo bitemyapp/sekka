@@ -31,5 +31,5 @@ libloading.workspace = true
 # it runs in the worker process alone, so a document that panics it or
 # keeps it busy takes no window with it (docs/apps.md). hayro-syntax's
 # `unsafe` decodes Flate, JPEG, JBIG2 and JPEG 2000 with SIMD, as measured.
-hayro = { git = "https://github.com/bitemyapp/hayro", rev = "144be58cb19f0e7a58edba9a4b4301962ab2d3d9" }
-hayro-syntax = { git = "https://github.com/bitemyapp/hayro", rev = "144be58cb19f0e7a58edba9a4b4301962ab2d3d9", features = ["unsafe"] }
+hayro = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9" }
+hayro-syntax = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9", features = ["unsafe"] }

@@ -137,20 +137,22 @@ searched), over the same 1,012 files, on the same laptop, back to back:
 
 | | PDFium's worker | hayro's |
 |---|---|---|
-| Files opened, drawn, read and searched | 985 | 993 |
-| A file, p50 / p90 / p99 / slowest | 24 / 42 / 176 / 918 ms | 14 / 25 / 78 / 373 ms |
-| The 981 files both did | 30.7 s | 16.4 s |
+| Files opened, drawn, read and searched | 985 | 995 |
+| A file, p50 / p90 / p99 / slowest | 24 / 41 / 136 / 931 ms | 15 / 26 / 82 / 356 ms |
+| The 983 files both did | 29.9 s | 17.4 s |
 | Stopped at 20 s / crashed / tiles not drawn | 2 / 1 / 2 | none |
 
-hayro reads eleven files PDFium couldn't use (it found no pages, or
-refused, crashed on or was stopped by them: `jpx_numcomps`, the two
-tiling-pattern files, `crypt_filters` among them). Four go the other way:
-two encrypted only for their attachments (`auth-event-ef-open` asks for
-a password, `encrypted-attachment` won't open), `issue15590` won't open,
-and `poppler-85140-0` has no pages. Where the drawings differ, PDFium is
-still right on knockout groups, a blend mode, transfer functions and some
-fonts that aren't embedded (the evaluation above); that is the fork's
-next work. The package no longer carries `libpdfium` or loads it.
+hayro reads twelve files PDFium couldn't use (it found no pages in them,
+refused them, couldn't draw a page of them, crashed on them or was stopped
+by them: `jpx_numcomps`, the two tiling-pattern files and `crypt_filters`
+among them). Two go the other way: `issue15590`, whose objects have lost
+their `<<` and `>>`, won't open, and `poppler-85140-0` has no pages hayro
+(or qpdf) can find. Two more did until the fork read documents encrypted
+only for their attachments (`auth-event-ef-open`, `encrypted-attachment`).
+Where the drawings differ, PDFium is still right on knockout groups, a
+blend mode, transfer functions and some fonts that aren't embedded (the
+evaluation above); that is the fork's next work. The package no longer
+carries `libpdfium` or loads it.
 
 ## A worker per document
 
@@ -186,8 +188,8 @@ fails):
   the last 16 pages asked about (text, links and find share it).
 - Running a worker per document also lets documents draw at the same time.
 
-Over the pdf.js corpus through this path, 993 of 1,012 files opened, drew,
-gave their text and links and were searched, in 14 ms at the median (78 ms
+Over the pdf.js corpus through this path, 995 of 1,012 files opened, drew,
+gave their text and links and were searched, in 15 ms at the median (82 ms
 p99; the table above); none was stopped or crashed its worker, and the rest
 were refused at once (passwords, files that aren't PDFs) or have no pages.
 
