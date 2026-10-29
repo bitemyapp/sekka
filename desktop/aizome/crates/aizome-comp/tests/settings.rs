@@ -1,5 +1,6 @@
-//! Settings keys Settei writes, honoured: what double-clicking a tab
-//! does, scrolling distance, sticky keys and slow keys.
+//! Settings keys Settei writes, honoured: whether new windows of the same
+//! app stack, what double-clicking a tab does, scrolling distance, sticky
+//! keys and slow keys.
 
 mod common;
 
@@ -31,6 +32,35 @@ fn double_click_tab(c: &Compositor, w: &aizome_ipc::WindowInfo) {
             Synthetic::Click { button: "left".into() },
         ],
     });
+}
+
+#[test]
+fn new_windows_of_the_focused_app_stack_unless_the_settings_say_not() {
+    // The default stacks a second window of the focused app into its group.
+    let c = Compositor::start(Options::default());
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
+    let a = c.wait_window("org.example.editor");
+    let _b = c.client(Spec::new("org.example.editor", 0x22cc22));
+    let ws = c.wait_windows("stacked", |ws| ws.len() == 2 && ws.iter().all(|w| w.group.is_some()));
+    let b = ws.iter().find(|w| w.id != a.id).unwrap();
+    assert_eq!(ws[0].group, ws[1].group, "{ws:?}");
+    assert!(b.group_active && b.focused, "the new window shows: {b:?}");
+    // Another app's window opens on its own.
+    let _v = c.client(Spec::new("org.example.viewer", 0xcc2222));
+    let v = c.wait_window("org.example.viewer");
+    assert!(v.group.is_none(), "{v:?}");
+
+    let c = Compositor::start(Options {
+        settings: "[windows]\nstack_new_windows_of_same_app = false\n",
+        ..Default::default()
+    });
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
+    c.wait_window("org.example.editor");
+    let _b = c.client(Spec::new("org.example.editor", 0x22cc22));
+    c.wait_windows("two windows", |ws| ws.len() == 2);
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "{ws:?}");
 }
 
 #[test]
