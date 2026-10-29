@@ -179,7 +179,36 @@
     "changed_pages": "issue17065 2.91 to 0.98 ms (PDFium 1.12), issue9915_reduced 1.39 to 0.33 (0.42), issue15096 6.02 to 4.77 (4.69); other pages that moved by more than 10% either way have the same instruction counts in both builds (issue9949 took 5 or 12 ms in alternate runs of each)",
     "run_to_run": "fork over PDFium 0.501-0.510 in the five runs"
   },
+  "fork_changes_after_72fd16cb": {
+    "range": "72fd16cb to 30c45b88 on aizome-perf: the three gaps named at 72fd16cb as having a known fix, in the order asked for",
+    "predefined CMaps as tables (fd100b0c)": "a document using a predefined CMap decoded it from hayro-cmap's compact bundle (Huffman-coded deltas, a destination allocated per entry, then a sort): vertical_rotated_fallback_glyphs spent 68 of its 75.5 million instructions decoding UniJIS-UTF16-V (with UniJIS-UTF16-H) and Adobe-Japan1-UCS2. The 65 CMaps are now an asset of the same tables decoded (1.7 MB: 8-byte entries for CID and .notdef ranges, 10-byte ones for bf ranges, a pool of UTF-16 units) that lookups search where they are, with the same binary search; the bundle stays as the source, and tests check the asset against it and every CMap's lookups against the decoded one's. Binaries grow by 1.2 MB. vertical_rotated_fallback_glyphs 75.5 to 6.3 million instructions, 7.05 to 0.84 ms (PDFium 1.58); pattern_text_rotated_fallback_glyphs 70.9 to 39.8 million, 5.67 to 2.51 ms (3.80)",
+    "moxcms gamma tables once (49df674f)": "moxcms built the sRGB curve for every transform to sRGB, a table of 4,096 correctly rounded pows (about 700 instructions each) for each channel. bitemyapp/moxcms gamma-table-cache-0.8 (0.8.1 with one change, patched in for the workspace) keeps the values for each curve, size and bit depth and fills each table from them as before. issue10339_reduced 24.1 to 18.0 million instructions, 1.86 to 1.22 ms (PDFium 0.65); issue2761 29.2 to 23.1 million, 3.41 to 2.89 ms (2.37); issue15096 (four gray ICC spaces) 47.9 to 38.8 million, 4.81 to 3.94 ms (4.70). The same change on moxcms master is on the fork's gamma-table-cache branch, not yet proposed",
+    "PostScript functions compiled (334c2604)": "the interpreter's stack of tagged values took about 50 instructions an operator. Type 4 programs have no loops, so each value pushed now gets a register, operators read and write registers, stack operators only rename them, numbers sit in a register file each thread keeps for the program that last ran, and branches end with moves that leave the stack the same either way; where the interpreter would fail, the compiled program fails when it gets there. Programs whose stack can't be worked out ahead of time are interpreted: 41 of the corpus's 42 compile (issue5470's 7-operator one doesn't). Both share the operators' functions; idiv by zero, which panicked, now fails the function. 20,000 random programs with branches agree compiled and interpreted. function_based_shading 973 to 650 million instructions; colorspace_sin 164 to 105",
+    "one sample per evaluation (30c45b88)": "Function::eval divided input and output into samples (an integer division, iterators over chunks) for every evaluation, about as much as a compiled program takes; one sample now goes straight through. function_based_shading 650 to 606 million instructions",
+    "PostScript pages now": "function_based_shading 57.3 to 49.0 ms (PDFium 53.0); colorspace_sin 10.6 to 8.2 (9.2), colorspace_cos 10.9 to 8.0 (9.2), colorspace_atan 12.6 to 9.3 (11.4); issue17065 1.00 to 0.68 (1.12)"
+  },
+  "results_at_30c45b88": {
+    "workstation": "wx-workstation, 8 files at a time on CPUs 16-23 (CCD 2), their SMT siblings 0-6% busy, one-minute load average 14-18",
+    "method": "five runs: PDFium, master, the fork at 72fd16cb and at 30c45b88 back to back on each file",
+    "pages_all_three_drew_under_5_s": 1189,
+    "total_ms": {"pdfium": 11298, "hayro_master": 12848, "fork_72fd16cb": 5623, "hayro_fork": 5513},
+    "per_page_ms": {
+      "columns": ["pages drawn", "p50", "p90", "p99", "max"],
+      "pdfium": [1193, 2.26, 10.8, 99.4, 1807.5],
+      "hayro_master": [1206, 2.00, 12.9, 127.0, 8395.5],
+      "fork_72fd16cb": [1206, 1.70, 7.2, 47.1, 6610.9],
+      "hayro_fork": [1206, 1.66, 7.2, 46.0, 6619.8]
+    },
+    "fork_over_pdfium": "0.488 of the total (0.498 for 72fd16cb in the same runs); per page p50 0.71, p90 0.99, p99 1.80",
+    "fork_faster_than_pdfium_on": "1,077 of 1,189 pages",
+    "fork_behind_pdfium": "on 100 pages by 67 ms in all (129 pages by 92 ms for 72fd16cb in the same runs); ahead on the rest by 5,852 ms",
+    "against_72fd16cb": "faster by more than 10% on 216 pages, slower on 14, among them page 3 of three tracemonkey-like files (4.2 to 5.2-5.4 ms) with fewer instructions than before, the memory-layout effect seen at fd143243",
+    "run_to_run": "fork over PDFium 0.487-0.489 in the five runs",
+    "failures": "as before: PDFium timed out on the two tiny-step tiling-pattern files and stopped itself on jpx_numcomps in every run; no hayro build crashed or timed out"
+  },
   "quality": {
+    "corpus_pixels_30c45b88_against_72fd16cb": "every one of the 1,206 pages identical, checked after each of the four commits",
+    "hayro_test_suite_at_30c45b88": "867 passed, 911 failed, 73 ignored, no panics; every failing test draws the same image (by hash) as at 72fd16cb; hayro-cmap's tests (41) and hayro-interpret's (56) pass",
     "corpus_pixels_72fd16cb_against_fd143243": "every one of the 1,206 pages identical",
     "corpus_pixels_fd143243_against_ad5920e6": "16 of 1,206 pages change, all with Type 3 glyphs, all from the Type 3 cache (each other commit, checked one by one, leaves every page identical): glyph edges move by up to 25-63 levels as cached glyphs are placed to a quarter pixel, on no more than 0.6% of any page's pixels by more than 16",
     "hayro_test_suite_at_72fd16cb": "867 passed, 911 failed, 73 ignored, no panics; every failing test draws the same image (by hash) as at fd143243",
@@ -196,14 +225,12 @@
     }
   },
   "remaining_gaps_to_pdfium": {
-    "as_of": "72fd16cb; times are medians from results_at_fd143243 (the quieter runs) for pages the last three commits don't change. Of the gaps listed at ad5920e6, very large pages are closed (issue14497 24 ms against 28) and Type 3 image glyphs narrowed (issue918 7.7 against 5.7, the rest being each glyph's first drawing, with bicubic filtering)",
-    "free-form and patch meshes": "issue2948 (14.6 ms against 8.0): a pixel's weights and color for each triangle covering it, triangles overlapping. personwithdog (70.5 against 65.5): patches cut into cells of about two pixels, a CMYK conversion per pixel. issue6231_1 (7.6 against 4.5): a mesh colored by a stitching function, 37,800 evaluations of about 590 instructions each through the 65,536-step table, then an image paint of the texture",
-    "soft masks and nested groups": "bug1755507 (17.4 against 10.1, a JPEG inside a soft mask), issue12798_page1_reduced (9.7 against 4.7, nested transparency groups), issue5044 (4.7 against 2.6) and issue18894 (4.5 against 3.0): vello_cpu's layers, which clear a buffer per tile and composite masks pixel by pixel",
-    "PostScript functions": "function_based_shading (55.6 against 52.6) and colorspace_sin, _cos and _atan (10.8-12.4 against 9.3-11.4): a stack machine over tagged values, about 50 instructions an operation (issue17065's OKLab conversion, about 100 operations, took 5,100 instructions an evaluation). Compiling programs to straight-line code, or to per-operation closures, is what's left; these pages also swing most with code layout",
-    "predefined CJK CMaps": "vertical_rotated_fallback_glyphs (7.3 against 1.6) and pattern_text_rotated_fallback_glyphs (5.5 against 3.7): parsing the binary CMaps at first use, about 5 ms; PDFium compiles its in. The bcmap files hold one large segment per kind of entry, so decoding lazily doesn't help; tables built ahead of time and searched in place would",
-    "color space set-up": "issue10339_reduced (1.8 against 0.6) and issue2761 (3.3 against 2.4) each make a Lab space, whose moxcms transform (18 million instructions) builds the sRGB output curve as a table of 65,536 entries with a pow each; ICC spaces pay the same, about 3 million a transform (issue15096 builds four). The curve is the same for every transform, so a moxcms change to share it, or sharing transforms between identical profiles (not yet checked on the corpus), would remove most of it",
-    "font set-up": "issue16316 (4.3 against 2.8): parsing a Type 1 font, 10.8 million instructions",
-    "smaller": "issue8092 (10.8 against 8.0, shadings sampled through gradient tables), large_jpeg_downscale (18.0 against 16.2, JPEG decoding), text-heavy pages within a millisecond (tracemonkey and its variants, which move with memory layout)"
+    "as_of": "30c45b88, times from results_at_30c45b88. Closed since 72fd16cb: predefined CJK CMaps (vertical_rotated_fallback_glyphs 0.84 ms against 1.58), PostScript functions (function_based_shading 49.0 against 53.0, colorspace_* faster too) and ICC set-up where a document builds several transforms (issue15096 3.94 against 4.70)",
+    "free-form and patch meshes": "issue2948 (14.6 ms against 8.2): a pixel's weights and color for each triangle covering it, triangles overlapping. personwithdog (69.2 against 65.7): patches cut into cells of about two pixels, a CMYK conversion per pixel. issue6231_1 (7.6 against 4.9): a mesh colored by a stitching function, 37,800 evaluations of about 590 instructions each through the 65,536-step table, then an image paint of the texture",
+    "soft masks and nested groups": "bug1755507 (17.5 against 10.0, a JPEG inside a soft mask), issue12798_page1_reduced (9.7 against 4.6, nested transparency groups), issue5044 (4.8 against 2.5) and issue18894 (4.4 against 3.1): vello_cpu's layers, which clear a buffer per tile and composite masks pixel by pixel",
+    "Lab set-up": "issue10339_reduced (1.22 against 0.65) and issue2761 (2.89 against 2.37) each make a Lab space; its moxcms transform still builds the sRGB curve once (4,096 correctly rounded pows, about 3 million instructions, the first transform a process makes) and repacks its 33^3 table for AVX (3.8 million). A table of the 8-bit sRGB curve built ahead of time, or a cheaper pow guarded where rounding could differ, would remove the first",
+    "font set-up": "issue16316 (4.4 against 2.8): parsing a Type 1 font, 10.8 million instructions",
+    "smaller": "issue8092 (11.0 against 8.2, shadings sampled through gradient tables), large_jpeg_downscale (17.8 against 15.9, JPEG decoding), radial_gradients pages 2 and 4 (14.1-14.7 against 12.8-13.4), issue918 (7.6 against 5.7, each Type 3 image glyph's first drawing, bicubic), and pages PDFium draws in about half a millisecond that take about 1.2 (issue19474, outlines_for_editor, issue22011 and bug1708041; bug1708041's are blank, and their time is filling the page's pixels)"
   },
   "not_covered": "the fork isn't in Shiori; no VM or hardware runs; machines under shared load; JPEG 2000 pages were checked and are on par with PDFium (865 ms against 974 over the 14 corpus pages that have them)"
 }

@@ -91,11 +91,17 @@ groups draw, CID font widths kept as ranges, ICC transforms and gradient
 stops built only when and as often as needed) brings it to 5.6 seconds
 against PDFium's 11.3, faster on 1,068 pages and behind on the rest by 0.09
 seconds. Cached Type 3 glyphs are placed to a quarter pixel, which moves
-their edges on 16 pages; the other changes leave every page as it was. It's
-still slower than PDFium on free-form and CMYK patch meshes, soft masks over
-images and nested transparency groups, PostScript functions, predefined CJK
-CMaps, and Lab and ICC color spaces, whose transforms take milliseconds to
-build. Its pages differ from hayro's own
+their edges on 16 pages; the other changes leave every page as it was. A
+fourth round (predefined CJK CMaps embedded as tables searched in place,
+PostScript functions compiled to instructions on registers, and moxcms's sRGB
+curve computed once rather than for every color transform, through a fork of
+moxcms, [bitemyapp/moxcms](https://github.com/bitemyapp/moxcms) branch
+`gamma-table-cache-0.8`) brings it to 0.49 of PDFium's time, faster on 1,077
+pages and behind on the rest by 0.07 seconds, with every page as it was; the
+CJK and PostScript pages are now faster than PDFium's. It's still slower than
+PDFium on free-form and CMYK patch meshes, soft masks over images and nested
+transparency groups, and setting up a Lab color space. Its pages differ from
+hayro's own
 references on under 1% of pixels by more than 48 levels, except one page
 where a hard edge in a gradient moved a pixel.
 
