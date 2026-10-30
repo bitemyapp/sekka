@@ -1,0 +1,57 @@
+{
+  "id": "gnome-lock-reject-password",
+  "description": "Wake the display after GNOME locks and powers it down. A blank screen alone is not proof of authentication enforcement.",
+  "max_calls": 70,
+  "max_input_tokens": 450000,
+  "max_seconds": 180,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-lock-wake",
+      "precondition": "Does the screen say Display output is not active?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "shift"
+        ]
+      },
+      "expected": "Is a lock screen visible with a large clock?",
+      "timeout_seconds": 25
+    },
+    {
+      "id": "Q3.gnome-lock-prompt",
+      "precondition": "Is a lock screen visible with a large clock?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a Password field visible below Jev Test?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.gnome-lock-wrong-type",
+      "precondition": "Is an empty Password field visible below Jev Test?",
+      "action": {
+        "kind": "type",
+        "text": "deliberately-wrong"
+      },
+      "expected": "Does the password field contain masked characters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q3.gnome-lock-reject",
+      "precondition": "Does the password field contain masked characters?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Does the lock screen show an authentication failure or a request to try again?",
+      "timeout_seconds": 30
+    }
+  ]
+}

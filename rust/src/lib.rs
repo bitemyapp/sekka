@@ -1,6 +1,7 @@
 pub mod builder;
 pub mod config;
 pub mod gui_input;
+pub mod jev;
 pub mod live_test;
 pub mod support;
 pub mod vm;

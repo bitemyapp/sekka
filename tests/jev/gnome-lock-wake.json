@@ -1,0 +1,23 @@
+{
+  "id": "gnome-lock-wake",
+  "description": "Wake the display after GNOME locks and powers it down. A blank screen alone is not proof of authentication enforcement.",
+  "max_calls": 30,
+  "max_input_tokens": 230000,
+  "max_seconds": 90,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.gnome-lock-wake",
+      "precondition": "Does the screen say Display output is not active?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "shift"
+        ]
+      },
+      "expected": "Is a lock screen visible with a large clock?",
+      "timeout_seconds": 25
+    }
+  ]
+}

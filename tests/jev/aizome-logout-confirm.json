@@ -1,0 +1,8 @@
+{
+  "id":"aizome-logout-confirm",
+  "description":"Normal confirmation before the countdown expires.",
+  "max_calls":40,"max_input_tokens":300000,"max_seconds":100,"min_probability":0.9,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q3.aizome-logout-confirm","precondition":"Is a Log out now confirmation dialog visible?","action":{"kind":"click","target":"Log Out button in the confirmation dialog"},"expected":"Is a user tile labeled Jev Test visible on the login screen?","timeout_seconds":60}
+  ]
+}

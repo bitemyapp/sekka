@@ -1,0 +1,1881 @@
+{
+  "schema": 1,
+  "generated_utc": "2026-10-28T03:28:32.559457+00:00",
+  "qualification": "not certified",
+  "publication_enabled": false,
+  "review": "Codex inspection and assistance; no independent human evidence audit",
+  "source_base_revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+  "evidence_root": "/home/callen/work/sekka-jev/.work/jev-evidence",
+  "candidate": {
+    "public_build": "20261022-ed92471",
+    "url": "https://downloads.sekka.computer/nightly/builds/20261022-ed92471/sekka-nightly-20261022-ed92471-x86_64-linux.iso",
+    "iso_bytes": 12167124992,
+    "iso_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+    "source_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+    "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+    "aizome_revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344"
+  },
+  "vm": {
+    "config": {
+      "cpus": 4,
+      "disk_bus": "nvme",
+      "disk_gib": 100,
+      "firmware": "uefi",
+      "iso": "/home/callen/work/sekka-jev/.work/jev-evidence/candidate.iso",
+      "iso_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+      "media": "usb",
+      "ovmf_code": "/nix/store/xpjhy9s6l6pnpn8ps9lwafhnlk6vn6lj-OVMF-202608-fd/FV/OVMF_CODE.fd",
+      "ovmf_vars": "/nix/store/xpjhy9s6l6pnpn8ps9lwafhnlk6vn6lj-OVMF-202608-fd/FV/OVMF_VARS.fd",
+      "qemu": "/nix/store/r6djkic6cvy7bp7fniwqiz005ni637g4-qemu-11.1.2/bin/qemu-system-x86_64",
+      "ram_mib": 8192,
+      "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+      "source_revision": "ed92471d8cd92e80267bb69df1225da28054a91f"
+    },
+    "manifest": ".work/jev-evidence/uefi/manifest.json",
+    "manifest_sha256": "5382b5f3746c4a1459aa463be46bd63a1702dd3a62ec71896f4442451346bdfa",
+    "launches": [
+      {
+        "path": ".work/jev-evidence/uefi/launch-0.json",
+        "sha256": "cac2575a5925e649dd853fe48112a732d1b8f0ad21f02836133d1334c596d717",
+        "media_attached": true
+      },
+      {
+        "path": ".work/jev-evidence/uefi/launch-1.json",
+        "sha256": "915884204229bb9c144b46eea841bb1450c1b244a806cef43330e5feed9d364d",
+        "media_attached": false
+      }
+    ],
+    "final_status": {
+      "phase": 1,
+      "running": false
+    }
+  },
+  "api": {
+    "recorded_http_responses": 736,
+    "known_input_tokens": 2271487,
+    "known_output_tokens": 36563,
+    "missing_input_usage_count": 0,
+    "http_status_counts": {
+      "200": 736
+    },
+    "median_latency_ms": 238.0,
+    "p95_latency_ms_nearest_rank": 456,
+    "estimated_usd": 0.095402454,
+    "input_usd_per_million": 0.042,
+    "output_usd_per_million": 0,
+    "price_source": "https://docs.typesafe.ai/models",
+    "price_checked": "2026-10-27",
+    "scope": "Unique retained HTTP response files, including calibration, probes, failed and completed scenarios. Cached observations are not counted twice. Excludes VM runtime, local computation and Codex assistance."
+  },
+  "scenario_status_counts": {
+    "incomplete": 36,
+    "completed": 49
+  },
+  "model_step_status_counts": {
+    "blocked": 36,
+    "observed": 125,
+    "not-run": 23
+  },
+  "input_event_counts": {
+    "jev_authored_input_intent": 143,
+    "assisted_event_kinds": {
+      "human-guided-input": 1,
+      "human-guided-input-completed": 12,
+      "human-guided-input-intent": 12,
+      "operator-assisted-input-completed": 26,
+      "operator-assisted-input-intent": 26
+    },
+    "note": "Intent/completion pairs refer to one input each. Legacy human-guided labels mean Codex assistance, not human review. Counts do not measure autonomous completion."
+  },
+  "component_validation": {
+    "rust_tests": 31,
+    "cargo_fmt": "passed",
+    "cargo_clippy_all_targets_deny_warnings": "passed",
+    "root_flake_tools_build": "passed",
+    "tools_store_path": "/nix/store/y2z0g2zmmf0zn41vnagfjic80nn5s3n4-respin-tools-0.1.0",
+    "iso_build": "not-run; public exact-image experiment"
+  },
+  "bios": {
+    "kind": "sekka-jev-narrow-evidence-fragment",
+    "qualification": false,
+    "candidate": {
+      "iso_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+      "source_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+      "sidestep_revision": "dae957e913376a26e642d6abee533eb755fb9092",
+      "manifest": "public-manifest.json",
+      "digest_verification": "Parent candidate metadata; this BIOS VM has not yet started its own hash-verifying launch."
+    },
+    "case": "bios-optical-default-aizome",
+    "prepared_at": "2026-10-28T02:44:15.662153+00:00",
+    "vm_config": "bios-optical.json",
+    "vm_run": "bios-optical",
+    "launch_status": "blocked",
+    "blocker": "Host memory preflight: approximately 1.5 GiB available with 30 GiB total; another Nix evaluation uses about 19.4 GiB RSS. Additional 8 GiB VM held to avoid disturbing active UEFI experiment/other work.",
+    "checks": [
+      {
+        "id": "BIOS.Q0.resource-preflight",
+        "status": "blocked",
+        "evidence": [
+          "bios-resource-preflight.txt",
+          "bios-resource-current.txt"
+        ],
+        "observed": "Insufficient currently available RAM for independent requested 8 GiB VM."
+      },
+      {
+        "id": "BIOS.Q1.optical-default-boot",
+        "status": "not-run",
+        "observed": null,
+        "evidence": []
+      },
+      {
+        "id": "BIOS.Q2.default-aizome-gui-install",
+        "status": "not-run",
+        "observed": null,
+        "evidence": []
+      },
+      {
+        "id": "BIOS.Q2.ui-shutdown",
+        "status": "not-run",
+        "observed": null,
+        "evidence": []
+      },
+      {
+        "id": "BIOS.Q3.disk-only-boot",
+        "status": "not-run",
+        "observed": null,
+        "evidence": []
+      },
+      {
+        "id": "BIOS.Q3.aizome-greeter-authentication",
+        "status": "not-run",
+        "observed": null,
+        "evidence": []
+      }
+    ],
+    "interventions": [],
+    "api_totals": {
+      "requests": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "estimated_usd": 0
+    },
+    "vm_cleanup": "No VM/process/disk created; nothing to stop.",
+    "publication": "Not authorized; unchanged."
+  },
+  "calibrations": [
+    {
+      "abstained": 0,
+      "correct_accepted": 21,
+      "description": "Seven historical repository screenshots manually inspected on 2026-10-27; labels and clickable rectangles authored before requests. These are predecessor UIs, not ISO qualification. Repeating on this small tuning corpus is not a held-out accuracy estimate.",
+      "incorrect_accepted": 0,
+      "kind": "labeled-screenshot-calibration",
+      "metrics": {
+        "attempts": 7,
+        "estimated_usd_at_0_042_per_million": 0.0009504600000000001,
+        "input_tokens": 22630,
+        "latency_ms": [
+          242,
+          272,
+          239,
+          262,
+          269,
+          378,
+          250
+        ],
+        "max_calls": 300,
+        "max_tokens": 10000000,
+        "median_latency_ms": 262,
+        "model": "jev-1.14.0",
+        "price_checked": "2026-10-27",
+        "price_source": "https://docs.typesafe.ai/models",
+        "unknown_usage_reserved_tokens": 0
+      },
+      "qualification": "not applicable; historical screenshot corpus, not live UI tests"
+    },
+    {
+      "abstained": 5,
+      "correct_accepted": 6,
+      "description": "Real 2026-10-27 QMP screenshots of public ISO ed92471. Deliberately retains known misleading wording and spatial false negatives; failures are model findings, not reasons to relabel the ground truth. Original pixels preserved; see fixture-provenance.json. This is a tuning set, not held-out evaluation.",
+      "incorrect_accepted": 1,
+      "kind": "labeled-screenshot-calibration",
+      "metrics": {
+        "attempts": 4,
+        "cache_hits": 0,
+        "estimated_usd_at_0_042_per_million": 0.0005675880000000001,
+        "input_tokens": 13514,
+        "latency_ms": [
+          369,
+          372,
+          275,
+          223
+        ],
+        "max_calls": 300,
+        "max_tokens": 10000000,
+        "median_latency_ms": 369,
+        "model": "jev-1.14.0",
+        "price_checked": "2026-10-27",
+        "price_source": "https://docs.typesafe.ai/models",
+        "unknown_usage_reserved_tokens": 0
+      },
+      "qualification": "not applicable; historical screenshot corpus, not live UI tests"
+    }
+  ],
+  "scenarios": [
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150400467-574925",
+      "scenario": "live-welcome-to-disk",
+      "recipe_sha256": "5351505ce7f9f7266b5c3b029aacc48381ea29b2b1c0bb215d678faf8bc74bed",
+      "report_sha256": "567720c061a261264284a93a9c2707d324580e4290fb565a4fab5997233a8efb",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 60971,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 25,
+      "input_tokens": 77800,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q1.live-welcome",
+          "error": "Target absent, ambiguous or disabled; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150479310-579843",
+      "scenario": "maximize-installer",
+      "recipe_sha256": "c30c0669ec932b2552b4af4ab7378944e00782284f390445c3659763989cb35c",
+      "report_sha256": "45e0afe0e4bacf66fc8d2e407c5ff2d26e82a5d878557f860daba6491190bdc7",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 427,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3028,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q1.maximize-installer",
+          "error": "QEMU RPC error: {\"error\":{\"class\":\"GenericError\",\"desc\":\"Parameter 'data' does not accept value 'F10'\"},\"id\":4}"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150497555-581249",
+      "scenario": "maximize-installer",
+      "recipe_sha256": "85080e4a8f1e59be40ecdf2857bd40d5bc2b7f3ae2554021a9695020bf7171a3",
+      "report_sha256": "cbeee1dcc4c6d7c73a468a41ac5709c86289653b85c73c778226331ab76ee2a8",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 30962,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 13,
+      "input_tokens": 39424,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q1.maximize-installer",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150549036-585823",
+      "scenario": "maximize-installer",
+      "recipe_sha256": "c0feaa0946de0147ca5ca4b19eaae04574d9fdecf0371fee0a28be17eeee0dd4",
+      "report_sha256": "b7adb119cec14a42de63e036543292bc773fd01a795651301bcb5870a31ffcee",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 32820,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 14,
+      "input_tokens": 42636,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q1.maximize-installer",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150603339-588271",
+      "scenario": "live-welcome-to-disk",
+      "recipe_sha256": "5351505ce7f9f7266b5c3b029aacc48381ea29b2b1c0bb215d678faf8bc74bed",
+      "report_sha256": "c7a4e0305a20009e223d6d777fc8a275c475c867790c38dfb1a3008d9284b8ef",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 4830,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9180,
+      "cache_hits": null,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150642903-590601",
+      "scenario": "install-select-disposable-disk",
+      "recipe_sha256": "2590e7dc8661904a8f6714b4111e4ffa1f1af92d0a2cc7c5e253d79505e7b61a",
+      "report_sha256": "87625e929dfa7f4377e5780ddb6b3125377628f73184802645c8be4d17fa9f48",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 327,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3119,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q2.select-disk",
+          "error": "Target absent, ambiguous or disabled; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150664521-591468",
+      "scenario": "install-select-disposable-disk",
+      "recipe_sha256": "aae764bb87131dab561188c7aad7a4bdeeb41c63dde26981d0e3374fba24a07f",
+      "report_sha256": "df4ba9389bb8a50046378a2fd81ae180271b2d9d9f09733508e72537254ba103",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 333,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3111,
+      "cache_hits": null,
+      "blocked": [
+        {
+          "id": "Q2.select-disk",
+          "error": "Target absent, ambiguous or disabled; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150771942-599269",
+      "scenario": "install-select-disposable-disk",
+      "recipe_sha256": "aae764bb87131dab561188c7aad7a4bdeeb41c63dde26981d0e3374fba24a07f",
+      "report_sha256": "0d71d66d38eb9905da6691f01725afb975095fc65ecb16da333f26d6b7fb9364",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 368,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3215,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q2.select-disk",
+          "error": "Target ambiguous check uncertain; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150833860-605766",
+      "scenario": "install-select-disposable-disk",
+      "recipe_sha256": "aae764bb87131dab561188c7aad7a4bdeeb41c63dde26981d0e3374fba24a07f",
+      "report_sha256": "4d5367c5c4142900b04d5fa2a83728ba40ebb69e9e4a08e23d75224e9d9372d1",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 9314,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 4,
+      "input_tokens": 12590,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793150887909-612794",
+      "scenario": "install-disposable-account",
+      "recipe_sha256": "8f6192b3d7523b4a053c8e77f0665ea6fd08ad9d91db67420cb7d963554679e9",
+      "report_sha256": "635bdd60c81cdf35e1fbc82bc0bd0b36a87c290adf88d33451ef82525de29166",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 50836,
+      "step_counts": {
+        "observed": 5,
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 17,
+      "input_tokens": 52753,
+      "cache_hits": 8,
+      "blocked": [
+        {
+          "id": "Q2.account-next",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151098165-626219",
+      "scenario": "resume-github-after-reviewed-false-negative",
+      "recipe_sha256": "21ad5b648912ac5b6d6e06a1892c88429fa35befc31fc14c13ece3f4a039a84e",
+      "report_sha256": "fbf5251b39ec6c4668443814feb0adb84041ad841b5e4475636f7648457546c4",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 4590,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6278,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151148385-626798",
+      "scenario": "install-six-desktops",
+      "recipe_sha256": "f84ed26eec4dbe8a1a02022ec81afb43641a67477a021466d2236ccc92fcf84b",
+      "report_sha256": "d7fe76b0a33a1a495d1e38aeabb5c341427125aa1967d19b9e7d1e743bb588e0",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 20092,
+      "step_counts": {
+        "observed": 4,
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 13,
+      "input_tokens": 40507,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q2.select-tatami",
+          "error": "Target disabled check uncertain; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151275304-627540",
+      "scenario": "resume-tatami-after-inspected-abstention",
+      "recipe_sha256": "1e496821a4da3f8627521a92fae4ddacf93173a3ebf95690fb538ae1289fb27f",
+      "report_sha256": "4500c68d0c24bd08d68e9840a3238d9613c8a7a9af68c4fb5c7a13916bb7bc35",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 9945,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 6,
+      "input_tokens": 18614,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151350255-635876",
+      "scenario": "install-default-apps-and-location",
+      "recipe_sha256": "c196d4d86a898b34a8b3f8a4a40926d3e30674b024da74c447d3deb33dee74b7",
+      "report_sha256": "6ca4d7b7b190f43763154238d746d09e333ac4332213a71290ea89985913d0db",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 5038,
+      "step_counts": {
+        "observed": 1,
+        "blocked": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9523,
+      "cache_hits": 1,
+      "blocked": [
+        {
+          "id": "Q2.location-next",
+          "error": "Target presence uncertain; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151419436-641168",
+      "scenario": "resume-location-with-correct-button-label",
+      "recipe_sha256": "7932842564cd12075560bf0ca342e370373ca5529a3fc31ada443101f6ded24a",
+      "report_sha256": "8d45e87de8e0156fc34914edc0bac6bb810b75e5b590235b3e1db0ea157b1372",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 4885,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9302,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793151531101-652592",
+      "scenario": "install-confirm-disposable-nvme",
+      "recipe_sha256": "a83f235262eaafe5044c98e0eee03912dcc2055927b97e5c81dd76217a02e5ca",
+      "report_sha256": "563e180c25c36e694d9fcf1a3f55a746271228c3c0b1261e9fb162776e9d75ee",
+      "harness_sha256": null,
+      "phase": 0,
+      "status": "completed",
+      "elapsed_ms": 645730,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 275,
+      "input_tokens": 864002,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152277575-667130",
+      "scenario": "installer-ui-shutdown",
+      "recipe_sha256": "91bd9b4b9d361a820f1bcc39ca7ab9505b00da448e260768bb4df9dfce922813",
+      "report_sha256": "b75549a3207b8afd7b7c56a7d5971b97bc6de089b6dfeac20a804811ecda8a6e",
+      "harness_sha256": "f11055a4a232680e47038098adbcc7c466025bd6b69b485c8250a5fcc44467a1",
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 252,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3253,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q2.ui-shutdown",
+          "error": "Box confidence below threshold or absent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152445598-667898",
+      "scenario": "installer-ui-shutdown",
+      "recipe_sha256": "91bd9b4b9d361a820f1bcc39ca7ab9505b00da448e260768bb4df9dfce922813",
+      "report_sha256": "557f70d2fd806b09e071e0ea1e3434e7527309434210022e310e4e9127b1e5f4",
+      "harness_sha256": "1908add323ba33d1309598edc8184786b796f9efbdc6bba29a7c6a89f06788de",
+      "phase": 0,
+      "status": "incomplete",
+      "elapsed_ms": 5939,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 2,
+      "input_tokens": 4173,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q2.ui-shutdown",
+          "error": "QEMU process identity changed"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152671800-669696",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "cb0d4c29db7f241f0c2a60cde94831b0b84237db82ab78f2b1f1f89a63771ac0",
+      "report_sha256": "638ed0c04663e770d0508794a42a2fb2f99f3310995d290ff848ab4600d9148e",
+      "harness_sha256": "ef8b1df7ecab16f4c845e5c137d5b0838ecbd86384cb8589a4a0512bb159f189",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 217,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3245,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q3.gdm-user",
+          "error": "Target disabled check uncertain; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152724108-670026",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "6772a7ea111943c1b249e39c99a3f0d5397a0fb8c8572d55f294b5c90d455244",
+      "harness_sha256": "ef8b1df7ecab16f4c845e5c137d5b0838ecbd86384cb8589a4a0512bb159f189",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4551,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152805253-670324",
+      "scenario": "gdm-session-inventory",
+      "recipe_sha256": "a46ec4e7a7aac25891362537fe39d45a2c9a387f4d60f873a72def8d73659c84",
+      "report_sha256": "c0effab99b0297da3f89f57357341380bc7c7abd0c7306dacbe061fca856dbbb",
+      "harness_sha256": "ef8b1df7ecab16f4c845e5c137d5b0838ecbd86384cb8589a4a0512bb159f189",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 340,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3281,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q3.gdm-session-menu",
+          "error": "Target disabled check uncertain; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793152942400-672317",
+      "scenario": "gdm-session-inventory",
+      "recipe_sha256": "a46ec4e7a7aac25891362537fe39d45a2c9a387f4d60f873a72def8d73659c84",
+      "report_sha256": "d6b7b1e823beef2363dc7494f32797fc2289d99bfd0b69ea9edb0ff7482e9766",
+      "harness_sha256": "6d5a5d4153a8a9052276eee1e5728bda88fb9958a38676c6207ca07299d661c9",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 382,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 2,
+      "input_tokens": 4071,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q3.gdm-session-menu",
+          "error": "Box confidence below threshold or absent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153175256-675270",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "4a72e81431ac31ae92e77634cebdd9aa3f1d857e8cd140524914d2759aa73c07",
+      "harness_sha256": "6d5a5d4153a8a9052276eee1e5728bda88fb9958a38676c6207ca07299d661c9",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 92674,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3029,
+      "cache_hits": 45,
+      "blocked": [
+        {
+          "id": "Q3.gdm-user",
+          "error": "Interrupted"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153267960-676659",
+      "scenario": "diagnostic-switch-to-tty",
+      "recipe_sha256": "1e1ef9f9d237c15545988b04b88f21b0b638d26b05882e9f6c4cc7d48ae2837f",
+      "report_sha256": "37a331764b03e8feff93a7026be6c80a3b4351f93bbfc3ad5d28649b615d350d",
+      "harness_sha256": "6d5a5d4153a8a9052276eee1e5728bda88fb9958a38676c6207ca07299d661c9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4537,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6053,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153342170-677223",
+      "scenario": "diagnostic-console-login",
+      "recipe_sha256": "ca0d54b1313150733dacf06dd9d1673fb2b76fdd6b6e870fa4aabf02f75e891b",
+      "report_sha256": "3bb7f4ded2fbab02f10dd067fea2159337a366f2ca297e97c982b8535a93a24f",
+      "harness_sha256": "6d5a5d4153a8a9052276eee1e5728bda88fb9958a38676c6207ca07299d661c9",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 36353,
+      "step_counts": {
+        "observed": 3,
+        "blocked": 1
+      },
+      "attempts": 10,
+      "input_tokens": 30272,
+      "cache_hits": 9,
+      "blocked": [
+        {
+          "id": "diagnostic.password-enter",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153873188-684256",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "d19afdb57f6e04f12963d5c9743dc4fdd0ac40e5ae162a81a8face6c448a6c67",
+      "harness_sha256": "baafe745450209dc6c9b29ba35efda2ec22959e33bc522d6330de68cf0de08f8",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4575,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153917343-685400",
+      "scenario": "gdm-login-aizome",
+      "recipe_sha256": "0dcf2d016872ef0b75bc9812f6a458902f32864ed7e6b82b364b2a09b1dd6826",
+      "report_sha256": "b2ccf0d21bfea6d3d63011b31e7a5b593408faedb9bf5053494f7b59c8f178f9",
+      "harness_sha256": "baafe745450209dc6c9b29ba35efda2ec22959e33bc522d6330de68cf0de08f8",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 10960,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 5,
+      "input_tokens": 15158,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793153958437-685811",
+      "scenario": "aizome-calculator",
+      "recipe_sha256": "bddbabb8b0feb960b29c68ae2fd3da2dd5954a8bf1fd7dc0807e867de28bdda4",
+      "report_sha256": "a1ceb9833d2cb1bc4fce0aea5e22cc94e8b5de54ee4b13973eeb077e290e18c8",
+      "harness_sha256": "baafe745450209dc6c9b29ba35efda2ec22959e33bc522d6330de68cf0de08f8",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 21335,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 4
+      },
+      "attempts": 5,
+      "input_tokens": 15150,
+      "cache_hits": 4,
+      "blocked": [
+        {
+          "id": "Q4.palette-open",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154016053-686547",
+      "scenario": "aizome-calculator",
+      "recipe_sha256": "005513f333565e6f05bbe51bed811582778570c576834c7c223bf9403e15f312",
+      "report_sha256": "7c3b81bf15e128ab4c130c9f172c918e0f50a92c373a576c2ec2a13353d07176",
+      "harness_sha256": "baafe745450209dc6c9b29ba35efda2ec22959e33bc522d6330de68cf0de08f8",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 28345,
+      "step_counts": {
+        "observed": 5
+      },
+      "attempts": 13,
+      "input_tokens": 39402,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154081596-688132",
+      "scenario": "aizome-editor",
+      "recipe_sha256": "217da6057d9cc741a3ebb42a3e3e91df32f533fba0b7d0260fd00e9b558fecfc",
+      "report_sha256": "2b7e5f64ff0fd2d3c2d3459ac394f88c50850fbfe6c9c31ffb38925e96597ed3",
+      "harness_sha256": "baafe745450209dc6c9b29ba35efda2ec22959e33bc522d6330de68cf0de08f8",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 43943,
+      "step_counts": {
+        "observed": 2,
+        "blocked": 1,
+        "not-run": 2
+      },
+      "attempts": 11,
+      "input_tokens": 33316,
+      "cache_hits": 9,
+      "blocked": [
+        {
+          "id": "Q4.sumi-open",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154152082-688437",
+      "scenario": "aizome-editor-resume-after-reviewed-launch",
+      "recipe_sha256": "1b96850b75984a272dab9f48481d4b3bce0c8690f17398c4d469cc63ae331532",
+      "report_sha256": "e42146cedae8dffadfbf1e4ac1d3046d45389a2bfb7464e1b98fea06b7f2e94b",
+      "harness_sha256": "06cda1e83c990c5099ca43a12facad473643763d25ea5ef9773b037099a230b6",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 13217,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 5,
+      "input_tokens": 15172,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154202861-690716",
+      "scenario": "aizome-editor-save-reopen",
+      "recipe_sha256": "1d121003f87a444ba11503c821b1edc5c8ddc9b950bb6e84561bc15b74f76b88",
+      "report_sha256": "a66681b1a0fc862f45adb9ecbf9199ee3ac26cbe9e38db88149aa3ed7ddf4756",
+      "harness_sha256": "06cda1e83c990c5099ca43a12facad473643763d25ea5ef9773b037099a230b6",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 21890,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 2
+      },
+      "attempts": 3,
+      "input_tokens": 9336,
+      "cache_hits": 6,
+      "blocked": [
+        {
+          "id": "Q4.sumi-filename",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154285702-691961",
+      "scenario": "aizome-editor-save-reopen",
+      "recipe_sha256": "ef6be5227fd426f2ecb7314d3541e760f2f1e30fcd0f6196d0ec7dd5340b6ac9",
+      "report_sha256": "e3cd2def8bba2bb5383eadbf2ef9ec55ac0e40ff042c6ab50926af7d32484512",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 23965,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 8,
+      "input_tokens": 24754,
+      "cache_hits": 4,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154330180-692112",
+      "scenario": "aizome-editor-open",
+      "recipe_sha256": "5815b1bc592338426a626b9afd5e9970891ebac36626a9bd6a36e3f78684e869",
+      "report_sha256": "0d9a1455bda137222830bb35ca9e78be00fb99b55f8f33f816596116aa680379",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 10990,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 5,
+      "input_tokens": 15621,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154354406-693075",
+      "scenario": "aizome-logout",
+      "recipe_sha256": "ddb61b5a921890cd7f1645375bc76167512fa408bdb08a2e0a98a4d258b6e49f",
+      "report_sha256": "8327c072c583c9a5b4783b1e19f8f14d9506b7544a46abdcf7d8ae9602fdebf6",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 17579,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 9,
+      "input_tokens": 27263,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154383714-694476",
+      "scenario": "aizome-logout-confirm",
+      "recipe_sha256": "89698a456a7dbe822e8a95143860f775d45620ca94da5ecc6497408d2f28a38f",
+      "report_sha256": "b54b10fb47035f712262638086039ead5363d0ea63400273074b214072a15fde",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 7108,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9320,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154412558-695028",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "d42e8b0b6eb1d7f473f6489c8f08c7a4796745186c35af30ba9ce3d2339bbf74",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4587,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154436958-695243",
+      "scenario": "gdm-login-tatami",
+      "recipe_sha256": "06248be7b482430f43f2fd34a7930d7a93e69f6f5a5d55773dce0219a85b3c93",
+      "report_sha256": "b307a8134b511ee9fa6c9f437d72f98c066cbd4cb074e0e75edd9782ba678722",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 17774,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 7,
+      "input_tokens": 21447,
+      "cache_hits": 3,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154521003-696131",
+      "scenario": "tatami-terminal",
+      "recipe_sha256": "c39202e4cd1b45bc0adf2503d29de4de61c8306f08564c569ea7eb9aaa4049d2",
+      "report_sha256": "0a181515039db4c8c3be9e6e7f8ecc75a19dc27fe261769ee9a6cff9922b7280",
+      "harness_sha256": "f921baff22512fcccb2a771731ad3b01b7c5a82c615f80ea6fd4ff29b0eff0f9",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 22361,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 6,
+      "input_tokens": 18190,
+      "cache_hits": 3,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154612637-697192",
+      "scenario": "tatami-browser-launch",
+      "recipe_sha256": "ca5c01a1a5155890d7142ddccb55eebe472a6d0c1a3da60965ff20bae79bb54b",
+      "report_sha256": "b74763de802e221514aec5c9438e4b04aa02949f3906574b73935afc3d0e3d19",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 5112,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9077,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154663689-697655",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "ce71893762d2d37d1e533fe4ff6e1c51cc9a0d924c6494ceb2334b1ba66bdf41",
+      "report_sha256": "5960dfa947cf109c2f56d7dfd1bcb2a42c4dd94fdf4b9d87a3c8e3a22dae307d",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 530,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 2
+      },
+      "attempts": 2,
+      "input_tokens": 4482,
+      "cache_hits": 0,
+      "blocked": [
+        {
+          "id": "Q6.browser-address",
+          "error": "Target disabled check uncertain after crop; no input sent"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154691414-698515",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "e096a24805dda1feca8fccbaa48c8f0e92765c9a2f11f4c412546ee7b72ee8af",
+      "report_sha256": "46359a3ff0ed215115a53287540b7679329210553fcfd40d405931c50ab8866b",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 40652,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 10,
+      "input_tokens": 30543,
+      "cache_hits": 6,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154748535-699731",
+      "scenario": "tatami-logout-menu",
+      "recipe_sha256": "89a0bcd354d1c88011e532880f79e4dee9a06bd9554eee57290ca7582ff23fe5",
+      "report_sha256": "d86b1fcb2560f253ebddaacb015d7de8bd479fe1b4a0c082efb1a9d3874d38fa",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4796,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6061,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154774061-700971",
+      "scenario": "tatami-logout",
+      "recipe_sha256": "9674390bf7a7fc9994880256b001e00da3f877ce6496a96f3988176b007c599b",
+      "report_sha256": "272172e600eb7e2d79ed78ad85d0b36810c7c31bbb1a6bff8db9050ef78820e6",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 81378,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 4,
+      "input_tokens": 12348,
+      "cache_hits": 35,
+      "blocked": [
+        {
+          "id": "Q3.tatami-logout",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154878928-701870",
+      "scenario": "tatami-logout-activate-selected",
+      "recipe_sha256": "806b7f97ee8052093072b7ef68b3b6d0962d87754ce93e6cd9d10eda52026444",
+      "report_sha256": "212e5f53f6664aa8bb772784b3a1c8d0c2c5187ba5352d3365b25ad2ea680830",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 6937,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9092,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154906309-701992",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "a599205103e6692e303db2c055977a8d548fd945d31a64e67a4a19e9eefe69fb",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4654,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154925980-702081",
+      "scenario": "gdm-login-gnome",
+      "recipe_sha256": "7d898d7360325cbd9f6a658d661a0b4e534c1cad5db6fa6dd966bdd16a703a63",
+      "report_sha256": "2427bca9b4c663ba36ff057856ce6d6b5264ddee1da0883f586d6f8b5bd59df8",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 18038,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 7,
+      "input_tokens": 21451,
+      "cache_hits": 3,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793154969858-702249",
+      "scenario": "gnome-browser",
+      "recipe_sha256": "441b08326a25b239eef9029fcd5b95270e78c1ed4d6f6888864d8c4f4bce17d3",
+      "report_sha256": "d59cd6a968eb121524553bd28cbf95af80625980fd059f65b78bbca5b4292c9d",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 15846,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 7,
+      "input_tokens": 21203,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155028762-702454",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "e096a24805dda1feca8fccbaa48c8f0e92765c9a2f11f4c412546ee7b72ee8af",
+      "report_sha256": "30f17553efcb5fb731ad71578f4a2624a0ce2bc5a152cce66b2f7ed71b099b8e",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 40180,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 9,
+      "input_tokens": 27514,
+      "cache_hits": 7,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155077734-702628",
+      "scenario": "gnome-lock",
+      "recipe_sha256": "add8862cc79fbcaed910b140a7d73ff069265476d6f8820dea749ac9f61629bd",
+      "report_sha256": "118dad91bb05e66c7bd3fb13e74909f049c68526f60f2e425944d8e611ad8524",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 41488,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6064,
+      "cache_hits": 18,
+      "blocked": [
+        {
+          "id": "Q3.gnome-lock",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155149942-703133",
+      "scenario": "gnome-lock-wake",
+      "recipe_sha256": "8c1be7f454730d308d11ff5dbb16e103b37fc140f4e8156b6d02c6bedab341bd",
+      "report_sha256": "ab6891f4891b7a53d7ba4e11f607300e6e18bb945b1731cf153e63a389480d83",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 5277,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9087,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155520038-706145",
+      "scenario": "gnome-lock-reject-password",
+      "recipe_sha256": "baed97a59f028845b8b5216f531f04804a0646ce87aed52373de7f526de4e0ea",
+      "report_sha256": "5b6144bcf18a6348cc0b13088650640ca65ce2d218d10ebdbb4d48ec5c809dbd",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 30507,
+      "step_counts": {
+        "observed": 2,
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 6,
+      "input_tokens": 18175,
+      "cache_hits": 10,
+      "blocked": [
+        {
+          "id": "Q3.gnome-lock-wrong-type",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155586271-706793",
+      "scenario": "gnome-lock-reject-resume",
+      "recipe_sha256": "5850bd177a77bd2e3a75bd4acb5bcc7f41af81161b6506f1a82606602fd2cfab",
+      "report_sha256": "1035ceffc0d6ac03f1f692a123d2f9f912c12ea4687062e11b3ca68b1458e296",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 38204,
+      "step_counts": {
+        "observed": 1,
+        "blocked": 1
+      },
+      "attempts": 6,
+      "input_tokens": 18185,
+      "cache_hits": 12,
+      "blocked": [
+        {
+          "id": "Q3.gnome-lock-reject",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155674573-708435",
+      "scenario": "gnome-unlock",
+      "recipe_sha256": "3499b202eb6b2bc456d63ce1d824e0568a6aa589bddad936b1d6a4c652255e67",
+      "report_sha256": "0d235574f7b29c9935c445ea0eae3210f33f838e8ceafb526caab955de41a749",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 20735,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 1,
+      "input_tokens": 3029,
+      "cache_hits": 9,
+      "blocked": [
+        {
+          "id": "Q3.gnome-unlock-type",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155733910-708997",
+      "scenario": "gnome-unlock",
+      "recipe_sha256": "3499b202eb6b2bc456d63ce1d824e0568a6aa589bddad936b1d6a4c652255e67",
+      "report_sha256": "a9b29cbfd1714d0891a3311157b9cab53c440ac3e493552b45fd6cb01926242b",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 10978,
+      "step_counts": {
+        "observed": 2
+      },
+      "attempts": 4,
+      "input_tokens": 12112,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155753929-709157",
+      "scenario": "gnome-logout-dialog",
+      "recipe_sha256": "5ba3e3c61ba7ad3cb906fffb8470d9e01632b675c22d8de90d5312fa160bb204",
+      "report_sha256": "cae568233a0292c4874aadfa522c6abf8ef037a2174216302b070cfef5876263",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4995,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6056,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155795966-709679",
+      "scenario": "gnome-logout-confirm",
+      "recipe_sha256": "8eb85e8f7fbad05ea3b50117bef3abfebb5b8bb9c0cd9f5d0f129d65c1d889db",
+      "report_sha256": "0c99c170034f9990985063c0adc8bd4354c6a0d063db506e7d48ee83e83ae048",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 15281,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 5,
+      "input_tokens": 15160,
+      "cache_hits": 2,
+      "blocked": [
+        {
+          "id": "Q3.gnome-logout-focus",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155846606-709913",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "122a17c08470e4b9fa081d37eee5ef20c7b6558e8c30e4cb83b50417f27e4096",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4613,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155863367-710304",
+      "scenario": "gdm-login-plasma",
+      "recipe_sha256": "c97528ed7df42d7b0f86b5279d1bc3b5fb3423b7db01e2c2ef128fc549266dd0",
+      "report_sha256": "7314bef287ae19ec1eb84e11de287f02eb147487f55a672c5da6cc6c59cf1416",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 26662,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 10,
+      "input_tokens": 30564,
+      "cache_hits": 3,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155919085-711028",
+      "scenario": "run-dialog-firefox",
+      "recipe_sha256": "2c97a6ffc9e2fc7e7cbaa0765eeb3d86e52e7716285c27b1bb188292b15c4f91",
+      "report_sha256": "3721f02d2635c2a24228e2066e8aef0c822a47fa2021b2184cd5b886ae6417c9",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 18515,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 8,
+      "input_tokens": 24221,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793155958331-711643",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "e096a24805dda1feca8fccbaa48c8f0e92765c9a2f11f4c412546ee7b72ee8af",
+      "report_sha256": "9b3690d1d2fcd9b7efc5321de9f503ad2e08106d276dc29f804cb035611f8738",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 33535,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 8,
+      "input_tokens": 24485,
+      "cache_hits": 4,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156022980-712508",
+      "scenario": "plasma-logout-dialog",
+      "recipe_sha256": "e96f63eb99c9e1d5114b02a4dd30b952a3a06f4689d7dd903b5591c6b6b063a8",
+      "report_sha256": "ed172c012931aee34d120dc6990b8bc614697be0c11536f7f2cad9fc4e343bae",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4986,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6058,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156068403-712723",
+      "scenario": "plasma-logout",
+      "recipe_sha256": "5e7de4f39f7676b2f743c13d06cf236fc3a67d486103aec50e02eaa96586f7fc",
+      "report_sha256": "26d8635738d21a1cc35914854e74eb6a33740940a2d30f38d0432cb1b68ab116",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 6997,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9341,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156089571-712769",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "8b04c85c8bf682df20f8aa4f53031d44f13e3d4b4d6b913c8846b8d9b138a42f",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 5155,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156200076-713363",
+      "scenario": "gdm-login-xfce",
+      "recipe_sha256": "8dd6fe5b10d54a923d1f820bbe4936eb009ad666534245f73e815e6ff188be29",
+      "report_sha256": "5dbd97e6e02648eb0303daa00c708204b043da03fa985275ea78d9952c92437a",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 18161,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 8,
+      "input_tokens": 24486,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156247011-713967",
+      "scenario": "run-dialog-firefox",
+      "recipe_sha256": "2c97a6ffc9e2fc7e7cbaa0765eeb3d86e52e7716285c27b1bb188292b15c4f91",
+      "report_sha256": "13d8fc9fd01f49e4f9779ee5653f508ef9c400176b760b573f77942cf1bab355",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 20565,
+      "step_counts": {
+        "observed": 2,
+        "blocked": 1
+      },
+      "attempts": 5,
+      "input_tokens": 15142,
+      "cache_hits": 5,
+      "blocked": [
+        {
+          "id": "Q6.run-firefox-launch",
+          "error": "Interrupted"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156314406-715542",
+      "scenario": "xfce-launch-resume-after-interrupt",
+      "recipe_sha256": "554d6e4f6d5dc048d6ac5df950695d1795bbe4efd0d4a99daaa5f5380e989490",
+      "report_sha256": "100f4397a04d695599d4323b260c0ac17e0929904c2b205fabceda7a1a18a056",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 5938,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9079,
+      "cache_hits": 0,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156356681-716228",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "e096a24805dda1feca8fccbaa48c8f0e92765c9a2f11f4c412546ee7b72ee8af",
+      "report_sha256": "4698e6dcdfe8ee8760d5324ac2801c29518543d16acb77704248f7545b5a4260",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 40816,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 9,
+      "input_tokens": 27514,
+      "cache_hits": 7,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156422223-716910",
+      "scenario": "xfce-logout-dialog",
+      "recipe_sha256": "2096000c70b76b1ce3e0ea0483097249810736c72b76ddbe51b0ee9263ab51e1",
+      "report_sha256": "227c72e48cef3a55bd976b5d00f723a0ca5d161262fb7b80c342dfa8978750fd",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4709,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6057,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156458138-717278",
+      "scenario": "xfce-logout",
+      "recipe_sha256": "de5e6b000a6e5e0480083ff4ee78f31b776fd56a6813e2eeeeefe204c8564a81",
+      "report_sha256": "746bde50054bbf7cdda747e0d3be332205a6234e8b3add6fef4549bc98c90524",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 9186,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 4,
+      "input_tokens": 12374,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156694355-719258",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "2a830c5626e2c51d81679fbe80117ba4d0384c3485612a7eabfad13d930a5a10",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4977,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156719062-719716",
+      "scenario": "gdm-login-hyprland",
+      "recipe_sha256": "4a7ec8c4c198e612e12b3e118450ed4b0e515f73dca5810ddb13ce9d7dfcf48c",
+      "report_sha256": "9c4ba0cb6747935c435cf4471f96a37e65083a841259a24377feed14db009799",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 111854,
+      "step_counts": {
+        "observed": 2,
+        "blocked": 1
+      },
+      "attempts": 9,
+      "input_tokens": 27553,
+      "cache_hits": 45,
+      "blocked": [
+        {
+          "id": "Q3.hyprland-login",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156878144-721571",
+      "scenario": "hyprland-first-login",
+      "recipe_sha256": "01feb42aee13433a0518c0370bf6361b22bf4d695d6fa7fb74ea3a1ebd9a68d5",
+      "report_sha256": "3441aaff99fb290b228251566a5c9790150bd297d4336551181a0c37ed6b2c73",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 21409,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 3,
+      "input_tokens": 7121,
+      "cache_hits": 8,
+      "blocked": [
+        {
+          "id": "Q3.hyprland-welcome",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793156965128-723430",
+      "scenario": "hyprland-browser",
+      "recipe_sha256": "614eb3bb9c83fd255771d98f9ab4c13e02108daa26de0cbb10d30deb203a3cb1",
+      "report_sha256": "9bb5dca44c2ce1869088dc5ec3afefdffa9ec878af081c1b78b381d1b524947d",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 36223,
+      "step_counts": {
+        "observed": 1,
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 7,
+      "input_tokens": 21184,
+      "cache_hits": 8,
+      "blocked": [
+        {
+          "id": "Q6.hyprland-firefox-search",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157153806-724264",
+      "scenario": "hyprland-firefox-after-assisted-query-correction",
+      "recipe_sha256": "328c2c5c052d4d5a23a60a9ed0a2ad80798952e368d051345ec8e74eb0dfd232",
+      "report_sha256": "e2cfec9e843f8a04004eb994f3c6a2ab01b48a516e262852069f83ab1f3f3da2",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 42630,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 4,
+      "input_tokens": 12104,
+      "cache_hits": 16,
+      "blocked": [
+        {
+          "id": "Q6.hyprland-firefox-launch",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157263233-726074",
+      "scenario": "hyprland-browser-input",
+      "recipe_sha256": "54cb317259b947187eba4a33093d1571cee574378ff3dfa0edcf052badfc0a55",
+      "report_sha256": "9dd0a6b620175b6ab20d111d1701bea0d4c06640649cc2146fdfb495c079f1b0",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 7158,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6308,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157299828-726847",
+      "scenario": "hyprland-logout",
+      "recipe_sha256": "548b1dfce6b50ed7eab87502ec24e190412a33a778b187cb2a050672c9be8b16",
+      "report_sha256": "7fc529f6760191fd721702622055aecc2a2bcacbb342083dd3172ec93d9c7881",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 8942,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9095,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157383287-728102",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "8edc7037009f73c2f9ee872fcafb026a454003b73fa7bd8601b46fea260a43b3",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 5127,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157694147-739189",
+      "scenario": "gdm-login-return-aizome",
+      "recipe_sha256": "42a30cb0d200bf77631a320e93310509e87ae11eabeb2ded9d25333c295e1afb",
+      "report_sha256": "1db00f9c75840263cff8cb7c66124179cf4826ee90128c73af27ee143232f215",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 20791,
+      "step_counts": {
+        "blocked": 1,
+        "not-run": 2
+      },
+      "attempts": 1,
+      "input_tokens": 3271,
+      "cache_hits": 9,
+      "blocked": [
+        {
+          "id": "Q3.return-aizome-select",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157723341-739295",
+      "scenario": "gdm-select-synthetic-user",
+      "recipe_sha256": "95bc99deda8ffd7d2b8e4f4ed9d1c712a572c5faa8967178eb1fa3d848e316ed",
+      "report_sha256": "61f989ba3c9b35f8cce30f9a804deb35b85cc9fc803588cf98fbf3b1e8232bec",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 4721,
+      "step_counts": {
+        "observed": 1
+      },
+      "attempts": 2,
+      "input_tokens": 6055,
+      "cache_hits": 1,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157736901-739427",
+      "scenario": "gdm-login-return-aizome",
+      "recipe_sha256": "42a30cb0d200bf77631a320e93310509e87ae11eabeb2ded9d25333c295e1afb",
+      "report_sha256": "bc525799f0c0147ea55492c8c915e988bb16153b86ba957ead5bde93b8a0288e",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 17969,
+      "step_counts": {
+        "observed": 3
+      },
+      "attempts": 8,
+      "input_tokens": 24504,
+      "cache_hits": 2,
+      "blocked": []
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157761109-740566",
+      "scenario": "aizome-browser-after-rotation",
+      "recipe_sha256": "8a9fc308324beb57d16c657a90b41e1726e7403f605b97e2fed99238a37f9602",
+      "report_sha256": "c5ff0b56a60616a9ced3bc47e61d75939f74827fdcbe205e5c21cc60a22ac030",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 43940,
+      "step_counts": {
+        "observed": 2,
+        "blocked": 1,
+        "not-run": 1
+      },
+      "attempts": 11,
+      "input_tokens": 33324,
+      "cache_hits": 8,
+      "blocked": [
+        {
+          "id": "Q6.aizome-browser-3",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157811987-741061",
+      "scenario": "firefox-local-page",
+      "recipe_sha256": "e096a24805dda1feca8fccbaa48c8f0e92765c9a2f11f4c412546ee7b72ee8af",
+      "report_sha256": "ea5248b5c3f5c97ae037615b1030483f962dd57c624b7c48603a569c18881e1d",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 63716,
+      "step_counts": {
+        "observed": 3,
+        "blocked": 1
+      },
+      "attempts": 12,
+      "input_tokens": 36610,
+      "cache_hits": 11,
+      "blocked": [
+        {
+          "id": "Q6.browser-input",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157895512-741831",
+      "scenario": "aizome-browser-fresh-input",
+      "recipe_sha256": "48fab9709b583d79f5f31c9367a54e5e233b9704b9adbb619103e94ea5b756ee",
+      "report_sha256": "5474c1021a23622568c6f70d8aa2b1dbec3942dcb4ea30edb3aef4c7d1a82db7",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "incomplete",
+      "elapsed_ms": 34491,
+      "step_counts": {
+        "blocked": 1
+      },
+      "attempts": 3,
+      "input_tokens": 9343,
+      "cache_hits": 11,
+      "blocked": [
+        {
+          "id": "Q6.aizome-browser-input",
+          "error": "Scenario deadline exceeded"
+        }
+      ]
+    },
+    {
+      "evidence": ".work/jev-evidence/uefi/scenario-1793157930249-742228",
+      "scenario": "aizome-normal-shutdown",
+      "recipe_sha256": "bdddba5c4e1b753e0c468196d4a246c689f6034c8e1a69000e3036f08955a0a5",
+      "report_sha256": "93339174c5ff72ff3ef9cd830b1aba79b1056e6c00934721a8e8865961e70819",
+      "harness_sha256": "b5164e1db78da9abdb75d19b6ae47016eb17feb61b84ad3778393a3e4923b5be",
+      "phase": 1,
+      "status": "completed",
+      "elapsed_ms": 24790,
+      "step_counts": {
+        "observed": 4
+      },
+      "attempts": 10,
+      "input_tokens": 30520,
+      "cache_hits": 0,
+      "blocked": []
+    }
+  ]
+}

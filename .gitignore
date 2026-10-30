@@ -1,4 +1,5 @@
 /.work/
+/.env
 /artifacts/
 /result*
 __pycache__/

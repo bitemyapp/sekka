@@ -1,0 +1,57 @@
+{
+  "id": "aizome-browser-after-rotation",
+  "description": "Return to Aizome after the other five sessions. Firefox is expected to restore the synthetic page used there.",
+  "max_calls": 80,
+  "max_input_tokens": 500000,
+  "max_seconds": 240,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q6.aizome-browser-1",
+      "precondition": "Is a panel visible along the top edge of the desktop?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "spc"
+        ]
+      },
+      "expected": "Is a command search palette visible?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.aizome-browser-2",
+      "precondition": "Is a command search palette visible?",
+      "action": {
+        "kind": "type",
+        "text": "Firefox"
+      },
+      "expected": "Does the search palette show a Firefox application result?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q6.aizome-browser-3",
+      "precondition": "Does the search palette show a Firefox application result?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Does a browser page display a large JEV_BROWSER_OK heading?",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q6.aizome-browser-input",
+      "precondition": "Does the browser page show a large JEV_BROWSER_OK heading?",
+      "action": {
+        "kind": "fill",
+        "target": "Name text input below the JEV_BROWSER_OK heading",
+        "text": "Aizome verified 1723"
+      },
+      "expected": "Does the Name text input contain Aizome verified 1723?",
+      "timeout_seconds": 30
+    }
+  ]
+}

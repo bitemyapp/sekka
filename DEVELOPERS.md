@@ -80,6 +80,13 @@ Do not merge unrelated Cargo workspaces or broaden package source filters as par
 
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
+`tools` also provides the experimental `sekka-jev` vision-assisted VM driver.
+It runs authored JSON scenarios against its own disposable QEMU guests, using
+Jev for narrow screenshot judgments and control locations. See
+[the harness guide](docs/jev-harness.md) for setup, budgets, calibration,
+evidence, and the distinction between model observations and ISO qualification.
+The source inventory in `tests/jev` is a plan, not a completed test matrix.
+
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
 `opt/org.seabios/pci64=0` setting. SeaBIOS 1.17 otherwise moves the NVMe
 controller above that limit in an 8 GiB guest and cannot read the boot disk.

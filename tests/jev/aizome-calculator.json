@@ -1,0 +1,68 @@
+{
+  "id": "aizome-calculator",
+  "description": "A narrow real application journey through Aizome's palette. Not comprehensive calculator or desktop qualification.",
+  "max_calls": 80,
+  "max_input_tokens": 500000,
+  "max_seconds": 240,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q4.palette-open",
+      "precondition": "Is a Welcome to Aizome window visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "spc"
+        ]
+      },
+      "expected": "Is a command search palette visible?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q4.soroban-search",
+      "precondition": "Is a command search palette visible?",
+      "action": {
+        "kind": "type",
+        "text": "Soroban"
+      },
+      "expected": "Does the search palette show a Soroban calculator application result?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q4.soroban-open",
+      "precondition": "Does the search palette show a Soroban calculator application result?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Is a calculator window visible with digit buttons and arithmetic operation buttons?",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q4.soroban-expression",
+      "precondition": "Is a calculator window visible with digit buttons and arithmetic operation buttons?",
+      "action": {
+        "kind": "type",
+        "text": "17*23"
+      },
+      "expected": "Does the calculator show the expression 17*23, possibly with a multiplication symbol?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q4.soroban-evaluate",
+      "precondition": "Does the calculator show the expression 17*23, possibly with a multiplication symbol?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ret"
+        ]
+      },
+      "expected": "Does the calculator display the result 391?",
+      "timeout_seconds": 20
+    }
+  ]
+}

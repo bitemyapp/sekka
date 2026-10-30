@@ -1,0 +1,323 @@
+{
+  "description": "Seven historical repository screenshots manually inspected on 2026-10-27; labels and clickable rectangles authored before requests. These are predecessor UIs, not ISO qualification. Repeating on this small tuning corpus is not a held-out accuracy estimate.",
+  "min_probability": 0.95,
+  "min_confidence": 0.6,
+  "cases": [
+    {
+      "id": "candidate-welcome",
+      "image": "../../docs/images/candidate-welcome.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Get Started control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Get Started control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "welcome",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": [
+        1033,
+        699,
+        1174,
+        746
+      ]
+    },
+    {
+      "id": "candidate-disk",
+      "image": "../../docs/images/candidate-disk.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Next control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Next control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "disk",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": [
+        1077,
+        700,
+        1175,
+        744
+      ]
+    },
+    {
+      "id": "candidate-desktops",
+      "image": "../../docs/images/candidate-desktops.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Next control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Next control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "desktop",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": [
+        1077,
+        700,
+        1175,
+        744
+      ]
+    },
+    {
+      "id": "candidate-review-ready",
+      "image": "../../docs/images/candidate-review-ready.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Erase Disk and Install control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Erase Disk and Install control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "review",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": [
+        967,
+        700,
+        1174,
+        746
+      ]
+    },
+    {
+      "id": "candidate-installing",
+      "image": "../../docs/images/candidate-installing.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        }
+      },
+      "expected": {
+        "page": "installing",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": null
+    },
+    {
+      "id": "native-install-complete",
+      "image": "../../docs/images/native-install-complete.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Close installer control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Close installer control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "complete",
+        "complete": true,
+        "absent": false
+      },
+      "click_rect": [
+        222,
+        231,
+        1058,
+        267
+      ]
+    },
+    {
+      "id": "native-bios-login",
+      "image": "../../docs/images/native-bios-login.png",
+      "questions": {
+        "page": {
+          "type": "choice",
+          "instructions": "Which state is visibly shown in `screen`?",
+          "criteria": {
+            "welcome": "Installer Welcome page.",
+            "disk": "Installer disk selection page.",
+            "desktop": "Installer desktop selection page.",
+            "review": "Installer review and erase confirmation page.",
+            "installing": "Installation is underway with unfinished stages.",
+            "complete": "Installer explicitly reports installation complete.",
+            "login": "Login screen asking for a password.",
+            "other": "None of these screens."
+          }
+        },
+        "complete": {
+          "type": "noul",
+          "instructions": "Does `screen` explicitly report that installation has finished successfully?"
+        },
+        "absent": {
+          "type": "noul",
+          "instructions": "Is a visible button labeled Retry Installation present in `screen`?"
+        },
+        "present": {
+          "type": "noul",
+          "instructions": "Is the Password input field control visible in `screen`?"
+        },
+        "target": {
+          "type": "box",
+          "instructions": "The Password input field control in `screen`."
+        }
+      },
+      "expected": {
+        "page": "login",
+        "complete": false,
+        "absent": false
+      },
+      "click_rect": [
+        495,
+        461,
+        749,
+        491
+      ]
+    }
+  ]
+}

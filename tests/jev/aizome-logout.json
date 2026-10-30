@@ -1,0 +1,10 @@
+{
+  "id":"aizome-logout",
+  "description":"Normal Aizome palette logout after the synthetic editor journey; inspect and confirm the resulting dialog separately.",
+  "max_calls":50,"max_input_tokens":350000,"max_seconds":120,"min_probability":0.9,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q3.aizome-logout-palette","precondition":"Is the text Sekka Jev end-to-end test 1723 visible in the editor?","action":{"kind":"key","keys":["meta_l","spc"]},"expected":"Is a command search palette visible?","timeout_seconds":20},
+    {"id":"Q3.aizome-logout-search","precondition":"Is a command search palette visible?","action":{"kind":"type","text":"Log Out"},"expected":"Does the command palette show a Log Out action?","timeout_seconds":20},
+    {"id":"Q3.aizome-logout-request","precondition":"Does the command palette show a Log Out action?","action":{"kind":"key","keys":["ret"]},"expected":"Is a confirmation dialog asking to log out visible?","timeout_seconds":20}
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "aizome-editor-save-reopen",
+  "description": "Synthetic document inside the disposable VM. Requires the Save As dialog from aizome-editor. Reopens the saved path through the normal file picker.",
+  "max_calls": 100,
+  "max_input_tokens": 700000,
+  "max_seconds": 300,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q4.sumi-filename",
+      "precondition": "Is the Save As dialog visible?",
+      "action": {
+        "kind": "fill",
+        "target": "Save as file name text field",
+        "text": "jev-proof.txt",
+        "select_all": [
+          "meta_l",
+          "a"
+        ]
+      },
+      "expected": "Does the Save as file name field contain exactly jev-proof.txt with no other letters?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q4.sumi-save",
+      "precondition": "Does the Save as file name field contain exactly jev-proof.txt with no other letters?",
+      "action": {
+        "kind": "click",
+        "target": "Save button at the bottom right of the Save As dialog"
+      },
+      "expected": "Is the document text Sekka Jev end-to-end test 1723 visible with no Save As dialog?",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "Q4.sumi-open-dialog",
+      "precondition": "Is the document text Sekka Jev end-to-end test 1723 visible?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "o"
+        ]
+      },
+      "expected": "Is an Open file dialog visible?",
+      "timeout_seconds": 20
+    }
+  ]
+}

@@ -1,0 +1,399 @@
+{
+  "schema_version": 1,
+  "kind": "source-inventory-comparison",
+  "qualification": false,
+  "executed_feature_tests": false,
+  "candidate": {
+    "source_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+    "iso_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+    "aizome_revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344",
+    "aizome_origin": "github:bitemyapp/aizome",
+    "lock_sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601"
+  },
+  "inventory": {
+    "source_revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+    "path": "tests/jev/coverage.json"
+  },
+  "method": {
+    "apps": "Literal native-app rows in pinned docs/apps.md; excludes foot and session shell.",
+    "settings": "Unique pane.id pairs from literal SettingEntry::new(\"id\", \"title\") calls under pinned apps/settei/src/panes. This excludes dynamic entries and does not prove installed controls.",
+    "comparison": "Read exact Git objects. No checkout, evaluation, network request, VM modification or product test was performed."
+  },
+  "differences": {
+    "native_apps": {
+      "candidate_count": 14,
+      "inventory_count": 15,
+      "candidate": [
+        "settei",
+        "yukimi",
+        "hako",
+        "sumi",
+        "fusen",
+        "koyomi",
+        "tokei",
+        "soroban",
+        "tenki",
+        "tansu",
+        "kura",
+        "myaku",
+        "shashin",
+        "annai"
+      ],
+      "inventory_only": [
+        "koe"
+      ],
+      "candidate_only": []
+    },
+    "settings": {
+      "candidate_literal_count": 151,
+      "inventory_literal_count": 154,
+      "inventory_only": {
+        "desktop.auto-hide": {
+          "title": "Automatically hide the Deskbar",
+          "path": "desktop/aizome/apps/settei/src/panes/desktop.rs",
+          "line": 100
+        },
+        "general.boot-splash": {
+          "title": "Boot splash",
+          "path": "desktop/aizome/apps/settei/src/panes/general/startup.rs",
+          "line": 40
+        },
+        "general.startup": {
+          "title": "Startup",
+          "path": "desktop/aizome/apps/settei/src/panes/general/mod.rs",
+          "line": 225
+        }
+      },
+      "candidate_only": {},
+      "changed_titles": {}
+    },
+    "tatami": [
+      {
+        "feature": "Setup audio label",
+        "candidate": "Audio",
+        "inventory": "Sound",
+        "source": "desktop/tatami/config/elephant/menus/tatami-setup.toml"
+      },
+      {
+        "feature": "Audio frontend",
+        "candidate": "wiremix terminal panel, output tab",
+        "inventory": "tatami-sound GTK window",
+        "source": "desktop/tatami/tool/src/main.rs"
+      },
+      {
+        "feature": "Bluetooth frontend",
+        "candidate": "bluetui terminal panel; missing adapter produces notification",
+        "inventory": "tatami-bluetooth GTK window",
+        "source": "desktop/tatami/tool/src/power.rs"
+      },
+      {
+        "feature": "Window rules",
+        "candidate": "org.tatami.wiremix and org.tatami.bluetui panel rules",
+        "inventory": "org.tatami.Sound and org.tatami.Bluetooth centered settings windows",
+        "source": "desktop/tatami/config/hypr/hyprland.lua"
+      }
+    ]
+  },
+  "unchanged_inventory": {
+    "offered_desktops": 6,
+    "optional_catalog_apps": 36,
+    "identical_sources": [
+      {
+        "path": "installer/genkan/rust/src/desktop.rs",
+        "sha256": "d731296100f1626e6a5c30925c5ecd009ace3a9ba926cd1f6498c9b12d3e6c84",
+        "candidate_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+        "inventory_revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78"
+      },
+      {
+        "path": "installer/genkan/rust/src/applications.json",
+        "sha256": "2cad7032b96de2cc83ebc0aef0f96f683f775d356dc0f4b81af41f8b5db8631b",
+        "candidate_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+        "inventory_revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78"
+      }
+    ]
+  },
+  "source_evidence": [
+    {
+      "path": "flake.lock",
+      "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "sha256": "4562c4a233005aa03c30075190532f6a4cf5d23c80595cf2b97fa2035754d601",
+      "url": "https://github.com/bitemyapp/sekka/blob/ed92471d8cd92e80267bb69df1225da28054a91f/flake.lock"
+    },
+    {
+      "path": "docs/apps.md",
+      "revision": "ca4e289e7bdc9ffe9371f71416c7c3f04e325344",
+      "sha256": "d515e9babb7a1eb35cba5c5b5a2de1d0271aa0c4e0e02747c19d4fffe80765c2",
+      "url": "https://github.com/bitemyapp/aizome/blob/ca4e289e7bdc9ffe9371f71416c7c3f04e325344/docs/apps.md"
+    },
+    {
+      "path": "desktop/aizome/docs/apps.md",
+      "revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+      "sha256": "aeb594b213b4c6ec5a52e1db76cd7a21aecb9fb070dd9ec241acbf543140038c",
+      "url": "https://github.com/bitemyapp/sekka/blob/bf4c4f5e4264eb5b3ce986cef274ea62587e4f78/desktop/aizome/docs/apps.md"
+    },
+    {
+      "path": "desktop/tatami/tool/src/main.rs",
+      "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "sha256": "b66ece70c896f73edb42cb5f997d45a40bd858d7a32b80fcd5d49751313df667",
+      "url": "https://github.com/bitemyapp/sekka/blob/ed92471d8cd92e80267bb69df1225da28054a91f/desktop/tatami/tool/src/main.rs"
+    },
+    {
+      "path": "desktop/tatami/tool/src/main.rs",
+      "revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+      "sha256": "33eceb57f499257a5191b41a5cd9d07f60acbdf89b2172abb38ae21d8856ca4b",
+      "url": "https://github.com/bitemyapp/sekka/blob/bf4c4f5e4264eb5b3ce986cef274ea62587e4f78/desktop/tatami/tool/src/main.rs"
+    },
+    {
+      "path": "desktop/tatami/tool/src/power.rs",
+      "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "sha256": "f0d37ce64ea4fe10c41d4ece5464b566081aec75ff128ceea8f5960d7df5d5be",
+      "url": "https://github.com/bitemyapp/sekka/blob/ed92471d8cd92e80267bb69df1225da28054a91f/desktop/tatami/tool/src/power.rs"
+    },
+    {
+      "path": "desktop/tatami/tool/src/power.rs",
+      "revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+      "sha256": "a6ef39a3ef5ed4db496800752bfbc40eb6126540f839c08b34079a0310169a99",
+      "url": "https://github.com/bitemyapp/sekka/blob/bf4c4f5e4264eb5b3ce986cef274ea62587e4f78/desktop/tatami/tool/src/power.rs"
+    },
+    {
+      "path": "desktop/tatami/config/elephant/menus/tatami-setup.toml",
+      "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "sha256": "20669cc9259c482e1e6468ed4191f978a37856d3e226c18915f987fd7da3c70b",
+      "url": "https://github.com/bitemyapp/sekka/blob/ed92471d8cd92e80267bb69df1225da28054a91f/desktop/tatami/config/elephant/menus/tatami-setup.toml"
+    },
+    {
+      "path": "desktop/tatami/config/elephant/menus/tatami-setup.toml",
+      "revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+      "sha256": "a770cc611a1066f4bc85f7456626b0e4affa12667924d005cd7296646dea5b06",
+      "url": "https://github.com/bitemyapp/sekka/blob/bf4c4f5e4264eb5b3ce986cef274ea62587e4f78/desktop/tatami/config/elephant/menus/tatami-setup.toml"
+    },
+    {
+      "path": "desktop/tatami/config/hypr/hyprland.lua",
+      "revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+      "sha256": "a2a43ea619d4cf6c06146093f90b23c467a48db6118ebc08c1a59180101dbbd6",
+      "url": "https://github.com/bitemyapp/sekka/blob/ed92471d8cd92e80267bb69df1225da28054a91f/desktop/tatami/config/hypr/hyprland.lua"
+    },
+    {
+      "path": "desktop/tatami/config/hypr/hyprland.lua",
+      "revision": "bf4c4f5e4264eb5b3ce986cef274ea62587e4f78",
+      "sha256": "5260ee453107f84e9c72fd643bd0c0b33b98107d4f3ac892e67a250b88753fff",
+      "url": "https://github.com/bitemyapp/sekka/blob/bf4c4f5e4264eb5b3ce986cef274ea62587e4f78/desktop/tatami/config/hypr/hyprland.lua"
+    }
+  ],
+  "setting_extraction_sources": {
+    "candidate": [
+      {
+        "path": "apps/settei/src/panes/accessibility.rs",
+        "sha256": "7a96e8a45e2370b947ad0ac897913cf9a2332c335cfdcba0831d8652ce775a8e"
+      },
+      {
+        "path": "apps/settei/src/panes/appearance.rs",
+        "sha256": "c729e36d9584aed7784556722affd7fbc3811b95054edfbf70043e5e28e037f2"
+      },
+      {
+        "path": "apps/settei/src/panes/battery.rs",
+        "sha256": "511c2d4053f459f4dbacdbd8bbfa29263769c03d0235948b8df6ad53f2d39e2c"
+      },
+      {
+        "path": "apps/settei/src/panes/bluetooth.rs",
+        "sha256": "7a4a3869e69d76981895e643817951d3259fdae21902b17f6797cd47a63bac19"
+      },
+      {
+        "path": "apps/settei/src/panes/desktop.rs",
+        "sha256": "6b523737dc955209645c566ce80ed9a91b2574bfad19b242f7e89ccf2c5af1cd"
+      },
+      {
+        "path": "apps/settei/src/panes/displays/mod.rs",
+        "sha256": "1d3b775157b626e5779f3381aeae8a8464b5fb3c48fe611823c4f9ed7fbd1c4d"
+      },
+      {
+        "path": "apps/settei/src/panes/general/about.rs",
+        "sha256": "09ec301e23ccb7701dfe9cf2d468d29005c80b577c07799ff5f0a0d35936f785"
+      },
+      {
+        "path": "apps/settei/src/panes/general/datetime.rs",
+        "sha256": "67415fb8e29c3aa8ce469c9d93a4cf636a83d305fec0c2367318ee77f27b3b39"
+      },
+      {
+        "path": "apps/settei/src/panes/general/language.rs",
+        "sha256": "903da7d9f4cd0d97a9558465c3ffc638f39652cb76e7dbe54877fead170b5a8a"
+      },
+      {
+        "path": "apps/settei/src/panes/general/login.rs",
+        "sha256": "575e57111a0b0032421dd9a390a2fd6d068e575291733dc61ae837788493b8e5"
+      },
+      {
+        "path": "apps/settei/src/panes/general/mod.rs",
+        "sha256": "281927bf6af792445502910023fd771a76db0499c8059696b8d49902685a8cdb"
+      },
+      {
+        "path": "apps/settei/src/panes/general/storage.rs",
+        "sha256": "5bd215db38ac4ac017b39a71645730b529bf2d926556cff88d37df74b3d31573"
+      },
+      {
+        "path": "apps/settei/src/panes/general/update.rs",
+        "sha256": "81a71a4f802cae12f2f0219dfe3d63b60240022c391333dd825a6ab129f70afe"
+      },
+      {
+        "path": "apps/settei/src/panes/keyboard/mod.rs",
+        "sha256": "5f7c549c3756aa51866dcdf94287162e8afc8279a52c11baa8a7bc8cbbd7f51c"
+      },
+      {
+        "path": "apps/settei/src/panes/lock.rs",
+        "sha256": "986b79ac1edcb4ac6db96dd6ae7e2763646c0580a48373619ff97de77c5ba8e3"
+      },
+      {
+        "path": "apps/settei/src/panes/menubar.rs",
+        "sha256": "b42ea91279ce635bb9371b892a206f1b155492f7a17bbfeadf99c6d10743ddc5"
+      },
+      {
+        "path": "apps/settei/src/panes/mouse.rs",
+        "sha256": "3a3dcc6437ac07611a53953f436c9bb2a953328459f29837960a0e4ea161e141"
+      },
+      {
+        "path": "apps/settei/src/panes/network/mod.rs",
+        "sha256": "4f06eff273450fb6679e98a357684a2cb841438601e4a3f340c844d538c439b6"
+      },
+      {
+        "path": "apps/settei/src/panes/notifications.rs",
+        "sha256": "2866cb57fca45b54fd4eba039f59b874ed24c33f66e4b1121aa588c4d45dff10"
+      },
+      {
+        "path": "apps/settei/src/panes/performance.rs",
+        "sha256": "a0cfea2edf6b439aec8c6d1dc22369786152c72e183aea2095f3228a1ad2c9e3"
+      },
+      {
+        "path": "apps/settei/src/panes/printers.rs",
+        "sha256": "a1268493ecec78f88eb8c95d72e568db62d00b041fe34b3809a2b6141012acdf"
+      },
+      {
+        "path": "apps/settei/src/panes/search.rs",
+        "sha256": "1f0f3712ae36c88e39a37c13608d672df4cf2edeb70a6c99b54752d0fb188c36"
+      },
+      {
+        "path": "apps/settei/src/panes/sound.rs",
+        "sha256": "4b2b483f4215064ae77f3c839c0e452f561eff7bfb96fa0bdb375aef1c1b32d9"
+      },
+      {
+        "path": "apps/settei/src/panes/trackpad.rs",
+        "sha256": "4f23cbe68507e071e98c864ff9f5c271bd026df22a53514c02e945070943dc65"
+      },
+      {
+        "path": "apps/settei/src/panes/users.rs",
+        "sha256": "a5a08f2a53baf593d6b0d78c016cc0eb089c9597351425b6e58d514221ed6988"
+      }
+    ],
+    "inventory": [
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/accessibility.rs",
+        "sha256": "7a96e8a45e2370b947ad0ac897913cf9a2332c335cfdcba0831d8652ce775a8e"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/appearance.rs",
+        "sha256": "c729e36d9584aed7784556722affd7fbc3811b95054edfbf70043e5e28e037f2"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/battery.rs",
+        "sha256": "cc77f28c5245a5df6cdf7fd7f40ef43390cfc9efaf2c34a40eacc62e61340f71"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/bluetooth.rs",
+        "sha256": "7a4a3869e69d76981895e643817951d3259fdae21902b17f6797cd47a63bac19"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/desktop.rs",
+        "sha256": "04e08f900bb32a5150ad4ea3d3838cc0066f120397dda7b242ba52bf4a2af955"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/displays/mod.rs",
+        "sha256": "1d3b775157b626e5779f3381aeae8a8464b5fb3c48fe611823c4f9ed7fbd1c4d"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/about.rs",
+        "sha256": "09ec301e23ccb7701dfe9cf2d468d29005c80b577c07799ff5f0a0d35936f785"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/datetime.rs",
+        "sha256": "67415fb8e29c3aa8ce469c9d93a4cf636a83d305fec0c2367318ee77f27b3b39"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/language.rs",
+        "sha256": "903da7d9f4cd0d97a9558465c3ffc638f39652cb76e7dbe54877fead170b5a8a"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/login.rs",
+        "sha256": "575e57111a0b0032421dd9a390a2fd6d068e575291733dc61ae837788493b8e5"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/mod.rs",
+        "sha256": "f41828c6aa0122322c20de0dea43f4484adc6dacd6ff42e4128b5a104e342011"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/startup.rs",
+        "sha256": "0907f464eb622b3528236e4a532263f1063ec9ab5b93c087656fd3232e50159b"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/storage.rs",
+        "sha256": "5bd215db38ac4ac017b39a71645730b529bf2d926556cff88d37df74b3d31573"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/general/update.rs",
+        "sha256": "81a71a4f802cae12f2f0219dfe3d63b60240022c391333dd825a6ab129f70afe"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/keyboard/mod.rs",
+        "sha256": "852e6d3180668ca33585d412d25786dda6233259800a462c850f5f62d930ca23"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/lock.rs",
+        "sha256": "986b79ac1edcb4ac6db96dd6ae7e2763646c0580a48373619ff97de77c5ba8e3"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/menubar.rs",
+        "sha256": "b42ea91279ce635bb9371b892a206f1b155492f7a17bbfeadf99c6d10743ddc5"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/mouse.rs",
+        "sha256": "3a3dcc6437ac07611a53953f436c9bb2a953328459f29837960a0e4ea161e141"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/network/mod.rs",
+        "sha256": "4f06eff273450fb6679e98a357684a2cb841438601e4a3f340c844d538c439b6"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/notifications.rs",
+        "sha256": "2866cb57fca45b54fd4eba039f59b874ed24c33f66e4b1121aa588c4d45dff10"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/performance.rs",
+        "sha256": "a0cfea2edf6b439aec8c6d1dc22369786152c72e183aea2095f3228a1ad2c9e3"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/printers.rs",
+        "sha256": "a1268493ecec78f88eb8c95d72e568db62d00b041fe34b3809a2b6141012acdf"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/search.rs",
+        "sha256": "1f0f3712ae36c88e39a37c13608d672df4cf2edeb70a6c99b54752d0fb188c36"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/sound.rs",
+        "sha256": "4b2b483f4215064ae77f3c839c0e452f561eff7bfb96fa0bdb375aef1c1b32d9"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/trackpad.rs",
+        "sha256": "4f23cbe68507e071e98c864ff9f5c271bd026df22a53514c02e945070943dc65"
+      },
+      {
+        "path": "desktop/aizome/apps/settei/src/panes/users.rs",
+        "sha256": "a5a08f2a53baf593d6b0d78c016cc0eb089c9597351425b6e58d514221ed6988"
+      }
+    ]
+  },
+  "coverage_effect": [
+    "Do not expect Koe, General Startup/Boot splash, or Deskbar auto-hide from this older candidate solely because current inventory lists them.",
+    "Candidate Tatami audio/Bluetooth recipes must target wiremix/bluetui and the Audio menu label.",
+    "Retain bf4c4f5 planning rows unchanged; reconcile a separate per-candidate runtime inventory and preserve source-based exclusions explicitly.",
+    "Source comparison does not establish whether each package/control is installed, usable or correct on the ISO. Screenshots and execution are still required."
+  ]
+}

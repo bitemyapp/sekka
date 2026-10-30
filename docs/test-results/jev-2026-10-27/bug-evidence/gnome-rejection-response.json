@@ -1,0 +1,18 @@
+{
+  "body": {
+    "answers": {
+      "expected": {
+        "noul": 1.0,
+        "type": "noul"
+      }
+    },
+    "model": "jev-1.14.0",
+    "usage": {
+      "input_tokens": 3034,
+      "output_tokens": 20
+    }
+  },
+  "http_status": 200,
+  "latency_ms": 198,
+  "transport_success": true
+}

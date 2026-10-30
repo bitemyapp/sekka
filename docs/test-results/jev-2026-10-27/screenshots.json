@@ -1,0 +1,124 @@
+{
+  "candidate_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+  "screenshots": [
+    {
+      "file": "installation-complete.png",
+      "source": ".work/jev-evidence/uefi/screen-1793152210545-666694.png",
+      "sha256": "17bc0cacb5832a81daa648de7eb7a5e7f17c66b01d9471e36ce37a1a96d4dfcb",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "disk-root.png",
+      "source": ".work/jev-evidence/uefi/screen-1793153571742-680959.png",
+      "sha256": "051e86f41cf521fe3fdf03a04dce900478d7928f09b6b63ce3605f0ed1b8ce0c",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "six-sessions.png",
+      "source": ".work/jev-evidence/uefi/screen-1793153885978-684531.png",
+      "sha256": "d124bbfffa64b9d5ab4031e270f12a5a819222aa69269db597d220c2632a575e",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "aizome-calculator.png",
+      "source": ".work/jev-evidence/uefi/screen-1793154044242-686547.png",
+      "sha256": "23b9af7e3a69c169fe0f1c948fab99d1cb806a7eb0ecf138772a1a74945e88cd",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "gnome-rejection.png",
+      "source": ".work/jev-evidence/uefi/screen-1793155597296-706793.png",
+      "sha256": "c05def3f307d6f448eeec8e396d671fcccb84fd51e28b2b37479f8f911293381",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "tatami-terminal.png",
+      "source": ".work/jev-evidence/uefi/screen-1793154543285-696131.png",
+      "sha256": "9538123199e7f2fb8ce4ed183f801bcf305bdb2d6b90f2c65cbe06ef95d39ede",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "tatami-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793154731988-698515.png",
+      "sha256": "d99f57a0c7ba86416797129f70eaf3a14bc3bb43bf63561c25a6e4ddc8bf3a84",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "gnome-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793155068923-702454.png",
+      "sha256": "0619bc816e7fa14a37a35aabde2a1ffeb4ed6f8134f285e290d41fa0fb325ff6",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "plasma-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793155991844-711643.png",
+      "sha256": "f550991184fdd548b4a56aa7bf133323b911871bf82a9a1a52ab3696c4cb6c71",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "xfce-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793156397463-716228.png",
+      "sha256": "7e0879bc069cf49be2390aa95a9d457688ac75f4828f351234cc1c7db93b511a",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "disk-mounts-timezone.png",
+      "source": ".work/jev-evidence/uefi/screen-1793156500541-717419.png",
+      "sha256": "0d779fbc6e9af1ca15621c952f5076f405b0d26ec54de859b04c7bb87851bf3c",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "session-failures.png",
+      "source": ".work/jev-evidence/uefi/screen-1793156546274-717674.png",
+      "sha256": "c1355921a99eba11eddecb300c37927ca669ce0e70ddf7da9ed5853f333f6aae",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "session-journal.png",
+      "source": ".work/jev-evidence/uefi/screen-1793156629641-718577.png",
+      "sha256": "2c0f530e01a808a5248dd31875534b22759f1ddcd38511cf56f9cd1ce9a7eba0",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "hyprland-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793157270358-726074.png",
+      "sha256": "1f7a19189df56df10e4fa29933e24290cf4262b02fb56c3f63bc009a42e0cc27",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "firefox-restore-error.png",
+      "source": ".work/jev-evidence/uefi/screen-1793157795234-740931.png",
+      "sha256": "913b1ef83ae9a4368531049785fdd689151614213ba063d4c377edf79ba2b1d6",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "aizome-browser.png",
+      "source": ".work/jev-evidence/uefi/screen-1793157911759-741982.png",
+      "sha256": "53d02617bf7a1e31054faae7f53c2bcf5a01ed13f0b6ce32c73f0f91fa1291e9",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    },
+    {
+      "file": "aizome-shutdown.png",
+      "source": ".work/jev-evidence/uefi/screen-1793157948893-742228.png",
+      "sha256": "0c6a03cdd565cd81e70bfce6d67e231ae8d5568874080a18ac846f4d0b0eaabb",
+      "transform": "none; original QMP screendump",
+      "review": "Visually inspected by Codex; not independent human review"
+    }
+  ]
+}

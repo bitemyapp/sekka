@@ -1,0 +1,9 @@
+{
+  "id":"aizome-editor-open",
+  "description":"Select the synthetic file in Sumi's Open dialog. Existing-document reuse means this alone is not proof of disk persistence; obtain independent file content evidence.",
+  "max_calls":40,"max_input_tokens":300000,"max_seconds":90,"min_probability":0.9,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q4.sumi-select-file","precondition":"Is an Open file dialog visible?","action":{"kind":"click","target":"jev-proof.txt file row in the file list"},"expected":"Is the Open button at the bottom right enabled?","timeout_seconds":20},
+    {"id":"Q4.sumi-open-file","precondition":"Is the Open button at the bottom right enabled?","action":{"kind":"click","target":"Open button at the bottom right"},"expected":"Is the text Sekka Jev end-to-end test 1723 visible in the editor?","timeout_seconds":20}
+  ]
+}

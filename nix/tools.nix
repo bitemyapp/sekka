@@ -11,6 +11,11 @@ pkgs.rustPlatform.buildRustPackage {
     ];
   };
   cargoLock.lockFile = ../rust/Cargo.lock;
+  nativeBuildInputs = [ pkgs.makeWrapper ];
+  postInstall = ''
+    wrapProgram $out/bin/sekka-jev \
+      --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.curl ]}
+  '';
   # Unit tests include a local Unix socket mock for QMP/QGA; no network/VM access.
   doCheck = true;
   meta = {

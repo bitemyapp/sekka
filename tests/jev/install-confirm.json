@@ -1,0 +1,11 @@
+{
+  "id":"install-confirm-disposable-nvme",
+  "description":"DESTRUCTIVE ONLY INSIDE THE HARNESS VM: erase its new SEKKA_JEV_TEST disk. Never use an attached host device. All-six desktop experiment, ext4, synthetic account.",
+  "max_calls":500,"max_input_tokens":2500000,"max_seconds":1800,"min_probability":0.90,"min_box_confidence":0.6,
+  "steps":[
+    {"id":"Q2.erase-phrase","precondition":"Does the erase warning identify serial SEKKA_JEV_TEST and /dev/nvme0n1?","action":{"kind":"fill","target":"confirmation text field with placeholder Type ERASE /dev/nvme0n1 to confirm","text":"ERASE /dev/nvme0n1"},"expected":"Does the confirmation field contain ERASE /dev/nvme0n1?","timeout_seconds":30},
+    {"id":"Q2.erase-acknowledge","precondition":"Does the erase warning identify serial SEKKA_JEV_TEST?","action":{"kind":"click","target":"empty checkbox beside I understand that all partitions and data on this disk will be destroyed"},"expected":"Is the checkbox beside I understand that all partitions and data on this disk will be destroyed checked?","timeout_seconds":30},
+    {"id":"Q2.install","precondition":"Does the preparation status say Ready to install?","action":{"kind":"click","target":"Erase Disk and Install button at the bottom right"},"expected":"Does the title say Installing?","timeout_seconds":900},
+    {"id":"Q2.install-complete","precondition":"Does the title say Installing?","action":{"kind":"observe"},"expected":"Does the installer explicitly report Installation complete?","timeout_seconds":900}
+  ]
+}

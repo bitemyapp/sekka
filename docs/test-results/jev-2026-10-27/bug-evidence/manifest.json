@@ -1,0 +1,29 @@
+{
+  "scope": "Existing experiment records; no new API calls or VM runs. Request artifacts are metadata and contain no API key or base64 image payload. Screenshots are linked in BUGS.md.",
+  "files": [
+    {
+      "file": "github-request.json",
+      "source": ".work/jev-evidence/live-calibration-rust/api-0001-request.json",
+      "sha256": "c94b630e9cbd6d6a0f63ff21331338b65077fa22b82c7c07c802794aefae93e9",
+      "transform": "none; byte-for-byte copy of retained request metadata or HTTP response"
+    },
+    {
+      "file": "github-response.json",
+      "source": ".work/jev-evidence/live-calibration-rust/api-0001-response.json",
+      "sha256": "c9c76c7ce1f57a1b93320cefcf9505d7b52ea8203d6136e175494966f2677217",
+      "transform": "none; byte-for-byte copy of retained request metadata or HTTP response"
+    },
+    {
+      "file": "gnome-rejection-request.json",
+      "source": ".work/jev-evidence/uefi/scenario-1793155586271-706793/api-0005-request.json",
+      "sha256": "2a55cbf1e9115299ac3cc2fc04b67e6e31d9560ec6e6bf46c352081b45487b4d",
+      "transform": "none; byte-for-byte copy of retained request metadata or HTTP response"
+    },
+    {
+      "file": "gnome-rejection-response.json",
+      "source": ".work/jev-evidence/uefi/scenario-1793155586271-706793/api-0005-response.json",
+      "sha256": "192c683c7ba38c15e21acfba9eec96db1fceda33731d01f44ba9451f9687ab82",
+      "transform": "none; byte-for-byte copy of retained request metadata or HTTP response"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "plasma-logout-dialog",
+  "description": "Normal Plasma logout shortcut after the browser test.",
+  "max_calls": 40,
+  "max_input_tokens": 300000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.plasma-logout-dialog",
+      "precondition": "Does the browser page show JEV_BROWSER_OK?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "ctrl",
+          "alt",
+          "delete"
+        ]
+      },
+      "expected": "Is a session exit screen visible offering Log Out?",
+      "timeout_seconds": 30
+    }
+  ]
+}

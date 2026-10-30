@@ -1,0 +1,24 @@
+{
+  "id": "hyprland-logout",
+  "description": "Normal upstream Super+M session-exit binding, read from the installed configuration.",
+  "max_calls": 50,
+  "max_input_tokens": 350000,
+  "max_seconds": 120,
+  "min_probability": 0.9,
+  "min_box_confidence": 0.6,
+  "steps": [
+    {
+      "id": "Q3.hyprland-logout",
+      "precondition": "Does the browser page show JEV_BROWSER_OK?",
+      "action": {
+        "kind": "key",
+        "keys": [
+          "meta_l",
+          "m"
+        ]
+      },
+      "expected": "Is a user tile labeled Jev Test visible on the login screen?",
+      "timeout_seconds": 60
+    }
+  ]
+}

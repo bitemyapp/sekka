@@ -1,0 +1,8 @@
+{
+  "welcome": {"type": "noul", "instructions": "Does `screen` show an operating system installer's Welcome page?"},
+  "complete": {"type": "noul", "instructions": "Does `screen` show that installation has completed successfully?"},
+  "present": {"type": "noul", "instructions": "Is a visible and enabled Get Started button present in `screen`?"},
+  "target": {"type": "box", "instructions": "The Get Started button in `screen`."},
+  "absent": {"type": "noul", "instructions": "Is a Retry Installation button visible in `screen`?"},
+  "absent_box": {"type": "box", "instructions": "The Retry Installation button in `screen`."}
+}

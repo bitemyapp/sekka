@@ -1,0 +1,13 @@
+{
+  "source": "QEMU screendump PNG, unmodified public ISO, own disposable UEFI USB VM",
+  "iso_sha256": "98d5174b40b2a552eae8586ad2578eb93b989e9ff1f7116c38cf5f002de0f591",
+  "source_revision": "ed92471d8cd92e80267bb69df1225da28054a91f",
+  "date": "2026-10-27",
+  "transforms": "None; exact original PNG bytes. API resizing, if needed, creates a separate artifact.",
+  "files": {
+    "boot-menu.png": "bc2bb4370b2076ea2ab05ff1586978e706253d027937dd0332929e4508246416",
+    "clipped.png": "22b930010f483e36a988a94b37080121f7225fdbe21a39648e222d38d01a74c7",
+    "maximized.png": "2731c3839e3ac966b9fd888c33cecb716e0757373588534675335ad0778b1aaa",
+    "github.png": "2e03c16bbff990bbd3ee04d970464e7298546dcee5b4d8fb23941939cff3915e"
+  }
+}
