@@ -114,6 +114,87 @@ fn full_screen_controls_cover_the_picture_until_they_hide() {
     assert_eq!(placed(&h).map(|p| p.1), Some(true));
 }
 
+const FULL_SCREEN: WindowState = WindowState { fullscreen: true, maximized: false, suspended: false };
+const WINDOWED: WindowState = WindowState { fullscreen: false, maximized: false, suspended: false };
+
+/// A video playing in full screen, its controls gone after the pointer
+/// rested.
+fn full_screen_with_the_controls_gone() -> (Harness<Utsushi>, WindowKey) {
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.window_state(w, FULL_SCREEN);
+    h.advance(Duration::from_secs(3));
+    assert!(!h.program().controls);
+    (h, w)
+}
+
+/// The controls that came back went again without the pointer moving,
+/// and the picture is over everything again.
+fn controls_went_again(h: &mut Harness<Utsushi>, after: &str) {
+    assert!(h.program().controls, "the controls show {after}");
+    h.advance(Duration::from_secs(3));
+    assert!(!h.program().controls, "the controls stayed {after}");
+    assert_eq!(placed(h).map(|p| p.1), Some(false), "the picture under the drawing {after}");
+}
+
+#[test]
+fn full_screen_controls_go_again_after_a_pause() {
+    let (mut h, _) = full_screen_with_the_controls_gone();
+    // As the menus and the desktop's media controls pause.
+    h.send(Msg::Toggle);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "paused, the controls stay");
+    h.send(Msg::Toggle);
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+    controls_went_again(&mut h, "after playing resumed");
+}
+
+#[test]
+fn full_screen_controls_go_again_after_space_and_space() {
+    // No pointer over the window: the keys go to the picture, which kept
+    // the keyboard into full screen.
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+    controls_went_again(&mut h, "after Space resumed");
+}
+
+#[test]
+fn full_screen_controls_go_again_after_another_desk() {
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    h.window_state(w, WindowState { suspended: true, ..FULL_SCREEN });
+    h.window_state(w, FULL_SCREEN);
+    controls_went_again(&mut h, "after the window came back");
+}
+
+#[test]
+fn the_picture_keeps_the_keyboard_through_full_screen() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+    // By the keyboard alone, with no pointer over the window.
+    h.type_text(w, "f");
+    assert_eq!(h.fullscreen_asked(w), Some(true));
+    h.window_state(w, FULL_SCREEN);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "in full screen");
+    let stage = h.find_id(w, "stage").expect("the picture");
+    assert!((stage.height() - h.size(w).height).abs() < 0.5, "the picture fills the screen: {stage:?}");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.fullscreen_asked(w), Some(false), "Escape leaves full screen");
+    h.window_state(w, WINDOWED);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "back in the window");
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+}
+
 #[test]
 fn keys_play_pause_and_seek() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};

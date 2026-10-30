@@ -448,6 +448,19 @@ impl Utsushi {
         }
     }
 
+    /// Full-screen controls that show with nothing to hide them: a pause
+    /// brings them up, and so does the window coming back from another
+    /// Desk, without the pointer moving. Once playing, they go when the
+    /// pointer has rested, as after it moves; otherwise they would stay
+    /// over the picture, which then can't be scanned out, and keep the
+    /// clock redrawing.
+    fn rest_controls(&mut self, cx: &mut Cx<Msg>) {
+        if self.fullscreen && self.controls && self.playing() && self.has_video() && self.controls_timer.is_none() {
+            self.controls_shown_at = Some(Instant::now());
+            self.controls_timer = Some(cx.after(CONTROLS_STAY, Msg::HideControls));
+        }
+    }
+
     /// Tell the desktop's media controls.
     fn publish(&self) {
         let Some(m) = &self.mpris else { return };
@@ -457,7 +470,7 @@ impl Utsushi {
             title: info.map(|i| i.title.clone()).unwrap_or_default(),
             artist: info.and_then(|i| i.artist.clone()),
             album: info.and_then(|i| i.album.clone()),
-            url: self.current_path().map(|p| format!("file://{}", p.display())),
+            url: self.current_path().map(crate::ui::url_of),
             art: None,
             status: match self.status {
                 Status::Playing => "Playing",
@@ -565,6 +578,9 @@ impl Utsushi {
                 if s == PlayState::Paused {
                     self.controls = true;
                 }
+                // Playing again by a key, the menus or the desktop's media
+                // controls: the pointer hasn't moved, so nothing else would.
+                self.rest_controls(cx);
                 self.schedule(cx);
                 self.publish();
             }
@@ -1087,7 +1103,8 @@ impl Program for Utsushi {
         if window != self.window {
             return;
         }
-        let entering = state.fullscreen && !self.fullscreen;
+        let was = self.fullscreen;
+        let entering = state.fullscreen && !was;
         self.fullscreen = state.fullscreen;
         self.maximized = state.maximized;
         if state.suspended != self.hidden {
@@ -1099,6 +1116,12 @@ impl Program for Utsushi {
         self.controls = true;
         if entering {
             self.show_controls(cx);
+        }
+        self.rest_controls(cx);
+        if was != state.fullscreen {
+            // The controls move between the bar and over the picture: keys
+            // go to the picture, whatever had them in the bar.
+            cx.focus("stage");
         }
         self.pos = self.player().map_or(self.pos, Player::position);
         self.schedule(cx);
