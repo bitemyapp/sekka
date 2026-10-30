@@ -548,11 +548,11 @@ impl Resampler {
         unsafe {
             if self.swr.is_null() || from != self.from || channels != self.channels {
                 ff::swr_free(&mut self.swr);
-                let mut out_layout: ff::AVChannelLayout = std::mem::zeroed();
-                ff::av_channel_layout_default(&mut out_layout, channels);
+                // The layout PipeWire is told the channels are in.
+                let out_layout = av::ChannelLayout::mixed(channels);
                 let r = ff::swr_alloc_set_opts2(
                     &mut self.swr,
-                    &out_layout,
+                    &out_layout.0,
                     ff::AVSampleFormat::AV_SAMPLE_FMT_FLT,
                     f.sample_rate,
                     &f.ch_layout,
@@ -561,7 +561,6 @@ impl Resampler {
                     0,
                     std::ptr::null_mut(),
                 );
-                ff::av_channel_layout_uninit(&mut out_layout);
                 if r < 0 || ff::swr_init(self.swr) < 0 {
                     ff::swr_free(&mut self.swr);
                     return false;

@@ -80,6 +80,36 @@ pub fn quiet() {
     unsafe { ff::av_log_set_level(if log::log_enabled!(log::Level::Debug) { 32 } else { 16 }) };
 }
 
+/// A channel layout, freed when dropped.
+pub struct ChannelLayout(pub ff::AVChannelLayout);
+
+impl ChannelLayout {
+    /// The layout `n` channels are mixed to and played in: FFmpeg's usual
+    /// one for that many (2.1 for three, 4.0 for four, 5.1(back) for six).
+    /// The resampler makes it, and the sound server is told it, from here.
+    pub fn mixed(n: i32) -> ChannelLayout {
+        // SAFETY: a zeroed layout, which FFmpeg fills.
+        unsafe {
+            let mut l: ff::AVChannelLayout = std::mem::zeroed();
+            ff::av_channel_layout_default(&mut l, n);
+            ChannelLayout(l)
+        }
+    }
+
+    /// Where channel `i` goes (`AV_CHAN_NONE` past the last).
+    pub fn channel(&self, i: u32) -> ff::AVChannel {
+        // SAFETY: a layout FFmpeg made.
+        unsafe { ff::av_channel_layout_channel_from_index(&self.0, i) }
+    }
+}
+
+impl Drop for ChannelLayout {
+    fn drop(&mut self) {
+        // SAFETY: a layout FFmpeg made, freed once.
+        unsafe { ff::av_channel_layout_uninit(&mut self.0) };
+    }
+}
+
 /// An open input: a file, or a URL FFmpeg reads.
 pub struct Input {
     pub ctx: *mut AVFormatContext,

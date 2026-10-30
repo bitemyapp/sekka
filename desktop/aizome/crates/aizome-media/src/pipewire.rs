@@ -20,6 +20,7 @@ use pipewire as pw;
 use pw::spa;
 
 use crate::audio::{Output, Ring, amplitude, fill};
+use crate::av::ChannelLayout;
 use crate::clock::Clock;
 
 /// What the stream is for: how long its cycles may be, and its role.
@@ -213,49 +214,43 @@ fn close(cur: &std::rc::Rc<std::cell::RefCell<Option<Playing>>>) {
     }
 }
 
-/// Channel positions for `n` channels, as PipeWire names them, from the
-/// layout the player's resampler makes them in (`av_channel_layout_default`,
-/// FFmpeg's usual layout for `n`: 2.1 for three, 4.0 for four, 5.1(back)
-/// for six), so each channel is placed where FFmpeg put it.
+/// Channel positions for `n` channels, as PipeWire names them: the layout
+/// the player's resampler mixes them to ([`ChannelLayout::mixed`], FFmpeg's
+/// usual one for `n`: 2.1 for three, 4.0 for four, 5.1(back) for six),
+/// channel by channel, so each is placed where FFmpeg put it.
 fn positions(n: u32) -> [u32; spa::sys::SPA_AUDIO_MAX_CHANNELS as usize] {
-    use crate::av::ff::{self, AVChannel::*};
+    use crate::av::ff::AVChannel::*;
     use spa::sys::*;
     let mut p = [SPA_AUDIO_CHANNEL_UNKNOWN; SPA_AUDIO_MAX_CHANNELS as usize];
     let n = n.clamp(1, SPA_AUDIO_MAX_CHANNELS);
-    // SAFETY: a zeroed layout that FFmpeg fills, which is read and then
-    // freed here.
-    unsafe {
-        let mut layout: ff::AVChannelLayout = std::mem::zeroed();
-        ff::av_channel_layout_default(&mut layout, n as i32);
-        for (i, slot) in p.iter_mut().enumerate().take(n as usize) {
-            *slot = match ff::av_channel_layout_channel_from_index(&layout, i as u32) {
-                // FFmpeg's mono is a centre channel; PipeWire's is MONO.
-                AV_CHAN_FRONT_CENTER if n == 1 => SPA_AUDIO_CHANNEL_MONO,
-                AV_CHAN_FRONT_LEFT => SPA_AUDIO_CHANNEL_FL,
-                AV_CHAN_FRONT_RIGHT => SPA_AUDIO_CHANNEL_FR,
-                AV_CHAN_FRONT_CENTER => SPA_AUDIO_CHANNEL_FC,
-                AV_CHAN_LOW_FREQUENCY => SPA_AUDIO_CHANNEL_LFE,
-                AV_CHAN_BACK_LEFT => SPA_AUDIO_CHANNEL_RL,
-                AV_CHAN_BACK_RIGHT => SPA_AUDIO_CHANNEL_RR,
-                AV_CHAN_FRONT_LEFT_OF_CENTER => SPA_AUDIO_CHANNEL_FLC,
-                AV_CHAN_FRONT_RIGHT_OF_CENTER => SPA_AUDIO_CHANNEL_FRC,
-                AV_CHAN_BACK_CENTER => SPA_AUDIO_CHANNEL_RC,
-                AV_CHAN_SIDE_LEFT => SPA_AUDIO_CHANNEL_SL,
-                AV_CHAN_SIDE_RIGHT => SPA_AUDIO_CHANNEL_SR,
-                AV_CHAN_TOP_CENTER => SPA_AUDIO_CHANNEL_TC,
-                AV_CHAN_TOP_FRONT_LEFT => SPA_AUDIO_CHANNEL_TFL,
-                AV_CHAN_TOP_FRONT_CENTER => SPA_AUDIO_CHANNEL_TFC,
-                AV_CHAN_TOP_FRONT_RIGHT => SPA_AUDIO_CHANNEL_TFR,
-                AV_CHAN_TOP_BACK_LEFT => SPA_AUDIO_CHANNEL_TRL,
-                AV_CHAN_TOP_BACK_CENTER => SPA_AUDIO_CHANNEL_TRC,
-                AV_CHAN_TOP_BACK_RIGHT => SPA_AUDIO_CHANNEL_TRR,
-                AV_CHAN_WIDE_LEFT => SPA_AUDIO_CHANNEL_FLW,
-                AV_CHAN_WIDE_RIGHT => SPA_AUDIO_CHANNEL_FRW,
-                AV_CHAN_LOW_FREQUENCY_2 => SPA_AUDIO_CHANNEL_LFE2,
-                _ => SPA_AUDIO_CHANNEL_UNKNOWN,
-            };
-        }
-        ff::av_channel_layout_uninit(&mut layout);
+    let layout = ChannelLayout::mixed(n as i32);
+    for (i, slot) in p.iter_mut().enumerate().take(n as usize) {
+        *slot = match layout.channel(i as u32) {
+            // FFmpeg's mono is a centre channel; PipeWire's is MONO.
+            AV_CHAN_FRONT_CENTER if n == 1 => SPA_AUDIO_CHANNEL_MONO,
+            AV_CHAN_FRONT_LEFT => SPA_AUDIO_CHANNEL_FL,
+            AV_CHAN_FRONT_RIGHT => SPA_AUDIO_CHANNEL_FR,
+            AV_CHAN_FRONT_CENTER => SPA_AUDIO_CHANNEL_FC,
+            AV_CHAN_LOW_FREQUENCY => SPA_AUDIO_CHANNEL_LFE,
+            AV_CHAN_BACK_LEFT => SPA_AUDIO_CHANNEL_RL,
+            AV_CHAN_BACK_RIGHT => SPA_AUDIO_CHANNEL_RR,
+            AV_CHAN_FRONT_LEFT_OF_CENTER => SPA_AUDIO_CHANNEL_FLC,
+            AV_CHAN_FRONT_RIGHT_OF_CENTER => SPA_AUDIO_CHANNEL_FRC,
+            AV_CHAN_BACK_CENTER => SPA_AUDIO_CHANNEL_RC,
+            AV_CHAN_SIDE_LEFT => SPA_AUDIO_CHANNEL_SL,
+            AV_CHAN_SIDE_RIGHT => SPA_AUDIO_CHANNEL_SR,
+            AV_CHAN_TOP_CENTER => SPA_AUDIO_CHANNEL_TC,
+            AV_CHAN_TOP_FRONT_LEFT => SPA_AUDIO_CHANNEL_TFL,
+            AV_CHAN_TOP_FRONT_CENTER => SPA_AUDIO_CHANNEL_TFC,
+            AV_CHAN_TOP_FRONT_RIGHT => SPA_AUDIO_CHANNEL_TFR,
+            AV_CHAN_TOP_BACK_LEFT => SPA_AUDIO_CHANNEL_TRL,
+            AV_CHAN_TOP_BACK_CENTER => SPA_AUDIO_CHANNEL_TRC,
+            AV_CHAN_TOP_BACK_RIGHT => SPA_AUDIO_CHANNEL_TRR,
+            AV_CHAN_WIDE_LEFT => SPA_AUDIO_CHANNEL_FLW,
+            AV_CHAN_WIDE_RIGHT => SPA_AUDIO_CHANNEL_FRW,
+            AV_CHAN_LOW_FREQUENCY_2 => SPA_AUDIO_CHANNEL_LFE2,
+            _ => SPA_AUDIO_CHANNEL_UNKNOWN,
+        };
     }
     p
 }
