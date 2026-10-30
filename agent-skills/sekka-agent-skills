@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# Sekka's agent skills in the user's home: copies in ~/.agents/skills, which
+# Codex, ChatGPT, OpenCode, oh-my-pi and most other agents read, and links to
+# them in ~/.claude/skills for Claude. A copy follows Sekka's updates while it
+# is as Sekka last left it. A skill the user changed or removed stays as they
+# left it, until `restore` brings Sekka's version back.
+set -euo pipefail
+
+shipped=${SEKKA_AGENT_SKILLS:-@skills@}
+agents=$HOME/.agents/skills
+claude=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills
+state=${XDG_STATE_HOME:-$HOME/.local/state}/sekka/agent-skills
+# One file per skill Sekka installed, holding the hash of the version it
+# installed; one per link it made in ~/.claude/skills.
+installed=$state/installed
+linked=$state/linked
+
+usage() {
+  cat <<EOF
+Usage: sekka-agent-skills status
+       sekka-agent-skills diff [SKILL...]
+       sekka-agent-skills restore [SKILL...]
+       sekka-agent-skills sync
+
+Sekka's skills for coding agents live in $agents, with links in
+$claude. They follow Sekka's updates until you change or remove them.
+
+  status    each skill, and whether it is Sekka's current version
+  diff      what differs from Sekka's version
+  restore   bring back Sekka's version (all skills by default); a changed
+            copy is moved to $state/backups first
+  sync      install new skills and update unchanged ones (run at login and
+            after each system update)
+EOF
+}
+
+# A hash of a skill's files: their paths, contents, symlink targets and
+# whether they are executable, but not their other permissions, so a copy
+# made writable still matches the read-only original.
+tree_hash() {
+  (
+    cd "$1"
+    find . \( -type f -o -type l \) -print0 | LC_ALL=C sort -z |
+      while IFS= read -r -d '' file; do
+        if [ -L "$file" ]; then
+          printf 'link %s %s\n' "$file" "$(readlink "$file")"
+        elif [ -x "$file" ]; then
+          printf 'exec %s %s\n' "$file" "$(sha256sum <"$file" | cut -d' ' -f1)"
+        else
+          printf 'file %s %s\n' "$file" "$(sha256sum <"$file" | cut -d' ' -f1)"
+        fi
+      done
+  ) | sha256sum | cut -d' ' -f1
+}
+
+shipped_skills() {
+  local skill
+  for skill in "$shipped"/*/; do
+    skill=${skill%/}
+    [ -f "$skill/SKILL.md" ] && printf '%s\n' "${skill##*/}"
+  done
+}
+
+exists() {
+  [ -e "$1" ] || [ -L "$1" ]
+}
+
+# Copy Sekka's version into place, writable, replacing whatever is there.
+install_skill() {
+  local name=$1 staging=$state/staging/$1
+  rm -rf "$staging"
+  mkdir -p "$state/staging" "$agents"
+  cp -R "$shipped/$name" "$staging"
+  chmod -R u+w "$staging"
+  rm -rf "${agents:?}/$name"
+  mv "$staging" "$agents/$name"
+  tree_hash "$agents/$name" >"$installed/$name"
+}
+
+# Whether ~/.claude/skills/NAME is the link to Sekka's copy.
+our_link() {
+  [ -L "$claude/$1" ] && [ "$(readlink "$claude/$1")" = "$agents/$1" ]
+}
+
+link_skill() {
+  mkdir -p "$claude"
+  ln -sfn "$agents/$1" "$claude/$1"
+  : >"$linked/$1"
+}
+
+sync() {
+  local name new current
+  while IFS= read -r name; do
+    new=$(tree_hash "$shipped/$name")
+    if ! exists "$agents/$name"; then
+      # Removed by the user, or never installed.
+      [ -e "$installed/$name" ] || install_skill "$name"
+    elif [ ! -L "$agents/$name" ] && [ -d "$agents/$name" ]; then
+      current=$(tree_hash "$agents/$name")
+      if [ "$current" = "$new" ]; then
+        printf '%s\n' "$new" >"$installed/$name"
+      elif [ -e "$installed/$name" ] && [ "$current" = "$(<"$installed/$name")" ]; then
+        install_skill "$name"
+      fi
+    fi
+    if our_link "$name"; then
+      if ! exists "$agents/$name"; then
+        rm -f "$claude/$name"
+      fi
+    elif ! exists "$claude/$name" && [ ! -e "$linked/$name" ] && [ -e "$installed/$name" ] &&
+      [ -d "$agents/$name" ] && [ ! -L "$agents/$name" ]; then
+      link_skill "$name"
+    fi
+  done < <(shipped_skills)
+  # Skills Sekka no longer has go too, unless the user changed them.
+  for record in "$installed"/*; do
+    [ -e "$record" ] || continue
+    name=${record##*/}
+    [ -f "$shipped/$name/SKILL.md" ] && continue
+    if exists "$agents/$name" && [ -d "$agents/$name" ] && [ ! -L "$agents/$name" ] &&
+      [ "$(tree_hash "$agents/$name")" = "$(<"$record")" ]; then
+      rm -rf "${agents:?}/$name"
+      our_link "$name" && rm -f "$claude/$name"
+      rm -f "$record" "$linked/$name"
+    elif ! exists "$agents/$name"; then
+      our_link "$name" && rm -f "$claude/$name"
+      rm -f "$record" "$linked/$name"
+    fi
+  done
+}
+
+describe() {
+  local name=$1 new where
+  new=$(tree_hash "$shipped/$name")
+  if [ -L "$agents/$name" ]; then
+    where="replaced by a link to $(readlink "$agents/$name")"
+  elif [ -d "$agents/$name" ]; then
+    if [ "$(tree_hash "$agents/$name")" = "$new" ]; then
+      where="Sekka's current version"
+    elif [ -e "$installed/$name" ]; then
+      where="changed (sekka-agent-skills diff $name)"
+    else
+      where="someone else's skill of the same name"
+    fi
+  elif [ -e "$installed/$name" ]; then
+    where="removed"
+  else
+    where="not installed yet"
+  fi
+  if our_link "$name"; then
+    where+=", linked for Claude"
+  elif exists "$claude/$name"; then
+    where+=", but $claude/$name is not Sekka's link"
+  elif [ -d "$agents/$name" ]; then
+    where+=", not linked for Claude"
+  fi
+  printf '%-10s %s\n' "$name" "$where"
+}
+
+status() {
+  local name
+  echo "Sekka's skills: $shipped"
+  echo "Installed in:   $agents (linked from $claude)"
+  while IFS= read -r name; do
+    describe "$name"
+  done < <(shipped_skills)
+  for record in "$installed"/*; do
+    [ -e "$record" ] || continue
+    name=${record##*/}
+    [ -f "$shipped/$name/SKILL.md" ] ||
+      printf '%-10s %s\n' "$name" "no longer part of Sekka; kept because it was changed"
+  done
+}
+
+chosen() {
+  local name
+  if [ $# -eq 0 ]; then
+    shipped_skills
+    return
+  fi
+  for name in "$@"; do
+    if [ ! -f "$shipped/$name/SKILL.md" ]; then
+      echo "sekka-agent-skills: Sekka has no skill named $name" >&2
+      return 1
+    fi
+    printf '%s\n' "$name"
+  done
+}
+
+diff_skills() {
+  local names name
+  names=$(chosen "$@")
+  while IFS= read -r name; do
+    if [ -d "$agents/$name" ]; then
+      diff -ru --label "sekka/$name" --label "$agents/$name" "$shipped/$name" "$agents/$name" || true
+    else
+      echo "$name: not in $agents"
+    fi
+  done <<<"$names"
+}
+
+restore() {
+  local names name backup
+  names=$(chosen "$@")
+  backup=$state/backups/$(date -u +%Y%m%dT%H%M%SZ)
+  while IFS= read -r name; do
+    if exists "$agents/$name" &&
+      { [ -L "$agents/$name" ] || [ "$(tree_hash "$agents/$name")" != "$(tree_hash "$shipped/$name")" ]; }; then
+      mkdir -p "$backup"
+      mv "$agents/$name" "$backup/$name"
+      echo "Kept your $name in $backup/$name"
+    fi
+    install_skill "$name"
+    if ! our_link "$name"; then
+      if exists "$claude/$name"; then
+        mkdir -p "$backup/claude"
+        mv "$claude/$name" "$backup/claude/$name"
+        echo "Kept your $claude/$name in $backup/claude/$name"
+      fi
+      link_skill "$name"
+    fi
+    echo "Restored $name"
+  done <<<"$names"
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+case $command in
+  status | diff | restore | sync)
+    if [ ! -d "$shipped" ]; then
+      echo "sekka-agent-skills: Sekka's skills aren't at $shipped" >&2
+      exit 1
+    fi
+    mkdir -p "$installed" "$linked"
+    exec 9>"$state/lock"
+    flock 9
+    ;;
+esac
+case $command in
+  status) status ;;
+  diff) diff_skills "$@" ;;
+  restore) restore "$@" ;;
+  sync) sync ;;
+  -h | --help | help) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

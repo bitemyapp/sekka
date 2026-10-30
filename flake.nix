@@ -197,6 +197,8 @@
         vm-fixture = fixture;
         # The catalog installs these same packages (nix/components.nix).
         inherit (inputs.catalog.packages.${system}) kakehashi uta;
+        # Skills for coding agents, kept in each home (agent-skills/module.nix).
+        agent-skills = pkgs.callPackage ./agent-skills/package.nix { };
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
@@ -604,6 +606,32 @@
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;
+        };
+        agent-skills =
+          pkgs.runCommand "agent-skills-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.shellcheck
+                pkgs.nix
+              ];
+            }
+            ''
+              cp -R ${./agent-skills} agent-skills
+              chmod -R u+w agent-skills
+              patchShebangs agent-skills/skills
+              mkdir tests
+              cp ${./tests/test_agent_skills.py} tests/test_agent_skills.py
+              shellcheck agent-skills/sekka-agent-skills agent-skills/skills/*/scripts/*
+              export HOME=$TMPDIR
+              SEKKA_AGENT_SKILLS_COMMAND=${pkgs.lib.getExe self.packages.${system}.agent-skills} \
+                REAL_NIX=$(command -v nix) python3 -m unittest discover -s tests -p test_agent_skills.py -v
+              touch $out
+            '';
+        agent-skills-vm = import ./nix/agent-skills-vm-test.nix {
+          inherit pkgs;
+          inherit (inputs) aizome;
+          agentSkills = self.packages.${system}.agent-skills;
         };
         usb-wake = pkgs.runCommand "usb-wake-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
           mkdir -p installer/genkan/rust/system tests
