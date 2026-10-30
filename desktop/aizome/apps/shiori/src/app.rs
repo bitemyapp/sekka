@@ -276,6 +276,9 @@ pub struct Doc {
     /// A place to go once it's open (a remembered one).
     pub pending: Option<Place>,
     pub tiles: Tiles,
+    /// What stands in for the tiles in view not drawn at this size yet
+    /// (`standin`): the part of each that's made, and its pixels.
+    pub standins: HashMap<TileKey, (TileKey, Image)>,
     /// What was last asked to be drawn and hasn't been.
     pub sent: Vec<TileKey>,
     /// Drawings that couldn't be made: each page's, by the size it was
@@ -498,6 +501,70 @@ impl Doc {
     fn preview_width(&self) -> u32 {
         (PREVIEW * self.scale).round() as u32
     }
+
+    /// Make stand-ins for the parts in view of tiles not drawn at this size
+    /// (`standin`), from their pages' other drawings, or larger ones where
+    /// more of a tile has come into view; let go of those drawn now or out
+    /// of view.
+    fn stand_in(&mut self) {
+        let s = self.scale;
+        let view =
+            Rect::new(self.scroll.0, self.scroll.1, self.scroll.0 + self.view.width, self.scroll.1 + self.view.height);
+        // What's in view of each tile, in its page's pixels, rounded out
+        // to `GRAIN`, so a little scrolling needs no more.
+        let mut parts: HashMap<TileKey, TileKey> = HashMap::new();
+        for i in self.layout.visible(view.y0, view.y1) {
+            let r = self.layout.page_rect(i);
+            let v = r.intersect(view);
+            let lo = |p: f64, at: u32| ((p.max(0.0) as u32) / GRAIN * GRAIN).max(at);
+            let hi = |p: f64, end: u32| ((p.ceil().max(0.0) as u32).div_ceil(GRAIN) * GRAIN).min(end);
+            for k in self.layout.tiles(i, s, view, view.center()) {
+                if self.tiles.has(&k) {
+                    continue;
+                }
+                let (x0, x1) = (lo((v.x0 - r.x0) * s, k.at.0), hi((v.x1 - r.x0) * s, k.at.0 + k.w));
+                let (y0, y1) = (lo((v.y0 - r.y0) * s, k.at.1), hi((v.y1 - r.y0) * s, k.at.1 + k.h));
+                if x0 < x1 && y0 < y1 {
+                    parts.insert(k, TileKey { at: (x0, y0), w: x1 - x0, h: y1 - y0, ..k });
+                }
+            }
+        }
+        self.standins.retain(|k, _| parts.contains_key(k));
+        let mut wanted = Vec::new();
+        let mut tile_of = HashMap::new();
+        for (k, part) in parts {
+            let part = match self.standins.get(&k) {
+                Some((had, _)) if within(&part, had) => continue,
+                Some((had, _)) => bounds(&part, had),
+                None => part,
+            };
+            tile_of.insert(part, k);
+            wanted.push((part, self.tiles.of_page(k.page).map(|(s, img)| (*s, img.clone())).collect()));
+        }
+        if wanted.is_empty() {
+            return;
+        }
+        for (part, img) in crate::standin::make(wanted) {
+            if let Some(k) = tile_of.get(&part) {
+                self.standins.insert(*k, (part, img));
+            }
+        }
+    }
+}
+
+/// How finely the part of a tile a stand-in is made of goes, in pixels.
+const GRAIN: u32 = 64;
+
+/// Whether part `a` of a page is within part `b` (of the same size).
+fn within(a: &TileKey, b: &TileKey) -> bool {
+    a.at.0 >= b.at.0 && a.at.1 >= b.at.1 && a.at.0 + a.w <= b.at.0 + b.w && a.at.1 + a.h <= b.at.1 + b.h
+}
+
+/// The part of a page that has parts `a` and `b`.
+fn bounds(a: &TileKey, b: &TileKey) -> TileKey {
+    let (x0, y0) = (a.at.0.min(b.at.0), a.at.1.min(b.at.1));
+    let (x1, y1) = ((a.at.0 + a.w).max(b.at.0 + b.w), (a.at.1 + a.h).max(b.at.1 + b.h));
+    TileKey { at: (x0, y0), w: x1 - x0, h: y1 - y0, ..*a }
 }
 
 /// What the pages saw when they drew: the view and its scale.
@@ -801,6 +868,7 @@ impl Shiori {
                 scale: self.scale,
                 pending,
                 tiles: Tiles::default(),
+                standins: HashMap::new(),
                 sent: Vec::new(),
                 broken: HashMap::new(),
                 texts: HashMap::new(),
@@ -880,7 +948,11 @@ impl Shiori {
     /// drawings would come in another order.
     pub fn request(&mut self, w: WindowKey) {
         let Some(d) = self.doc_mut(w) else { return };
-        if d.info().is_none() || d.engine.is_none() || d.layout.is_empty() {
+        if d.info().is_none() || d.layout.is_empty() {
+            return;
+        }
+        d.stand_in();
+        if d.engine.is_none() {
             return;
         }
         let s = d.scale;
@@ -1138,6 +1210,7 @@ impl Shiori {
         if reloading {
             d.reloading = false;
             d.tiles.clear();
+            d.standins.clear();
             d.broken.clear();
             d.texts.clear();
             d.links.clear();

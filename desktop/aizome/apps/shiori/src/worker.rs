@@ -34,6 +34,9 @@ use crate::protocol::{
 /// computer's.
 const ADDRESS_SPACE: u64 = 8 << 30;
 
+/// How much the pipe the drawings go back through holds.
+const PIPE: libc::c_int = 1 << 20;
+
 /// How many pages' text is kept between requests: those that show, and
 /// those either side, typically, which text, links and find ask about.
 const KEPT_TEXTS: usize = 16;
@@ -104,6 +107,7 @@ enum Next {
 
 /// Limit what the worker can do to the rest of the computer: it goes when
 /// the app does, can't gain privileges, and can't take all the memory.
+/// And widen the pipe its drawings go back through.
 fn confine() {
     // SAFETY: plain system calls with constant arguments.
     unsafe {
@@ -111,6 +115,9 @@ fn confine() {
         libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1 as libc::c_ulong, 0, 0, 0);
         let limit = libc::rlimit { rlim_cur: ADDRESS_SPACE, rlim_max: ADDRESS_SPACE };
         libc::setrlimit(libc::RLIMIT_AS, &limit);
+        // A tile is megabytes: a larger pipe takes it in fewer turns (and the
+        // default stays if the system won't).
+        libc::fcntl(1, libc::F_SETPIPE_SZ, PIPE);
         // Its parent may already be gone.
         if libc::getppid() == 1 {
             libc::_exit(0);
@@ -175,7 +182,7 @@ pub fn run() -> i32 {
                 let _ = write_frame(&mut out, &Reply::Working(job.clone()), None);
                 match job {
                     Job::Draw(key) => match d.guarded(|d| d.draw(&key)).flatten() {
-                        Some(px) => write_frame(&mut out, &Reply::Drawn(key), Some(&px)),
+                        Some(px) => write_frame(&mut out, &Reply::Drawn(key), Some(px.data_as_u8_slice())),
                         None => write_frame(&mut out, &Reply::DrawFailed(key), None),
                     },
                     Job::Text(page) => {
@@ -264,7 +271,7 @@ impl Doc {
         }
     }
 
-    fn draw(&mut self, key: &TileKey) -> Option<Vec<u8>> {
+    fn draw(&mut self, key: &TileKey) -> Option<Pixmap> {
         let page = self.pdf.pages().get(key.page as usize)?;
         let (w, h) = page.render_dimensions();
         let (tw, th) = (u16::try_from(key.w).ok()?, u16::try_from(key.h).ok()?);
@@ -283,8 +290,7 @@ impl Doc {
         // premultiplied bytes are the straight RGBA the protocol sends.
         let settings = RasterizerSettings { target_init: TargetInit::Clear(WHITE), ..Default::default() };
         ctx.render_with(&mut pixmap, &mut Resources::default(), settings);
-        let px = pixmap.data_as_u8_slice().to_vec();
-        (px.len() == key.bytes()).then_some(px)
+        (pixmap.data_as_u8_slice().len() == key.bytes()).then_some(pixmap)
     }
 
     /// Page `n`'s text, kept for what comes next.

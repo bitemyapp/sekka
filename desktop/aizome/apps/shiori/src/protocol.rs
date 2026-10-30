@@ -8,6 +8,7 @@
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -214,9 +215,11 @@ pub fn read_frame<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T
 }
 
 /// The pixels after a `Drawn` frame.
-pub fn read_pixels(r: &mut impl Read, key: &TileKey) -> io::Result<Vec<u8>> {
-    let mut px = vec![0u8; key.bytes()];
-    r.read_exact(&mut px)?;
+pub fn read_pixels(r: &mut impl Read, key: &TileKey) -> io::Result<Arc<[u8]>> {
+    // Read where they'll stay, for an image to take without a copy.
+    let mut px: Arc<[u8]> = std::iter::repeat_n(0, key.bytes()).collect();
+    let into = Arc::get_mut(&mut px).ok_or_else(|| io::Error::other("pixels shared"))?;
+    r.read_exact(into)?;
     Ok(px)
 }
 
@@ -233,7 +236,7 @@ mod tests {
         let mut r = &buf[..];
         let Some(Reply::Drawn(k)) = read_frame(&mut r).unwrap() else { panic!() };
         assert_eq!(k, key);
-        assert_eq!(read_pixels(&mut r, &k).unwrap(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(&read_pixels(&mut r, &k).unwrap()[..], [1, 2, 3, 4, 5, 6, 7, 8]);
         assert!(matches!(read_frame(&mut r).unwrap(), Some(Reply::Working(Job::Text(2)))));
         assert!(read_frame::<Reply>(&mut r).unwrap().is_none());
     }

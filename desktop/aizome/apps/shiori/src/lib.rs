@@ -5,7 +5,8 @@
 //! reads their text and the document's structure, in a process of its own
 //! for each document (`worker`), so a file that panics it or keeps it busy
 //! costs a page, not the window; tiles are drawn for exactly the zoom and
-//! the screen's scale, and copied one to one.
+//! the screen's scale, and copied one to one, and while they come, what
+//! stands in is made from other zooms' drawings (`standin`).
 
 pub mod app;
 pub mod document;
@@ -17,6 +18,7 @@ pub mod pages;
 pub mod pdftext;
 pub mod places;
 pub mod protocol;
+pub mod standin;
 pub mod text;
 pub mod ui;
 pub mod worker;

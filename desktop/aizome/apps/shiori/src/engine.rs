@@ -199,7 +199,9 @@ fn read_replies(mut out: BufReader<std::process::ChildStdout>, shared: &Shared, 
                 }
                 let Ok(px) = read_pixels(&mut out, &key) else { return };
                 done(shared);
-                match Image::from_rgba(key.w, key.h, &px) {
+                // Drawn on white, every pixel opaque: premultiplied as
+                // they are.
+                match Image::from_premultiplied_rgba(key.w, key.h, px) {
                     Some(img) => sink(Event::Drawn(key, img)),
                     None => sink(Event::Reply(Reply::DrawFailed(key))),
                 }

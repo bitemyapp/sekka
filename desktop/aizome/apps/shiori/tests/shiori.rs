@@ -165,6 +165,53 @@ fn moves_and_zooms_keeping_the_place() {
 }
 
 #[test]
+fn a_zoom_shows_at_once_and_sharpens() {
+    use aizome_shiori::pages::{Drawing, pages_of};
+    let mut r = rig("standin", &[("sample.pdf", common::sample())], &["sample.pdf"]);
+    let shown = |r: &Rig| {
+        let p = r.h.program();
+        pages_of(p, &p.docs[0]).shown.iter().flat_map(|pd| pd.tiles.clone()).collect::<Vec<_>>()
+    };
+    assert!(shown(&r).iter().all(|(_, d)| matches!(d, Drawing::Exact(_))));
+    // At once, before the worker's drawn anything at the new zoom, the
+    // last zoom's drawings stand in: no paper where the page was.
+    r.h.send(Msg::ZoomIn);
+    let standing = shown(&r);
+    assert!(!standing.is_empty());
+    assert!(standing.iter().all(|(_, d)| !matches!(d, Drawing::Blank)), "paper stood in");
+    settle(&mut r);
+    let sharp = shown(&r);
+    assert!(sharp.iter().all(|(_, d)| matches!(d, Drawing::Exact(_))));
+    assert!(doc(&r).standins.is_empty(), "stand-ins kept once drawn");
+    // And what stood in has its ink where the drawings have theirs: the
+    // box around the dark pixels of the part made, in the page's pixels.
+    let ink = |img: &Image, at: (u32, u32), part: &TileKey| {
+        let (w, _) = img.pixel_size();
+        let px = img.premultiplied_pixels().unwrap();
+        let mut b: Option<(u32, u32, u32, u32)> = None;
+        for y in part.at.1..part.at.1 + part.h {
+            for x in part.at.0..part.at.0 + part.w {
+                let o = (((y - at.1) * w + (x - at.0)) * 4) as usize;
+                if px[o] < 128 {
+                    b = Some(b.map_or((x, y, x, y), |(x0, y0, x1, y1)| (x0.min(x), y0.min(y), x1.max(x), y1.max(y))));
+                }
+            }
+        }
+        b
+    };
+    let mut compared = 0;
+    for (k, d) in &standing {
+        let Drawing::StandIn { part, image } = d else { continue };
+        let Some((_, Drawing::Exact(exact))) = sharp.iter().find(|(s, _)| s == k) else { continue };
+        let (Some(a), Some(b)) = (ink(image, part.at, part), ink(exact, k.at, part)) else { continue };
+        let near = |p: u32, q: u32| p.abs_diff(q) <= 3;
+        assert!(near(a.0, b.0) && near(a.1, b.1) && near(a.2, b.2) && near(a.3, b.3), "{k:?}: {a:?} {b:?}");
+        compared += 1;
+    }
+    assert!(compared > 0, "no ink to compare");
+}
+
+#[test]
 fn finds_and_steps_through_hits() {
     let mut r = rig("find", &[("sample.pdf", common::sample())], &["sample.pdf"]);
     let w = r.h.window();

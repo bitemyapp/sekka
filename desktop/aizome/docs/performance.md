@@ -128,9 +128,11 @@ noise (`docs/reload.md`). Two kinds of number:
 | | Pinching † | 2.81–2.84 | 3.22–3.65 | within (10) |
 | | A zoom step, ❖+ ❖− (live, 6000 × 4000 JPEG) | 1.2–1.5 | 1.6–2.2 | within (10) |
 | | The next picture † | 2.48–3.25 | 2.70–3.73 | within |
-| Shiori ‡ | Scrolling a wheel's notch | 0.17 | 0.20 | within |
+| Shiori ‡ | Scrolling a wheel's notch | 0.09 | 0.11–0.15 | within |
 | | Moving the pointer over text | 0.00 | 0.00 | within |
-| | Page Down, a window of new tiles | 3.19 | 3.77 | within (11) |
+| | Page Down, a window of new tiles | 1.22–1.38 | 1.68–1.73 | within (11) |
+| | A zoom step, ❖+, to a zoom not drawn yet | 4.25–4.43 | 4.38–4.60 | **at** (12) |
+| | Pinching, a step from pages drawn sharp | 3.46–3.49 | 3.96–4.02 | within (12) |
 | Annai | A frame of a scene | 0.43 | 0.57 | within |
 | | Turning a page | 1.00 | 1.09 | within |
 | Greeter (login screen) | Typing a password | 0.06 | 0.07 | within |
@@ -226,9 +228,22 @@ summary of six or seven frames is in effect its largest frame.
     made, so the engine drawing them (PDFium then, hayro now) isn't in it.
     Scrolling, which moves what was drawn, is 0.17 ms; a canvas that drew
     everything took 9.9 ms a notch. See `docs/shiori.md`.
+    Measured again on 29 October 2026 at load average 1 to 2 (two runs):
+    Page Down p50 1.22–1.38, p95 1.68–1.73 ms; a notch 0.09 ms.
+12. **Shiori's zooms** (29 October 2026, as (11), load average 1 to 2,
+    two runs): a zoom step p50 4.25–4.43, p95 4.38–4.60 ms, *at* the
+    budget; pinching p50 3.46–3.49, p95 3.96–4.02 ms. Every pixel of the
+    window changes: Shiori makes what stands in for the tiles not drawn at
+    the new zoom from those it has (2.2–2.7 ms of it, on up to 16 threads,
+    into buffers it uses again), and the toolkit copies it one to one.
+    When the window scaled the drawings itself as it drew, bicubic and on
+    one thread, the same test took 382 ms at p50 and 508 ms at p95 for a
+    step, and 357 and 474–479 ms for pinching. The worker's new drawings
+    replace the stand-ins as they come: on a 4K window of A4 pages, the
+    tiles in view were sharp 35–53 ms after the key. See `docs/shiori.md`.
 
-‡ Measured on 28 October 2026 under the conditions of (11), not in the
-18 October run.
+‡ Measured on 29 October 2026 under the conditions of (11) and (12), not
+in the 18 October run.
 
 Within the budget now, though written up below as exceptions earlier:
 Hako's preview column (↓ p95 2.44 ms), Tenki's choosing a place (p95

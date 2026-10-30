@@ -95,6 +95,18 @@ fn typical_interactions() {
     // Paging down.
     let mut t = measure(&mut h, 20, &|h, _| h.send(Msg::Nav(w, aizome_shiori::app::Nav::PageDown)));
     report("paging down", &mut t);
+    // Zooming a step (❖+) to a zoom not drawn at yet, up through the
+    // steps from 100%: what shows at once is the last zoom's drawings
+    // standing in.
+    h.send(Msg::ActualSize);
+    let mut t = measure(&mut h, 9, &|h, _| h.send(Msg::ZoomIn));
+    report("a zoom step", &mut t);
+    let step = t.0[((t.0.len() - 1) as f64 * 0.95) as usize];
+    // Pinching out, each step from pages drawn sharp.
+    h.send(Msg::FitWidth);
+    let mut t = measure(&mut h, 20, &|h, _| h.pinch(w, Point::new(700.0, 400.0), 1.03));
+    report("pinching", &mut t);
     // Generous in debug builds; the numbers that count are release's.
     assert!(worst < Duration::from_millis(if cfg!(debug_assertions) { 200 } else { 12 }), "{worst:?}");
+    assert!(step < Duration::from_millis(if cfg!(debug_assertions) { 2000 } else { 16 }), "{step:?}");
 }

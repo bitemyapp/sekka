@@ -37,14 +37,20 @@ pub struct Reporter {
     pub last: Rc<Cell<u64>>,
 }
 
-/// A page that shows: its drawings, those for other sizes (scaled while
-/// the right ones come) first.
+/// What shows of a tile: its drawing, what stands in while that comes
+/// (`standin`: for `part` of it, what was in view), or paper.
+#[derive(Clone)]
+pub enum Drawing {
+    Exact(Image),
+    StandIn { part: TileKey, image: Image },
+    Blank,
+}
+
+/// A page that shows: its tiles in view, each exactly as large as it shows.
 #[derive(Clone)]
 pub struct PageDraw {
     pub page: usize,
-    pub tiles: Vec<(TileKey, Image)>,
-    /// Every exact drawing of what shows has come.
-    pub complete: bool,
+    pub tiles: Vec<(TileKey, Drawing)>,
     pub broken: bool,
 }
 
@@ -102,11 +108,17 @@ impl Pages {
         let mut out = Vec::new();
         for p in self.shown.iter() {
             let r = self.layout.page_rect(p.page);
-            for (k, _) in &p.tiles {
-                out.push((tile_rect(r, k), id(&|h| (0u8, k).hash(h))));
-            }
-            if !p.complete {
-                out.push((r, id(&|h| (4u8, p.page).hash(h))));
+            for (k, shown) in &p.tiles {
+                let what = match shown {
+                    Drawing::Exact(_) => 0u8,
+                    Drawing::StandIn { .. } => 4,
+                    Drawing::Blank => 5,
+                };
+                let part = match shown {
+                    Drawing::StandIn { part, .. } => Some(*part),
+                    _ => None,
+                };
+                out.push((tile_rect(r, k), id(&|h| (what, k, part).hash(h))));
             }
             if p.broken {
                 out.push((r, id(&|h| (1u8, p.page).hash(h))));
@@ -192,28 +204,19 @@ pub fn pages_of(app: &Shiori, d: &Doc) -> Pages {
     let mut hits = Vec::new();
     for i in range {
         let p = i as u32;
-        let r = layout.page_rect(i);
-        let exact = layout.device_size(i, s);
-        let needed = layout.tiles(i, s, view, view.center());
-        let all_there = needed.iter().all(|k| d.tiles.has(k));
-        let mut tiles: Vec<(TileKey, Image)> = Vec::new();
-        if !all_there {
-            // What stands in: the other drawings of the page that show,
-            // smallest (the preview) first, each scaled to fit.
-            let mut others: Vec<(TileKey, Image)> = d
-                .tiles
-                .of_page(p)
-                .filter(|(k, _)| k.size != exact && tile_rect(r, k).intersect(view).area() > 0.0)
-                .map(|(k, i)| (*k, i.clone()))
-                .collect();
-            others.sort_by_key(|(k, _)| (k.size.0, k.at));
-            tiles.extend(others);
-        }
-        let mut exact_tiles: Vec<(TileKey, Image)> =
-            needed.iter().filter_map(|k| d.tiles.get(k).map(|img| (*k, img.clone()))).collect();
-        exact_tiles.sort_by_key(|(k, _)| k.at);
-        tiles.extend(exact_tiles);
-        shown.push(PageDraw { page: i, tiles, complete: all_there, broken: d.broken_at(p, exact) });
+        let tiles = layout
+            .tiles(i, s, view, view.center())
+            .into_iter()
+            .map(|k| {
+                let shown = match (d.tiles.get(&k), d.standins.get(&k)) {
+                    (Some(img), _) => Drawing::Exact(img.clone()),
+                    (None, Some((part, image))) => Drawing::StandIn { part: *part, image: image.clone() },
+                    (None, None) => Drawing::Blank,
+                };
+                (k, shown)
+            })
+            .collect();
+        shown.push(PageDraw { page: i, tiles, broken: d.broken_at(p, layout.device_size(i, s)) });
         if let Some(ls) = d.links.get(&p) {
             links.extend(ls.iter().enumerate().map(|(n, l)| (layout.rect_to_doc(i, &l.rect), p, n)));
         }
@@ -530,9 +533,8 @@ fn pages_event(ev: &Event, size: Size, st: &Pages) -> Option<Msg> {
     }
 }
 
-/// Draw what the damage needs of the pages: each on its shadow, white,
-/// with its exact drawings one to one where they've come and what there
-/// is, scaled, where they haven't; then the found text and the
+/// Draw what the damage needs of the pages: each on its shadow, its tiles
+/// copied one to one, drawn or standing in; then the found text and the
 /// selection; then the scroll bar. Only the gutters are filled with
 /// `sunk`, and only the edges drawn under a page: its drawings are
 /// opaque, so each pixel is written about once.
@@ -585,38 +587,37 @@ pub fn paint_pages(c: &mut Canvas, bounds: Rect, st: &Pages, theme: &Theme) {
         fill(c, Rect::new(v.x1, v.y0, v.x1 + 1.0, v.y1), line);
         fill(c, Rect::new(v.x1 + 1.0, v.y0 + 3.0, v.x1 + 3.0, v.y1 + 3.0), shadow);
         fill(c, Rect::new(v.x0 + 3.0, v.y1 + 1.0, v.x1 + 1.0, v.y1 + 3.0), shadow);
-        let exact = st.layout.device_size(p.page, s);
-        // White under what stands in while the exact drawings come.
-        if !p.complete || p.broken {
-            fill(c, *v, Color::WHITE);
-        }
-        for (k, img) in &p.tiles {
-            let one_to_one = k.size == exact;
-            let dst = if one_to_one {
-                Rect::from_origin_size(
-                    Point::new(v.x0 + f64::from(k.at.0) / s, v.y0 + f64::from(k.at.1) / s),
-                    Size::new(f64::from(k.w) / s, f64::from(k.h) / s),
-                )
-            } else {
-                let f = v.width() / f64::from(k.size.0);
-                Rect::new(
-                    px(v.x0 + f64::from(k.at.0) * f),
-                    px(v.y0 + f64::from(k.at.1) * f),
-                    px(v.x0 + f64::from(k.at.0 + k.w) * f),
-                    px(v.y0 + f64::from(k.at.1 + k.h) * f),
-                )
-            };
+        // Each tile one to one, opaque, in place of what's under it: its
+        // drawing, what stands in for it, or paper.
+        let place = |k: &TileKey| {
+            Rect::from_origin_size(
+                Point::new(v.x0 + f64::from(k.at.0) / s, v.y0 + f64::from(k.at.1) / s),
+                Size::new(f64::from(k.w) / s, f64::from(k.h) / s),
+            )
+        };
+        let copy = |c: &mut Canvas, img: &Image, dst: Rect| {
+            c.save();
+            c.set_blend_mode(BlendMode::Copy);
+            c.draw_image_with(img, None, dst, ImageOptions { smooth: false, ..ImageOptions::default() });
+            c.restore();
+        };
+        for (k, shown) in &p.tiles {
+            let dst = place(k);
             if !c.needs(dst) {
                 continue;
             }
-            if one_to_one {
-                // Opaque: in place of what's under it, unblended.
-                c.save();
-                c.set_blend_mode(BlendMode::Copy);
-                c.draw_image_with(img, None, dst, ImageOptions { smooth: false, ..ImageOptions::default() });
-                c.restore();
-            } else {
-                c.draw_image_with(img, None, dst, ImageOptions { smooth: true, ..ImageOptions::default() });
+            match shown {
+                Drawing::Exact(img) => copy(c, img, dst),
+                Drawing::StandIn { part, image } => {
+                    // Paper where the part made is short of what shows.
+                    let made = place(part);
+                    let shows = dst.intersect(bounds);
+                    if made.intersect(shows) != shows {
+                        fill(c, dst, Color::WHITE);
+                    }
+                    copy(c, image, made);
+                }
+                Drawing::Blank => fill(c, dst, Color::WHITE),
             }
         }
         if p.broken {

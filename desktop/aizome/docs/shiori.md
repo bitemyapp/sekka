@@ -219,10 +219,25 @@ the next step for hostile files.
 ## Drawing
 
 - **Tiles** of 1024 device pixels, for exactly the zoom and the screen's
-  scale, are copied one to one; while the right ones come, the page's
-  preview (112 points wide, also the sidebar's) and drawings at other
-  zooms stand in, scaled. A pinch or a ❖-scroll asks for tiles once the
-  zoom has rested 160 ms.
+  scale, are copied one to one. A pinch or a ❖-scroll asks for tiles once
+  the zoom has rested 160 ms.
+- **Stand-ins** (`standin.rs`): while a tile's drawing comes, Shiori makes
+  what stands in for the part of it in view, exactly its size, from the
+  page's drawings at other sizes (the last zoom's tiles; the preview, 112
+  points wide, also the sidebar's), so the window copies it one to one as
+  well. Each band of rows comes from the nearest size that has all of it,
+  over the others only where it hasn't: bilinear, or from a drawing over
+  twice as large, the mean of four pixels spread over each; a row of the
+  drawing scaled across serves every row of the tile between it and the
+  next. They're made on all but one of the computer's threads (up to 16),
+  into the buffers of earlier ones whose images have gone (up to 64 MiB
+  kept, so a zoom doesn't wait on fresh memory), and let go once the
+  drawing comes. The window used to scale the drawings itself as it drew,
+  bicubic and on one thread, several sizes over each other: a zoom step's
+  first frame took 360–530 ms at 4K.
+- **Drawings come back** through a 1 MiB pipe (64 KiB is Linux's own),
+  sent from the worker's pixmap as they are and read into the buffer the
+  app's image keeps: a tile is copied by the pipe, and only by the pipe.
 - **What's asked for**, most needed first: the tiles of what shows,
   nearest the middle; the previews of the pages that show; the rest of
   those pages and the whole of the page above and the page below; the
@@ -250,20 +265,35 @@ the next step for hostile files.
   the pages' edges drawn under them, so each pixel is written about once.
 
 At 2880 × 1800 (scale 2), release, with the drawings there
-(`cargo test -p aizome-shiori --release --test budget -- --nocapture`), at
-load average 2 to 3:
+(`cargo test -p aizome-shiori --release --test budget -- --nocapture`),
+over two runs on 29 October 2026 at load average 1 to 2:
 
 | Interaction | p50 | p95 | Of the window drawn |
 |---|---|---|---|
-| Scrolling a wheel's notch | 0.17 ms | 0.20 ms | 5% |
+| Scrolling a wheel's notch | 0.09 ms | 0.11–0.15 ms | 5% |
 | Moving the pointer over text | 0.00 ms | 0.00 ms | 0% |
-| Page Down | 3.2 ms | 3.8 ms | 100% |
+| Page Down | 1.2–1.4 ms | 1.7 ms | 100% |
+| A zoom step (❖+) to a zoom not drawn yet | 4.3–4.4 ms | 4.4–4.6 ms | 98% |
+| Pinching, a step from pages drawn sharp | 3.5 ms | 4.0 ms | 98% |
 
 Page Down shows a window of drawings never drawn before; Shiori's own part
-of it is 0.04 ms, the rest is the toolkit copying 21 MB of new tiles (at
-load average 10 with PDFium drawing, it was 5.7 ms). A canvas redrawing
-everything took 9.9 ms for a notch of scrolling. These measure the window,
-not the engine: the drawings are there before they start.
+of it is 0.04 ms, the rest is the toolkit copying 21 MB of new tiles (on
+28 October at load average 2 to 3 it was 3.2 ms, and at load average 10
+with PDFium drawing, 5.7 ms). A canvas redrawing everything took 9.9 ms
+for a notch of scrolling. A zoom changes every pixel of the window, which
+puts a step at the 4 ms budget: Shiori's own part, 2.4–2.7 ms, is mostly
+making the stand-ins, and the toolkit copies them. When the window scaled
+the drawings itself as it drew, the same test took 382 ms at p50 and 508
+ms at p95 for a zoom step, and 357 ms and 474–479 ms for pinching.
+These measure the window, not the engine: the drawings are there before
+they start.
+
+On a 6 MB book of A4 pages fitted to a 1900 × 1000 window (3800 × 2000
+pixels), with its worker drawing, a zoom step's first frame took 4.5–5.0
+ms (357–533 ms before), and the tiles in view were sharp 35–53 ms after
+the key. Pinching from 3.14 to 10.24 and back, a step every 8 ms, took
+3.6 ms a frame at p50 and 4.8 ms at p95 zooming in, and 5.4 and 6.3 ms
+zooming out, from drawings over twice as large.
 
 ## Text
 
@@ -294,17 +324,19 @@ document order.
 ## Testing
 
 `cargo test -p aizome-shiori`: the geometry, text and protocol alone,
-and the worker's parts (laying glyphs out into text, finding, PDF text
-strings, fonts); the worker through the engine (`tests/worker.rs`:
-opening, drawing where the text is on a turned page, links, find,
-passwords, a killed worker replaced); the app headless with real workers
-(`tests/shiori.rs`: drawing exactly, moving and zooming in place, find,
-selecting and copying, copying pages not yet read, links clicked and
-dragged from, the sidebar and the contents following the page, a locked
-document, a dying worker, a page failing at one size, your place and
-sidebar, a file changing, drawing ahead, Escape, panning and selecting
-past the edge) and its look in Night and Day (`tests/golden`, drawn with
-hayro). Documents are written by `tests/common` from text;
+the worker's parts (laying glyphs out into text, finding, PDF text
+strings, fonts), and stand-ins (scaled across drawings' edges, the nearest
+size over the preview, paper where there's nothing, averaged from much
+larger, alike on several threads); the worker through the engine
+(`tests/worker.rs`: opening, drawing where the text is on a turned page,
+links, find, passwords, a killed worker replaced); the app headless with
+real workers (`tests/shiori.rs`: drawing exactly, moving and zooming in
+place, a zoom showing at once with its ink in place, find, selecting and
+copying, copying pages not yet read, links clicked and dragged from, the
+sidebar and the contents following the page, a locked document, a dying
+worker, a page failing at one size, your place and sidebar, a file
+changing, drawing ahead, Escape, panning and selecting past the edge)
+and its look in Night and Day (`tests/golden`, drawn with hayro). Documents are written by `tests/common` from text;
 `tests/fixtures/locked.pdf` is the sample encrypted by qpdf 12.4 (the
 command is in `tests/worker.rs`).
 

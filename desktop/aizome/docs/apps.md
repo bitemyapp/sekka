@@ -715,7 +715,8 @@ is put together, is in `docs/shiori.md`.
 - **Speed**: tiles of 1024 device pixels, drawn for exactly the zoom and
   the screen's scale and copied one to one; the page above and the page
   below drawn ahead and kept; scrolling moves what was drawn and draws
-  the strip that came into view.
+  the strip that came into view. A zoom shows in the next frame, the last
+  zoom's drawings scaled to it, and sharpens as the new ones come.
 - One instance: a second launch hands its files over
   (`aizome-app.shiori.sock`); each document has its window.
 - Not yet: printing, filling in forms (they're drawn), making
