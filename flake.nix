@@ -127,6 +127,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        apple-silicon-backlight = import ./nix/apple-silicon/backlight.nix;
       };
       lib = {
         inherit installedLock;
@@ -285,7 +286,18 @@
           ];
         };
       };
+      apps.aarch64-linux.update = {
+        type = "app";
+        program = "${inputs.yukimi.packages.aarch64-linux.yukimi}/bin/sekka-update";
+        meta.description = "Update an installed Sekka system";
+      };
+      # Apple Silicon Macs (nix/apple-silicon).
+      packages.aarch64-linux = import ./nix/apple-silicon {
+        inherit inputs nixpkgs hyprlandOverlay;
+        revision = self.shortRev or self.dirtyShortRev or "unknown";
+      };
       checks.${system} = {
+        t6030-backlight = import ./nix/apple-silicon/backlight-test.nix { inherit pkgs; };
         plasma-login-config = import ./nix/plasma-login-config-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

@@ -14,7 +14,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `apps/yukimi/` | Privileged helper, CLI, and store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
-| `nix/` | Component integration, packages, application resolution, prebuilt systems |
+| `nix/` | Component integration, packages, application resolution, prebuilt systems; Apple Silicon platform (`nix/apple-silicon/`) |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
@@ -884,6 +884,35 @@ systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
+
+### T6030 developer-image brightness
+
+The J514S/J516S developer image's pinned `7.1.12-aurora20` kernel predates
+[linux-aurora PR 183](https://github.com/omacom/linux-aurora/pull/183). Without
+that driver support, `/sys/class/backlight` is empty; changing a desktop
+percentage cannot change the panel. Import
+`sekka.nixosModules.apple-silicon-backlight` alongside that image's modules to
+backport the upstream panel support. This optional module asserts the exact
+kernel source and version. Remove it when upgrading to a kernel that includes
+the upstream fix; it is not a generic backlight patch for other kernels.
+
+The backport retains the pinned kernel's separate H17P dispatch and admits
+only J514S/J516S internal panels. It uses the existing logind backlight
+interface, bounds the panel request to 500 nits, and leaves the boot loader's
+brightness in place until userspace requests a level. An actual level is
+reported only after the matching successful present. Aizome consumes refused
+brightness keys without inventing 45% or 55% readings and uses the backend's
+rounded level for an accepted request.
+
+`checks.x86_64-linux.t6030-backlight` applies the patch without fuzz to the
+exact source archive and exercises its production wire encoding, level
+policy and work gates. The patch also carries upstream's KUnit tests under
+`CONFIG_DRM_APPLE_DISPLAY_KUNIT_TEST`; compiling these is separate from
+running them. These component checks and a native kernel/system build do
+not certify a physical panel or suspend/resume. Hardware validation requires
+booting the new generation, checking `apple-panel-bl`, varying brightness
+with keys and sliders, and checking the panel after blanking and sleep.
+Keep the previous boot generation available during that validation.
 
 ## Binary cache
 
@@ -2055,6 +2084,282 @@ To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes
 (`nix flake prefetch github:omacom-io/omarchy-fish/v<version>`), then run the
 check.
+## Apple Silicon
+
+`packages.aarch64-linux` (`nix/apple-silicon/`) builds Sekka for Apple
+Silicon Macs. The first target is the 14-inch MacBook Pro with an M3 Pro
+(Mac15,6, board J514S, SoC T6030). Genkan, Tatami and its applications,
+Yukimi, Kakehashi, the tools and the patched Aquamarine and Hyprland build
+from the same sources as on PCs: `nix/components.nix` gives the components a
+package for each system. This leaves every x86_64 derivation as it was, apart
+from those that record Sekka's own revision (the ISO, the installer system,
+the installed lock, the site and its template check). Those change with any
+commit.
+
+Upstream Asahi Linux drives the M3 Pro's built-in panel only through the boot
+framebuffer and has no GPU driver for it. The platform here is Omarchy's
+instead, pinned to its release `aurora-2026.10.17.20`. A J514S owner with the
+same system firmware as ours (iBoot 20457.1.29) reported that release's
+kernel, m1n1 and Mesa working:
+[omacom/linux-aurora#138](https://github.com/omacom/linux-aurora/issues/138).
+The built-in panel ran natively at 3024x1964 and 120 Hz, the GPU drew
+Hyprland, and a 4K display worked over one USB-C port (`atc0`). That report also
+lists what did not work: the second USB-C port, a backlight device, sleep with
+a display attached, and GPU clocks above 1056 MHz (no die temperature zone).
+The commits below come from the release's `mesa-matched-stack.json`.
+
+- `linux-aurora` (`kernel.nix`): the release's source archive, commit
+  `c46d7dcd`, with its sha256. Its recipe's configuration is
+  `linux-aurora.config`, byte for byte. It is built with Clang 22 and LLD
+  (`LLVM=1`), as the recipe builds it, with 16K pages and Rust. Only
+  `LOCALVERSION` changes, so the release is `7.1.12-aurora20`. Its final
+  `.config` matches the one in the release's headers package except for that
+  and what the toolchain reports: rustc 1.98.1 rather than 1.93.1, bindgen
+  0.72.1 rather than 0.73.2, and `CC_CAN_LINK` (Nixpkgs builds with the
+  unwrapped compiler).
+- `m1n1-aurora` (`m1n1.nix`): omacom/m1n1 `d05ba17d`, which is upstream
+  `3e354a24` plus Omarchy's 64 commits, built as Nixpkgs builds m1n1. Its
+  T6030 display and GPU handoff stays off unless `boot.bin` ends with the
+  three switches in `passthru.t6030Switches`. The binary differs from the
+  release's (`m1n1_bin_sha256`): the logo and toolchain are Nixpkgs'.
+- `mesa-m3-native-pro` and `mesa-m3-pro-vulkan` (`mesa.nix`):
+  iconidentify/mesa-omacom `d616d065` (native OpenGL) and `b0f56952`
+  (Honeykrisp Vulkan), both Mesa 26.1.4. They are Nixpkgs' Mesa with the
+  recipes' sources, drivers and options, Meson's automatic features left
+  automatic as the recipes leave them. Nixpkgs' LLVM is 21 where the recipes
+  use 22. Three changes adapt 26.1 to Nixpkgs:
+  - libclc is Nixpkgs' `mesa-libclc`, Mesa's own build of LLVM 22.1.8's
+    libclc, under the `libclc.pc` name 26.1 asks for;
+  - Clang's library directory is added where 26.1 looks for Clang;
+  - the 26.2 recipe's OpenCL patch and header check are dropped.
+
+  As in the recipes, Mesa's build-time compilers aren't installed, and a
+  package that needs LLVM or Clang at run time fails to build
+  (`disallowedRequisites`). Each package's closure is about 110 MiB. Neither
+  replaces the system's Mesa.
+  In Omarchy a session points at them only after checking the kernel and the
+  GPU's identity (`chip=0x6030 G15S rev=0x11`); otherwise it draws with
+  llvmpipe. macOS on our J514S reports the same GPU (`AGXG15S`, revision
+  0x11).
+
+The drivers depend on Apple's firmware interfaces. Asahi's installer gives an
+M3 the macOS 14.8.3 OS firmware, which the drivers see as 14.7, and the
+release was tested with that.
+
+Omarchy's Apple Silicon kernel and Mesa commits are largely written with AI
+assistance, and their trailers say so (`Assisted-by: LLM`, `Co-Authored-By:
+Claude …`). Asahi Linux does not accept such contributions, so Sekka's changes
+to these drivers belong in Omarchy's trees, not Asahi's.
+
+Building needs an aarch64-linux builder. On a Mac, Nixpkgs'
+`darwin.linux-builder` (a QEMU VM with Apple's hypervisor) is enough:
+
+```sh
+nix build .#packages.aarch64-linux.{linux-aurora,m1n1-aurora,mesa-m3-native-pro,mesa-m3-pro-vulkan}
+nix build .#packages.aarch64-linux.{genkan,tatami,displays,network,activity,wallpapers,yukimi,kakehashi,tools,aquamarine,hyprland}
+nix build .#packages.aarch64-linux.{installed-j514s,installed-j514s-boot-bin,m3-gpu-session-env-test}
+```
+
+### The installed system
+
+`nix/apple-silicon/module.nix` is imported with Genkan's system modules, so
+every installed system has it, and does nothing until
+`calamares.appleSilicon.enable` is set:
+
+- **Kernel.** `boot.kernelPackages` is forced to linux-aurora, the only
+  kernel that runs these Macs here.
+  - **Initrd modules** (`initrdModules`) and boot options follow
+    nixos-apple-silicon, plus `appledrm` for the native display.
+  - **Blacklisted:** `phram`, as the kernel package's modprobe.d does.
+  - **Forced off:** settings written for PCs (CPU microcode, 32-bit ALSA).
+  - **Yukimi:** its update planner records the 32-bit graphics stack only
+    where one exists, x86.
+- **Boot.** The Asahi installer's m1n1 first stage chainloads
+  `m1n1/boot.bin` from the EFI system partition. systemd-boot copies it there
+  (`extraFiles`) on every switch. It is m1n1-aurora, every Apple device tree
+  of the kernel, U-Boot (`uboot.nix`, AsahiLinux/u-boot `asahi-v2026.07-2`,
+  configured as nixos-apple-silicon does) and, with
+  `calamares.appleSilicon.t6030Handoff`, the three `chosen.asahi,t6030-*`
+  switches. U-Boot has no EFI variables, so systemd-boot doesn't write any.
+- **Apple's firmware.** Wi-Fi, Bluetooth, keyboard, trackpad and camera
+  firmware can't be redistributed. The Asahi installer extracts it on the Mac
+  to `vendorfw/firmware.cpio` on the EFI system partition. It is loaded at boot,
+  as Asahi's interop notes ask, rather than read while the configuration is
+  evaluated as nixos-apple-silicon does, so prebuilt and cached systems work:
+  - systemd-boot's entries load the archive as a second initrd
+    (`extraInstallCommands`, only while the file exists);
+  - the initrd has it at `/vendorfw`, which `firmware_class.path` names for
+    early drivers;
+  - `sekka-vendor-firmware.service` copies it to a tmpfs at
+    `/lib/firmware/vendor` in the booted system, which linux-aurora searches
+    after NixOS's own firmware path.
+
+  `avd-fw` adds the video decoder's firmware.
+- **Sound.** As nixos-apple-silicon: asahi-audio's PipeWire and WirePlumber
+  configuration, Asahi's UCM files and speakersafetyd. The kernel keeps the
+  speakers quiet without speakersafetyd.
+- **Session graphics** (`m3ProGraphics`, on with the handoff). Every session
+  renders in software: `LIBGL_ALWAYS_SOFTWARE=1` is a session variable, and
+  only the `render` group (`graphicsUsers`, the installer's user) may open the
+  GPU's render node. The kernel refuses Nixpkgs' Mesa on the M3 GPU, and
+  Hyprland stops at start if it reaches the node with it. A uwsm session
+  (Tatami's) then sources `/etc/xdg/uwsm/env.d/50-sekka-m3-gpu`
+  (`m3-gpu/session-env.sh`), adapted from Omarchy's hooks.
+  - **Checks.** The opt-outs (`/etc/mesa-m3/disable`,
+    `~/.config/mesa-m3/disable`, `mesa_m3=off`), the T6030 GPU's own render
+    node and native display, Omarchy's runtime ABI check (`mesa-m3-abi-check`:
+    T6030 G15S, two clusters, legacy HAL), and no GPU or display fault in this
+    boot's kernel log.
+  - **No login loop.** A login on the GPU must be confirmed alive by
+    `sekka-m3-gpu-confirm.service` 15 seconds after its graphical session
+    starts. If it isn't, later logins this boot render in software.
+  - **When the checks pass,** it points the session at the M3 Pro's Mesa with
+    Omarchy's environment, and records its decision in
+    `/run/user/UID/sekka-m3-gpu.state` and the journal (tag `sekka-m3-gpu`).
+  - **What isn't ported.** Omarchy's library and user-setup checks: Nix pins
+    the libraries and the kernel together.
+  - **Performance.** `sekka-m3-gpu-performance.service` sets the batching
+    values Omarchy's release pairs with this Mesa.
+
+  Aizome receives the same matched graphics environment through its own
+  session and greeter configuration. Other desktops render in software.
+
+  `packages.aarch64-linux.m3-gpu-session-env-test`
+  (`m3-gpu/test-session-env.sh`) sources the gate as uwsm does, against fake
+  T6030 roots: device tree, sysfs, render node, kernel log, state files and a
+  stub ABI check. It covers every decision and what each exports, including
+  the confirmed, unconfirmed and earlier-boot logins. A gate that ignores
+  firmware errors fails it. The script also runs on macOS:
+  `bash nix/apple-silicon/m3-gpu/test-session-env.sh GATE`.
+
+`packages.aarch64-linux.installed-j514s` is Genkan's reference system with
+Tatami and these options on; it uses `initrdModules` alone, because the
+reference lists a PC's storage drivers and this kernel has no `ahci`.
+`installed-j514s-boot-bin` is its `boot.bin`: m1n1-aurora byte for byte, the
+device trees (J514S among them), U-Boot, then the three switches. Both build,
+but nothing has booted them on a Mac.
+
+### Updating the original J514S installation
+
+The October 18 developer image left `/etc/nixos` empty. It booted Tatami
+and Firefox, but had no flake for `nixos-rebuild` or Yukimi to update.
+`nix/apple-silicon/installed/` supplies that missing configuration for the
+original image: its root label and ESP UUID, mutable existing users without
+resetting their passwords, the Apple platform, and Aizome as the default
+desktop and login screen. Tatami remains available. The flake follows the
+Apple Silicon integration branch while the platform is absent from main;
+its dependencies follow Sekka's root lock. Copy both files to `/etc/nixos`,
+lock the flake and build its `nixosConfigurations.sekka` before staging it
+with `switch-to-configuration boot`. Keep the old boot generation.
+
+The configuration uses the same `calamares.applications` list as Genkan,
+so Yukimi can install the missed applications after installation. Add desired
+catalog IDs to that list; the upstream catalog still includes applications
+that their publishers do not supply for ARM Linux. Aizome brings its own
+apps and configured fish shell. Zram provides swap without changing partitions.
+
+Aizome does not use uwsm. The platform now gives its session and greeter the
+same pinned OpenGL/Vulkan environment as Tatami, and grants the greeter
+access to the render node. Apple has separate rendering and display DRM
+nodes, so Aizome selects AGX's persistent render-device path. Aizome's session
+imports this environment into its user manager and removes it on logout.
+Tatami retains its health gate; Aizome uses the matched stack directly.
+`calamares.appleSilicon.m3ProGraphics = false` disables both integrations.
+The active GPU environment explicitly sets `LIBGL_ALWAYS_SOFTWARE=0`:
+unsetting the variable allowed uwsm's inherited software default to return.
+Neither platform changes Tatami's palette; its shipped colors were Tokyo
+Night already. A fresh login is needed to use updated desktop packages.
+
+The kernel recipe checks its `LOCALVERSION` replacement by comparing the
+result with the original text. Do not use `lib.hasInfix` on the whole kernel
+configuration: its regular expression overflowed the stack in Determinate
+Nix 3.23.3 and 3.24.0 on this Mac, preventing system evaluation and Yukimi
+updates. The plain string check produces exactly the same kernel and system
+derivations; both Nix clients can evaluate it.
+
+### Installing from macOS
+
+`packages.aarch64-linux.mac-installer-j514s` (`image.nix`) is a directory the
+Asahi installer installs from, on the Mac itself, with no USB stick or server:
+
+- `installer_data.json`: one entry, offered only where the installer gives the
+  macOS 14.8.3 OS firmware (the M3 series).
+  - **ESP:** a 1 GiB FAT partition with volume ID `0x5ecca5e1`. It is filled
+    from the package's `esp/` tree, and the installer adds Apple's firmware
+    (`copy_firmware`).
+  - **Root:** a partition written from `root.img` that grows into the free space
+    (`expand`).
+- `os/sekka-j514s-REVISION.zip`: the package (stored, not compressed).
+  - **`esp/`:** holds `m1n1/boot.bin`, systemd-boot, the kernel and initrd, and
+    generation 1's entry with `/vendorfw/firmware.cpio` as its first initrd.
+    NixOS's own systemd-boot installer takes it over at the first rebuild.
+  - **`root.img`:** ext4 labelled `sekka-root`, holding the system's closure. It
+    grows at boot (`autoResize`), and `sekka-image-first-boot.service` registers
+    its store and system profile once.
+- `install-sekka.sh`: Asahi's bootstrap (MIT), adapted. It runs the unmodified
+  Asahi installer, pinned to v0.9.2 and checked by SHA-256, with
+  `INSTALLER_DATA` and `REPO_BASE` pointing at this directory.
+
+The image's system is the J514S configuration with Tatami and Firefox. It has
+a developer account, `sekka` with password `sekka`; change it with `passwd`.
+Genkan has no first-boot setup for Macs yet. Two things in `image.nix` reflect
+how far this has got:
+
+- The image carries no installed flake, so neither Yukimi updates nor
+  `nixos-rebuild` from the Mac work yet.
+- The image adds `virtio_mmio` to its initrd only so that the same image boots
+  in a test VM.
+
+Installing has to be run by the Mac's owner. The installer shrinks macOS,
+then asks them to start in recoveryOS (hold the power button) and enter their
+password. **Back up first.** On macOS 27.0.1 (26A434), the build this MacBook Pro
+runs, `diskutil apfs resizeContainer` has failed for someone else with
+`-69606` (error 49187) despite clean First Aid
+([AsahiLinux/asahi-installer#448](https://github.com/AsahiLinux/asahi-installer/issues/448)).
+That report was closed without a fix; going back to macOS 26 helped. Older
+reports of the same code traced to Time Machine local snapshots. On this Mac
+(2026-10-18, read-only checks):
+
+- the container is 494.4 GB, and can shrink to 175.8 GB at minimum
+  (186.5 GB recommended);
+- there are no local snapshots;
+- FileVault is on, which the installer handles;
+- no newer macOS was offered.
+
+If the resize fails, the installer stops. The reports above found macOS
+intact afterwards, but Apple's tool is the one changing the disk.
+
+```sh
+nix build .#packages.aarch64-linux.mac-installer-j514s --out-link result-mac
+./result-mac/install-sekka.sh
+```
+
+`nix/apple-silicon/boot-image-in-vm.sh result-mac` tests the same package on
+an Apple Silicon Mac without touching its disk.
+
+1. **Disk.** It lays out a disk image as the installer would: the ESP with the
+   package's tree, its volume ID and a stand-in firmware archive, then
+   `root.img` with 4 GiB to grow into.
+2. **Boot.** It boots that twice in QEMU with Apple's hypervisor. linux-aurora
+   has no ACPI, PCI host or serial driver for QEMU's `virt` machine, so the
+   firmware is given QEMU's device tree (`acpi=off`), and the disks and console
+   are virtio-mmio.
+3. **Checks.** After each boot it logs in on the console (`vm-console.py`) and
+   requires all of these: systemd `running` with no failed units, the graphical
+   target and display manager active, the store registered, the stand-in
+   firmware on its tmpfs, and the ESP mounted by volume ID.
+
+None of this exercises m1n1, U-Boot, the handoff or Apple's drivers. Only the
+J514S can show those:
+
+- the Asahi installer's m1n1 starting this `boot.bin`;
+- U-Boot starting systemd-boot;
+- the firmware reaching Wi-Fi and the trackpad;
+- the handoff giving a native display;
+- a Tatami login passing the GPU checks;
+- the speakers working through speakersafetyd.
+
+aarch64 builders and cache for the nightly come after that.
 
 ## Releases
 
