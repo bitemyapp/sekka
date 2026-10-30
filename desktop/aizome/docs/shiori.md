@@ -367,5 +367,3 @@ its worker is the package's own program and loads no PDFium, ❖F and
 typing find two hits and Return goes to the second, a worker killed with
 `SIGKILL` is replaced with the window open and the notice shown, and the
 session's `application/pdf` default is Shiori.
-
-Not yet tested on hardware.
