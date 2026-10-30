@@ -146,6 +146,8 @@ pub enum Surface {
         output: u32,
     },
     Deskbar,
+    /// The width an edge drag would give the Deskbar, over it.
+    DeskbarPreview,
     Palette,
     Panel,
     Osd,
@@ -302,8 +304,9 @@ pub struct Shell {
     pub confirm: Option<crate::confirm::Confirm>,
     /// The session verb last carried out (tests: nothing happens).
     pub session_done: Option<SessionVerb>,
-    /// The critical notifications' cards, and how many.
-    pub cards: Option<(WindowKey, usize)>,
+    /// The critical notifications' cards, how many, and their margin at the
+    /// right.
+    pub cards: Option<(WindowKey, usize, f64)>,
     /// What the shell's own notifications' actions do.
     pub note_actions: HashMap<(u32, String), Action>,
     /// Actions to carry out once the update in hand is done.
@@ -315,6 +318,13 @@ pub struct Shell {
     /// The output the Deskbar was opened on: it opens again on the main
     /// display when that changes.
     pub(crate) deskbar_output: Option<u32>,
+    /// The edge the open Deskbar was anchored to.
+    pub(crate) deskbar_side: aizome_config::DeskbarSide,
+    /// An edge drag under way: the width at the press, and the pointer's x
+    /// then.
+    pub(crate) deskbar_resize: Option<(f64, f64)>,
+    /// The surface showing the width that drag would give, and the width.
+    pub(crate) deskbar_preview: Option<(WindowKey, f64)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -446,6 +456,9 @@ impl Shell {
             deskbar_visibility: Default::default(),
             deskbar_transient: false,
             deskbar_output: None,
+            deskbar_side: aizome_config::DeskbarSide::Right,
+            deskbar_resize: None,
+            deskbar_preview: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -652,6 +665,8 @@ impl Shell {
             output: screen.name(),
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
+            header: self.header_width(),
+            deskbar_left: self.deskbar_cfg.side == aizome_config::DeskbarSide::Left,
         }
     }
 
@@ -893,6 +908,15 @@ impl Shell {
                 self.save_section("deskbar");
             }
             Action::MoveDeskbarApp { app_id, down } => self.move_deskbar_app(&app_id, down),
+            Action::PlaceDeskbar { side, width } => {
+                if let Some(s) = side {
+                    self.deskbar_cfg.side = s;
+                }
+                if let Some(w) = width {
+                    self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                }
+                self.save_section("deskbar");
+            }
             Action::EmptyTrash => crate::launch::empty_trash(),
             Action::MoveToTrash { path } => {
                 if let Err(e) = crate::launch::move_to_trash(&path) {
@@ -1624,6 +1648,7 @@ impl Program for Shell {
             }
             Some(Surface::Desktop { output }) => self.desktop_view(*output),
             Some(Surface::Deskbar) => crate::deskbar::view(&self.deskbar_model()).map(Msg::Deskbar),
+            Some(Surface::DeskbarPreview) => self.deskbar_preview_view(),
             Some(Surface::Palette) => match self.palette_in(window) {
                 Some(p) => {
                     let inner = crate::palette::view::view(&self.palette_view_of(p), p.scroll)
@@ -1704,6 +1729,11 @@ impl Program for Shell {
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // An edge drag on it can't end now.
+                self.end_deskbar_resize(cx);
+            }
+            if s == Surface::DeskbarPreview {
+                self.deskbar_preview = None;
             }
         }
         true
@@ -1716,6 +1746,12 @@ impl Program for Shell {
 
     fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
         if self.deskbar == Some(window) {
+            // While the button's down the pointer stays the Deskbar's: gone
+            // mid-drag, the compositor took it, and the release won't come.
+            // The edge drag is over, its width not taken.
+            if !inside {
+                self.end_deskbar_resize(cx);
+            }
             self.deskbar_hover(false, inside, cx);
             self.after_update(cx);
         }

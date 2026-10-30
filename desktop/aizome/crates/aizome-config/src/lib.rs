@@ -26,9 +26,9 @@ pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleCl
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
 pub use shell::{
-    ClockFormat, DeskbarSettings, DesktopSettings, LockSettings, MenubarSettings, NotificationSettings, PALETTE_SCOPES,
-    PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat, RecordingQuality, RecordingSettings,
-    SYSTRAY_WIDGETS, SoundSettings, names_app,
+    ClockFormat, DESKBAR_SIZES, DeskbarSettings, DeskbarSide, DesktopSettings, LockSettings, MenubarSettings,
+    NotificationSettings, PALETTE_SCOPES, PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat,
+    RecordingQuality, RecordingSettings, SYSTRAY_WIDGETS, SoundSettings, names_app,
 };
 
 /// Everything in `settings.toml`.

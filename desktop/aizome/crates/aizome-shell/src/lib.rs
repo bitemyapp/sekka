@@ -13,6 +13,7 @@ pub mod carry;
 pub mod clock;
 pub mod confirm;
 pub mod deskbar;
+pub mod deskbar_compact;
 mod deskbar_glue;
 pub mod desktop;
 mod desktop_glue;

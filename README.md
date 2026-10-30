@@ -59,6 +59,9 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 - The Toolchest launches apps and places, the Deskbar lists each app with
   its windows and files its notifications beneath it, and Desks keep work
   apart (**Super + Ctrl + ↑** shows them all).
+- Drag the strip along the Deskbar's top to stand it at the left or right,
+  and its inner edge to make it wider, slimmer or icons only. Right-click
+  the strip for its named sizes.
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
   and foot opens in fish.
 - Each keyboard keeps its own modifier keys, Caps Lock and Compose key. When

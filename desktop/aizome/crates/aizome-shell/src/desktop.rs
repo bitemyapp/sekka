@@ -115,8 +115,9 @@ impl DesktopState {
 }
 
 /// Where each icon goes: placed ones where they were put, the rest down
-/// the left (a new column when the output's height runs out).
-pub fn layout(icons: &[DeskIcon], positions: &HashMap<String, Point>, height: f64) -> Vec<Point> {
+/// the left (a new column when the output's height runs out), `left` in
+/// from it (clear of a Deskbar standing there).
+pub fn layout(icons: &[DeskIcon], positions: &HashMap<String, Point>, height: f64, left: f64) -> Vec<Point> {
     let rows = (((height - TOP - 8.0) / STEP).floor() as usize).max(1);
     let mut slot = 0usize;
     icons
@@ -126,7 +127,7 @@ pub fn layout(icons: &[DeskIcon], positions: &HashMap<String, Point>, height: f6
             None => {
                 let (col, row) = (slot / rows, slot % rows);
                 slot += 1;
-                Point::new(LEFT + col as f64 * (ICON_W + 8.0), TOP + row as f64 * STEP)
+                Point::new(left + LEFT + col as f64 * (ICON_W + 8.0), TOP + row as f64 * STEP)
             }
         })
         .collect()
@@ -287,8 +288,9 @@ pub fn view(
     state: &DesktopState,
     wallpaper: Option<(Image, u64)>,
     size: Size,
+    left: f64,
 ) -> Element<DesktopMsg> {
-    let points = layout(icons, &state.positions, size.height);
+    let points = layout(icons, &state.positions, size.height, left);
     let mut placed: Vec<(Point, Element<DesktopMsg>)> = icons
         .iter()
         .zip(points)
@@ -317,21 +319,34 @@ pub fn view(
 }
 
 /// Icons a rubber band from `a` to `b` takes in.
-pub fn in_band(icons: &[DeskIcon], positions: &HashMap<String, Point>, height: f64, a: Point, b: Point) -> Vec<String> {
+pub fn in_band(
+    icons: &[DeskIcon],
+    positions: &HashMap<String, Point>,
+    height: f64,
+    left: f64,
+    a: Point,
+    b: Point,
+) -> Vec<String> {
     let band = Rect::from_points(a, b);
     icons
         .iter()
-        .zip(layout(icons, positions, height))
+        .zip(layout(icons, positions, height, left))
         .filter(|(_, p)| band.intersect(Rect::from_origin_size(*p, (ICON_W, ICON_H))).area() > 0.0)
         .map(|(i, _)| i.key.clone())
         .collect()
 }
 
 /// The icon under a point.
-pub fn icon_at(icons: &[DeskIcon], positions: &HashMap<String, Point>, height: f64, at: Point) -> Option<String> {
+pub fn icon_at(
+    icons: &[DeskIcon],
+    positions: &HashMap<String, Point>,
+    height: f64,
+    left: f64,
+    at: Point,
+) -> Option<String> {
     icons
         .iter()
-        .zip(layout(icons, positions, height))
+        .zip(layout(icons, positions, height, left))
         .find(|(_, p)| Rect::from_origin_size(*p, (ICON_W, ICON_H)).contains(at))
         .map(|(i, _)| i.key.clone())
 }
@@ -359,17 +374,17 @@ mod tests {
     #[test]
     fn icons_line_up_down_the_left_and_wrap() {
         let icons: Vec<DeskIcon> = (0..5).map(|i| icon(&format!("i{i}"))).collect();
-        let pts = layout(&icons, &HashMap::new(), TOP + 3.0 * STEP + 8.0);
+        let pts = layout(&icons, &HashMap::new(), TOP + 3.0 * STEP + 8.0, 0.0);
         assert_eq!(pts[0], Point::new(LEFT, TOP));
         assert_eq!(pts[1], Point::new(LEFT, TOP + STEP));
         assert_eq!(pts[3], Point::new(LEFT + ICON_W + 8.0, TOP), "a new column");
         let mut put = HashMap::new();
         put.insert("i0".to_owned(), Point::new(500.0, 300.0));
-        let pts = layout(&icons, &put, 900.0);
+        let pts = layout(&icons, &put, 900.0, 0.0);
         assert_eq!(pts[0], Point::new(500.0, 300.0));
         assert_eq!(pts[1], Point::new(LEFT, TOP), "the others close up");
-        assert_eq!(in_band(&icons, &put, 900.0, Point::new(0.0, 0.0), Point::new(60.0, 140.0)), ["i1", "i2"]);
-        assert_eq!(icon_at(&icons, &put, 900.0, Point::new(520.0, 310.0)).as_deref(), Some("i0"));
+        assert_eq!(in_band(&icons, &put, 900.0, 0.0, Point::new(0.0, 0.0), Point::new(60.0, 140.0)), ["i1", "i2"]);
+        assert_eq!(icon_at(&icons, &put, 900.0, 0.0, Point::new(520.0, 310.0)).as_deref(), Some("i0"));
     }
 
     #[test]

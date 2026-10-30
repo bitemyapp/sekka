@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use aizome_config::{DeskConfig, FocusFollows};
+use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows};
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use aizome_sys::apps::AppIndex;
@@ -14,6 +14,12 @@ use aizome_sys::apps::AppIndex;
 use crate::extra;
 use crate::form;
 use crate::pane::{Confirm, Group, Pane, PaneCx, SettingEntry, Tile, ViewCx};
+
+/// The named width a configured one is, if any: none after the Deskbar's
+/// edge was dragged to another, so that any of them can be picked.
+fn width_index(w: f64) -> Option<usize> {
+    DESKBAR_SIZES.iter().position(|s| (s.1 - w).abs() < 0.5)
+}
 
 #[derive(Default)]
 pub struct Desktop {
@@ -37,6 +43,8 @@ pub enum Msg {
     Collapsed(bool),
     AutoHide(bool),
     Shelf(bool),
+    Side(usize),
+    Width(usize),
     Pin(usize),
     Unpin(String),
     Icon(&'static str, bool),
@@ -100,6 +108,18 @@ impl Pane for Desktop {
             SettingEntry::new("auto-hide", "Automatically hide the Deskbar").keywords(&["auto hide", "dock", "apps"]),
             SettingEntry::new("pinned", "Apps kept in the Deskbar").keywords(&["pin", "favourites", "keep in deskbar"]),
             SettingEntry::new("shelf", "Show the Shelf").keywords(&["drag", "park", "shelf"]),
+            SettingEntry::new("deskbar-side", "Where the Deskbar stands")
+                .keywords(&["deskbar", "left", "right", "side", "edge", "move"]),
+            SettingEntry::new("deskbar-width", "Deskbar width").keywords(&[
+                "size",
+                "slim",
+                "icons only",
+                "narrow",
+                "standard",
+                "wide",
+                "wider",
+                "compact",
+            ]),
             SettingEntry::new("desktop-icons", "Icons on the desktop").keywords(&["home", "disks", "trash"]),
             SettingEntry::new("stack-new", "Stack new windows of the same app").keywords(&["tabs", "tab groups"]),
             SettingEntry::new("double-click", "Double-click a tab").keywords(&[
@@ -235,6 +255,16 @@ impl Pane for Desktop {
                 s.set_shell_section("deskbar", &d);
             }),
             Msg::Shelf(on) => cx.change(|s| extra::set(&mut s.deskbar, "show_shelf", on)),
+            Msg::Side(i) => cx.change(|s| {
+                let mut d = s.deskbar_settings();
+                d.side = if i == 0 { DeskbarSide::Left } else { DeskbarSide::Right };
+                s.set_shell_section("deskbar", &d);
+            }),
+            Msg::Width(i) => cx.change(|s| {
+                let mut d = s.deskbar_settings();
+                d.width = DESKBAR_SIZES[i.min(DESKBAR_SIZES.len() - 1)].1;
+                s.set_shell_section("deskbar", &d);
+            }),
             Msg::Pin(i) => {
                 let Some((id, _)) = self.apps.as_ref().and_then(|a| a.get(i)).cloned() else { return };
                 cx.change(|s| {
@@ -328,6 +358,15 @@ impl Pane for Desktop {
             form::row("Show the Shelf", toggle(extra::get_bool(&s.deskbar, "show_shelf", true)).on_toggle(Msg::Shelf))
                 .entry("shelf")
                 .help("A place to park what you're dragging: files, text, pictures."),
+            form::row(
+                "Stands at",
+                form::segments(&["Left", "Right"], usize::from(db.side == DeskbarSide::Right), Msg::Side),
+            )
+            .entry("deskbar-side")
+            .help("The edge of the screen it hangs from, under the menu bar."),
+            form::row("Width", form::segments(&DESKBAR_SIZES.map(|w| w.0), width_index(db.width), Msg::Width))
+                .entry("deskbar-width")
+                .help("Wider shows more of long window titles; Slim and Icons Only leave more of the screen."),
         ];
         let pin_list: Vec<String> =
             names.iter().filter(|(id, _)| !db.pinned.contains(id)).map(|(_, n)| n.clone()).collect();
@@ -417,5 +456,17 @@ impl Pane for Desktop {
             vcx.section("Desktop Icons", icons),
             vcx.section("Windows", windows),
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_deskbar_width_shows_as_its_name_or_none() {
+        assert_eq!(width_index(48.0), Some(0), "Icons Only shows, and Standard can be picked from it");
+        assert_eq!(width_index(232.0), Some(2));
+        assert_eq!(width_index(263.0), None, "a dragged width lights none, so any can be picked");
     }
 }

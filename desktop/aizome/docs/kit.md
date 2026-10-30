@@ -370,6 +370,16 @@ kit then has Sidestep move those pixels and draws only the strips they
 uncover and what changed; such a widget leaves its scroll offset out of its
 `hash`. The kit's scroll views, lists, tables, outlines and editor do this.
 
+A widget that lies over others and takes only drags says so with
+`drags_only` (the shell's `drawn(..).drags_only()`, such as the Deskbar's
+resize edge over its rows). It shows its cursor and hover, and takes a
+left press; if no drag comes of it, the press and its release go to what's
+under it, as a click. Other buttons, the wheel and drops go there
+directly, and what's under it shows its hover and tooltip too (its own
+tooltip, if it has one, wins). If the pointer leaves the window while it
+holds a press (the compositor took the pointer, so the release goes
+elsewhere), the press is over and the next one starts afresh.
+
 ## Keyboard
 
 - Tab and ⇧Tab walk the focus chain (what can be used: disabled controls are
