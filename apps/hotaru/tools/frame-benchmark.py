@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import queue
 import random
+import re
 import select
 import signal
 import socket
@@ -161,6 +162,21 @@ def fixture(address, nonce):
                                 time.sleep((deadline - time.monotonic_ns()) / 1e9)
                         paint(seq, request["kind"], data)
                     send(stream, {"event": "stream_done", "time_ns": time.monotonic_ns()})
+                elif operation == "throughput":
+                    # The PTY takes only what the terminal consumes, so the
+                    # write time is the terminal's own speed. Terminal defaults
+                    # first (autowrap, cursor), as a fresh terminal would see
+                    # the input; whole repeats, so the closing marker can't land
+                    # inside an unfinished sequence.
+                    data = Path(request["path"]).read_bytes()
+                    write_output(b"\x1b[?7h\x1b[?25h\x1b[0m\x1b[r\x1b[2J\x1b[H")
+                    start = time.monotonic_ns()
+                    for _ in range(request["repeat"]):
+                        write_output(data)
+                    end = time.monotonic_ns()
+                    send(stream, {"event": "throughput_done", "path": request["path"], "bytes": len(data) * request["repeat"],
+                                  "write_start_ns": start, "write_end_ns": end})
+                    paint(request["sequence"], "initial")
                 elif operation == "quit":
                     return
                 else:
@@ -227,7 +243,7 @@ def source_hash(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def build_observer(directory):
+def build_observer(directory, overrides=None):
     directory.mkdir(parents=True, exist_ok=True)
     registry = Path.home() / ".cargo/registry/src"
     patterns = {"screencopy": "*/wayland-protocols-wlr-*/wlr-protocols/unstable/wlr-screencopy-unstable-v1.xml",
@@ -235,7 +251,8 @@ def build_observer(directory):
     protocols = {}
     sources = []
     for name, pattern in patterns.items():
-        candidates = sorted(registry.glob(pattern))
+        # A host without a Cargo registry names the XML itself (--protocol-xml).
+        candidates = [Path(overrides[name])] if overrides and name in overrides else sorted(registry.glob(pattern))
         if not candidates:
             raise RuntimeError(f"missing protocol XML: {pattern}")
         xml = candidates[-1]
@@ -298,10 +315,60 @@ def unrelated_uta_builds():
     return found
 
 
+DRIVER_LIBRARIES = re.compile(r"lib(EGL|GLESv2|GLX|GL|OpenGL|vulkan|gallium|nvidia|drm|gbm)[-_.\w]*\.so[.\d]*|[\w-]+_dri\.so")
+
+
+def process_tree(root):
+    """`root` and every process descended from it."""
+    parents = {}
+    for proc in Path("/proc").iterdir():
+        if proc.name.isdecimal():
+            with contextlib.suppress(OSError, ValueError, IndexError):
+                parents[int(proc.name)] = int((proc / "stat").read_text().rsplit(")", 1)[1].split()[1])
+    tree, frontier = [root], [root]
+    while frontier:
+        frontier = [pid for pid, parent in parents.items() if parent in frontier]
+        tree.extend(frontier)
+    return tree
+
+
+def gpu_evidence(root):
+    """The GL, EGL and Vulkan libraries each process maps, and the DRM and NVIDIA device nodes it holds."""
+    evidence = {}
+    for pid in process_tree(root):
+        with contextlib.suppress(OSError):
+            libraries = sorted({Path(line.split()[-1]).name for line in Path(f"/proc/{pid}/maps").read_text().splitlines()
+                                if line.split()[-1].startswith("/") and DRIVER_LIBRARIES.fullmatch(Path(line.split()[-1]).name)})
+            devices = set()
+            for fd in Path(f"/proc/{pid}/fd").iterdir():
+                with contextlib.suppress(OSError):
+                    target = os.readlink(fd)
+                    if target.startswith(("/dev/dri/", "/dev/nvidia")):
+                        devices.add(target)
+            evidence[str(pid)] = {"comm": Path(f"/proc/{pid}/comm").read_text().strip(), "libraries": libraries,
+                                  "devices": sorted(devices)}
+    return evidence
+
+
+def ghostty_presentation(log):
+    """Ghostty's own account of how its frames reach the compositor."""
+    lines = [line for line in log.read_text(errors="replace").splitlines()
+             if "Using renderer" in line or "Not using" in line or "EGL vendor" in line
+             or "loaded OpenGL" in line or "dmabuf" in line or "CPU presentation" in line]
+    fallback = [line for line in lines if "GskCairoRenderer" in line or "CPU presentation" in line]
+    return {"lines": lines, "gpu_presentation": not fallback, "fallback": fallback}
+
+
 def run(args):
     evidence = args.output.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
-    observer_binary = build_observer(evidence / "observer-build")
+    observer_binary = build_observer(evidence / "observer-build", dict(item.split("=", 1) for item in args.protocol_xml))
+    software = args.renderer == "software"
+    app_environment = json.loads(args.app_env.read_text()) if args.app_env else {}
+    if not software and args.kind == "ghostty":
+        # GTK names the renderer it chose for the window; Ghostty itself logs
+        # its EGL vendor and any fallback to CPU presentation.
+        app_environment.setdefault("GSK_DEBUG", "renderer")
     temporary = tempfile.TemporaryDirectory(prefix="hotaru-frames-")
     runtime = Path(temporary.name)
     os.chmod(runtime, 0o700)
@@ -316,21 +383,27 @@ def run(args):
         (runtime / name).mkdir()
     env.update(HOME=str(runtime / "home"), XDG_RUNTIME_DIR=str(runtime), XDG_CONFIG_HOME=str(runtime / "config"),
                XDG_CACHE_HOME=str(runtime / "cache"), XDG_DATA_HOME=str(runtime / "data"), XDG_CURRENT_DESKTOP="sway",
-               XDG_SESSION_TYPE="wayland", WLR_BACKENDS="headless", WLR_RENDERER="pixman", WLR_LIBINPUT_NO_DEVICES="1",
-               LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", AIZOME_FONT_DIR=str(args.font_dir), HOTARU_FONT_DIR=str(args.fallback_dir),
-               HOTARU_BENCH_FIXTURE_CPUS=args.fixture_cpus, RUST_LOG="warn", LP_NUM_THREADS="4", SIDESTEP_RASTER_THREADS="4",
+               XDG_SESSION_TYPE="wayland", WLR_BACKENDS="headless", WLR_RENDERER="pixman" if software else "gles2",
+               WLR_LIBINPUT_NO_DEVICES="1", AIZOME_FONT_DIR=str(args.font_dir), HOTARU_FONT_DIR=str(args.fallback_dir),
+               HOTARU_BENCH_FIXTURE_CPUS=args.fixture_cpus, RUST_LOG="warn", SIDESTEP_RASTER_THREADS="4",
                AIZOME_NO_PIXEL_SCROLL=args.no_pixel_scroll)
+    if software:
+        env.update(LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe", LP_NUM_THREADS="4")
     fonts = runtime / "fonts.conf"
     fonts.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>' +
                      ''.join('<dir>' + escape(str(p)) + '</dir>' for p in (args.font_dir, args.fallback_dir)) +
                      '<cachedir>' + escape(str(runtime / "cache/fonts")) + '</cachedir></fontconfig>')
     env["FONTCONFIG_FILE"] = str(fonts)
+    if args.mesa and not software:
+        raise RuntimeError("--mesa selects a software GL stack; GPU runs use the host's drivers (and --app-env)")
     if args.mesa:
         env.update(__EGL_VENDOR_LIBRARY_FILENAMES=str(args.mesa / "share/glvnd/egl_vendor.d/50_mesa.json"),
                    LIBGL_DRIVERS_PATH=str(args.mesa / "lib/dri"))
     processes, logs, readers = [], [], []
-    result = {"schema": 1, "status": "running", "kind": args.kind, "purpose": args.purpose,
-              "scope": "private headless software compositor screencopy completion; no physical scanout or parser timing",
+    result = {"schema": 1, "status": "running", "kind": args.kind, "purpose": args.purpose, "renderer": args.renderer,
+              "scope": "private headless " + ("software" if software else "GPU (gles2)") +
+                       " compositor screencopy completion; no physical scanout or parser timing",
+              "application_environment": app_environment, "gpu": {},
               "marker_contract": "matching complete top/bottom 76-cell markers, sequence32 + CRC32(sequence,nonce); sampled opaque interiors; not a full glyph-pixel CRC",
               "recorded_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(), "nonce": args.nonce,
               "capture_interval_us": args.capture_us, "commands": {}, "cpu_sets": {"app": args.app_cpus, "compositor": args.compositor_cpus,
@@ -342,12 +415,12 @@ def run(args):
               "fonts": {str(p): source_hash(p) for d in (args.font_dir, args.fallback_dir) for p in d.rglob('*') if p.is_file() and p.suffix in {'.ttf', '.otf', '.ttc'}}}
     result["unrelated_uta_builds"] = unrelated_uta_builds()
 
-    def launch(name, command, cpus=None, pipes=False):
+    def launch(name, command, cpus=None, pipes=False, extra=None):
         log = (evidence / f"{name}.log").open("wb"); logs.append(log)
         if cpus:
             command = ["taskset", "-c", cpus, *command]
         result["commands"][name] = command
-        process = subprocess.Popen(command, env=env, stdin=subprocess.PIPE if pipes else subprocess.DEVNULL,
+        process = subprocess.Popen(command, env=env | (extra or {}), stdin=subprocess.PIPE if pipes else subprocess.DEVNULL,
                                    stdout=subprocess.PIPE if pipes else log, stderr=log, start_new_session=True, bufsize=0)
         processes.append(process)
         return process
@@ -366,10 +439,18 @@ def run(args):
         app_id = "com.mitchellh.ghostty" if args.kind == "ghostty" else "org.aizome.Hotaru"
         sway_config.write_text("output HEADLESS-1 mode 1920x1440@60Hz\nseat seat0 fallback true\nfocus_follows_mouse no\ndefault_border none\n" +
             f'for_window [app_id="{app_id}"] floating enable, border none, resize set {args.window_width} px {args.window_height} px, move position 20 px 20 px\n')
-        compositor = launch("sway", ["sway", "--unsupported-gpu", "-c", str(sway_config)], args.compositor_cpus)
+        compositor = launch("sway", ["sway", "--unsupported-gpu", *([] if software else ["--verbose"]), "-c", str(sway_config)],
+                            args.compositor_cpus)
         display = wait("private Wayland", lambda: next((p for p in runtime.glob("wayland-*") if p.is_socket()), None))
         sway_socket = wait("private Sway", lambda: next(runtime.glob("sway-ipc.*.sock"), None))
         env.update(WAYLAND_DISPLAY=display.name, SWAYSOCK=str(sway_socket))
+        if not software:
+            logs[-1].flush()
+            renderer = [line.split("] ", 2)[-1] for line in (evidence / "sway.log").read_text(errors="replace").splitlines()
+                        if any(key in line for key in ("EGL vendor", "GL vendor", "GL renderer", "Using OpenGL", "Creating GLES2"))]
+            result["gpu"]["compositor"] = {"log": renderer, "process": gpu_evidence(compositor.pid)}
+            if not any("GL renderer" in line for line in renderer):
+                raise RuntimeError("the private compositor did not report a GPU renderer")
 
         def sway(command):
             return json.loads(subprocess.check_output(["swaymsg", "-s", str(sway_socket), *command], env=env, timeout=3))
@@ -401,7 +482,7 @@ def run(args):
                 app_id = "org.aizome.Hotaru"
             result["configuration"] = config_text
             launch_ns = time.monotonic_ns()
-            app = launch("application", command, args.app_cpus)
+            app = launch("application", command, args.app_cpus, extra=app_environment)
             connection, _ = listener.accept()
             with connection:
                 stream = connection.makefile("rwb", buffering=0)
@@ -424,6 +505,15 @@ def run(args):
                     result["startup"]["qualified"] = result["startup"]["initial_grid_matches_requested"]
                 result["running_executable"] = str(Path(f"/proc/{app.pid}/exe").resolve())
                 result["running_executable_sha256"] = source_hash(f"/proc/{app.pid}/exe")
+                if not software:
+                    # After the first matching frame, so the application has
+                    # created whatever GL context it draws with.
+                    result["gpu"]["application"] = gpu_evidence(app.pid)
+                    if args.kind == "ghostty":
+                        logs[-1].flush()
+                        result["gpu"]["ghostty"] = ghostty_presentation(evidence / "application.log")
+                        if args.purpose == "measurement" and not result["gpu"]["ghostty"]["gpu_presentation"]:
+                            raise RuntimeError("Ghostty fell back from GPU presentation: " + "; ".join(result["gpu"]["ghostty"]["fallback"]))
                 def samples():
                     return {name: process_sample(pid) for name, pid in [("application", app.pid), ("fixture", ready["pid"]),
                                                                       ("compositor", compositor.pid), ("observer", observer.pid)]}
@@ -505,7 +595,33 @@ def run(args):
                         "final_write_to_capture_ns": unique[last]["ready_ns"] - writes[-1]["write_end_ns"],
                         "observed_unique_per_second": len(unique) / ((unique[last]["ready_ns"] - writes[0]["write_start_ns"]) / 1e9),
                         "bytes": sum(e["bytes"] for e in writes), "before": before, "after": after})
+                result["throughput"] = []
+                for index, corpus in enumerate(args.throughput):
+                    sequence = 50000 + index
+                    before = samples()
+                    send(stream, {"operation": "throughput", "path": str(corpus.resolve()), "repeat": args.throughput_repeat,
+                                  "sequence": sequence})
+                    done = fixtures.until(lambda e: e["event"] == "throughput_done", timeout=600)
+                    seen = observations.until(lambda e: e["event"] == "capture" and e["valid"] and e["sequence"] == sequence,
+                                              timeout=600)
+                    after = samples()
+                    ticks = result["clock_ticks_per_second"]
+                    flood = [e for e in observations.events
+                             if e["event"] == "capture" and done["write_start_ns"] <= e["ready_ns"] <= done["write_end_ns"]]
+                    consumed = done["write_end_ns"] - done["write_start_ns"]
+                    result["throughput"].append({
+                        "corpus": str(corpus), "corpus_sha256": source_hash(corpus), "repeat": args.throughput_repeat,
+                        "bytes": done["bytes"], "consume_ns": consumed, "mib_per_second": done["bytes"] / 2**20 / (consumed / 1e9),
+                        "to_final_capture_ns": seen["ready_ns"] - done["write_start_ns"],
+                        "captures_during": len(flood),
+                        "application_cpu_ms": (after["application"]["cpu_ticks"] - before["application"]["cpu_ticks"]) / ticks * 1000,
+                        "compositor_cpu_ms": (after["compositor"]["cpu_ticks"] - before["compositor"]["cpu_ticks"]) / ticks * 1000,
+                        "before": before, "after": after})
                 subprocess.run(["grim", str(evidence / "final.png")], env=env, check=True, timeout=5)
+                if not software and args.kind == "ghostty":
+                    result["gpu"]["ghostty"] = ghostty_presentation(evidence / "application.log")
+                    if args.purpose == "measurement" and not result["gpu"]["ghostty"]["gpu_presentation"]:
+                        raise RuntimeError("Ghostty fell back from GPU presentation during the run")
                 result["status"] = "passed"
     except Exception as error:
         result.update(status="failed", error=repr(error))
@@ -535,6 +651,14 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--font-dir", type=Path, required=True); parser.add_argument("--fallback-dir", type=Path, required=True)
     parser.add_argument("--mesa", type=Path)
+    parser.add_argument("--renderer", choices=("software", "gpu"), default="software",
+                        help="gpu: the private compositor renders with GLES2 and applications use the host's GPU drivers")
+    parser.add_argument("--app-env", type=Path, help="JSON object of extra environment for the application only (GPU driver paths)")
+    parser.add_argument("--throughput", action="append", default=[], type=Path, metavar="CORPUS",
+                        help="after the streams, write CORPUS through the terminal as fast as it consumes it")
+    parser.add_argument("--throughput-repeat", type=int, default=8, help="whole repeats of each throughput corpus")
+    parser.add_argument("--protocol-xml", action="append", default=[], metavar="NAME=PATH",
+                        help="protocol XML for the observer (screencopy, virtual-keyboard) where no Cargo registry has it")
     parser.add_argument("--cols", type=int, default=120); parser.add_argument("--rows", type=int, default=40)
     parser.add_argument("--font-size", type=float, default=14.0); parser.add_argument("--ghostty-cell-height")
     parser.add_argument("--window-width", type=int, default=1400); parser.add_argument("--window-height", type=int, default=1080)

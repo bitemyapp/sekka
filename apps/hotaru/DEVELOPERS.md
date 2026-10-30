@@ -165,6 +165,12 @@ The [history budget check](docs/history-budget-check.md) keeps the test that
 runs after every parsed byte inline. It also records how that loop was
 profiled on `wx-workstation`, with `perf`, IBS and callgrind.
 
+The [GPU comparison](docs/gpu-comparison-2026-10-30.md) measures both
+applications' shipped rendering paths on wx's NVIDIA GPU and the laptop's Intel
+GPU: startup, latency, idle cost, paced updates and bulk throughput.
+`tools/frame-benchmark.py --renderer gpu` and the throughput phase are
+described in [frame-benchmark.md](docs/frame-benchmark.md).
+
 [Automatic URL and path detection](docs/automatic-links.md) now uses the pinned
 default rule on bounded logical context from the exact displayed snapshot.
 Worker results and path-helper completion are checked against the original

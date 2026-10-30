@@ -209,7 +209,15 @@ specific work:
 - Implement the DEC and ANSI modes the reference reports but Hotaru doesn't
   (2, 12, 3, 4, 5, 8, 40, 45, 1039, 1045, 2026, 2031, 2033, 2048), and
   DECSASD.
-- Investigate the 60 Hz scroll capture shortfall (114/120) and its compositor cost.
+- The [GPU comparison](gpu-comparison-2026-10-30.md) leaves this work:
+  - The 60 Hz scroll shortfall (114/120) doesn't occur with a GPU compositor.
+    Hotaru's compositor cost does: about 45–70 % more than Ghostty's when
+    scrolling at 60 Hz, from copying CPU-drawn buffers.
+  - Close the GUI throughput gap. Ghostty consumes ASCII 1.2–1.6× faster, and
+    Unicode and (on the laptop) styled text up to 1.7× faster. Hotaru's
+    application reaches about 30 % of its own core feed's speed on ASCII.
+    Profile the path from the PTY to the screen: reading, handing data to the
+    terminal, and drawing.
 
 In the software GUI pilot Hotaru already leads on startup, keyboard latency,
 idle CPU and memory.

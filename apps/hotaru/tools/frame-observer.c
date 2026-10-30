@@ -58,11 +58,29 @@ static uint32_t checksum(uint32_t sequence) {
     }
     return ~crc;
 }
+static uint32_t bytes_per_pixel(uint32_t f) {
+    return f == WL_SHM_FORMAT_RGB888 || f == WL_SHM_FORMAT_BGR888 ? 3 : 4;
+}
 static uint32_t pixel(int x, int y) {
     if (x < 0 || y < 0 || (uint32_t)x >= width || (uint32_t)y >= height) return UINT32_MAX;
     if (flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT) y = (int)height - 1 - y;
+    const uint8_t *at = pixels + (size_t)y * stride + (size_t)x * bytes_per_pixel(format);
+    /* Three-byte formats, such as a GPU compositor's read format: BGR888
+     * stores R, G, B in memory, RGB888 B, G, R. */
+    if (format == WL_SHM_FORMAT_BGR888) return (uint32_t)at[0] << 16 | (uint32_t)at[1] << 8 | at[2];
+    if (format == WL_SHM_FORMAT_RGB888) return (uint32_t)at[2] << 16 | (uint32_t)at[1] << 8 | at[0];
     uint32_t value;
-    memcpy(&value, pixels + (size_t)y * stride + (size_t)x * 4, 4);
+    memcpy(&value, at, 4);
+    if (format == WL_SHM_FORMAT_XRGB2101010 || format == WL_SHM_FORMAT_ARGB2101010 ||
+        format == WL_SHM_FORMAT_XBGR2101010 || format == WL_SHM_FORMAT_ABGR2101010) {
+        /* Ten-bit channels (a GPU compositor's read format) back to the
+         * eight-bit colors they hold exactly. */
+        uint32_t high = ((value >> 20 & 1023) * 255 + 511) / 1023, mid = ((value >> 10 & 1023) * 255 + 511) / 1023,
+                 low = ((value & 1023) * 255 + 511) / 1023;
+        if (format == WL_SHM_FORMAT_XRGB2101010 || format == WL_SHM_FORMAT_ARGB2101010)
+            return high << 16 | mid << 8 | low;
+        return low << 16 | mid << 8 | high;
+    }
     if (format == WL_SHM_FORMAT_XBGR8888 || format == WL_SHM_FORMAT_ABGR8888)
         return ((value & 255) << 16) | (value & 0xff00) | ((value >> 16) & 255);
     return value & 0xffffff;
@@ -133,8 +151,14 @@ static void offered(void *data, struct zwlr_screencopy_frame_v1 *object, uint32_
                     uint32_t w, uint32_t h, uint32_t s) {
     (void)data; (void)object;
     if (f != WL_SHM_FORMAT_XRGB8888 && f != WL_SHM_FORMAT_ARGB8888 &&
-        f != WL_SHM_FORMAT_XBGR8888 && f != WL_SHM_FORMAT_ABGR8888) fail("unsupported SHM format");
-    if (!w || !h || w > INT_MAX / 4 || h > INT_MAX || s < w * 4 || s > INT_MAX ||
+        f != WL_SHM_FORMAT_XBGR8888 && f != WL_SHM_FORMAT_ABGR8888 &&
+        f != WL_SHM_FORMAT_XRGB2101010 && f != WL_SHM_FORMAT_ARGB2101010 &&
+        f != WL_SHM_FORMAT_XBGR2101010 && f != WL_SHM_FORMAT_ABGR2101010 &&
+        f != WL_SHM_FORMAT_RGB888 && f != WL_SHM_FORMAT_BGR888) {
+        fprintf(stderr, "frame-observer: SHM format 0x%08x\n", f);
+        fail("unsupported SHM format");
+    }
+    if (!w || !h || w > INT_MAX / 4 || h > INT_MAX || s < w * bytes_per_pixel(f) || s > INT_MAX ||
         (uint64_t)s * h > MAX_BUFFER) fail("invalid/oversized output dimensions");
     if (buffer && (w != width || h != height || s != stride || f != format)) fail("output geometry changed");
     if (!buffer) {

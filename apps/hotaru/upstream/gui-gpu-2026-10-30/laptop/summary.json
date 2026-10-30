@@ -1,0 +1,1072 @@
+{
+  "schema": 1,
+  "label": "laptop, Intel Xe (PTL), GPU",
+  "startup": {
+    "hotaru": {
+      "executable": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "sha256": "3de75828ccfda346eb7628b16a740513666ab496badb34b3829ab9fa0660d2ce",
+      "trials": 4,
+      "launch_to_pty_ready_ms": {
+        "median": 49.2860615,
+        "min": 49.076362,
+        "max": 49.795905,
+        "samples": [
+          49.338302,
+          49.076362,
+          49.233821,
+          49.795905
+        ]
+      },
+      "launch_to_matching_capture_ms": {
+        "median": 71.72124,
+        "min": 71.232839,
+        "max": 72.186966,
+        "samples": [
+          71.232839,
+          71.745188,
+          72.186966,
+          71.697292
+        ]
+      }
+    },
+    "ghostty": {
+      "executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "trials": 4,
+      "launch_to_pty_ready_ms": {
+        "median": 369.2341805,
+        "min": 362.492231,
+        "max": 369.785319,
+        "samples": [
+          369.785319,
+          362.492231,
+          368.870128,
+          369.598233
+        ]
+      },
+      "launch_to_matching_capture_ms": {
+        "median": 410.4665745,
+        "min": 408.577007,
+        "max": 411.649834,
+        "samples": [
+          411.09977,
+          411.649834,
+          408.577007,
+          409.833379
+        ]
+      }
+    }
+  },
+  "steady": {
+    "hotaru": {
+      "executable": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "sha256": "3de75828ccfda346eb7628b16a740513666ab496badb34b3829ab9fa0660d2ce",
+      "trials": 2,
+      "keyboard_ms": {
+        "n": 1000,
+        "p50": 30.225008000000003,
+        "p95": 37.49652975,
+        "p99": 38.58846019,
+        "max": 40.297189
+      },
+      "idle": {
+        "seconds": [
+          30.0,
+          30.0,
+          30.0,
+          30.0
+        ],
+        "app_cpu_ms": [
+          10,
+          0,
+          0,
+          0
+        ],
+        "app_rss_mib": [
+          53,
+          53,
+          53,
+          53
+        ]
+      },
+      "streams": {
+        "marker 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 100,
+            "compositor_cpu_ms": 290,
+            "final_write_to_capture_ms": 18.16
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 90,
+            "compositor_cpu_ms": 290,
+            "final_write_to_capture_ms": 15.18
+          }
+        ],
+        "marker 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 100,
+            "compositor_cpu_ms": 160,
+            "final_write_to_capture_ms": 13.59
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 80,
+            "compositor_cpu_ms": 170,
+            "final_write_to_capture_ms": 12.78
+          }
+        ],
+        "marker unpaced": [
+          {
+            "seen": 1,
+            "produced": 120,
+            "app_cpu_ms": 10,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 18.57
+          },
+          {
+            "seen": 1,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 19.96
+          }
+        ],
+        "sparse 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 110,
+            "compositor_cpu_ms": 320,
+            "final_write_to_capture_ms": 21.4
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 130,
+            "compositor_cpu_ms": 310,
+            "final_write_to_capture_ms": 8.42
+          }
+        ],
+        "sparse 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 90,
+            "compositor_cpu_ms": 170,
+            "final_write_to_capture_ms": 11.57
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 90,
+            "compositor_cpu_ms": 180,
+            "final_write_to_capture_ms": 10.42
+          }
+        ],
+        "sparse unpaced": [
+          {
+            "seen": 1,
+            "produced": 120,
+            "app_cpu_ms": 10,
+            "compositor_cpu_ms": 10,
+            "final_write_to_capture_ms": 35.75
+          },
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 20,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 34.88
+          }
+        ],
+        "scroll 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 200,
+            "compositor_cpu_ms": 350,
+            "final_write_to_capture_ms": 6.95
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 170,
+            "compositor_cpu_ms": 360,
+            "final_write_to_capture_ms": 5.64
+          }
+        ],
+        "scroll 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 180,
+            "compositor_cpu_ms": 220,
+            "final_write_to_capture_ms": 15.03
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 170,
+            "compositor_cpu_ms": 230,
+            "final_write_to_capture_ms": 19.74
+          }
+        ],
+        "scroll unpaced": [
+          {
+            "seen": 1,
+            "produced": 120,
+            "app_cpu_ms": 10,
+            "compositor_cpu_ms": 10,
+            "final_write_to_capture_ms": 19.58
+          },
+          {
+            "seen": 1,
+            "produced": 120,
+            "app_cpu_ms": 10,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 20.28
+          }
+        ]
+      }
+    },
+    "ghostty": {
+      "executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "trials": 2,
+      "keyboard_ms": {
+        "n": 1000,
+        "p50": 32.868577,
+        "p95": 39.474434099999996,
+        "p99": 40.518236099999996,
+        "max": 41.655678
+      },
+      "idle": {
+        "seconds": [
+          30.0,
+          30.0,
+          30.0,
+          30.0
+        ],
+        "app_cpu_ms": [
+          70,
+          70,
+          70,
+          80
+        ],
+        "app_rss_mib": [
+          199,
+          199,
+          199,
+          199
+        ]
+      },
+      "streams": {
+        "marker 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 140,
+            "compositor_cpu_ms": 260,
+            "final_write_to_capture_ms": 15.72
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 130,
+            "compositor_cpu_ms": 280,
+            "final_write_to_capture_ms": 14.2
+          }
+        ],
+        "marker 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 120,
+            "compositor_cpu_ms": 120,
+            "final_write_to_capture_ms": 15.41
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 100,
+            "compositor_cpu_ms": 160,
+            "final_write_to_capture_ms": 13.46
+          }
+        ],
+        "marker unpaced": [
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 19.68
+          },
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 10,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 35.42
+          }
+        ],
+        "sparse 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 140,
+            "compositor_cpu_ms": 260,
+            "final_write_to_capture_ms": 12.51
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 130,
+            "compositor_cpu_ms": 280,
+            "final_write_to_capture_ms": 14.39
+          }
+        ],
+        "sparse 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 110,
+            "compositor_cpu_ms": 130,
+            "final_write_to_capture_ms": 13.26
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 110,
+            "compositor_cpu_ms": 140,
+            "final_write_to_capture_ms": 18.28
+          }
+        ],
+        "sparse unpaced": [
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 19.97
+          },
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 36.41
+          }
+        ],
+        "scroll 30": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 170,
+            "compositor_cpu_ms": 260,
+            "final_write_to_capture_ms": 7.28
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 160,
+            "compositor_cpu_ms": 280,
+            "final_write_to_capture_ms": 19.33
+          }
+        ],
+        "scroll 60": [
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 150,
+            "compositor_cpu_ms": 150,
+            "final_write_to_capture_ms": 15.33
+          },
+          {
+            "seen": 120,
+            "produced": 120,
+            "app_cpu_ms": 160,
+            "compositor_cpu_ms": 160,
+            "final_write_to_capture_ms": 13.99
+          }
+        ],
+        "scroll unpaced": [
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 10,
+            "final_write_to_capture_ms": 35.37
+          },
+          {
+            "seen": 2,
+            "produced": 120,
+            "app_cpu_ms": 0,
+            "compositor_cpu_ms": 0,
+            "final_write_to_capture_ms": 35.28
+          }
+        ]
+      }
+    }
+  },
+  "gates": {
+    "startup": {
+      "trials": 8,
+      "renderer": "gpu",
+      "cpu_sets": {
+        "app": "0-2",
+        "compositor": "3",
+        "observer": "4",
+        "controller": "5",
+        "fixture": "6"
+      },
+      "sources": {
+        "frame-observer.c": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+        "frame-matrix.py": "713e44c358bc35bc5b7596cb046770005f9580c3242cbc91ec8d54de627941f1",
+        "frame-benchmark.py": "b3288ac5b4bdc0b1105c31aa1c10a1c7d31405a3475e74b7a78a9789d3c24203"
+      },
+      "preflight_attempts": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        1,
+        1,
+        2
+      ],
+      "compiler_overlap_samples": 0
+    },
+    "steady": {
+      "trials": 4,
+      "renderer": "gpu",
+      "cpu_sets": {
+        "app": "0-2",
+        "compositor": "3",
+        "observer": "4",
+        "controller": "5",
+        "fixture": "6"
+      },
+      "sources": {
+        "frame-observer.c": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+        "frame-matrix.py": "713e44c358bc35bc5b7596cb046770005f9580c3242cbc91ec8d54de627941f1",
+        "frame-benchmark.py": "b3288ac5b4bdc0b1105c31aa1c10a1c7d31405a3475e74b7a78a9789d3c24203"
+      },
+      "preflight_attempts": [
+        3,
+        1,
+        1,
+        1
+      ],
+      "compiler_overlap_samples": 0
+    },
+    "throughput": {
+      "trials": 8,
+      "cpu_sets": {
+        "app": "0-2",
+        "compositor": "3",
+        "observer": "4",
+        "controller": "5",
+        "fixture": "6"
+      },
+      "preflight_attempts": [
+        1,
+        8,
+        4,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "gpu": {
+    "hotaru": {
+      "compositor": [
+        "[render/egl.c:374] EGL vendor: Mesa Project",
+        "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+        "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.5",
+        "[render/gles2/renderer.c:540] GL vendor: Intel",
+        "[render/gles2/renderer.c:541] GL renderer: Mesa Intel(R) Graphics (PTL)"
+      ],
+      "presentation": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "application": {
+        "comm": ".hotaru-wrapped",
+        "libraries": [],
+        "devices": []
+      }
+    },
+    "ghostty": {
+      "compositor": [
+        "[render/egl.c:374] EGL vendor: Mesa Project",
+        "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+        "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.5",
+        "[render/gles2/renderer.c:540] GL vendor: Intel",
+        "[render/gles2/renderer.c:541] GL renderer: Mesa Intel(R) Graphics (PTL)"
+      ],
+      "presentation": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "application": {
+        "comm": ".ghostty-wrappe",
+        "libraries": [
+          "libEGL.so.1.1.0",
+          "libEGL_mesa.so.0.0.0",
+          "libGLESv2.so.2.1.0",
+          "libGLX.so.0.0.0",
+          "libGLdispatch.so.0.0.0",
+          "libdrm.so.2.134.0",
+          "libdrm_amdgpu.so.1.134.0",
+          "libdrm_intel.so.1.134.0",
+          "libgallium-26.2.5.so",
+          "libgbm.so.1.0.0",
+          "libvulkan.so.1.4.363"
+        ],
+        "devices": [
+          "/dev/dri/renderD128"
+        ]
+      }
+    }
+  },
+  "throughput": {
+    "hotaru": {
+      "ascii": {
+        "bytes": 67109056,
+        "trials": 4,
+        "consume_ms": {
+          "median": 223.0672255,
+          "min": 219.540224,
+          "max": 225.208399,
+          "samples": [
+            219.540224,
+            221.110367,
+            225.208399,
+            225.024084
+          ]
+        },
+        "mib_per_second": {
+          "median": 286.9319264357165,
+          "min": 284.18204378544846,
+          "max": 291.51916646249185,
+          "samples": [
+            291.51916646249185,
+            289.44903838664766,
+            284.18204378544846,
+            284.4148144847853
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 253.349041,
+          "min": 252.408894,
+          "max": 254.897526,
+          "samples": [
+            252.970974,
+            254.897526,
+            253.727108,
+            252.408894
+          ]
+        },
+        "captures_during": [
+          13,
+          13,
+          14,
+          14
+        ],
+        "application_cpu_ms": {
+          "median": 230.0,
+          "min": 220.0,
+          "max": 240.0,
+          "samples": [
+            220.0,
+            240.0,
+            230.0,
+            230.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 20.0,
+          "min": 20.0,
+          "max": 20.0,
+          "samples": [
+            20.0,
+            20.0,
+            20.0,
+            20.0
+          ]
+        }
+      },
+      "styled": {
+        "bytes": 67108864,
+        "trials": 4,
+        "consume_ms": {
+          "median": 408.2812265,
+          "min": 403.782082,
+          "max": 432.09773,
+          "samples": [
+            408.840237,
+            403.782082,
+            407.722216,
+            432.09773
+          ]
+        },
+        "mib_per_second": {
+          "median": 156.75499098187697,
+          "min": 148.11464063928315,
+          "max": 158.50133736246374,
+          "samples": [
+            156.54036517936956,
+            158.50133736246374,
+            156.96961678438439,
+            148.11464063928315
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 441.061103,
+          "min": 439.491161,
+          "max": 459.293559,
+          "samples": [
+            441.202406,
+            440.9198,
+            439.491161,
+            459.293559
+          ]
+        },
+        "captures_during": [
+          26,
+          25,
+          26,
+          27
+        ],
+        "application_cpu_ms": {
+          "median": 450.0,
+          "min": 440.0,
+          "max": 450.0,
+          "samples": [
+            450.0,
+            440.0,
+            450.0,
+            450.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 40.0,
+          "min": 40.0,
+          "max": 50.0,
+          "samples": [
+            40.0,
+            40.0,
+            40.0,
+            50.0
+          ]
+        }
+      },
+      "unicode": {
+        "bytes": 67109240,
+        "trials": 4,
+        "consume_ms": {
+          "median": 533.2897370000001,
+          "min": 524.546254,
+          "max": 544.923523,
+          "samples": [
+            532.92259,
+            544.923523,
+            524.546254,
+            533.656884
+          ]
+        },
+        "mib_per_second": {
+          "median": 120.0105392539989,
+          "min": 117.44833151851836,
+          "max": 122.01089626224453,
+          "samples": [
+            120.09316133801529,
+            117.44833151851836,
+            122.01089626224453,
+            119.92791716998252
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 569.80281,
+          "min": 552.64832,
+          "max": 571.144533,
+          "samples": [
+            569.605191,
+            570.000429,
+            552.64832,
+            571.144533
+          ]
+        },
+        "captures_during": [
+          33,
+          34,
+          33,
+          33
+        ],
+        "application_cpu_ms": {
+          "median": 585.0,
+          "min": 570.0,
+          "max": 590.0,
+          "samples": [
+            580.0,
+            590.0,
+            590.0,
+            570.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 55.0,
+          "min": 50.0,
+          "max": 60.0,
+          "samples": [
+            60.0,
+            50.0,
+            50.0,
+            60.0
+          ]
+        }
+      },
+      "cursor": {
+        "bytes": 67109064,
+        "trials": 4,
+        "consume_ms": {
+          "median": 767.040747,
+          "min": 754.908589,
+          "max": 784.099648,
+          "samples": [
+            764.435824,
+            769.64567,
+            754.908589,
+            784.099648
+          ]
+        },
+        "mib_per_second": {
+          "median": 83.4387600996933,
+          "min": 81.62252195637166,
+          "max": 84.77872906392814,
+          "samples": [
+            83.72212385334689,
+            83.15539634603971,
+            84.77872906392814,
+            81.62252195637166
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 798.9860960000001,
+          "min": 795.586146,
+          "max": 814.160357,
+          "samples": [
+            798.017142,
+            799.95505,
+            795.586146,
+            814.160357
+          ]
+        },
+        "captures_during": [
+          47,
+          48,
+          47,
+          49
+        ],
+        "application_cpu_ms": {
+          "median": 825.0,
+          "min": 820.0,
+          "max": 840.0,
+          "samples": [
+            820.0,
+            820.0,
+            830.0,
+            840.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 90.0,
+          "min": 90.0,
+          "max": 90.0,
+          "samples": [
+            90.0,
+            90.0,
+            90.0,
+            90.0
+          ]
+        }
+      }
+    },
+    "ghostty": {
+      "ascii": {
+        "bytes": 67109056,
+        "trials": 4,
+        "consume_ms": {
+          "median": 184.6984815,
+          "min": 176.81035,
+          "max": 195.77092,
+          "samples": [
+            186.210072,
+            195.77092,
+            183.186891,
+            176.81035
+          ]
+        },
+        "mib_per_second": {
+          "median": 346.5349014819626,
+          "min": 326.91363510713825,
+          "max": 361.9707958582105,
+          "samples": [
+            343.69882583724444,
+            326.91363510713825,
+            349.3709771266807,
+            361.9707958582105
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 211.511424,
+          "min": 203.146595,
+          "max": 220.206678,
+          "samples": [
+            220.206678,
+            219.489459,
+            203.533389,
+            203.146595
+          ]
+        },
+        "captures_during": [
+          11,
+          12,
+          11,
+          11
+        ],
+        "application_cpu_ms": {
+          "median": 250.0,
+          "min": 250.0,
+          "max": 260.0,
+          "samples": [
+            260.0,
+            250.0,
+            250.0,
+            250.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 10.0,
+          "min": 0.0,
+          "max": 10.0,
+          "samples": [
+            10.0,
+            10.0,
+            0.0,
+            10.0
+          ]
+        }
+      },
+      "styled": {
+        "bytes": 67108864,
+        "trials": 4,
+        "consume_ms": {
+          "median": 245.2039175,
+          "min": 225.936387,
+          "max": 266.701863,
+          "samples": [
+            225.936387,
+            248.180955,
+            242.22688,
+            266.701863
+          ]
+        },
+        "mib_per_second": {
+          "median": 261.04572878728925,
+          "min": 239.9683274803371,
+          "max": 283.26557244628333,
+          "samples": [
+            283.26557244628333,
+            257.8763547750874,
+            264.2151027994911,
+            239.9683274803371
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 278.7519515,
+          "min": 244.348691,
+          "max": 293.500898,
+          "samples": [
+            244.348691,
+            280.46506,
+            277.038843,
+            293.500898
+          ]
+        },
+        "captures_during": [
+          14,
+          16,
+          15,
+          17
+        ],
+        "application_cpu_ms": {
+          "median": 430.0,
+          "min": 420.0,
+          "max": 440.0,
+          "samples": [
+            420.0,
+            430.0,
+            430.0,
+            440.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 10.0,
+          "min": 10.0,
+          "max": 10.0,
+          "samples": [
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ]
+        }
+      },
+      "unicode": {
+        "bytes": 67109240,
+        "trials": 4,
+        "consume_ms": {
+          "median": 332.014614,
+          "min": 325.067436,
+          "max": 341.327585,
+          "samples": [
+            325.067436,
+            330.186961,
+            333.842267,
+            341.327585
+          ]
+        },
+        "mib_per_second": {
+          "median": 192.76952064280098,
+          "min": 187.50420825654325,
+          "max": 196.8833278690609,
+          "samples": [
+            196.8833278690609,
+            193.83066607994544,
+            191.70837520565652,
+            187.50420825654325
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 360.11515499999996,
+          "min": 358.170803,
+          "max": 361.361144,
+          "samples": [
+            361.361144,
+            358.170803,
+            360.12904,
+            360.10127
+          ]
+        },
+        "captures_during": [
+          20,
+          21,
+          21,
+          21
+        ],
+        "application_cpu_ms": {
+          "median": 555.0,
+          "min": 540.0,
+          "max": 560.0,
+          "samples": [
+            540.0,
+            550.0,
+            560.0,
+            560.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 20.0,
+          "min": 10.0,
+          "max": 30.0,
+          "samples": [
+            10.0,
+            30.0,
+            20.0,
+            20.0
+          ]
+        }
+      },
+      "cursor": {
+        "bytes": 67109064,
+        "trials": 4,
+        "consume_ms": {
+          "median": 3085.2005485,
+          "min": 3072.274891,
+          "max": 3096.795148,
+          "samples": [
+            3084.728134,
+            3085.672963,
+            3072.274891,
+            3096.795148
+          ]
+        },
+        "mib_per_second": {
+          "median": 20.744256727999662,
+          "min": 20.666588416801304,
+          "max": 20.831531358846522,
+          "samples": [
+            20.747433146360795,
+            20.74108030963853,
+            20.831531358846522,
+            20.666588416801304
+          ]
+        },
+        "to_final_capture_ms": {
+          "median": 3118.5662895,
+          "min": 3108.096702,
+          "max": 3139.202698,
+          "samples": [
+            3111.643737,
+            3125.488842,
+            3108.096702,
+            3139.202698
+          ]
+        },
+        "captures_during": [
+          191,
+          191,
+          190,
+          192
+        ],
+        "application_cpu_ms": {
+          "median": 3590.0,
+          "min": 3570.0,
+          "max": 3620.0,
+          "samples": [
+            3580.0,
+            3570.0,
+            3600.0,
+            3620.0
+          ]
+        },
+        "compositor_cpu_ms": {
+          "median": 195.0,
+          "min": 180.0,
+          "max": 210.0,
+          "samples": [
+            180.0,
+            190.0,
+            200.0,
+            210.0
+          ]
+        }
+      }
+    }
+  }
+}
