@@ -133,6 +133,12 @@ translation; native and GTK apps keep their own Close/Quit handling. The
 `terminal-close` / `terminal-quit` bindings can be overridden or unbound in
 `keys.bindings`, and shortcut inhibitors still take precedence.
 
+The system's chords in the table come before the translation, so other apps
+don't get those either. ❖⇧[ and ❖⇧] switch tabs, so apps that don't use the
+kit no longer receive them as Ctrl+Shift+[ and Ctrl+Shift+] (VS Code's Fold
+and Unfold, for one). `"Super+Shift+bracketleft" = "none"` and
+`"Super+Shift+bracketright" = "none"` in `keys.bindings` give them back.
+
 ## IPC
 
 ### Compositor: `$AIZOME_SOCKET`
