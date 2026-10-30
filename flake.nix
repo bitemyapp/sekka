@@ -544,6 +544,19 @@
           aizomeSource = inputs.aizome.outPath;
         };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
+        # Installed systems on Nixpkgs' latest kernel load Sekka's rebuilt xe.
+        xe-dpt =
+          let
+            installed =
+              (import ./nix/reference-systems.nix {
+                inherit inputs applicationCatalog;
+                desktops = [ "tatami" ];
+              }).systems.tatami.config;
+          in
+          assert builtins.elem "linux-xe-dpt-cursor" (
+            map (p: p.pname or "") installed.boot.extraModulePackages
+          );
+          import ./nix/xe-dpt-test.nix { inherit pkgs; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };

@@ -1,0 +1,78 @@
+From bfdd61ba6f21ec08cf419c059fa59f285f0327d8 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Thu, 29 Oct 2026 21:51:02 -0500
+Subject: [PATCH] drm/xe/display: Fill a DPT with one walk over the BO
+
+__xe_pin_fb_vma_dpt() fills a normal view's DPT by calling xe_bo_addr()
+for each 4 KiB page. For a BO in system memory, __xe_bo_addr() starts a
+cursor at the head of the BO's sg table and walks it to that page, so
+filling the DPT is quadratic in the BO's DMA segments.
+
+Every flip to a framebuffer the plane doesn't already show pins it and
+fills a new DPT, inside the atomic commit ioctl. Once physical memory is
+fragmented, a scanout buffer's pages come in hundreds of segments. On a
+Panther Lake laptop (2880x1800 at 120 Hz, IOMMU in passthrough) after
+three days of uptime, this walk took about 90% of the compositor's CPU
+time, close to 3 ms for each flip of a 4-tiled CCS framebuffer.
+
+Walk the BO with a single cursor instead, as xe_ggtt_map_bo() does.
+
+The cost was found with perf record and perf ftrace on the running
+compositor. Claude Opus 5.5 (an AI coding assistant, in Claude Code)
+did that profiling and wrote this patch. It was built as a module for
+v7.3 with a distribution's configuration and loaded in QEMU, which has
+no xe device; it has not yet been run on xe hardware.
+
+Fixes: 44e694958b95 ("drm/xe/display: Implement display support")
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/xe/display/xe_fb_pin.c | 25 ++++++++++++++++++++-----
+ 1 file changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/xe/display/xe_fb_pin.c b/drivers/gpu/drm/xe/display/xe_fb_pin.c
+index e091162..e3da9ce 100644
+--- a/drivers/gpu/drm/xe/display/xe_fb_pin.c
++++ b/drivers/gpu/drm/xe/display/xe_fb_pin.c
+@@ -17,6 +17,7 @@
+ #include "xe_ggtt.h"
+ #include "xe_pat.h"
+ #include "xe_pm.h"
++#include "xe_res_cursor.h"
+ #include "xe_vram_types.h"
+ 
+ static void
+@@ -175,12 +176,26 @@ static int __xe_pin_fb_vma_dpt(struct drm_gem_object *obj,
+ 
+ 	if (intel_gtt_view_is_normal(view)) {
+ 		u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo, xe_cache_pat_idx(xe, XE_CACHE_NONE));
+-		u32 x;
++		struct xe_res_cursor cur;
++		u32 x = 0;
+ 
+-		for (x = 0; x < size / XE_PAGE_SIZE; x++) {
+-			u64 addr = xe_bo_addr(bo, x * XE_PAGE_SIZE, XE_PAGE_SIZE);
+-
+-			iosys_map_wr(&dpt->vmap, x * 8, u64, pte | addr);
++		/*
++		 * Walk the BO once, as xe_ggtt_map_bo() does. xe_bo_addr()
++		 * starts each lookup at the beginning of the BO's sg table,
++		 * so calling it per page is quadratic in its DMA segments.
++		 */
++		if (!xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo)) {
++			for (xe_res_first_sg(xe_bo_sg(bo), 0, size, &cur);
++			     cur.remaining; xe_res_next(&cur, XE_PAGE_SIZE))
++				iosys_map_wr(&dpt->vmap, x++ * 8, u64,
++					     pte | xe_res_dma(&cur));
++		} else {
++			u64 offset = vram_region_gpu_offset(bo->ttm.resource);
++
++			for (xe_res_first(bo->ttm.resource, 0, size, &cur);
++			     cur.remaining; xe_res_next(&cur, XE_PAGE_SIZE))
++				iosys_map_wr(&dpt->vmap, x++ * 8, u64,
++					     pte | (cur.start + offset));
+ 		}
+ 	} else if (intel_gtt_view_is_remapped(view)) {
+ 		write_dpt_remapped(bo, &view->remapped, &dpt->vmap);
+-- 
+2.56.0
+
