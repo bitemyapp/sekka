@@ -39,7 +39,10 @@ rustPlatform.buildRustPackage {
   inherit version;
   src = source;
   sourceRoot = "hotaru-source/desktop/aizome";
-  cargoLock.lockFile = "${src}/Cargo.lock";
+  cargoLock = {
+    lockFile = "${src}/Cargo.lock";
+    outputHashes = import ./cargo-output-hashes.nix;
+  };
   nativeBuildInputs = [
     pkg-config
     makeWrapper
