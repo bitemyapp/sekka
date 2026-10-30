@@ -214,6 +214,8 @@ pub fn open_from_keys(state: &mut State, win: WinId) {
     if let Some(o) = output {
         state.az.queue_redraw(&o);
     }
+    // The window keeps the keyboard (and hears ⌃ and ❖ come up: [`key`]).
+    state.update_keyboard_focus();
 }
 
 /// The pause is over: the menu shows, if it's the same one, still held
@@ -242,12 +244,19 @@ pub fn press(state: &mut State, win: WinId, pos: Point<f64, Logical>, serial: Se
     state.set_logic_pointer_grab(grab, serial, PointerFocusMode::Clear);
 }
 
-fn close(state: &mut State) {
+pub fn close(state: &mut State) {
     if let Some(m) = state.lg.m().overlays.marking.take()
         && let Some(o) = m.output
     {
         state.az.queue_redraw(&o);
     }
+}
+
+/// The menu went from the keys or a click: the keyboard goes where the
+/// focus is now (a verb may have moved it). Not from [`MarkingGrab`],
+/// which runs holding the pointer's lock.
+fn refocus(state: &mut State) {
+    state.update_keyboard_focus();
 }
 
 /// Runs the picked verb (or Desk).
@@ -483,13 +492,20 @@ impl PointerGrab<State> for MarkingGrab {
 
 /// Esc (or Space, as ⌃❖Space again) closes the menu; an arrow or a verb's
 /// letter picks it, and with the Desk ring open, a digit picks that Desk.
+///
+/// The modifiers, and every release, go on as though the menu weren't up.
+/// ⌃ and ❖ are still down when ⌃❖Space opens it, and the window keeps the
+/// keyboard, so it must hear them come up, or its next key after the menu
+/// arrives as a ⌃ chord. The core swallows the release of each key the
+/// menu took.
 pub fn key(state: &mut State, syms: &[Keysym], pressed: bool) -> Option<KeyDecision> {
     let sub = state.lg.r().overlays.marking.as_ref()?.sub;
-    if !pressed {
-        return Some(KeyDecision::Swallow);
+    if !pressed || syms.iter().any(|s| s.is_modifier_key()) {
+        return None;
     }
     if syms.iter().any(|s| matches!(s.raw(), keysyms::KEY_Escape | keysyms::KEY_space)) {
         close(state);
+        refocus(state);
         return Some(KeyDecision::Swallow);
     }
     if sub {
@@ -499,6 +515,7 @@ pub fn key(state: &mut State, syms: &[Keysym], pressed: bool) -> Option<KeyDecis
                 m.desk_hover = Some(d);
             }
             pick(state);
+            refocus(state);
         }
         return Some(KeyDecision::Swallow);
     }
@@ -512,6 +529,7 @@ pub fn key(state: &mut State, syms: &[Keysym], pressed: bool) -> Option<KeyDecis
         }
     } else {
         pick(state);
+        refocus(state);
     }
     Some(KeyDecision::Swallow)
 }
@@ -637,6 +655,7 @@ pub fn click(state: &mut State, x: f64, y: f64) {
     } else {
         close(state);
     }
+    refocus(state);
 }
 
 /// A menu opened near an output's edge (a tab under the menu bar) moves

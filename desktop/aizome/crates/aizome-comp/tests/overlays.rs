@@ -181,6 +181,54 @@ fn ctrl_super_space_opens_the_marking_menu_for_the_keys() {
     assert!(!keys.iter().any(|k| [1, 3, 32, 57].contains(k)), "{keys:?}");
 }
 
+/// Types X; the modifiers the app last heard of when it arrived.
+fn type_x(c: &Compositor, a: &TestClient) -> u32 {
+    let n = a.seen().keys.iter().filter(|(k, _)| *k == 45).count();
+    c.ok(Request::Synthesize { events: vec![Synthetic::Chord { keys: "x".into() }] });
+    let s = a.wait_seen("x reached the app", |s| s.keys.iter().filter(|(k, _)| *k == 45).count() > n);
+    s.keys.iter().rev().find(|(k, _)| *k == 45).unwrap().1
+}
+
+#[test]
+fn keys_after_the_keyboard_marking_menu_carry_no_stale_modifiers() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("test.a", 0xcc2222));
+    let _w = c.wait_window("test.a");
+    let chord = |keys: &str| c.ok(Request::Synthesize { events: vec![Synthetic::Chord { keys: keys.into() }] });
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    // ⌃ and ❖ come up while the menu is up: the app hears them, and X
+    // after Esc is a plain X, not ⌃X.
+    let x = || type_x(&c, &a);
+    chord("ctrl+super+space");
+    chord("escape");
+    assert_eq!(x(), 0, "x after Esc: {:?}", a.seen().keys);
+    // And after a verb picked by its key.
+    chord("ctrl+super+space");
+    chord("f");
+    assert_eq!(x(), 0, "x after F: {:?}", a.seen().keys);
+    // ⇧ pressed while ⌃❖ are still down, and let go after the verb: the
+    // app hears each come up.
+    c.ok(Request::Synthesize {
+        events: vec![
+            key("ctrl", true),
+            key("super", true),
+            key("space", true),
+            key("space", false),
+            key("shift", true),
+            key("ctrl", false),
+            key("super", false),
+            key("up", true),
+            key("up", false),
+            key("shift", false),
+        ],
+    });
+    a.wait_seen("filled by ⇧↑", |s| s.maximized);
+    assert_eq!(x(), 0, "x after ⇧↑: {:?}", a.seen().keys);
+    // The menu's own keys never reached it.
+    let keys: Vec<u32> = a.seen().keys.iter().map(|(k, _)| *k).collect();
+    assert!(!keys.iter().any(|k| [1, 33, 57, 103].contains(k)), "{keys:?}");
+}
+
 #[test]
 fn a_marking_menu_shows_after_a_pause_and_picks() {
     let c = Compositor::start(Options::default());
