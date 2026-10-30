@@ -823,7 +823,8 @@ rest); folders play their files in Hako's natural order.
   screen; ⇧N and ⇧P the next and previous item; S the picture to
   Pictures/Screenshots, ❖C to the clipboard. A click
   on the picture plays and pauses, a double click is full screen, the
-  wheel is volume. Files dropped on the window play.
+  wheel is volume. The keys stay with the picture after a click in the
+  bar (Tab moves them into it). Files dropped on the window play.
 - **Subtitles**: embedded text (SubRip, ASS/SSA, WebVTT, MP4's) and
   pictures (Blu-ray PGS, DVD, DVB), and files beside the video with its
   name (`Film.srt`, `Film.en.srt`), which show by themselves, as do

@@ -96,6 +96,8 @@ pub enum Msg {
     /// The pointer is over the full-screen controls, or left them.
     OverControls(bool),
     HideControls,
+    /// The keys go back to the picture (after the volume was dragged).
+    FocusPicture,
     Tick,
     CueTick,
     ShowInfo,
@@ -963,9 +965,12 @@ impl Program for Utsushi {
                 if self.fullscreen && self.playing() && !self.over_controls && self.has_video() {
                     self.controls = false;
                     cx.hide_cursor_until_moved();
+                    // What had the keys in the bar goes with it.
+                    cx.focus("stage");
                     self.schedule(cx);
                 }
             }
+            Msg::FocusPicture => cx.focus("stage"),
             Msg::Tick => {
                 self.tick = None;
                 self.pos = self.player().map_or(self.pos, Player::position);

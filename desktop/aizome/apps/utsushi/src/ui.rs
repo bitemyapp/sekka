@@ -390,11 +390,16 @@ fn bar(app: &Utsushi, floating: bool) -> Element<Msg> {
         Icon::Volume2
     };
     items.push(tool(vol_icon, if app.muted { "Unmute  M" } else { "Mute  M" }, Msg::Mute, true));
+    // A click takes the keyboard to a slider; once the volume's set it goes
+    // back to the picture, so Space and the rest still play and pause.
+    // (Tab to it keeps it, for its arrows.)
     items.push(
         slider(if app.muted { 0.0 } else { f64::from(app.volume) }, 0.0..=1.0)
             .on_change(|v| Msg::Volume(v as f32))
+            .on_release(Msg::FocusPicture)
             .width(84.0)
             .key("volume")
+            .id("volume")
             .label("Volume")
             .into(),
     );

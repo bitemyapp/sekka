@@ -232,6 +232,66 @@ fn full_screen_controls_go_after_full_screen_left_with_the_pointer_on_them() {
 }
 
 #[test]
+fn the_keys_stay_with_the_picture_after_the_volume() {
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    let vol = h.find_id(w, "volume").expect("the volume");
+    h.click(w, Point::new(vol.x0 + vol.width() * 0.25, vol.center().y));
+    assert!(h.program().volume < 0.5, "the click set the volume: {}", h.program().volume);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "after a click on the volume");
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+    // In full screen, with the pointer then off the window.
+    h.window_state(w, FULL_SCREEN);
+    let vol = h.find_id(w, "volume").expect("the volume over the picture");
+    h.click(w, vol.center());
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "after a click on the volume in full screen");
+    h.leave(w);
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+}
+
+#[test]
+fn the_keys_come_back_to_the_picture_from_the_bar() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    let in_the_bar = |h: &Harness<Utsushi>| {
+        let bottom = h.size(w).height;
+        h.focused_rect(w).is_some_and(|r| r.y0 >= bottom - aizome_utsushi::ui::BAR - 24.0 - 1.0 && r.y1 <= bottom)
+    };
+    // Tab into the bar, then full screen (as from the View menu): the bar
+    // that had the keys is gone, and they're the picture's.
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    assert!(in_the_bar(&h), "Tab went into the bar: {:?}", h.focused_rect(w));
+    h.send(Msg::ToggleFullscreen);
+    h.window_state(w, FULL_SCREEN);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "into full screen");
+    // And out of it from the floating bar.
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    assert!(in_the_bar(&h), "Tab went into the floating bar: {:?}", h.focused_rect(w));
+    h.send(Msg::Escape);
+    h.window_state(w, WINDOWED);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "out of full screen");
+    // The floating bar going as the pointer rests.
+    h.send(Msg::ToggleFullscreen);
+    h.window_state(w, FULL_SCREEN);
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    assert!(in_the_bar(&h), "Tab went into the floating bar again: {:?}", h.focused_rect(w));
+    h.advance(Duration::from_secs(3));
+    assert!(!h.program().controls);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"), "as the controls went");
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+}
+
+#[test]
 fn the_picture_keeps_the_keyboard_through_full_screen() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
     let mut h = harness();
