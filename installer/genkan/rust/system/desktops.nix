@@ -180,6 +180,7 @@ in
   imports = [
     ./hyprland.nix
     ../../../../modules/portal-fixes.nix
+    ../../../../modules/avahi-fixes.nix
     (lib.mkRenamedOptionModule [ "calamares" "omarchy" "enable" ] [ "programs" "tatami" "enable" ])
     (lib.mkRenamedOptionModule [ "calamares" "tatami" "enable" ] [ "programs" "tatami" "enable" ])
     # GDM lists exactly the chosen desktops, one entry each (hiddenSessions).
