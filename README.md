@@ -85,8 +85,8 @@ It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 reader), Utsushi (Media Player) and Koe (Dictation).
 Nisshi reads the system's journal and /var/log, suggests filters from what
 wrote each message, and asks for an administrator's password only to read
-what you can't. Aizome is new, and so far it has run only in virtual machines.
-See [its README](desktop/aizome/README.md) for what is done and what isn't.
+what you can't. See [its README](desktop/aizome/README.md) for what is done
+and what isn't.
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
 need a terminal open in it too. Hotaru is new, and it draws with the processor
