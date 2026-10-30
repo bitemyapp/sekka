@@ -1,9 +1,10 @@
 # Packaged Utsushi in a real Aizome session: a video opened as the desktop
 # opens one (xdg-open, the session's default for video/mp4), played to its
-# end through PipeWire, and a song paused and resumed by its key. The VM's
-# GPU has no 3D, so the compositor renders in software and takes no
-# dmabufs: frames take Utsushi's shared-memory path, and decoding is in
-# software. The hardware path (VA-API, dmabufs, planes) needs a real GPU.
+# end through PipeWire, a song paused and resumed by its key, and one of
+# the shell's sounds over the song on short graph cycles. The VM's GPU has
+# no 3D, so the compositor renders in software and takes no dmabufs:
+# frames take Utsushi's shared-memory path, and decoding is in software.
+# The hardware path (VA-API, dmabufs, planes) needs a real GPU.
 {
   pkgs,
   self,
@@ -16,8 +17,11 @@ let
       -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=6" -ac 2 \
       -c:v libx264 -preset veryfast -g 25 -pix_fmt yuv420p -c:a aac -b:a 64k \
       -metadata title="Test Pattern" -movflags +faststart "$out/pattern.mp4"
-    ffmpeg -nostdin -loglevel error -f lavfi -i "sine=frequency=523:sample_rate=44100:duration=20" \
+    ffmpeg -nostdin -loglevel error -f lavfi -i "sine=frequency=523:sample_rate=44100:duration=60" \
       -c:a flac -metadata title="Long Note" -metadata artist="The Dyers" "$out/note.flac"
+    # A sound for the shell to play, as a notification asks.
+    ffmpeg -nostdin -loglevel error -f lavfi -i "sine=frequency=880:sample_rate=48000:duration=10" -ac 2 \
+      "$out/chime.wav"
   '';
 in
 pkgs.testers.runNixOSTest {
@@ -72,6 +76,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.xdg-utils
         pkgs.pipewire
+        pkgs.libnotify
       ];
       environment.etc."utsushi-media".source = media;
     };

@@ -868,12 +868,16 @@ frames through the kit's video element (`docs/kit.md`, Video).
   40 ms with a picture). Pausing drops what the graph held and steps the
   ring back to what was being heard, so pause and seek are immediate
   whatever the cycle. Aizome's module raises PipeWire's cycle limit to
-  8192 frames so the long cycles are granted (`default.clock.max-quantum`;
-  streams asking for short cycles still get theirs). The limit is the
-  whole system's: other streams asking for more than 2048 frames get
-  longer cycles too (`pw-play`'s default 100 ms, which the shell's sounds
-  use, gets 4096 frames), and those asking for nothing run at the
-  graph's cycle, which is long while music plays.
+  8192 frames so the long cycles are granted (`default.clock.max-quantum`).
+  Streams asking for short cycles still get theirs, and while one plays
+  the whole graph runs at its cycle: the shell's sounds, and Settei's
+  preview of the alert, ask `pw-play` for 20 ms, so they start at once
+  even over music (the graph runs at 1024 frames while one plays, and
+  goes back to music's 8192 after). The limit is the whole system's:
+  other streams asking for more than 2048 frames get longer cycles too
+  (`pw-play` left at its default 100 ms gets 4096 frames), and those
+  asking for nothing run at the graph's cycle, which is long while music
+  plays.
 - The window redraws a digit a second, and nothing in full screen with
   the controls gone, or while paused, except for subtitles.
 - Software decoding (no VA-API, or a codec the GPU lacks) runs on

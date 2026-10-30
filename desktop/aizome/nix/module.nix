@@ -521,13 +521,14 @@ in
       # asks for 8192 frames (170 ms), so with nothing else playing the
       # sound card, PipeWire and the player wake about six times a second
       # rather than twenty-three at PipeWire's usual cap of 2048. Streams
-      # asking for short cycles (calls, games) still get theirs. The cap
-      # is system-wide, though (Tatami sessions too), so it isn't
-      # Utsushi's alone: any stream asking for more than 2048 frames gets
-      # more, such as pw-play's default 100 ms (the shell's sounds: 4096
-      # frames, not 2048), and streams that ask for nothing, such as
-      # pw-record's, run at whatever cycle the graph has, 8192 while
-      # music plays.
+      # asking for short cycles (calls, games, the shell's sounds, which
+      # ask pw-play for 20 ms) still get theirs, and the graph runs at
+      # theirs while they play. The cap is system-wide, though (Tatami
+      # sessions too), so it isn't Utsushi's alone: any stream asking for
+      # more than 2048 frames gets more, such as pw-play left at its
+      # default 100 ms (4096 frames, not 2048), and streams that ask for
+      # nothing, such as pw-record's, run at whatever cycle the graph has,
+      # 8192 while music plays.
       extraConfig.pipewire."90-aizome-long-cycles"."context.properties"."default.clock.max-quantum" =
         lib.mkDefault 8192;
     };

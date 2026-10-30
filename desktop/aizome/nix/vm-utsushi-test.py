@@ -1,9 +1,11 @@
 """Component regression: packaged Utsushi in a real Aizome session.
 
 A video opened by MIME type plays to its end through PipeWire; a song
-pauses and resumes by its key. Inspection only reads what the window
-shows; input goes through the compositor. This fixture VM renders in
-software, so it exercises the shared-memory frame path, not VA-API.
+pauses and resumes by its key; a sound the shell plays over the song
+gets short graph cycles, and the song its long ones back after it.
+Inspection only reads what the window shows; input goes through the
+compositor. This fixture VM renders in software, so it exercises the
+shared-memory frame path, not VA-API.
 """
 
 import json
@@ -88,6 +90,38 @@ def stream():
     return None
 
 
+def player_stream():
+    """The stream node of a `pw-play` running, if there is one, with the
+    process of its client as `pid`."""
+    objects = json.loads(user("pw-dump"))
+    for n in objects:
+        props = (n.get("info") or {}).get("props") or {}
+        names = {props.get(k) for k in ("application.process.binary", "application.name", "node.name")}
+        if n.get("type") == "PipeWire:Interface:Node" and names & {"pw-play", "pw-cat"}:
+            client = next((o for o in objects if o.get("id") == props.get("client.id")), {})
+            of_client = (client.get("info") or {}).get("props") or {}
+            return dict(props, pid=of_client.get("application.process.id") or of_client.get("pipewire.sec.pid"))
+    return None
+
+
+def graph_cycle():
+    """The cycle the graph runs at, in frames: pw-top's QUANT for the sink,
+    which drives it, in its last report."""
+    report = re.split(r"^S\s+ID\s+QUANT\b.*$", user("timeout 30 pw-top -b -n 3"), flags=re.M)[-1]
+    print(report)
+    for line in report.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[-1] == "test-sink" and fields[2].isdigit():
+            return int(fields[2])
+    return None
+
+
+def short_cycle():
+    """The graph's cycle, if it's short (PipeWire's usual 1024 or less)."""
+    cycle = graph_cycle()
+    return cycle if cycle is not None and 0 < cycle <= 1024 else None
+
+
 def at_the_end(clip):
     """The last stats line, once it was logged at the clip's end (an
     earlier one counts frames shown before the end)."""
@@ -151,3 +185,27 @@ with subtest("a song pauses and goes on from where it stopped"):
     user("aizomectl input key space")
     until("playing again", lambda: seconds(timeline()) > seconds(paused), timeout=10)
     machine.screenshot("utsushi-song")
+
+with subtest("a sound from the shell runs on short cycles over music's long ones"):
+    # The song, on as it was: the graph at music's cycle.
+    until("music's long cycles", lambda: graph_cycle() == 8192, timeout=40)
+    # The shell plays the sound a notification asks for with pw-play.
+    user(
+        "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "
+        f"notify-send --app-name=Chimes -h string:sound-file:{MEDIA}/chime.wav 'A chime'"
+    )
+    sound = until("the shell's sound", player_stream, timeout=10)
+    print(f"the shell's sound: {sound}")
+    pid = sound["pid"]
+    assert pid, f"no process for the sound's client: {sound}"
+    parent = user(f"ps -o comm= -p $(ps -o ppid= -p {pid})").strip()
+    assert parent == "aizome-shell", f"pw-play {pid} came from {parent!r}"
+    # 20 ms, in frames at the file's rate.
+    frames, rate = (int(x) for x in sound.get("node.latency", "0/1").split("/"))
+    assert abs(frames / rate - 0.020) < 0.001, sound
+    cycle = until("a short cycle while it plays", short_cycle, timeout=8)
+    print(f"with the sound and the song, the graph ran at {cycle} frames")
+    # Once it's done, the song has the graph to itself again.
+    until("the sound ended", lambda: player_stream() is None, timeout=20)
+    until("music's long cycles again", lambda: graph_cycle() == 8192, timeout=20)
+    assert window() and window()["title"] == "Long Note", "the song played on"

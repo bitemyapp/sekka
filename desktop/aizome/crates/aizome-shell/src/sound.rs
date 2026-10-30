@@ -5,6 +5,10 @@
 //! sound theme where it's installed; files play through PipeWire with
 //! `pw-play` (else `paplay`, else `aplay`, which can't set a volume), each
 //! in a process of its own, reaped on a thread.
+//!
+//! `pw-play` asks for short graph cycles ([`LATENCY`]), so a sound starts
+//! at once. Left to its default (100 ms) it would take whatever cycle up
+//! to that the graph allows: with Aizome's long-cycle cap, 4096 frames.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -20,6 +24,10 @@ pub const FEEDBACK: &str = "audio-volume-change";
 /// How long after a volume change its feedback plays: long enough for the
 /// sound server to have taken the new volume.
 pub const FEEDBACK_AFTER: Duration = Duration::from_millis(60);
+/// The graph cycle `pw-play` asks for: 20 ms, which PipeWire runs as its
+/// usual 1024 frames at 48 kHz, against music's 8192. While a sound plays,
+/// whatever else is playing runs at that too.
+pub const LATENCY: &str = "20ms";
 
 /// Where the sound theme's files may be: `$XDG_DATA_HOME`,
 /// `$XDG_DATA_DIRS`, NixOS's system profile, `/usr/share`.
@@ -70,7 +78,9 @@ pub fn command(player: &str, file: &std::path::Path, volume: f64) -> Vec<String>
     let volume = volume.clamp(0.0, 1.0);
     let file = file.to_string_lossy().into_owned();
     match player {
-        "pw-play" => vec!["pw-play".into(), "--volume".into(), format!("{volume:.2}"), file],
+        "pw-play" => {
+            vec!["pw-play".into(), "--volume".into(), format!("{volume:.2}"), "--latency".into(), LATENCY.into(), file]
+        }
         // PulseAudio's scale: 65536 is 100%.
         "paplay" => vec!["paplay".into(), format!("--volume={}", (volume * 65536.0).round() as u32), file],
         other => vec![other.into(), file],
@@ -151,7 +161,7 @@ mod tests {
     #[test]
     fn players_are_told_the_volume() {
         let f = std::path::Path::new("/s/bell.oga");
-        assert_eq!(command("pw-play", f, 0.7), ["pw-play", "--volume", "0.70", "/s/bell.oga"]);
+        assert_eq!(command("pw-play", f, 0.7), ["pw-play", "--volume", "0.70", "--latency", "20ms", "/s/bell.oga"]);
         assert_eq!(command("paplay", f, 0.5), ["paplay", "--volume=32768", "/s/bell.oga"]);
         assert_eq!(command("pw-play", f, 3.0)[2], "1.00");
         assert_eq!(command("aplay", f, 0.5), ["aplay", "/s/bell.oga"]);
