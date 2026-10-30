@@ -100,7 +100,7 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ⌥❖S | Stack with the window behind |
 | ⌥❖[, ⌥❖] | Previous, next tab of the window's group |
 | ⌃❖F | Full screen |
-| ❖Return | Terminal (foot) in the Desk's folder |
+| ❖Return | Terminal (Hotaru, or the one chosen in Settei) in the Desk's folder |
 | ⌃❖Q | Lock |
 | ⌃⌥Del | Recovery: force quit stuck apps, reset input, restart the shell (`docs/recovery.md`) |
 | ⌃❖R | Reload what changed: the compositor's logic, the shell, the settings (`docs/reload.md`) |
@@ -196,7 +196,7 @@ sunrise and sunset: the shell writes what GeoClue says).
   ext-image-copy-capture, for outputs and windows, chosen with
   `aizome-share-picker`); xdg-desktop-portal-gtk for the rest
   (`aizome-portals.conf`).
-- Terminal: foot. Shell: Sekka's fish (set up as Omarchy sets it up).
+- Terminal: Hotaru, Aizome's own; foot stays installed as a choice. Shell: Sekka's fish (set up as Omarchy sets it up).
 - The lock screen uses PAM service `aizome`.
 
 ## Repository layout

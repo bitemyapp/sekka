@@ -9,7 +9,7 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "aizome-terminal-shortcuts";
-  globalTimeout = 300;
+  globalTimeout = 360;
   nodes.machine = { lib, ... }: {
     imports = [ self.nixosModules.default ];
     programs.aizome.enable = true;

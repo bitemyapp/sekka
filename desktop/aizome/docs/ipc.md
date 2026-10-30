@@ -295,7 +295,7 @@ Handled by the compositor:
 | ⌥❖S | `stack-with-behind` |
 | ⌥❖[, ⌥❖] | `previous-tab`, `next-tab` (in tab order, wrapping round) |
 | ⌃❖F | `fullscreen` |
-| ❖Return | `terminal` (`keys.terminal`, default `foot`, in the Desk's folder) |
+| ❖Return | `terminal` (`keys.terminal`, default `aizome-hotaru`, in the Desk's folder) |
 | ❖⇧3 | `screenshot-screen` |
 | ❖⇧4, Print | `screenshot-area` (a rubber band; Space picks a window; Esc cancels) |
 | XF86Switch_VT_N | `vt-N` |

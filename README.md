@@ -59,7 +59,7 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
   its windows and files its notifications beneath it, and Desks keep work
   apart (**Super + Ctrl + ↑** shows them all).
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
-  and foot opens in fish.
+  and the terminal opens in fish.
 - Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop
@@ -71,6 +71,20 @@ It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Activity), Shashin (Images) and Koe (Dictation). Aizome is new, and so far it
 has run only in virtual machines. See [its README](desktop/aizome/README.md)
 for what is done and what isn't.
+
+**Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
+need a terminal open in it too. Hotaru is new, and it draws with the processor
+rather than the graphics card. Some full-screen programs may flicker or draw
+less than they would in Ghostty, because it doesn't yet support:
+
+- synchronized output (DEC mode 2026), so redraws can flicker;
+- in-band resize (2048);
+- the Kitty graphics protocol, so images don't show;
+- DEC modes 1039 and 1045;
+- DECSASD.
+
+foot is still installed. To go back to it, choose it in Settei, under
+General → Default Apps → Terminal.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

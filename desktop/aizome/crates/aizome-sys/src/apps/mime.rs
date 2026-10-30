@@ -40,7 +40,8 @@
 //! `$XDG_DATA_DIRS/xdg-terminal-exec`; one desktop file ID per line
 //! (`id:action` allowed, `#` comments, `-id` excludes, `+id` includes).
 //! The default is the first listed installed entry with `TerminalEmulator`
-//! in `Categories`, else `foot.desktop`, else the first terminal by name.
+//! in `Categories`, else `org.aizome.Hotaru.desktop` (Aizome's own), else
+//! `foot.desktop`, else the first terminal by name.
 //! [`AppIndex::set_role_default`] moves the choice to the top of
 //! `$XDG_CONFIG_HOME/xdg-terminals.list`.
 
@@ -515,7 +516,11 @@ impl AppIndex {
 
     fn default_terminal(&self) -> Option<usize> {
         let listed = self.mime.terminals.iter().filter_map(|id| self.position(id)).find(|&i| self.is_terminal(i));
-        listed.or_else(|| self.position("foot.desktop").filter(|&i| self.is_terminal(i))).or_else(|| {
+        let aizome = ["org.aizome.Hotaru.desktop", "foot.desktop"]
+            .into_iter()
+            .filter_map(|id| self.position(id))
+            .find(|&i| self.is_terminal(i));
+        listed.or(aizome).or_else(|| {
             (0..self.all().len())
                 .filter(|&i| self.is_terminal(i) && self.shown_at(i))
                 .filter(|&i| self.entry_at(i).is_some_and(|e| !self.mime.excluded_terminals.contains(&e.id)))
@@ -987,6 +992,22 @@ mod tests {
         );
         assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some("xterm.desktop"));
         assert!(matches!(index.set_role_default(DefaultRole::Terminal, "gedit"), Err(Error::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn hotaru_comes_before_foot_until_someone_chooses() {
+        let tmp = fixture();
+        tmp.write(
+            "usr/share/applications/org.aizome.Hotaru.desktop",
+            &entry("Hotaru", "", "Categories=System;TerminalEmulator;\nX-TerminalArgExec=--\n"),
+        );
+        let mut index = index(&tmp);
+        assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some("org.aizome.Hotaru.desktop"));
+        assert_eq!(index.terminal_command().unwrap(), ["prog", "--"]);
+        // A list, the person's or the system's, still wins.
+        tmp.write("home/.config/xdg-terminals.list", "foot.desktop\n");
+        assert!(index.refresh_if_changed());
+        assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some("foot.desktop"));
     }
 
     #[test]

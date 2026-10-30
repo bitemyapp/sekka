@@ -47,7 +47,7 @@ tests, which were run after each fix.
 |---|---|---|---|
 | ⌃❖←/→, ⌃❖1–4 | done | live | |
 | Desks strip in the bar, current on `selection`, click to switch, `+` adds | done | live | Double-click rename not tried |
-| ❖Return opens foot | done | live | In the Desk's folder: not tried live (the Desk had none then) |
+| ❖Return opens the terminal (Hotaru; foot before #142) | done | live; Hotaru in `vm-terminal-shortcuts` | In the Desk's folder: not tried live (the Desk had none then) |
 | Overview (⌃❖↑): Desks with thumbnails, counts, "here", new Desk slot | done | live, `04` | |
 | Drag a window to another Desk in the overview | done | live (Tokei to Write) | |
 | Type to filter, 1–9 to go, Esc | done | live | |
@@ -191,7 +191,7 @@ All fourteen opened from the session and were looked at:
 | Systray: sound, Bluetooth, network, display, battery, power | done | checked against this laptop's real devices, read only, and in VMs (above); a sharing indicator and a recording indicator join them while in use |
 | Settings, all panes | done | `checks.settings`: a VM drives every pane that has state, checks the system took the change, then reopens Settings and checks the pane shows it (`nix/vm-settings-test.py`, `docs/apps.md`) |
 | Apps (Yukimi, Calculator, Calendar, Clock, Disks, Disk Usage with its agent index, Notes, TextEdit, Weather, Files, Activity, Images, Welcome) | done | |
-| foot as the terminal, fish as the shell | done | foot with Aizome's `foot.ini`; fish from nixpkgs here (Sekka's module installs it) |
+| Hotaru as the terminal (foot before #142), fish as the shell | done | foot with Aizome's `foot.ini`; fish from nixpkgs here (Sekka's module installs it) |
 | GPU and software rendering | done | GLES for the walkthrough; the same scene under pixman (`AIZOME_RENDERER=pixman`) |
 | The 4 ms budget | done, with exceptions | `docs/performance.md`: every interaction within it, except once-per-session first frames (the palette's first opening, the wallpaper) and the pixman overview's opening and closing frames, at about 4.5 ms |
 | Recovery (Ctrl+Alt+Del), live reload, screen recording and sharing | done | asked for after the first login: `docs/recovery.md`, `docs/reload.md`, `docs/shell.md`; each has its VM test step |
