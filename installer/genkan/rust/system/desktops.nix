@@ -34,6 +34,12 @@ let
   selected = map current cfg.desktops;
   defaultDesktop = current cfg.defaultDesktop;
   has = name: builtins.elem name selected;
+  # kwalletd6 answers both KWallet names, as in its own package.
+  kwalletDaemon = pkgs.runCommand "kwallet-daemon" { } ''
+    mkdir -p $out/share/dbus-1/services
+    cp ${pkgs.kdePackages.kwallet}/share/dbus-1/services/org.kde.kwalletd{5,6}.service \
+      $out/share/dbus-1/services/
+  '';
   sessionEnv = pkgs.callPackage ./session-env/package.nix { };
   # The login screen. Aizome's own (aizome-greeter on greetd) wherever
   # Aizome is chosen, listing every chosen desktop. But GNOME locks the
@@ -415,21 +421,24 @@ in
         "${pkgs.x11_ssh_askpass}/libexec/x11-ssh-askpass";
     programs.gnupg.agent.pinentryPackage =
       if has "plasma" then pkgs.pinentry-qt else pkgs.pinentry-gnome3;
-    # One keyring in every desktop: GNOME Keyring, unlocked at login. Plasma
-    # keeps the KWallet API for KDE applications (and Chromium and Electron
-    # use it in Plasma), but with GNOME Keyring's default collection as its
+    # One keyring in every desktop: GNOME Keyring, unlocked at login. The
+    # KWallet API stays for KDE applications (and Chromium and Electron use
+    # it in Plasma), but with GNOME Keyring's default collection as its
     # storage instead of ksecretd, so a password saved in one desktop is there
     # in the others. Without kwallet-pam no ksecretd starts at login, which
     # had stayed behind in every other desktop's sessions.
     services.gnome.gnome-keyring.enable = true;
-    environment.etc."xdg/kwalletrc" = lib.mkIf (has "plasma") {
-      text = ''
-        [KSecretD]
-        Enabled=false
-      '';
-    };
+    environment.etc."xdg/kwalletrc".text = ''
+      [KSecretD]
+      Enabled=false
+    '';
     security.pam.services.login = lib.mkIf (has "plasma") { kwallet.enable = lib.mkForce false; };
     security.pam.services.kde = lib.mkIf (has "plasma") { kwallet.enable = lib.mkForce false; };
+    # Plasma installs KWallet. Without it, keep KWallet's daemon on the
+    # session bus (not its Secret Service or portal): profiles made in
+    # Plasma, Signal's among them, recorded KWallet and still ask for it,
+    # also after Plasma is deselected.
+    services.dbus.packages = lib.mkIf (!has "plasma") [ kwalletDaemon ];
     # Xfce installs polkit-gnome system-wide, and its autostart entry has no
     # OnlyShowIn, so it also starts in Plasma, Hyprland and the others and
     # races their own authentication agents. /etc/xdg is searched first.
