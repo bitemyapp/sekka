@@ -25,9 +25,12 @@ fn harness() -> Harness<Utsushi> {
     Harness::new(app)
 }
 
-/// Take the player's messages until `f` holds, within `secs`.
+/// Take the player's messages until `f` holds, within `secs` on an idle
+/// machine. The player's threads decode in real time, so a loaded one
+/// (the workspace's tests all at once, or a busy build host) gets five
+/// times as long; a pass returns as soon as `f` holds.
 fn until(h: &mut Harness<Utsushi>, secs: f64, mut f: impl FnMut(&Utsushi) -> bool) {
-    let end = Instant::now() + Duration::from_secs_f64(secs);
+    let end = Instant::now() + Duration::from_secs_f64(secs * 5.0);
     loop {
         h.send_all(std::iter::empty());
         if f(h.program()) {
