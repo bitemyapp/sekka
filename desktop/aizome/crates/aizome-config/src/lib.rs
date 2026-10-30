@@ -26,9 +26,9 @@ pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleCl
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
 pub use shell::{
-    ClockFormat, DeskbarSettings, DesktopSettings, LockSettings, MenubarSettings, NotificationSettings, PALETTE_SCOPES,
-    PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat, RecordingQuality, RecordingSettings,
-    SYSTRAY_WIDGETS, SoundSettings, names_app,
+    ClockFormat, DESKBAR_SIZES, DeskbarSettings, DeskbarSide, DesktopSettings, LockSettings, MenubarSettings,
+    NotificationSettings, PALETTE_SCOPES, PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat,
+    RecordingQuality, RecordingSettings, SYSTRAY_WIDGETS, SoundSettings, names_app,
 };
 
 /// Everything in `settings.toml`.
@@ -202,10 +202,80 @@ impl Appearance {
 #[serde(default)]
 pub struct Input {
     pub keyboard: Keyboard,
+    /// Keyboards with keys of their own (`[[input.keyboards]]`); every
+    /// other keyboard types with `keyboard`'s.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub keyboards: Vec<KeyboardProfile>,
     pub pointer: Pointer,
     pub touchpad: Touchpad,
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+impl Input {
+    /// A keyboard's own entry, if it has one.
+    pub fn keyboard_profile(&self, name: &str, id: &str) -> Option<&KeyboardProfile> {
+        self.keyboards.iter().find(|k| k.matches(name, id))
+    }
+
+    /// The XKB options a keyboard types with: `[input.keyboard]`'s, with
+    /// its own keys' in place of theirs when it has its own.
+    pub fn options_for(&self, name: &str, id: &str) -> String {
+        match self.keyboard_profile(name, id).and_then(|k| k.options.as_deref()) {
+            Some(own) => with_key_options(&self.keyboard.options, own),
+            None => self.keyboard.options.clone(),
+        }
+    }
+}
+
+/// One keyboard's own keys: its modifier swaps, Caps Lock and Compose key
+/// (the options [`is_key_option`] covers), in place of `[input.keyboard]`'s.
+/// It applies to the keyboard giving this name and these IDs; layouts,
+/// repeat and Num Lock are every keyboard's.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KeyboardProfile {
+    /// What the keyboard calls itself: `Apple Inc. Magic Keyboard`.
+    pub name: String,
+    /// Its USB or Bluetooth vendor and product, as `lsusb` writes them:
+    /// `05ac:029c`.
+    pub id: String,
+    /// Its keys' options. Unset, it types as other keyboards do (it was
+    /// set up to, and isn't asked about again).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<String>,
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+impl KeyboardProfile {
+    pub fn matches(&self, name: &str, id: &str) -> bool {
+        self.name == name && self.id.eq_ignore_ascii_case(id)
+    }
+}
+
+/// Whether an XKB option is about a keyboard's keys rather than its
+/// layouts: modifier swaps (`altwin:`, `ctrl:`), Caps Lock (`caps:`) and
+/// Compose (`compose:`). These are what a keyboard can have of its own.
+pub fn is_key_option(o: &str) -> bool {
+    ["altwin:", "ctrl:", "caps:", "compose:"].iter().any(|p| o.starts_with(p))
+}
+
+fn split_options(s: &str) -> impl Iterator<Item = &str> {
+    s.split(',').map(str::trim).filter(|o| !o.is_empty())
+}
+
+/// The keys' options in `options`, without the rest.
+pub fn key_options(options: &str) -> String {
+    split_options(options).filter(|o| is_key_option(o)).collect::<Vec<_>>().join(",")
+}
+
+/// `general` with `own`'s keys' options in place of its: layout switching
+/// and the rest stay `general`'s, and anything else in `own` is ignored.
+pub fn with_key_options(general: &str, own: &str) -> String {
+    let mut v: Vec<&str> = split_options(general).filter(|o| !is_key_option(o)).collect();
+    v.extend(split_options(own).filter(|o| is_key_option(o)));
+    v.join(",")
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -816,6 +886,45 @@ a = 1
         assert_eq!(again.desks[0].extra.get("colour").and_then(|v| v.as_str()), Some("red"));
         assert_eq!(again.outputs[0].extra.get("hdr").and_then(|v| v.as_bool()), Some(false));
         assert_eq!(again.menubar.get("clock").and_then(|v| v.as_str()), Some("24h"));
+    }
+
+    #[test]
+    fn keyboards_of_their_own_change_only_their_keys() {
+        let text = r#"
+[input.keyboard]
+options = "grp:alt_shift_toggle, altwin:swap_alt_win,ctrl:nocaps,lv3:ralt_switch"
+[[input.keyboards]]
+name = "Apple Inc. Magic Keyboard"
+id = "05ac:029c"
+options = "compose:rwin,grp:ctrl_shift_toggle"
+backlight = "dim"
+[[input.keyboards]]
+name = "Logitech K120"
+id = "046d:c31c"
+"#;
+        let s = Settings::from_toml(text).unwrap();
+        let input = &s.input;
+        assert_eq!(
+            input.options_for("Apple Inc. Magic Keyboard", "05AC:029C"),
+            "grp:alt_shift_toggle,lv3:ralt_switch,compose:rwin",
+            "its own keys in place of the others', its layout switching ignored"
+        );
+        assert_eq!(input.options_for("Logitech K120", "046d:c31c"), input.keyboard.options, "unset: as the others");
+        assert_eq!(
+            input.options_for("Apple Inc. Magic Keyboard", "05ac:0250"),
+            input.keyboard.options,
+            "another model"
+        );
+        assert_eq!(input.options_for("Unknown", "0000:0000"), input.keyboard.options);
+        assert_eq!(key_options(&input.keyboard.options), "altwin:swap_alt_win,ctrl:nocaps");
+        assert_eq!(with_key_options("grp:shifts_toggle,caps:escape", ""), "grp:shifts_toggle");
+
+        let again = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
+        assert_eq!(again, s);
+        assert_eq!(again.input.keyboards[0].extra.get("backlight").and_then(|v| v.as_str()), Some("dim"));
+        assert_eq!(again.input.keyboards[1].options, None);
+        // No keyboards of their own, nothing written.
+        assert!(!Settings::default().to_toml().unwrap().contains("keyboards"));
     }
 
     #[test]

@@ -136,10 +136,12 @@ fn launching_into_energy_without_a_meter_keeps_the_requested_lens() {
 fn a_desktop_without_root_or_a_battery_measures_energy_by_its_meters() {
     let (mut h, _) = start();
     let w = h.window();
-    // RAPL is root's and there's no battery, but the Radeon's meter is the
-    // processor package's and the RTX has its own.
+    // RAPL is root's and there's no battery: Aizome's power meter reads
+    // RAPL, and the RTX has its own meter. The Radeon's measures only
+    // itself.
     let f = fixture::workstation(300, 40);
-    assert_eq!(f.power.meter, Meter::Package);
+    assert_eq!(f.power.meter, Meter::Rapl);
+    assert!(f.power.cpu.is_some_and(|w| w > 24.0));
     h.send(Msg::Frame(Arc::new(f)));
     h.send(Msg::Lens(Lens::Energy));
     assert_eq!(h.program().lens, Lens::Energy, "the Energy lens is offered");

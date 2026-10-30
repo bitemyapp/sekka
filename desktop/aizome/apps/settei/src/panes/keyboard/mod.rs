@@ -1,17 +1,23 @@
 //! Keyboard: layouts (searched from xkeyboard-config's registry, with
 //! variants) and the keys that switch them; key repeat with a place to try
 //! it; modifier swaps, Caps Lock as Control, Escape or Compose and the
-//! Compose key; and the editor for the system's shortcuts (the compositor's `[keys]`).
-//! `[input.keyboard]` and `[keys.bindings]`, applied by the compositor.
+//! Compose key, every keyboard's or one keyboard's own, with the setup
+//! that finds out where its ❖ should go (`setup.rs`); and the editor for
+//! the system's shortcuts (the compositor's `[keys]`). `[input.keyboard]`,
+//! `[[input.keyboards]]` and `[keys.bindings]`, applied by the compositor.
 
 pub mod keys;
 mod modifiers;
 mod record;
+mod setup;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use aizome_config::{KeyboardProfile, Settings, key_options};
+use aizome_ipc::KeyboardInfo;
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
 use aizome_sys::keyboard::KeyboardData;
@@ -19,6 +25,7 @@ use aizome_sys::keyboard::KeyboardData;
 use crate::form;
 use crate::pane::{Confirm, Group, Pane, PaneCx, SettingEntry, Tile, ViewCx};
 use keys::Chord;
+use setup::Setup;
 
 /// A layout or variant to add: its description, layout and variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +111,13 @@ pub struct Keyboard {
     /// The sheet for a command of the user's own, while it's open.
     command: Option<CommandSheet>,
     trial: String,
+    /// Whose keys the Keys section shows: a keyboard with its own (name
+    /// and ID), or other keyboards'.
+    keys_of: Option<(String, String)>,
+    /// The setup sheet, while it's open.
+    setup: Option<Setup>,
+    /// Waits for a key so far: one that isn't the latest is given up.
+    waits: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +154,30 @@ pub enum Msg {
     CommandCancel,
     CommandSave,
     RemoveCommand(String),
+    /// Whose keys the Keys section shows: other keyboards', then each
+    /// keyboard with its own.
+    KeysOf(usize),
+    /// The keyboard shown has keys of its own no longer.
+    Forget,
+    /// Open the setup sheet, with the keyboard a launch named
+    /// (`--keyboard`) chosen while no key has come.
+    SetupOpen(Option<String>),
+    /// Wait `n`'s key and the keyboard it came from, none if given up.
+    SetupCaught(u64, Result<Option<(u32, Option<KeyboardInfo>)>, String>),
+    /// A key on the sample's keyboard (the sample has no compositor).
+    SampleKey(u32),
+    SetupAgain,
+    SetupModifiers(usize),
+    SetupFrom(usize),
+    /// The keyboards attached, as the compositor lists them.
+    SetupKeyboards(Vec<KeyboardInfo>),
+    /// One of those not set up, chosen while no key has come.
+    SetupChoose(usize),
+    SetupSave,
+    /// Set up to type as other keyboards do: the keyboard whose key came,
+    /// or else the one chosen.
+    SetupSame,
+    SetupCancel,
 }
 
 /// What Caps Lock can be, and the option that makes it so.
@@ -217,9 +255,63 @@ pub fn filter<'a>(choices: &'a [Choice], query: &str) -> Vec<&'a Choice> {
         .collect()
 }
 
+/// The options of `who`'s keys: a keyboard's own (with every keyboard's
+/// layout switching), or, for any other, `[input.keyboard]`'s.
+pub fn options_of(s: &Settings, who: Option<&(String, String)>) -> String {
+    match who {
+        Some((name, id)) => s.input.options_for(name, id),
+        None => s.input.keyboard.options.clone(),
+    }
+}
+
+/// Changes `who`'s keys: `f` gets their options as [`options_of`] gives
+/// them. A keyboard that typed as the others did gets keys of its own.
+pub fn change_options(s: &mut Settings, who: Option<&(String, String)>, f: impl FnOnce(&str) -> String) {
+    let now = options_of(s, who);
+    match who.and_then(|(name, id)| s.input.keyboards.iter_mut().find(|k| k.matches(name, id))) {
+        Some(k) => k.options = Some(key_options(&f(&now))),
+        None => s.input.keyboard.options = f(&now),
+    }
+}
+
+/// Gives a keyboard its own keys' options, or (`None`) has it type as
+/// other keyboards do.
+fn put_keyboard(s: &mut Settings, k: &KeyboardInfo, options: Option<String>) {
+    match s.input.keyboards.iter_mut().find(|p| p.matches(&k.name, &k.id)) {
+        Some(p) => p.options = options,
+        None => s.input.keyboards.push(KeyboardProfile {
+            name: k.name.clone(),
+            id: k.id.clone(),
+            options,
+            ..Default::default()
+        }),
+    }
+}
+
+/// The Keys section's menu of keyboards: other keyboards, then each with
+/// its own (its IDs too where two share a name).
+fn keyboard_labels(s: &Settings) -> Vec<String> {
+    let ks = &s.input.keyboards;
+    let mut v = vec![if ks.is_empty() { "All keyboards" } else { "Other keyboards" }.to_owned()];
+    v.extend(ks.iter().map(|k| {
+        if ks.iter().filter(|o| o.name == k.name).count() > 1 {
+            format!("{} ({})", k.name, k.id)
+        } else {
+            k.name.clone()
+        }
+    }));
+    v
+}
+
 impl Keyboard {
     fn registry(&self) -> Option<&Registry> {
         self.registry.as_deref()
+    }
+
+    /// The keyboard whose keys the Keys section shows, while it has an
+    /// entry of its own.
+    fn who(&self, s: &Settings) -> Option<&(String, String)> {
+        self.keys_of.as_ref().filter(|(name, id)| s.input.keyboard_profile(name, id).is_some())
     }
 
     fn describe(&self, l: &str, v: &str) -> String {
@@ -285,13 +377,40 @@ impl Keyboard {
             }),
         );
 
-        let caps_i = CAPS.iter().position(|(_, o)| o.is_some_and(has)).unwrap_or(0);
-        let compose_i = COMPOSE.iter().position(|(_, o)| o.is_some_and(has)).unwrap_or(0);
-        let modifiers_i = modifiers::selected(&k.options);
+        // The keys: every keyboard's, or the one chosen's own.
+        let s = vcx.settings();
+        let who = self.who(s);
+        let own = options_of(s, who);
+        let own_opts = options(&own);
+        let has_own = |o: &str| own_opts.iter().any(|x| x == o);
+        let caps_i = CAPS.iter().position(|(_, o)| o.is_some_and(has_own)).unwrap_or(0);
+        let compose_i = COMPOSE.iter().position(|(_, o)| o.is_some_and(has_own)).unwrap_or(0);
+        let modifiers_i = modifiers::selected(&own);
         let mut modifier_labels: Vec<String> = modifiers::CHOICES.iter().map(|(label, _)| (*label).into()).collect();
         if modifiers_i == modifiers::CHOICES.len() {
             modifier_labels.push("Custom".into());
         }
+        let profiles = &s.input.keyboards;
+        let shown = who.and_then(|(n, i)| profiles.iter().position(|k| k.matches(n, i))).map_or(0, |p| p + 1);
+        let mut whose = row![dropdown(keyboard_labels(s), shown).on_select(Msg::KeysOf).min_width(240.0)]
+            .spacing(6.0)
+            .align(Align::Center);
+        if shown > 0 {
+            whose = whose.push(
+                icon_button(Icon::Minus).toolbar().on_press(Msg::Forget).tooltip("Forget its own keys").id("forget"),
+            );
+        }
+        // `keyboard.setup` is this button, which opens the setup sheet.
+        whose = whose.push(button("Set Up…").on_press(Msg::SetupOpen(None)).id(vcx.entry_name("setup")));
+        let whose_help = match shown {
+            0 if profiles.is_empty() => {
+                "Set up a keyboard to give it keys of its own: press the key beside its space bar, \
+                 and Settei suggests where ❖ goes."
+            }
+            0 => "For every keyboard without keys of its own.",
+            p if profiles[p - 1].options.is_none() => "It types as other keyboards do, until you change one of these.",
+            _ => "Its own modifier keys, Caps Lock and Compose key. Layouts, repeat and Num Lock are every keyboard's.",
+        };
         let delay = f64::from(k.repeat_delay);
         let rate = f64::from(k.repeat_rate);
         vec![
@@ -322,6 +441,7 @@ impl Keyboard {
             vcx.section(
                 "Keys",
                 vec![
+                    form::row("Keyboard", whose).entry("keyboards").help(whose_help),
                     form::row(
                         "Modifier keys",
                         dropdown(modifier_labels, modifiers_i).on_select(Msg::Modifiers).min_width(240.0),
@@ -329,7 +449,7 @@ impl Keyboard {
                     .entry("modifiers")
                     .help(
                         "Super (❖) is the Windows or Command key. Swap Alt and Super for a Mac-style position. \
-                         Applies to all keyboards immediately; choose Default to undo. \
+                         Applies immediately to the keyboard above; choose Default to undo. \
                          Use a left-only swap to keep Right Alt for accents.",
                     ),
                     form::row("Caps Lock key", form::choice(&CAPS.map(|c| c.0), caps_i, Msg::Caps))
@@ -345,7 +465,9 @@ impl Keyboard {
                         .help(
                             "Press it, then two keys, to type what the keyboard lacks: o and \" for ö, < and = for ≤.",
                         ),
-                    form::row("Num Lock on at start", toggle(k.numlock).on_toggle(Msg::NumLock)).entry("numlock"),
+                    form::row("Num Lock on at start", toggle(k.numlock).on_toggle(Msg::NumLock))
+                        .entry("numlock")
+                        .help("On every keyboard."),
                 ],
             ),
         ]
@@ -495,6 +617,201 @@ impl Keyboard {
         .into()
     }
 
+    fn setup_view(&self, s: &Settings, st: &Setup) -> Element<Msg> {
+        let mut col = column![
+            text("Set Up a Keyboard").size(15.0).weight(650.0),
+            form::note("Press the key just left of the space bar, on the keyboard you're setting up."),
+        ]
+        .spacing(10.0)
+        .width(460.0);
+        if st.waiting {
+            col = col.push(
+                row![icon(Icon::Keyboard).size(16.0).role(Role::Text3), text("Waiting for the key…").role(Role::Text3)]
+                    .spacing(8.0)
+                    .align(Align::Center),
+            );
+        }
+        // One with no space bar to press beside (a security key, a mouse's
+        // receiver) can be chosen instead, to type as the others do.
+        if st.keyboard.is_none() && !st.unset.is_empty() {
+            let labels: Vec<String> = st
+                .unset
+                .iter()
+                .map(|k| {
+                    if st.unset.iter().filter(|o| o.name == k.name).count() > 1 {
+                        format!("{} ({})", k.name, k.id)
+                    } else {
+                        k.name.clone()
+                    }
+                })
+                .collect();
+            col = col.push(form::note(
+                "No space bar on it, as on a security key or a mouse's receiver? Choose it, then \
+                 Same as Other Keyboards.",
+            ));
+            col = col.push(
+                row![
+                    text("Keyboard").width(170.0),
+                    dropdown(labels, st.chosen).on_select(Msg::SetupChoose).min_width(240.0).id("setup-keyboard")
+                ]
+                .spacing(8.0)
+                .align(Align::Center),
+            );
+        }
+        if let (Some(k), Some(b)) = (&st.keyboard, &st.beside) {
+            col = col.push(
+                container(
+                    column![
+                        row![
+                            icon(Icon::Keyboard).size(16.0),
+                            text(k.name.clone()).weight(650.0),
+                            text(k.id.clone()).mono().size(11.0).role(Role::Text3),
+                            spacer(),
+                            button("Press Again").compact().on_press(Msg::SetupAgain),
+                        ]
+                        .spacing(8.0)
+                        .align(Align::Center)
+                        .width(Fill),
+                        text(format!("Beside the space bar: {}", b.what)),
+                        text(b.why).size(11.5).role(Role::Text2),
+                    ]
+                    .spacing(6.0),
+                )
+                .padding([10.0, 12.0])
+                .fill(Tone::Sunk)
+                .border(Edge::Line)
+                .width(Fill),
+            );
+            let mut labels: Vec<String> = modifiers::CHOICES.iter().map(|(l, _)| (*l).into()).collect();
+            if st.modifiers == modifiers::CHOICES.len() {
+                labels.push("Custom".into());
+            }
+            col = col.push(
+                row![
+                    text("Modifier keys").width(170.0),
+                    dropdown(labels, st.modifiers)
+                        .on_select(Msg::SetupModifiers)
+                        .min_width(240.0)
+                        .id("setup-modifiers")
+                ]
+                .spacing(8.0)
+                .align(Align::Center),
+            );
+            // Its Caps Lock and Compose key: as other keyboards', or as
+            // another keyboard's.
+            let sources = setup::sources(s);
+            if sources.len() > 1 {
+                let labels: Vec<String> = sources.into_iter().map(|s| s.label).collect();
+                col = col.push(
+                    row![
+                        text("Caps Lock and Compose").width(170.0),
+                        dropdown(labels, st.from).on_select(Msg::SetupFrom).min_width(240.0).id("setup-from")
+                    ]
+                    .spacing(8.0)
+                    .align(Align::Center),
+                );
+            }
+        }
+        let ready = st.keyboard.is_some();
+        let known = ready || !st.unset.is_empty();
+        col.push(text(st.error.clone().unwrap_or_default()).size(11.0).role(Role::Danger))
+            .push(
+                row![
+                    spacer(),
+                    button("Not Now").cancel().on_press(Msg::SetupCancel),
+                    button("Same as Other Keyboards").enabled(known).on_press(Msg::SetupSame),
+                    button("Save").primary().default().enabled(ready).on_press(Msg::SetupSave),
+                ]
+                .spacing(8.0)
+                .width(Fill),
+            )
+            .into()
+    }
+
+    /// Wait for the key beside the space bar: the compositor catches it
+    /// (the sample's comes as [`Msg::SampleKey`]).
+    fn wait_for_key(&mut self, cx: &mut PaneCx<Msg>) {
+        let n = self.waits.fetch_add(1, Ordering::SeqCst) + 1;
+        if let Some(st) = &mut self.setup {
+            st.waiting = true;
+        }
+        if cx.sample() {
+            return;
+        }
+        let waits = self.waits.clone();
+        cx.spawn(move || Msg::SetupCaught(n, setup::catch_key(n, &waits)));
+    }
+
+    fn stop_waiting(&mut self) {
+        self.waits.fetch_add(1, Ordering::SeqCst);
+        if let Some(st) = &mut self.setup {
+            st.waiting = false;
+        }
+    }
+
+    /// The keyboard set up gets keys of its own (`own`: the modifier keys
+    /// chosen, the rest from where the sheet says), or types as other
+    /// keyboards do (the one chosen, if no key came); the Keys section
+    /// shows it after.
+    fn finish_setup(&mut self, own: bool, cx: &mut PaneCx<Msg>) {
+        let Some(st) = &self.setup else { return };
+        let chosen = if own { None } else { st.unset.get(st.chosen) };
+        let Some(k) = st.keyboard.as_ref().or(chosen).cloned() else { return };
+        let options = own.then(|| {
+            let sources = setup::sources(cx.settings());
+            let from = sources.get(st.from).map(|s| s.options.clone()).unwrap_or_default();
+            key_options(&modifiers::set(&from, st.modifiers))
+        });
+        let said = if own {
+            format!("{} has keys of its own", k.name)
+        } else {
+            format!("{} types as other keyboards do", k.name)
+        };
+        self.close_setup(cx);
+        self.keys_of = Some((k.name.clone(), k.id.clone()));
+        cx.change(|s| put_keyboard(s, &k, options));
+        cx.say(said);
+    }
+
+    fn close_setup(&mut self, cx: &mut PaneCx<Msg>) {
+        self.stop_waiting();
+        self.setup = None;
+        cx.close_sheet();
+    }
+
+    /// The key beside the space bar came, from `keyboard`: what it is says
+    /// where ❖ goes. Another key, or one Settei can't place, waits again.
+    fn caught(&mut self, code: u32, keyboard: Option<KeyboardInfo>, cx: &mut PaneCx<Msg>) {
+        const ESCAPE: u32 = 1;
+        if code == ESCAPE {
+            self.close_setup(cx);
+            return;
+        }
+        let Some(st) = &mut self.setup else { return };
+        st.waiting = false;
+        match (setup::beside_space(code), keyboard) {
+            (Err(again), _) => st.error = Some(again.into()),
+            (Ok(_), None) => {
+                st.error = Some("Settei couldn't tell which keyboard that was: press the key again.".into())
+            }
+            (Ok(b), Some(k)) => {
+                let sources = setup::sources(cx.settings());
+                // A keyboard set up before keeps its own; others start as
+                // other keyboards.
+                st.from = sources
+                    .iter()
+                    .position(|s| s.who.as_ref().is_some_and(|(n, i)| k.name == *n && k.id.eq_ignore_ascii_case(i)))
+                    .unwrap_or(0);
+                st.modifiers = b.suggest.unwrap_or_else(|| modifiers::selected(&sources[st.from].options));
+                st.keyboard = Some(k);
+                st.beside = Some(b);
+                st.error = None;
+                return;
+            }
+        }
+        self.wait_for_key(cx);
+    }
+
     fn picker_view(&self) -> Element<Msg> {
         let (query, selected) = self.picker.clone().unwrap_or_default();
         let choices: Rc<Vec<Choice>> = Rc::new(
@@ -589,6 +906,21 @@ impl Pane for Keyboard {
             SettingEntry::new("switch-layout", "Switch layouts with").keywords(&["input source", "toggle", "grp"]),
             SettingEntry::new("repeat-delay", "Delay until repeat").keywords(&["key repeat", "hold"]),
             SettingEntry::new("repeat-rate", "Repeat rate").keywords(&["key repeat", "speed"]),
+            SettingEntry::new("keyboards", "Keyboards with keys of their own").keywords(&[
+                "each keyboard",
+                "per keyboard",
+                "external",
+                "bluetooth",
+                "usb",
+                "apple",
+            ]),
+            SettingEntry::new("setup", "Set up a keyboard").keywords(&[
+                "new keyboard",
+                "identify",
+                "plugged in",
+                "space bar",
+                "where super goes",
+            ]),
             SettingEntry::new("modifiers", "Modifier keys").keywords(&[
                 "swap", "remap", "super", "alt", "control", "ctrl", "windows", "command", "option", "mac", "macOS",
             ]),
@@ -632,10 +964,32 @@ impl Pane for Keyboard {
 
     fn hidden(&mut self, _cx: &mut PaneCx<Msg>) {
         self.recording = None;
+        self.stop_waiting();
     }
 
-    fn focus_entry(&mut self, entry: &str, _cx: &mut PaneCx<Msg>) {
+    fn focus_entry(&mut self, entry: &str, cx: &mut PaneCx<Msg>) {
         self.tab = if entry.starts_with("shortcut") || entry == "commands" { Tab::Shortcuts } else { Tab::Typing };
+        // `keyboard.setup`: what the shell opens for a keyboard plugged in,
+        // with `--keyboard` naming it.
+        if entry != "setup" {
+            return;
+        }
+        let asked = cx.keyboard_named().map(str::to_owned);
+        match &mut self.setup {
+            None => cx.send(Msg::SetupOpen(asked)),
+            // Open already, for another keyboard: this one is chosen, once
+            // it's listed.
+            Some(st) if asked.is_some() => {
+                st.asked = asked;
+                if cx.sample() {
+                    let unset = std::mem::take(&mut st.unset);
+                    st.set_unset(unset);
+                } else {
+                    cx.spawn(|| Msg::SetupKeyboards(setup::attached()));
+                }
+            }
+            Some(_) => {}
+        }
     }
 
     fn update(&mut self, msg: Msg, cx: &mut PaneCx<Msg>) {
@@ -704,22 +1058,105 @@ impl Pane for Keyboard {
             }
             Msg::Rate(v) => cx.change(|s| s.input.keyboard.repeat_rate = v.round().clamp(5.0, 60.0) as u32),
             Msg::Trial(t) => self.trial = t,
-            Msg::Modifiers(i) => cx.change(|s| {
-                let k = &mut s.input.keyboard;
-                k.options = modifiers::set(&k.options, i);
-            }),
-            Msg::Caps(i) => cx.change(|s| {
-                let k = &mut s.input.keyboard;
-                k.options = replace_options(&k.options, is_caps_option, CAPS.get(i).and_then(|c| c.1));
-            }),
-            Msg::Compose(i) => cx.change(|s| {
-                let k = &mut s.input.keyboard;
-                k.options = replace_options(
-                    &k.options,
-                    |o| o.starts_with("compose:") && o != "compose:caps",
-                    COMPOSE.get(i).and_then(|c| c.1),
-                );
-            }),
+            Msg::Modifiers(i) => {
+                let who = self.who(cx.settings()).cloned();
+                cx.change(|s| change_options(s, who.as_ref(), |o| modifiers::set(o, i)));
+            }
+            Msg::Caps(i) => {
+                let who = self.who(cx.settings()).cloned();
+                cx.change(|s| {
+                    change_options(s, who.as_ref(), |o| {
+                        replace_options(o, is_caps_option, CAPS.get(i).and_then(|c| c.1))
+                    })
+                });
+            }
+            Msg::Compose(i) => {
+                let who = self.who(cx.settings()).cloned();
+                cx.change(|s| {
+                    change_options(s, who.as_ref(), |o| {
+                        replace_options(
+                            o,
+                            |o| o.starts_with("compose:") && o != "compose:caps",
+                            COMPOSE.get(i).and_then(|c| c.1),
+                        )
+                    })
+                });
+            }
+            Msg::KeysOf(i) => {
+                self.keys_of = i
+                    .checked_sub(1)
+                    .and_then(|p| cx.settings().input.keyboards.get(p))
+                    .map(|k| (k.name.clone(), k.id.clone()));
+            }
+            Msg::Forget => {
+                let Some((name, id)) = self.who(cx.settings()).cloned() else { return };
+                self.keys_of = None;
+                cx.change(|s| s.input.keyboards.retain(|k| !k.matches(&name, &id)));
+                cx.say(format!("{name} types as other keyboards do"));
+            }
+            Msg::SetupOpen(asked) => {
+                // The keyboards not set up, for one that has no key to press.
+                let mut st = Setup { asked, ..Default::default() };
+                if cx.sample() {
+                    st.set_unset(setup::not_set_up(cx.settings(), &setup::sample_keyboards()));
+                } else {
+                    cx.spawn(|| Msg::SetupKeyboards(setup::attached()));
+                }
+                self.setup = Some(st);
+                cx.open_sheet();
+                self.wait_for_key(cx);
+            }
+            Msg::SetupKeyboards(attached) => {
+                let unset = setup::not_set_up(cx.settings(), &attached);
+                if let Some(st) = &mut self.setup {
+                    st.set_unset(unset);
+                }
+            }
+            Msg::SetupChoose(i) => {
+                if let Some(st) = &mut self.setup {
+                    st.chosen = i;
+                }
+            }
+            Msg::SetupCaught(n, result) => {
+                if n != self.waits.load(Ordering::SeqCst) || self.setup.is_none() {
+                    return;
+                }
+                match result {
+                    Ok(Some((code, keyboard))) => self.caught(code, keyboard, cx),
+                    Ok(None) => {}
+                    Err(e) => {
+                        if let Some(st) = &mut self.setup {
+                            st.waiting = false;
+                            st.error = Some(format!("Settei couldn't ask Aizome for the key: {e}"));
+                        }
+                    }
+                }
+            }
+            Msg::SampleKey(code) => {
+                if cx.sample() && self.setup.as_ref().is_some_and(|st| st.waiting) {
+                    self.caught(code, Some(setup::sample_keyboard()), cx);
+                }
+            }
+            Msg::SetupAgain => {
+                if let Some(st) = &mut self.setup {
+                    st.keyboard = None;
+                    st.beside = None;
+                }
+                self.wait_for_key(cx);
+            }
+            Msg::SetupModifiers(i) => {
+                if let Some(st) = &mut self.setup {
+                    st.modifiers = i;
+                }
+            }
+            Msg::SetupFrom(i) => {
+                if let Some(st) = &mut self.setup {
+                    st.from = i;
+                }
+            }
+            Msg::SetupSave => self.finish_setup(true, cx),
+            Msg::SetupSame => self.finish_setup(false, cx),
+            Msg::SetupCancel => self.close_setup(cx),
             Msg::NumLock(on) => cx.change(|s| s.input.keyboard.numlock = on),
             Msg::Record(action) => {
                 self.recording = Some(action);
@@ -869,9 +1306,12 @@ impl Pane for Keyboard {
         form::page(sections)
     }
 
-    fn sheet(&self, _vcx: &ViewCx) -> Option<Element<Msg>> {
+    fn sheet(&self, vcx: &ViewCx) -> Option<Element<Msg>> {
         if self.picker.is_some() {
             return Some(self.picker_view());
+        }
+        if let Some(st) = &self.setup {
+            return Some(self.setup_view(vcx.settings(), st));
         }
         self.command.as_ref().map(|c| self.command_view(c))
     }

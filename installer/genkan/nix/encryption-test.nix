@@ -48,6 +48,11 @@ let
         # /boot and the store are supplied by the harness; root and swap use
         # the production-generated UUIDs and initrd unlock configuration.
         virtualisation.rootDevice = "/dev/disk/by-uuid/11111111-2222-4333-8444-555555555555";
+        # The console's log level on an installed system (rust/system/tuning.nix
+        # and the boot splash set 3), not the test VM's 7. At 7 the kernel's
+        # device messages printed onto the passphrase prompt's line, and when
+        # the prompt came before them they scrolled it off the screen.
+        boot.consoleLogLevel = lib.mkForce 3;
       };
     };
   };
@@ -78,7 +83,10 @@ pkgs.testers.runNixOSTest {
         machine.succeed("sync")
         machine.crash()
         machine.start()
-        machine.wait_for_text("[Pp]assphrase for", timeout=180)
+        # The prompt shows on the screen. OCR has read it in pieces ("enter
+        # passphrase" and "for disk root" apart), so one word of it, which
+        # nothing else there has, is enough.
+        machine.wait_for_text("[Pp]assphrase", timeout=180)
         machine.send_chars("Genkan-test-only-123\n")
         machine.wait_for_unit("multi-user.target", timeout=180)
         machine.succeed("test $(findmnt -n -o UUID /) = 11111111-2222-4333-8444-555555555555")

@@ -73,13 +73,45 @@ pub struct DeskbarSettings {
     pub order: Vec<String>,
     /// The Shelf under the apps.
     pub show_shelf: bool,
+    /// The screen edge it stands against, under the bar.
+    pub side: DeskbarSide,
+    /// Its width in points: 200 to 400 shows everything, narrower is Slim,
+    /// and the narrowest just icons (the shell keeps it in range).
+    pub width: f64,
 }
 
 impl Default for DeskbarSettings {
     fn default() -> Self {
-        DeskbarSettings { collapsed: false, auto_hide: false, pinned: Vec::new(), order: Vec::new(), show_shelf: true }
+        DeskbarSettings {
+            collapsed: false,
+            auto_hide: false,
+            pinned: Vec::new(),
+            order: Vec::new(),
+            show_shelf: true,
+            side: DeskbarSide::Right,
+            width: aizome_theme::metrics::DESKBAR_WIDTH,
+        }
     }
 }
+
+/// `[deskbar] side`: the edge the Deskbar hangs from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeskbarSide {
+    Left,
+    /// At the top right, as in C2-Desktop (the default).
+    #[default]
+    Right,
+}
+
+/// The Deskbar's named widths, the same in its grip's menu and in Settei.
+pub const DESKBAR_SIZES: [(&str, f64); 5] = [
+    ("Icons Only", 48.0),
+    ("Slim", 150.0),
+    ("Standard", aizome_theme::metrics::DESKBAR_WIDTH),
+    ("Wide", 300.0),
+    ("Wider", 360.0),
+];
 
 /// `[desktop]`: the desktop's icons.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

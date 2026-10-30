@@ -450,6 +450,13 @@ pub struct Seen {
     /// Keys pressed (evdev codes) with the modifiers held then.
     pub keys: Vec<(u32, u32)>,
     pub mods: u32,
+    /// Locked modifiers (Caps Lock is 2) and the layout in use (its
+    /// index), now and as each of `keys` came, and keymaps received.
+    pub locked: u32,
+    pub locked_at_keys: Vec<u32>,
+    pub group: u32,
+    pub group_at_keys: Vec<u32>,
+    pub keymaps: u32,
     pub keyboard_focus: bool,
     /// Vertical scrolling received, summed.
     pub scrolled: f64,
@@ -815,10 +822,19 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
         match event {
             wl_keyboard::Event::Enter { .. } => seen.keyboard_focus = true,
             wl_keyboard::Event::Leave { .. } => seen.keyboard_focus = false,
-            wl_keyboard::Event::Modifiers { mods_depressed, .. } => seen.mods = mods_depressed,
+            wl_keyboard::Event::Modifiers { mods_depressed, mods_locked, group, .. } => {
+                seen.mods = mods_depressed;
+                seen.locked = mods_locked;
+                seen.group = group;
+            }
+            wl_keyboard::Event::Keymap { .. } => seen.keymaps += 1,
             wl_keyboard::Event::Key { key, state: WEnum::Value(wl_keyboard::KeyState::Pressed), .. } => {
                 let m = seen.mods;
                 seen.keys.push((key, m));
+                let l = seen.locked;
+                seen.locked_at_keys.push(l);
+                let g = seen.group;
+                seen.group_at_keys.push(g);
             }
             _ => {}
         }
@@ -1008,7 +1024,20 @@ use wayland_protocols::ext::session_lock::v1::client::{
 pub struct LockClient {
     tx: Sender<Cmd>,
     pub locked: Arc<Mutex<Option<bool>>>,
+    /// What the lock surfaces (the prompt) got from the seat.
+    pub heard: Arc<Mutex<Heard>>,
     join: Option<JoinHandle<()>>,
+}
+
+/// Input that reached the lock prompt.
+#[derive(Clone, Debug, Default)]
+pub struct Heard {
+    /// Keys pressed (evdev codes).
+    pub keys: Vec<u32>,
+    /// Buttons: (code, pressed).
+    pub buttons: Vec<(u32, bool)>,
+    /// Vertical scrolling, summed.
+    pub scrolled: f64,
 }
 
 impl LockClient {
@@ -1016,9 +1045,27 @@ impl LockClient {
         let stream = UnixStream::connect(c.dir.join(&c.socket)).unwrap();
         let (tx, rx) = channel();
         let locked = Arc::new(Mutex::new(None));
-        let l2 = locked.clone();
-        let join = std::thread::spawn(move || run_lock(stream, color, rx, l2));
-        LockClient { tx, locked, join: Some(join) }
+        let heard = Arc::new(Mutex::new(Heard::default()));
+        let (l2, h2) = (locked.clone(), heard.clone());
+        let join = std::thread::spawn(move || run_lock(stream, color, rx, l2, h2));
+        LockClient { tx, locked, heard, join: Some(join) }
+    }
+
+    pub fn heard(&self) -> Heard {
+        self.heard.lock().unwrap().clone()
+    }
+
+    /// Waits for the prompt to have heard something.
+    pub fn wait_heard(&self, what: &str, f: impl Fn(&Heard) -> bool) -> Heard {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let h = self.heard();
+            if f(&h) {
+                return h;
+            }
+            assert!(Instant::now() < deadline, "timed out waiting for {what}: {h:?}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// Unlocks (unlock_and_destroy) and lets the thread end.
@@ -1043,14 +1090,25 @@ struct Locker {
     color: u32,
     shm: wl_shm::WlShm,
     locked: Arc<Mutex<Option<bool>>>,
+    heard: Arc<Mutex<Heard>>,
 }
 
-fn run_lock(stream: UnixStream, color: u32, rx: Receiver<Cmd>, locked: Arc<Mutex<Option<bool>>>) {
+fn run_lock(
+    stream: UnixStream,
+    color: u32,
+    rx: Receiver<Cmd>,
+    locked: Arc<Mutex<Option<bool>>>,
+    heard: Arc<Mutex<Heard>>,
+) {
     let conn = Connection::from_socket(stream).unwrap();
     let (globals, mut queue): (_, EventQueue<Locker>) = registry_queue_init(&conn).unwrap();
     let qh = queue.handle();
     let compositor: wl_compositor::WlCompositor = globals.bind(&qh, 4..=6, ()).unwrap();
     let shm: wl_shm::WlShm = globals.bind(&qh, 1..=1, ()).unwrap();
+    // The prompt's keyboard and pointer, so tests can tell what reached it.
+    let seat: Option<wl_seat::WlSeat> = globals.bind(&qh, 5..=9, ()).ok();
+    let _keyboard = seat.as_ref().map(|s| s.get_keyboard(&qh, ()));
+    let _pointer = seat.as_ref().map(|s| s.get_pointer(&qh, ()));
     let outputs: Vec<wl_output::WlOutput> = globals.contents().with_list(|list| {
         list.iter()
             .filter(|g| g.interface == "wl_output")
@@ -1059,7 +1117,7 @@ fn run_lock(stream: UnixStream, color: u32, rx: Receiver<Cmd>, locked: Arc<Mutex
     });
     let manager: ext_session_lock_manager_v1::ExtSessionLockManagerV1 = globals.bind(&qh, 1..=1, ()).unwrap();
     let lock = manager.lock(&qh, ());
-    let mut state = Locker { color, shm, locked };
+    let mut state = Locker { color, shm, locked, heard };
     // Each lock surface carries the wl_surface its configures fill.
     let _lock_surfaces: Vec<_> = outputs
         .iter()
@@ -1112,8 +1170,46 @@ ignore_locker!(
     wl_surface::WlSurface,
     wl_output::WlOutput,
     wl_buffer::WlBuffer,
+    wl_seat::WlSeat,
     ext_session_lock_manager_v1::ExtSessionLockManagerV1
 );
+
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for Locker {
+    fn event(
+        s: &mut Self,
+        _: &wl_keyboard::WlKeyboard,
+        event: wl_keyboard::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let wl_keyboard::Event::Key { key, state: WEnum::Value(wl_keyboard::KeyState::Pressed), .. } = event {
+            s.heard.lock().unwrap().keys.push(key);
+        }
+    }
+}
+
+impl Dispatch<wayland_client::protocol::wl_pointer::WlPointer, ()> for Locker {
+    fn event(
+        s: &mut Self,
+        _: &wayland_client::protocol::wl_pointer::WlPointer,
+        event: wayland_client::protocol::wl_pointer::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        use wayland_client::protocol::wl_pointer;
+        match event {
+            wl_pointer::Event::Axis { axis: WEnum::Value(wl_pointer::Axis::VerticalScroll), value, .. } => {
+                s.heard.lock().unwrap().scrolled += value;
+            }
+            wl_pointer::Event::Button { button, state: WEnum::Value(state), .. } => {
+                s.heard.lock().unwrap().buttons.push((button, state == wl_pointer::ButtonState::Pressed));
+            }
+            _ => {}
+        }
+    }
+}
 
 impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, ()> for Locker {
     fn event(

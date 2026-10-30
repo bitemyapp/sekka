@@ -127,6 +127,11 @@ pub enum Action {
         app_id: String,
         down: bool,
     },
+    /// Move the Deskbar to an edge, or make it a width (saved).
+    PlaceDeskbar {
+        side: Option<aizome_config::DeskbarSide>,
+        width: Option<f64>,
+    },
     /// Mount, unmount or eject a disk by its device path.
     Disk {
         device: String,
@@ -141,6 +146,18 @@ pub enum Action {
     /// Open the focused app's menu holding a command (its trail).
     ShowInMenu {
         trail: String,
+    },
+    /// Open Settei's keyboard setup for one keyboard, chosen in its sheet
+    /// (`keyboards.rs`).
+    SetUpKeyboard {
+        name: String,
+        id: String,
+    },
+    /// Have a keyboard type as other keyboards do, without setting it up,
+    /// so it isn't asked about again (`keyboards.rs`).
+    KeyboardAsOthers {
+        name: String,
+        id: String,
     },
 }
 

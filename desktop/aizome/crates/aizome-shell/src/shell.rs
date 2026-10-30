@@ -146,6 +146,8 @@ pub enum Surface {
         output: u32,
     },
     Deskbar,
+    /// The width an edge drag would give the Deskbar, over it.
+    DeskbarPreview,
     Palette,
     Panel,
     Osd,
@@ -302,8 +304,9 @@ pub struct Shell {
     pub confirm: Option<crate::confirm::Confirm>,
     /// The session verb last carried out (tests: nothing happens).
     pub session_done: Option<SessionVerb>,
-    /// The critical notifications' cards, and how many.
-    pub cards: Option<(WindowKey, usize)>,
+    /// The critical notifications' cards, how many, and their margin at the
+    /// right.
+    pub cards: Option<(WindowKey, usize, f64)>,
     /// What the shell's own notifications' actions do.
     pub note_actions: HashMap<(u32, String), Action>,
     /// Actions to carry out once the update in hand is done.
@@ -315,6 +318,13 @@ pub struct Shell {
     /// The output the Deskbar was opened on: it opens again on the main
     /// display when that changes.
     pub(crate) deskbar_output: Option<u32>,
+    /// The edge the open Deskbar was anchored to.
+    pub(crate) deskbar_side: aizome_config::DeskbarSide,
+    /// An edge drag under way: the width at the press, and the pointer's x
+    /// then.
+    pub(crate) deskbar_resize: Option<(f64, f64)>,
+    /// The surface showing the width that drag would give, and the width.
+    pub(crate) deskbar_preview: Option<(WindowKey, f64)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -345,6 +355,8 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// Keyboards asked about this session, by name and ID (`keyboards.rs`).
+    pub keyboards_asked: std::collections::HashSet<(String, String)>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -444,6 +456,9 @@ impl Shell {
             deskbar_visibility: Default::default(),
             deskbar_transient: false,
             deskbar_output: None,
+            deskbar_side: aizome_config::DeskbarSide::Right,
+            deskbar_resize: None,
+            deskbar_preview: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -460,6 +475,7 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            keyboards_asked: Default::default(),
             locating: false,
             located_at: None,
             recording: None,
@@ -649,6 +665,8 @@ impl Shell {
             output: screen.name(),
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
+            header: self.header_width(),
+            deskbar_left: self.deskbar_cfg.side == aizome_config::DeskbarSide::Left,
         }
     }
 
@@ -856,6 +874,10 @@ impl Shell {
                 self.focus_app_window(crate::launch::SETTEI);
                 self.launch(crate::launch::settings(&pane, anchor.as_deref()), cx);
             }
+            Action::SetUpKeyboard { name, id } => {
+                self.focus_app_window(crate::launch::SETTEI);
+                self.launch(crate::launch::keyboard_setup(&name, &id), cx);
+            }
             Action::Copy { text } => cx.set_clipboard_text(&text),
             Action::StatusMenuItem { key, id } => self.status_menu_item(&key, id),
             Action::NewDesk => {
@@ -886,6 +908,15 @@ impl Shell {
                 self.save_section("deskbar");
             }
             Action::MoveDeskbarApp { app_id, down } => self.move_deskbar_app(&app_id, down),
+            Action::PlaceDeskbar { side, width } => {
+                if let Some(s) = side {
+                    self.deskbar_cfg.side = s;
+                }
+                if let Some(w) = width {
+                    self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                }
+                self.save_section("deskbar");
+            }
             Action::EmptyTrash => crate::launch::empty_trash(),
             Action::MoveToTrash { path } => {
                 if let Err(e) = crate::launch::move_to_trash(&path) {
@@ -925,6 +956,7 @@ impl Shell {
                 self.shelf.remove(index);
                 self.save_shelf();
             }
+            Action::KeyboardAsOthers { name, id } => self.keyboard_as_others(&name, &id),
             Action::Service(verb) => self.run_service(verb, cx),
             Action::NewFolderOnDesktop => {
                 let dir = crate::launch::desktop_dir();
@@ -1146,6 +1178,8 @@ impl Shell {
                 self.ipc.ask(Request::NightLight { enabled: None, temperature: None }, NIGHT_LIGHT_TAG);
                 // What's shared already (the shell restarted mid-share).
                 self.ipc.ask(Request::Shares, SHARES_TAG);
+                // Keyboards plugged in before the shell came.
+                self.ipc.ask(Request::Keyboards, KEYBOARDS_TAG);
             }
             IpcEvent::Event(e) => {
                 self.wm.apply(&e);
@@ -1168,6 +1202,7 @@ impl Shell {
                     Event::NightLightChanged { state } => self.night = Some(state),
                     Event::AreaPicked { tag, area, output, .. } => self.area_picked(&tag, area, output.as_deref(), cx),
                     Event::SharesChanged { shares } => self.shares_changed(shares),
+                    Event::KeyboardAdded { keyboard } => self.keyboard_met(keyboard, cx),
                     // Another main display: the Deskbar goes there.
                     Event::OutputsChanged { .. } => self.sync_screens(cx.outputs(), cx),
                     _ => {}
@@ -1179,6 +1214,11 @@ impl Shell {
             }
             IpcEvent::Reply { tag: SHARES_TAG, response: aizome_ipc::Response::Shares { shares } } => {
                 self.shares_changed(shares)
+            }
+            IpcEvent::Reply { tag: KEYBOARDS_TAG, response: aizome_ipc::Response::Keyboards { keyboards } } => {
+                for k in keyboards {
+                    self.keyboard_met(k, cx);
+                }
             }
             IpcEvent::Reply { .. } => {}
         }
@@ -1608,6 +1648,7 @@ impl Program for Shell {
             }
             Some(Surface::Desktop { output }) => self.desktop_view(*output),
             Some(Surface::Deskbar) => crate::deskbar::view(&self.deskbar_model()).map(Msg::Deskbar),
+            Some(Surface::DeskbarPreview) => self.deskbar_preview_view(),
             Some(Surface::Palette) => match self.palette_in(window) {
                 Some(p) => {
                     let inner = crate::palette::view::view(&self.palette_view_of(p), p.scroll)
@@ -1688,6 +1729,11 @@ impl Program for Shell {
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // An edge drag on it can't end now.
+                self.end_deskbar_resize(cx);
+            }
+            if s == Surface::DeskbarPreview {
+                self.deskbar_preview = None;
             }
         }
         true
@@ -1700,6 +1746,12 @@ impl Program for Shell {
 
     fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
         if self.deskbar == Some(window) {
+            // While the button's down the pointer stays the Deskbar's: gone
+            // mid-drag, the compositor took it, and the release won't come.
+            // The edge drag is over, its width not taken.
+            if !inside {
+                self.end_deskbar_resize(cx);
+            }
             self.deskbar_hover(false, inside, cx);
             self.after_update(cx);
         }
@@ -1759,6 +1811,7 @@ pub fn app_sel(app_id: &str) -> AppSel {
 /// The tag of the Night Light question asked at connecting.
 const NIGHT_LIGHT_TAG: u64 = 0x4e49_4748;
 const SHARES_TAG: u64 = 0x5348_4152;
+const KEYBOARDS_TAG: u64 = 0x4b45_5942;
 
 pub fn layer(opts: LayerOptions, width: f64, height: f64, title: &str) -> WindowSpec {
     let mut s = WindowSpec::layer(opts, width, height);
@@ -2074,6 +2127,16 @@ mod tests {
                 .values()
                 .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("keyboard.caps")) })
         );
+    }
+
+    #[test]
+    fn setting_up_a_keyboard_opens_settei_with_it_chosen() {
+        let (mut h, requests) = running_settings();
+        let (name, id) = ("Yubico YubiKey OTP+FIDO+CCID", "1050:0407");
+        h.send(Msg::Run(Action::SetUpKeyboard { name: name.into(), id: id.into() }));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 42 });
+        let want = crate::launch::keyboard_setup(name, id);
+        assert!(h.program().launches.values().any(|(launch, _)| *launch == want), "{:?}", h.program().launches);
     }
 
     #[test]

@@ -9,6 +9,10 @@ import subprocess
 import time
 
 os.environ["OMP_THREAD_LIMIT"] = "1"
+# One OCR of a whole frame takes a second or two alone, on one thread. On a
+# host busy with other VM checks it took more than 10 seconds, which failed
+# the check although the frame was fine; this only stops a hung tesseract.
+OCR_TIMEOUT = 120
 PORTAL = "busctl --user --timeout=10 call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.Settings Read ss org.freedesktop.appearance color-scheme 2>&1"
 
 
@@ -47,8 +51,11 @@ def frame(machine, name):
 
 def words(machine, name="ocr", psm="11"):
     path = frame(machine, name)
-    output = subprocess.check_output(["@tesseract@", str(path), "stdout", "--psm", psm, "tsv"], text=True, timeout=10)
-    return [row for row in csv.DictReader(io.StringIO(output), delimiter="\t") if row["text"].strip()]
+    output = subprocess.check_output(["@tesseract@", str(path), "stdout", "--psm", psm, "tsv"], text=True, timeout=OCR_TIMEOUT)
+    # Tesseract doesn't quote its fields: a word that starts with a quote mark
+    # (the wallpaper makes some) would otherwise swallow every word after it.
+    rows = csv.DictReader(io.StringIO(output), delimiter="\t", quoting=csv.QUOTE_NONE)
+    return [row for row in rows if row["text"].strip()]
 
 
 def wait_word(machine, text, timeout=60, psm="11"):
@@ -102,7 +109,7 @@ def verify_test_password(machine):
         path = frame(machine, "test-password")
         crop = path.with_name(path.stem + "-field.png")
         subprocess.run(["@magick@", str(path), "-crop", "200x20+500+468", "+repage", "-bordercolor", "white", "-border", "10", str(crop)], check=True)
-        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=10).strip()
+        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=OCR_TIMEOUT).strip()
         if text == "demo":
             return
         time.sleep(0.5)
@@ -118,8 +125,10 @@ def wait_plasma_panel(machine):
         crop = path.with_name(path.stem + "-clock.png")
         # Include both floating and edge-attached panel positions.
         subprocess.run(["@magick@", str(path), "-crop", "80x56+1144+744", "+repage", "-bordercolor", "white", "-border", "10", str(crop)], check=True)
-        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "6"], text=True, timeout=10).strip()
-        if any(re.fullmatch(r"[0-2]?[0-9]:[0-5][0-9]\s*[AP]M", line) for line in text.splitlines()):
+        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "6"], text=True, timeout=OCR_TIMEOUT).strip()
+        # OCR drops the colon from some times ("433 PM" for 4:33), and the
+        # clock doesn't change for up to a minute.
+        if any(re.fullmatch(r"[0-2]?[0-9]:?[0-5][0-9]\s*[AP]M", line) for line in text.splitlines()):
             return
         time.sleep(0.5)
     raise AssertionError(("Plasma panel clock", text))
@@ -141,7 +150,7 @@ def login(machine, session="Xfce", expected_preselection=None):
         path = frame(machine, "fresh-preselection")
         crop = path.with_name(path.stem + "-selection.png")
         subprocess.run(["@magick@", str(path), "-crop", "285x24+495+502", "+repage", "-bordercolor", "white", "-border", "10", str(crop)], check=True)
-        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=10).strip()
+        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=OCR_TIMEOUT).strip()
         assert expected_preselection in text, (expected_preselection, text)
     if session:
         click_word(machine, "Desktop")

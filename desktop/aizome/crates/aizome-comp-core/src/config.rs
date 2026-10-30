@@ -1,10 +1,10 @@
 //! Settings applied live: theme and focus colour on tabs, effects tier,
-//! keyboard layout and repeat, pointer and touchpad, outputs and Desks.
+//! keyboard layout, each keyboard's own keys and repeat, pointer and
+//! touchpad, outputs and Desks.
 
 use aizome_config::Settings;
 use aizome_ipc::Event;
 use aizome_theme::Palette;
-use smithay::input::keyboard::XkbConfig;
 use tracing::{info, warn};
 
 use crate::state::State;
@@ -43,26 +43,13 @@ impl State {
             self.az.queue_redraw_all();
         }
 
-        // Keyboard.
+        // Keyboard: the keymap of the one typing, with its own keys.
+        self.apply_keymap();
         let (ok, nk) = (&old.input.keyboard, &s.input.keyboard);
-        if let Some(kb) = self.az.seat.get_keyboard() {
-            if ok.layouts != nk.layouts || ok.variant != nk.variant || ok.options != nk.options || ok.model != nk.model
-            {
-                let layouts = nk.layouts.join(",");
-                let cfg = XkbConfig {
-                    rules: "",
-                    model: &nk.model,
-                    layout: &layouts,
-                    variant: &nk.variant,
-                    options: if nk.options.is_empty() { None } else { Some(nk.options.clone()) },
-                };
-                if let Err(e) = kb.set_xkb_config(self, cfg) {
-                    warn!("keyboard layout {layouts}: {e:?}");
-                }
-            }
-            if ok.repeat_delay != nk.repeat_delay || ok.repeat_rate != nk.repeat_rate {
-                kb.change_repeat_info(nk.repeat_rate as i32, nk.repeat_delay as i32);
-            }
+        if let Some(kb) = self.az.seat.get_keyboard()
+            && (ok.repeat_delay != nk.repeat_delay || ok.repeat_rate != nk.repeat_rate)
+        {
+            kb.change_repeat_info(nk.repeat_rate as i32, nk.repeat_delay as i32);
         }
 
         // Pointer and touchpad (libinput devices on udev).

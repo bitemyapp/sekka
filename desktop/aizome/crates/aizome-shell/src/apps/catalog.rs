@@ -99,6 +99,7 @@ pub fn glyph_for(app_id: &str) -> Option<(Icon, Hue)> {
         "myaku" => (Icon::Activity, Hue::Red),
         "nisshi" => (Icon::NotepadText, Hue::Cyan),
         "shashin" => (Icon::Image, Hue::Violet),
+        "shiori" => (Icon::BookOpen, Hue::Amber),
         "utsushi" => (Icon::Film, Hue::Red),
         "annai" => (Icon::Compass, Hue::Amber),
         "foot" | "footclient" | "alacritty" | "kitty" | "wezterm" | "ghostty" | "konsole" | "terminal" | "xterm" => {

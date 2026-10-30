@@ -79,6 +79,7 @@ pub fn fallback(name: &str, window: Option<&WindowInfo>, desks: &[DeskInfo]) -> 
     let pid = window.and_then(|w| w.pid);
     let app_id = window.map(|w| w.app_id.clone()).unwrap_or_default();
     let id = window.map(|w| w.id);
+    let stacked = window.is_some_and(|w| !w.group_members.is_empty());
     let app = Menu::new(
         name,
         vec![
@@ -99,7 +100,16 @@ pub fn fallback(name: &str, window: Option<&WindowInfo>, desks: &[DeskInfo]) -> 
             Entry::action("Split Left", Action::Wm(Request::Split { id, side: Side::Left })).shortcut(sc("⌥❖", "←")),
             Entry::action("Split Right", Action::Wm(Request::Split { id, side: Side::Right })).shortcut(sc("⌥❖", "→")),
             Entry::action("Stack with…", Action::Wm(Request::Action { action: "stack-with-behind".into() }))
-                .shortcut(sc("⌥❖", "S")),
+                .shortcut(sc("⌃❖", "S")),
+            Entry::action("Show Previous Tab", Action::Wm(Request::Action { action: "previous-tab".into() }))
+                .shortcut(sc("⇧❖", "["))
+                .enabled(stacked),
+            Entry::action("Show Next Tab", Action::Wm(Request::Action { action: "next-tab".into() }))
+                .shortcut(sc("⇧❖", "]"))
+                .enabled(stacked),
+            Entry::action("Move Tab to New Window", Action::Wm(Request::Action { action: "unstack".into() }))
+                .shortcut(sc("⌃⇧❖", "S"))
+                .enabled(stacked),
             Entry::submenu("Move to Desk", desk_items(desks, |i| crate::actions::wm::move_to_desk(id, i))),
             Entry::separator(),
             Entry::action("Full Screen", Action::Wm(Request::Fullscreen { id, state: None })).shortcut(sc("⌃❖", "F")),
@@ -552,6 +562,8 @@ mod tests {
     fn shortcuts_become_the_kits() {
         let s = kit_shortcut(&sc("⌥❖", "H")).unwrap();
         assert_eq!(s.label(), "⌥❖H");
+        let tab = kit_shortcut(&sc("⇧❖", "]")).unwrap();
+        assert_eq!((tab.key, tab.command, tab.shift), (aizome_kit::ShortcutKey::Char(']'), true, true));
         assert_eq!(kit_shortcut(&sc("⌃❖", "↑")).unwrap().key, aizome_kit::ShortcutKey::Up);
         assert_eq!(
             kit_shortcut(&proto::Shortcut { key: "F10".into(), ..Default::default() }).unwrap().key,

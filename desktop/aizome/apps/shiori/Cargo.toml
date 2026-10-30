@@ -1,0 +1,35 @@
+[package]
+name = "aizome-shiori"
+description = "Shiori 栞 (Documents), Aizome's PDF reader: pages drawn by hayro in a worker process of their own, find, text selection, links, the outline, and your place kept"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_shiori"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-shiori"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-config.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+# fontconfig, asked for fonts documents name but don't carry (fonts.rs).
+libloading.workspace = true
+# hayro (Apache-2.0 OR MIT), a PDF renderer in Rust, from bitemyapp's fork
+# of it: branch aizome-perf, half PDFium's time over the pdf.js corpus, with
+# an encrypted document's permissions (docs/shiori.md). Pinned by revision;
+# it runs in the worker process alone, so a document that panics it or
+# keeps it busy takes no window with it (docs/apps.md). hayro-syntax's
+# `unsafe` decodes Flate, JPEG, JBIG2 and JPEG 2000 with SIMD, as measured.
+hayro = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9" }
+hayro-syntax = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9", features = ["unsafe"] }
