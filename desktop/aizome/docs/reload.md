@@ -140,8 +140,7 @@ aizome-dev env                        # how the session was built, and the cargo
 
 `watch` builds the logic and the shell once, then on every save:
 
-- a file of the logic → rebuild it (about 6 s for a one-line change
-  here) and swap it in;
+- a file of the logic → rebuild it and swap it in;
 - a file of the shell → rebuild it and restart the shell beside the old
   one;
 - a file of an app → rebuild it and, if it's running, close it and start
@@ -151,8 +150,13 @@ aizome-dev env                        # how the session was built, and the cargo
   the compositor's core makes the logic's reload refused, with which part
   of the core differs, and it runs at the next login.
 
-The logic builds at `opt-level = 1` by default, which compiles several
-times faster; `--optimised` builds it as the session's own.
+The logic uses the session's regular build profile without lowering its
+optimisation level or increasing its codegen units. For a packaged session
+this is `release`; the shell and apps use the package's recorded
+`release-lto` profile. Older packages that did not record a standalone
+profile keep their recorded `release` profile. `--optimised` is still
+accepted for existing commands, but is no longer needed. A session built
+with the debug profile still requires that profile for compatible reloads.
 
 ### Why a build from your checkout loads into the packaged session
 
@@ -193,9 +197,9 @@ builds with exactly that: the recorded `rustc` and `cargo` (realised from
 the binary cache if they aren't in the store), the core's flags, the same
 `-p` set, profile and target, in `target/aizome-dev` beside the
 checkout's own builds (other flags there would rebuild everything each
-time). Only the logic's own profile is changed, through `--config
-profile.release.package.aizome-comp-logic…`, which leaves every other
-crate as it was.
+time). It does not add package-specific profile overrides. Standalone
+programs go into their own profile's output directory within the same
+target directory.
 
 Verified, with the package built by Nix (in `/build/aizome-source`)
 and the same commit unpacked in another directory and built there by the

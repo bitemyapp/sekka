@@ -391,13 +391,46 @@ struct Maps {
     pictures: HashMap<WinId, Kept>,
 }
 
-/// A hidden window's picture drawn ahead, kept for its next showing.
+/// A hidden window's picture drawn ahead, kept through its next showing.
 struct Kept {
     picture: crate::ahead::Picture,
     /// It shows, and its first frame is still to come.
     shown: bool,
     /// What changed since it showed, to draw over the picture.
     changed: Vec<Rect>,
+}
+
+impl Kept {
+    /// Use the picture for the first suitable frame, without dropping its
+    /// images inside the draw callback. Sidestep queues that frame after
+    /// the callback returns: dropping here would queue ForgetImages first,
+    /// then the frame would put the orphaned pixels back in its cache.
+    fn first_damage(&mut self, size: Size, scale: f64, damage: &[Rect]) -> Option<Vec<Rect>> {
+        if !std::mem::take(&mut self.shown) || !self.picture.fits(size, scale, damage) {
+            return None;
+        }
+        crate::ahead::changed(&self.changed, size)
+    }
+}
+
+#[cfg(test)]
+mod picture_tests {
+    use super::*;
+
+    #[test]
+    fn the_first_frame_keeps_its_image_owner_but_cannot_reuse_stale_pixels() {
+        let size = Size::new(1.0, 1.0);
+        let rect = Rect::new(0.0, 0.0, 1.0, 1.0);
+        let picture = crate::ahead::Picture {
+            size,
+            scale: 1.0,
+            bands: vec![(rect, sidestep_ui::Image::from_rgba(1, 1, &[23, 45, 67, 255]).unwrap())],
+        };
+        let mut kept = Kept { picture, shown: true, changed: Vec::new() };
+        assert_eq!(kept.first_damage(size, 1.0, &[rect]), Some(Vec::new()));
+        assert_eq!(kept.picture.bands[0].1.to_rgba8(), Some(vec![23, 45, 67, 255]));
+        assert_eq!(kept.first_damage(size, 1.0, &[rect]), None, "later frames repaint their widgets");
+    }
 }
 
 struct Glue<P: Program> {
@@ -775,12 +808,13 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
         let Some(&win) = self.maps.to_kit.get(&window) else { return };
         // The first frame of a window drawn ahead, at the size and scale
         // drawn: the picture, and what changed since drawn over it.
-        if let Some(k) = self.maps.pictures.remove(&win).filter(|k| k.shown)
-            && k.picture.fits(canvas.size(), canvas.scale(), &canvas.damage())
-            && let Some(changed) = crate::ahead::changed(&k.changed, canvas.size())
+        if let Some(k) = self.maps.pictures.get_mut(&win)
+            && let Some(changed) = k.first_damage(canvas.size(), canvas.scale(), &canvas.damage())
         {
             let core = &mut self.rt.core;
             crate::ahead::draw(&k.picture, &changed, canvas, |c| core.paint(win, c));
+            // Kept until hide, replacement or close, after this frame's
+            // Paint has been queued. Later frames paint the widgets.
             return;
         }
         self.rt.core.paint(win, canvas);

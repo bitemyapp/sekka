@@ -10,3 +10,6 @@ repository.workspace = true
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true
+# Reuse Sidestep's JPEG decoder without expanding full-size RGB photos to
+# RGBA before scaling them down to the output size.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }

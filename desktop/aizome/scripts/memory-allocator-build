@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Build a matched glibc / TiKV jemalloc experiment from the working tree.
+# Run inside nix develop .#aizome. Nothing changes the checkout or live session.
+set -euo pipefail
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: $0 NEW_OUTPUT_DIRECTORY [JOBS]" >&2
+  exit 2
+fi
+repo=$(realpath "$(dirname "$(realpath "$0")")/..")
+sekka_root=$(git -C "$repo" rev-parse --show-toplevel)
+sidestep=$(realpath "$repo/sidestep")
+output=$(realpath -m -- "$1")
+jobs=${2:-2}
+[[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo "JOBS must be positive" >&2; exit 2; }
+case "$output/" in
+  "$sekka_root/"*|"$sidestep/"*)
+    echo "Put the experiment outside the Aizome and Sidestep checkouts" >&2
+    exit 2 ;;
+esac
+[ ! -e "$output" ] || { echo "Output already exists: $output" >&2; exit 2; }
+warm_target=
+if [ -n "${AIZOME_ALLOCATOR_WARM_TARGET:-}" ]; then
+  # Resolve relative to the caller before changing directory. cp -a must
+  # copy a directory, not preserve a link back into the original cache.
+  warm_target=$(realpath -- "$AIZOME_ALLOCATOR_WARM_TARGET")
+  [ -d "$warm_target" ] || { echo "Warm target is not a directory: $warm_target" >&2; exit 2; }
+  case "$output/" in
+    "$warm_target/"*)
+      echo "Put the experiment outside the warm target directory" >&2
+      exit 2 ;;
+  esac
+fi
+command -v cargo >/dev/null || { echo "Run inside nix develop .#aizome" >&2; exit 1; }
+mkdir -p "$output/source" "$output/sidestep" "$output/glibc" "$output/jemalloc/lib"
+# Include uncommitted fixes, and keep the original snapshot for comparison.
+git -C "$sekka_root" ls-files -z --cached --others --exclude-standard -- \
+  desktop/aizome apps/yukimi/Cargo.toml apps/yukimi/crates |
+  while IFS= read -r -d '' source_file; do
+    # The index still lists unstaged deletions. A dangling symlink, however,
+    # is an existing source entry and must remain in the snapshot.
+    if [ -e "$sekka_root/$source_file" ] || [ -L "$sekka_root/$source_file" ]; then
+      printf '%s\0' "$source_file"
+    fi
+  done > "$output/source-files"
+tar -C "$sekka_root" --exclude='__pycache__' --null --verbatim-files-from \
+  -T "$output/source-files" -cf "$output/source-before-allocator.tar"
+tar -xf "$output/source-before-allocator.tar" -C "$output/source"
+tar -C "$sidestep" --exclude=.git --exclude=target -cf - . | tar -xf - -C "$output/sidestep"
+ln -sfn "$output/sidestep" "$output/source/desktop/aizome/sidestep"
+git -C "$repo" rev-parse HEAD > "$output/source-revision"
+git -C "$sekka_root" diff --binary HEAD -- desktop/aizome apps/yukimi > "$output/working-tree.patch"
+cd "$output/source/desktop/aizome"
+{
+  rustc -vV
+  cargo -V
+  printf 'RUSTFLAGS=%s\nCARGO_ENCODED_RUSTFLAGS=%s\nRUSTC_WRAPPER=%s\n' \
+    "${RUSTFLAGS:-}" "${CARGO_ENCODED_RUSTFLAGS:-}" "${RUSTC_WRAPPER:-}"
+} > "$output/toolchain.txt"
+
+export CARGO_TARGET_DIR="$output/target"
+# Optional reuse of an idle target; Cargo still checks its fingerprints.
+if [ -n "$warm_target" ]; then
+  cp -a --reflink=auto "$warm_target" "$CARGO_TARGET_DIR"
+fi
+packages=(aizome-shell aizome-soroban aizome-sumi aizome-settei)
+args=()
+for package in "${packages[@]}"; do args+=(-p "$package"); done
+freeze() {
+  for package in "${packages[@]}"; do
+    cp "$CARGO_TARGET_DIR/release-lto/$package" "$output/$1/$package"
+  done
+}
+lock_packages() {
+  # Cargo's generated lock format has one identity per [[package]] block.
+  # Preserve source and checksum too: equal names/versions alone are weaker.
+  awk '
+    function emit() { if (name != "") print name "\t" version "\t" source "\t" checksum }
+    /^\[\[package\]\]$/ { emit(); name=version=source=checksum=""; next }
+    /^name = / { name=substr($0,8) }
+    /^version = / { version=substr($0,11) }
+    /^source = / { source=substr($0,10) }
+    /^checksum = / { checksum=substr($0,12) }
+    END { emit() }
+  ' "$1" | LC_ALL=C sort
+}
+
+echo "Building the matched glibc control"
+cp Cargo.lock "$output/glibc-Cargo.lock"
+lock_packages Cargo.lock > "$output/glibc-packages.tsv"
+cargo build --locked --profile release-lto -j "$jobs" "${args[@]}" --bins > "$output/glibc-build.log" 2>&1
+cargo tree --locked -e features "${args[@]}" > "$output/glibc-features.txt"
+freeze glibc
+
+mkdir -p crates/aizome-allocator-experiment/src
+cat > crates/aizome-allocator-experiment/Cargo.toml <<'MANIFEST'
+[package]
+name = "aizome-allocator-experiment"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tikv-jemallocator = { version = "=0.7.0", features = ["override_allocator_on_supported_platforms"] }
+MANIFEST
+cat > crates/aizome-allocator-experiment/src/lib.rs <<'RUST'
+//! Isolated experiment: use the same allocator for Rust and public C APIs.
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+RUST
+sed -i '/^\[dependencies\]$/a aizome-allocator-experiment = { path = "../aizome-allocator-experiment" }' crates/aizome-kit/Cargo.toml
+sed -i '/^pub mod a11y;/i use aizome_allocator_experiment as _;\n' crates/aizome-kit/src/lib.rs
+echo "Building TiKV jemalloc with unprefixed allocator overrides"
+# Resolve the added dependency, then verify every original identity before
+# compiling. Reject removed packages and new versions/sources of old names.
+cargo tree -e features "${args[@]}" > "$output/jemalloc-features.txt"
+lock_packages Cargo.lock > "$output/jemalloc-packages.tsv"
+LC_ALL=C comm -23 "$output/glibc-packages.tsv" "$output/jemalloc-packages.tsv" > "$output/removed-packages.tsv"
+if [ -s "$output/removed-packages.tsv" ] || ! awk -F '\t' '
+  NR == FNR { identities[$0]=1; names[$1]=1; next }
+  ($1 in names) && !($0 in identities) { changed=1 }
+  END { exit changed }
+' "$output/glibc-packages.tsv" "$output/jemalloc-packages.tsv"; then
+  echo "Allocator resolution changed existing package identities; inspect the saved lock files" >&2
+  cp Cargo.lock "$output/jemalloc-Cargo.lock"
+  exit 1
+fi
+cargo build --locked --profile release-lto -j "$jobs" "${args[@]}" --bins > "$output/jemalloc-build.log" 2>&1
+freeze jemalloc
+
+# The compositor uses Rust System, which calls the public C allocation API.
+# This library permits a process-scoped preload using the exact allocator
+# built above, without recompiling Smithay or changing the host allocator.
+mapfile -t archives < <(find "$CARGO_TARGET_DIR/release-lto/build" \
+  -path '*tikv-jemalloc-sys*/out/lib/libjemalloc_pic.a')
+[ "${#archives[@]}" -eq 1 ] || { echo "Expected one jemalloc archive; found ${#archives[@]}" >&2; exit 1; }
+cc -shared -o "$output/jemalloc/lib/libjemalloc.so" -Wl,-soname,libjemalloc.so \
+  -Wl,--whole-archive "${archives[0]}" -Wl,--no-whole-archive -pthread -ldl -lm
+for package in "${packages[@]}"; do
+  readelf --dyn-syms --wide "$output/jemalloc/$package" > "$output/$package.dynsym"
+  for symbol in malloc calloc realloc free aligned_alloc posix_memalign; do
+    awk -v symbol="$symbol" '$8 == symbol && $7 != "UND" {found=1} END {exit !found}' \
+      "$output/$package.dynsym" || { echo "$package does not export $symbol" >&2; exit 1; }
+  done
+done
+cp Cargo.lock "$output/jemalloc-Cargo.lock"
+echo "Built controls in $output/glibc and jemalloc variants in $output/jemalloc"
+echo "Verify runtime bindings with LD_DEBUG=bindings; coordinate measurements with /tmp/aizome-benchmark.lock."

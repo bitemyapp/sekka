@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# Build three native-Rust linkage experiments, without changing the checkout.
+# Run inside `nix develop .#aizome`:
+#   scripts/memory-linkage-build /tmp/aizome-linkage [GIT_REVISION] [JOBS]
+#
+# The output directory must not exist. The source revision and a snapshot of
+# this checkout's Sidestep source are preserved there. Every variant uses
+# release, codegen-units=1, and no cross-crate LTO. The resulting variants.json
+# names frozen binaries and their additional runtime library paths. Test
+# harnesses are compiled, not executed: coordinate timing runs separately.
+set -euo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  echo "usage: $0 NEW_OUTPUT_DIRECTORY [GIT_REVISION] [JOBS]"
+  echo "Run inside nix develop .#aizome; builds isolated static, dynamic std, and dynamic kit variants."
+  exit 0
+fi
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+  echo "usage: $0 NEW_OUTPUT_DIRECTORY [GIT_REVISION] [JOBS]" >&2
+  exit 2
+fi
+repo=$(realpath "$(dirname "$(realpath "$0")")/..")
+sekka_root=$(git -C "$repo" rev-parse --show-toplevel)
+revision=$(git -C "$repo" rev-parse --verify --end-of-options "${2:-HEAD}^{commit}")
+output=$(realpath -m -- "$1")
+jobs=${3:-2}
+[[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo "JOBS must be positive" >&2; exit 2; }
+if [[ "$output" =~ [[:cntrl:]] ]]; then
+  echo "The output path must not contain control characters" >&2
+  exit 2
+fi
+if [ -e "$output" ]; then
+  echo "Output already exists: $output" >&2
+  exit 2
+fi
+command -v cargo >/dev/null || { echo "Run this script inside nix develop .#aizome" >&2; exit 1; }
+sidestep=$(realpath "$repo/sidestep")
+[ -d "$sidestep/crates/sidestep-ui" ] || { echo "Missing Sidestep source" >&2; exit 1; }
+case "$output/" in
+  "$sekka_root/"*|"$sidestep/"*)
+    echo "Output must be outside the Aizome and Sidestep checkouts" >&2
+    exit 2 ;;
+esac
+mkdir -p "$(dirname "$output")"
+mkdir "$output"
+mkdir "$output/source" "$output/sidestep"
+git -C "$sekka_root" archive "$revision" -- \
+  desktop/aizome apps/yukimi/Cargo.toml apps/yukimi/crates | tar -x -C "$output/source"
+tar -C "$sidestep" --exclude=.git --exclude=target -cf - . | tar -x -C "$output/sidestep"
+ln -sfn "$output/sidestep" "$output/source/desktop/aizome/sidestep"
+cd "$output/source/desktop/aizome"
+if rg -q '^\[lib\]' crates/aizome-kit/Cargo.toml; then
+  echo "aizome-kit already has a [lib] section; review this experiment before adapting it" >&2
+  exit 1
+fi
+
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+export CARGO_PROFILE_RELEASE_LTO=false
+original_wrapper=${RUSTC_WRAPPER:-}
+export AIZOME_LINKAGE_ORIGINAL_WRAPPER="$original_wrapper"
+target_libdir=$(rustc --print target-libdir)
+{
+  printf 'revision=%s\nsidestep_source=%s\n' "$revision" "$sidestep"
+  rustc -vV
+  cargo -V
+  printf 'RUSTFLAGS=%s\nCARGO_ENCODED_RUSTFLAGS=%s\nRUSTC_WRAPPER=%s\n' \
+    "${RUSTFLAGS:-}" "${CARGO_ENCODED_RUSTFLAGS:-}" "$original_wrapper"
+} > "$output/provenance.txt"
+cargo tree --locked -e features -p aizome-soroban -p aizome-sumi -p aizome-settei \
+  > "$output/features.txt"
+
+build_apps() {
+  cargo build --locked --release -j "$jobs" -p aizome-soroban -p aizome-sumi -p aizome-settei --bins
+}
+freeze_apps() {
+  local variant=$1
+  mkdir -p "$output/bin/$variant/lib"
+  for app in aizome-soroban aizome-sumi aizome-settei; do
+    cp "$CARGO_TARGET_DIR/release/$app" "$output/bin/$variant/$app"
+  done
+}
+build_tests() {
+  cargo test --locked --release -j "$jobs" -p aizome-soroban -p aizome-sumi \
+    -p aizome-kit -p aizome-settei --test soroban --test perf --test budget \
+    --no-run --message-format=json
+}
+
+echo "Building the static control (cgu1, no LTO)"
+export CARGO_TARGET_DIR="$output/target-static"
+build_apps > "$output/static-build.log" 2>&1
+# Per-package test builds can change Cargo feature unification. Freeze the
+# measured applications before compiling tests, and use one test invocation
+# so all harnesses agree on the dylib's crate graph.
+freeze_apps static
+build_tests > "$output/static-tests.jsonl" 2> "$output/static-tests.log"
+
+echo "Building with dynamic std"
+cp -a --reflink=auto "$output/target-static" "$output/target-std"
+cat > "$output/wrapper-std" <<'WRAPPER'
+#!/bin/sh
+rustc="$1"
+shift
+case " $* " in
+  *" --crate-type bin "*|*" --test "*)
+    case " $* " in
+      *" --crate-name aizome_soroban "*|*" --crate-name aizome_sumi "*|*" --crate-name aizome_settei "*|*" --crate-name soroban "*|*" --crate-name perf "*|*" --crate-name budget "*)
+        set -- "$@" -C prefer-dynamic ;;
+    esac ;;
+esac
+if [ -n "${AIZOME_LINKAGE_ORIGINAL_WRAPPER:-}" ]; then
+  exec "$AIZOME_LINKAGE_ORIGINAL_WRAPPER" "$rustc" "$@"
+fi
+exec "$rustc" "$@"
+WRAPPER
+chmod +x "$output/wrapper-std"
+export RUSTC_WRAPPER="$output/wrapper-std"
+export CARGO_TARGET_DIR="$output/target-std"
+# Cargo does not track arbitrary wrapper contents. Invalidate the final
+# binary/test sources explicitly in this disposable source snapshot.
+touch apps/soroban/src/main.rs apps/sumi/src/main.rs apps/settei/src/main.rs
+build_apps > "$output/std-build.log" 2>&1
+freeze_apps std
+touch apps/soroban/tests/soroban.rs crates/aizome-kit/tests/perf.rs apps/settei/tests/budget.rs
+build_tests > "$output/std-tests.jsonl" 2> "$output/std-tests.log"
+
+echo "Building a shared Aizome kit with the native Rust ABI"
+cp -a --reflink=auto "$output/target-static" "$output/target-kit"
+cat >> crates/aizome-kit/Cargo.toml <<'MANIFEST'
+
+# Experimental, only inside the isolated source snapshot.
+[lib]
+crate-type = ["dylib"]
+MANIFEST
+cat > "$output/wrapper-kit" <<'WRAPPER'
+#!/bin/sh
+rustc="$1"
+shift
+case " $* " in
+  *" --crate-name aizome_kit "*) set -- "$@" -C prefer-dynamic ;;
+esac
+if [ -n "${AIZOME_LINKAGE_ORIGINAL_WRAPPER:-}" ]; then
+  exec "$AIZOME_LINKAGE_ORIGINAL_WRAPPER" "$rustc" "$@"
+fi
+exec "$rustc" "$@"
+WRAPPER
+chmod +x "$output/wrapper-kit"
+export RUSTC_WRAPPER="$output/wrapper-kit"
+export CARGO_TARGET_DIR="$output/target-kit"
+build_apps > "$output/kit-build.log" 2>&1
+freeze_apps kit
+cp "$CARGO_TARGET_DIR/release/deps/libaizome_kit.so" "$output/bin/kit/lib/"
+build_tests > "$output/kit-tests.jsonl" 2> "$output/kit-tests.log"
+# Tests may enable extra dependency features. Preserve their matching library
+# separately rather than accidentally pairing them with the GUI app dylib.
+mkdir "$output/kit-test-lib"
+cp "$CARGO_TARGET_DIR/release/deps/libaizome_kit.so" "$output/kit-test-lib/"
+printf '%s\n' "$output/kit-test-lib:$target_libdir" > "$output/kit-test-library-path.txt"
+sha256sum "$output/bin/kit/lib/libaizome_kit.so" "$output/kit-test-lib/libaizome_kit.so" \
+  > "$output/kit-library-sha256.txt"
+
+json_string() {
+  local value=${1//\\/\\\\}
+  value=${value//\"/\\\"}
+  printf '"%s"' "$value"
+}
+{
+  printf '[\n  {"label":"static-cgu1-nolto","bin_dir":'
+  json_string "$output/bin/static"
+  printf '},\n  {"label":"dynamic-std-cgu1-nolto","bin_dir":'
+  json_string "$output/bin/std"
+  printf ',"library_path":'
+  json_string "$target_libdir"
+  printf '},\n  {"label":"dynamic-kit-cgu1-nolto","bin_dir":'
+  json_string "$output/bin/kit"
+  printf ',"library_path":'
+  json_string "$output/bin/kit/lib:$target_libdir"
+  printf '}\n]\n'
+} > "$output/variants.json"
+
+echo "Built all three variants: $output/variants.json"
+echo "Test executables are recorded in *-tests.jsonl; run timings under flock /tmp/aizome-benchmark.lock."
+echo "Kit tests use the LD_LIBRARY_PATH recorded in kit-test-library-path.txt."

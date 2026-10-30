@@ -38,8 +38,7 @@ usage: aizome-dev [COMMAND] [WHAT...] [--checkout PATH] [--optimised]
   --checkout PATH  a Sekka checkout or its desktop/aizome workspace
                    (default: $AIZOME_CHECKOUT, then the current worktree,
                    then ~/work/sekka/desktop/aizome)
-  --optimised      build the logic as optimised as the session's own (by
-                   default it builds quicker, at opt-level 1)
+  --optimised      accepted for compatibility; optimised builds are the default
 
 It talks to the session at $AIZOME_SOCKET (or the one for $WAYLAND_DISPLAY).
 Changes to the compositor's core (aizome-comp-core, aizome-ipc,
@@ -53,7 +52,7 @@ fn main() -> ExitCode {
         print!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    let optimised = take_flag(&mut args, "--optimised");
+    take_flag(&mut args, "--optimised");
     let checkout = match take_opt(&mut args, "--checkout") {
         Ok(c) => c.map(PathBuf::from),
         Err(e) => return fail(&e),
@@ -70,7 +69,7 @@ fn main() -> ExitCode {
         Some(c) => c,
         None => return fail(&format!("{} isn't an Aizome checkout (--checkout PATH)", checkout.display())),
     };
-    let mut dev = match Dev::new(checkout, optimised) {
+    let mut dev = match Dev::new(checkout) {
         Ok(d) => d,
         Err(e) => return fail(&e),
     };
@@ -172,7 +171,6 @@ impl What {
 /// How the running session was built, and how to build to match it.
 struct Dev {
     checkout: PathBuf,
-    optimised: bool,
     /// The running core's build info (target, profile, flags, ABI).
     core: Value,
     /// The package's build-env.json, when the session runs from one.
@@ -184,7 +182,7 @@ struct Dev {
 }
 
 impl Dev {
-    fn new(checkout: PathBuf, optimised: bool) -> Result<Dev, String> {
+    fn new(checkout: PathBuf) -> Result<Dev, String> {
         let mut c = Client::connect().map_err(|e| format!("no Aizome session to talk to ({e})"))?;
         let (exe, build) = match c.request(&Request::Version).map_err(|e| e.to_string())? {
             Response::Version { exe, build, .. } => (exe, build),
@@ -198,7 +196,7 @@ impl Dev {
             .and_then(|e| Some(e.parent()?.parent()?.join("share/aizome/build-env.json")))
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|t| serde_json::from_str(&t).ok());
-        Ok(Dev { checkout, optimised, core, env, cargo_env: None, target_dir: None })
+        Ok(Dev { checkout, core, env, cargo_env: None, target_dir: None })
     }
 
     fn what(&self, name: &str) -> Result<What, String> {
@@ -221,7 +219,14 @@ impl Dev {
 
     /// The profile the session's compositor was built with (the package
     /// says; a build from a checkout is `release` or `dev`).
-    fn profile(&self) -> String {
+    fn profile(&self, what: &What) -> String {
+        // Standalone programs can use LTO; logic must match the running
+        // core. Older packages only recorded the compositor's profile.
+        if *what != What::Logic
+            && let Some(p) = self.env.as_ref().and_then(|e| e["standalone_profile"].as_str())
+        {
+            return p.into();
+        }
         if let Some(p) = self.env.as_ref().and_then(|e| e["profile"].as_str()) {
             return p.into();
         }
@@ -231,8 +236,8 @@ impl Dev {
         }
     }
 
-    fn profile_dir(&self) -> String {
-        match self.profile().as_str() {
+    fn profile_dir(&self, what: &What) -> String {
+        match self.profile(what).as_str() {
             "dev" | "test" => "debug".into(),
             "bench" => "release".into(),
             p => p.into(),
@@ -386,12 +391,12 @@ impl Dev {
         t
     }
 
-    fn out_dir(&mut self) -> PathBuf {
+    fn out_dir(&mut self, what: &What) -> PathBuf {
         let mut d = self.target_dir();
         if self.core["explicit_target"].as_bool().unwrap_or(false) {
             d = d.join(self.core_str("target"));
         }
-        d.join(self.profile_dir())
+        d.join(self.profile_dir(what))
     }
 
     /// The cargo command for one part.
@@ -401,7 +406,7 @@ impl Dev {
         if self.core["explicit_target"].as_bool().unwrap_or(false) {
             a.extend(["--target".into(), self.core_str("target")]);
         }
-        match self.profile().as_str() {
+        match self.profile(what).as_str() {
             "dev" => {}
             "release" => a.push("--release".into()),
             p => a.extend(["--profile".into(), p.into()]),
@@ -410,14 +415,6 @@ impl Dev {
             What::Logic => {
                 for p in self.logic_packages() {
                     a.extend(["-p".into(), p]);
-                }
-                if !self.optimised && self.profile() != "dev" {
-                    // The logic alone compiles quicker; the core and every
-                    // dependency stay exactly as the session's.
-                    let p = self.profile();
-                    for c in ["opt-level=1", "codegen-units=64", "incremental=true"] {
-                        a.extend(["--config".into(), format!("profile.{p}.package.aizome-comp-logic.{c}")]);
-                    }
                 }
             }
             w => a.extend(["-p".into(), w.package()]),
@@ -449,7 +446,7 @@ impl Dev {
     fn build(&mut self, what: &What) -> Result<(PathBuf, bool), String> {
         let env = self.cargo_env()?;
         let target_dir = self.target_dir();
-        let out = self.out_dir().join(match what {
+        let out = self.out_dir(what).join(match what {
             What::Logic => "libaizome_comp_logic.so".to_string(),
             w => w.package(),
         });
@@ -529,7 +526,7 @@ impl Dev {
 
     /// The build info of the compositor core aizome-dev just built.
     fn built_core_info(&mut self) -> Option<Value> {
-        let dir = self.out_dir();
+        let dir = self.out_dir(&What::Logic);
         let env = self.cargo_env().ok()?;
         let rustc = find_in(env.get("PATH")?, "rustc")?;
         let sysroot = Command::new(rustc).args(["--print", "sysroot"]).output().ok()?;
@@ -827,6 +824,42 @@ fn changed_files(a: &BTreeMap<PathBuf, SystemTime>, b: &BTreeMap<PathBuf, System
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dev(core: Value, env: Option<Value>) -> Dev {
+        Dev { checkout: PathBuf::from("/checkout"), core, env, cargo_env: None, target_dir: Some("/target".into()) }
+    }
+
+    #[test]
+    fn packaged_builds_keep_release_settings_and_their_own_output_directories() {
+        let mut d = dev(
+            serde_json::json!({ "profile": "release", "explicit_target": true, "target": "test-target" }),
+            Some(serde_json::json!({
+                "profile": "release", "standalone_profile": "release-lto",
+                "packages": ["aizome-comp", "aizome-comp-logic"]
+            })),
+        );
+        let logic = d.cargo_args(&What::Logic);
+        assert!(logic.iter().any(|a| a == "--release"));
+        assert!(!logic.iter().any(|a| a == "--config"));
+        assert!(logic.windows(2).any(|a| a == ["-p", "aizome-comp"]));
+        assert_eq!(d.out_dir(&What::Logic), Path::new("/target/test-target/release"));
+        for what in [What::Shell, What::App("hako".into())] {
+            let args = d.cargo_args(&what);
+            assert!(args.windows(2).any(|a| a == ["--profile", "release-lto"]));
+            assert_eq!(d.out_dir(&what), Path::new("/target/test-target/release-lto"));
+        }
+    }
+
+    #[test]
+    fn older_packages_and_checkout_sessions_keep_their_recorded_profile() {
+        let mut old =
+            dev(serde_json::json!({ "profile": "release" }), Some(serde_json::json!({ "profile": "release" })));
+        assert_eq!(old.out_dir(&What::Shell), Path::new("/target/release"));
+        assert!(old.cargo_args(&What::Logic).iter().any(|a| a == "--release"));
+        let mut debug = dev(serde_json::json!({ "profile": "debug" }), None);
+        assert_eq!(debug.out_dir(&What::Logic), Path::new("/target/debug"));
+        assert!(!debug.cargo_args(&What::Logic).iter().any(|a| a == "--release" || a == "--profile"));
+    }
 
     #[test]
     fn saves_map_to_what_reloads() {

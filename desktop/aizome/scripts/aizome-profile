@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Heaptrack entry points; profilers remain optional dependencies.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+usage: aizome-profile COMMAND [ARGUMENTS...]
+
+  heap PROGRAM [ARGS...]     record allocations from a new app/process
+  compositor [ARGS...]       record a separate nested compositor, without a shell
+  interpret RAW_FILE         resolve a raw recording's symbols after recording
+  view FILE                  open an interpreted recording in Heaptrack's GUI
+  summary FILE               print allocation counts and peak heap consumers
+
+Run `nix develop .#aizome-profiling` for Heaptrack and GDB.
+Recordings go to $AIZOME_PROFILE_DIR (default: ./aizome-profiles).
+Set AIZOME_DEBUG_DIRS to a colon-separated list of lib/debug directories
+before `interpret`; NIX_DEBUG_INFO_DIRS is used as a fallback.
+Set AIZOME_PROFILE_COMPOSITOR to select a particular aizome executable.
+See docs/profiling.md for split symbols and recording the shell separately.
+EOF
+}
+
+fail() { echo "aizome-profile: $*" >&2; exit 2; }
+need() { command -v "$1" >/dev/null || fail "$1 is missing; run nix develop .#aizome-profiling"; }
+record() {
+  [ "$#" -gt 0 ] || fail "heap needs a program (for example, aizome-profile heap aizome-hako)"
+  need heaptrack
+  local dir=${AIZOME_PROFILE_DIR:-./aizome-profiles}
+  mkdir -p "$dir"
+  # Raw mode keeps DWARF parsing outside the capture. It still instruments
+  # every allocation, so timings/RSS during capture are not a baseline.
+  exec heaptrack --raw --record-only --output "$dir/heaptrack.$(date -u +%Y%m%dT%H%M%SZ).$$.%p" "$@"
+}
+
+command=${1:---help}
+[ "$#" -eq 0 ] || shift
+case "$command" in
+  -h|--help|help) usage ;;
+  heap)
+    if [ "${1:-}" = -- ]; then shift; fi
+    record "$@"
+    ;;
+  compositor)
+    # winit creates a window in the current desktop. A unique socket and
+    # --no-session keep this separate from the desktop being investigated.
+    record "${AIZOME_PROFILE_COMPOSITOR:-aizome}" --backend winit \
+      --socket "aizome-profile-$$" --no-session --no-shell --no-xwayland "$@"
+    ;;
+  interpret)
+    [ "$#" -eq 1 ] || fail "interpret needs one raw recording"
+    [ -f "$1" ] || fail "recording does not exist: $1"
+    case "$1" in *.raw.gz|*.raw.zst) ;; *) fail "interpret needs a .raw.gz or .raw.zst recording" ;; esac
+    need heaptrack
+    debug_dirs=${AIZOME_DEBUG_DIRS:-${NIX_DEBUG_INFO_DIRS:-}}
+    args=(--interpret "$1")
+    [ -z "$debug_dirs" ] || args+=(--debug-paths "$debug_dirs")
+    exec heaptrack "${args[@]}"
+    ;;
+  view|summary)
+    [ "$#" -eq 1 ] || fail "$command needs one interpreted recording"
+    [ -f "$1" ] || fail "recording does not exist: $1"
+    case "$1" in *.raw|*.raw.gz|*.raw.zst) fail "run aizome-profile interpret on this raw recording first" ;; esac
+    if [ "$command" = view ]; then
+      need heaptrack_gui
+      exec heaptrack_gui "$1"
+    fi
+    need heaptrack_print
+    # The pinned Heaptrack crashes merging backtraces in a captured Rust
+    # shell trace. Unmerged stacks preserve the data and print reliably.
+    exec heaptrack_print --merge-backtraces=0 "$1"
+    ;;
+  *) fail "unknown command $command (aizome-profile --help)" ;;
+esac

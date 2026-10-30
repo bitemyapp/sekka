@@ -81,6 +81,7 @@ let
           fonts
           ;
       };
+      aizome-debug = aizome.debug;
       archivo = pkgs.callPackage ./fonts.nix { };
       # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
@@ -129,7 +130,7 @@ let
       koe = import ./vm-koe-test.nix { inherit pkgs self; };
     });
 
-    devShells = forAll (pkgs: {
+    devShells = forAll (pkgs: rec {
       default = pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
           just
@@ -157,6 +158,9 @@ let
         # (docs/reload.md); the wrapper adds it for that crate alone.
         RUSTC_WRAPPER = "${../scripts/rustc-wrapper}";
       };
+      profiling = default.overrideAttrs (old: {
+        nativeBuildInputs = old.nativeBuildInputs ++ (with pkgs; [ heaptrack gdb binutils python3 ]);
+      });
     });
   };
 in

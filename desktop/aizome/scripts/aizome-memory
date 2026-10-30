@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Read Linux process memory without changing the session (all sizes in KiB).
+
+PSS apportions shared pages; RSS counts them in every process. Anonymous PSS
+includes live heap, allocator retention and touched stacks, not just live objects.
+GPU allocations, kernel memory and unmapped filesystem cache are not included.
+"""
+
+import argparse
+import json
+from pathlib import Path
+
+
+def sample(pid):
+    proc = Path('/proc') / str(pid)
+    # readlink also works after a rebuild unlinks a running executable;
+    # resolving its " (deleted)" path would incorrectly omit the process.
+    exe = str((proc / 'exe').readlink())
+    fields = {}
+    for line in (proc / 'smaps_rollup').read_text().splitlines():
+        key, _, value = line.partition(':')
+        if value.strip().endswith(' kB'):
+            fields[key] = int(value.split()[0])
+    status = dict(line.split(':', 1) for line in (proc / 'status').read_text().splitlines() if ':' in line)
+    return {
+        'pid': pid,
+        'executable': exe,
+        'threads': int(status['Threads']),
+        'pss_kib': fields['Pss'],
+        'rss_kib': fields['Rss'],
+        'anonymous_pss_kib': fields.get('Pss_Anon'),
+        'file_pss_kib': fields.get('Pss_File'),
+        'shmem_pss_kib': fields.get('Pss_Shmem'),
+        'swap_pss_kib': fields.get('SwapPss'),
+    }
+
+
+def native_pids():
+    for proc in Path('/proc').glob('[0-9]*'):
+        try:
+            name = (proc / 'exe').readlink().name.removesuffix(' (deleted)')
+            if name == 'aizome' or name.startswith('aizome-'):
+                yield int(proc.name)
+        except (OSError, RuntimeError):
+            continue
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('pid', type=int, nargs='*', help='PIDs; default: running Aizome executables')
+    parser.add_argument('--json', action='store_true', help='machine-readable sizes in KiB')
+    args = parser.parse_args()
+    processes, unavailable = [], []
+    for pid in sorted(set(args.pid or native_pids())):
+        try:
+            processes.append(sample(pid))
+        except (OSError, KeyError, ValueError) as error:
+            unavailable.append({'pid': pid, 'error': str(error)})
+    totals = {
+        key: sum(p[key] for p in processes) if all(p[key] is not None for p in processes) else None
+        for key in ('pss_kib', 'rss_kib', 'anonymous_pss_kib', 'file_pss_kib', 'shmem_pss_kib', 'swap_pss_kib')
+    }
+    if args.json:
+        print(json.dumps({'processes': processes, 'total': totals, 'unavailable': unavailable}, indent=2))
+    else:
+        print('MiB, process memory only; anonymous is not a live-heap measurement.')
+        print(f'{"PID":>8}  {"Process":<24} {"PSS":>8} {"Anon":>8} {"File":>8} {"SHM":>8} {"RSS":>8} {"Threads":>7}')
+        keys = ('pss_kib', 'anonymous_pss_kib', 'file_pss_kib', 'shmem_pss_kib', 'rss_kib')
+        def sizes(row):
+            return ' '.join(f'{row[k] / 1024:8.2f}' if row[k] is not None else f'{"?":>8}' for k in keys)
+        for row in processes:
+            print(f'{row["pid"]:>8}  {Path(row["executable"]).name:<24} {sizes(row)} {row["threads"]:7}')
+        print(f'{"":>8}  {"TOTAL":<24} {sizes(totals)}')
+        for row in unavailable:
+            print(f'Unavailable PID {row["pid"]}: {row["error"]}')
+    return 1 if unavailable else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

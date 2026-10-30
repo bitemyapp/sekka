@@ -90,6 +90,7 @@ let
   buildEnv = builtins.toJSON {
     inherit target version;
     profile = "release";
+    standalone_profile = "release-lto";
     # Built together, so Cargo resolves the core's dependencies' features
     # the same way (another set changes the core's symbols).
     packages = [
@@ -113,6 +114,9 @@ rustPlatform.buildRustPackage {
   src = source;
   sourceRoot = "aizome-source/desktop/aizome";
   cargoLock.lockFile = "${src}/Cargo.lock";
+  # Keep the exact installed build's DWARF in a separately installable
+  # output. This does not add the debug output to the session's closure.
+  separateDebugInfo = true;
 
   nativeBuildInputs = [
     pkg-config
@@ -166,9 +170,17 @@ rustPlatform.buildRustPackage {
 
   buildPhase = ''
     runHook preBuild
+    # separateDebugInfo's setup hook injects full DWARF behind Cargo's
+    # back. Keep the manifest's line-tables-only setting (and the same
+    # flags as a checkout build) while retaining the hook's extraction.
+    export NIX_RUSTFLAGS="''${NIX_RUSTFLAGS/ -g -C strip=none/}"
     # -C prefer-dynamic for the compositor's core alone (scripts/rustc-wrapper).
     export RUSTC_WRAPPER=$PWD/scripts/rustc-wrapper
-    flags=(-j "$NIX_BUILD_CORES" --target ${target} --offline)
+    # Use explicit config for the hyphenated profile: Cargo interprets
+    # CARGO_PROFILE_RELEASE_LTO_* as the release profile's LTO setting.
+    flags=(-j "$NIX_BUILD_CORES" --target ${target} --offline
+      --config 'profile.release.strip=false'
+      --config 'profile.release-lto.strip=false')
     # Plain cargo for the compositor: nixpkgs' cargo-auditable wrapper is a
     # RUSTC_WORKSPACE_WRAPPER, whose path Cargo hashes into every workspace
     # crate's symbols, and a logic built from a checkout couldn't match.
@@ -229,6 +241,7 @@ rustPlatform.buildRustPackage {
     install -Dm755 session/aizome-session $out/bin/aizome-session
     substituteInPlace $out/bin/aizome-session \
       --replace-fail 'flock -n 9' '${util-linux}/bin/flock -n 9'
+    install -Dm755 scripts/aizome-profile $out/bin/aizome-profile
     install -Dm644 session/aizome.desktop $out/share/wayland-sessions/aizome.desktop
     shopt -s nullglob
     for unit in session/*.service session/*.target session/*.path apps/*/data/*.service; do
