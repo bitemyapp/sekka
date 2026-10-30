@@ -97,8 +97,8 @@ pub struct Keyboards {
     /// What the seat's keymap was compiled from.
     pub active: Option<KeymapSpec>,
     /// The tag of a [`Request::CatchKey`](aizome_ipc::Request::CatchKey)
-    /// waiting for a key, and the IPC connection that asked: it waits only
-    /// while that stays open.
+    /// waiting for a key, and the IPC connection that asked, which alone
+    /// hears of the key: it waits only while that stays open.
     pub catch: Option<(String, u64)>,
 }
 

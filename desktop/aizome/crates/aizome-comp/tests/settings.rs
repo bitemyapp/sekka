@@ -338,57 +338,92 @@ fn layout_survives_a_change_of_keyboard_with_caps_lock() {
 fn a_caught_key_says_which_keyboard_and_reaches_no_app() {
     const SUPER: u32 = 1 << 6;
     let c = Compositor::start(Options::default());
-    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
-    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    // Listening, and never asking for a key.
+    let mut others = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    others.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
     let a = c.client(Spec::new("org.aizome.catch-test", 0x2222cc));
     c.wait_window("org.aizome.catch-test");
     a.wait_seen("keyboard focus", |s| s.keyboard_focus);
     let synth = |e: Synthetic| c.ok(Request::Synthesize { events: vec![e] });
-    synth(Synthetic::PlugKeyboard {
-        name: "Apple Inc. Magic Keyboard".into(),
-        id: "05ac:029c".into(),
-        bus: aizome_ipc::KeyboardBus::Bluetooth,
-    });
+    let plug = |name: &str| {
+        synth(Synthetic::PlugKeyboard {
+            name: name.into(),
+            id: "05ac:029c".into(),
+            bus: aizome_ipc::KeyboardBus::Bluetooth,
+        })
+    };
+    plug("Apple Inc. Magic Keyboard");
     let on = |key: &str, pressed: bool| {
         synth(Synthetic::KeyOn { keyboard: "Apple Inc. Magic Keyboard".into(), key: key.into(), pressed })
     };
+    let tap = |key: &str| {
+        on(key, true);
+        on(key, false);
+    };
 
-    let catch = |tag: Option<&str>| {
-        let mut asker = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
-        let r = asker.request(&Request::CatchKey { tag: tag.map(str::to_owned) }).unwrap();
+    // Asked on a connection listening for events, which alone hears of it.
+    let catch = |tag: &str| {
+        let mut asker = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+        asker.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let r = asker.request(&Request::CatchKey { tag: Some(tag.into()) }).unwrap();
         assert_eq!(r, aizome_ipc::Response::Ok);
         asker
     };
-    let asker = catch(Some("setup"));
+    let caught = |events: &mut aizome_ipc::Events| {
+        events.by_ref().find_map(|e| match e {
+            Ok(aizome_ipc::Event::KeyCaught { tag, code, keyboard }) => Some((tag, code, keyboard)),
+            _ => None,
+        })
+    };
+    let mut asker = catch("setup");
     // Command, beside the space bar, alone: no app ever hears that.
     on("125", true);
-    on("a", true);
-    on("a", false);
+    tap("a");
     on("125", false);
-    let caught = events.by_ref().find_map(|e| match e {
-        Ok(aizome_ipc::Event::KeyCaught { tag, code, keyboard }) => Some((tag, code, keyboard)),
-        _ => None,
-    });
-    let (tag, code, keyboard) = caught.expect("caught");
+    let (tag, code, keyboard) = caught(&mut asker).expect("caught");
     assert_eq!((tag.as_str(), code), ("setup", 125));
     assert_eq!(keyboard.map(|k| (k.name, k.id)), Some(("Apple Inc. Magic Keyboard".into(), "05ac:029c".into())));
     let s = a.wait_seen("a", |s| s.keys.iter().any(|(k, _)| *k == KEY_A));
     assert!(!s.keys.iter().any(|(k, _)| *k == 125), "Command was swallowed: {:?}", s.keys);
     assert_eq!(s.keys.iter().find(|(k, _)| *k == KEY_A).unwrap().1 & SUPER, 0, "and held nothing");
-
+    // Another connection heard nothing of it: the next it hears is a
+    // keyboard plugged in after.
+    plug("After");
+    let mut heard = Vec::new();
+    loop {
+        let e = others.next().expect("events").expect("the keyboard plugged in after");
+        if matches!(&e, aizome_ipc::Event::KeyboardAdded { keyboard } if keyboard.name == "After") {
+            break;
+        }
+        heard.push(e);
+    }
+    assert!(!heard.iter().any(|e| matches!(e, aizome_ipc::Event::KeyCaught { .. })), "{heard:?}");
     drop(asker);
 
-    // Given up on, or the asker gone (Settei quit), nothing is caught.
-    let mut asker = catch(Some("setup"));
-    asker.request(&Request::CatchKey { tag: None }).unwrap();
-    on("b", true);
-    on("b", false);
+    // Asked on a connection that doesn't listen, nobody would hear it.
+    let mut plain = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    let r = plain.request(&Request::CatchKey { tag: Some("deaf".into()) }).unwrap();
+    assert!(matches!(r, aizome_ipc::Response::Error { .. }), "{r:?}");
+    tap("d");
+    a.wait_seen("d", |s| s.keys.iter().any(|(k, _)| *k == 32));
+
+    // Another connection's word without a tag changes nothing; the
+    // asker's own gives up.
+    let mut asker = catch("again");
+    assert_eq!(plain.request(&Request::CatchKey { tag: None }).unwrap(), aizome_ipc::Response::Ok);
+    tap("c");
+    assert_eq!(caught(&mut asker).map(|(t, code, _)| (t, code)), Some(("again".into(), 46)));
+    let mut asker = catch("again");
+    assert_eq!(asker.request(&Request::CatchKey { tag: None }).unwrap(), aizome_ipc::Response::Ok);
+    tap("b");
     a.wait_seen("b", |s| s.keys.iter().any(|(k, _)| *k == KEY_B));
-    drop(catch(Some("setup")));
+    assert!(!a.seen().keys.iter().any(|(k, _)| *k == 46), "c was caught");
+
+    // The asker gone (Settei quit), nothing is caught.
+    drop(catch("setup"));
     // The compositor sees the connection close before the key comes.
     c.settle();
-    on("e", true);
-    on("e", false);
+    tap("e");
     a.wait_seen("e", |s| s.keys.iter().any(|(k, _)| *k == 18));
 }
 

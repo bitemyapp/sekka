@@ -10,6 +10,7 @@
 //! kebab-case, e.g. `{"request":"focus","id":7}`. `docs/ipc.md` lists
 //! every message.
 
+use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -400,11 +401,14 @@ pub enum Request {
     /// devices is one), and which typed last. → [`Response::Keyboards`].
     Keyboards,
     /// Swallows the next key pressed (unless the screen is locked) and
-    /// tells subscribers which it was and on which keyboard, by
-    /// [`Event::KeyCaught`] with this `tag`: Settei's keyboard setup asks,
-    /// as an app never hears a modifier key alone. It waits while the
-    /// connection that asked stays open; asked without a tag, it stops.
-    /// Answered at once with `ok`.
+    /// tells the connection that asked, alone, which it was and on which
+    /// keyboard, by [`Event::KeyCaught`] with this `tag`: Settei's keyboard
+    /// setup asks, as an app never hears a modifier key alone. The asking
+    /// connection must have subscribed ([`Events::request`]). It waits
+    /// while that connection stays open, until it asks again without a
+    /// tag (another connection's asking without one changes nothing) or
+    /// another connection asks for a key. Answered at once with `ok`, or
+    /// an error on a connection that hasn't subscribed.
     CatchKey {
         #[serde(default)]
         tag: Option<String>,
@@ -998,9 +1002,9 @@ pub enum Event {
     KeyboardAdded {
         keyboard: KeyboardInfo,
     },
-    /// The key a [`Request::CatchKey`] caught: its evdev code, the same
-    /// whatever the keymap makes of the key, and the keyboard that typed
-    /// it (none for a key from IPC).
+    /// The key a [`Request::CatchKey`] caught, sent to the connection that
+    /// asked alone: its evdev code, the same whatever the keymap makes of
+    /// the key, and the keyboard that typed it (none for a key from IPC).
     KeyCaught {
         tag: String,
         code: u32,
@@ -1083,11 +1087,11 @@ impl Client {
         }
     }
 
-    /// Subscribes and returns the event stream. The connection carries
-    /// nothing else afterwards.
+    /// Subscribes and returns the event stream. Requests can still go on
+    /// it, answered among the events ([`Events::request`]).
     pub fn events(mut self) -> io::Result<Events> {
         match self.request(&Request::Subscribe)? {
-            Response::Ok => Ok(Events { reader: self.reader, _writer: self.writer }),
+            Response::Ok => Ok(Events { reader: self.reader, writer: self.writer, early: VecDeque::new() }),
             Response::Error { message } => Err(io::Error::other(message)),
             other => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unexpected {other:?}"))),
         }
@@ -1102,18 +1106,49 @@ impl Client {
 /// Events from a subscribed connection. Ends when the compositor closes it.
 pub struct Events {
     reader: BufReader<UnixStream>,
-    _writer: UnixStream,
+    writer: UnixStream,
+    /// Events that came while a request waited for its response.
+    early: VecDeque<Event>,
 }
 
 impl Events {
     pub fn stream(&self) -> &UnixStream {
         self.reader.get_ref()
     }
+
+    /// Sends a request on this connection and waits for its response,
+    /// keeping the events that come first for [`Iterator::next`]: what
+    /// only this connection hears (a [`Request::CatchKey`]'s key) is asked
+    /// for here. Responses come in order, after the events sent before.
+    pub fn request(&mut self, request: &Request) -> io::Result<Response> {
+        let mut line = serde_json::to_string(request).map_err(io::Error::other)?;
+        line.push('\n');
+        self.writer.write_all(line.as_bytes())?;
+        self.writer.flush()?;
+        let bad = |e: serde_json::Error| io::Error::new(io::ErrorKind::InvalidData, e);
+        loop {
+            let mut buf = String::new();
+            if self.reader.read_line(&mut buf)? == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "the compositor closed the connection"));
+            }
+            let v: serde_json::Value = serde_json::from_str(buf.trim_end()).map_err(bad)?;
+            if v.get("event").is_none() {
+                return serde_json::from_value(v).map_err(bad);
+            }
+            // One this side doesn't know (a newer compositor's) is skipped.
+            if let Ok(e) = serde_json::from_value(v) {
+                self.early.push_back(e);
+            }
+        }
+    }
 }
 
 impl Iterator for Events {
     type Item = io::Result<Event>;
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(e) = self.early.pop_front() {
+            return Some(Ok(e));
+        }
         let mut buf = String::new();
         match self.reader.read_line(&mut buf) {
             Ok(0) => None,

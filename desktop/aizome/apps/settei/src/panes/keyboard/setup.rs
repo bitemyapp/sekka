@@ -140,23 +140,28 @@ fn tag(n: u64) -> String {
 }
 
 /// Wait `n` for the next key, on a thread: listening first, so the key
-/// can't come between, then asking the compositor to catch it, on a
-/// connection held while waiting (the compositor waits no longer than
-/// it's open, so not after Settei is gone). `None` when given up on:
-/// `waits` moved past `n` (another wait began, or the sheet closed).
+/// can't come between, then asking the compositor to catch it, on the same
+/// connection, held while waiting (the compositor tells no other
+/// connection of the key, and waits no longer than this one is open, so
+/// not after Settei is gone). `None` when given up on: `waits` moved past
+/// `n` (another wait began, or the sheet closed).
 pub fn catch_key(n: u64, waits: &AtomicU64) -> Result<Option<(u32, Option<KeyboardInfo>)>, String> {
     let given_up = || waits.load(Ordering::SeqCst) != n;
     let mut events = aizome_ipc::Client::connect().and_then(|c| c.events()).map_err(|e| e.to_string())?;
-    events.stream().set_read_timeout(Some(Duration::from_millis(500))).map_err(|e| e.to_string())?;
-    let mut asker = aizome_ipc::Client::connect().map_err(|e| e.to_string())?;
-    match asker.request(&Request::CatchKey { tag: Some(tag(n)) }) {
+    // The latest to ask is the one that waits: not this, after a newer one.
+    if given_up() {
+        return Ok(None);
+    }
+    match events.request(&Request::CatchKey { tag: Some(tag(n)) }) {
         Ok(Response::Error { message }) => return Err(message),
         Err(e) => return Err(e.to_string()),
         Ok(_) => {}
     }
+    events.stream().set_read_timeout(Some(Duration::from_millis(500))).map_err(|e| e.to_string())?;
     loop {
         if given_up() {
-            let _ = asker.request(&Request::CatchKey { tag: None });
+            // This wait's alone: a newer one, on its own connection, goes on.
+            let _ = events.request(&Request::CatchKey { tag: None });
             return Ok(None);
         }
         match events.next() {

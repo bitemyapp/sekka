@@ -8,7 +8,10 @@ everything it starts (and to systemd and D-Bus activation) as
 - Framing: newline-delimited JSON, one message per line.
 - A client writes a **request** and reads one **response** back, in order.
 - After `subscribe` (answered `{"response":"ok"}`) the connection carries
-  only **events**, one per line, until either side closes it.
+  **events**, one per line, until either side closes it. Requests can still
+  go on it: each response comes in order, among the events (after those
+  sent before it). `catch-key` is asked this way, as its `key-caught` goes
+  to the connection that asked alone.
 - Enums are tagged in kebab-case: `{"request":"focus","id":7}`,
   `{"response":"error","message":"no window 7"}`,
   `{"event":"window-focused","id":7}`.
@@ -84,7 +87,7 @@ Protocol version: **1** (`version` reports it).
 | `recovery-action` | `action`, `app_id?` | `message {message}` or `error`; does one of the overlay's actions, open or not: `force-quit` and `close` (with `app_id`), `reset-input`, `restart-shell`, `reload-compositor`, `lock`, `log-out`, `text-console`. Over the lock screen only `reset-input`, `restart-shell` and `text-console` |
 | `input-state` | | `input-state {state: InputState}` |
 | `keyboards` | | `keyboards {keyboards: [KeyboardInfo]}`: the keyboards that type (a space bar and the letters: not a power button, nor a keyboard's media keys), each once however many devices it has, `{name, id, bus, last}`: `id` is vendor and product as `lsusb` writes them (`05ac:029c`), `bus` `usb`, `bluetooth`, `built-in` or `other` (a VM's, uinput), `last` whether it typed last |
-| `catch-key` | `tag?` | `ok` at once; the next key pressed (unless the screen is locked) is swallowed, press and release, and sent to subscribers as `key-caught` with this tag: what Settei's keyboard setup asks, as no app hears a modifier key alone. It waits only while the connection that asked stays open; asked without a tag, it stops |
+| `catch-key` | `tag?` | `ok` at once (an error on a connection that hasn't subscribed); the next key pressed (unless the screen is locked) is swallowed, press and release, and sent as `key-caught` with this tag to the connection that asked alone: what Settei's keyboard setup asks, as no app hears a modifier key alone. It waits only while that connection stays open, until it asks again without a tag (another connection's asking without one changes nothing) or another connection asks for a key in its place |
 | `debug-stall` | `seconds` | `ok` after blocking the main loop that long (at most 60 s), to try the watchdog (`docs/recovery.md`) |
 | `pick-area` | `tag?`, `prompt?`, `targets?` | `ok` at once; the screenshot picker opens (drag over an area, click for the whole display under the pointer, Space and a click for a window, Esc to give up), says `pick-started` with this tag, and its pick is sent to subscribers as `area-picked` with it, not taken as a screenshot. `targets` narrows what may be picked (`area`, `display`, `window`; all when left out): without `area` a drag picks the display under the pointer, with `window` alone the picker starts at windows, and in window mode a click on no window keeps picking. `prompt` puts a banner at the top of each display saying what the pick is for, with the keys. The shell uses it to choose what to record, `aizome-share-picker` what to share |
 | `shares` | | `shares {shares: [ShareInfo]}`: what's being shared through ext-image-copy-capture (browsers' screen and window sharing): sessions that have shown frames for a second (so not a screenshot tool's single frame), `{id, output?, window?, cursor}` |
@@ -281,7 +284,7 @@ and for wl_shm reading it back).
 | `area-picked` | `tag`, `area?` (`{x,y,w,h}` in points; `null` when given up), `output?` (the one holding its centre), `window?` and `toplevel?` (when a window was picked: its ID, and its ext-foreign-toplevel-list identifier, which is how xdg-desktop-portal-wlr names it) | the picker opened by `pick-area` closed |
 | `shares-changed` | `shares` | something began or stopped being shared (as `shares` answers) |
 | `keyboard-added` | `keyboard` (`KeyboardInfo`) | a keyboard that types appeared for the first time since the compositor started: one plugged in again, or back from another VT, isn't news. The shell offers to set up one plugged in or paired (USB or Bluetooth) that hasn't keys of its own |
-| `key-caught` | `tag`, `code` (evdev, whatever the keymap makes of it), `keyboard?` (`KeyboardInfo`; none for a key from IPC or a device that doesn't type) | the key `catch-key` waited for |
+| `key-caught` | `tag`, `code` (evdev, whatever the keymap makes of it), `keyboard?` (`KeyboardInfo`; none for a key from IPC or a device that doesn't type) | the key `catch-key` waited for, to the connection that asked alone |
 
 ## Bindings
 

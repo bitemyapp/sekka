@@ -453,15 +453,16 @@ impl State {
             return Decision::Swallow;
         }
         // A key someone asked for (Settei's keyboard setup): which it was,
-        // and on which keyboard; the app hears nothing of it.
+        // and on which keyboard, for the asker alone; the app hears nothing
+        // of it.
         if pressed
             && !self.az.lock.is_locked()
             && let Some((tag, conn)) = self.az.keyboards.catch.take()
-            && self.az.ipc.is_open(conn)
+            && self.az.ipc.is_subscribed(conn)
         {
             self.az.suppressed_keys.insert(keycode);
             let keyboard = self.az.keyboards.sending();
-            self.az.ipc.emit(&aizome_ipc::Event::KeyCaught { tag, code: keycode.raw() - 8, keyboard });
+            self.az.ipc.emit_to(conn, &aizome_ipc::Event::KeyCaught { tag, code: keycode.raw() - 8, keyboard });
             return Decision::Swallow;
         }
         if pressed && let Some(a) = core_binding(mods, &syms, self.az.lock.is_locked()) {
