@@ -397,16 +397,20 @@ the new font invalidates that context before GTK has initialized its CSS node.
 `nix/overlays/xapp.nix` carries a local source patch that coalesces the theme
 notification at GLib idle priority, after the pending settings events. It
 preserves Settings reads and change signals, without delaying portal startup.
-`modules/portal-fixes.nix` applies it to installed desktops and the live
-compatibility session. Review the patch when updating XApp; remove it when
-upstream handles this case correctly.
+`modules/portal-fixes.nix` applies it to installed desktops and to the live
+media. Every live boot entry runs Aizome, the software one included, so the
+media carry Xfce and the portal only in their prebuilt installed systems.
+Review the patch when updating XApp; remove it when upstream handles this case
+correctly.
 
 `nix build .#checks.x86_64-linux.xapp-settings .#checks.x86_64-linux.xapp-packages`
 checks the real backend under private X and D-Bus sessions. The original
 package must crash for the same theme/font batch; the patched package must
 read two distinct accent colors and emit their change notifications. Package
-selection assertions cover installed Xfce, its ISO reference and the live
-compatibility configuration. This is component evidence, not ISO qualification.
+selection assertions cover installed Xfce and the media's prebuilt Xfce and
+every-desktop systems, which must select the patched portal and no other XApp
+package, and every live boot entry, where any XApp portal must be the patched
+one. This is component evidence, not ISO qualification.
 
 Sekka backports Aquamarine's upstream null-connector teardown fix
 [`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)

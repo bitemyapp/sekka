@@ -287,9 +287,13 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         xapp-packages = import ./nix/xapp-packages-test.nix {
-          inherit pkgs inputs applicationCatalog;
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            installer
+            ;
           patched = xappPkgs.xdg-desktop-portal-xapp;
-          compatibility = installer.config.specialisation.compatibility.configuration;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
           inherit pkgs;
