@@ -74,9 +74,11 @@ def test(scale):
             wait_for("Xwayland ready", lambda: "Connected to Xwayland" in
                      (directory / "satellite.log").read_text())
 
-            def scenario(name, size, decoration, before, expected, transitions=False):
+            def scenario(name, size, decoration, before, expected, transitions=False,
+                         take_focus=False):
                 client = start([os.environ["X11_FIXTURE"], name,
-                                str(size[0] * scale), str(size[1] * scale), decoration],
+                                str(size[0] * scale), str(size[1] * scale), decoration,
+                                *(["take-focus"] if take_focus else [])],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
                 assert line(client) == "ready"
 
@@ -138,7 +140,10 @@ def test(scale):
                     check(True)
                     command("unmap")
                     wait_for(f"{name}: withdrawn", lambda: window(name) is None)
-                    command("property-delete")
+                    # The bridge, as window manager, removes its own state on
+                    # withdrawal; otherwise FULLSCREEN returns on remapping.
+                    wait_for(f"{name}: EWMH state removed",
+                             lambda: command("state-present") == "0")
                     command("restore-size")
                     command("map")
                     check(False)
@@ -149,6 +154,8 @@ def test(scale):
                 print(f"PASS {scale}x {name}", flush=True)
 
             scenario("initial-fullscreen", (640, 480), "borderless", ["property-full"], True, True)
+            scenario("take-focus-fullscreen", (640, 480), "borderless", ["property-full"], True,
+                     True, take_focus=True)
             scenario("early-fullscreen", (640, 480), "borderless", ["add"], True)
             scenario("cancel-early-fullscreen", (1280, 800), "borderless", ["add", "remove"], False)
             scenario("initial-windowed", (1280, 800), "borderless", ["property-normal"], False)
@@ -187,6 +194,15 @@ def test(scale):
                 ipc("input", "motion", "960", "600")
                 wait_for("pointer uses emulated resolution",
                          lambda: command("pointer") == f"{width * 3 // 4} {height * 3 // 4}")
+            # A game that resizes away from its mode leaves emulation, as in
+            # Xwayland: the viewport and pointer follow its actual drawable.
+            command(f"resize {1280 * scale} {800 * scale}")
+            wait_for("game resized its drawable",
+                     lambda: command("geometry") == f"{1280 * scale} {800 * scale}")
+            ipc("input", "motion", "900", "550")
+            ipc("input", "motion", "960", "600")
+            wait_for("pointer follows the resized drawable",
+                     lambda: command("pointer") == f"{960 * scale} {600 * scale}")
             command(f"mode {1280 * scale} {800 * scale}")
             wait_for("removing emulation restores native drawable",
                      lambda: command("geometry") == f"{1280 * scale} {800 * scale}")

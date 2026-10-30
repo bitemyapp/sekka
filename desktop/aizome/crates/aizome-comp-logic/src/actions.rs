@@ -957,13 +957,17 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     }
     place_new_window(st, id, info.size, info.parent);
 
-    // A new window of the focused app joins its group, when asked for.
+    // A new window of the focused app joins its group, when asked for. Tabs
+    // share one size, which fixed-size windows (Steam's helpers, games) can't
+    // take, whether new or already in that group.
     let l = st.lg.r();
     let focused = l.wm.focused();
     let same_app = focused.filter(|f| l.wm.get(*f).is_some_and(|w| w.app_id == info.app_id && w.id != id));
     if st.az.settings.windows.stack_new_windows_of_same_app
         && info.parent.is_none()
         && let Some(f) = same_app
+        && !group_has_fixed_size(st, id)
+        && !group_has_fixed_size(st, f)
     {
         st.stack(f, id);
     }

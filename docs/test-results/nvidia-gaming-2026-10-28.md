@@ -1,8 +1,13 @@
 # NVIDIA gaming component work, 28 October 2026
 
-Source: `feat/nvidia-gaming`, based on main `3f4b559`, in the separate
-`/home/callen/work/sekka-nvidia-gaming` worktree. The original checkout's
-uncommitted work was left alone. The root dependency lock did not change.
+Source: `feat/nvidia-gaming`, based on main `3f4b559`, in a separate
+worktree. The original checkout's uncommitted work was left alone. The root
+dependency lock did not change. Later sections used Sidestep's combined
+`aizome-combined` branch at `853fbb3` through the `sidestep` input
+(commit `4267fae`). The branch was afterwards rebased onto main `ff1b15b`,
+where that same `853fbb3` snapshot is in-tree as Sukumo (#139), and the
+re-pin commit was dropped; store paths below come from the builds before
+that rebase. Review fixes made after it are recorded in the last section.
 
 ## Hardware and scope
 
@@ -16,9 +21,10 @@ scale 2.
 Read-only DRM queries reported sync objects, timeline sync objects and
 atomic asynchronous page flips. The connected output reports VRR
 capability and has an HDR metadata property. Those capabilities are not
-proof of correct presentation: no physical KMS mode, VRR, HDR or tearing
-transition was performed. The current desktop was not replaced or
-restarted. No system generation was activated, Steam account modified,
+proof of correct presentation. The component work in this section made no
+physical KMS mode, VRR, HDR or tearing transition; the later Turok run
+observed only the physical session's VRR policy transition. The current
+desktop was not replaced or restarted. No system generation was activated, Steam account modified,
 game launch options rewritten, or image published.
 
 ## Verified components
@@ -439,3 +445,55 @@ No Steam/Proton game benchmark, frame-time comparison, suspend/resume,
 multi-GPU offload, display hotplug, standalone Steam login or ISO
 installation was performed. These are component results, not release
 qualification or an FPS improvement claim. Publication remains inhibited.
+
+## Review fixes, 29 October 2026
+
+A review of the rebased branch found these, now fixed:
+
+- `calamares.gaming.gamescopeSession.enable = false`, or
+  `programs.steam.gamescopeSession.enable = false`, failed evaluation:
+  both Steam's module and Sekka set `programs.gamescope.enable` with
+  `mkDefault`, to different values. Sekka's value now has priority 900.
+- `sekka-game --gamescope` started Gamescope's 1280×720/60 Hz default and
+  ran the bare package, skipping `programs.gamescope.args` and `env`. It
+  now takes `--mode WxH[@Hz]` and runs that module's wrapper (without
+  the capability wrapper, which can't run in Steam's sandbox).
+- The satellite patch never removed `_NET_WM_STATE` on withdrawal, then
+  read its own FULLSCREEN back as the client's request on the next map.
+- Its emulated-mode viewport and input scaling applied even after a game
+  resized away from the mode; now only while the window has that size.
+- Adaptive sync was offered on HDMI, where Smithay reports switching needs
+  a modeset because it flickers, and Aizome switches it per fullscreen
+  window, overlay and animation. HDMI outputs no longer offer it.
+- With `stack_new_windows_of_same_app` (the default on main since #148),
+  Steam's fixed-size helpers joined its tab group and took its size.
+
+The review also reported that windows advertising `WM_TAKE_FOCUS` were
+never told of restoration. Satellite 0.8.3's keyboard-enter handler reads
+`WindowData` from the keyboard's entity rather than the surface's, so
+toplevels always take the `SetInputFocus` path, which did clear the
+state: that was not a live bug, consistent with Turok's result. The
+bridge now clears it on keyboard focus itself, independent of that path,
+and no longer marks a minimized window restored when focus merely
+returns to it after another window closes or changes output. The
+upstream lookup is unchanged.
+
+Validation, on Sekka's offload workstation, of the branch merged with main
+`2d8a1b9`:
+
+- 179 library tests and the `aizome-comp` displays, explicit_sync (GPU
+  case skipped), fullscreen, fullscreen_frames, headless, layout (nine,
+  with the new grouping test), pacing, reload, screens and settings suites
+  pass, as do Settei's goldens and Displays tests. Without the grouping
+  guard, the new layout test fails.
+- The satellite package passes its 87 upstream and patch unit tests. The
+  packaged X11 check passes all 20 scenarios at 1×/2×, now including a
+  `WM_TAKE_FOCUS` client, withdrawal without the client deleting its
+  state, and a game resizing away from its mode. Against the previous
+  bridge the same check fails at the withdrawal and mode-resize steps.
+- The gaming policy check passes, including both session opt-outs,
+  `programs.gamescope.enable = false`, and the launcher's Gamescope
+  keeping configured args and env; the launcher's eight tests pass.
+
+None of this was repeated on the RTX 5090 or a physical display; the
+HDMI change in particular is a policy change, not a hardware observation.

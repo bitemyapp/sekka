@@ -123,6 +123,8 @@ changes. Remembered geometry is accepted only within the new window's
 declared size limits. Fixed-size helpers neither inherit nor replace an
 app-wide size, even when they share the main window's app ID (Steam does
 this). The regression also checks this behavior across a logic reload.
+With `stack_new_windows_of_same_app`, fixed-size windows neither join their
+app's group nor take in a new window, since tabs share one size.
 To run the same checks against an installed compositor, set
 `AIZOME_LAYOUT_TEST_EXE` to its executable.
 

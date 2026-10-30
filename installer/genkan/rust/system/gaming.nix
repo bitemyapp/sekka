@@ -9,12 +9,32 @@
 }:
 let
   cfg = config.calamares.gaming;
+  gamescopeCfg = config.programs.gamescope;
+  # programs.gamescope's own wrapper, for its args and env, without its
+  # optional capability wrapper: that cannot run inside Steam's sandbox.
+  gamescope = pkgs.runCommand "sekka-gamescope" { nativeBuildInputs = [ pkgs.makeBinaryWrapper ]; } ''
+    mkdir -p $out/bin
+    makeWrapper ${gamescopeCfg.package}/bin/gamescope $out/bin/gamescope --inherit-argv0 \
+      ${lib.escapeShellArgs (
+        lib.optionals (gamescopeCfg.args != [ ]) [
+          "--add-flags"
+          (toString gamescopeCfg.args)
+        ]
+        ++ lib.concatLists (
+          lib.mapAttrsToList (name: value: [
+            "--set-default"
+            name
+            value
+          ]) gamescopeCfg.env
+        )
+      )}
+  '';
   launcher = pkgs.writeShellApplication {
     name = "sekka-game";
     runtimeInputs = [
       pkgs.gamemode
       pkgs.mangohud
-      config.programs.gamescope.package
+      gamescope
     ];
     text = builtins.readFile ./gaming/sekka-game.sh;
   };
@@ -45,7 +65,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    programs.gamescope.enable = lib.mkDefault true;
+    # Nested Gamescope and its WSI layer stay available without the login
+    # session. Steam's module sets this to the session's state with
+    # mkDefault, so a plain mkDefault would conflict once the session is off.
+    # An explicit user setting still wins.
+    programs.gamescope.enable = lib.mkOverride 900 true;
     programs.gamescope.package = lib.mkDefault (
       import ../../../../nix/gamescope.nix {
         inherit (pkgs) gamescope;
@@ -71,7 +95,7 @@ in
         launcher
         pkgs.gamemode
         pkgs.mangohud
-        config.programs.gamescope.package
+        gamescope
       ];
       extraCompatPackages = lib.optionals cfg.protonGE.enable [ pkgs.proton-ge-bin ];
       gamescopeSession = lib.mkIf cfg.gamescopeSession.enable {

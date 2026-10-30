@@ -223,6 +223,39 @@ fn fixed_size_games_are_not_enlarged_by_fill_or_split() {
 }
 
 #[test]
+fn fixed_size_windows_stay_out_of_their_apps_automatic_groups() {
+    let c = start(Options {
+        settings: "[appearance]\neffects = \"austere\"\n[windows]\nstack_new_windows_of_same_app = true\n",
+        ..Default::default()
+    });
+    let _shell = shell(&c);
+    // Steam opens fixed-size helpers under its main window's app ID.
+    let _main = c.client(Spec::new("shared-app-id", 0x448866).size(800, 600).csd());
+    let main = c.wait_window("shared-app-id");
+    let helper =
+        c.client(Spec::new("shared-app-id", 0x664488).size(107, 100).min_size(107, 100).max_size(107, 100).csd());
+    c.wait_windows("helper opened", |ws| ws.len() == 2);
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "helper joined the group: {ws:?}");
+    assert_eq!(helper.seen().size, (107, 100));
+    // The helper now has the focus; a new ordinary window can't join it.
+    let _second = c.client(Spec::new("shared-app-id", 0x886644).size(800, 600).csd());
+    c.wait_windows("second window opened", |ws| ws.len() == 3);
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "joined the helper: {ws:?}");
+    assert_eq!(helper.seen().size, (107, 100));
+    // Ordinary windows of the app still stack with each other.
+    c.ok(Request::Focus { id: main.id });
+    let _third = c.client(Spec::new("shared-app-id", 0x668844).size(800, 600).csd());
+    c.wait_windows("ordinary window stacked", |ws| {
+        ws.len() == 4 && ws.iter().filter(|w| w.group.is_some()).count() == 2
+    });
+    assert!(c.windows().iter().find(|w| w.id == main.id).unwrap().group.is_some());
+}
+
+#[test]
 fn deskbar_arrival_width_changes_and_removal_refit_without_losing_restore() {
     let c = start(Options::default());
     let _app = c.client(Spec::new("filled", 0x886644));

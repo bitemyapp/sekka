@@ -45,6 +45,29 @@ class GameLauncher(unittest.TestCase):
         self.assertEqual(trace[0], ["gamescope", "--fullscreen", "--immediate-flips", "--", "gamemoderun", "mangohud", "game"])
         self.assertEqual([t[0] for t in trace], ["gamescope", "gamemoderun", "mangohud", "game"])
 
+    def test_mode_sets_game_resolution_and_refresh(self):
+        result, trace = self.run_game("--mode", "2560x1440@144", "--", "game", desktop="Hyprland")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(trace[0], ["gamescope", "--fullscreen", "-W", "2560", "-H", "1440",
+                                    "-w", "2560", "-h", "1440", "-r", "144", "--", "gamemoderun", "game"])
+        self.assertNotIn("1280x720", result.stderr)
+        result, trace = self.run_game("--gamescope", "--mode=1920x1080", "--", "game")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(trace[0][:10], ["gamescope", "--fullscreen", "-W", "1920", "-H", "1080",
+                                         "-w", "1920", "-h", "1080"])
+        self.assertEqual(trace[0][10], "--")
+        for args in [["--mode"], ["--mode", "1920"], ["--mode", "0x1080", "--", "game"],
+                     ["--mode=1920x1080@", "--", "game"], ["--mode", "big", "--", "game"]]:
+            result, trace = self.run_game(*args)
+            self.assertEqual(result.returncode, 2, args)
+            self.assertEqual(trace, [])
+
+    def test_nested_without_mode_names_the_default(self):
+        result, trace = self.run_game("--gamescope", "--", "game")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(trace[0], ["gamescope", "--fullscreen", "--", "gamemoderun", "game"])
+        self.assertIn("--mode", result.stderr)
+
     def test_does_not_nest_in_existing_gamescope(self):
         result, trace = self.run_game("--gamescope", "--hdr", "--", "game", gamescope=True)
         self.assertEqual(result.returncode, 0, result.stderr)

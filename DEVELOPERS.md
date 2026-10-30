@@ -210,7 +210,14 @@ It does not change fences or take the fork's other renderer changes. An explicit
 The `sekka-game` wrapper is available inside Steam's FHS environment as well
 as in the system PATH. It preserves argument boundaries, applies GameMode
 per game, optionally adds MangoHud or nested Gamescope, and avoids nesting
-inside an existing Gamescope session. This per-game approach takes
+inside an existing Gamescope session. Nested Gamescope has no automatic size:
+`--mode WxH[@Hz]` passes the game and output resolution and refresh rate,
+and without it Gamescope uses 1280×720 at 60 Hz. The wrapper runs
+`programs.gamescope.package` with that module's `args` and `env`, but not its
+`capSysNice` capability wrapper, which cannot run inside Steam's sandbox.
+Turning off the login session, through either option, keeps
+`programs.gamescope` enabled for nested use and its WSI layer; setting
+`programs.gamescope.enable = false` removes it. This per-game approach takes
 inspiration from [Bazzite's ScopeBuddy](https://docs.bazzite.gg/Advanced/scopebuddy/).
 It does not rewrite Steam's launch options or force a Proton version.
 GameMode requests the performance governor only while registered games run;
@@ -249,15 +256,22 @@ limited to undecorated or unmanaged legacy windows. This prevents startup
 requests disappearing and ordinary decorated windows being promoted to
 fullscreen just because their dimensions match a display. It also translates
 ICCCM `WM_CHANGE_STATE` iconification to Wayland minimization, reports
-`WM_STATE`/`_NET_WM_STATE_HIDDEN`, and clears hidden state on restoration.
-Fullscreen updates preserve other state atoms. SDL2 exclusive-fullscreen
+`WM_STATE`/`_NET_WM_STATE_HIDDEN`, and clears hidden state when keyboard
+focus restores the window, including windows using `WM_TAKE_FOCUS` (SDL,
+Wine). Fullscreen updates preserve other state atoms. As EWMH asks of a
+window manager, it removes `_NET_WM_STATE` on withdrawal, before
+`WM_STATE` says Withdrawn, so its own state is not read back as the
+client's on the next map. SDL2 exclusive-fullscreen
 games rely on these notifications when focus loss temporarily releases their
 fullscreen mode; otherwise they return as ordinary windows. Satellite also
 reads Xwayland's per-client `_XWAYLAND_RANDR_EMU_MONITOR_RECTS`: a fullscreen
 game keeps its chosen drawable resolution while the viewport fills the
 physical output. Absolute input and cursor-position hints use that viewport's
 transform, including changes while the pointer remains inside or locked.
-Windowed clients retain normal DPI scaling. Aizome's fill/split actions also
+As in Xwayland, the viewport and input follow the mode only while the X
+window has that mode's size. A configure applies the mode for the output
+the window is on; after a move between outputs it applies at the next
+configure or mode change. Windowed clients retain normal DPI scaling. Aizome's fill/split actions also
 respect fixed-size client bounds, including fixed tabs in a group.
 Aizome transfers the latest accepted fullscreen state into its window manager
 when the first buffer maps. That buffer may still use an older windowed
@@ -267,9 +281,10 @@ output changes at 1×/2× without relying on scheduler timing.
 The package runs
 its upstream tests; `nix build .#checks.x86_64-linux.xwayland-fullscreen`
 tests real X11 requests through the packaged bridge and Aizome at 1×/2×,
-including startup, cancellation, toggling, remapping and repeated
-minimize/restore transitions, real RandR mode changes, drawable dimensions,
-pointer coordinates and restoration to the native mode. Updating the bridge
+including startup, cancellation, toggling, remapping after withdrawal and
+repeated minimize/restore transitions with and without `WM_TAKE_FOCUS`, real
+RandR mode changes, drawable dimensions, pointer coordinates, a game resizing
+away from its mode and restoration to the native mode. Updating the bridge
 requires a fresh login, since restarting it disconnects its X11 clients.
 Native `tearing-control-v1` and HDR colour management remain unimplemented
 in Aizome; adding protocol globals alone would misrepresent its renderer.

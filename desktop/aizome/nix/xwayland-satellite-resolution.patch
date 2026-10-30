@@ -44,10 +44,10 @@ index 3815022..ef67cad 100644
                  client.destroy();
 diff --git a/src/server/emulation.rs b/src/server/emulation.rs
 new file mode 100644
-index 0000000..f904eb6
+index 0000000..2a58818
 --- /dev/null
 +++ b/src/server/emulation.rs
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,133 @@
 +//! Xwayland's per-client RandR mode is distinct from the physical output mode.
 +//! Keep the X drawable at the requested resolution and scale its viewport to
 +//! the fullscreen configure. Satellite owns the viewport, so Xwayland cannot
@@ -97,6 +97,13 @@ index 0000000..f904eb6
 +        .map(|m| (m.width, m.height))
 +}
 +
++/// The emulated mode while the X window still has exactly that size, as in
++/// Xwayland's own emulation. A game may resize away from its mode, and an
++/// output change can precede the next configure; scale those normally.
++pub(super) fn active(win: &WindowData, role: &SurfaceRole) -> Option<(u16, u16)> {
++    mode(win, role).filter(|&(w, h)| win.attrs.dims.width == w && win.attrs.dims.height == h)
++}
++
 +// Track the surface rather than copying its scale into input devices. A mode
 +// can change while the pointer remains inside the window or stays locked.
 +#[derive(Clone, Copy)]
@@ -109,7 +116,7 @@ index 0000000..f904eb6
 +        .unwrap_or(1.0);
 +    if let Ok(mut q) = world.query_one::<(&WindowData, &SurfaceRole)>(entity) {
 +        if let Some((win, role)) = q.get() {
-+            if let (Some((w, h)), SurfaceRole::Toplevel(Some(t))) = (mode(win, role), role) {
++            if let (Some((w, h)), SurfaceRole::Toplevel(Some(t))) = (active(win, role), role) {
 +                let (width, height) = t.fullscreen_size.unwrap();
 +                return (w as f64 / width as f64, h as f64 / height as f64);
 +            }
@@ -175,7 +182,7 @@ index 0000000..f904eb6
 +    }
 +}
 diff --git a/src/server/event.rs b/src/server/event.rs
-index 167a5c4..c60dfb0 100644
+index 167a5c4..594fe91 100644
 --- a/src/server/event.rs
 +++ b/src/server/event.rs
 @@ -323,6 +323,7 @@ impl SurfaceEvents {
@@ -204,7 +211,7 @@ index 167a5c4..c60dfb0 100644
      let height = (dims.height as f64 / scale_factor.0).ceil() as i32;
 +    let (width, height) = match role.as_deref() {
 +        Some(role @ SurfaceRole::Toplevel(Some(t)))
-+            if emulation::mode(window_data, role).is_some() =>
++            if emulation::active(window_data, role).is_some() =>
 +        {
 +            t.fullscreen_size.unwrap()
 +        }
@@ -322,7 +329,7 @@ index 167a5c4..c60dfb0 100644
              _ => {
                  let tool = state.world.get::<&TabletToolServer>(target).unwrap();
 diff --git a/src/server/mod.rs b/src/server/mod.rs
-index 20b2f32..10fc55b 100644
+index 6c05427..16f8299 100644
 --- a/src/server/mod.rs
 +++ b/src/server/mod.rs
 @@ -1,7 +1,10 @@
@@ -352,7 +359,7 @@ index 20b2f32..10fc55b 100644
      decoration: decoration::DecorationsData,
  }
  
-@@ -1626,6 +1631,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+@@ -1631,6 +1636,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
              },
              toplevel,
              fullscreen: false,
@@ -361,10 +368,10 @@ index 20b2f32..10fc55b 100644
                  wl: wl_decoration,
                  satellite: sat_decoration,
 diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
-index 0aa29f9..7f4c712 100644
+index be57e70..3b27dfd 100644
 --- a/src/xstate/mod.rs
 +++ b/src/xstate/mod.rs
-@@ -656,6 +656,8 @@ impl XState {
+@@ -668,6 +668,8 @@ impl XState {
              server_state.set_win_class(window, class);
          }
  
@@ -373,7 +380,7 @@ index 0aa29f9..7f4c712 100644
          let size_hints = self.get_wm_size_hints(window)?;
          if let Some(hints) = size_hints {
              server_state.set_size_hints(window, hints);
-@@ -730,6 +732,16 @@ impl XState {
+@@ -742,6 +744,16 @@ impl XState {
              .resolve(|reply| reply.value::<x::Atom>().contains(&self.atoms.wm_fullscreen))
      }
  
@@ -390,7 +397,7 @@ index 0aa29f9..7f4c712 100644
      fn get_wm_class(&self, window: x::Window) -> XResult<Option<String>> {
          let cookie = self.get_property_cookie(window, x::ATOM_WM_CLASS, x::ATOM_STRING, 256);
          let resolver = move |reply: x::GetPropertyReply| {
-@@ -866,6 +878,11 @@ impl XState {
+@@ -878,6 +890,11 @@ impl XState {
          if self.handle_selection_property_change(&event) {
              return;
          }
@@ -402,7 +409,7 @@ index 0aa29f9..7f4c712 100644
          if event.state() == x::Property::Delete {
              debug!(
                  "ignoring delete for property {:?}",
-@@ -932,6 +949,7 @@ xcb::atoms_struct! {
+@@ -944,6 +961,7 @@ xcb::atoms_struct! {
          net_wm_cm_s0 => b"_NET_WM_CM_S0" only_if_exists = false,
          wm_check => b"_NET_SUPPORTING_WM_CHECK" only_if_exists = false,
          net_wm_name => b"_NET_WM_NAME" only_if_exists = false,

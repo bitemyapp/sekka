@@ -113,11 +113,14 @@ struct Surface {
 }
 
 impl Surface {
+    /// VRR switches with fullscreen windows, overlays and animations, so
+    /// only where that is seamless. Smithay reports HDMI as needing a
+    /// modeset because switching there flickers (amd#2200).
     fn vrr_supported(&mut self) -> bool {
         match &mut self.drm {
-            SurfaceOutput::Gles(o) => o
-                .with_compositor(|c| c.vrr_supported(self.connector))
-                .is_ok_and(|r| matches!(r, VrrSupport::Supported | VrrSupport::RequiresModeset)),
+            SurfaceOutput::Gles(o) => {
+                o.with_compositor(|c| c.vrr_supported(self.connector)).is_ok_and(|r| r == VrrSupport::Supported)
+            }
             SurfaceOutput::Pixman(_) => false,
         }
     }

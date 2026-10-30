@@ -58,7 +58,9 @@ composition. This is still SDR, with no HDR colour conversion or metadata.
 
 `[[outputs]] vrr` accepts `off`, `fullscreen` (the default), or `always`.
 Adaptive sync requires a capable KMS output and GLES; fullscreen policy
-checks the top visible window on each output. Lock, recovery, keyboard
+checks the top visible window on each output. HDMI outputs are not offered
+it: Smithay reports that switching VRR there needs a modeset, since it
+flickers, and Aizome switches it as fullscreen windows come and go. Lock, recovery, keyboard
 overlays, animation and mirroring disable it. Transitions force a fresh
 frame even when pixels are unchanged; rejected VRR commits retry at fixed
 refresh. Variable-refresh presentation feedback and frame scheduling stop

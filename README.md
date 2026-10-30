@@ -163,8 +163,10 @@ choose it for individual games that need it.
 
 For a game to request GameMode while it runs, set its Steam launch options
 to `sekka-game -- %command%`. Use `sekka-game --hud -- %command%` to show
-frame times and GPU usage, or add `--gamescope` to run it inside Gamescope.
-There is no need to nest Gamescope inside the Steam login session; the
+frame times and GPU usage. To run a game inside Gamescope, add `--mode` with
+your display's resolution and refresh rate, such as
+`sekka-game --mode 2560x1440@144 -- %command%`; plain `--gamescope` renders
+at 1280×720. There is no need to nest Gamescope inside the Steam login session; the
 launcher detects it.
 
 With system tuning enabled, Steam games automatically receive higher CPU
@@ -174,6 +176,7 @@ CPU work; it does not increase the GPU's rendering capacity.
 
 Aizome supports explicit synchronization for NVIDIA games and adaptive sync
 under **Settings → Displays**, with fullscreen-only operation by default.
+Adaptive sync is offered on DisplayPort and built-in displays, not HDMI.
 If a display flickers with adaptive sync, select **Off**. Aizome still
 displays SDR and does not support tearing; use the Steam login session for
 those features. HDR, VRR and tearing still need physical display and game

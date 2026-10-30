@@ -8,7 +8,7 @@
 #include <string.h>
 
 int main(int argc, char **argv) {
-    if (argc != 5) return 2;
+    if (argc != 5 && argc != 6) return 2;
     Display *display = XOpenDisplay(NULL);
     if (!display) return 3;
     Window root = DefaultRootWindow(display);
@@ -26,6 +26,15 @@ int main(int argc, char **argv) {
         XSetWindowAttributes attrs = {.override_redirect = True};
         XChangeWindowAttributes(display, window, CWOverrideRedirect, &attrs);
     }
+    /* SDL and Wine advertise WM_TAKE_FOCUS, so the bridge never assigns
+     * their input focus itself. */
+    if (argc == 6 && !strcmp(argv[5], "take-focus")) {
+        Atom protocols[] = {
+            XInternAtom(display, "WM_DELETE_WINDOW", False),
+            XInternAtom(display, "WM_TAKE_FOCUS", False),
+        };
+        XSetWMProtocols(display, window, protocols, 2);
+    } else if (argc == 6) return 2;
     Atom state = XInternAtom(display, "_NET_WM_STATE", False);
     Atom fullscreen = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
     Atom hidden = XInternAtom(display, "_NET_WM_STATE_HIDDEN", False);
@@ -52,6 +61,8 @@ int main(int argc, char **argv) {
             XRRFreeCrtcInfo(crtc);
             XRRFreeScreenResources(resources);
             if (status != Success) return 7;
+        } else if (sscanf(command, "resize %d %d", &mode_w, &mode_h) == 2) {
+            XResizeWindow(display, window, mode_w, mode_h);
         } else if (!strcmp(command, "geometry")) {
             XWindowAttributes attrs;
             XGetWindowAttributes(display, window, &attrs);
@@ -73,8 +84,17 @@ int main(int argc, char **argv) {
         else if (!strcmp(command, "property-full") || !strcmp(command, "property-normal")) {
             XChangeProperty(display, window, state, XA_ATOM, 32, PropModeReplace,
                 (unsigned char *)&fullscreen, !strcmp(command, "property-full") ? 1 : 0);
-        } else if (!strcmp(command, "property-delete")) {
-            XDeleteProperty(display, window, state);
+        } else if (!strcmp(command, "state-present")) {
+            Atom type;
+            int format;
+            unsigned long count, remaining;
+            unsigned char *value = NULL;
+            XGetWindowProperty(display, window, state, 0, 0, False, AnyPropertyType,
+                &type, &format, &count, &remaining, &value);
+            if (value) XFree(value);
+            printf("%d\n", type != None);
+            fflush(stdout);
+            continue;
         } else if (!strcmp(command, "add") || !strcmp(command, "remove") || !strcmp(command, "toggle")) {
             XEvent event = {0};
             event.xclient.type = ClientMessage;

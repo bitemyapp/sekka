@@ -318,7 +318,7 @@ fn display_sections(p: &Displays, vcx: &ViewCx, d: &Display) -> Vec<Element<Msg>
             .entry("adaptive-sync"),
         );
     } else {
-        picture.push(form::value("Adaptive sync", "Unavailable at this display mode").entry("adaptive-sync"));
+        picture.push(form::value("Adaptive sync", "Unavailable on this display or mode").entry("adaptive-sync"));
     }
     let labels: Vec<&str> = model::ROTATIONS.iter().map(|(_, l)| *l).collect();
     let n = name.clone();

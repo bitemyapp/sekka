@@ -5,19 +5,29 @@ nested=false
 hdr=false
 tearing=false
 use_gamemode=true
+mode=
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hud) hud=true ;;
     --gamescope) nested=true ;;
+    --mode=*) mode=${1#--mode=}; nested=true ;;
+    --mode)
+      if [[ $# -lt 2 ]]; then
+        printf 'sekka-game: --mode needs WxH or WxH@Hz\n' >&2
+        exit 2
+      fi
+      mode=$2; nested=true; shift ;;
     --hdr) hdr=true; nested=true ;;
     --tearing) tearing=true; nested=true ;;
     --no-gamemode) use_gamemode=false ;;
     --help|-h)
       cat <<'HELP'
-Usage: sekka-game [--hud] [--gamescope] [--hdr] [--tearing] [--no-gamemode] -- COMMAND [ARG...]
+Usage: sekka-game [--hud] [--gamescope] [--mode WxH[@Hz]] [--hdr] [--tearing] [--no-gamemode] -- COMMAND [ARG...]
 
 Steam launch options: sekka-game -- %command%
 Add --hud for frame times and GPU usage, or --gamescope for a fullscreen game container.
+--mode sets the game's resolution and refresh rate in Gamescope, usually the display's own,
+for example --mode 2560x1440@144. Without it, nested Gamescope renders at 1280x720.
 --hdr needs an HDR-capable host compositor (Tatami with HDR enabled, or the Steam login session).
 --tearing allows immediate flips where the host compositor and driver support them.
 Inside the Steam login session, Gamescope is already running and is not nested again.
@@ -32,6 +42,17 @@ done
 if [[ $# -eq 0 ]]; then
   printf 'sekka-game: expected a game command after --\n' >&2
   exit 2
+fi
+size=()
+if [[ -n "$mode" ]]; then
+  if [[ ! "$mode" =~ ^([1-9][0-9]*)x([1-9][0-9]*)(@([1-9][0-9]*))?$ ]]; then
+    printf 'sekka-game: --mode needs WxH or WxH@Hz, not %s\n' "$mode" >&2
+    exit 2
+  fi
+  width=${BASH_REMATCH[1]} height=${BASH_REMATCH[2]} refresh=${BASH_REMATCH[4]}
+  # The output and the game's own resolution; the window still fills the display.
+  size=(-W "$width" -H "$height" -w "$width" -h "$height")
+  if [[ -n "$refresh" ]]; then size+=(-r "$refresh"); fi
 fi
 
 in_gamescope=false
@@ -49,7 +70,10 @@ fi
 
 command=()
 if $nested && ! $in_gamescope; then
-  command+=(gamescope --fullscreen)
+  command+=(gamescope --fullscreen "${size[@]}")
+  if [[ -z "$mode" ]]; then
+    printf 'sekka-game: Gamescope renders at 1280x720; add --mode WxH[@Hz] for your display.\n' >&2
+  fi
   if $hdr; then command+=(--hdr-enabled); fi
   if $tearing; then command+=(--immediate-flips); fi
   command+=(--)
