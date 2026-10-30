@@ -59,9 +59,13 @@ impl VrrFailures {
 
     /// A frame reached the display. True, once, when VRR should be given up.
     pub fn presented(&mut self, vrr: bool) -> bool {
+        // Any frame that reaches the display ends a hold-off. One with VRR
+        // still on (the driver refused to switch it off for the retry)
+        // shows VRR wasn't the cause.
+        let retried = std::mem::take(&mut self.retrying);
         if vrr {
             self.blamed = 0;
-        } else if std::mem::take(&mut self.retrying) {
+        } else if retried {
             self.blamed = self.blamed.saturating_add(1);
             return self.blamed == Self::LIMIT;
         }
@@ -105,6 +109,18 @@ mod tests {
         assert!(!f.presented(false));
         let mut f = VrrFailures::default();
         assert!(!f.refused() && !f.refused() && f.refused());
+    }
+
+    #[test]
+    fn a_frame_shown_with_adaptive_sync_on_ends_the_hold_off() {
+        // A VRR frame failed, the driver refused to switch VRR off for the
+        // retry, and the next frame, still with VRR, reached the display.
+        let mut f = VrrFailures::default();
+        assert!(f.failed(true) && f.holding_off());
+        assert!(!f.refused());
+        assert!(!f.presented(true));
+        assert!(!f.holding_off());
+        assert_eq!(f, VrrFailures::default());
     }
 
     #[test]

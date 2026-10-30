@@ -268,20 +268,20 @@ ICCCM `WM_CHANGE_STATE` iconification to Wayland minimization, reports
 `WM_STATE`/`_NET_WM_STATE_HIDDEN`, and clears hidden state when keyboard
 focus restores the window, including windows using `WM_TAKE_FOCUS` (SDL,
 Wine). Fullscreen updates preserve other state atoms. As EWMH asks of a
-window manager, it removes `_NET_WM_STATE` on withdrawal, before
-`WM_STATE` says Withdrawn, so its own state is not read back as the
-client's on the next map. SDL2 exclusive-fullscreen
-games rely on these notifications when focus loss temporarily releases their
-fullscreen mode; otherwise they return as ordinary windows. Satellite also
-reads Xwayland's per-client `_XWAYLAND_RANDR_EMU_MONITOR_RECTS`: a fullscreen
-game keeps its chosen drawable resolution while the viewport fills the
-physical output. Absolute input and cursor-position hints use that viewport's
-transform, including changes while the pointer remains inside or locked.
+window manager, it removes `_NET_WM_STATE` on withdrawal, before `WM_STATE` says
+Withdrawn, so its own state is not read back as the client's on the next map.
+SDL2 exclusive-fullscreen games rely on these notifications when focus loss
+temporarily releases their fullscreen mode; otherwise they return as ordinary
+windows. Satellite also reads Xwayland's per-client
+`_XWAYLAND_RANDR_EMU_MONITOR_RECTS`: a fullscreen game keeps its chosen drawable
+resolution while the viewport fills the physical output. Absolute input and
+cursor-position hints use that viewport's transform, including changes while the
+pointer remains inside or locked.
 As in Xwayland, the viewport and input follow the mode only while the X
-window has that mode's size. A configure applies the mode for the output
-the window is on; after a move between outputs it applies at the next
-configure or mode change. Windowed clients retain normal DPI scaling. Aizome's fill/split actions also
-respect fixed-size client bounds, including fixed tabs in a group.
+window has that mode's size. A configure applies the mode for the output the
+window is on; after a move between outputs it applies at the next configure or
+mode change. Windowed clients retain normal DPI scaling. Aizome's fill/split
+actions also respect fixed-size client bounds, including fixed tabs in a group.
 Aizome transfers the latest accepted fullscreen state into its window manager
 when the first buffer maps. That buffer may still use an older windowed
 configure; using its committed state would cancel a newer fullscreen request.
@@ -295,11 +295,12 @@ tests, the patches' included, with a 20-minute limit. The patches change
 0.8.3's internals, so evaluation stops with a message to rebase them when
 Nixpkgs moves satellite to another version.
 `nix build .#checks.x86_64-linux.xwayland-fullscreen` tests real X11 requests
-through the packaged bridge and Aizome at 1×/2×, including startup, cancellation, toggling, remapping after withdrawal and
-repeated minimize/restore transitions with and without `WM_TAKE_FOCUS`, real
-RandR mode changes, drawable dimensions, pointer coordinates, a game resizing
-away from its mode and restoration to the native mode. Updating the bridge
-requires a fresh login, since restarting it disconnects its X11 clients.
+through the packaged bridge and Aizome at 1×/2×, including startup,
+cancellation, toggling, remapping after withdrawal and repeated minimize/restore
+transitions with and without `WM_TAKE_FOCUS`, real RandR mode changes, drawable
+dimensions, pointer coordinates, a game resizing away from its mode and
+restoration to the native mode. Updating the bridge requires a fresh login,
+since restarting it disconnects its X11 clients.
 Native `tearing-control-v1` and HDR colour management remain unimplemented
 in Aizome; adding protocol globals alone would misrepresent its renderer.
 See [rendering](desktop/aizome/docs/rendering.md) for lifetime and pacing
@@ -330,14 +331,14 @@ nix build .#aizome --no-update-lock-file
 nix build .#gamescope --no-update-lock-file --out-link result-gamescope-gaming
 ```
 
-Use the GPU's actual render node. The GPU test checks an unsignaled
-acquire point, responsiveness while waiting, release after unmap, and
-descriptor cleanup for abandoned surfaces; it turns explicit sync on, so it
-runs on any GPU. Its companion checks that the default offers explicit sync
-only on NVIDIA. They do not validate scanout, VRR, HDR, tearing, Steam
-login, or game frame rates. Those need a physical
-session and a reproducible game workload, with before/after frame-time
-captures. Component results do not qualify an ISO or enable publication.
+Use the GPU's actual render node. The GPU test checks an unsignaled acquire
+point, responsiveness while waiting, release after unmap, and descriptor cleanup
+for abandoned surfaces; it turns explicit sync on, so it runs on any GPU. Its
+companion checks that the default offers explicit sync only on NVIDIA. They do
+not validate scanout, VRR, HDR, tearing, Steam login, or game frame rates. Those
+need a physical session and a reproducible game workload, with before/after
+frame-time captures. Component results do not qualify an ISO or enable
+publication.
 
 Still to validate on hardware, on Intel (the X1 Carbon Gen 14's xe and its
 OLED eDP panel) as well as NVIDIA:
@@ -366,10 +367,12 @@ AIZOME_RENDER_NODE=/dev/dri/by-path/pci-0000:01:00.0-render \
   -c bash tests/gaming-gpu-smoke.sh
 ```
 
-The script retains logs in a private temporary directory and stops only
-its own processes. `GAMING_GPU_INDEX` chooses vkcube's GPU (default 0);
-check its printed device name against the intended GPU. This is a render
-and synchronization smoke test, not a benchmark.
+The script turns explicit sync on, as the GPU test does, so it runs on any
+GPU; where the driver cannot wait on syncobj eventfds, it says so and skips
+the Xwayland check. It retains logs in a private temporary directory and
+stops only its own processes. `GAMING_GPU_INDEX` chooses vkcube's GPU
+(default 0); check its printed device name against the intended GPU. This
+is a render and synchronization smoke test, not a benchmark.
 
 ### Aizome and IBus
 
@@ -1104,32 +1107,30 @@ nix run .#push-cache
 It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
 `aquamarine`, `hyprland`, `tools`, `installed-systems` and `gaming`, and signs
 their complete runtime closures into a temporary local cache: Nix only adds a
-path to a binary cache that already holds its references. `installed-systems` is an
-installed system for each desktop the media offers (`respin.referenceDesktops`),
-one with all of those desktops together, and one with every free catalog
-application, so everything Sekka's modules
-change and every application one can choose is covered without a list to
-keep up:
-Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
-Elephant, the wallpapers. `gaming` is what `calamares.gaming` adds to a Steam
-installation, taken from a free reference system with that module but not
-Steam: the patched Gamescope, `programs.gamescope`'s wrapper, `sekka-game` with
-its Gamescope wrapper, and the 32-bit Gamescope WSI layer, none of which
-cache.nixos.org has. The wrappers match an installation's only while
-`programs.gamescope.args` and `env` keep their defaults; otherwise the
-installation builds them, with a C compiler. Steam itself, being unfree, is
-always assembled locally, without one. It then uploads just the paths that
-none of cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
-archives before the narinfos that point to them, and skips objects already in
-the bucket. Determinate Nixd is left to Determinate. Clients substitute each
-reference separately, so the shared libraries come from cache.nixos.org; the
-Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
-All of these are evaluated refusing unfree packages (`installed-systems`
-forces it), so NVIDIA's driver and other unfree packages are never published,
-and one added to a desktop makes the push fail rather than publish it.
-Installed systems at the same lock use the identical store paths.
-The command also writes `nix-cache-info` with priority 50, so Nix asks
-cache.nixos.org (40) first.
+path to a binary cache that already holds its references. `installed-systems` is
+an installed system for each desktop the media offers
+(`respin.referenceDesktops`), one with all of those desktops together, and one
+with every free catalog application, so everything Sekka's modules change and
+every application one can choose is covered without a list to keep up: Hyprland
+and what uses its patched Aquamarine (hyprlauncher among them), Elephant, the
+wallpapers. `gaming` is what `calamares.gaming` adds to a Steam installation,
+taken from a free reference system with that module but not Steam: the patched
+Gamescope, `programs.gamescope`'s wrapper, `sekka-game` with its Gamescope
+wrapper, and the 32-bit Gamescope WSI layer, none of which cache.nixos.org has.
+The wrappers match an installation's only while `programs.gamescope.args` and
+`env` keep their defaults; otherwise the installation builds them, with a C
+compiler. Steam itself, being unfree, is always assembled locally, without one.
+It then uploads just the paths that none of cache.nixos.org, Determinate's cache
+and numtide's cache serve (about 0.8 GiB), archives before the narinfos that
+point to them, and skips objects already in the bucket. Determinate Nixd is left
+to Determinate. Clients substitute each reference separately, so the shared
+libraries come from cache.nixos.org; the Sekka cache is incomplete on its own,
+and `nix copy --from` it alone fails. All of these are evaluated refusing unfree
+packages (`installed-systems` forces it), so NVIDIA's driver and other unfree
+packages are never published, and one added to a desktop makes the push fail
+rather than publish it. Installed systems at the same lock use the identical
+store paths. The command also writes `nix-cache-info` with priority 50, so Nix
+asks cache.nixos.org (40) first.
 
 The push needs two credentials, neither of which belongs in the repository:
 

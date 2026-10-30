@@ -72,8 +72,8 @@ It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Activity), Nisshi (Logs), Shashin (Images) and Koe (Dictation). Nisshi reads
 the system's journal and /var/log, suggests filters from what wrote each
 message, and asks for an administrator's password only to read what you
-can't. Aizome is new and its hardware coverage is limited. See [its README](desktop/aizome/README.md)
-for what is done and what isn't.
+can't. Aizome is new and its hardware coverage is limited. See
+[its README](desktop/aizome/README.md) for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
@@ -171,8 +171,8 @@ to `sekka-game -- %command%`. Use `sekka-game --hud -- %command%` to show
 frame times and GPU usage. To run a game inside Gamescope, add `--mode` with
 your display's resolution and refresh rate, such as
 `sekka-game --mode 2560x1440@144 -- %command%`; plain `--gamescope` renders
-at 1280×720. There is no need to nest Gamescope inside the Steam login session; the
-launcher detects it.
+at 1280×720. There is no need to nest Gamescope inside the Steam login
+session; the launcher detects it.
 
 With system tuning enabled, Steam games automatically receive higher CPU
 priority, including games absent from the scheduling rules. Background shader

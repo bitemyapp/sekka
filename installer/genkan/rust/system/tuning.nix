@@ -248,6 +248,11 @@ in
             }
           ];
       };
+      # ananicy-cpp reads its rules only when it starts, so restart it when
+      # they change, as when a rebuild adds or removes Steam. Otherwise, with
+      # Steam newly added, CachyOS's launcher rule (nice 16, idle I/O) would
+      # still reach its games until the next boot.
+      systemd.services.ananicy-cpp.restartTriggers = [ config.environment.etc."ananicy.d".source ];
       # One shared budget for all job scopes, compared with each ordinary
       # app's weight 100. A shell/compiler rule cannot undo this group weight.
       systemd.user.slices.app-background.sliceConfig = {

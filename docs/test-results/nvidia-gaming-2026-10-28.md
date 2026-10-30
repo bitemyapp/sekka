@@ -19,13 +19,13 @@ present. The active display is an ASUS PG27UCDM, DP-4, 3840×2160 at 240 Hz,
 scale 2.
 
 Read-only DRM queries reported sync objects, timeline sync objects and
-atomic asynchronous page flips. The connected output reports VRR
-capability and has an HDR metadata property. Those capabilities are not
-proof of correct presentation. The component work in this section made no
-physical KMS mode, VRR, HDR or tearing transition; the later Turok run
-observed only the physical session's VRR policy transition. The current
-desktop was not replaced or restarted. No system generation was activated, Steam account modified,
-game launch options rewritten, or image published.
+atomic asynchronous page flips. The connected output reports VRR capability
+and has an HDR metadata property. Those capabilities are not proof of
+correct presentation. The component work in this section made no physical
+KMS mode, VRR, HDR or tearing transition; the later Turok run observed only
+the physical session's VRR policy transition. The current desktop was not
+replaced or restarted. No system generation was activated, Steam account
+modified, game launch options rewritten, or image published.
 
 ## Verified components
 
@@ -90,7 +90,8 @@ The requested policy is Steam at nice −5 and its same-user descendants at a
 named and per-thread nice priorities and existing real-time CPU policies are
 preserved. Fossilize shader-cache processing and its children remain idle.
 Ananicy owns this policy; GameMode does not compete with it. The mechanism
-and ancestry limits are documented in [tuning.md](../tuning.md#steam-process-trees).
+and ancestry limits are documented in
+[tuning.md](../tuning.md#steam-process-trees).
 
 Both component checks pass:
 
@@ -207,11 +208,12 @@ Validation:
   `/tmp/sekka-turok-fullscreen/physical-0.png` and `physical-1.png`;
   the run log is `physical-final-results.log` in the same directory.
 
-At this stage the exact Turok inversion was intermittent: initial reruns through the old
-bridge also successfully entered fullscreen. This is a deterministic protocol
-fix with a failing control, not proof that every cause of the original game
-symptom has been eliminated. At 3840×2160, `v_windowed=1` plus
-`v_borderless=1` legitimately produces a monitor-sized borderless window.
+At this stage the exact Turok inversion was intermittent: initial reruns
+through the old bridge also successfully entered fullscreen. This is a
+deterministic protocol fix with a failing control, not proof that every
+cause of the original game symptom has been eliminated. At 3840×2160,
+`v_windowed=1` plus `v_borderless=1` legitimately produces a monitor-sized
+borderless window.
 
 The new bridge was tested separately from the desktop's existing X11 server;
 it was not substituted underneath running Steam or other X11 apps. Install
@@ -420,14 +422,15 @@ the game exited normally; its native/fullscreen configuration is retained.
 ## Repository-wide evaluation
 
 The broad `nix flake check --no-build --no-update-lock-file` did not pass.
-The first attempt hit transient source-path validity errors. A serial
-retry evaluated the component checks but found two failures: an absent
-cached nixpkgs source for `iso-store-integrity`, and the live-compatibility
-Xfce assertion in `xapp-packages`. Fetching the cached source fixed the
-targeted `iso-store-integrity.drvPath` evaluation. The Xfce assertion also
-fails when evaluated at the untouched base commit `3f4b5593c04b83ac533c7f3d48d7dc0a22839967`.
-It is not introduced by this branch. The focused gaming check and package
-builds pass; this record does not claim a green repository-wide check.
+The first attempt hit transient source-path validity errors. A serial retry
+evaluated the component checks but found two failures: an absent cached
+nixpkgs source for `iso-store-integrity`, and the live-compatibility Xfce
+assertion in `xapp-packages`. Fetching the cached source fixed the targeted
+`iso-store-integrity.drvPath` evaluation. The Xfce assertion also fails when
+evaluated at the untouched base commit
+`3f4b5593c04b83ac533c7f3d48d7dc0a22839967`. It is not introduced by this
+branch. The focused gaming check and package builds pass; this record does
+not claim a green repository-wide check.
 
 ## Remaining validation and limits
 
@@ -435,11 +438,10 @@ Aizome now implements explicit sync and VRR policy with KMS integration,
 plus more useful scanout format feedback. Turok's fullscreen/VRR policy
 transition was observed on the physical desktop as described above. Direct
 scanout and the panel's variable-refresh range still need measurement.
-Native HDR colour management and
-`tearing-control-v1` remain absent from Aizome; the configured Gamescope
-login session supplies a separate route that also needs physical testing.
-Do not infer working HDR from a 10-bit framebuffer or an advertised
-connector property.
+Native HDR colour management and `tearing-control-v1` remain absent from
+Aizome; the configured Gamescope login session supplies a separate route
+that also needs physical testing. Do not infer working HDR from a 10-bit
+framebuffer or an advertised connector property.
 
 No Steam/Proton game benchmark, frame-time comparison, suspend/resume,
 multi-GPU offload, display hotplug, standalone Steam login or ISO
@@ -506,13 +508,15 @@ a local Gamescope build. Changes:
 
 - Adaptive sync defaults to Off on every output; Fullscreen and Always
   remain in Settings, `[[outputs]] vrr` and `aizomectl output-vrr`. The
-  X1 Carbon Gen 14's OLED eDP-1 reports `vrr_capable` with a 30–120 Hz
-  range, so the old Fullscreen default reached it.
+  X1 Carbon Gen 14's OLED eDP-1 advertises adaptive sync over 30–120 Hz
+  in its EDID (a range descriptor and an adaptive-sync block), so the old
+  Fullscreen default would very likely have reached it. Its KMS
+  `vrr_capable` property was not read.
 - `linux-drm-syncobj-v1` is advertised by default only when the primary
-  GPU's driver is `nvidia-drm`. xe also reports timeline syncobjs, so the
-  X1 would otherwise have switched Vulkan and Xwayland clients to
-  explicit sync. `[performance] explicit_sync = "on"` or `"off"`
-  overrides it at the next login.
+  GPU's driver is `nvidia-drm`. xe supports timeline syncobjs, so the X1
+  would otherwise have switched Vulkan and Xwayland clients to explicit
+  sync. `[performance] explicit_sync = "on"` or `"off"` overrides it at
+  the next login.
 - A frame that fails with VRR on is retried at fixed refresh as before,
   but VRR is now given up for the mode only after three such retries
   succeed in a row (or the driver refuses three switches), not after one
@@ -573,3 +577,50 @@ default) and then set to Fullscreen, fullscreen video and Vulkan clients
 with direct scanout, and its X11 applications through the patched bridge.
 On the RTX 5090 desktop, explicit sync should still be offered by default,
 and adaptive sync now has to be set to Fullscreen by hand.
+
+## Final review changes, 30 October 2026
+
+A review of the merge-readiness changes found these, now fixed:
+
+- Steam's Ananicy rules follow `programs.steam.enable`, but ananicy-cpp
+  reads its rules only when it starts, and nothing restarted it on a
+  rebuild. Steam added after installation kept CachyOS's launcher rule
+  (nice 16, idle I/O) until the next boot, and games inherited it. A
+  change to `/etc/ananicy.d` now restarts the daemon.
+- No runtime check covered the daemon without Steam, as most
+  installations are. The tuning VM now switches to a configuration
+  without Steam's rules and back, and the daemon logs at info level
+  whether it follows process ancestry.
+- `tests/gaming-gpu-smoke.sh` expected explicit sync by default, so it
+  failed on every render node but NVIDIA's. It now turns explicit sync
+  on, as the GPU test does, and skips the Xwayland check, saying so, where
+  the driver cannot wait on syncobj eventfds.
+- When the driver refused to switch VRR off for a fixed-refresh retry, a
+  VRR frame that then reached the display did not end the hold-off, so
+  every frame retried the switch and logged a warning. It now ends it.
+- compositor.md lists `[performance] explicit_sync` and adaptive sync,
+  and the X1's adaptive sync above is described as its EDID shows it.
+
+Validation, on the offload workstation, of the branch merged with main
+`d717500a` plus these changes:
+
+- `checks.x86_64-linux.tuning` passed all three runs (one build, two
+  `--rebuild`s), with both new subtests. A fourth was cancelled when its
+  test driver hung for 11 minutes before starting QEMU. Switching to the
+  configuration without Steam restarts the daemon, which logs that it
+  follows no ancestry, keeps a terminal at −4, its shell at 0 and a
+  compiler at 3, and leaves a child of a process named `steam` at the nice
+  16 it inherits under CachyOS's launcher rule. Switching back restarts it
+  again, and a new Steam game gets −10. With the restart trigger removed,
+  the check fails at the first switch because the daemon keeps running.
+- `aizome-comp-core`, `aizome-comp`, `aizome-shell`, `aizome-settei`,
+  `aizome-ipc` and `aizome-sys`: 885 tests pass, including the new
+  hold-off test. The 13 failures are the same as above. Clippy passes with
+  warnings denied.
+- `tuning-policy`, `gaming` (which runs ShellCheck on the smoke script)
+  and `aizome-login` pass, and the `aizome` package builds. With stand-ins
+  for Aizome and Gamescope, the smoke script skips the Xwayland check when
+  the compositor reports a driver without syncobj eventfds, and fails when
+  explicit sync is off for any other reason. It did not run on a GPU.
+
+None of this ran on the RTX 5090 or the X1 Carbon.

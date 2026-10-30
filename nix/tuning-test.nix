@@ -78,12 +78,17 @@ pkgs.testers.runNixOSTest {
       calamares.tuning.enable = true;
       # Steam's process-tree rules, without installing Steam itself.
       calamares.tuning.steam.enable = true;
+      # Most installations: no Steam, so no rule with a child_rule. The test
+      # switches to this and back, as a rebuild that removes or adds Steam.
+      specialisation.without-steam.configuration.calamares.tuning.steam.enable = lib.mkForce false;
       services.ananicy.extraRules = [
         {
           name = "sekka-known-game";
           type = "Game";
         }
       ];
+      # The daemon says at info level whether it follows process ancestry.
+      services.ananicy.settings.loglevel = "info";
       # The kernel installed systems use.
       boot.kernelPackages = pkgs.linuxPackages_latest;
       # The test driver reads the kernel log; tuning lowers it to 3.
@@ -328,5 +333,50 @@ pkgs.testers.runNixOSTest {
         scope = group.strip().split("/")[-1]
         assert scope.endswith(".scope"), group
         assert machine.succeed(user(f"systemctl --user show -P CPUWeight {scope}")).strip() in ("100", "[not set]")
+
+    # ananicy-cpp reads its rules only at startup.
+    def switch_restarts_ananicy(toplevel):
+        before = machine.succeed("systemctl show -P InvocationID ananicy-cpp").strip()
+        machine.succeed(f"{toplevel}/bin/switch-to-configuration test")
+        machine.wait_for_unit("ananicy-cpp.service")
+        after = machine.succeed("systemctl show -P InvocationID ananicy-cpp").strip()
+        assert after != before, "the new rules did not restart ananicy-cpp"
+        return after
+
+    def logged(invocation, message):
+        machine.wait_until_succeeds(
+            f"journalctl _SYSTEMD_INVOCATION_ID={invocation} | grep -qF '{message}'", timeout=30
+        )
+
+    with subtest("without Steam the daemon applies ordinary rules and follows no ancestry"):
+        machine.succeed("journalctl -b -u ananicy-cpp | grep -qF 'Process ancestry: followed for child_rule'")
+        invocation = switch_restarts_ananicy("/run/booted-system/specialisation/without-steam")
+        machine.fail("grep -rq child_rule /etc/ananicy.d")
+        logged(invocation, "Process ancestry: not followed, no rule has a child_rule")
+        machine.succeed("systemd-run --unit=terminal-without-steam ${bash} -c '( exec -a foot ${bash} ${terminal} ) & wait'")
+        terminal = started("^foot ", machine.succeed("systemctl show -P MainPID terminal-without-steam").strip())
+        wait_nice(terminal, -4)
+        shell = started("${shell}", terminal)
+        wait_nice(shell, 0)
+        compiler = started("^rustc ", shell)
+        wait_nice(compiler, 3)
+        # CachyOS's own launcher rule applies to Steam's name again, and
+        # nothing reaches a child of it.
+        machine.succeed("systemd-run --unit=steam-without-rules --uid=demo --property=KillMode=process ${probe}/bin/steam jobs ${probe}/bin/probe")
+        launcher = machine.succeed("systemctl show -P MainPID steam-without-rules").strip()
+        all_threads(launcher, nice=16, io="idle")
+        machine.succeed(f"kill -USR1 {launcher}")
+        child = started(".", launcher)
+        # Events are handled in order: once a later process has its rule, the
+        # child's exec has been seen.
+        machine.succeed("systemd-run --unit=game-without-steam ${probe}/bin/sekka-known-game")
+        wait_nice(machine.succeed("systemctl show -P MainPID game-without-steam").strip(), -5)
+        assert machine.succeed(f"cut -d ' ' -f 19 /proc/{child}/stat").strip() == "16"
+
+    with subtest("adding Steam back restarts the daemon and its rules apply at once"):
+        invocation = switch_restarts_ananicy("/run/booted-system")
+        logged(invocation, "Process ancestry: followed for child_rule")
+        _, readded = steam_job("steam-readded", "${probe}/bin/probe")
+        all_threads(readded, nice=-10, policy=0, io="best-effort: prio 0")
   '';
 }

@@ -141,10 +141,11 @@ which `calamares.tuning.steam.enable` follows), `steam`, `steam.sh` and
 `Steam.exe` receive nice −5 with normal CPU scheduling and best-effort I/O.
 Their same-user descendants receive a nice −10 baseline, including unlisted
 native games, Proton wrappers, secondary launchers and Steam's browser
-helpers. Generic shell, runtime and game rules cannot lower that baseline. A stronger named rule, such as
-`wineserver` at −12, still applies, and threads already using a stronger nice
-value retain it. Existing FIFO, RR and deadline CPU policies are preserved;
-this policy does not grant real-time CPU scheduling.
+helpers. Generic shell, runtime and game rules cannot lower that baseline. A
+stronger named rule, such as `wineserver` at −12, still applies, and threads
+already using a stronger nice value retain it. Existing FIFO, RR and deadline
+CPU policies are preserved; this policy does not grant real-time CPU
+scheduling.
 
 `fossilize_replay` and its descendants are the deliberate exception: background
 shader-cache processing remains at nice 16 with idle CPU and I/O scheduling,
@@ -164,7 +165,10 @@ Upstream rules for Steam and Fossilize are removed before adding Sekka's rules,
 so filesystem iteration order cannot choose the old launcher policy. Without
 Steam, none of these rules is added and CachyOS's own rules for those names
 stay. The daemon then has no rule with a `child_rule` and skips the ancestry
-walk altogether: each event costs what it did without this patch.
+walk altogether: each event costs what it did without this patch. At info
+level, its log says whether it follows ancestry. ananicy-cpp reads its rules
+only when it starts, so a rebuild that changes them, adding or removing Steam
+among other things, restarts it.
 
 Like every Ananicy rule, these match a process by name: the basename of its
 `argv[0]`, or of its executable when no rule has that name. Any local user can
@@ -230,6 +234,11 @@ The same VM checks Steam's −5 launcher and −10 descendants as an ordinary
 user, unknown and known games, generic runtimes, shell wrappers, Wine's
 stronger rule, preservation of real-time threads, background shader helpers,
 fork-only children, reparenting, and classification after daemon restart.
+It then switches to a configuration without Steam, as most installations
+are, and back: each switch restarts the daemon. Without Steam the daemon
+logs that it follows no ancestry, terminals, shells and compilers keep their
+rules, and a child of a process named `steam` keeps the nice 16 it inherits
+under CachyOS's launcher rule. With Steam again, a new game gets −10 at once.
 
 `nix build .#checks.x86_64-linux.aizome-login` additionally logs into the full
 Aizome desktop, opens actual Foot through its IPC launcher, starts a raw-mode

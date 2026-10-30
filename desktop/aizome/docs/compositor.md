@@ -37,7 +37,8 @@ aizome --build-info                      # how the core was built (what a logic 
   turned round once on every device), `[input.keyboard]` `sticky_keys` (a modifier
   tapped alone latches for the next key; tapped again it lets go) and
   `slow_keys` with `slow_keys_ms` (a key counts once held that long; a
-  brush is dropped), and `[performance] renderer` (at the next start).
+  brush is dropped), and `[performance]` `renderer` and `explicit_sync`
+  (both at the next start).
 - Fonts: Archivo, IBM Plex Mono and Noto Sans Symbols 2 from fontconfig,
   else from `$AIZOME_FONT_DIR` or `../share/aizome/fonts` beside the
   binary.
@@ -106,11 +107,12 @@ the client's under the pointer, which never saw the press.
 ## What clients get
 
 Globals: wl_compositor (6), wl_subcompositor, wl_shm, linux-dmabuf (GLES;
-with feedback), wl_output (4) and xdg-output, xdg-shell, xdg-decoration
-(server-side by default; clients may insist on client-side and then get
-the tab only), xdg-dialog, xdg-activation, xdg-foreign, wlr-layer-shell,
-ext-session-lock, wl_seat (keyboard, pointer, touch), data-device,
-primary-selection, wlr and ext data-control, viewporter,
+with feedback), linux-drm-syncobj (GLES; by default only on `nvidia-drm`,
+see Explicit sync below), wl_output (4) and xdg-output, xdg-shell,
+xdg-decoration (server-side by default; clients may insist on client-side
+and then get the tab only), xdg-dialog, xdg-activation, xdg-foreign,
+wlr-layer-shell, ext-session-lock, wl_seat (keyboard, pointer, touch),
+data-device, primary-selection, wlr and ext data-control, viewporter,
 fractional-scale, presentation-time, single-pixel-buffer, cursor-shape,
 idle-notify, idle-inhibit, keyboard-shortcuts-inhibit, pointer-constraints,
 relative-pointer, pointer-gestures, text-input-v3, input-method-v2,
@@ -304,6 +306,18 @@ Notes for client authors:
 - **Renderer**: `[performance] renderer` (`auto`, `gpu`, `software`) picks
   GLES or pixman at start-up unless `--renderer` or `AIZOME_RENDERER` say
   otherwise; `stats` reports when it differs from the running one.
+- **Explicit sync**: `[performance] explicit_sync` decides at start-up
+  whether GLES offers linux-drm-syncobj-v1: `auto` (the default) only on
+  NVIDIA's driver (`nvidia-drm`), `on` on any GPU whose driver can wait on
+  syncobj eventfds, `off` nowhere. The log says which
+  ([rendering](rendering.md)).
+- **Adaptive sync**: `vrr` in an `[[outputs]]` entry is `off` (the
+  default), `fullscreen` (while the top visible window on that output
+  covers it in fullscreen) or `always`, applied live; `output-vrr` changes
+  it for the session. It needs a capable KMS output under GLES and isn't
+  offered on HDMI; the lock, recovery, keyboard overlays, animations and
+  mirroring turn it off while they last. The IPC's outputs say `vrr` (the
+  policy), `vrr_supported` and `vrr_enabled` ([rendering](rendering.md)).
 
 ## Window management in brief
 
@@ -436,6 +450,12 @@ nix develop .#aizome --command cargo test -p aizome-comp
   mirroring scaled and letterboxed, the main display, Night Light's IPC
   and schedule, the renderer setting, and a laptop's panel (a headless
   output named `eDP-1`) dark while its lid is closed.
+- `tests/explicit_sync.rs`: pixman never offers linux-drm-syncobj, even
+  with `explicit_sync = "on"`. Ignored unless `AIZOME_RENDER_NODE` names
+  a GPU: the default offers it only on `nvidia-drm` and `off` withholds
+  it; and, turned on, an unsignalled acquire point holds a commit without
+  stalling the compositor, the release point follows unmap, and a
+  destroyed surface drops its waits.
 - `tests/screens.rs`: displays with Desks of their own: switching on one
   leaves the other alone, a Desk another display shows swaps with it and
   its window scales to the larger display and back exactly, a window
