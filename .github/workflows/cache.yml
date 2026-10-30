@@ -65,12 +65,15 @@ jobs:
             echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
             exit 1
           }
-      - name: Build and check Uta
+      - name: Build Uta
         shell: bash
         run: |
           set -euo pipefail
-          nix build --no-update-lock-file --print-build-logs .#uta --out-link result-uta
-          ./result-uta/bin/aizome-uta --version | grep -F '(RustyPipe: true)'
+          # First, so a kit or Sukumo change that breaks Uta (see DEVELOPERS.md)
+          # fails here by name. Nothing of Uta runs in this job, which goes on
+          # to hold the cache's secrets: the flake check's uta-rustypipe runs
+          # it in the build sandbox.
+          nix build --no-update-lock-file --print-build-logs --no-link .#uta
       - name: Check components
         shell: bash
         run: |

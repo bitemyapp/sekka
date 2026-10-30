@@ -367,6 +367,26 @@
           inherit pkgs applicationCatalog installer;
           uta = self.packages.${system}.uta;
         };
+        # Uta is third-party code: it runs here, in the build sandbox, not in
+        # the workflows' jobs, which go on to hold the cache's secrets.
+        uta-rustypipe =
+          let
+            inherit (self.packages.${system}) uta;
+          in
+          pkgs.runCommand "uta-rustypipe-check" { } ''
+            version=$(${uta}/bin/aizome-uta --version)
+            echo "$version"
+            grep -qF '(RustyPipe: true)' <<< "$version"
+            # The GPL-3.0-only build's notices and directions to its source,
+            # and the source push-cache publishes beside it.
+            doc=${uta}/share/doc/aizome-uta
+            test -s "$doc/LICENSE-RustyPipe" && test -s "$doc/LICENSE-EJS"
+            grep -qF "github:bitemyapp/uta/${inputs.uta.rev or "(not a Git revision)"}" "$doc/SOURCE"
+            test -f ${uta.source}/uta/vendor/rustypipe/LICENSE
+            test -f ${uta.source}/aizome/crates/aizome-kit/Cargo.toml
+            test -f ${uta.source}/sekka/nix/uta.nix
+            echo "$version" > $out
+          '';
         application-cache = applicationCatalog.cache;
         live-profiles =
           let

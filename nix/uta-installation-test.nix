@@ -11,7 +11,7 @@ let
   entry = lib.findFirst (app: app.id == "uta") null catalog;
   selected = (applicationCatalog.evaluate [ "uta" ]).config;
   empty = (applicationCatalog.evaluate [ ]).config;
-  preloaded = (applicationCatalog.evaluate (map (app: app.id) applicationCatalog.preloaded)).config;
+  preloaded = applicationCatalog.preloadedSystem.config;
   # Inspect the JSON values without turning every mentioned package into a
   # dependency of the parser; the report below retains Uta's real reference.
   manifest =
@@ -27,7 +27,6 @@ assert entry != null && entry.source == "sekka" && !entry.preload && !(entry.unf
 assert hasUta selected && (manifest selected).selected == [ "uta" ];
 assert !hasUta empty && !hasUta preloaded && !hasUta iso;
 assert !(builtins.elem "uta" (manifest preloaded).selected);
-assert applicationCatalog.cache.drvPath == preloaded.system.build.installerApplications.drvPath;
 assert builtins.elem (toString applicationCatalog.cache) (map toString iso.isoImage.storeContents);
 assert
   !(lib.any (file: file.target == "/calamares/closures/application-uta.paths") iso.isoImage.contents);

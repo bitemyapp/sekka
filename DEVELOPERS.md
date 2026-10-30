@@ -919,6 +919,7 @@ nix run .#push-cache
 ```
 
 It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
+`uta.source` (Uta's GPL-3.0-only build's sources, published beside it),
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
@@ -1122,15 +1123,62 @@ interface or dependencies of the kit or Sukumo must keep
 source holds only the kit's and Sukumo's crates, so a crate the kit comes to
 depend on joins the list in `nix/uta.nix`.
 
+That `Cargo.lock` lives in bitemyapp/uta, at the revision `flake.nix` pins,
+and Nix vendors exactly the crates it names. A kit or Sukumo change that adds
+or bumps a crates.io dependency, or gives the kit a new path crate, therefore
+breaks `.#uta` until Uta's lock is regenerated and re-pinned, even though
+nothing in Sekka's own locks is wrong. `.#uta` is built by the cache
+workflow's and the nightly's first step, by `nix flake check` and by
+`push-cache`, so a broken Uta stops publication for that push to `main` and
+holds `nightly`, with every other input update, until it is fixed. Build
+`.#uta` before merging a kit or Sukumo change. When it fails, re-pin Uta in the
+same pull request:
+
+1. In a scratch directory, put a checkout of bitemyapp/uta at `uta/` and this
+   worktree's `desktop/aizome` at `aizome/` beside it (a symlink works), which
+   is the layout Uta's path dependency `../aizome/crates/aizome-kit` and its
+   `nix/package.nix` expect.
+2. In `uta/`, inside this worktree's `nix develop .#aizome` shell, run
+   `cargo update --workspace`, which adds what the kit and Sukumo now need
+   and leaves the other locked versions alone, check that
+   `cargo build --locked` works, and commit and push `Cargo.lock` (with any
+   source change Uta needs) to bitemyapp/uta. Cargo applies only the
+   `[patch]` sections of the workspace it builds, Uta's: a patch the kit or
+   Sukumo relies on in `desktop/aizome/Cargo.toml` must be repeated in Uta's
+   `Cargo.toml`.
+3. Put the new revision in `inputs.uta.url` in `flake.nix`, run
+   `nix flake update uta`, update the pin in `docs/applications.md`, and build
+   `.#uta`, `.#checks.x86_64-linux.uta-rustypipe` and
+   `.#checks.x86_64-linux.uta-installation`.
+
+The same holds for moving to a new Uta revision: its lock must match the kit
+and Sukumo here, so run step 2 against this worktree before pinning it.
+
+With RustyPipe, Uta's build is GPL-3.0-only. `share/doc/aizome-uta` holds
+RustyPipe's and EJS's notices and a `SOURCE` note naming Uta's repository,
+revision and narHash, and Sekka's recipe. `uta.source` links the exact sources
+it was built from: the pinned Uta source (with its vendored, patched
+RustyPipe), the kit and Sukumo fileset from `nix/uta.nix`, and that recipe.
+`push-cache` publishes `uta.source` beside `uta`, so the cache that serves the
+binary also serves its source; the crates.io sources are named, by checksum, in
+Uta's `Cargo.lock`. `checks.x86_64-linux.uta-rustypipe` runs
+`aizome-uta --version` in the build sandbox to confirm RustyPipe is enabled,
+and checks the notices, the note and the source links. The workflows only
+build Uta: no Uta code runs in a job that holds the cache's secrets.
+
 Uta is an optional download in Genkan and Yukimi, with RustyPipe enabled. Its
 catalog `preload: false` excludes it from `application-cache` and the ISO's
 application closure lists; it remains in the free-application systems published
 to the binary cache. New catalog entries preload by default. Keep the two
 policies separate: catalog availability does not require offline media inclusion.
-Run `nix build .#uta .#checks.x86_64-linux.uta-installation` after changing the pin
-or preload policy. This checks package selection and evaluated ISO contents;
-it does not certify an ISO boot or installation. Binary cache distribution of
-the GPL-3.0-only build still requires its corresponding source and notices.
+Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation`
+after changing the pin or preload policy. This checks the package, package
+selection and evaluated ISO contents; it does not certify an ISO boot or
+installation. Because the ISO doesn't carry Uta, installing it from that ISO
+needs the network and a cache.sekka.computer entry for the exact Uta that
+ISO's revision builds; otherwise Genkan compiles it in the live session. ISO
+qualification checks that entry first
+(`.agents/skills/sekka-iso-qualification/references/prepare.md`).
 
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix
@@ -2065,10 +2113,13 @@ on. One run builds at a time; while it does, GitHub keeps only the newest
 waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
-It explicitly builds `.#uta` and checks that RustyPipe is enabled, then runs
-`nix flake check` on the revision as merged, without updating inputs.
-`nix run .#push-cache` signs and uploads the packages, including Uta, to the
-`sekka-cache` R2 bucket. `scripts/check_cache_coverage.py .#uta .#installed-systems`
+It builds `.#uta` first, so a kit or Sukumo change that breaks Uta fails by
+name (see [Aizome](#aizome)), then runs `nix flake check` on the revision as
+merged, without updating inputs; its `uta-rustypipe` check confirms, in the
+build sandbox, that RustyPipe is enabled. Nothing of Uta runs in the job
+itself, which goes on to hold the cache's secrets.
+`nix run .#push-cache` signs and uploads the packages, including Uta and its
+source, to the `sekka-cache` R2 bucket. `scripts/check_cache_coverage.py .#uta .#installed-systems`
 then verifies that a fresh store can download Uta and the installed systems
 without compiling them. The nightly uses the same build, upload and coverage
 checks. Uta remains excluded from the ISO preload list. A failed build or check

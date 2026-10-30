@@ -1,6 +1,7 @@
 {
   "date": "2026-10-28",
   "sekka_code_commit": "314572ce0870514f7a4e91ba05064a87493f6b51",
+  "applies_to": "314572ce only: an earlier revision of this change, not in the merged history, that still built Uta against Sekka's former sidestep input. Uta was later rebuilt against Sukumo (desktop/aizome/sukumo), merged with a newer main and given its SOURCE note, which changes the Uta store path and the ISO derivation. The paths and counts below are that revision's, not those of any later one.",
   "uta_commit": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
   "scope": "Package and catalog checks plus evaluation of the ISO dependency graph; not release-image qualification.",
   "workstation_checks": {

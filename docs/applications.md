@@ -94,18 +94,20 @@ Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
 revision, so the nightly's input update doesn't move it: a Uta built for a
 different Aizome would fail the nightly's checks and hold back every other
 input. To move it, put the new revision in `flake.nix`, run `nix flake lock`
-and build `.#uta`. RustyPipe handles public browsing and anonymous or Premium
-playback; ytmusicapi and yt-dlp from the applications' Nixpkgs handle account
-operations and playback fallback.
+and build `.#uta`; DEVELOPERS.md describes re-pinning when a kit or Sukumo
+change needs a new Uta `Cargo.lock`. RustyPipe handles public browsing and
+anonymous or Premium playback; ytmusicapi and yt-dlp from the applications'
+Nixpkgs handle account operations and playback fallback.
 Uta's windows are Wayland only, so it runs in every Sekka desktop but Xfce,
 whose session is X11. Connecting an account saves its session in the desktop
 keyring, which every Sekka desktop runs.
 
 Uta appears in Genkan and Yukimi's Discover but is not selected by default.
 Its catalog entry has `preload: false`: neither its package nor its precache
-path list is added to the ISO. Selecting it requires a download; if the binary
-cache lacks the build, Nix builds it from the pinned sources. The free-application
-binary cache still includes Uta independently of the ISO's preload list.
+path list is added to the ISO. Selecting it requires a download, so installing
+it, from the ISO too, needs a network connection; if the binary cache lacks the
+build, Nix builds it from the pinned sources. The free-application binary cache
+still includes Uta independently of the ISO's preload list.
 
 The RustyPipe build is GPL-3.0-only, with its notices included in the package;
 it is free software and does not require proprietary-software consent.
@@ -113,8 +115,12 @@ Listing a separate application does not link its code into Genkan or Yukimi.
 Optional downloads still require the corresponding source and notices when
 distributing binaries; excluding the package from an ISO does not waive those
 requirements. See [GPLv3 section 6](https://www.gnu.org/licenses/gpl-3.0.html#section6).
-The Uta pin, its vendored RustyPipe sources, Sekka's `nix/uta.nix`, the local
-Aizome kit and Sukumo identify the sources and build recipe used here.
+The package's `share/doc/aizome-uta/SOURCE` names Uta's repository and
+revision and Sekka's recipe, `nix/uta.nix`. Sekka's binary cache publishes the
+exact sources beside every Uta build it serves: the Uta pin with its vendored
+RustyPipe, the Aizome kit and Sukumo it was built with, and that recipe
+(`nix build .#uta.source` collects them). Uta's `Cargo.lock` names its
+crates.io sources by checksum.
 
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
@@ -153,7 +159,9 @@ failures stop before erasure.
 
 `nix flake check` evaluates all choices and none, builds the offline package
 cache, and checks that Uta is selectable while absent from that cache, the live
-session and ISO precache lists (`uta-installation`). The rootless builder's additional configuration matrix evaluates
+session and ISO precache lists (`uta-installation`), and that its build has
+RustyPipe, its notices and its source note (`uta-rustypipe`). The rootless
+builder's additional configuration matrix evaluates
 actual Rust-generated configurations for every choice, all, none and free-only,
 including dependency normalization, rootless Docker, Firefox/Steam integration
 and freshly probed filesystem UUID overrides. It can also be run separately:
