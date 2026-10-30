@@ -30,6 +30,8 @@ impl State {
                 build: Some(crate::logic::build_info()),
             },
             Request::Outputs => Response::Outputs { outputs: crate::outputs::all_info(&self.az) },
+            Request::Keyboards => Response::Keyboards { keyboards: self.az.keyboards.info() },
+            Request::CatchKey { .. } => return Err("the connection that waits for the key asks".into()),
             Request::Spawn { argv, cwd, in_desk_folder } => {
                 let cwd = cwd.map(|c| aizome_config::expand_home(&c)).or_else(|| {
                     if in_desk_folder { self.az.view.desk_folder.clone().filter(|p| p.is_dir()) } else { None }
@@ -217,9 +219,13 @@ impl State {
                 self.pointer_button(b, false, time);
             }
             Synthetic::PointerScroll { dx, dy } => self.pointer_scroll(dx, dy, time),
-            Synthetic::Key { key, pressed } => self.keyboard_key(key_code(&key)?, pressed, time),
+            Synthetic::Key { key, pressed } => {
+                self.key_from(None);
+                self.keyboard_key(key_code(&key)?, pressed, time);
+            }
             Synthetic::Chord { keys } => {
                 let codes: Vec<u32> = keys.split('+').map(|k| key_code(k.trim())).collect::<Result<_, _>>()?;
+                self.key_from(None);
                 for c in &codes {
                     self.keyboard_key(*c, true, time);
                 }
@@ -228,6 +234,19 @@ impl State {
                 }
             }
             Synthetic::Lid { closed } => self.lid_switched(closed),
+            Synthetic::PlugKeyboard { name, id, bus } => {
+                let (vendor, product) = id
+                    .split_once(':')
+                    .and_then(|(v, p)| Some((u32::from_str_radix(v, 16).ok()?, u32::from_str_radix(p, 16).ok()?)))
+                    .ok_or_else(|| format!("{id}: say vendor:product, as 05ac:029c"))?;
+                let k = crate::keyboards::Keyboard::new(&name, vendor, product, bus);
+                self.keyboard_added(format!("synthetic:{name}"), k);
+            }
+            Synthetic::UnplugKeyboard { name } => self.keyboard_removed(&format!("synthetic:{name}")),
+            Synthetic::KeyOn { keyboard, key, pressed } => {
+                self.key_from(Some(&format!("synthetic:{keyboard}")));
+                self.keyboard_key(key_code(&key)?, pressed, time);
+            }
         }
         Ok(())
     }

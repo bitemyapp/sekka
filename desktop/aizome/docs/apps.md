@@ -131,9 +131,32 @@ palette. Search filters the sidebar and highlights options.
   list of Aizome's shortcuts (from the compositor's `keys` config, editable).
   In Typing → Keys → Modifier keys, choose **Swap Alt and Super** for a
   Mac-style position, or the left-only swap to keep Right Alt for accents.
-  Changes apply immediately to all keyboards and persist across logins;
-  **Default** restores the modifier arrangement. Open this control directly
-  with `aizome-settei --pane keyboard.modifiers`.
+  Changes apply immediately and persist across logins; **Default**
+  restores the modifier arrangement. Open this control directly with
+  `aizome-settei --pane keyboard.modifiers`.
+  The modifier keys, Caps Lock and Compose key can differ from keyboard to
+  keyboard: Keys → Keyboard chooses whose they are, every keyboard's
+  without its own (`[input.keyboard]`) or one keyboard's
+  (`[[input.keyboards]]`, by the name and vendor:product it gives), and −
+  forgets a keyboard's own. **Set Up…** (`aizome-settei --pane
+  keyboard.setup`) asks for the key just left of the space bar on the
+  keyboard to set up. The compositor catches that key (`catch-key`: an
+  app never hears a modifier key alone) with the keyboard it came from,
+  so the press says which keyboard and where its ❖ should go: Alt there,
+  as on a PC, suggests **Swap Alt and Super**; ⌘ Command or the Windows
+  key, nothing; Control, **Swap Control and Super**. The space bar or a
+  key right of it asks again. Its Caps Lock and Compose key start as
+  other keyboards' or, when there's one, as another keyboard's own.
+  **Same as Other Keyboards** keeps it typing as the others do, without
+  being asked again; while no key has come, it applies to the keyboard
+  chosen from those plugged in or paired and not set up, for one with no
+  space bar to press beside (a security key, a mouse's receiver). Layouts,
+  repeat, Num Lock and shortcuts are every keyboard's. When a USB or
+  Bluetooth keyboard without keys of its own appears (at login, or plugged
+  in), the shell offers this setup in a notification, once a session, or
+  to have it type as the others do; a laptop's own keyboard and a VM's
+  aren't asked about. The notification's **Set Up…** opens the sheet with
+  that keyboard chosen (`--keyboard "Name (vendor:product)"`).
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
   typing, scroll speed.
@@ -597,17 +620,44 @@ package reading is not added on top of RAPL. Unavailable readings are
 labelled without assuming why access failed. This optional window uses
 the sampler's existing readings and closes independently of the main view.
 
-The processor's meter is its RAPL counters, readable only by root, or else
-the meter an AMD integrated Radeon reports: amdgpu's is the whole package's
-on an APU, the processor included, and anyone may read it. Without either,
-the battery's draw counts while it discharges. Each discrete card's own
-meter adds to any of these: NVML's energy counter, or the card's hwmon
-meter. A desktop with no battery and RAPL kept for root (the integrated
-Radeon and RTX 5090 one) measures through these. Each meter is shared by
-use of what it measures: the processor's (or the battery's draw less the
-cards') by processor time, a card's by its clients' time on that card,
-and what is left is the devices idling. With only the cards' meters,
-what uses no card shows a dash.
+The processor's meter is its RAPL counters. Only root may read them, as
+quick samples can leak secrets (CVE-2020-8694), so Myaku, running as you,
+asks Aizome's power meter for them. `aizome-power-meter` runs as root when
+something connects to `/run/aizome/power.sock` (the module's
+`aizome-power-meter.socket`), with no capabilities, network or writable
+files. It reads the package domains at most once a second, as Tatami's
+meter does, answers every connection with "NAME ENERGY_UJ RANGE_UJ
+READ_US" lines, and exits after a minute without one. `READ_US` is when
+it read them, in microseconds of `CLOCK_BOOTTIME`: Myaku's rates are over
+the time between two readings, whoever asked for them, and a repeated
+answer leaves its last rate standing: at Myaku's one-second frames, the
+processor's figure changes every second or two. The package domains are
+the `intel-rapl:N` named `package…`: a laptop's `psys` (Intel's platform
+domain, `intel-rapl:1` on the X1 Carbon Gen 14) measures the whole
+computer, the package included, and is left out. After the computer
+sleeps, the first interval is not measured: RAPL's counters went on
+through the night while Myaku's clock stopped, so its rate starts over
+(the processor shows a dash for a second or two) and no one's energy
+grows by it.
+`nix build .#aizome-checks.power-meter` boots a disposable VM: the socket
+must start the meter as root with no capabilities, and a user may ask it.
+A VM has no RAPL counters, so a stand-in then answers on the socket with
+a package drawing 20 W, which `aizome-myaku --print`, run as a user, must
+report. Reading real RAPL counters as root needs physical hardware.
+
+Without RAPL, an AMD APU's integrated Radeon reports the whole package
+(amdgpu's `PPT`, the processor included), and anyone may read it. A Ryzen
+7000 or 9000 desktop processor's Radeon (Raphael, Granite Ridge) doesn't:
+it sits on the I/O die beside separate core dies, and its `PPT` measures
+the graphics alone, about a tenth of a watt with every core busy. Myaku
+never takes it for the processor's. Without either, the battery's draw
+counts while it discharges. Each discrete card's own meter adds to any of
+these: NVML's energy counter, or the card's hwmon meter. A desktop with no
+battery (the Granite Ridge and RTX 5090 one) measures through RAPL and the
+card's meter. Each meter is shared by use of what it measures: the
+processor's (or the battery's draw less the cards') by processor time, a
+card's by its clients' time on that card, and what is left is the devices
+idling. With only the cards' meters, what uses no card shows a dash.
 
 `cargo test -p aizome-myaku --test gpu` drives the choice from the toolbar,
 the strip and the menu on a made-up desktop with both cards

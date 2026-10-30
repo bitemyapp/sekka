@@ -19,7 +19,7 @@ mod desktop;
 mod displays;
 mod general;
 pub(crate) mod hw;
-mod keyboard;
+pub mod keyboard;
 mod lock;
 mod menubar;
 mod mouse;

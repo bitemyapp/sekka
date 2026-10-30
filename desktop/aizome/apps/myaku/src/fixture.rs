@@ -280,7 +280,8 @@ pub fn workstation(processes: usize, tick: u64) -> Frame {
             video: Some(0.0),
             vram_used: Some(22 << 20),
             vram_total: Some(2 << 30),
-            power: Some(9.2),
+            // Its own meter: the processor package is RAPL's.
+            power: Some(0.11),
             temperature: Some(41.0),
             ..Default::default()
         },
@@ -356,13 +357,14 @@ pub fn workstation(processes: usize, tick: u64) -> Frame {
     f
 }
 
-/// The workstation's meters as the sampler reads them: RAPL is root's and
-/// there's no battery, but the Radeon's meter is the processor package's
-/// and the RTX has its own. Each process draws as it does now since the
-/// first reading.
+/// The workstation's meters as the sampler reads them: RAPL through
+/// Aizome's power meter (the Radeon's meter is the graphics' alone, as on
+/// any Ryzen desktop processor), and the RTX's own; there's no battery.
+/// Each process draws as it does now since the first reading.
 fn measure(f: &mut Frame) {
-    f.power = crate::sampler::meters(None, None, false, &f.gpus);
     let cores = f.system.cores.len().max(1) as f64;
+    let busy = f.processes.iter().map(|p| p.usage.cpu).sum::<f64>() / (100.0 * cores);
+    f.power = crate::sampler::meters(Some(Some(24.0 + 96.0 * busy.min(1.0))), None, false, &f.gpus);
     let mut floors = vec![Floor::default(); f.gpus.len()];
     let parts = crate::sampler::attribute(&f.power, &f.gpus, &f.processes, cores, &mut Floor::default(), &mut floors);
     f.power.attributed = parts.iter().flatten().sum();

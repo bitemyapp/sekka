@@ -54,6 +54,11 @@ impl Overlays {
     pub fn overview_open(&self) -> bool {
         self.overview.is_some()
     }
+
+    /// Whether any is up (or, for the marking menu, waiting out its pause).
+    pub fn any(&self) -> bool {
+        self.marking.is_some() || self.switcher.is_some() || self.overview.is_some() || self.area.is_some()
+    }
 }
 
 /// Overlays on an output, front first.
@@ -78,8 +83,30 @@ pub fn close_all(st: &mut State) {
     st.az.queue_redraw_all();
 }
 
-/// A key while an overlay is up; `None` lets it through.
+/// The session locked: every overlay closes, so none takes the keys or
+/// clicks meant for the lock prompt (a ⌃❖Space menu left up would run its
+/// verbs on the window behind it, and the switcher would wait for a ❖ the
+/// prompt has). A picker someone asked for hears nothing was picked, as
+/// with Esc. Called between loop iterations, so right after the lock
+/// engages; the input paths below check the lock too.
+pub fn close_for_lock(st: &mut State) {
+    if !st.az.lock.is_locked() || !st.lg.r().overlays.any() {
+        return;
+    }
+    tracing::debug!("the session locked: overlays close");
+    area::cancel(st);
+    switcher::close(st, false);
+    overview::close(st);
+    marking::close(st);
+    st.update_keyboard_focus();
+}
+
+/// A key while an overlay is up; `None` lets it through. Behind the lock
+/// every key does: they're the prompt's.
 pub fn key(state: &mut State, syms: &[Keysym], mods: Mods, pressed: bool, utf8: Option<char>) -> Option<KeyDecision> {
+    if state.az.lock.is_locked() {
+        return None;
+    }
     if state.lg.m().overlays.area.is_some() {
         return area::key(state, syms, pressed);
     }
@@ -95,12 +122,20 @@ pub fn key(state: &mut State, syms: &[Keysym], mods: Mods, pressed: bool, utf8: 
     None
 }
 
-/// Scrolling over an overlay; true if it took it.
+/// Scrolling over an overlay; true if it took it. Behind the lock the
+/// pointer, like the keys, is the prompt's: no overlay scrolls, follows
+/// it or takes a button.
 pub fn scroll(state: &mut State, _h: f64, v: f64) -> bool {
+    if state.az.lock.is_locked() {
+        return false;
+    }
     overview::scroll(state, v) || state.lg.m().overlays.switcher.is_some()
 }
 
 pub fn pointer_moved(state: &mut State, pos: Point<f64, Logical>) {
+    if state.az.lock.is_locked() {
+        return;
+    }
     area::pointer_moved(state, pos.x, pos.y);
     let grabbed = state.az.seat.get_pointer().is_some_and(|p| p.is_grabbed());
     if !grabbed && state.lg.m().overlays.marking.as_ref().is_some_and(|m| m.sticky && m.shown) {
@@ -112,6 +147,9 @@ pub fn pointer_moved(state: &mut State, pos: Point<f64, Logical>) {
 /// A button over an overlay; true if it took it.
 pub fn pointer_button(state: &mut State, button: u32, pressed: bool, pos: Point<f64, Logical>) -> bool {
     let _ = button;
+    if state.az.lock.is_locked() {
+        return false;
+    }
     if state.lg.m().overlays.area.is_some() {
         return area::pointer_button(state, pressed, pos.x, pos.y);
     }

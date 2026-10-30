@@ -100,7 +100,7 @@ pub fn toggle(state: &mut State) {
     state.az.queue_redraw(&output);
 }
 
-fn close(state: &mut State) {
+pub fn close(state: &mut State) {
     if state.lg.m().overlays.overview.is_some() {
         toggle(state);
     }

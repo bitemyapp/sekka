@@ -355,6 +355,8 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// Keyboards asked about this session, by name and ID (`keyboards.rs`).
+    pub keyboards_asked: std::collections::HashSet<(String, String)>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -473,6 +475,7 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            keyboards_asked: Default::default(),
             locating: false,
             located_at: None,
             recording: None,
@@ -871,6 +874,10 @@ impl Shell {
                 self.focus_app_window(crate::launch::SETTEI);
                 self.launch(crate::launch::settings(&pane, anchor.as_deref()), cx);
             }
+            Action::SetUpKeyboard { name, id } => {
+                self.focus_app_window(crate::launch::SETTEI);
+                self.launch(crate::launch::keyboard_setup(&name, &id), cx);
+            }
             Action::Copy { text } => cx.set_clipboard_text(&text),
             Action::StatusMenuItem { key, id } => self.status_menu_item(&key, id),
             Action::NewDesk => {
@@ -949,6 +956,7 @@ impl Shell {
                 self.shelf.remove(index);
                 self.save_shelf();
             }
+            Action::KeyboardAsOthers { name, id } => self.keyboard_as_others(&name, &id),
             Action::Service(verb) => self.run_service(verb, cx),
             Action::NewFolderOnDesktop => {
                 let dir = crate::launch::desktop_dir();
@@ -1170,6 +1178,8 @@ impl Shell {
                 self.ipc.ask(Request::NightLight { enabled: None, temperature: None }, NIGHT_LIGHT_TAG);
                 // What's shared already (the shell restarted mid-share).
                 self.ipc.ask(Request::Shares, SHARES_TAG);
+                // Keyboards plugged in before the shell came.
+                self.ipc.ask(Request::Keyboards, KEYBOARDS_TAG);
             }
             IpcEvent::Event(e) => {
                 self.wm.apply(&e);
@@ -1192,6 +1202,7 @@ impl Shell {
                     Event::NightLightChanged { state } => self.night = Some(state),
                     Event::AreaPicked { tag, area, output, .. } => self.area_picked(&tag, area, output.as_deref(), cx),
                     Event::SharesChanged { shares } => self.shares_changed(shares),
+                    Event::KeyboardAdded { keyboard } => self.keyboard_met(keyboard, cx),
                     // Another main display: the Deskbar goes there.
                     Event::OutputsChanged { .. } => self.sync_screens(cx.outputs(), cx),
                     _ => {}
@@ -1203,6 +1214,11 @@ impl Shell {
             }
             IpcEvent::Reply { tag: SHARES_TAG, response: aizome_ipc::Response::Shares { shares } } => {
                 self.shares_changed(shares)
+            }
+            IpcEvent::Reply { tag: KEYBOARDS_TAG, response: aizome_ipc::Response::Keyboards { keyboards } } => {
+                for k in keyboards {
+                    self.keyboard_met(k, cx);
+                }
             }
             IpcEvent::Reply { .. } => {}
         }
@@ -1795,6 +1811,7 @@ pub fn app_sel(app_id: &str) -> AppSel {
 /// The tag of the Night Light question asked at connecting.
 const NIGHT_LIGHT_TAG: u64 = 0x4e49_4748;
 const SHARES_TAG: u64 = 0x5348_4152;
+const KEYBOARDS_TAG: u64 = 0x4b45_5942;
 
 pub fn layer(opts: LayerOptions, width: f64, height: f64, title: &str) -> WindowSpec {
     let mut s = WindowSpec::layer(opts, width, height);
@@ -2110,6 +2127,16 @@ mod tests {
                 .values()
                 .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("keyboard.caps")) })
         );
+    }
+
+    #[test]
+    fn setting_up_a_keyboard_opens_settei_with_it_chosen() {
+        let (mut h, requests) = running_settings();
+        let (name, id) = ("Yubico YubiKey OTP+FIDO+CCID", "1050:0407");
+        h.send(Msg::Run(Action::SetUpKeyboard { name: name.into(), id: id.into() }));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 42 });
+        let want = crate::launch::keyboard_setup(name, id);
+        assert!(h.program().launches.values().any(|(launch, _)| *launch == want), "{:?}", h.program().launches);
     }
 
     #[test]

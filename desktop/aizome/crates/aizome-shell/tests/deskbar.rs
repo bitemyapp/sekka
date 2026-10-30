@@ -352,6 +352,40 @@ fn auto_hide_resumes_when_a_dragged_app_or_window_disappears() {
     }
 }
 
+#[test]
+fn a_keyboard_offer_s_buttons_fit_under_its_card() {
+    use aizome_ipc::{Event, KeyboardBus, KeyboardInfo};
+    use aizome_kit::text::{TextCache, TextSpec};
+    use aizome_kit::theme::FontSpec;
+    use aizome_shell::deskbar::{SHADOW, WIDTH};
+    let mut h = scene(false);
+    let keyboard = KeyboardInfo {
+        name: "Yubico YubiKey OTP+FIDO+CCID".into(),
+        id: "1050:0407".into(),
+        bus: KeyboardBus::Usb,
+        last: false,
+    };
+    h.send(Msg::Ipc(aizome_shell::ipc::IpcEvent::Event(Event::KeyboardAdded { keyboard })));
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    h.save_png(db, shots().join("deskbar-keyboard-offer.png"), 2.0);
+    // A compact button's label, with 6 on each side: narrower, it's cut
+    // short with an ellipsis.
+    let mut cache = TextCache::default();
+    let mut font = FontSpec::ui(h.theme().metrics.small + 1.0);
+    font.weight = 500.0;
+    let spec = TextSpec::new(font, h.theme().text());
+    let mut left = 0.0;
+    for label in ["Set Up…", "Same as Others"] {
+        let r = h.find(db, label).unwrap_or_else(|| panic!("{label} in {:?}", h.texts(db)));
+        let w = cache.layout(h.theme(), label, &spec, None).size().width.ceil();
+        assert!(r.width() >= w + 12.0, "“{label}” is cut short: {w} wide in {r:?}");
+        assert!(r.x0 >= left, "“{label}” overlaps the button before it: {r:?}");
+        left = r.x1;
+    }
+    assert!(left <= SHADOW + WIDTH - 10.0, "inside the card's edge: {left}");
+}
+
 /// The open Deskbar's layer options.
 fn deskbar_layer(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> aizome_kit::LayerOptions {
     let w = h.platform.windows.values().rfind(|w| w.title == "Deskbar").expect("a Deskbar");

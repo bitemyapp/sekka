@@ -333,6 +333,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-power-meter"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "aizome-search"
 version = "0.1.0"
 dependencies = [

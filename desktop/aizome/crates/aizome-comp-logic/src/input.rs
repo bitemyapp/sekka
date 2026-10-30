@@ -413,11 +413,26 @@ impl InputExt for State {
                     self.stack_with_behind(id);
                 }
             }
+            Action::Unstack => {
+                if let Some(id) = focused {
+                    self.unstack(id, None);
+                }
+            }
             Action::PrevTab | Action::NextTab => {
                 if let Some(id) = focused
                     && let Some(tab) = self.lg.r().wm.neighbour_tab(id, action == Action::NextTab)
                 {
                     self.show_group_member(tab);
+                }
+            }
+            Action::MoveTabLeft | Action::MoveTabRight => {
+                if let Some(id) = focused {
+                    self.move_tab(id, action == Action::MoveTabRight);
+                }
+            }
+            Action::WindowMenu => {
+                if let Some(id) = focused {
+                    crate::overlays::marking::open_from_keys(self, id);
                 }
             }
             Action::Fullscreen => {

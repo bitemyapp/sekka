@@ -64,6 +64,15 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
   the strip for its named sizes.
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
   and foot opens in fish.
+- Each keyboard keeps its own modifier keys, Caps Lock and Compose key. When
+  you plug in or pair a keyboard, Aizome offers to set it up: press the key
+  beside its space bar and Settings suggests where Super should go, so it
+  sits under your thumb on a Mac keyboard and a PC keyboard alike. A
+  laptop's own keyboard is set up from Settings → Keyboard. Layouts and
+  shortcuts are the same on every keyboard. Keyboards don't yet keep their
+  own keys under an input method (IBus or Fcitx 5): while one handles your
+  typing, every keyboard types with the keys of the one in use when it
+  began.
 - Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop

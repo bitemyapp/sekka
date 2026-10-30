@@ -29,6 +29,7 @@ pub mod icons;
 pub mod idle;
 pub mod input;
 pub mod ipc;
+pub mod keyboards;
 pub mod logic;
 pub mod night;
 pub mod outputs;

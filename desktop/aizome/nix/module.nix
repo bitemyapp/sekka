@@ -335,6 +335,54 @@ in
     systemd.services."user@".serviceConfig.AmbientCapabilities = lib.mkIf cfg.alarmsWakeSystem [
       "CAP_WAKE_ALARM"
     ];
+    # The processor's energy counters (RAPL) for Myaku's Energy view:
+    # readable by root only, as quick samples can leak secrets
+    # (CVE-2020-8694), and on a Ryzen desktop processor nothing else
+    # measures the package. The meter reads them at most once a second,
+    # started by its socket when Myaku asks and gone after a minute
+    # without a question. Root for the read alone: no capabilities,
+    # network or writable files.
+    systemd.sockets.aizome-power-meter = {
+      description = "Aizome's processor power meter";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "/run/aizome/power.sock";
+        SocketMode = "0666";
+        DirectoryMode = "0755";
+      };
+    };
+    systemd.services.aizome-power-meter = {
+      description = "Aizome's processor power meter";
+      serviceConfig = {
+        ExecStart = "${cfg.package}/bin/aizome-power-meter";
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateNetwork = true;
+        PrivateTmp = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProtectSystem = "strict";
+        RestrictAddressFamilies = "AF_UNIX";
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged @resources"
+        ];
+        UMask = "0077";
+      };
+    };
 
     environment.etc = {
       "xdg/aizome/environment".text = lib.concatStrings (
