@@ -620,17 +620,44 @@ package reading is not added on top of RAPL. Unavailable readings are
 labelled without assuming why access failed. This optional window uses
 the sampler's existing readings and closes independently of the main view.
 
-The processor's meter is its RAPL counters, readable only by root, or else
-the meter an AMD integrated Radeon reports: amdgpu's is the whole package's
-on an APU, the processor included, and anyone may read it. Without either,
-the battery's draw counts while it discharges. Each discrete card's own
-meter adds to any of these: NVML's energy counter, or the card's hwmon
-meter. A desktop with no battery and RAPL kept for root (the integrated
-Radeon and RTX 5090 one) measures through these. Each meter is shared by
-use of what it measures: the processor's (or the battery's draw less the
-cards') by processor time, a card's by its clients' time on that card,
-and what is left is the devices idling. With only the cards' meters,
-what uses no card shows a dash.
+The processor's meter is its RAPL counters. Only root may read them, as
+quick samples can leak secrets (CVE-2020-8694), so Myaku, running as you,
+asks Aizome's power meter for them. `aizome-power-meter` runs as root when
+something connects to `/run/aizome/power.sock` (the module's
+`aizome-power-meter.socket`), with no capabilities, network or writable
+files. It reads the package domains at most once a second, as Tatami's
+meter does, answers every connection with "NAME ENERGY_UJ RANGE_UJ
+READ_US" lines, and exits after a minute without one. `READ_US` is when
+it read them, in microseconds of `CLOCK_BOOTTIME`: Myaku's rates are over
+the time between two readings, whoever asked for them, and a repeated
+answer leaves its last rate standing: at Myaku's one-second frames, the
+processor's figure changes every second or two. The package domains are
+the `intel-rapl:N` named `package…`: a laptop's `psys` (Intel's platform
+domain, `intel-rapl:1` on the X1 Carbon Gen 14) measures the whole
+computer, the package included, and is left out. After the computer
+sleeps, the first interval is not measured: RAPL's counters went on
+through the night while Myaku's clock stopped, so its rate starts over
+(the processor shows a dash for a second or two) and no one's energy
+grows by it.
+`nix build .#aizome-checks.power-meter` boots a disposable VM: the socket
+must start the meter as root with no capabilities, and a user may ask it.
+A VM has no RAPL counters, so a stand-in then answers on the socket with
+a package drawing 20 W, which `aizome-myaku --print`, run as a user, must
+report. Reading real RAPL counters as root needs physical hardware.
+
+Without RAPL, an AMD APU's integrated Radeon reports the whole package
+(amdgpu's `PPT`, the processor included), and anyone may read it. A Ryzen
+7000 or 9000 desktop processor's Radeon (Raphael, Granite Ridge) doesn't:
+it sits on the I/O die beside separate core dies, and its `PPT` measures
+the graphics alone, about a tenth of a watt with every core busy. Myaku
+never takes it for the processor's. Without either, the battery's draw
+counts while it discharges. Each discrete card's own meter adds to any of
+these: NVML's energy counter, or the card's hwmon meter. A desktop with no
+battery (the Granite Ridge and RTX 5090 one) measures through RAPL and the
+card's meter. Each meter is shared by use of what it measures: the
+processor's (or the battery's draw less the cards') by processor time, a
+card's by its clients' time on that card, and what is left is the devices
+idling. With only the cards' meters, what uses no card shows a dash.
 
 `cargo test -p aizome-myaku --test gpu` drives the choice from the toolbar,
 the strip and the menu on a made-up desktop with both cards
