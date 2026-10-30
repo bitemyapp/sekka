@@ -80,6 +80,11 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     import shlex
 
+    # How long a rule, scheduler or process may take to show. These check
+    # that tuning applies, not how fast: on a loaded CI host the VM can be
+    # starved for more than 30 seconds.
+    WAIT = 120
+
     machine.wait_for_unit("ananicy-cpp.service")
 
     # Ubuntu's lowlatency-kernel boot options take effect.
@@ -89,17 +94,17 @@ pkgs.testers.runNixOSTest {
     machine.succeed("journalctl -k | grep 'Offload RCU callbacks from CPUs'")
 
     # mq-deadline for NVMe, BFQ for rotating disks (QEMU's virtio disk).
-    machine.wait_until_succeeds("grep -F '[mq-deadline]' /sys/block/nvme0n1/queue/scheduler", timeout=30)
+    machine.wait_until_succeeds("grep -F '[mq-deadline]' /sys/block/nvme0n1/queue/scheduler", timeout=WAIT)
     assert machine.succeed("cat /sys/block/vda/queue/rotational").strip() == "1"
-    machine.wait_until_succeeds("grep -F '[bfq]' /sys/block/vda/queue/scheduler", timeout=30)
+    machine.wait_until_succeeds("grep -F '[bfq]' /sys/block/vda/queue/scheduler", timeout=WAIT)
 
     # ps shows "-" for the nice value of a SCHED_IDLE process; stat has it.
     def wait_nice(pid, value):
-        machine.wait_until_succeeds(f"[ \"$(cut -d ' ' -f 19 /proc/{pid}/stat)\" = {value} ]", timeout=30)
+        machine.wait_until_succeeds(f"[ \"$(cut -d ' ' -f 19 /proc/{pid}/stat)\" = {value} ]", timeout=WAIT)
 
     def started(pattern, parent=None):
         query = f"pgrep -f '{pattern}'" if parent is None else f"pgrep -P {parent} -f '{pattern}'"
-        machine.wait_until_succeeds(query, timeout=30)
+        machine.wait_until_succeeds(query, timeout=WAIT)
         return machine.succeed(query).strip()
 
     # A terminal keeps -4, the shell in it runs at 0 and a compiler at 3.
@@ -142,7 +147,7 @@ pkgs.testers.runNixOSTest {
         if {io!r} is not None:
             assert subprocess.check_output(['ionice', '-p', str(tid)], text=True).strip() == {io!r}
     """
-        machine.wait_until_succeeds("python3 -c " + shlex.quote(code), timeout=30)
+        machine.wait_until_succeeds("python3 -c " + shlex.quote(code), timeout=WAIT)
 
     with subtest("existing Nix workers all receive idle CPU and I/O policy"):
         machine.succeed("systemctl stop ananicy-cpp")
