@@ -48,7 +48,8 @@ Aizome's look.
   fallback menus for apps that publish none: an app menu (About, Hide ❖H,
   Hide Others ⌥❖H, Quit ❖Q — Quit closes all its windows through the
   compositor) and a Window menu (Minimise ❖M, Fill, Split Left, Split Right,
-  Stack with…, Move to Desk ▸, Full Screen ⌃❖F, Close). With no window
+  Stack with… ⌃❖S, Show Previous Tab ⇧❖[, Show Next Tab ⇧❖], Move Tab to
+  New Window ⌃⇧❖S, Move to Desk ▸, Full Screen ⌃❖F, Close). With no window
   focused, the "app" is the desktop: Aizome's own menus (Aizome ▸ About
   Aizome, Settings…, Lock, Log Out; File ▸ New Folder on Desktop; Desks ▸;
   Help ▸).

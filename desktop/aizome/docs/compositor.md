@@ -205,7 +205,10 @@ Notes for client authors:
   window urgent (IPC `urgent`) instead.
 - ext-session-lock: `locked` is sent once every output has drawn a frame
   without the desktop; lock surfaces get the output's size and all input.
-  A locker that dies leaves the session locked.
+  A locker that dies leaves the session locked. Locking closes the
+  overview, the switcher, the marking menu and the area picker (one
+  borrowed with `pick-area` reports nothing picked), so a menu left open
+  can't act on the windows behind the prompt.
 - wlr-screencopy (what wf-recorder and grim use): each frame offers
   wl_shm XRGB8888 and, under GLES on a render node (or a GPU on udev), a
   linux-dmabuf XRGB8888 buffer too (`linux_dmabuf`, then `buffer_done`).
@@ -341,9 +344,10 @@ Notes for client authors:
   after them all (a dashed slot and "Release to stack with ‹title›"
   show); click a background tab to show it, drag it away to tear it out
   (⌥-drag tears out the showing one), and drop it back on its group to
-  move it along; ⌥❖S stacks with the window behind; ⌥❖[ and ⌥❖] show
-  the previous and next tab; IPC `stack`/`unstack` (`stack` adds at the
-  end).
+  move it along; ⌃❖S stacks with the window behind and ⌃⇧❖S takes the
+  showing tab out; ❖⇧[ and ❖⇧] show the previous and next tab, and
+  ⌃⇧❖[ and ⌃⇧❖] move the showing one along; IPC `stack`/`unstack`
+  (`stack` adds at the end).
 - **Desks**: four by default (settings `[[desks]]`). Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is
@@ -375,7 +379,8 @@ Notes for client authors:
   keep their places for when one does. Every display keeps a Desk, so
   removing Desks stops at one each.
 - **Overview** (⌃❖↑), **switcher** (❖Tab), **marking menu** (right press
-  on a tab), **area screenshots** (❖⇧4; the shell borrows the picker with
+  on a tab, or ⌃❖Space for the focused window: arrows, letters and digits
+  pick, and the pointer only what it's over), **area screenshots** (❖⇧4; the shell borrows the picker with
   IPC `pick-area` to choose what to record, and `aizome-share-picker` to
   choose what to share, a display or a window, under a banner saying so):
   see `docs/ipc.md` for their

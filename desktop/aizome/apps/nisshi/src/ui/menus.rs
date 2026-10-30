@@ -59,7 +59,7 @@ pub fn menus(n: &Nisshi) -> MenuBar<Msg> {
         .separator()
         .item(
             MenuItem::new(if n.sidebar { "Hide Sidebar" } else { "Show Sidebar" }, Msg::ToggleSidebar)
-                .shortcut(Shortcut::cmd('S').ctrl()),
+                .shortcut(Shortcut::cmd('S').alt()),
         )
         .item(
             MenuItem::new(if n.details { "Hide Details" } else { "Show Details" }, Msg::ToggleDetails)
