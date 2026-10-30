@@ -221,8 +221,11 @@ impl Ring {
 /// frame written and the speaker; `now` the cycle's time. Returns the
 /// frames of audio (not silence) written.
 pub fn fill(ring: &Ring, clock: &Clock, out: &mut [f32], latency: u64, now: u64) -> usize {
-    ring.busy.store(true, Ordering::Release);
-    if ring.halted.load(Ordering::Acquire) {
+    // Busy, then halted: whoever halts the ring and then waits while it's
+    // busy sees this cycle, or this cycle sees the halt (sequentially
+    // consistent, as neither may pass the other).
+    ring.busy.store(true, Ordering::SeqCst);
+    if ring.halted.load(Ordering::SeqCst) {
         out.fill(0.0);
         ring.busy.store(false, Ordering::Release);
         return 0;
@@ -357,7 +360,10 @@ impl Output for NullOutput {
         let Some(r) = &self.run else { return };
         if !playing && r.playing.load(Ordering::Acquire) {
             r.playing.store(false, Ordering::Release);
-            while r.ring.busy.load(Ordering::Acquire) {
+            // A cycle that already saw it playing takes nothing now, and
+            // leaves the clock alone: stopped below, it stays stopped.
+            r.ring.halted.store(true, Ordering::SeqCst);
+            while r.ring.busy.load(Ordering::SeqCst) {
                 std::hint::spin_loop();
             }
             // Nothing is held past the ring: the clock stops at what's next.
@@ -366,6 +372,11 @@ impl Output for NullOutput {
                 r.clock.stop_at(pos);
             }
             return;
+        }
+        if playing {
+            // Whatever halted the ring (a pause, or the output this one
+            // stands in for) is over.
+            r.ring.halted.store(false, Ordering::SeqCst);
         }
         r.playing.store(playing, Ordering::Release);
         r.cv.notify_all();
@@ -496,6 +507,30 @@ mod tests {
         assert_eq!(fill(&r, &c, &mut out, 0, 2_000), 0);
         assert!(out.iter().all(|s| *s == 0.0));
         assert_eq!(c.anchor().rate, 0.0);
+    }
+
+    #[test]
+    fn the_null_output_plays_on_a_halted_ring_and_pausing_stops_its_clock() {
+        // As when the player falls back to it from a sink that took
+        // nothing: that output halted the ring as it stopped.
+        let r = Arc::new(Ring::new(Format { rate: 1000, channels: 2 }));
+        let c = Arc::new(Clock::new());
+        r.flush(0.0, 1.0, true);
+        r.push(&vec![0.0; 2 * 3000]);
+        r.halted.store(true, Ordering::SeqCst);
+        let mut n = NullOutput::new();
+        n.open(r.clone(), c.clone(), "test").expect("the null output");
+        n.set_playing(true);
+        let start = std::time::Instant::now();
+        while !c.running() {
+            assert!(start.elapsed() < std::time::Duration::from_secs(5), "the clock never ran");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        n.set_playing(false);
+        let at = c.now();
+        assert!(!c.running());
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        assert_eq!(c.now(), at, "paused, the clock stays");
     }
 
     #[test]

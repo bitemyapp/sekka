@@ -384,9 +384,9 @@ fn set_playing(p: &mut Playing, on: bool) {
     // Stop, then step back to what was being heard: what the graph held
     // goes, and plays again from the ring.
     let heard = p.clock.now();
-    p.ring.halted.store(true, std::sync::atomic::Ordering::Release);
+    p.ring.halted.store(true, std::sync::atomic::Ordering::SeqCst);
     let _ = p.stream.set_active(false);
-    while p.ring.busy.load(std::sync::atomic::Ordering::Acquire) {
+    while p.ring.busy.load(std::sync::atomic::Ordering::SeqCst) {
         std::hint::spin_loop();
     }
     let _ = p.stream.flush(false);
