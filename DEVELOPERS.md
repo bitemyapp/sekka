@@ -1186,6 +1186,74 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
+Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
+reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
+PDF renderer in Rust, from [bitemyapp/hayro](https://github.com/bitemyapp/hayro)'s
+`aizome-perf` branch. The fork is about twice as fast as PDFium over the
+pdf.js corpus and gives an encrypted document's permissions
+([record](docs/test-results/hayro-fork-2026-10-28.json)). Shiori's
+`Cargo.toml` pins it by revision; it brings bitemyapp/zune-image's
+`scaled-idct` zune-jpeg (pinned by `Cargo.lock`), and Aizome's workspace
+patches moxcms to bitemyapp/moxcms's `gamma-table-cache-0.8`
+(awxkee/moxcms#209). Each git dependency has a hash in `cargoLock.outputHashes`
+in `desktop/aizome/nix/package.nix`. To move the fork, push it, change both
+revisions in Shiori's `Cargo.toml`, run `cargo update -p hayro`, and put the
+new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
+--fetch-submodules` hash in `outputHashes`.
+
+The zune-core and moxcms entries in the `[patch.crates-io]` of
+`desktop/aizome/Cargo.toml` aren't Shiori's alone: Cargo applies a patch to
+the whole workspace. Everything that reaches `image` builds it against the
+forks: the compositor (`aizome-comp`, `aizome-comp-core` and
+`aizome-comp-logic`, through Sukumo's `sidestep-ui` and `sidestep-engine`),
+`aizome-kit` the same way, and so the shell and every app (Hako and Shashin
+use `sidestep-engine` directly too, and Shashin `image`). `image` still
+decodes JPEGs with crates.io's zune-jpeg, compiled against the forked
+zune-core, and manages colour with the forked moxcms. Sukumo's own
+workspace has its own `Cargo.lock` and no patch. A change to either fork
+can change how wallpapers, icons and thumbnails decode, so moving one needs
+Shashin's tests, the `aizome` package's check phase and a look at a
+session, not only Shiori's tests:
+
+- zune-core is named by its branch, `scaled-idct`, as hayro names its
+  zune-jpeg, so a plain `cargo update` moves both (one repository) to the
+  branch's head. Choose the commit with `cargo update -p zune-core
+  --precise REV`, and replace the zune-image hash in `outputHashes`.
+- moxcms is pinned by `rev`: change it, run `cargo update -p moxcms`, and
+  replace its hash.
+- The moxcms patch only saves work (its tables are the same), so dropping
+  it with its hash costs Shiori time on ICC-based and Lab colour, nothing
+  else; it can go once awxkee/moxcms#209 is released.
+- The zune-core patch can go only once hayro's zune-jpeg and `image`'s
+  agree on a zune-core Nix can vendor, as it can't hold two crates of one
+  name and version: the fork's work released and hayro's fork moved to
+  it, or the fork's zune-core given a version of its own.
+
+Only the worker process, `aizome-shiori --worker`, one for each open
+document, runs hayro: a document can panic it or keep it busy, and the
+SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
+`unsafe` code on the document's bytes. A panic costs the job it was on (a page it was drawing shows as
+unreadable at that size; one whose text it was reading has none); the
+reader restarts a worker that dies or spends too long on a page, and
+refuses a drawing it couldn't have asked for (too large, or of a page the document hasn't). Fonts a document names but doesn't carry come from hayro's built-in
+Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
+fontconfig for. Its tests start real workers over generated documents and a
+qpdf-encrypted fixture:
+
+```sh
+cargo test -p aizome-shiori
+cargo test -p aizome-shiori --release --test budget -- --nocapture
+cargo run --release -p aizome-shiori --example corpus -- DIR
+nix build .#aizome-checks.shiori -L
+```
+
+The last runs the packaged reader in an Aizome VM, including a worker
+killed and replaced.
+
+The engine evaluation (PDFium against hayro over the pdf.js corpus, and
+why MuPDF and Poppler were ruled out by licence), the fork's work, and the
+reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
+
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
 one authentication state; mirrors show their source's prompt and explicitly

@@ -427,6 +427,10 @@ in
           "application/json"
           "application/x-yaml"
         ]
+        + entry "Shiori" [
+          "application/pdf"
+          "application/x-pdf"
+        ]
         + entry "Hako" [ "inode/directory" ]
         + entry "Koyomi" [ "text/calendar" ]
         + entry "Tansu" [

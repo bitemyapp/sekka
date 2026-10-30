@@ -81,12 +81,11 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
-(Activity), Nisshi (Logs), Shashin (Images) and Koe (Dictation). Nisshi reads
-the system's journal and /var/log, suggests filters from what wrote each
-message, and asks for an administrator's password only to read what you
-can't. Aizome is new, and so far it
-has run only in virtual machines. See [its README](desktop/aizome/README.md)
-for what is done and what isn't.
+(Activity), Nisshi (Logs), Shashin (Images), Shiori (Documents, a PDF reader) and Koe (Dictation).
+Nisshi reads the system's journal and /var/log, suggests filters from what
+wrote each message, and asks for an administrator's password only to read
+what you can't. Aizome is new, and so far it has run only in virtual machines.
+See [its README](desktop/aizome/README.md) for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

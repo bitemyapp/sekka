@@ -1,0 +1,380 @@
+//! What Shiori and its worker say to each other, over the worker's
+//! stdin and stdout: each frame is a little-endian `u32` length and that
+//! much JSON, and a drawing's pixels follow its frame.
+//!
+//! Geometry is in points from a page's top left as it shows, turned by its
+//! `/Rotate`: the worker does PDF's upward, rotated coordinates, so the app
+//! never has to.
+
+use std::io::{self, Read, Write};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+
+/// `[x0, y0, x1, y1]` on a page, in points from its top left as it shows.
+pub type PageRect = [f32; 4];
+
+/// The most a frame's JSON may be (a page's text is the largest).
+const MAX_FRAME: usize = 256 << 20;
+
+/// The widest or tallest drawing a worker sends: a tile is 1024 device
+/// pixels and a preview narrower. The app takes no larger one on a
+/// worker's word, as the worker reads what a document gives it.
+pub const MOST_SIDE: u32 = 4096;
+
+/// A drawing of part of a page: the page drawn `size` device pixels large,
+/// and the part of that at `at`, `w` × `h`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TileKey {
+    pub page: u32,
+    pub size: (u32, u32),
+    pub at: (u32, u32),
+    pub w: u32,
+    pub h: u32,
+}
+
+impl TileKey {
+    pub fn bytes(&self) -> usize {
+        self.w as usize * self.h as usize * 4
+    }
+
+    /// Whether it's a drawing the app could have asked for: no wider or
+    /// taller than `MOST_SIDE`, and within the page drawn `size` large.
+    pub fn plausible(&self) -> bool {
+        let within = |at: u32, side: u32, of: u32| at.checked_add(side).is_some_and(|end| end <= of);
+        (1..=MOST_SIDE).contains(&self.w)
+            && (1..=MOST_SIDE).contains(&self.h)
+            && within(self.at.0, self.w, self.size.0)
+            && within(self.at.1, self.h, self.size.1)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Request {
+    /// Open the document (once, first).
+    Open { path: PathBuf, password: Option<String> },
+    /// What to draw, most wanted first, in place of what was asked before
+    /// and not yet drawn.
+    Draw(Vec<TileKey>),
+    /// A page's characters and where they are.
+    Text(u32),
+    /// A page's links.
+    Links(u32),
+    /// Look for `query` on `pages` in that order, in place of any search
+    /// still going.
+    Find { serial: u64, query: String, case: bool, pages: Vec<u32> },
+    /// Stop looking.
+    StopFind,
+}
+
+/// What the worker is doing now: what the app holds it to when it
+/// crashes or takes too long.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Job {
+    Open,
+    Draw(TileKey),
+    Text(u32),
+    Links(u32),
+    Find(u32),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Reply {
+    Opened(Box<DocInfo>),
+    OpenFailed(OpenError),
+    /// Starting on a job.
+    Working(Job),
+    /// A drawing: `key.bytes()` of straight RGBA follow the frame.
+    Drawn(TileKey),
+    DrawFailed(TileKey),
+    Text {
+        page: u32,
+        text: PageText,
+    },
+    Links {
+        page: u32,
+        links: Vec<Link>,
+    },
+    /// A page searched: each hit is the rectangles it covers (a line each).
+    Found {
+        serial: u64,
+        page: u32,
+        hits: Vec<Vec<PageRect>>,
+    },
+}
+
+/// What a page with no size a JSON number can give is taken to be: A4, as
+/// hayro takes a page whose boxes are empty.
+const NO_SIZE: (f32, f32) = (595.0, 842.0);
+
+/// Whether each of `r`'s corners is a number JSON can carry.
+fn finite(r: &PageRect) -> bool {
+    r.iter().all(|v| v.is_finite())
+}
+
+fn finite_target(t: &mut Target) {
+    if let Target::Page { y, .. } = t
+        && y.is_some_and(|y| !y.is_finite())
+    {
+        *y = None;
+    }
+}
+
+fn finite_outline(entries: &mut [Outline]) {
+    for e in entries {
+        if let Some(t) = e.target.as_mut() {
+            finite_target(t);
+        }
+        finite_outline(&mut e.children);
+    }
+}
+
+impl Reply {
+    /// It, with nothing in it that isn't a number. JSON has no infinity
+    /// or NaN: serde_json writes them as `null`, a reply with one can't be
+    /// read, and the app would take the worker for broken. A document can
+    /// give either: a link 10^40 points wide is infinite as an `f32`, and
+    /// NaN once turned with its page. Such a link, or rectangle of a hit,
+    /// is left out; such a character keeps its place in the text with no
+    /// box (as an inferred space has); such a page is A4; such a
+    /// destination keeps its page and not its place down it.
+    pub fn finite(mut self) -> Reply {
+        match &mut self {
+            Reply::Opened(info) => {
+                for p in &mut info.pages {
+                    if !(p.0.is_finite() && p.1.is_finite()) {
+                        *p = NO_SIZE;
+                    }
+                }
+                finite_outline(&mut info.outline);
+            }
+            Reply::Text { text, .. } => {
+                for b in text.boxes.iter_mut().filter(|b| !finite(b)) {
+                    *b = [0.0; 4];
+                }
+            }
+            Reply::Links { links, .. } => {
+                links.retain(|l| finite(&l.rect));
+                for l in links {
+                    finite_target(&mut l.target);
+                }
+            }
+            Reply::Found { hits, .. } => {
+                hits.retain_mut(|h| {
+                    h.retain(finite);
+                    !h.is_empty()
+                });
+            }
+            Reply::OpenFailed(_) | Reply::Working(_) | Reply::Drawn(_) | Reply::DrawFailed(_) => {}
+        }
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpenError {
+    /// It has a password and none (or the wrong one) was given.
+    Password { tried: bool },
+    /// Not a PDF, or too damaged to read.
+    Format(String),
+    /// The file couldn't be read.
+    Io(String),
+    /// The worker couldn't be started.
+    Worker(String),
+}
+
+impl OpenError {
+    pub fn message(&self) -> String {
+        match self {
+            OpenError::Password { .. } => "It's protected by a password.".into(),
+            OpenError::Format(e) => format!("It isn't a PDF Shiori can read ({e})."),
+            OpenError::Io(e) => e.clone(),
+            OpenError::Worker(e) => format!("Shiori's worker couldn't be started: {e}"),
+        }
+    }
+}
+
+/// What a document is, as it opened.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DocInfo {
+    /// Each page's size in points, as it shows.
+    pub pages: Vec<(f32, f32)>,
+    /// Title, Author, Subject, Keywords, Creator, Producer, dates: those
+    /// it has.
+    pub meta: Vec<(String, String)>,
+    pub version: String,
+    pub outline: Vec<Outline>,
+    pub encrypted: bool,
+    pub forms: bool,
+    /// Whether its author allows copying its text.
+    pub can_copy: bool,
+}
+
+impl DocInfo {
+    pub fn meta(&self, key: &str) -> Option<&str> {
+        self.meta.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).filter(|v| !v.trim().is_empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Target {
+    /// A place in the document: a page, and how far down it (points).
+    Page {
+        page: u32,
+        y: Option<f32>,
+    },
+    Uri(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Outline {
+    pub title: String,
+    pub target: Option<Target>,
+    pub children: Vec<Outline>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Link {
+    pub rect: PageRect,
+    pub target: Target,
+}
+
+/// A page's characters in reading order, and each one's box (all zero
+/// for those the worker inferred: spaces between words, line ends).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PageText {
+    pub chars: Vec<char>,
+    pub boxes: Vec<PageRect>,
+}
+
+impl PageText {
+    /// A box for each character, as the worker sends them: a reply where
+    /// the two disagree is cut to the shorter.
+    pub fn agree(&mut self) {
+        let n = self.chars.len().min(self.boxes.len());
+        self.chars.truncate(n);
+        self.boxes.truncate(n);
+    }
+}
+
+/// Send `msg`, then `pixels`.
+pub fn write_frame<T: Serialize>(w: &mut impl Write, msg: &T, pixels: Option<&[u8]>) -> io::Result<()> {
+    let json = serde_json::to_vec(msg).map_err(io::Error::other)?;
+    w.write_all(&(json.len() as u32).to_le_bytes())?;
+    w.write_all(&json)?;
+    if let Some(p) = pixels {
+        w.write_all(p)?;
+    }
+    w.flush()
+}
+
+/// The next frame; `None` at the end of the stream.
+pub fn read_frame<T: DeserializeOwned>(r: &mut impl Read) -> io::Result<Option<T>> {
+    let mut len = [0u8; 4];
+    match r.read_exact(&mut len) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e),
+    }
+    let len = u32::from_le_bytes(len) as usize;
+    if len > MAX_FRAME {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("a frame of {len} bytes")));
+    }
+    let mut json = vec![0u8; len];
+    r.read_exact(&mut json)?;
+    serde_json::from_slice(&json).map(Some).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
+
+/// The pixels after a `Drawn` frame.
+pub fn read_pixels(r: &mut impl Read, key: &TileKey) -> io::Result<Arc<[u8]>> {
+    // Read where they'll stay, for an image to take without a copy.
+    let mut px: Arc<[u8]> = std::iter::repeat_n(0, key.bytes()).collect();
+    let into = Arc::get_mut(&mut px).ok_or_else(|| io::Error::other("pixels shared"))?;
+    r.read_exact(into)?;
+    Ok(px)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frames_go_and_come_back() {
+        let key = TileKey { page: 3, size: (100, 200), at: (0, 64), w: 2, h: 1 };
+        let mut buf = Vec::new();
+        write_frame(&mut buf, &Reply::Drawn(key), Some(&[1, 2, 3, 4, 5, 6, 7, 8])).unwrap();
+        write_frame(&mut buf, &Reply::Working(Job::Text(2)), None).unwrap();
+        let mut r = &buf[..];
+        let Some(Reply::Drawn(k)) = read_frame(&mut r).unwrap() else { panic!() };
+        assert_eq!(k, key);
+        assert_eq!(&read_pixels(&mut r, &k).unwrap()[..], [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert!(matches!(read_frame(&mut r).unwrap(), Some(Reply::Working(Job::Text(2)))));
+        assert!(read_frame::<Reply>(&mut r).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_huge_length_is_refused() {
+        let buf = (u32::MAX).to_le_bytes();
+        assert!(read_frame::<Reply>(&mut &buf[..]).is_err());
+    }
+
+    #[test]
+    fn only_drawings_the_app_asks_for_are_taken() {
+        let key = |w, h| TileKey { page: 0, size: (w, h), at: (0, 0), w, h };
+        assert!(key(1024, 1024).plausible());
+        assert!(key(224, 896).plausible());
+        assert!(!key(0, 10).plausible());
+        assert!(!key(u32::MAX, u32::MAX).plausible());
+        // The last tile of a page drawn 1500 wide, and parts past its edge.
+        let edge = TileKey { page: 0, size: (1500, 2000), at: (1024, 1024), w: 476, h: 976 };
+        assert!(edge.plausible());
+        assert!(!TileKey { w: 477, ..edge }.plausible());
+        assert!(!TileKey { at: (u32::MAX - 10, 0), w: 100, ..edge }.plausible());
+        assert!(!TileKey { size: (0, 0), at: (0, 0), ..edge }.plausible());
+        let mut t = PageText { chars: vec!['a', 'b'], boxes: vec![[0.0; 4]] };
+        t.agree();
+        assert_eq!((t.chars.len(), t.boxes.len()), (1, 1));
+    }
+
+    /// The reply, sent and read back as the app reads it.
+    fn through(r: Reply) -> Reply {
+        let mut buf = Vec::new();
+        write_frame(&mut buf, &r.finite(), None).unwrap();
+        read_frame(&mut &buf[..]).expect("a reply the app can read").unwrap()
+    }
+
+    #[test]
+    fn what_isnt_a_number_is_left_out() {
+        let inf = f32::INFINITY;
+        let to = |y| Target::Page { page: 1, y: Some(y) };
+        // Unsent as it is, a reply with one can't be read.
+        let mut buf = Vec::new();
+        let link = Link { rect: [0.0, 0.0, inf, 20.0], target: Target::Uri("https://example.com".into()) };
+        write_frame(&mut buf, &Reply::Links { page: 0, links: vec![link.clone()] }, None).unwrap();
+        assert!(read_frame::<Reply>(&mut &buf[..]).is_err());
+        let kept = Link { rect: [1.0, 2.0, 3.0, 4.0], target: to(f32::NAN) };
+        let Reply::Links { links, .. } = through(Reply::Links { page: 0, links: vec![link, kept.clone()] }) else {
+            panic!()
+        };
+        assert_eq!(links, vec![Link { target: Target::Page { page: 1, y: None }, ..kept }]);
+        let text = PageText { chars: vec!['a', 'b'], boxes: vec![[1.0, 2.0, 3.0, 4.0], [f32::NAN, 0.0, inf, 1.0]] };
+        let Reply::Text { text, .. } = through(Reply::Text { page: 0, text }) else { panic!() };
+        assert_eq!(text.chars, ['a', 'b']);
+        assert_eq!(text.boxes, [[1.0, 2.0, 3.0, 4.0], [0.0; 4]]);
+        let hits = vec![vec![[inf; 4]], vec![[1.0; 4], [-inf; 4]]];
+        let Reply::Found { hits, .. } = through(Reply::Found { serial: 1, page: 0, hits }) else { panic!() };
+        assert_eq!(hits, vec![vec![[1.0; 4]]]);
+        let outline = vec![Outline {
+            title: "A".into(),
+            target: Some(to(inf)),
+            children: vec![Outline { title: "B".into(), target: Some(to(f32::NAN)), children: Vec::new() }],
+        }];
+        let info = DocInfo { pages: vec![(612.0, 792.0), (inf, 792.0)], outline, ..DocInfo::default() };
+        let Reply::Opened(info) = through(Reply::Opened(Box::new(info))) else { panic!() };
+        assert_eq!(info.pages, [(612.0, 792.0), NO_SIZE]);
+        assert_eq!(info.outline[0].target, Some(Target::Page { page: 1, y: None }));
+        assert_eq!(info.outline[0].children[0].target, Some(Target::Page { page: 1, y: None }));
+    }
+}

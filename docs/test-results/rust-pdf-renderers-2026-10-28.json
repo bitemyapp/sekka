@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-28",
+  "scope": "Shiori's engine, second pass: every permissively licensed Rust PDF renderer that draws pages, against PDFium and hayro (0.8.0, current master, and a branch of master sped up for Shiori), over the pdf.js test corpus. Component evidence on one laptop; not VM, ISO or hardware qualification. Shiori still draws with PDFium.",
+  "workstation": "ganymede (8 threads, 30 GiB RAM), shared with other sessions (one-minute load average 3-6 during the final runs; up to 18 earlier, whose timings are not used here)",
+  "corpus": {
+    "source": "https://github.com/mozilla/pdf.js test/pdfs",
+    "revision": "279175b948b23077808d744435c07b32d23aa5bc",
+    "files": 1012,
+    "note": "Deliberately hostile: many files are reduced bug reports, fuzzer output and broken on purpose."
+  },
+  "method": {
+    "program": "a scratch benchmark (not in the tree), one program per renderer with the same output: each file in a process of its own under `timeout 30`, four files at a time, release builds, up to the first 5 pages at 2x on white; time per page includes loading the page; renderers with thread pools ran with RAYON_NUM_THREADS=1",
+    "final_timings": "PDFium, hayro master and the hayro branch ran back to back on each file, three times; each page's time is its median of the three",
+    "comparison": "per page, the largest per-channel difference of each pixel; a pixel differs when that exceeds 48 of 255"
+  },
+  "survey": {
+    "benchmarked": {
+      "stet-pdf-reader 0.8.7": "Apache-2.0 OR MIT; own tiny-skia fork, banded and multithreaded",
+      "pdfrum 0.5.3": "MIT OR Apache-2.0; a Rust port of PDFium drawing with vello_cpu",
+      "pdfboss-render 2.16.1": "MIT OR Apache-2.0; own rasterizer",
+      "pdf_oxide 0.3.78 (rendering)": "MIT OR Apache-2.0; tiny-skia; shading patterns not implemented",
+      "zpdf 0.18.0": "MIT; tiny-skia"
+    },
+    "not_benchmarked": {
+      "kasane-pdf, justpdf, pdf-toolkit": "a week to a few months old, with gaps in encryption or blending",
+      "pdf-render (PDFluent)": "a fork of hayro 0.5",
+      "rpdfium": "repository gone; unverifiable",
+      "pdf-rs pdf_render": "stale since 2025, git-only dependencies",
+      "printpdf, pdfrs, rasterrocket, ferrugo, fop-pdf-renderer": "SVG only, schematic, grayscale only or thumbnails only",
+      "lege-pdf, zenpdf": "AGPL"
+    },
+    "vetting": "build scripts of every dependency new to this machine read before building (only pdfrum's generate tables, and only when asked to)"
+  },
+  "renderers": {
+    "columns": ["pages drawn", "p50 ms", "p90 ms", "p99 ms", "max ms", "timeouts", "crashes", "total vs PDFium on pages both drew under 5 s", "median page time / PDFium", "pages differing from PDFium on over 5% of pixels"],
+    "pdfium 8066": [1193, 3.3, 14.6, 122.8, 1192.6, 2, 1, "1.00", 1.00, "-"],
+    "hayro branch (aizome-perf 0acbbb5a)": [1206, 3.6, 14.4, 117.0, 9145.1, 0, 0, "0.88", 0.95, 57],
+    "hayro master 8558a8a5": [1206, 3.7, 16.0, 133.1, 10310.2, 0, 0, "1.28", 0.95, 46],
+    "pdfboss": [1196, 6.8, 56.1, 578.3, 4001.7, 0, 0, "2.29", 1.22, 110],
+    "zpdf": [1204, 6.8, 69.8, 550.1, 4000.4, 0, 0, "2.41", 1.32, 151],
+    "stet": [1202, 21.9, 104.3, 525.3, 3856.9, 1, 0, "3.60", 4.40, 75],
+    "pdfrum": [1194, 20.8, 94.1, 858.0, 10975.0, 3, 0, "4.07", 3.73, 54],
+    "pdf_oxide": [1196, 45.8, 167.7, 1132.2, 15832.6, 2, 0, "6.87", 9.87, 185],
+    "note": "PDFium and both hayros from the final medians; the five others from one run earlier the same day, against PDFium in another run, so their ratios are approximate. pdfrum matches PDFium most closely (918 of 1,192 pages differ on under 0.1% of pixels; hayro 489), as a port would. The branch's 11 more pages over 5% are one page (tracemonkey page 4, in 11 files) moving from 4.9% to 5.3%: antialiasing."
+  },
+  "hayro_0_8_feature_check": "hayro-syntax's `unsafe` feature (flate2, memchr, SIMD JPEG/JBIG2/JPEG 2000) made no measurable difference to 0.8.0 over this corpus; the first comparison's hayro numbers stand for 0.8.0, and master is faster",
+  "totals": {
+    "pages_all_three_drew": 1190,
+    "ms": {"pdfium": 11804, "hayro_master": 25433, "hayro_branch": 10404},
+    "under_5_s_in_all_1189_pages_ms": {"pdfium": 11799, "hayro_master": 15123, "hayro_branch": 10400},
+    "branch_faster_than_pdfium_on": "618 of 1190 pages",
+    "confirming_run_on_8d9cdb14_ms": {"pdfium": 11692, "hayro_master": 14773, "hayro_branch": 10114}
+  },
+  "hayro_branch": {
+    "where": "~/work/hayro, branch aizome-perf, four commits on upstream 8558a8a5 (timings from the third, 0acbbb5a; the fourth, 8d9cdb14, only changes mesh sampling and was checked by the confirming run and the test suite); local only, not pushed or proposed upstream",
+    "changes": {
+      "glyph coverage cache": "outline glyphs drawn a second time at one size, orientation and quarter-pixel position draw from cached coverage as a tinted image instead of being filled again (tracemonkey's first 5 pages: master 75.6 ms, branch 54.8 ms, PDFium 44.5 ms)",
+      "image cache": "decoded and resampled images, including those with a soft mask of another size, kept per document by scale, so repeats and other tiles of a page don't decode again (issue16263: master 4,017 ms, branch 405 ms, PDFium 947 ms)",
+      "JBIG2 page size": "pages larger than the decoder's bitmap rejected when parsed, before a 10 GB buffer was filled (bomb_giant: master 10,310 ms, branch 4 ms)",
+      "gradient table": "axial and radial shadings drawn as textures look colours up in 4,096 steps instead of evaluating each pixel",
+      "mesh grid": "mesh shadings sampled into a grid clipped to the render target instead of a hash map (issue2948: master 314 ms, branch 75 ms; coons-allflags-withfunction 87 to 29 ms; two tensor-patch pages 4-8% slower)",
+      "block averaging": "reductions of 8x or more average blocks first, leaving the Hermite filter 4-8x",
+      "luminance masks": "soft masks converted in 16-bit fixed point (issue18032: 115 to 91 ms)"
+    },
+    "hayro_test_suite": {
+      "upstream_master": "1,760 passed, 18 failed (11 of them reference images not yet uploaded), 73 ignored",
+      "branch": "916 passed, 862 failed, 73 ignored; the suite allows 3 levels per channel against CI's references, which cached glyph placement exceeds on text",
+      "graded": "of the 1,277 pages that differ, 1,271 have pixels off by more than 48 on under 0.01% of the page and 6 on 0.01-0.017%; the largest single-pixel difference is 109 of 255; no crashes"
+    }
+  },
+  "remaining_gaps_to_pdfium": "per page, the branch is over 1.5 times PDFium's time on 10% of pages and 7.5 times at the 99th percentile: tiling patterns (tiling-pattern-box 245 ms against 6), mesh and function shadings, soft-mask groups drawn at full canvas size, and building the CMYK colour table once per process (about 35 ms)",
+  "what_shiori_would_need_to_use_hayro": "character boxes (hayro-interpret exposes each glyph's Unicode, code and transform to a Device), search, links and the outline read with hayro-syntax, forms; hayro already decrypts, and is memory-safe, though a worker per document would still bound hangs",
+  "not_covered": "the branch isn't in Shiori or upstream; no VM or hardware runs; single machine under shared load",
+  "followed_by": "hayro-fork-2026-10-28.json"
+}
