@@ -314,20 +314,38 @@ fn launch_with_observer(
 }
 
 /// Launch an already parsed command, without passing it through a shell's
-/// parser or desktop-entry field-code expansion.
+/// parser or desktop-entry field-code expansion. `app_id` is the app the
+/// caller knows the command runs, if any; its scope is named for that app,
+/// else for the program, as an app's own launch would be.
 pub fn launch_command_observed(
     argv: &[String],
+    app_id: Option<&str>,
     options: &LaunchOptions,
     observer: &LaunchObserver,
 ) -> Result<Vec<Launched>> {
+    let entry = command_entry(argv, app_id)?;
+    let backend = if options.use_systemd { systemd_backend() } else { None };
+    launch_commands(&entry, vec![argv.to_vec()], options, &backend.unwrap_or(Backend::Plain), Some(observer))
+}
+
+/// The stand-in entry a command launches as: only its ID (which names the
+/// scope) and its name come from the command; nothing else of an app's
+/// entry (its folder, its terminal) applies.
+fn command_entry(argv: &[String], app_id: Option<&str>) -> Result<DesktopEntry> {
+    let program = argv.first().map(String::as_str).unwrap_or("");
+    let program = program.rsplit('/').next().unwrap_or(program);
+    let id = match app_id.filter(|id| !id.is_empty()) {
+        Some(id) => format!("{id}.desktop"),
+        None if !program.is_empty() => program.to_owned(),
+        None => "command".to_owned(),
+    };
     let mut entry = DesktopEntry::parse(
         "[Desktop Entry]\nType=Application\nName=Command\nExec=true\n",
-        "aizome-command.desktop",
+        &id,
         &super::Locale::parse("C"),
     )?;
     entry.name = argv.first().cloned().unwrap_or_else(|| "Command".into());
-    let backend = if options.use_systemd { systemd_backend() } else { None };
-    launch_commands(&entry, vec![argv.to_vec()], options, &backend.unwrap_or(Backend::Plain), Some(observer))
+    Ok(entry)
 }
 
 fn launch_commands(
@@ -707,6 +725,14 @@ mod tests {
         assert_eq!(systemd_escape(r"back\slash"), r"back\x5cslash");
         assert_eq!(unit_name("foot", "0123abcd"), "app-aizome-foot-0123abcd.scope");
         assert_eq!(unit_name("org.foo-bar", "ff"), r"app-aizome-org.foo\x2dbar-ff.scope");
+        // A command's scope is named for the app it runs, else its program.
+        let settings =
+            command_entry(&["aizome-settei".into(), "--pane=sound".into()], Some("org.aizome.Settei")).unwrap();
+        assert_eq!(settings.app_id(), "org.aizome.Settei");
+        assert_eq!(settings.name, "aizome-settei");
+        let open = command_entry(&["/run/current-system/sw/bin/xdg-open".into(), "x".into()], None).unwrap();
+        assert_eq!(unit_name(open.app_id(), "ff"), r"app-aizome-xdg\x2dopen-ff.scope");
+        assert_eq!(command_entry(&[], None).unwrap().app_id(), "command");
         let long = unit_name(&"-".repeat(200), "0123456789abcdef");
         assert!(long.len() <= 255, "{}", long.len());
         assert!(long.ends_with(r"\x2d-0123456789abcdef.scope"));
@@ -1095,9 +1121,13 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
             "test".into(),
             "%F $HOME `false`".into(),
         ];
-        let launched =
-            launch_command_observed(&argv, &LaunchOptions { use_systemd: false, ..Default::default() }, &observer)
-                .unwrap();
+        let launched = launch_command_observed(
+            &argv,
+            None,
+            &LaunchOptions { use_systemd: false, ..Default::default() },
+            &observer,
+        )
+        .unwrap();
         assert_eq!(launched[0].argv, argv);
         assert!(
             matches!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), LaunchEvent::Message(s) if s.contains("Executable:"))
@@ -1109,8 +1139,12 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
         assert!(status.unwrap().success());
         let other = LaunchObserver::new(|_| {});
         assert_ne!(observer.journal_id(), other.journal_id());
-        let missing =
-            launch_command_observed(&["/definitely/not/an/application".into()], &LaunchOptions::default(), &other);
+        let missing = launch_command_observed(
+            &["/definitely/not/an/application".into()],
+            None,
+            &LaunchOptions::default(),
+            &other,
+        );
         assert!(missing.is_err());
     }
 }

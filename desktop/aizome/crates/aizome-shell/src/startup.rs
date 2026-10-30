@@ -50,6 +50,10 @@ pub struct Attempt {
     expects_window: bool,
     had_window: bool,
     windows_before: BTreeSet<aizome_ipc::WindowId>,
+    /// The processes it started.
+    pids: Vec<u32>,
+    /// The window that confirmed it.
+    window: Option<aizome_ipc::WindowId>,
     exited: bool,
     notification: Option<u32>,
     started: Instant,
@@ -127,6 +131,8 @@ impl Shell {
             expects_window,
             had_window,
             windows_before: self.wm.windows.keys().copied().collect(),
+            pids: vec![],
+            window: None,
             exited: false,
             notification: None,
             started: Instant::now(),
@@ -168,7 +174,13 @@ impl Shell {
                     aizome_sys::apps::launch_observed(&entry, &options, Some(&observer))
                 }
                 (Launch::App { app_id, .. }, None) => Err(aizome_sys::Error::NotFound(format!("application {app_id}"))),
-                (Launch::Argv(argv), _) => aizome_sys::apps::launch_command_observed(argv, &options, &observer),
+                // Its scope is the app's, when the command is a known app's.
+                (Launch::Argv(argv), entry) => aizome_sys::apps::launch_command_observed(
+                    argv,
+                    entry.as_ref().map(|e| e.app_id()),
+                    &options,
+                    &observer,
+                ),
             };
             if let Err(error) = result {
                 tx.send(Msg::Startup(Event::Failed(id, error.to_string())));
@@ -188,9 +200,16 @@ impl Shell {
 
     /// Only a newly mapped window confirms a graphical launch. Existing
     /// windows and a successful helper exit are recorded separately.
+    ///
+    /// A window confirms one launch: the one whose process opened it, else
+    /// the oldest of that app's still waiting. Two quick launches of an app
+    /// need a window each, so a second that never opens one is reported.
     pub(crate) fn startup_window(&mut self, window: &aizome_ipc::WindowInfo) {
         let app_id = &window.app_id;
-        let ids: Vec<_> = self
+        if self.startup.attempts.values().any(|a| a.window == Some(window.id)) {
+            return;
+        }
+        let waiting: Vec<u64> = self
             .startup
             .attempts
             .iter()
@@ -203,14 +222,16 @@ impl Shell {
             })
             .map(|(id, _)| *id)
             .collect();
-        for id in ids {
-            let a = self.startup.attempts.get_mut(&id).unwrap();
-            a.ready = true;
-            a.outcome = "Window opened".into();
-            a.record(format!("Compositor observed a window for {app_id}."));
-            if let Some(note) = a.notification.take() {
-                self.dismiss_note(note);
-            }
+        let pid = window.pid.and_then(|p| u32::try_from(p).ok());
+        let own = waiting.iter().copied().find(|id| pid.is_some_and(|p| self.startup.attempts[id].pids.contains(&p)));
+        let Some(id) = own.or_else(|| waiting.first().copied()) else { return };
+        let a = self.startup.attempts.get_mut(&id).unwrap();
+        a.ready = true;
+        a.window = Some(window.id);
+        a.outcome = "Window opened".into();
+        a.record(format!("Compositor observed a window for {app_id}."));
+        if let Some(note) = a.notification.take() {
+            self.dismiss_note(note);
         }
     }
 
@@ -252,6 +273,7 @@ impl Shell {
                             p.unit.as_deref().unwrap_or("none"),
                             p.argv
                         ));
+                        a.pids.push(p.pid);
                         if !a.ready && !a.failed {
                             a.outcome = "Process started; no window confirmed".into();
                         }
@@ -267,11 +289,21 @@ impl Shell {
                     LaunchEvent::Exited { pid, status } => {
                         a.exited = true;
                         let success = status.as_ref().is_ok_and(|s| s.success());
+                        let crash = status.as_ref().is_ok_and(crashed);
                         let status = status
                             .map(|s| s.to_string())
                             .unwrap_or_else(|e| format!("could not read exit status: {e}"));
                         a.record(format!("Process {pid}: {status}"));
-                        if !a.ready || (!success && a.started.elapsed() <= Duration::from_secs(30)) {
+                        if a.ready {
+                            // Its window opened: how it ends is its own
+                            // (a terminal passes on its shell's status),
+                            // unless it crashed while starting.
+                            if crash && a.started.elapsed() <= Duration::from_secs(30) {
+                                a.failed = true;
+                                a.outcome = format!("Closed during startup: {status}");
+                                failed = true;
+                            }
+                        } else {
                             a.failed |= !success;
                             if success && a.failed {
                                 return;
@@ -283,7 +315,7 @@ impl Shell {
                                     "Command completed; no window confirmed".into()
                                 }
                             } else {
-                                format!("{}: {status}", if a.ready { "Closed during startup" } else { "Launch failed" })
+                                format!("Launch failed: {status}")
                             };
                             failed = !success && a.started.elapsed() <= Duration::from_secs(120);
                         }
@@ -324,7 +356,13 @@ impl Shell {
             summary: format!("{}: {}", a.name, if a.failed { "could not open" } else { "waiting for a window" }),
             body: format!("{}. Show Details to see what happened and the application output.", a.outcome),
             desktop_entry: a.app_id.clone(),
-            urgency: crate::notifications::store::Urgency::Critical,
+            // A failure stays until seen; a slow start is only news, and
+            // its window may come long after the shell stops waiting.
+            urgency: if a.failed {
+                crate::notifications::store::Urgency::Critical
+            } else {
+                crate::notifications::store::Urgency::Normal
+            },
             ..Default::default()
         };
         let action = Action::LaunchDetails { id: Some(id) };
@@ -441,6 +479,18 @@ pub(crate) fn logs_command(journal_id: &str) -> Vec<String> {
     vec!["aizome-nisshi".into(), "--launch".into(), journal_id.into()]
 }
 
+/// Whether a process ended by crashing: a signal for a fault or an abort,
+/// or a shell's status for its child's (128 + the signal), not one asked
+/// for (TERM, KILL, INT from someone ending it) or an exit code it chose.
+fn crashed(status: &std::process::ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    let fault = |s: i32| {
+        [libc::SIGSEGV, libc::SIGABRT, libc::SIGBUS, libc::SIGILL, libc::SIGFPE, libc::SIGTRAP, libc::SIGSYS]
+            .contains(&s)
+    };
+    status.signal().is_some_and(fault) || status.code().is_some_and(|c| c > 128 && fault(c - 128))
+}
+
 /// Read only this launch's journal stream. Bound time and memory, drain
 /// stdout concurrently, and keep all journal I/O off the interface thread.
 fn read_logs(identifier: &str) -> String {
@@ -538,29 +588,38 @@ mod tests {
     use aizome_kit::testing::Harness;
     use std::os::unix::process::ExitStatusExt;
 
+    fn attempt() -> Attempt {
+        Attempt {
+            name: "Koe failure fixture".into(),
+            app_id: Some("org.aizome.Koe".into()),
+            journal_id: "test-launch".into(),
+            outcome: "Starting".into(),
+            messages: vec![],
+            logs: String::new(),
+            ready: false,
+            failed: false,
+            activated: false,
+            expects_window: true,
+            had_window: false,
+            windows_before: BTreeSet::new(),
+            pids: vec![],
+            window: None,
+            exited: false,
+            notification: None,
+            started: Instant::now(),
+        }
+    }
+
     fn fixture() -> Harness<Shell> {
         let mut h = Harness::new(Shell::new(Options::default()));
-        h.program_mut().startup.attempts.insert(
-            1,
-            Attempt {
-                name: "Koe failure fixture".into(),
-                app_id: Some("org.aizome.Koe".into()),
-                journal_id: "test-launch".into(),
-                outcome: "Starting".into(),
-                messages: vec![],
-                logs: String::new(),
-                ready: false,
-                failed: false,
-                activated: false,
-                expects_window: true,
-                had_window: false,
-                windows_before: BTreeSet::new(),
-                exited: false,
-                notification: None,
-                started: Instant::now(),
-            },
-        );
+        h.program_mut().startup.attempts.insert(1, attempt());
         h
+    }
+
+    fn opened(id: aizome_ipc::WindowId, pid: Option<i32>) -> Msg {
+        Msg::Ipc(crate::ipc::IpcEvent::Event(aizome_ipc::Event::WindowOpened {
+            window: aizome_ipc::WindowInfo { id, app_id: "org.aizome.Koe".into(), pid, ..Default::default() },
+        }))
     }
 
     fn exit(h: &mut Harness<Shell>, code: i32) {
@@ -642,7 +701,10 @@ mod tests {
         assert!(!h.program().startup.attempts[&1].ready);
         h.send(Msg::Startup(Event::Check(1)));
         assert!(!h.program().startup.attempts[&1].failed);
-        assert!(h.program().notes.list.last().unwrap().summary.contains("waiting for a window"));
+        let note = h.program().notes.list.last().unwrap();
+        assert!(note.summary.contains("waiting for a window"));
+        // News, not a card that stays until the window comes.
+        assert_eq!(note.urgency, crate::notifications::store::Urgency::Normal);
         save_mock(&mut h, "mock-waiting.png");
         h.send(Msg::Ipc(crate::ipc::IpcEvent::Event(aizome_ipc::Event::WindowOpened {
             window: aizome_ipc::WindowInfo { id: 42, app_id: "org.aizome.Koe".into(), ..Default::default() },
@@ -685,6 +747,64 @@ mod tests {
         exit(&mut h, 139);
         assert!(h.program().startup.attempts[&1].failed);
         assert!(h.program().startup.attempts[&1].outcome.contains("Closed during startup"));
+        let note = h.program().notes.list.last().unwrap();
+        assert!(note.summary.contains("could not open"));
+        assert_eq!(note.urgency, crate::notifications::store::Urgency::Critical);
+    }
+
+    #[test]
+    fn a_window_confirms_one_launch() {
+        let mut h = fixture();
+        let mut second = attempt();
+        second.pids.push(456);
+        h.program_mut().startup.attempts.insert(2, second);
+        // The second launch's own process opened it.
+        h.send(opened(42, Some(456)));
+        assert!(!h.program().startup.attempts[&1].ready);
+        assert!(h.program().startup.attempts[&2].ready);
+        // The same window again (its title changed) confirms nothing more.
+        h.send(Msg::Ipc(crate::ipc::IpcEvent::Event(aizome_ipc::Event::WindowChanged {
+            window: aizome_ipc::WindowInfo { id: 42, app_id: "org.aizome.Koe".into(), ..Default::default() },
+        })));
+        assert!(!h.program().startup.attempts[&1].ready);
+        // Another window, from a process neither started: the oldest waiting.
+        h.send(opened(43, Some(789)));
+        assert!(h.program().startup.attempts[&1].ready);
+        assert_eq!(h.program().startup.attempts[&1].window, Some(43));
+        // A third launch with no window of its own is still asked about.
+        h.program_mut().startup.attempts.insert(3, attempt());
+        h.send(Msg::Startup(Event::Check(3)));
+        assert!(!h.program().startup.attempts[&3].ready);
+        assert!(h.program().notes.list.last().unwrap().summary.contains("waiting for a window"));
+    }
+
+    #[test]
+    fn after_its_window_opens_only_a_crash_is_a_failure() {
+        let mut h = fixture();
+        h.send(opened(42, None));
+        // A terminal passing on its shell's status, or an app closed soon.
+        exit(&mut h, 1);
+        let a = &h.program().startup.attempts[&1];
+        assert!(a.ready && !a.failed);
+        assert_eq!(a.outcome, "Window opened");
+        assert!(a.messages.iter().any(|m| m.contains("exit status: 1")));
+        assert!(h.program().notes.list.is_empty());
+        // Ended by someone (TERM): not a crash either.
+        let mut h = fixture();
+        h.send(opened(42, None));
+        h.send(Msg::Startup(Event::Process(
+            1,
+            LaunchEvent::Exited { pid: 123, status: Ok(std::process::ExitStatus::from_raw(libc::SIGTERM)) },
+        )));
+        assert!(!h.program().startup.attempts[&1].failed);
+        // Aborted: it is.
+        let mut h = fixture();
+        h.send(opened(42, None));
+        h.send(Msg::Startup(Event::Process(
+            1,
+            LaunchEvent::Exited { pid: 123, status: Ok(std::process::ExitStatus::from_raw(libc::SIGABRT)) },
+        )));
+        assert!(h.program().startup.attempts[&1].failed);
         assert!(h.program().notes.list.last().unwrap().summary.contains("could not open"));
     }
 
@@ -720,6 +840,7 @@ mod tests {
             });
             aizome_sys::apps::launch_command_observed(
                 &["sh".into(), "-c".into(), format!("echo {marker}; echo stderr-{marker} >&2; exit 23")],
+                None,
                 &LaunchOptions { use_systemd: false, ..Default::default() },
                 &observer,
             )

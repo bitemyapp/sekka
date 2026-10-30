@@ -166,11 +166,19 @@ typed.
 
 **Application Launches…** keeps the last 64 attempts made by this shell.
 It distinguishes starting a process, an application accepting activation,
-and the compositor seeing a new window. An early failed exit or a missing
-program shows a notification with **Show Details**. A graphical app that
-hasn't shown a window after 15 seconds says it is still starting; it keeps
-running, and the shell watches for its window for two minutes. A window
-observed during that interval clears the waiting notice.
+and the compositor seeing a new window; each new window confirms one
+launch, so a second launch of an app needs a window of its own. A failed
+exit before a window, a missing program, or a crash within 30 seconds of
+the window shows a notification with **Show Details** that stays until
+seen; how an app ends once its window is up is otherwise its own. A
+graphical app that hasn't shown a window after 15 seconds says, in an
+ordinary notification, that it is still starting; it keeps running, and
+the shell watches for its window for two minutes. A window observed during
+that interval clears the waiting notice.
+
+Commands the shell runs (a Settings pane, a file opened with `xdg-open`)
+run in a scope named for the app they belong to, or for the program when
+no app's entry runs it, as an app's own launch does.
 
 Details include the selected desktop entry, executable, process result,
 and that attempt's journal output, with **Refresh Logs** and **Copy Details**.

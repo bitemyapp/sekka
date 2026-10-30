@@ -9,6 +9,8 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 /// Whether a journal identifier is one launch's own.
@@ -36,8 +38,20 @@ pub fn app_of_unit(unit: &str) -> Option<String> {
     if !known && !(random.len() >= 8 && random.bytes().all(|b| b.is_ascii_hexdigit())) {
         return None;
     }
+    // Anyone can name a scope of their own, and the ID becomes a desktop
+    // entry's file name: only the characters desktop IDs use, so that
+    // `\x2f` can't make it a path.
     let id = unescape(id);
-    (!id.is_empty()).then_some(id)
+    is_app_id(&id).then_some(id)
+}
+
+/// Whether `id` could be a desktop entry's ID: letters, digits, `.`, `_`
+/// and `-`, not starting with a dot.
+fn is_app_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 255
+        && !id.starts_with('.')
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 /// systemd's escaping of a unit name's parts: `\x2d` for `-`.
@@ -72,11 +86,25 @@ fn application_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
+/// The most of a desktop entry read for its name.
+const LARGEST_ENTRY: u64 = 1 << 20;
+
 /// The `Name` an app's desktop entry gives it, in the first of `dirs` that
-/// has it.
+/// has it. Only a plain file, and only its start: this runs on the reader's
+/// thread, which a FIFO or `/dev/zero` would stop.
 pub fn name_in(dirs: &[PathBuf], id: &str) -> Option<String> {
     dirs.iter().find_map(|d| {
-        let text = std::fs::read_to_string(d.join(format!("{id}.desktop"))).ok()?;
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(d.join(format!("{id}.desktop")))
+            .ok()?;
+        if !f.metadata().ok()?.is_file() {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        f.take(LARGEST_ENTRY).read_to_end(&mut bytes).ok()?;
+        let text = String::from_utf8_lossy(&bytes);
         let mut in_entry = false;
         for line in text.lines() {
             let line = line.trim();
@@ -140,6 +168,10 @@ mod tests {
             app_of_unit("app-tool-org.example.Viewer-72395e0ce4c25ac6.scope").as_deref(),
             Some("org.example.Viewer")
         );
+        // Another user's scope named to make the ID a path.
+        assert_eq!(app_of_unit(r"app-aizome-..\x2f..\x2f..\x2ftmp\x2fevil-deadbeef.scope"), None);
+        assert_eq!(app_of_unit(r"app-aizome-\x2fdev\x2fzero-deadbeef.scope"), None);
+        assert_eq!(app_of_unit(r"app-aizome-.hidden-deadbeef.scope"), None);
         assert_eq!(fallback_name("org.aizome.Koe"), "Koe");
         assert_eq!(fallback_name("google-chrome"), "google-chrome");
         assert!(is_runner("sh") && !is_runner("aizome-koe"));
@@ -156,6 +188,12 @@ mod tests {
         .unwrap();
         assert_eq!(name_in(std::slice::from_ref(&dir), "org.example.Tool").as_deref(), Some("Example Tool"));
         assert_eq!(name_in(std::slice::from_ref(&dir), "org.example.Missing"), None);
+        // A FIFO isn't read (it would wait for a writer forever).
+        let fifo =
+            std::ffi::CString::new(dir.join("org.example.Fifo.desktop").into_os_string().into_encoded_bytes()).unwrap();
+        // SAFETY: fifo is a valid NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert_eq!(name_in(std::slice::from_ref(&dir), "org.example.Fifo"), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

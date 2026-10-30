@@ -507,6 +507,11 @@ impl Nisshi {
         self.file_store.clear();
         self.selected.clear();
         self.fields = None;
+        // The rows were the old lines': none now, until the new ones come
+        // (or for good, if the read fails).
+        if self.in_file() {
+            self.rebuild();
+        }
         let readable = self.files.iter().find(|f| f.path == path).is_none_or(|f| f.readable);
         if !readable && self.unlock != Unlock::Unlocked {
             self.after_unlock = Some(path);
@@ -913,8 +918,7 @@ impl Nisshi {
     pub fn export_text(&self, json: bool) -> String {
         let store = self.shown();
         let mut out = String::new();
-        for &i in self.view.rows.iter() {
-            let e = &store.entries[i as usize];
+        for e in self.view.rows.iter().filter_map(|&i| store.entries.get(i as usize)) {
             if json {
                 let v = serde_json::json!({
                     "time": e.time,
@@ -1126,7 +1130,7 @@ impl Program for Nisshi {
                                 .view
                                 .rows
                                 .iter()
-                                .map(|&i| &store.entries[i as usize])
+                                .filter_map(|&i| store.entries.get(i as usize))
                                 .min_by_key(|e| (e.time - t).abs())
                                 .map(|e| e.seq);
                             if let Some(seq) = near {

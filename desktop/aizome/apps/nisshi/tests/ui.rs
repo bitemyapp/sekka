@@ -131,6 +131,9 @@ fn completing_a_key() {
     assert_eq!(h.program().suggestions[0].label, "fwupd-refresh.service");
     h.send(Msg::Search("level:w".into()));
     assert_eq!(h.program().suggestions[0].label, "Warning and worse");
+    // After a space of more than a byte, from an input method.
+    h.send(Msg::Search("sshd\u{3000}level:".into()));
+    assert_eq!(h.program().suggestions[0].action, Action::Search("sshd\u{3000}level:err ".into()));
 }
 
 #[test]
@@ -322,6 +325,11 @@ fn a_log_file() {
     assert_eq!(n.view.shown[5].priority, Priority::Warning, "(WW)");
     h.send(Msg::Level(Some(Priority::Warning)));
     assert_eq!(shown(&h).len(), 2);
+    // Read again: the old lines' rows go with them, even with no reader to
+    // bring new ones.
+    h.send(Msg::Reload);
+    assert!(h.program().view.rows.is_empty());
+    assert_eq!(h.program().export_text(false), "");
 }
 
 #[test]

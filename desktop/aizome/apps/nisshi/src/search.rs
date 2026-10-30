@@ -346,7 +346,9 @@ pub fn completing(input: &str) -> Option<(&'static str, &str)> {
 
 /// `input` with what's being typed replaced by `value` (and a space).
 pub fn complete(input: &str, value: &str) -> String {
-    let start = input.rfind(char::is_whitespace).map_or(0, |i| i + 1);
+    // After the last space, which may be more than a byte (an ideographic
+    // space from an input method, a no-break space).
+    let start = input.char_indices().rfind(|(_, c)| c.is_whitespace()).map_or(0, |(i, c)| i + c.len_utf8());
     let last = &input[start..];
     let neg = if last.starts_with('-') { "-" } else { "" };
     let key = last.trim_start_matches('-').split(':').next().unwrap_or("");
@@ -441,5 +443,8 @@ mod tests {
         assert_eq!(completing("error"), None);
         assert_eq!(complete("error app:net", "NetworkManager"), "error app:NetworkManager ");
         assert_eq!(complete("-app:te", "Google Chrome"), "-app:\"Google Chrome\" ");
+        assert_eq!(completing("x\u{3000}level:"), Some(("level:", "")));
+        assert_eq!(complete("x\u{3000}level:", "error"), "x\u{3000}level:error ");
+        assert_eq!(complete("x\u{a0}app:ne", "NetworkManager"), "x\u{a0}app:NetworkManager ");
     }
 }
