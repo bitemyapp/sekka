@@ -121,7 +121,9 @@ manager starts them, restarting the launcher cannot end them either.
 With other desktops installed, Tatami keeps their pieces out: their tray
 applets (nm-applet, the printer applet) do not start in it, and the session
 reports `XDG_CURRENT_DESKTOP=Hyprland:Tatami` so such entries can tell it
-apart. Setup › Hyprland creates `~/.config/tatami/hyprland.lua`, which loads
+apart. In turn, Tatami's own Displays, Network, Bluetooth, Sound and Activity
+windows are listed only in Tatami: other desktops' menus show their own
+settings instead. Setup › Hyprland creates `~/.config/tatami/hyprland.lua`, which loads
 Tatami's defaults first and then your own settings, so later updates of the
 defaults still apply.
 

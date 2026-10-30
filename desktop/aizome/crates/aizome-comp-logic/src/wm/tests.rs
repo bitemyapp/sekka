@@ -285,6 +285,47 @@ fn stacking_a_group_into_another_merges_them() {
 }
 
 #[test]
+fn a_torn_out_tab_goes_back_before_any_other() {
+    let mut m = model();
+    let a = add(&mut m, "a");
+    let b = add(&mut m, "b");
+    let c = add(&mut m, "c");
+    m.stack(a, b);
+    m.stack(a, c);
+    // The showing tab, torn out (⌥-drag) and dropped before the first.
+    assert!(m.unstack(c));
+    let shown = m.group_of(a).unwrap().active;
+    m.stack_at(shown, c, Some(0));
+    assert_eq!(m.group_of(a).unwrap().members, vec![c, a, b]);
+    assert_eq!(m.group_of(a).unwrap().active, c);
+    // Between the two others.
+    assert!(m.unstack(c));
+    m.stack_at(a, c, Some(1));
+    assert_eq!(m.group_of(a).unwrap().members, vec![a, c, b]);
+    // Past the end is the end.
+    assert!(m.unstack(c));
+    m.stack_at(a, c, Some(9));
+    assert_eq!(m.group_of(a).unwrap().members, vec![a, b, c]);
+}
+
+#[test]
+fn stacking_before_a_tab_brings_the_whole_group() {
+    let mut m = model();
+    let a = add(&mut m, "a");
+    let b = add(&mut m, "b");
+    let c = add(&mut m, "c");
+    let d = add(&mut m, "d");
+    // Before a window on its own.
+    m.stack_at(a, b, Some(0));
+    assert_eq!(m.group_of(a).unwrap().members, vec![b, a]);
+    m.stack(c, d);
+    m.stack_at(a, d, Some(1));
+    assert_eq!(m.group_of(a).unwrap().members, vec![b, c, d, a]);
+    assert_eq!(m.group_of(a).unwrap().active, d);
+    assert_eq!(m.groups().count(), 1);
+}
+
+#[test]
 fn closing_a_shown_member_shows_a_neighbour() {
     let mut m = model();
     let a = add(&mut m, "a");
