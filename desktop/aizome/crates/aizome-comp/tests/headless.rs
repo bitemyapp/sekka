@@ -407,6 +407,90 @@ fn dragging_a_tab_onto_another_stacks_them() {
     assert_eq!((b.geometry.x, b.geometry.y), (300, 500));
 }
 
+#[test]
+fn alt_dragging_the_showing_tab_left_puts_it_between_or_first() {
+    let c = Compositor::start(Options { settings: "", ..Default::default() });
+    let _a = c.client(Spec::new("test.a", 0x2222cc).title("A"));
+    let wa = c.wait_window("test.a");
+    let _b = c.client(Spec::new("test.b", 0x22cc22).title("B"));
+    let wb = c.wait_window("test.b");
+    let _c = c.client(Spec::new("test.c", 0xcc2222).title("C"));
+    let wc = c.wait_window("test.c");
+    c.ok(Request::Move { id: Some(wa.id), x: 200, y: 200 });
+    c.ok(Request::Stack { a: wa.id, b: wb.id });
+    c.ok(Request::Stack { a: wa.id, b: wc.id });
+    let ws = c.wait_windows("three stacked", |ws| {
+        ws.iter().all(|w| w.group_members == vec![wa.id, wb.id, wc.id] && w.geometry == ws[0].geometry)
+    });
+    let g = ws[0].geometry;
+    c.settle();
+    // Three tabs as wide as each other along the frame's top, C's last.
+    let (fx, ty) = (g.x as f64 - 1.0, g.y - 14);
+    let img = c.screenshot();
+    let row: Vec<[u8; 3]> = (g.x..g.x + g.w).map(|x| img.px(x, ty)).collect();
+    let tab = row.iter().position(|p| near(*p, rgb(FOCUS))).expect("C's focused tab") as f64 / 2.0;
+    assert!(tab >= 48.0, "C's tab comes after two others");
+    let at = |i: f64| fx + tab * i;
+    // A tab's own colour: past its left border, before its glyph.
+    let inside = |i: f64| (at(i) + 3.0) as i32;
+    let order = |what: &str, members: Vec<u64>| {
+        let ws = c.wait_windows(what, |ws| ws.iter().all(|w| w.group_members == members));
+        let shown = ws.iter().find(|w| w.id == wc.id).unwrap();
+        assert!(shown.group_active && shown.focused, "the dropped tab shows");
+        assert!(ws.iter().all(|w| w.geometry == g), "in the group's frame");
+    };
+    // ⌥-drag C to B's left half: it'll go between A and B, and B makes room.
+    let ty_f = ty as f64;
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::PointerMotion { x: at(2.5), y: ty_f },
+            Synthetic::Key { key: "alt".into(), pressed: true },
+            Synthetic::PointerButton { button: "left".into(), pressed: true },
+            Synthetic::PointerMotion { x: at(2.0), y: ty_f + 20.0 },
+            Synthetic::PointerMotion { x: at(1.25), y: ty_f },
+        ],
+    });
+    c.settle();
+    let img = c.screenshot();
+    keep(&img, "drag-between-tabs");
+    assert_px(&img, inside(0.0), ty, rgb(0x2a2e45), "A's tab stays first");
+    assert_px(&img, inside(2.0), ty, rgb(TAB_IDLE), "B's tab moves along for it");
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::PointerButton { button: "left".into(), pressed: false },
+            Synthetic::Key { key: "alt".into(), pressed: false },
+        ],
+    });
+    order("C between A and B", vec![wa.id, wc.id, wb.id]);
+    // A separate gesture, outside the tab's double-click interval.
+    std::thread::sleep(std::time::Duration::from_millis(450));
+    c.settle();
+    // ⌥-drag C to A's left half: it'll go first, and both make room.
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::PointerMotion { x: at(1.5), y: ty_f },
+            Synthetic::Key { key: "alt".into(), pressed: true },
+            Synthetic::PointerButton { button: "left".into(), pressed: true },
+            Synthetic::PointerMotion { x: at(1.0), y: ty_f + 20.0 },
+            Synthetic::PointerMotion { x: at(0.1), y: ty_f },
+        ],
+    });
+    c.settle();
+    let img = c.screenshot();
+    keep(&img, "drag-before-tabs");
+    assert_px(&img, inside(1.0), ty, rgb(TAB_IDLE), "A's tab moves along for it");
+    assert_px(&img, inside(2.0), ty, rgb(0x2a2e45), "so does B's");
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::PointerButton { button: "left".into(), pressed: false },
+            Synthetic::Key { key: "alt".into(), pressed: false },
+        ],
+    });
+    order("C first", vec![wc.id, wa.id, wb.id]);
+    c.settle();
+    keep(&c.screenshot(), "dropped-before-tabs");
+}
+
 /// Runs a tool against the compositor if it's installed.
 fn tool(c: &Compositor, cmd: &str, args: &[&str]) -> Option<std::process::Output> {
     let found =

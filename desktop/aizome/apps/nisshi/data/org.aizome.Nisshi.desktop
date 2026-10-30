@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Nisshi
+GenericName=Logs
+Comment=Read and search the system's logs, with filters suggested by what wrote each message
+Keywords=logs;log viewer;journal;journalctl;system log;syslog;dmesg;kernel;events;console;errors;warnings;crash;crashes;coredump;debug;troubleshoot;
+Categories=System;Monitor;
+Icon=org.aizome.Nisshi
+Exec=aizome-nisshi
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Nisshi
+DBusActivatable=false
