@@ -30,6 +30,7 @@
   {"id":"slack","name":"Slack","description":"Team messaging and collaboration. Sign in to your workspace after installation.","category":"Communication","packages":["slack"],"unfree":true},
   {"id":"vlc","name":"VLC","description":"Play video and audio in most common formats.","category":"Media & creativity","packages":["vlc"]},
   {"id":"spotify","name":"Spotify","description":"Stream music and podcasts. Sign in after installation.","category":"Media & creativity","packages":["spotify"],"unfree":true},
+  {"id":"uta","name":"Uta for YouTube Music","description":"Search and play YouTube Music, with optional account and Premium playback. Downloads when selected. Requires a Wayland desktop.","category":"Media & creativity","source":"sekka","packages":["uta"],"preload":false},
   {"id":"obs-studio","name":"OBS Studio","description":"Record your screen and stream live video.","category":"Media & creativity","packages":["obs-studio"]},
   {"id":"gimp","name":"GIMP","description":"Edit photographs and other images.","category":"Media & creativity","packages":["gimp"]},
   {"id":"inkscape","name":"Inkscape","description":"Draw vector illustrations, logos, and diagrams.","category":"Media & creativity","packages":["inkscape"]},

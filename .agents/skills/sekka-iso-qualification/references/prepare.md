@@ -10,6 +10,24 @@
    inputs. Build with
    `nix build .#iso --no-update-lock-file --out-link result-iso`. Store the
    build log and resulting store path. Do not change dependencies mid-run.
+   Catalog entries with `"preload": false` in
+   `installer/genkan/rust/src/applications.json` (currently Uta) are not on
+   the media: Genkan downloads them, or compiles them in the live session's
+   RAM-backed store when no cache has that exact build. Before qualifying,
+   confirm cache.sekka.computer serves the candidate revision's Uta and its
+   source; each line must end in 200:
+
+   ```sh
+   for attr in uta uta.source; do
+     p=$(nix eval --raw --no-update-lock-file ".#$attr.outPath"); h=${p#/nix/store/}
+     curl -s -o /dev/null -w "$attr %{http_code}\n" "https://cache.sekka.computer/${h%%-*}.narinfo"
+   done
+   ```
+
+   Ask curl, not Nix, which remembers a miss for an hour. On a 404, wait for
+   the cache workflow to finish for that revision of `main`, or publish it as
+   DEVELOPERS.md describes, and check again; don't qualify against a cache that
+   lacks it.
 3. Hash the single ISO with `sha256sum`, record `stat` size and lock hash, and
    verify public metadata when testing a download. A locally reconstructed
    image is not evidence about public bytes until its hash matches.
