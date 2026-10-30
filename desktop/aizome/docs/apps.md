@@ -811,8 +811,9 @@ rest); folders play their files in Hako's natural order.
   video sizes the window to its picture, up to most of the screen. In
   full screen the bar floats over the picture's foot until the pointer
   rests for 2.5 seconds off it (or leaves the window), and the pointer
-  hides with it; it stays while paused, and goes 2.5 seconds after
-  playing resumes or the window comes back from another Desk. A song
+  hides with it; it stays while paused and while its Subtitles and Audio
+  or speed menu is open, and goes 2.5 seconds after playing resumes, the
+  menu closes, or the window comes back from another Desk. A song
   shows its cover (its own, or a tile in the dye), its title, and who
   made it on what album when; with several queued, the queue beside it.
 - **Keys**: Space or K plays and pauses; ←/→ five seconds (⇧ one, ⌥ a
