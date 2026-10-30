@@ -1,6 +1,6 @@
 //! `aizome-nisshi [--search TEXT] [--source NAME] [--unit NAME] [--level LEVEL]
 //! [--scope problems|mine|kernel|crashes|security] [--boot N] [--file PATH]
-//! [--cursor CURSOR]`:
+//! [--cursor CURSOR] [--launch ID]`:
 //! the Logs window, or in the open one, the view asked for. `--print`
 //! prints the newest messages instead (`--system` reads them as root,
 //! through polkit).
@@ -71,7 +71,7 @@ fn main() {
         println!(
             "Usage: aizome-nisshi [--search TEXT] [--source NAME] [--unit NAME] [--level LEVEL]\n\
              \x20                    [--scope problems|mine|kernel|crashes|security] [--boot N] [--file PATH]\n\
-             \x20                    [--cursor CURSOR]\n\
+             \x20                    [--cursor CURSOR] [--launch ID]\n\
              \x20      aizome-nisshi --print [--lines N] [--system]\n\n\
              Logs: the system journal and /var/log, searched as you type, with filters suggested by what wrote each message."
         );

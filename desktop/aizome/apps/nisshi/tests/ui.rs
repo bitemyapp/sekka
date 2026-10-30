@@ -348,3 +348,36 @@ fn terminal_colours_and_the_level_written() {
     let w = h.window();
     assert!(h.texts(w).iter().any(|t| t == "Warning (as written in the message)"), "{:?}", h.texts(w));
 }
+
+#[test]
+fn an_apps_launches() {
+    let mut h = start();
+    // Each launch's output under its own identifier, all of it Koe's.
+    let sources: Vec<String> = h.program().view.sources.iter().map(|s| s.name.to_string()).collect();
+    assert!(sources.iter().any(|s| s == "Koe"), "{sources:?}");
+    assert!(!sources.iter().any(|s| s.starts_with("aizome-launch")), "{sources:?}");
+    select(&mut h, "no such source: alsa_input");
+    let e = h.program().selection().unwrap().clone();
+    assert_eq!(e.priority, Priority::Error, "its ERROR, though journald had Info");
+    let i = suggestion(&h, "This launch");
+    assert_eq!(h.program().suggestions[i].count, Some(3));
+    h.send(Msg::Suggest(i));
+    assert_eq!(
+        shown(&h),
+        [
+            "koe: loading ggml-base.en (142 MB)",
+            "ERROR: no such source: alsa_input.usb-Blue_Microphones_Yeti-00.analog-stereo",
+            "koe: daemon did not become ready"
+        ]
+    );
+    // Opened on one launch, as the shell can ask.
+    let first = "aizome-launch-0a1b2c3d4e5f60718293a4b5c6d7e8f9";
+    h.send(Msg::Launched(vec!["--launch".into(), first.into()]));
+    assert_eq!(shown(&h).len(), 3);
+    assert!(shown(&h)[2].starts_with("koe: listening on"));
+    let w = h.window();
+    assert!(h.texts(w).iter().any(|t| t == "One launch (0a1b2c3d)"), "{:?}", h.texts(w));
+    // Not an identifier a launch has: ignored.
+    h.send(Msg::Launched(vec!["--launch".into(), "--rotate".into()]));
+    assert!(h.program().filter.chips.is_empty());
+}

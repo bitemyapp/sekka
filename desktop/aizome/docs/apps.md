@@ -671,6 +671,14 @@ details below the list.
   characters are left out (`src/ansi.rs`). A service's output, which
   journald files at Info, takes the level its line was written with
   (`2026-…Z  WARN target: …`, `ERROR: …`, `[warn]`), and the details say so.
+- **Launched apps**: the shell starts an app in a scope named for it
+  (`app-aizome-<app ID>-<random>.scope`) and gives its output to the
+  journal itself, under the app's ID or a launch's own identifier
+  (`aizome-launch-…`, where the shell watches the launch). journald credits
+  that output to whatever opened the stream (`cat`, `sh`). Nisshi names it
+  after the app, from the scope and the app's desktop entry, so every
+  launch of Koe is under Koe. Where an app was launched more than once,
+  **This launch** narrows to one attempt (`src/launch.rs`).
 - **Details**: the message whole (a core dump's stack trace included),
   when, how long ago, and every field the journal keeps with it, each
   with a button that filters by it. **Around This Time** clears every
@@ -688,7 +696,8 @@ details below the list.
   (⇧❖E) writes what shows as text, or JSON lines for a `.json` file.
 - `aizome-nisshi --search TEXT --source NAME --unit NAME --level LEVEL
   --scope problems|mine|kernel|crashes|security --boot N --file PATH
-  --cursor CURSOR` opens on that, in the running window if there is one;
+  --cursor CURSOR --launch ID` opens on that, in the running window if
+  there is one; `--launch` shows one launch's output, by its identifier;
   `--cursor` selects one message, by the cursor `journalctl --show-cursor`
   prints (another app's "show this in Logs").
 

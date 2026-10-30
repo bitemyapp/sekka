@@ -379,6 +379,7 @@ mod tests {
             seq: 0,
             flags: 0,
             styles: None,
+            launch: None,
         }
     }
 

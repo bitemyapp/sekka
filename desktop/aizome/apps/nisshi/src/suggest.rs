@@ -156,6 +156,21 @@ pub fn for_entry(
             });
         }
     }
+    // Its launch, where its app was launched more than once.
+    if let Some(id) = &e.launch
+        && !filter.chips.iter().any(|c| matches!(c, Chip::Launch(_)))
+    {
+        let n = theirs.iter().filter(|x| x.launch.as_ref() == Some(id)).count();
+        if n > 0 && n < theirs.len() {
+            out.push(Suggestion {
+                label: "This launch".into(),
+                count: Some(n),
+                icon: Icon::Play,
+                why: format!("Only what {source} wrote the time it was opened then: its other launches left out"),
+                action: narrow(vec![Chip::Launch(id.clone())]),
+            });
+        }
+    }
     // Its process, where its source has several.
     if e.pid > 0 && !filter.chips.iter().any(|c| matches!(c, Chip::Pid(_))) {
         let pids: HashSet<u32> = theirs.iter().map(|x| x.pid).collect();

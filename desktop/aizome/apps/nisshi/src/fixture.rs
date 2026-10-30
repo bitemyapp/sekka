@@ -71,6 +71,14 @@ impl Writer {
         self.say_about(at, who, p, message, None, None)
     }
 
+    /// A line of an app the desktop launched, under that launch's own
+    /// identifier, in the app's scope ([`crate::launch`]).
+    fn launched(&mut self, at: i64, launch: &str, line: &str) {
+        let koe = mine("Koe", r"app-aizome-org.aizome.Koe-5c1e0a9b3d2f4e67.scope", 5120);
+        let id = self.intern.get(launch);
+        self.say(at, koe, Priority::Info, line).launch = Some(id);
+    }
+
     fn say_about(
         &mut self,
         at: i64,
@@ -108,6 +116,7 @@ impl Writer {
             seq: 0,
             flags: 0,
             styles: None,
+            launch: None,
         }
         .finish();
         self.out.push(e);
@@ -392,6 +401,18 @@ pub fn journal() -> Vec<Entry> {
         Some("fwupd-refresh.service"),
         None,
     );
+    // Koe, launched from the Toolchest twice: once it starts, once its
+    // microphone has gone.
+    let first = "aizome-launch-0a1b2c3d4e5f60718293a4b5c6d7e8f9";
+    let at = NOW - 170 * MIN;
+    w.launched(at, first, "koe: loading ggml-base.en (142 MB)");
+    w.launched(at + 1_200_000, first, "koe: model ready in 1.2 s, using Vulkan on Radeon Graphics");
+    w.launched(at + 1_400_000, first, "koe: listening on alsa_input.usb-Blue_Microphones_Yeti-00.analog-stereo");
+    let second = "aizome-launch-f332d86ed3fac3deb4589d0998c3a08e";
+    let at = NOW - 31 * MIN;
+    w.launched(at, second, "koe: loading ggml-base.en (142 MB)");
+    w.launched(at + 1_100_000, second, "ERROR: no such source: alsa_input.usb-Blue_Microphones_Yeti-00.analog-stereo");
+    w.launched(at + 1_150_000, second, "koe: daemon did not become ready");
     // A program that crashes.
     let at = NOW - 26 * MIN;
     w.say(at, KERNEL, Info, "traps: gamescope-wl[298773] trap int3 ip:55d03a2b1c4e sp:7ffd5f1e2a90 error:0 in gamescope-wl[2b1c4e,55d03a200000+1a2000]");
@@ -536,8 +557,11 @@ pub fn json(e: &Entry) -> String {
     if styled.is_none() {
         put("MESSAGE", e.message.to_string());
     }
-    put("PRIORITY", e.priority.level().to_string());
-    put("SYSLOG_IDENTIFIER", e.source.to_string());
+    // The level journald filed it at: a level read from the text wasn't.
+    let filed = if e.flags & crate::entry::WRITTEN_LEVEL != 0 { Priority::Info } else { e.priority };
+    put("PRIORITY", filed.level().to_string());
+    // A launch's own identifier, as the shell gives a launch it watches.
+    put("SYSLOG_IDENTIFIER", e.launch.as_deref().unwrap_or(&e.source).to_string());
     if let Some(f) = e.facility {
         put("SYSLOG_FACILITY", f.to_string());
     }

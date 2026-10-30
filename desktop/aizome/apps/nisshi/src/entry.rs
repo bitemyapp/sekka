@@ -249,6 +249,9 @@ pub struct Entry {
     pub flags: u8,
     /// The message's terminal styles, where it had any.
     pub styles: Option<Box<[crate::ansi::Run]>>,
+    /// The launch it came from, where the desktop gave that launch an
+    /// identifier of its own (`aizome-launch-…`: [`crate::launch`]).
+    pub launch: Option<Arc<str>>,
 }
 
 /// A crash report: a core dump, a segfault, a panic ([`crate::filter::is_crash`]).
@@ -459,12 +462,26 @@ pub fn parse(line: &str, intern: &mut Interner) -> Option<Entry> {
         (Some(u), _) => Some(u.clone()),
         (None, uu) => uu.clone(),
     };
-    let source = text(&raw.identifier)
-        .filter(|s| !s.is_empty())
-        .or_else(|| (transport == Transport::Kernel).then_some(Cow::Borrowed("kernel")))
-        .or_else(|| text(&raw.comm))
-        .or_else(|| own_unit.clone())
-        .unwrap_or(Cow::Borrowed("journal"));
+    let identifier = text(&raw.identifier).filter(|s| !s.is_empty());
+    // An app a desktop launched: named after the app its scope is for,
+    // whether its output came as the app's ID or as that launch's own.
+    let app = own_unit.as_deref().and_then(crate::launch::app_of_unit);
+    let launch = identifier.as_deref().filter(|i| crate::launch::is_launch_id(i)).map(|i| intern.get(i));
+    let source = if launch.is_some() {
+        let comm = text(&raw.comm).filter(|c| !crate::launch::is_runner(c));
+        let named = app.as_deref().map(crate::launch::app_name).or_else(|| comm.map(Cow::into_owned));
+        Cow::Owned(named.unwrap_or_else(|| "Launched app".into()))
+    } else if let (Some(id), Some(app)) = (&identifier, &app)
+        && id.as_ref() == app.as_str()
+    {
+        Cow::Owned(crate::launch::app_name(app))
+    } else {
+        identifier
+            .or_else(|| (transport == Transport::Kernel).then_some(Cow::Borrowed("kernel")))
+            .or_else(|| text(&raw.comm))
+            .or_else(|| own_unit.clone())
+            .unwrap_or(Cow::Borrowed("journal"))
+    };
     let about = text(&raw.about_user).or_else(|| text(&raw.about));
     Some(
         Entry {
@@ -486,6 +503,7 @@ pub fn parse(line: &str, intern: &mut Interner) -> Option<Entry> {
             seq: 0,
             flags: 0,
             styles: None,
+            launch,
         }
         .finish(),
     )
@@ -528,6 +546,7 @@ pub fn from_line(line: &str, source: &Arc<str>, prev_time: i64, clock: &crate::t
         seq: 0,
         flags: 0,
         styles: (!runs.is_empty()).then(|| runs.into_boxed_slice()),
+        launch: None,
     }
     .finish()
 }
@@ -638,6 +657,34 @@ mod tests {
                 style: crate::ansi::Style { hue: Some(crate::ansi::Hue::Red), ..Default::default() }
             }
         );
+    }
+
+    #[test]
+    fn launched_apps_are_named_for_the_app() {
+        let mut i = Interner::default();
+        // A launch the shell watched (its own identifier), in Koe's scope.
+        let e = parse(
+            r#"{"MESSAGE":"koe: daemon did not become ready","SYSLOG_IDENTIFIER":"aizome-launch-f332d86ed3fac3deb4589d0998c3a08e","_COMM":"aizome-koe","_SYSTEMD_UNIT":"user@1000.service","_SYSTEMD_USER_UNIT":"app-aizome-org.aizome.Koe-0123abcd.scope","_TRANSPORT":"stdout"}"#,
+            &mut i,
+        )
+        .unwrap();
+        assert_eq!(&*e.source, "Koe");
+        assert_eq!(e.launch.as_deref(), Some("aizome-launch-f332d86ed3fac3deb4589d0998c3a08e"));
+        // Without a scope, the process's name; a shell's says nothing.
+        let e = parse(r#"{"MESSAGE":"x","SYSLOG_IDENTIFIER":"aizome-launch-0123456789abcdef","_COMM":"sh"}"#, &mut i)
+            .unwrap();
+        assert_eq!(&*e.source, "Launched app");
+        // The launcher as it is today: the app's ID, credited to `cat`.
+        let e = parse(
+            r#"{"MESSAGE":"x","SYSLOG_IDENTIFIER":"org.example.Viewer","_COMM":"cat","_SYSTEMD_USER_UNIT":"app-aizome-org.example.Viewer-72395e0ce4c25ac6.scope"}"#,
+            &mut i,
+        )
+        .unwrap();
+        assert_eq!(&*e.source, "Viewer");
+        assert_eq!(e.launch, None);
+        // Anything else keeps its own identifier.
+        let e = parse(r#"{"MESSAGE":"x","SYSLOG_IDENTIFIER":"Telegram","_SYSTEMD_USER_UNIT":"app-aizome-org.telegram.desktop-ab12.scope"}"#, &mut i).unwrap();
+        assert_eq!(&*e.source, "Telegram");
     }
 
     #[test]

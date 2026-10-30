@@ -19,6 +19,7 @@ pub mod filter;
 pub mod fixture;
 pub mod instance;
 pub mod known;
+pub mod launch;
 pub mod model;
 pub mod protocol;
 pub mod query;

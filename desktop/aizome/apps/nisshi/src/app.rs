@@ -128,6 +128,9 @@ pub struct Request {
     /// A message to open on, by its cursor (as `journalctl --show-cursor`
     /// prints it).
     pub cursor: Option<String>,
+    /// One launch's output, by its journal identifier (`aizome-launch-…`,
+    /// as the shell names a launch it watches).
+    pub launch: Option<String>,
 }
 
 impl Request {
@@ -153,6 +156,7 @@ impl Request {
             }),
             file: value("--file"),
             cursor: value("--cursor"),
+            launch: value("--launch").filter(|l| crate::launch::is_launch_id(l)),
         }
     }
 }
@@ -340,6 +344,9 @@ impl Nisshi {
         }
         if let Some(f) = &r.file {
             self.filter.scope = Scope::File(f.clone());
+        }
+        if let Some(l) = &r.launch {
+            self.filter.add(Chip::Launch(l.as_str().into()));
         }
         if r.cursor.is_some() {
             self.want_cursor = r.cursor.clone();

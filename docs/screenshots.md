@@ -42,8 +42,8 @@ helper, but from a stand-in journalctl that answers from the made-up boot
 of `apps/nisshi/src/fixture.rs` (`cargo run -p aizome-nisshi --example
 sample`). No message of a real computer is shown. The window was moved
 between views by launching `aizome-nisshi` again with `--cursor`,
-`--search` and `--scope`, which hand those to the running window, not by
-pointer input. They are not cropped or scaled. The Night and Day goldens
+`--search`, `--scope` and `--launch`, which hand those to the running
+window, not by pointer input. They are not cropped or scaled. The Night and Day goldens
 in `desktop/aizome/apps/nisshi/tests/snapshots/` are headless renders from
 the kit's offscreen renderer, not window captures.
 

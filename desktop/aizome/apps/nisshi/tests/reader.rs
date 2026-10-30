@@ -99,6 +99,9 @@ fn reads_the_boot_then_follows_it() {
     let edid = n.store.entries.iter().find(|e| e.message.contains("no EDID")).unwrap();
     assert!(edid.styles.is_some() && !edid.message.contains('\u{1b}'));
     assert_eq!(edid.priority, nisshi::entry::Priority::Warning);
+    // A launch's output, under its own identifier, is Koe's.
+    let koe = n.store.entries.iter().find(|e| e.message.contains("daemon did not become ready")).unwrap();
+    assert_eq!((&*koe.source, koe.launch.as_deref()), ("Koe", Some("aizome-launch-f332d86ed3fac3deb4589d0998c3a08e")));
     assert_eq!(n.boots.len(), 4);
     assert_eq!(n.boots[0].index, 0, "this boot first");
     let asked = stage.asked();

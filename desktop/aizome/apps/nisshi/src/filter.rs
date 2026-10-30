@@ -162,6 +162,8 @@ pub enum Chip {
         id: Arc<str>,
         label: Arc<str>,
     },
+    /// One launch of an app ([`crate::launch`]).
+    Launch(Arc<str>),
 }
 
 impl PartialEq for Chip {
@@ -181,6 +183,7 @@ impl Chip {
             Chip::Topic { re, not, .. } => format!("topic {not} {}", re.as_str()),
             Chip::Range { .. } => "range".into(),
             Chip::MessageId { id, .. } => format!("id {id}"),
+            Chip::Launch(id) => format!("launch {id}"),
         }
     }
 
@@ -204,6 +207,7 @@ impl Chip {
             Chip::Topic { re, not, .. } => re.is_match(&e.message) != *not,
             Chip::Range { from, to } => e.time >= *from && e.time <= *to,
             Chip::MessageId { id, .. } => e.message_id.as_ref() == Some(id),
+            Chip::Launch(id) => e.launch.as_ref() == Some(id),
         }
     }
 
@@ -220,6 +224,9 @@ impl Chip {
             Chip::Topic { label, not: true, .. } => format!("Hiding {label}"),
             Chip::Range { from, to } => format!("{} – {}", clock.stamp(*from), clock.time(*to)),
             Chip::MessageId { label, .. } => label.to_string(),
+            Chip::Launch(id) => {
+                format!("One launch ({})", id.trim_start_matches("aizome-launch-").get(..8).unwrap_or(""))
+            }
         }
     }
 
@@ -233,6 +240,7 @@ impl Chip {
             Chip::Topic { .. } => Icon::Tag,
             Chip::Range { .. } => Icon::Clock,
             Chip::MessageId { .. } => Icon::BookOpen,
+            Chip::Launch(_) => Icon::Play,
         }
     }
 }
