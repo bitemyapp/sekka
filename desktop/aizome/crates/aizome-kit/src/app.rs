@@ -536,6 +536,12 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
+    fn activate_with_token(&mut self, id: WinId, token: &str) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.activate_with_token(token);
+        }
+    }
+
     fn begin_move(&mut self, id: WinId) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
             w.begin_move();

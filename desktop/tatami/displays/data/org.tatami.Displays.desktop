@@ -6,5 +6,6 @@ Comment=Arrange displays and set their resolution, refresh rate, scale, rotation
 Exec=tatami display
 Icon=preferences-desktop-display
 Categories=Settings;HardwareSettings;
+OnlyShowIn=Tatami;
 Keywords=monitor;screen;arrange;resolution;refresh;scale;hidpi;dpi;rotation;orientation;hdr;mirror;projector;brightness;night shift;
 StartupNotify=true

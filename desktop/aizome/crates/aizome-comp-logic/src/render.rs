@@ -144,6 +144,7 @@ fn shift_layout(l: &Layout, offset: (f64, f64)) -> Layout {
     let mut l = l.clone();
     l.content = l.content.translate(dx, dy);
     l.frame = l.frame.translate(dx, dy);
+    l.slot = l.slot.map(|s| s.translate(dx, dy));
     for t in &mut l.tabs {
         t.rect = t.rect.translate(dx, dy);
         t.close = t.close.translate(dx, dy);
@@ -216,8 +217,18 @@ const TAB_INNER: f64 = (decor::TAB_H - decor::BORDER) as f64;
 
 impl Logic {
     /// A window's decoration layout (its group's, when stacked), or none
-    /// for full-screen windows.
+    /// for full-screen windows. Tabs dragged over its strip part it where
+    /// they'd go.
     pub fn decor_layout(&self, labels: &mut Labels, id: WinId) -> Option<Layout> {
+        self.layout_for(labels, id, true)
+    }
+
+    /// The same, as it is without tabs dragged over it.
+    pub fn decor_layout_unparted(&self, labels: &mut Labels, id: WinId) -> Option<Layout> {
+        self.layout_for(labels, id, false)
+    }
+
+    fn layout_for(&self, labels: &mut Labels, id: WinId, parted: bool) -> Option<Layout> {
         let w = self.wm.get(id)?;
         if w.fullscreen() {
             return None;
@@ -226,10 +237,17 @@ impl Logic {
         let members = self.wm.group_members(id);
         let active = members.iter().copied().find(|m| self.wm.is_group_active(*m)).unwrap_or(id);
         let focused = self.wm.focused().is_some_and(|f| members.contains(&f)) && !self.overlays.steals_focus_look();
-        let titles: Vec<(WinId, String)> =
-            members.iter().map(|m| (*m, self.wm.get(*m).map(|w| w.title.clone()).unwrap_or_default())).collect();
-        let widths: Vec<(WinId, f64)> =
-            titles.iter().map(|(m, t)| (*m, labels.measure(t, Face::Tab, typeface::TAB).0)).collect();
-        Some(decor::layout(content, ssd, focused, &widths, active, offset))
+        let mut measure = |m: WinId| {
+            let title = self.wm.get(m).map(|w| w.title.clone()).unwrap_or_default();
+            labels.measure(&title, Face::Tab, typeface::TAB).0
+        };
+        let widths: Vec<(WinId, f64)> = members.iter().map(|m| (*m, measure(*m))).collect();
+        let gap = match &self.interactive.drag {
+            Some(d) if parted && d.target.is_some_and(|t| members.contains(&t)) => {
+                Some(decor::Gap { at: d.at, titles: self.wm.group_members(d.win).into_iter().map(measure).collect() })
+            }
+            _ => None,
+        };
+        Some(decor::layout(content, ssd, focused, &widths, active, offset, gap.as_ref()))
     }
 }

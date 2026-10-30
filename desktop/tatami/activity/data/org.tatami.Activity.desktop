@@ -6,5 +6,6 @@ Comment=See what each application uses of the processor, memory, energy, graphic
 Exec=tatami-activity
 Icon=utilities-system-monitor
 Categories=System;Monitor;
+OnlyShowIn=Tatami;
 Keywords=activity;monitor;activity monitor;task manager;process;processes;task;manager;cpu;memory;ram;pss;rss;energy;power;watts;gpu;vram;disk;quit;kill;top;htop;btop;
 StartupNotify=true
