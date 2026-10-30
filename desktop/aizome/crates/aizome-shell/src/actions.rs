@@ -46,6 +46,10 @@ pub enum Action {
     Spawn {
         argv: Vec<String>,
     },
+    /// Outcomes and output of applications opened by the shell.
+    LaunchDetails {
+        id: Option<u64>,
+    },
     /// Open a file or folder: folders in Hako, files with their default app.
     Open {
         path: PathBuf,

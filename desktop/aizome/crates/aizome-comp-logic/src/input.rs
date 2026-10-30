@@ -47,6 +47,9 @@ pub struct TabDrag {
     pub win: WinId,
     /// The window whose tab it hovers, to stack with on release.
     pub target: Option<WinId>,
+    /// Which of the target's tabs it would go before (their count: after
+    /// them all).
+    pub at: usize,
     /// Where the dropped tab would go (the slot), in global points.
     pub slot: Option<crate::wm::Rect>,
 }

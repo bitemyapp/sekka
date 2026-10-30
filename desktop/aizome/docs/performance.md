@@ -123,6 +123,11 @@ noise (`docs/reload.md`). Two kinds of number:
 | Myaku | A new reading (600 processes) | 2.61 | 2.99 | within |
 | | A click on a row | 0.20 | 0.30 | within |
 | | Scrolling the table | 0.29 | 0.34 | within |
+| Nisshi | Messages arriving live (108,000 read) | 2.4–2.7 | 3.0–6.3 | within |
+| | A click on a row | 0.72–0.76 | 1.2–1.6 | within |
+| | Scrolling the table | 0.16–0.17 | 0.19–0.21 | within |
+| | A character typed in search (4,000 messages, filtered at once) | 2.2 | 3.5–3.8 | within |
+| | Search applied to 108,000 messages, once typing pauses | 5.9–6.9 | | over (see Nisshi) |
 | Shashin | Showing a fitted 3000 × 2000 photo | 3.30 | 3.68 | within (10) |
 | | Panning at 100% | 3.25 | 3.56 | within (10) |
 | | Pinching † | 2.81–2.84 | 3.22–3.65 | within (10) |
@@ -212,6 +217,12 @@ summary of six or seven frames is in effect its largest frame.
     photo used to free its 24 MB of pixels on the window's thread). One
     frame of forty, the first pinch step below 100%, takes about 22 ms, not
     yet explained.
+11. **Nisshi's search over a large boot**: applying a search to 108,000
+    messages takes 5.9–6.9 ms (3.4 ms of it filtering, the rest drawing
+    every row anew). *Accepted*: past 30,000 messages it runs once, 80 ms
+    after typing pauses, while each character typed costs 0.1 ms. Below
+    that, where it runs at each character, a desktop's 4,000 messages take
+    2.2 ms (p95 3.5–3.8).
 
 Within the budget now, though written up below as exceptions earlier:
 Hako's preview column (↓ p95 2.44 ms), Tenki's choosing a place (p95
@@ -861,6 +872,68 @@ p50 0.9–2.0 ms, p95 1.2–2.8 ms; damage 87% (the figures of every visible
 row change each second). Resident memory 36.6 MB.
 
 No exceptions.
+
+## Nisshi (Logs)
+
+Measured on 29 October 2026 on runnymede (AMD Ryzen 9 9950X3D, 16 cores),
+release builds of the `aizome-logs` branch, with Aizome's fonts. Another
+session's Aizome build shared the machine: the one-minute load average was
+14–19 throughout. The harness rows print the time taken and the processor
+time the frame's thread used beside it. At this load the two can differ,
+when the scheduler pauses a frame, and the test holds the processor time to
+the budget. In these runs they agreed to within a few per cent.
+
+The window with 108,110 messages (`apps/nisshi/tests/perf.rs`, the made-up
+boot 190 times over, 2×, rasterising each damaged rectangle), three runs:
+
+| | p50 | p95 | |
+|---|---|---|---|
+| Ten messages arriving live | 2.4–2.7 ms | 3.0–6.3 ms | n=60 |
+| A click on a row | 0.72–0.76 ms | 1.2–1.6 ms | n=30 |
+| Scrolling the table (44pt steps) | 0.16–0.17 ms | 0.19–0.21 ms | n=30 |
+| A character typed in search (the field alone) | 0.10–0.11 ms | 0.14–0.20 ms | n=16 |
+| The search applied once typing pauses (filtering and drawing) | 5.9–6.9 ms | | n=3 |
+| Filtering alone (no drawing) | 3.35–3.38 ms | 3.4–3.6 ms | n=7 |
+
+Measured again once the other session's build had finished (load 0.7),
+after terminal colours were added: every row within the ranges above.
+
+With 3,983 messages, a desktop's boot (this one's had 3,629), search
+filters at each character: 2.2 ms at the median and 3.5–3.8 ms at the
+95th percentile, most of it drawing the rows that changed (n=24, two runs).
+Taking in all 107,510 messages at once and making the first view took
+32 ms.
+
+What keeps it there:
+
+- journalctl's JSON is parsed on the reader's thread, with only the
+  fields the list uses (a message's others are read when it's selected),
+  and sources, units and boots shared between messages. Each message is
+  classified once there (a crash, a login).
+- A cursor is kept in parts (its sequence and boot are shared): about a
+  third of the text's size.
+- Live messages are added to the view rather than the view made again.
+  The messages shown are kept in chunks of 4,096 shared with the table, so
+  an arrival copies at most one chunk the last frame still holds, not
+  every row. The timeline is counted from a compact list of times.
+- The overview's suggestions (errors by source, failed units, crashes,
+  out-of-memory kills) are tallied as the view is made. The message so
+  frequent it hides the rest is found in a sample of 4,000 rows and then
+  counted.
+- Search finds plain words with a substring search (memchr's, or
+  aho-corasick's ignoring ASCII case) rather than a regular expression.
+  What a word decides of a source's or a unit's name is remembered for
+  the view, since names are shared.
+- A selection's topics, which run patterns over everything its source
+  wrote, are counted 30 ms after the selection shows.
+- Past 30,000 messages search waits 80 ms after the last character before
+  it filters.
+
+### Exceptions
+
+- Applying a search to 108,000 messages takes 5.9–6.9 ms, over the 4 ms
+  budget. It runs once, when typing pauses, not at each character. Below
+  30,000 messages, where it does run at each character, it's within.
 
 ## Shashin (Images)
 

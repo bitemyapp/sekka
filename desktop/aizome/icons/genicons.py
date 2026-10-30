@@ -159,6 +159,22 @@ def myaku():
     return g
 
 
+@icon("org.aizome.Nisshi", "Nisshi (Logs)")
+def nisshi():
+    # A log book open on its page, bound in the deepest dye: each line a
+    # time and the message written then, one of them marked in amber, the
+    # one looked for.
+    g = R(10, 8, 40, 46, PAPER) + R(10, 8, 4, 46, AI)
+    for i, w in enumerate((18, 12, 20, 16, 10, 18)):
+        y = 14 + i * 6
+        marked = i == 3
+        if marked:
+            g += R(16, y - 2, 32, 6, AMBER)
+        g += R(18, y, 6, 2, INK if marked else MID)
+        g += R(26, y, w, 2, INK if marked else DEEP)
+    return g
+
+
 @icon("org.aizome.Yukimi", "Yukimi (Software)")
 def yukimi():
     # A yukimi-shōji: paper and lattice above, a pane of glass set low,
