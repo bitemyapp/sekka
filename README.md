@@ -66,7 +66,10 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
   beside its space bar and Settings suggests where Super should go, so it
   sits under your thumb on a Mac keyboard and a PC keyboard alike. A
   laptop's own keyboard is set up from Settings → Keyboard. Layouts and
-  shortcuts are the same on every keyboard.
+  shortcuts are the same on every keyboard. Keyboards don't yet keep their
+  own keys under an input method (IBus or Fcitx 5): while one handles your
+  typing, every keyboard types with the keys of the one in use when it
+  began.
 - Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop

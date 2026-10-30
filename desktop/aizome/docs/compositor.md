@@ -47,7 +47,15 @@ aizome --build-info                      # how the core was built (what a logic 
   keymap, as Wayland has: before a key from a keyboard that types (one
   with a space bar and the letters) goes anywhere, the keymap becomes that
   keyboard's if it isn't already, and the focus hears it; Caps Lock, Num
-  Lock and the layout in use carry over (`keyboards.rs`).
+  Lock and the layout in use carry over (`keyboards.rs`). Not yet under an
+  input method: smithay gives an input method's keyboard grab
+  (`zwp_input_method_keyboard_grab_v2`, IBus's or Fcitx 5's) the keymap
+  only when the grab begins, and a change of keymap reaches `wl_keyboard`s
+  alone. While IBus or Fcitx 5 holds the grab, it reads every keyboard's
+  keys with the keymap in force when it took it, and the keys it passes on
+  through its virtual keyboard carry that keymap to the app: one keyboard's
+  own modifier swaps then go for all, or for none. Sending the keymap to
+  the grab again after a change would need a change in smithay.
 - Fonts: Archivo, IBM Plex Mono and Noto Sans Symbols 2 from fontconfig,
   else from `$AIZOME_FONT_DIR` or `../share/aizome/fonts` beside the
   binary.
