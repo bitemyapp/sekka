@@ -13,6 +13,22 @@ let
     }).config;
   enabled = configuration true { };
   disabled = configuration false { };
+  # Steam's rules follow programs.steam.enable; nothing else uses child_rule.
+  steam = configuration true { programs.steam.enable = true; };
+  steamRulesOff = configuration true {
+    programs.steam.enable = true;
+    calamares.tuning.steam.enable = false;
+  };
+  tracksAncestry = c: builtins.any (rule: rule ? child_rule) c.services.ananicy.extraRules;
+  steamNames = [
+    "steam"
+    "steam.sh"
+    "Steam.exe"
+    "sekka-steam-children"
+    "fossilize_replay"
+  ];
+  hasSteamRules =
+    c: builtins.any (rule: builtins.elem (rule.name or "") steamNames) c.services.ananicy.extraRules;
   custom = configuration true {
     nix.daemonCPUSchedPolicy = "batch";
     systemd.services.nix-daemon.serviceConfig.CPUWeight = 50;
@@ -31,12 +47,15 @@ assert !disabled.services.ananicy.enable;
 assert custom.nix.daemonCPUSchedPolicy == "batch";
 assert custom.systemd.services.nix-daemon.serviceConfig.CPUWeight == 50;
 assert custom.systemd.user.slices.app-background.sliceConfig.CPUWeight == 30;
+assert !tracksAncestry enabled && !hasSteamRules enabled;
+assert !tracksAncestry steamRulesOff && !hasSteamRules steamRulesOff;
+assert tracksAncestry steam;
 assert builtins.all
   (
     name:
     builtins.any (
       rule: rule.name == name && rule.nice == -5 && rule.child_rule == "sekka-steam-children"
-    ) enabled.services.ananicy.extraRules
+    ) steam.services.ananicy.extraRules
   )
   [
     "steam"
@@ -49,7 +68,7 @@ assert builtins.any (
   && rule.nice == -10
   && rule.nice_only_raise
   && rule.sched_keep_realtime
-) enabled.services.ananicy.extraRules;
+) steam.services.ananicy.extraRules;
 pkgs.runCommand "sekka-scheduling-policy"
   {
     nativeBuildInputs = [
@@ -66,5 +85,12 @@ pkgs.runCommand "sekka-scheduling-policy"
     c++ -std=c++20 -Wall -Wextra -Werror -pthread -I . \
       ${../../tests/test_descendant_rules.cpp} -o test-descendants
     ./test-descendants
+    # Without Steam's rules CachyOS's own rule for its launcher stays; with
+    # them it is replaced.
+    pattern='"name": *"steam"'
+    grep -rqE "$pattern" ${enabled.services.ananicy.rulesProvider}/etc/ananicy.d
+    if grep -rqE "$pattern" ${steam.services.ananicy.rulesProvider}/etc/ananicy.d; then
+      exit 1
+    fi
     touch $out
   ''

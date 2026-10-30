@@ -63,11 +63,14 @@ On any NixOS system with flakes, from Sekka's flake:
 Then pick **Aizome** on the login screen.
 
 Games with desktop shortcuts appear in **Toolchest → Applications → Games**.
-The GPU compositor supports explicit synchronization, including through
-Xwayland, and adaptive sync for fullscreen windows on capable displays.
-Choose Off, Fullscreen or Always under **Settings → Displays**; changes
-revert after 15 seconds unless kept. Turn adaptive sync off if the display
-flickers. HDMI, software and nested outputs do not offer adaptive sync.
+When an NVIDIA GPU drives the desktop, the GPU compositor offers games
+explicit synchronization, including through Xwayland; other GPUs keep
+implicit synchronization unless `[performance] explicit_sync = "on"` is set
+([rendering](docs/rendering.md)).
+Adaptive sync is off by default. On capable displays, choose Fullscreen or
+Always under **Settings → Displays**; changes revert after 15 seconds unless
+kept. Turn it off again if the display flickers. HDMI, software and nested
+outputs do not offer adaptive sync.
 
 Aizome's display pipeline is SDR and synchronized to vertical refresh; it
 does not yet implement native HDR or tearing control. Sekka's separate

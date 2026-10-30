@@ -35,10 +35,30 @@ struct Probe {
 
 #[test]
 fn software_compositor_does_not_advertise_explicit_sync() {
-    let c = Compositor::start(Options { renderer: Some("pixman"), ..Default::default() });
+    // Even when asked for: pixman has no GPU fences to wait on.
+    let settings = "[appearance]\neffects = \"austere\"\n[performance]\nexplicit_sync = \"on\"\n";
+    let c = Compositor::start(Options { renderer: Some("pixman"), settings, ..Default::default() });
+    assert!(!advertised(&c));
+}
+
+fn advertised(c: &Compositor) -> bool {
     let conn = Connection::from_socket(UnixStream::connect(c.dir.join(&c.socket)).unwrap()).unwrap();
     let (globals, _) = registry_queue_init::<Probe>(&conn).unwrap();
-    assert!(!globals.contents().clone_list().iter().any(|g| g.interface == "wp_linux_drm_syncobj_manager_v1"));
+    globals.contents().clone_list().iter().any(|g| g.interface == "wp_linux_drm_syncobj_manager_v1")
+}
+
+#[test]
+#[ignore = "requires a real GPU; set AIZOME_RENDER_NODE"]
+fn explicit_sync_is_offered_by_default_only_on_nvidia() {
+    let path = std::env::var("AIZOME_RENDER_NODE").expect("set AIZOME_RENDER_NODE to the GPU under test");
+    let file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
+    let nvidia = drm::Device::get_driver(&Device(file)).unwrap().name() == "nvidia-drm";
+    let c = Compositor::start(Options { renderer: Some("gles"), ..Default::default() });
+    assert!(c.log_text().contains(&format!("rendering with GLES on {path}")), "{}", c.log_text());
+    assert_eq!(advertised(&c), nvidia, "{}", c.log_text());
+    let settings = "[appearance]\neffects = \"austere\"\n[performance]\nexplicit_sync = \"off\"\n";
+    let c = Compositor::start(Options { renderer: Some("gles"), settings, ..Default::default() });
+    assert!(!advertised(&c), "{}", c.log_text());
 }
 
 #[test]
@@ -46,7 +66,9 @@ fn software_compositor_does_not_advertise_explicit_sync() {
 fn acquire_waits_and_release_retires_on_real_gpu() {
     let path = std::env::var("AIZOME_RENDER_NODE").expect("set AIZOME_RENDER_NODE to the GPU under test");
     let node = std::fs::canonicalize(&path).unwrap();
-    let c = Compositor::start(Options { renderer: Some("gles"), ..Default::default() });
+    // Offered by default only on NVIDIA; this test applies to any GPU.
+    let settings = "[appearance]\neffects = \"austere\"\n[performance]\nexplicit_sync = \"on\"\n";
+    let c = Compositor::start(Options { renderer: Some("gles"), settings, ..Default::default() });
     assert!(c.log_text().contains(&format!("rendering with GLES on {path}")), "{}", c.log_text());
     assert!(c.log_text().contains("explicit synchronization available"), "{}", c.log_text());
     let stream = UnixStream::connect(c.dir.join(&c.socket)).unwrap();

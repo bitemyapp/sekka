@@ -41,10 +41,18 @@ Both scan out through KMS on real displays (udev backend, with libseat), and
 both render offscreen for the headless backend that tests and screenshots
 use.
 
-GPU clients instead submit DMA-BUFs. On a DRM device with syncobj eventfd
-support, Aizome advertises `linux-drm-syncobj-v1`: the pending surface commit
-waits for its acquire timeline point before buffer import, without blocking
-the compositor thread. Smithay retains the release point with the renderer
+GPU clients instead submit DMA-BUFs. When the primary GPU's driver is
+NVIDIA's (`nvidia-drm`) and can wait on syncobj eventfds, Aizome advertises
+`linux-drm-syncobj-v1`: the pending surface commit waits for its acquire
+timeline point before buffer import, without blocking the compositor thread.
+Other drivers, Intel's xe and i915 among them, support it too but have not
+been validated with it, so it is off there by default. `[performance]
+explicit_sync` decides at the next login: `"auto"` (the default), `"on"`
+for any driver that can wait on syncobj eventfds, or `"off"`. The log says
+which ("explicit synchronization available" or "explicit synchronization
+off"). On a laptop that offloads games to an NVIDIA GPU, the primary GPU is
+usually Intel's, so those games use implicit synchronization unless it is
+turned on. Smithay retains the release point with the renderer
 buffer until its last reference retires, including scanout. Destroying a
 surface cancels abandoned acquire waiters. Clients without explicit sync
 keep the implicit DMA-BUF fence path. Software and winit backends do not
@@ -53,18 +61,27 @@ The pinned xwayland-satellite forwards the protocol to Xwayland.
 
 KMS outputs send scanout DMA-BUF feedback for formats the primary renderer
 can also import. An 8-bit game can use direct scanout even when the
-compositor's own buffers are 10-bit; a failed plane test falls back to
-composition. This is still SDR, with no HDR colour conversion or metadata.
+compositor's own buffers are 10-bit (Smithay's
+`ALLOW_PRIMARY_PLANE_SCANOUT_ANY`, which niri also enables); a failed plane
+test falls back to composition. This applies on every GPU and has not yet
+been checked on a physical display. This is still SDR, with no HDR colour
+conversion or metadata.
 
-`[[outputs]] vrr` accepts `off`, `fullscreen` (the default), or `always`.
-Adaptive sync requires a capable KMS output and GLES; fullscreen policy
-checks the top visible window on each output. HDMI outputs are not offered
-it: Smithay reports that switching VRR there needs a modeset, since it
-flickers, and Aizome switches it as fullscreen windows come and go. Lock, recovery, keyboard
-overlays, animation and mirroring disable it. Transitions force a fresh
-frame even when pixels are unchanged; rejected VRR commits retry at fixed
-refresh. Variable-refresh presentation feedback and frame scheduling stop
-predicting a fixed vblank interval. Settings uses its normal Keep/Revert
+`[[outputs]] vrr` accepts `off` (the default), `fullscreen`, or `always`.
+Off stays the default until switching has been checked on more panels than
+one NVIDIA desktop's DisplayPort monitor: built-in panels, such as the
+ThinkPad X1 Carbon Gen 14's OLED, report VRR capability too. Adaptive sync
+requires a capable KMS output and GLES; fullscreen policy checks the top
+visible window on each output. HDMI outputs are not offered it: Smithay
+reports that switching VRR there needs a modeset, since it flickers, and
+Aizome switches it as fullscreen windows come and go. Lock, recovery,
+keyboard overlays, animation and mirroring disable it. Transitions force a
+fresh frame even when pixels are unchanged. A frame that fails with VRR on
+is retried at fixed refresh; VRR is given up for that mode only when three
+such retries in a row succeed with no good VRR frame between them, or the
+driver refuses three switches, so one transient failure does not turn it
+off for the session. Variable-refresh presentation feedback and frame
+scheduling stop predicting a fixed vblank interval. Settings uses its normal Keep/Revert
 preview for policy changes. Actual panel timing still needs a physical KMS
 test: a render-node test cannot validate VRR, direct scanout, HDR or tearing.
 

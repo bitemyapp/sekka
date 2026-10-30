@@ -136,11 +136,12 @@ Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
 
 ### Steam process trees
 
-With system tuning enabled, `steam`, `steam.sh` and `Steam.exe` receive nice
-−5 with normal CPU scheduling and best-effort I/O. Their same-user descendants
-receive a nice −10 baseline, including unlisted native games, Proton wrappers,
-secondary launchers and Steam's browser helpers. Generic shell, runtime and
-game rules cannot lower that baseline. A stronger named rule, such as
+With system tuning enabled on a system with Steam (`programs.steam.enable`,
+which `calamares.tuning.steam.enable` follows), `steam`, `steam.sh` and
+`Steam.exe` receive nice −5 with normal CPU scheduling and best-effort I/O.
+Their same-user descendants receive a nice −10 baseline, including unlisted
+native games, Proton wrappers, secondary launchers and Steam's browser
+helpers. Generic shell, runtime and game rules cannot lower that baseline. A stronger named rule, such as
 `wineserver` at −12, still applies, and threads already using a stronger nice
 value retain it. Existing FIFO, RR and deadline CPU policies are preserved;
 this policy does not grant real-time CPU scheduling.
@@ -160,7 +161,18 @@ own `child_rule` starts a new lineage, which lets Fossilize override Steam's
 foreground policy. The daemon's `nice_only_raise` flag keeps stronger thread
 priorities, and `sched_keep_realtime` preserves existing real-time CPU policies.
 Upstream rules for Steam and Fossilize are removed before adding Sekka's rules,
-so filesystem iteration order cannot choose the old launcher policy.
+so filesystem iteration order cannot choose the old launcher policy. Without
+Steam, none of these rules is added and CachyOS's own rules for those names
+stay. The daemon then has no rule with a `child_rule` and skips the ancestry
+walk altogether: each event costs what it did without this patch.
+
+Like every Ananicy rule, these match a process by name: the basename of its
+`argv[0]`, or of its executable when no rule has that name. Any local user can
+choose either, for example with `exec -a steam` or a copy named `steam`, and
+so give a process tree of their own nice −10, which an unprivileged user
+cannot otherwise set. The same holds for single processes under CachyOS's
+named rules; Steam's rule extends it to a whole tree. On a machine shared with
+users who should not have that, set `calamares.tuning.steam.enable = false`.
 
 Ancestry stops at UID changes and setuid helpers. No process is moved between
 cgroups. A process that loses all recognizable ancestry before its first
@@ -204,7 +216,8 @@ should be restarted after installing the change.
 
 `nix build .#checks.x86_64-linux.tuning-policy` checks disabling the policy,
 explicit overrides and process-tree classification, including Steam ancestry,
-PID reuse, credential boundaries and reparenting.
+PID reuse, credential boundaries and reparenting, and that only systems with
+Steam get its rules.
 `nix build .#checks.x86_64-linux.tuning` boots a disposable VM and checks the
 preemption and disk-scheduler settings, terminal/shell/compiler nice values,
 all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only

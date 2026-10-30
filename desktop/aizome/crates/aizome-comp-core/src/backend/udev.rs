@@ -108,6 +108,7 @@ struct Surface {
     /// What changed under blurs since the last frame ([`crate::blur`]).
     blur_probe: crate::blur::Probe,
     dmabuf_feedback: Option<(DmabufFeedback, DmabufFeedback)>,
+    vrr_failures: crate::gaming::VrrFailures,
     redraw: Redraw,
     modes: Vec<smithay::reexports::drm::control::Mode>,
 }
@@ -129,6 +130,7 @@ impl Surface {
         let Some(status) = az.out.get(&self.output) else { return };
         let fullscreen = crate::gaming::fullscreen_on(az, &self.output).is_some();
         let wanted = status.vrr_supported
+            && !self.vrr_failures.holding_off()
             && crate::gaming::vrr_wanted(
                 status.vrr,
                 fullscreen,
@@ -149,11 +151,12 @@ impl Surface {
             SurfaceOutput::Gles(o) => o.with_compositor(|c| c.use_vrr(wanted)).map_err(|e| format!("{e:?}")),
             SurfaceOutput::Pixman(_) => return,
         };
-        if result.is_ok() {
-            if let SurfaceOutput::Gles(o) = &mut self.drm {
-                o.reset_buffers();
-            }
+        if result.is_ok()
+            && let SurfaceOutput::Gles(o) = &mut self.drm
+        {
+            o.reset_buffers();
         }
+        let give_up = result.is_err() && self.vrr_failures.refused();
         if let Some(status) = az.out.get_mut(&self.output) {
             match result {
                 Ok(()) => {
@@ -161,9 +164,9 @@ impl Surface {
                     tracing::debug!(output = self.output.name(), wanted, "adaptive sync");
                 }
                 Err(error) => {
-                    // Do not retry every frame on a driver that rejected it.
-                    status.vrr_supported = false;
-                    warn!(output = self.output.name(), %error, "adaptive sync unavailable");
+                    // Do not retry every frame on a driver that rejects it.
+                    warn!(output = self.output.name(), %error, give_up, "cannot switch adaptive sync");
+                    status.vrr_supported &= !give_up;
                 }
             }
         }
@@ -547,10 +550,17 @@ impl Udev {
             }
             _ => Err("renderer and output disagree".into()),
         };
+        let vrr = az.out.get(output).is_some_and(|o| o.vrr_enabled);
         match result {
             Ok((queued, states)) => {
                 if queued {
                     surface.redraw = Redraw::WaitingForVBlank;
+                    if surface.vrr_failures.presented(vrr) {
+                        warn!(output = output.name(), "adaptive sync unavailable: frames fail only with it on");
+                        if let Some(o) = az.out.get_mut(output) {
+                            o.vrr_supported = false;
+                        }
+                    }
                 }
                 let frame = Frame { damaged: queued, states, cpu: started.elapsed(), gpu: None };
                 post_frame(az, output, &frame, false);
@@ -571,10 +581,7 @@ impl Udev {
                 warn!("rendering {}: {e}", output.name());
                 // A driver may pass TEST_ONLY and reject the real commit.
                 // Try a fresh, fixed-refresh frame before leaving it idle.
-                if az.out.get(output).is_some_and(|o| o.vrr_enabled) {
-                    if let Some(o) = az.out.get_mut(output) {
-                        o.vrr_supported = false;
-                    }
+                if surface.vrr_failures.failed(vrr) {
                     surface.update_vrr(az);
                     az.queue_redraw(output);
                 }
@@ -768,6 +775,7 @@ impl Udev {
             };
             res?;
             let supported = s.vrr_supported();
+            s.vrr_failures = Default::default();
             if let Some(o) = az.out.get_mut(&output) {
                 o.vrr_supported = supported;
             }
@@ -1148,6 +1156,7 @@ fn connector_connected_as(
             drm: drm_output,
             blur_probe: Default::default(),
             dmabuf_feedback,
+            vrr_failures: Default::default(),
             redraw: Redraw::Idle,
             modes,
         },

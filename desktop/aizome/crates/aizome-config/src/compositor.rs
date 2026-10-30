@@ -95,6 +95,42 @@ impl Settings {
     }
 }
 
+/// Whether to offer clients explicit synchronization (linux-drm-syncobj-v1):
+/// `[performance] explicit_sync`, read at start-up.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ExplicitSyncChoice {
+    /// Only on NVIDIA's driver, the one it has been validated on.
+    #[default]
+    Auto,
+    /// On any GPU whose driver can wait on syncobj eventfds.
+    On,
+    Off,
+}
+
+impl ExplicitSyncChoice {
+    /// Whether to offer it on a DRM device with this kernel driver.
+    pub fn offered_on(self, driver: &str) -> bool {
+        match self {
+            Self::Auto => driver == "nvidia-drm",
+            Self::On => true,
+            Self::Off => false,
+        }
+    }
+}
+
+impl Settings {
+    pub fn explicit_sync_choice(&self) -> ExplicitSyncChoice {
+        let value = self.extra.get("performance").and_then(toml::Value::as_table).and_then(|t| t.get("explicit_sync"));
+        match value {
+            Some(toml::Value::Boolean(true)) => ExplicitSyncChoice::On,
+            Some(toml::Value::Boolean(false)) => ExplicitSyncChoice::Off,
+            Some(toml::Value::String(s)) if s == "on" => ExplicitSyncChoice::On,
+            Some(toml::Value::String(s)) if s == "off" => ExplicitSyncChoice::Off,
+            _ => ExplicitSyncChoice::Auto,
+        }
+    }
+}
+
 impl OutputConfig {
     /// The connector this display mirrors (`mirror = "eDP-1"`).
     pub fn mirror(&self) -> Option<&str> {
@@ -291,9 +327,29 @@ mod tests {
         assert_eq!(d.windows.tab_double_click(), TabDoubleClick::Fill);
         assert_eq!(d.input.keyboard.slow_keys(), None);
         assert_eq!(d.renderer_choice(), RendererChoice::Auto);
+        assert_eq!(d.explicit_sync_choice(), ExplicitSyncChoice::Auto);
+        // Adaptive sync stays off unless a display entry asks for it.
+        let o = Settings::from_toml("[[outputs]]\nname = \"eDP-1\"\n").unwrap();
+        assert_eq!(o.outputs[0].vrr, crate::VrrMode::Off);
         // Written back as they were.
         let back = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
         assert_eq!(back.outputs[0].mirror(), Some("eDP-1"));
+    }
+
+    #[test]
+    fn explicit_sync_is_offered_on_nvidia_unless_set() {
+        let choice = |toml: &str| Settings::from_toml(toml).unwrap().explicit_sync_choice();
+        assert_eq!(choice(""), ExplicitSyncChoice::Auto);
+        assert_eq!(choice("[performance]\nexplicit_sync = \"on\"\n"), ExplicitSyncChoice::On);
+        assert_eq!(choice("[performance]\nexplicit_sync = true\n"), ExplicitSyncChoice::On);
+        assert_eq!(choice("[performance]\nexplicit_sync = \"off\"\n"), ExplicitSyncChoice::Off);
+        assert_eq!(choice("[performance]\nexplicit_sync = \"auto\"\n"), ExplicitSyncChoice::Auto);
+        assert!(ExplicitSyncChoice::Auto.offered_on("nvidia-drm"));
+        for driver in ["xe", "i915", "amdgpu", "nouveau", ""] {
+            assert!(!ExplicitSyncChoice::Auto.offered_on(driver));
+            assert!(ExplicitSyncChoice::On.offered_on(driver));
+        }
+        assert!(!ExplicitSyncChoice::Off.offered_on("nvidia-drm"));
     }
 
     #[test]

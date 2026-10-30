@@ -497,3 +497,79 @@ Validation, on Sekka's offload workstation, of the branch merged with main
 
 None of this was repeated on the RTX 5090 or a physical display; the
 HDMI change in particular is a policy change, not a hardware observation.
+
+## Merge-readiness changes, 30 October 2026
+
+A second review asked that nothing this branch has validated only on the
+RTX 5090 change other machines by default, and found two flaky checks and
+a local Gamescope build. Changes:
+
+- Adaptive sync defaults to Off on every output; Fullscreen and Always
+  remain in Settings, `[[outputs]] vrr` and `aizomectl output-vrr`. The
+  X1 Carbon Gen 14's OLED eDP-1 reports `vrr_capable` with a 30–120 Hz
+  range, so the old Fullscreen default reached it.
+- `linux-drm-syncobj-v1` is advertised by default only when the primary
+  GPU's driver is `nvidia-drm`. xe also reports timeline syncobjs, so the
+  X1 would otherwise have switched Vulkan and Xwayland clients to
+  explicit sync. `[performance] explicit_sync = "on"` or `"off"`
+  overrides it at the next login.
+- A frame that fails with VRR on is retried at fixed refresh as before,
+  but VRR is now given up for the mode only after three such retries
+  succeed in a row (or the driver refuses three switches), not after one
+  failure.
+- Any-format primary-plane scanout stays on for every GPU, as in niri,
+  and is listed in DEVELOPERS.md's hardware-validation note.
+- Steam's Ananicy rules are added only with `programs.steam.enable`
+  (`calamares.tuning.steam.enable`), and the daemon skips its ancestry
+  walk when no rule has a `child_rule`. docs/tuning.md notes that the
+  rules match names any user can choose.
+- The shipped xwayland-satellite skips the upstream tests again, as
+  Nixpkgs does: in the first review its integration tests passed one
+  rebuild in three under load (one failure, one hang of over 12 minutes),
+  and unpatched upstream with the tests on one in four.
+  `checks.x86_64-linux.xwayland-satellite-unit` runs the 87 unit tests,
+  the patches' included, under a time limit, and evaluation stops with a
+  rebase message if Nixpkgs moves satellite past 0.8.3.
+- `packages.gaming`, which push-cache now publishes, carries the patched
+  Gamescope, `programs.gamescope`'s wrapper, `sekka-game` with its
+  Gamescope wrapper and the 32-bit WSI layer, from a free reference
+  system with the gaming module.
+- The tuning VM check matched its wrapper's short-lived `sleep` child
+  instead of the game, failing about three runs in four; it now matches
+  the game by name.
+
+Validation, on Sekka's offload workstation, of the branch merged with main
+`d717500a` plus these changes:
+
+- `aizome-config`, `aizome-comp-core`, `aizome-comp`, `aizome-comp-logic`,
+  `aizome-shell`, `aizome-settei`, `aizome-ipc` and `aizome-sys`: 981
+  tests pass, including the new explicit-sync choice, VRR-failure and
+  default-policy tests, Settei's revert to Off, and the `screens`,
+  `explicit_sync`, `displays`, `fullscreen`, `layout` and `pacing`
+  suites. The 13 failures are that machine's known ones (`headless`'s
+  grim/wlr-randr/lswt, the two reload tests, `aizome-sys`'s systemd and
+  polkit tests, the shell's whole-screen and lock-screen goldens) and
+  five `aizome-shell` recording tests that fail the same way on main.
+  Clippy passes with warnings denied on all eight crates.
+- The two GPU explicit-sync tests were not run: that machine's user cannot
+  open its render node.
+- `checks.x86_64-linux.tuning` passed all seven runs across the three
+  revisions of these changes, three on the final tree (one fresh run and
+  two `--rebuild`s). `tuning-policy`, `gaming`, `xwayland-satellite-unit`
+  (87 unit tests), the 20 `xwayland-fullscreen` scenarios and
+  `aizome-login` pass, and the `aizome` package builds. With its limit
+  lowered to two seconds, the satellite check fails with `timeout`'s exit
+  code 124, so a hung test cannot hold a builder.
+- A dry run of an installed Aizome system with Steam, against an empty
+  store and the caches installed systems use, builds 75 derivations that
+  neither the same system without Steam nor `packages.gaming` builds:
+  Steam's FHS environment and `steam-gamescope`, fish completions, and
+  per-machine configuration, all with `stdenvNoCC`. Gamescope, the
+  32-bit WSI layer and the launcher wrappers are not among them.
+
+None of this ran on the RTX 5090 or the X1 Carbon. Before merging, the X1
+still needs the merged build tried with adaptive sync left Off (the
+default) and then set to Fullscreen, fullscreen video and Vulkan clients
+with direct scanout, and its X11 applications through the patched bridge.
+On the RTX 5090 desktop, explicit sync should still be offered by default,
+and adaptive sync now has to be set to Fullscreen by hand.

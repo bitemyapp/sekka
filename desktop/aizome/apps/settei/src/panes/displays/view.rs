@@ -314,7 +314,7 @@ fn display_sections(p: &Displays, vcx: &ViewCx, d: &Display) -> Vec<Element<Msg>
                 "Adaptive sync",
                 form::choice(&["Off", "Fullscreen", "Always"], at, move |i| Msg::Vrr(n.clone(), i)),
             )
-            .help("Match the display to the game's frame rate. Choose Off if the screen flickers.")
+            .help("Fullscreen follows a fullscreen game's frame rate. Choose Off if the screen flickers.")
             .entry("adaptive-sync"),
         );
     } else {

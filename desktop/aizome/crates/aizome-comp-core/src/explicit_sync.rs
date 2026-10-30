@@ -37,12 +37,23 @@ pub fn surface_destroyed(state: &mut State, surface: &WlSurface) {
     });
 }
 
+/// Offered by default only on NVIDIA's driver, where it has been validated;
+/// `[performance] explicit_sync` turns it on or off for any GPU.
 pub fn init(az: &mut Aizome, device: DrmDeviceFd) {
-    if supports_syncobj_eventfd(&device) {
+    use smithay::reexports::drm::Device as _;
+    let driver = device.get_driver().map(|d| d.name().to_string_lossy().into_owned()).unwrap_or_default();
+    let choice = az.settings.explicit_sync_choice();
+    if !choice.offered_on(&driver) {
+        tracing::info!(
+            %driver,
+            ?choice,
+            "explicit synchronization off; [performance] explicit_sync = \"on\" offers linux-drm-syncobj-v1"
+        );
+    } else if supports_syncobj_eventfd(&device) {
         az.drm_syncobj = Some(DrmSyncobjState::new::<State>(&az.dh, device));
-        tracing::info!("explicit synchronization available (linux-drm-syncobj-v1)");
+        tracing::info!(%driver, "explicit synchronization available (linux-drm-syncobj-v1)");
     } else {
-        tracing::info!("DRM device cannot wait on syncobj eventfds; using implicit synchronization");
+        tracing::info!(%driver, "DRM device cannot wait on syncobj eventfds; using implicit synchronization");
     }
 }
 

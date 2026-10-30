@@ -66,7 +66,8 @@ fn adaptive_sync_reports_and_rejects_unsupported_outputs() {
     let c = Compositor::start(two("1280x800@1"));
     let request = |name: &str, mode: &str| Request::OutputVrr { name: name.into(), mode: mode.into() };
     let Response::Outputs { outputs } = c.request(Request::Outputs) else { panic!("outputs") };
-    assert!(outputs.iter().all(|o| !o.vrr_supported && !o.vrr_enabled && o.vrr == "fullscreen"));
+    // Off until a display entry asks for it.
+    assert!(outputs.iter().all(|o| !o.vrr_supported && !o.vrr_enabled && o.vrr == "off"));
     for (name, mode) in [("HEADLESS-1", "always"), ("HEADLESS-1", "invalid"), ("missing", "off")] {
         assert!(matches!(c.request(request(name, mode)), Response::Error { .. }));
     }

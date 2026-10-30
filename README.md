@@ -179,13 +179,15 @@ priority, including games absent from the scheduling rules. Background shader
 cache processing stays at low priority. This helps games compete with other
 CPU work; it does not increase the GPU's rendering capacity.
 
-Aizome supports explicit synchronization for NVIDIA games and adaptive sync
-under **Settings → Displays**, with fullscreen-only operation by default.
-Adaptive sync is offered on DisplayPort and built-in displays, not HDMI.
-If a display flickers with adaptive sync, select **Off**. Aizome still
-displays SDR and does not support tearing; use the Steam login session for
-those features. HDR, VRR and tearing still need physical display and game
-validation on each machine; GPU protocol tests alone do not establish them.
+Aizome offers games explicit synchronization when an NVIDIA GPU drives the
+desktop. Adaptive sync is off by default; to use it, choose **Fullscreen** or
+**Always** under **Settings → Displays**. It is offered on DisplayPort and
+built-in displays, not HDMI, and has so far been tried only on one NVIDIA
+desktop's monitor. If a display flickers with adaptive sync, select **Off**.
+Aizome still displays SDR and does not support tearing; use the Steam login
+session for those features. HDR, VRR and tearing still need physical display
+and game validation on each machine; GPU protocol tests alone do not
+establish them.
 
 ## Trying Sekka
 

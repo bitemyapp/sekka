@@ -28,7 +28,10 @@ let
     "steam.sh"
     "Steam.exe"
   ];
-  replacedRules = shells ++ steamLaunchers ++ [ "fossilize_replay" ];
+  # Steam's rules apply only where Steam is installed. They are the only
+  # child_rule rules, and without one the daemon tracks no ancestry.
+  steamRules = cfg.tuning.steam.enable;
+  replacedRules = shells ++ lib.optionals steamRules (steamLaunchers ++ [ "fossilize_replay" ]);
   # CachyOS's rules without names replaced below. ananicy loads rule files in
   # directory order and the last rule for a name wins, so an added rule could
   # not reliably replace them.
@@ -48,6 +51,16 @@ in
 {
   options.calamares = {
     tuning.enable = lib.mkEnableOption "CachyOS-inspired kernel, memory, I/O and service defaults";
+    tuning.steam.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = config.programs.steam.enable;
+      defaultText = lib.literalExpression "config.programs.steam.enable";
+      description = ''
+        With tuning, raise Steam's launcher and its same-user process tree,
+        and keep its shader-cache processing in the background
+        (docs/tuning.md, "Steam process trees").
+      '';
+    };
     zswap.enable = lib.mkEnableOption "zswap in front of the RAM-sized swap partition";
   };
   config = lib.mkMerge [
@@ -176,38 +189,42 @@ in
           # Steam's launcher must not pass the upstream Launcher type's nice
           # 16 and idle I/O to unknown games. The packaged daemon follows
           # same-user ancestry across wrappers, execs, forks and threads.
-          ++ map (name: {
-            inherit name;
-            nice = -5;
-            nice_only_raise = true;
-            sched = "normal";
-            sched_keep_realtime = true;
-            ioclass = "best-effort";
-            child_rule = "sekka-steam-children";
-          }) steamLaunchers
-          ++ [
-            {
-              name = "sekka-steam-children";
-              nice = -10;
+          # Like every Ananicy rule these match process names, which any
+          # user can choose (docs/tuning.md).
+          ++ lib.optionals steamRules (
+            map (name: {
+              inherit name;
+              nice = -5;
               nice_only_raise = true;
               sched = "normal";
               sched_keep_realtime = true;
               ioclass = "best-effort";
-            }
-            {
-              # Steam's background shader cache processing must not compete
-              # with a running game, even through compiler/helper children.
-              name = "fossilize_replay";
-              type = "BG_CPUIO";
-              child_rule = "sekka-steam-shader-children";
-            }
-            {
-              name = "sekka-steam-shader-children";
-              type = "BG_CPUIO";
-              nice_only_raise = false;
-              sched_keep_realtime = false;
-            }
-          ]
+              child_rule = "sekka-steam-children";
+            }) steamLaunchers
+            ++ [
+              {
+                name = "sekka-steam-children";
+                nice = -10;
+                nice_only_raise = true;
+                sched = "normal";
+                sched_keep_realtime = true;
+                ioclass = "best-effort";
+              }
+              {
+                # Steam's background shader cache processing must not compete
+                # with a running game, even through compiler/helper children.
+                name = "fossilize_replay";
+                type = "BG_CPUIO";
+                child_rule = "sekka-steam-shader-children";
+              }
+              {
+                name = "sekka-steam-shader-children";
+                type = "BG_CPUIO";
+                nice_only_raise = false;
+                sched_keep_realtime = false;
+              }
+            ]
+          )
           # Harnesses stay interactive, like Foot and Chrome. Only their child
           # workloads enter the background slice, through the user service.
           ++

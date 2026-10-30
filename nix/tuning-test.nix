@@ -76,6 +76,8 @@ pkgs.testers.runNixOSTest {
     {
       imports = [ ../installer/genkan/rust/system/tuning.nix ];
       calamares.tuning.enable = true;
+      # Steam's process-tree rules, without installing Steam itself.
+      calamares.tuning.steam.enable = true;
       services.ananicy.extraRules = [
         {
           name = "sekka-known-game";
@@ -204,7 +206,8 @@ pkgs.testers.runNixOSTest {
         all_threads(wine, nice=-12)
         _, wrapper = steam_job("steam-wrapper", "${steamWrapper}")
         wait_nice(wrapper, -10)
-        wrapped_game = started(".", wrapper)
+        # By name: the wrapper's own waitNice loop also has short-lived children.
+        wrapped_game = started("${probe}/bin/probe", wrapper)
         all_threads(wrapped_game, nice=-10)
 
     with subtest("Steam games fork new processes without exec"):

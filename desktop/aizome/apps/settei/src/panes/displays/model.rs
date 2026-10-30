@@ -1009,7 +1009,7 @@ mod tests {
         assert!(matches!(requests(&before, &after, &names).last(),
             Some(Request::OutputVrr { mode, .. }) if mode == "always"));
         assert!(matches!(requests(&after, &before, &names).last(),
-            Some(Request::OutputVrr { mode, .. }) if mode == "fullscreen"));
+            Some(Request::OutputVrr { mode, .. }) if mode == "off"));
         let d = Display::from_output(&output("DP-1", 3840, 2160, 2.0, 0), None);
         let mut outputs = vec![];
         write_entries(&mut outputs, &[(d.config_key(), after[0].clone())], main.as_deref());

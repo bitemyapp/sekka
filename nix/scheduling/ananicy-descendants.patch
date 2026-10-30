@@ -21,6 +21,19 @@ index 03f9bf3..758d5e3 100644
  
  bool set_oom_score_adjust(pid_t pid, int value);
  
+diff --git a/include/core/rules.hpp b/include/core/rules.hpp
+index 1dc9d4c..1c9b75e 100644
+--- a/include/core/rules.hpp
++++ b/include/core/rules.hpp
+@@ -38,6 +38,8 @@ public:
+   void load_rules_from_file(const std::filesystem::path &path);
+   void load_rules_from_directory(const std::filesystem::path &dir_path);
+   nlohmann::json get_rule(const std::string &name) const noexcept;
++  // Whether any program or type rule sets this key.
++  bool any_rule_has(const std::string &key) const noexcept;
+ 
+   void create_cgroups() const noexcept;
+ 
 diff --git a/src/platform/linux/priority.cpp b/src/platform/linux/priority.cpp
 index e4526d7..1c7b07d 100644
 --- a/src/platform/linux/priority.cpp
@@ -69,8 +82,36 @@ index e4526d7..1c7b07d 100644
    });
  }
  
+diff --git a/src/rules.cpp b/src/rules.cpp
+index a4c5a59..aaa5a07 100644
+--- a/src/rules.cpp
++++ b/src/rules.cpp
+@@ -9,6 +9,7 @@
+ #include "utility/regex_utils.hpp"
+ #endif
+ 
++#include <algorithm>   // for any_of
+ #include <filesystem>  // for path, recursive_directory_iterator
+ #include <fstream>     // for ifstream
+ #include <iostream>    // for cout
+@@ -178,6 +179,15 @@ void Rules::create_cgroups() const noexcept {
+   spdlog::info("Finished creating Cgroups...");
+ }
+ 
++bool Rules::any_rule_has(const std::string &key) const noexcept {
++  const auto has = [&](const ruleset &rules) {
++    return std::any_of(rules.begin(), rules.end(), [&](const auto &rule) {
++      return rule.second.contains(key);
++    });
++  };
++  return has(m_program_rules) || has(m_type_rules);
++}
++
+ json Rules::get_rule(const std::string &name) const noexcept {
+   json rule;
+ 
 diff --git a/src/worker.cpp b/src/worker.cpp
-index 9e7a8f2..c3b89df 100644
+index 9e7a8f2..d6be80e 100644
 --- a/src/worker.cpp
 +++ b/src/worker.cpp
 @@ -8,6 +8,7 @@
@@ -81,7 +122,7 @@ index 9e7a8f2..c3b89df 100644
  
  #include <chrono>
  #include <functional>
-@@ -72,6 +73,25 @@ void Worker::build_cpuset_aliases() {
+@@ -72,6 +73,28 @@ void Worker::build_cpuset_aliases() {
  
  void Worker::work(const std::stop_token &stop_token) {
    std::optional<Process> proc;
@@ -104,10 +145,13 @@ index 9e7a8f2..c3b89df 100644
 +    }
 +    return rule;
 +  };
++  // Rules load once, at startup. Without a child_rule, skip the ancestry
++  // walk's /proc reads on every fork, thread and exec.
++  const bool tracks_descendants = rules->any_rule_has("child_rule");
    const bool             is_affected_by_cgroup_bug =
        control_groups::get_cgroup_version().version ==
        control_groups::cgroup_info::v2;
-@@ -79,21 +99,22 @@ void Worker::work(const std::stop_token &stop_token) {
+@@ -79,21 +102,24 @@ void Worker::work(const std::stop_token &stop_token) {
      while ((proc = process_queue->poll(500ms)).has_value()) {
        const auto &p = proc.value();
        // A wrapper may have exec'd again while this event was queued.
@@ -127,12 +171,14 @@ index 9e7a8f2..c3b89df 100644
 -        if (!error)
 -          rule = rules->get_rule(normalize(exe.filename().string()));
 +      auto rule = lookup(p.pid);
-+      auto inherited_name = descendants.inherited(
-+          p.pid, sekka::process_identity, [&](pid_t pid) {
-+            auto parent_rule = lookup(pid);
-+            return parent_rule.is_object()
-+                ? parent_rule.value("child_rule", std::string{}) : std::string{};
-+          });
++      std::string inherited_name;
++      if (tracks_descendants)
++        inherited_name = descendants.inherited(
++            p.pid, sekka::process_identity, [&](pid_t pid) {
++              auto parent_rule = lookup(pid);
++              return parent_rule.is_object()
++                  ? parent_rule.value("child_rule", std::string{}) : std::string{};
++            });
 +      if (!inherited_name.empty() && !rule.contains("child_rule")) {
 +        auto inherited = rules->get_rule(inherited_name);
 +        if (!inherited.is_null()) {
@@ -145,7 +191,7 @@ index 9e7a8f2..c3b89df 100644
        }
  
        processed_count++;
-@@ -117,7 +138,8 @@ void Worker::work(const std::stop_token &stop_token) {
+@@ -117,7 +143,8 @@ void Worker::work(const std::stop_token &stop_token) {
              const int &rule_nice = rule["nice"];
              spdlog::debug("Setting priority of {}({}) to {}", p.name, p.pid,
                            rule_nice);
@@ -155,7 +201,7 @@ index 9e7a8f2..c3b89df 100644
                continue;
              }
            }
-@@ -145,7 +167,8 @@ void Worker::work(const std::stop_token &stop_token) {
+@@ -145,7 +172,8 @@ void Worker::work(const std::stop_token &stop_token) {
              const std::string &rule_sched = rule["sched"];
              spdlog::debug("Setting scheduler of {}({}) to {}", p.name, p.pid,
                            rule_sched);
