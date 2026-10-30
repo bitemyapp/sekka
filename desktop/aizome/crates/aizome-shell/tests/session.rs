@@ -124,7 +124,7 @@ fn keyboards_plugged_in_are_offered_their_setup_once() {
     h.send(added(YUBIKEY, "1050:0407", KeyboardBus::Usb));
     let n = h.program().notes.list.iter().find(|n| n.summary == format!("Set up {YUBIKEY}?")).cloned();
     let n = n.expect("asked about");
-    assert!(n.buttons().any(|(_, l)| l == "Same as Other Keyboards"), "{:?}", n.actions);
+    assert!(n.buttons().any(|(_, l)| l == "Same as Others"), "{:?}", n.actions);
     h.send(Msg::Card(CardMsg::Action(n.id, "same".into())));
     let saved = h.program().settings.input.keyboard_profile(YUBIKEY, "1050:0407").cloned();
     assert_eq!(saved.map(|k| k.options), Some(None), "known, with no keys of its own");

@@ -38,7 +38,9 @@ impl Shell {
             vec![
                 ("default".into(), "Set Up…".into(), setup.clone()),
                 ("set-up".into(), "Set Up…".into(), setup),
-                ("same".into(), "Same as Other Keyboards".into(), same),
+                // Settei's “Same as Other Keyboards”, short enough to fit
+                // beside Set Up… in the Deskbar.
+                ("same".into(), "Same as Others".into(), same),
             ],
             cx,
         );

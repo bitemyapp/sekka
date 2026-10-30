@@ -312,8 +312,8 @@ Hako". A USB or Bluetooth keyboard without keys of its own
 (`[[input.keyboards]]`), there when the shell connects or plugged in
 later (`keyboard-added`), gets "Set up …?" with **Set Up…**, which opens
 Settei's keyboard setup (`keyboard.setup`) with that keyboard chosen
-(`--keyboard`), and **Same as Other Keyboards**, which writes an entry
-without `options` for it (as Settei's sheet does), so a
+(`--keyboard`), and **Same as Others**, which writes an entry without
+`options` for it (as Settei's **Same as Other Keyboards** does), so a
 device that only says it's a keyboard (a security key, a mouse's receiver)
 isn't asked about again; each is asked about once a session
 (`keyboards.rs`).
