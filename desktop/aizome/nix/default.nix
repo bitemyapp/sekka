@@ -155,6 +155,9 @@ let
       wallpaper-choice = import ./vm-wallpaper-choice-test.nix { inherit pkgs self; };
       network-auth = import ./vm-network-auth-test.nix { inherit pkgs self; };
       polkit-recovery = import ./vm-polkit-recovery-test.nix { inherit pkgs self; };
+      # Nisshi's reader through real polkit and pkexec: your own journal,
+      # the system's once polkit says yes, refused without (vm-nisshi-test.nix).
+      nisshi = import ./vm-nisshi-test.nix { inherit pkgs self; };
       # Koe set up from its window, and its service on, off and at the
       # next start (vm-koe-test.nix).
       koe = import ./vm-koe-test.nix { inherit pkgs self; };

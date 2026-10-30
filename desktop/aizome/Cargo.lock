@@ -317,6 +317,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-nisshi"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "aizome-kit",
+ "env_logger",
+ "jiff",
+ "libc",
+ "log",
+ "memchr",
+ "regex",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "aizome-portal"
 version = "0.1.0"
 dependencies = [

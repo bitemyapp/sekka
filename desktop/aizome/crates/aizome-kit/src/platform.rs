@@ -89,6 +89,8 @@ pub trait Platform {
         let _ = (id, on);
     }
     fn activate(&mut self, id: WinId);
+    /// Consume a token supplied by the application that initiated a launch.
+    fn activate_with_token(&mut self, id: WinId, token: &str);
     fn begin_move(&mut self, id: WinId);
     fn clipboard_text(&mut self) -> Option<String>;
     fn set_clipboard_text(&mut self, text: &str);

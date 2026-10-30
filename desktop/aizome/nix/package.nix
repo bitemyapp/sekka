@@ -213,6 +213,9 @@ rustPlatform.buildRustPackage {
     }
     export TZDIR=${tzdata}/share/zoneinfo
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
+    # A successful spawn is not a successful application launch. Gate the
+    # shipped shell on process outcomes and its failure/details interface.
+    cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell --lib
     runHook postCheck
   '';
 
@@ -261,6 +264,12 @@ rustPlatform.buildRustPackage {
     for icon in icons/apps/*.svg; do
       install -Dm644 "$icon" "$out/share/icons/hicolor/scalable/apps/$(basename "$icon")"
     done
+    # Nisshi's reader, run as root only through pkexec under its own
+    # polkit action, which names it by this path.
+    mkdir -p $out/libexec $out/share/polkit-1/actions
+    mv $out/bin/aizome-nisshi-helper $out/libexec/
+    substitute apps/nisshi/data/org.aizome.Nisshi.policy.in $out/share/polkit-1/actions/org.aizome.Nisshi.policy \
+      --subst-var-by helper $out/libexec/aizome-nisshi-helper
     install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
     install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
     install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt

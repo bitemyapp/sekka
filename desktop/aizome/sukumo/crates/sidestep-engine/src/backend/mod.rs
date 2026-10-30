@@ -1042,6 +1042,12 @@ impl State {
                 }
             }
             ToRender::Request { window, request } => self.request(window, request),
+            ToRender::ActivateWithToken { window, token } => {
+                let window = sheet::toplevel_of(self, window);
+                if let (Some(activation), Some(win)) = (&self.activation, self.windows.get(&window)) {
+                    activation.activate::<State>(win.main_surface(), token);
+                }
+            }
             ToRender::SetCursor { window, cursor } => {
                 if let Some(win) = self.windows.get_mut(&window) {
                     win.cursor = cursor;

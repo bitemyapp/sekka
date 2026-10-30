@@ -6,5 +6,6 @@ Comment=Pair headphones, keyboards and other Bluetooth devices
 Exec=tatami-bluetooth
 Icon=bluetooth
 Categories=Settings;HardwareSettings;
+OnlyShowIn=Tatami;
 Keywords=bluetooth;wireless;pair;pairing;headphones;headset;speaker;keyboard;mouse;controller;
 StartupNotify=true

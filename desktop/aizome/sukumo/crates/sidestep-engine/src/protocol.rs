@@ -720,6 +720,12 @@ pub enum ToRender {
         window: WindowId,
         request: WindowRequest,
     },
+    /// Use an existing xdg-activation token, rather than requesting one
+    /// from this client's last input (which may belong to an old focus).
+    ActivateWithToken {
+        window: WindowId,
+        token: String,
+    },
     /// The pointer's appearance over the window's content.
     SetCursor {
         window: WindowId,

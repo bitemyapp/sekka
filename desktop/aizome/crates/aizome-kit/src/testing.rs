@@ -74,6 +74,7 @@ pub struct TestPlatform {
     pub locked: bool,
     pub lock_asked: bool,
     pub activation_requests: Vec<(u64, Option<String>)>,
+    pub activations: Vec<(WinId, Option<String>)>,
     /// Full screen as last asked, by window.
     pub fullscreen: HashMap<WinId, bool>,
     /// Regions moved since the test last took them, by window.
@@ -127,6 +128,7 @@ impl TestPlatform {
             locked: false,
             lock_asked: false,
             activation_requests: Vec::new(),
+            activations: Vec::new(),
             fullscreen: HashMap::new(),
             scrolls: HashMap::new(),
             drags: Vec::new(),
@@ -230,7 +232,13 @@ impl Platform for TestPlatform {
         self.fullscreen.insert(id, on);
     }
 
-    fn activate(&mut self, _id: WinId) {}
+    fn activate(&mut self, id: WinId) {
+        self.activations.push((id, None));
+    }
+
+    fn activate_with_token(&mut self, id: WinId, token: &str) {
+        self.activations.push((id, Some(token.to_owned())));
+    }
 
     fn begin_move(&mut self, _id: WinId) {}
 

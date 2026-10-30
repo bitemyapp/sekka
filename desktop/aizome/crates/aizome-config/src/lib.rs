@@ -495,7 +495,7 @@ pub struct Windows {
 impl Default for Windows {
     fn default() -> Self {
         Windows {
-            stack_new_windows_of_same_app: false,
+            stack_new_windows_of_same_app: true,
             focus_follows: FocusFollows::Click,
             remember_geometry: true,
             extra: toml::Table::new(),
@@ -766,6 +766,7 @@ mod tests {
         assert_eq!(s.desks_or_default().len(), 4);
         assert_eq!(s.desks_or_default()[0].name, "1");
         assert!(s.keys.command_key_for_all_apps);
+        assert!(s.windows.stack_new_windows_of_same_app);
         assert_eq!(s.appearance.cursor_theme, "Adwaita");
         assert_eq!(s.appearance.motion_ms(), 80);
     }
@@ -823,7 +824,7 @@ a = 1
         let dir = std::env::temp_dir().join(format!("aizome-config-test-{}", std::process::id()));
         let path = dir.join("settings.toml");
         let mut s = Settings::default();
-        s.windows.stack_new_windows_of_same_app = true;
+        s.windows.stack_new_windows_of_same_app = false;
         s.desks = vec![
             DeskConfig::named("Mail"),
             DeskConfig { name: "Build".into(), folder: Some("~/work".into()), ..Default::default() },

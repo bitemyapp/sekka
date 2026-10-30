@@ -438,6 +438,12 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
             ToRender::RequestActivationToken { request, .. } => {
                 send(FromRender::ActivationToken { request, token: Some(format!("null-activation-{request}")) });
             }
+            ToRender::ActivateWithToken { window, token } => {
+                note(Seen::Request { window, request: format!("ActivateWithToken({token:?})") });
+                if windows.contains_key(&window) {
+                    focus(&mut focused, Some(window));
+                }
+            }
             ToRender::Request { window, request } => {
                 note(Seen::Request { window, request: format!("{request:?}") });
                 let Some(win) = windows.get_mut(&window) else { continue };

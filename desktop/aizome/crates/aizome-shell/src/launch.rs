@@ -2,10 +2,8 @@
 //! with an xdg-activation token so their first window takes the focus,
 //! files with their default app, folders in Hako, Settings at a pane.
 
+use aizome_sys::apps::AppIndex;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-
-use aizome_sys::apps::{App, AppIndex, LaunchOptions};
 
 /// Hako, Aizome's file manager.
 pub const HAKO: &str = "org.aizome.Hako";
@@ -57,56 +55,6 @@ pub fn settings(pane: &str, anchor: Option<&str>) -> Launch {
         argv.push(a.to_owned());
     }
     Launch::Argv(argv)
-}
-
-/// Run `launch` now, with `token` (from xdg-activation) for its first
-/// window. Doesn't wait for the program: errors are logged.
-pub fn start(index: Option<&AppIndex>, launch: &Launch, token: Option<String>, cwd: Option<PathBuf>) {
-    match launch {
-        Launch::App { app_id, targets } => {
-            let Some(entry) = index.and_then(|i| i.match_window_identity(app_id)) else {
-                log::warn!("no app {app_id} to launch");
-                return;
-            };
-            let entry: App = entry.clone();
-            let options = LaunchOptions {
-                targets: targets.clone(),
-                activation_token: token,
-                working_dir: cwd,
-                ..LaunchOptions::default()
-            };
-            let id = app_id.clone();
-            std::thread::spawn(move || {
-                if let Err(e) = aizome_sys::apps::launch(&entry, &options) {
-                    log::warn!("launching {id}: {e}");
-                }
-            });
-        }
-        Launch::Argv(argv) => spawn(argv, token, cwd),
-    }
-}
-
-/// Run a command line directly, detached, with the activation token in its
-/// environment and the shell socket for kit apps.
-pub fn spawn(argv: &[String], token: Option<String>, cwd: Option<PathBuf>) {
-    let Some((prog, args)) = argv.split_first() else { return };
-    let mut c = Command::new(prog);
-    c.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit());
-    if let Some(t) = token {
-        c.env("XDG_ACTIVATION_TOKEN", &t).env("DESKTOP_STARTUP_ID", &t);
-    }
-    if let Some(d) = cwd {
-        c.current_dir(d);
-    }
-    match c.spawn() {
-        // Reap it on a thread so it doesn't linger as a zombie.
-        Ok(mut child) => {
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-        }
-        Err(e) => log::warn!("{prog}: {e}"),
-    }
 }
 
 /// The home folder's usual places: (name, path).

@@ -9,6 +9,7 @@
 { self }:
 {
   config,
+  options,
   lib,
   pkgs,
   ...
@@ -415,33 +416,42 @@ in
 
     # The lock screen authenticates through PAM as this service.
     security.pam.services.aizome = { };
-    security.polkit.enable = true;
     # Someone at the computer who administers it (wheel) changes from
     # Settings what a Mac's owner changes there without a password prompt,
     # as GNOME lets them: the time and time zone, the computer's name, the
     # language and keyboard, and networks (joining, airplane mode, sharing),
     # which NixOS otherwise leaves to the networkmanager group. Others are
     # asked as systemd and NetworkManager ask.
-    security.polkit.extraConfig = ''
-      polkit.addRule(function (action, subject) {
-        var settings = [
-          "org.freedesktop.timedate1.set-time",
-          "org.freedesktop.timedate1.set-timezone",
-          "org.freedesktop.timedate1.set-local-rtc",
-          "org.freedesktop.timedate1.set-ntp",
-          "org.freedesktop.hostname1.set-hostname",
-          "org.freedesktop.hostname1.set-static-hostname",
-          "org.freedesktop.hostname1.set-machine-info",
-          "org.freedesktop.locale1.set-locale",
-          "org.freedesktop.locale1.set-keyboard",
-        ];
-        if (subject.local && subject.active && subject.isInGroup("wheel") &&
-            (settings.indexOf(action.id) >= 0 ||
-             action.id.indexOf("org.freedesktop.NetworkManager.") == 0)) {
-          return polkit.Result.YES;
-        }
-      });
-    '';
+    #
+    # Nisshi unlocks the system's logs through pkexec, which works only
+    # through NixOS's setuid wrapper. Recent NixOS makes that wrapper only
+    # when something asks for it.
+    security.polkit = {
+      enable = true;
+      extraConfig = ''
+        polkit.addRule(function (action, subject) {
+          var settings = [
+            "org.freedesktop.timedate1.set-time",
+            "org.freedesktop.timedate1.set-timezone",
+            "org.freedesktop.timedate1.set-local-rtc",
+            "org.freedesktop.timedate1.set-ntp",
+            "org.freedesktop.hostname1.set-hostname",
+            "org.freedesktop.hostname1.set-static-hostname",
+            "org.freedesktop.hostname1.set-machine-info",
+            "org.freedesktop.locale1.set-locale",
+            "org.freedesktop.locale1.set-keyboard",
+          ];
+          if (subject.local && subject.active && subject.isInGroup("wheel") &&
+              (settings.indexOf(action.id) >= 0 ||
+               action.id.indexOf("org.freedesktop.NetworkManager.") == 0)) {
+            return polkit.Result.YES;
+          }
+        });
+      '';
+    }
+    // lib.optionalAttrs (options.security.polkit ? enablePkexecWrapper) {
+      enablePkexecWrapper = true;
+    };
 
     # What Settings, the Deskbar's widgets and the apps talk to.
     networking.networkmanager.enable = lib.mkDefault true;
