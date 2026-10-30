@@ -1,12 +1,12 @@
 //! Default Apps: which app opens links, mail, folders, text, pictures, PDF
 //! documents, music and video, and which terminal ❖Return starts. Written
-//! to `mimeapps.list` (and, for the terminal, `xdg-terminals.list` and the
-//! compositor's `[keys] terminal`) in the user's config.
+//! to `mimeapps.list` (and, for the terminal, `xdg-terminals.list`) in the
+//! user's config; the compositor reads the same list for ❖Return.
 
 use std::sync::{Arc, Mutex};
 
 use aizome_kit::prelude::*;
-use aizome_sys::apps::{AppIndex, DefaultRole, DesktopEntry, LaunchOptions, command_lines};
+use aizome_sys::apps::{AppIndex, DefaultRole};
 
 use super::Msg as G;
 use crate::form;
@@ -183,14 +183,6 @@ impl State {
                             Ok(()) => {
                                 row.current = index.role_default(role);
                                 cx.say(format!("{name} opens {} now", role.label().to_lowercase()));
-                                // ❖Return starts the compositor's terminal command.
-                                let command = (role == DefaultRole::Terminal)
-                                    .then(|| index.get(&id).and_then(terminal_command))
-                                    .flatten();
-                                drop(index);
-                                if let Some(command) = command {
-                                    cx.change(|s| s.keys.terminal = command);
-                                }
                             }
                             Err(e) => cx.failed(role.label(), e),
                         }
@@ -234,25 +226,5 @@ impl State {
             rows,
             Some("Apps that can open these are listed; an app chosen here also opens what's like it (an image viewer every kind of image it reads).".into()),
         )])
-    }
-}
-
-/// The command ❖Return runs for a terminal's desktop entry (its `Exec`,
-/// without the field codes it takes files by).
-pub fn terminal_command(entry: &DesktopEntry) -> Option<Vec<String>> {
-    command_lines(entry, &LaunchOptions::default()).ok()?.into_iter().next().filter(|argv| !argv.is_empty())
-}
-
-#[cfg(test)]
-mod tests {
-    use aizome_sys::apps::{DesktopEntry, Locale};
-
-    use super::terminal_command;
-
-    #[test]
-    fn a_terminals_command_drops_its_field_codes() {
-        let text = "[Desktop Entry]\nType=Application\nName=Kitty\nExec=kitty --single-instance %U\nCategories=TerminalEmulator;\n";
-        let entry = DesktopEntry::parse(text, "kitty.desktop", &Locale::parse("C")).unwrap();
-        assert_eq!(terminal_command(&entry), Some(vec!["kitty".to_owned(), "--single-instance".to_owned()]));
     }
 }

@@ -83,6 +83,7 @@ dependencies = [
 name = "aizome-comp-core"
 version = "0.1.0"
 dependencies = [
+ "aizome-apps",
  "aizome-config",
  "aizome-ipc",
  "aizome-theme",

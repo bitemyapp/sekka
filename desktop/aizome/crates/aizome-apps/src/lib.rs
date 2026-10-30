@@ -34,7 +34,7 @@ pub use error::{Error, Result};
 pub use exec::{Exec, ExecContext, file_uri_to_path, path_to_file_uri};
 pub use icons::{IconLookup, IconTheme};
 pub use index::{App, AppIndex, Watcher};
-pub use mime::DefaultRole;
+pub use mime::{DefaultRole, TerminalMove};
 pub use xdg::{DESKTOP_NAME, XdgDirs, find_program, parse_desktops};
 
 use std::sync::{Arc, Mutex};

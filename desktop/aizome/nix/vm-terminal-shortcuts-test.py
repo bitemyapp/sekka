@@ -64,6 +64,14 @@ def focus(w):
 machine.start()
 machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
 
+with subtest("foot, chosen before Hotaru, becomes Hotaru once"):
+    until(
+        "the move to Hotaru",
+        lambda: machine.execute("test -e /home/alice/.local/state/aizome/terminal-moved-to-hotaru")[0] == 0,
+    )
+    listed = machine.succeed("cat /home/alice/.config/xdg-terminals.list").split()
+    assert listed == ["org.aizome.Hotaru.desktop", "foot.desktop"], listed
+
 with subtest("❖Return opens Hotaru, the default terminal, and typing reaches its shell"):
     chord("super+Return")
     until("Hotaru", hotarus)

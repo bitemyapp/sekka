@@ -21,9 +21,7 @@ let
   run = pkgs.writeShellScript "run-aizome" ''
     export LD_LIBRARY_PATH=${ldp}
     export AIZOME_LOG=info,smithay=warn XDG_CONFIG_HOME=/tmp/azcfg
-    # Only foot is installed here; Aizome's own default is Hotaru.
-    mkdir -p /tmp/azcfg/aizome
-    printf '[keys]\nterminal = ["foot"]\n' > /tmp/azcfg/aizome/settings.toml
+    # Only foot is installed here, so it's the default terminal (❖Return's).
     exec /mnt/aizome/aizome --backend udev --no-shell --no-xwayland > /tmp/az.log 2>&1
   '';
 in

@@ -58,8 +58,8 @@
 //! Not handled here: `Type=Link` entries (open their `URL` with the default
 //! browser).
 
-use aizome_apps::{DesktopEntry, EntryKind, Exec, ExecContext, find_program, random_hex};
 use crate::{Error, Result, Task, Wake};
+use aizome_apps::{DesktopEntry, EntryKind, Exec, ExecContext, find_program, random_hex};
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::os::unix::process::CommandExt;
@@ -705,9 +705,9 @@ pub fn systemd_escape(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use aizome_apps::Locale;
     use aizome_apps::testutil::TempDir;
-    use super::*;
 
     fn entry(text: &str) -> DesktopEntry {
         DesktopEntry::parse(text, "org.example.Test-App.desktop", &Locale::default()).unwrap()

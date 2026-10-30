@@ -50,6 +50,7 @@ pub mod shell;
 pub mod state;
 pub mod stats;
 pub mod svg;
+pub mod terminal;
 pub mod text;
 pub mod thumbs;
 pub mod timers;

@@ -838,9 +838,15 @@ def default_apps():
     )
     assert query.strip() == "aizome-test-editor.desktop", query
 
-    # The terminal chosen is the one ❖Return starts.
+    # The terminal chosen is the one ❖Return starts: the compositor reads
+    # the list Settei writes, and nothing else.
     S.choose(S.control("general", "default-terminal", role="combobox"), "Test Terminal")
-    until("[keys] terminal", lambda: setting("keys.terminal") == ["foot", "--app-id=aizome-test-terminal"])
+    until(
+        "xdg-terminals.list to name it",
+        lambda: machine.succeed(f"head -n1 {HOME}/.config/xdg-terminals.list || true").strip()
+        == "aizome-test-terminal.desktop",
+    )
+    assert setting("keys.terminal") is None
     chord("super+return")
     term = until(
         "the chosen terminal",
