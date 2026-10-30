@@ -285,6 +285,24 @@ fn a_seek_to_the_last_moments_lands() {
 }
 
 #[test]
+fn a_seek_is_where_playback_is_from_when_its_asked() {
+    let r = player();
+    r.player.open(fixture("clip.mp4"), 0.0, true);
+    r.state(5.0, PlayState::Playing);
+    std::thread::sleep(Duration::from_millis(300));
+    // The player's thread hasn't had them yet: a seek relative to now,
+    // asked next (two presses of → at once), starts from the last one's
+    // target, not from the clock before it.
+    r.player.seek(0.1, true);
+    assert_eq!(r.player.position(), 0.1);
+    r.player.seek(1.5, true);
+    assert_eq!(r.player.position(), 1.5);
+    r.until(3.0, |e| matches!(e, Event::Seeked(t) if (*t - 1.5).abs() < 1e-9));
+    let p = r.player.position();
+    assert!((1.5 - 1e-6..1.9).contains(&p), "{p}");
+}
+
+#[test]
 fn the_picture_showing_can_be_taken() {
     let r = player();
     r.player.open(fixture("clip.mp4"), 0.0, false);

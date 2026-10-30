@@ -15,7 +15,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::time::Duration;
 
@@ -243,7 +243,8 @@ enum Command {
     Open { url: String, start: f64, play: bool },
     Play,
     Pause,
-    Seek { to: f64, precise: bool },
+    /// `n`: which seek of the [`Player`]'s, to say when it's done.
+    Seek { to: f64, precise: bool, n: u64 },
     Step(bool),
     Speed(f64),
     Volume(f32, bool),
@@ -255,12 +256,24 @@ enum Command {
     Quit,
 }
 
+/// Seeks asked of the player's thread and those it has carried out, and
+/// the last one's target: until the thread has it, that is where
+/// playback is (so a seek relative to now, asked right after another,
+/// starts from where the first one goes).
+#[derive(Default)]
+struct Seeks {
+    asked: AtomicU64,
+    done: AtomicU64,
+    to: AtomicU64,
+}
+
 /// A player. Commands return at once; what they do is heard as events.
 pub struct Player {
     tx: mpsc::Sender<Command>,
     wake: Arc<Wake>,
     clock: Arc<Clock>,
     video: Arc<video::Shared>,
+    seeks: Arc<Seeks>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -273,12 +286,13 @@ impl Player {
         let video = video::Shared::new(wake.clone());
         let v = video.clone();
         clock.on_start(move || v.poke());
-        let ctl = Ctl::new(options, rx, wake.clone(), clock.clone(), video.clone(), Arc::new(events));
+        let seeks = Arc::new(Seeks::default());
+        let ctl = Ctl::new(options, rx, wake.clone(), clock.clone(), video.clone(), seeks.clone(), Arc::new(events));
         let thread = std::thread::Builder::new()
             .name("aizome-media".into())
             .spawn(move || ctl.run())
             .expect("aizome-media: couldn't start the player's thread");
-        Player { tx, wake, clock, video, thread: Some(thread) }
+        Player { tx, wake, clock, video, seeks, thread: Some(thread) }
     }
 
     fn send(&self, cmd: Command) {
@@ -303,7 +317,9 @@ impl Player {
     /// Go to `to` seconds: exactly, or to the keyframe before (quick, for
     /// dragging along the timeline).
     pub fn seek(&self, to: f64, precise: bool) {
-        self.send(Command::Seek { to, precise });
+        self.seeks.to.store(to.max(0.0).to_bits(), Ordering::Relaxed);
+        let n = self.seeks.asked.fetch_add(1, Ordering::Release) + 1;
+        self.send(Command::Seek { to, precise, n });
     }
 
     /// One frame forward or back (pausing).
@@ -352,8 +368,14 @@ impl Player {
         self.send(Command::Close);
     }
 
-    /// Where playback is now, in seconds.
+    /// Where playback is now, in seconds: where the last seek goes, from
+    /// when it's asked. (The clock follows once the player's thread has it,
+    /// moments later.)
     pub fn position(&self) -> f64 {
+        let s = &self.seeks;
+        if s.done.load(Ordering::Acquire) < s.asked.load(Ordering::Acquire) {
+            return f64::from_bits(s.to.load(Ordering::Relaxed));
+        }
         self.clock.now()
     }
 
@@ -625,6 +647,7 @@ struct Ctl {
     wake: Arc<Wake>,
     clock: Arc<Clock>,
     video: Arc<video::Shared>,
+    seeks: Arc<Seeks>,
     events: Arc<dyn Fn(Event) + Send + Sync>,
     sink: Option<VideoSink>,
     caps: Option<VideoCaps>,
@@ -658,6 +681,7 @@ impl Ctl {
         wake: Arc<Wake>,
         clock: Arc<Clock>,
         video: Arc<video::Shared>,
+        seeks: Arc<Seeks>,
         events: Arc<dyn Fn(Event) + Send + Sync>,
     ) -> Ctl {
         let output: Box<dyn Output> = match options.audio {
@@ -676,6 +700,7 @@ impl Ctl {
             wake,
             clock,
             video,
+            seeks,
             events,
             caps: options.caps,
             sink: options.sink,
@@ -739,7 +764,12 @@ impl Ctl {
             }
             Command::Play => self.play(),
             Command::Pause => self.pause(),
-            Command::Seek { to, precise } => self.seek(to, precise),
+            Command::Seek { to, precise, n } => {
+                self.seek(to, precise);
+                // The clock is at the seek's target now (or the seek did
+                // nothing): it says where playback is again.
+                self.seeks.done.store(n, Ordering::Release);
+            }
             Command::Step(forward) => self.step(forward),
             Command::Speed(s) => {
                 self.speed = s;

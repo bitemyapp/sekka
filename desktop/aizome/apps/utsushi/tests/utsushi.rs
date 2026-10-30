@@ -292,6 +292,21 @@ fn the_keys_come_back_to_the_picture_from_the_bar() {
 }
 
 #[test]
+fn seeks_in_a_row_add_up() {
+    // → pressed quickly, or held: each seek goes on from where the last
+    // one goes, though the player hasn't got there yet.
+    let mut h = harness();
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send_all([Msg::SeekTo(0.0), Msg::SeekBy(1.0)]);
+    assert_eq!(h.program().pos, 1.0);
+    h.send_all([Msg::SeekBy(0.5), Msg::SeekBy(0.5)]);
+    assert_eq!(h.program().pos, 2.0);
+}
+
+#[test]
 fn the_picture_keeps_the_keyboard_through_full_screen() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
     let mut h = harness();
