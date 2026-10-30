@@ -119,11 +119,24 @@ were low (p50 0.26 ms, p95 1.0 ms), but only because memory had just been
 booted (3,121 free order-10 blocks in the Normal zone, against none before),
 so each walk was short. That is what led to this version.
 
-Not yet tested: this version on xe hardware. Booted on ganymede, a profile of
-`drm_mode_atomic_ioctl` should show no `xe_bo_addr()` calls under
-`__xe_pin_fb_vma`. After a few days of uptime, `aizomectl stats` should stay
-near the fresh-boot figures above rather than return to 3–4 ms. Both are
-needed before the patch is sent.
+This version was booted on ganymede the same way (module
+`hjbx3db4…-linux-xe-dpt-cursor-7.3`, the same code as Sekka's copy, whose
+commit message has since gained these results). Profiled a few minutes after
+boot:
+
+- `perf ftrace profile -G drm_mode_atomic_ioctl`: no `xe_bo_addr()` calls in
+  30 pins. `dpt_cursor_addr()` was called 150,637 times, about 5,000 per pin,
+  and is a function of its own in this build. Tracing each of those calls is
+  most of the 0.62 ms per pin that ftrace shows for `write_dpt_remapped()`.
+- `perf record`, untraced: the DPT fill was 11 of the compositor's 387 samples
+  over 8 s (2.8%), about 0.14 ms per pin. The first version's boot, equally
+  fresh, had 31 of 780 (4.0%), about 0.57 ms per pin. Both counts are small.
+- `aizomectl stats` over the profile: p50 0.25 ms, p95 1.5 ms, p99 2.1 ms.
+
+Not yet tested: a run long enough for memory to fragment. On the old lookups
+that took close to 3 ms per flip. With the cursor, the fill is linear in pages
+and segments, so after a few days `aizomectl stats` should stay near the
+figures above.
 
 ## Submitting
 

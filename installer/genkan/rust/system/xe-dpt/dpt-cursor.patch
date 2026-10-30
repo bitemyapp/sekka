@@ -1,4 +1,4 @@
-From ebb0951abc0b30cb24c7838efe46f5dcb33ea949 Mon Sep 17 00:00:00 2001
+From 723e1ed62ce28aae151134b3768028fd52fa18a0 Mon Sep 17 00:00:00 2001
 From: Chris Allen <cma@bitemyapp.com>
 Date: Thu, 29 Oct 2026 22:19:19 -0500
 Subject: [PATCH] drm/xe/display: Look up a DPT's pages with one cursor
@@ -25,10 +25,12 @@ xe_bo_addr().
 The cost was found with perf record and perf ftrace on the running
 compositor. Claude Opus 5.5 (an AI coding assistant, in Claude Code)
 did that profiling and wrote this patch. It was built as a module for
-v7.3 with a distribution's configuration and loaded in QEMU, which has
-no xe device. An earlier version that changed only the normal view was
-booted on the laptop above and left its flips unchanged: they all go
-through the remapped view. This version has not yet run on xe hardware.
+v7.3 with a distribution's configuration, loaded in QEMU, and run on
+the laptop above for a few minutes after boot. There, pinning made no
+xe_bo_addr() calls, and filling DPTs took about 0.14 ms per pin by perf
+record, against about 0.57 ms for the old lookups on an equally fresh
+boot. A run long enough for memory to fragment, where the old lookups
+took close to 3 ms, has not been done yet.
 
 Fixes: 44e694958b95 ("drm/xe/display: Implement display support")
 Fixes: 216d62bb241a ("drm/xe/display: Add writing of remapped dpt")
