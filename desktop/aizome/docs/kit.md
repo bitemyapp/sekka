@@ -90,7 +90,8 @@ What `launched` and `update` act with:
 | `stream() -> MsgSender<Msg>` | A `Clone + Send` sender for threads that keep sending (D-Bus, IPC event streams, file watchers): `sender.send(msg)` wakes the loop. |
 | `after(d, msg)`, `every(d, msg) -> TimerHandle`, `cancel(h)`, `send(msg)` | Timers; a message to the next update. |
 | `clipboard_text()`, `set_clipboard_text(s)` | |
-| `open_url(url)`, `notify(summary, body)` | xdg-open; a desktop notification. |
+| `clipboard_types()`, `read_clipboard(mime, f)` | What the clipboard offers (`image/png`, `text/uri-list`, …), and its bytes as one of them, read on a worker as another program's can take a while: a paste of a picture or of files. |
+| `open_url(url)`, `notify(summary, body)` | xdg-open; a desktop notification (`notify-send`). Each runs on a thread of its own, which waits for it, never on the thread that draws. |
 | `focus(name)` | Focus the element given `.id(name)` (now, or once it shows). |
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
@@ -129,8 +130,8 @@ there is; in a row or column, an equal share of what the others leave),
 | `column![a, b, c]`, `row![…]` | `.spacing(p)`, `.padding(p)` (a number, `[v, h]` or `[t, r, b, l]`), `.align(Align::Center)` across. Rows centre across by default. `aizome_kit::widgets::layout::column(vec)` for a built `Vec`. |
 | `stack![base, over]` | Over one another, the last on top; `.align_x/.align_y`. |
 | `container(el)` | `.padding`, `.fill(Tone::Chrome)`, `.border(Edge::Line)`, `.edges(Edge::BevelLo, Sides::BOTTOM)`, `.bevel()` (the top highlight), `.floating()` (raised, `bevel_lo` edge and the hard shadow), `.center()`, `.align_x/.align_y`, `.clip()`. |
-| `scroll(el)` | `.horizontal()`, `.both()`. Momentum from touchpads, thin overlay bars that show while it moves and drag, Page Up/Down, Home/End, the arrows (when it has the focus, or nothing does). A control focused out of sight is scrolled into view. |
-| `split(a, b)` | A divider to drag; `.vertical()`, `.ratio(r)`, `.first_size(p)`, `.min_sizes(a, b)`, `.on_resize(f)`. |
+| `scroll(el)` | `.horizontal()`, `.both()`. Momentum from touchpads, thin overlay bars that show while it moves and drag, Page Up/Down, Home/End, the arrows (when it has the focus, or nothing does). A control focused out of sight is scrolled into view. `.follow_end()` keeps it at its end as the content grows, unless the reader has scrolled back (a conversation, a log); `.scroll_to_end(token)` goes to the end whenever `token` changes (a message sent). |
+| `split(a, b)` | A divider to drag; `.vertical()`, `.ratio(r)`, `.first_size(p)` or `.second_size(p)` (the side pane keeps its size as the window grows), `.min_sizes(a, b)`, `.on_resize(f)`. `.collapse_second(b)` folds the second pane away, the first taking all the room, without either losing its place or state. |
 | `sidebar_layout(sidebar, content)` | Settings' and Files' layout: a 200pt `sunk` sidebar (draggable) beside the content. Fill it with `caption("System")` and `sidebar_item(Icon::Wifi, "Network", selected).on_press(msg).detail("3")`. |
 | `spacer()`, `space(p)`, `divider()` | A stretch along a row or column; a fixed gap; a 1pt rule (`.vertical()`, `.engraved()`). |
 
@@ -138,8 +139,8 @@ there is; in a row or column, an equal share of what the others leave),
 
 | | |
 |---|---|
-| `text("…")` | `.role(Role::Text2)` (`Text`, `Text2`, `Text3`, `Faint`, `Accent`, `Danger`, `Success`, `Warning`, `Violet`, `Cyan`), `.size(p)`, `.weight(w)`, `.semibold()`, `.bold()`, `.mono()`, `.italic()`, `.tabular()`, `.condensed()` (Archivo at 87.5%), `.wrap()`, `.max_lines(n)` (wraps for up to `n` lines), `.center()`, `.caps()`, `.letter_spacing(p)`, `.underline()`, `.selectable()`. One line ends in an ellipsis where it doesn't fit. |
-| `rich_text([Span::new("Ln ").role(Role::Text3), Span::new("48").mono()])` | Runs with their own look: `role`, `color`, `weight`, `italic`, `mono`, `underline`, `strikethrough`, `background`, `size`, `alpha` (the colour at part strength). |
+| `text("…")` | `.role(Role::Text2)` (`Text`, `Text2`, `Text3`, `Faint`, `Accent`, `Danger`, `Success`, `Warning`, `Violet`, `Cyan`), `.size(p)`, `.weight(w)`, `.semibold()`, `.bold()`, `.mono()`, `.italic()`, `.tabular()`, `.condensed()` (Archivo at 87.5%), `.wrap()`, `.max_lines(n)` (wraps for up to `n` lines), `.center()`, `.caps()`, `.letter_spacing(p)`, `.underline()`, `.scale(f)` (the size relative to the body's), `.selectable()` (dragged, double- and triple-clicked to select; ❖C and Select All). One line ends in an ellipsis where it doesn't fit. |
+| `rich_text([Span::new("Ln ").role(Role::Text3), Span::new("48").mono()])` | Runs with their own look: `role`, `color`, `weight`, `italic`, `mono`, `underline`, `strikethrough`, `background`, `size`, `scale` (relative to the text's), `alpha` (the colour at part strength), `link(target)`. `Span::inline(Inline::new(width, ascent, descent, text, id, paint))` puts something that isn't text in the line (a formula): a box measured in ems of its span's size, wrapping with the words, that `paint(canvas, InlineBox { rect, em, color })` draws and copying reads as `text`. The text takes `.selectable()`, `.on_link(|target| msg)` (a click on a link, the pointer a hand over it), `.line_height(m)` and `.scale(f)`. |
 | `icon(Icon::Wifi)` | `.size(16.0)`, `.role(Role::Text2)`. A curated set of ~290 Lucide icons (ISC), stroked at 1.5pt at 16pt. `Icon::from_name("wifi-off")`. |
 | `image(Image)` | `.fit(Fit::Contain / Cover / Fill / None)`, `.revision(n)` when the picture changes at the same size. |
 | `badge("3")`, `keycap("❖")` | A count on `red` (`.role(..)` for another); a key as a keycap. |
@@ -197,7 +198,11 @@ line gone to) is scrolled into view, a third of the way down if it was far
 out of sight. `.on_click(|char, mods| Option<Msg>)` takes the clicks the program
 cares about (a task's `[ ]`, a link with ❖) instead of placing the caret;
 `.text_color(c)` and `.caret_color(c)` are for an editor on a ground of
-its own colour (a sticky note).
+its own colour (a sticky note). A composer: `.fit_lines(min, max)` with `.height(Shrink)` makes it as tall
+as its text, `min` to `max` lines; `.on_key(|key| Option<Msg>)` takes the
+keys the program wants first (Return to send, ↑ to recall); and
+`.on_paste(|types| Option<Msg>)` takes a paste the program reads itself
+(a picture: `Cx::read_clipboard`), text still pasting as text.
 
 ### Collections
 
@@ -283,7 +288,7 @@ a `bevel_lo` bottom): compact pop-ups, `button(..).toolbar()`,
 | `context_menu(el, Menu)` | The menu on a right click (or ⌃-click). |
 | `tooltip(el, "text")` (or `.tooltip(..)`) | After the pointer rests 650 ms. |
 | `mouse_area(el)` | `.on_press`, `.on_release`, `.on_double_click`, `.on_right_click(\|at\| ..)`, `.on_hover(\|in\| ..)`, `.on_move`, `.on_drag(\|DragEvent\| ..)`, `.on_drop(\|Dropped { urls, text, .. }\| ..)` (files and text from other programs, and this program's own drags out), `.drag_out(\|\| DragSource)` (pressed and moved four points, it goes out as the desktop's drag; `on_drag` hears no more of that press), `.cursor(c)`. |
-| `canvas(state, \|canvas, bounds, &state, theme\| …)` | Drawing of one's own (charts, calendars, disk maps) with Sidestep's `Canvas`; it's drawn again when `state`'s hash changes. `.on_event(\|event, size, &state\| Option<Msg>)` (pointer, scroll, `Event::Pinch { scale, .. }` from a touchpad, keys), `.focusable()` (`.focus_ring(FocusRing::Never)` for a canvas that is the whole content), `.parts(\|&state, size\| vec![(rect, hash)])`: parts that change by themselves (a hovered bar, a cursor), left out of `state`'s `Hash`, so that only the rectangles of parts that came, went or changed are drawn again. |
+| `canvas(state, \|canvas, bounds, &state, theme\| …)` | Drawing of one's own (charts, calendars, disk maps) with Sidestep's `Canvas`; it's drawn again when `state`'s hash changes. `.on_event(\|event, size, &state\| Option<Msg>)` (pointer, scroll, `Event::Pinch { scale, .. }` from a touchpad, keys), `.focusable()` (`.focus_ring(FocusRing::Never)` for a canvas that is the whole content), `.parts(\|&state, size\| vec![(rect, hash)])`: parts that change by themselves (a hovered bar, a cursor), left out of `state`'s `Hash`, so that only the rectangles of parts that came, went or changed are drawn again. `.aspect(ratio)` keeps its width to its height (a picture, a diagram): as wide as it's given (capped by `max_width`) and as tall as that makes it. |
 
 A shown tooltip follows changes to its text or nearest tooltip-bearing ancestor
 even when the pointer stays still, and disappears when its source is removed.
@@ -519,8 +524,11 @@ The numbers measured on this laptop are at the end of this document.
 
 `aizome_kit::testing::Harness` runs a program on a stand-in platform: windows
 open at the size asked for, timers run on a clock the test moves, the
-clipboard is kept, and pictures come from Sidestep's offscreen renderer (the
-same rasterizer and text engine windows use).
+clipboard is kept (`h.platform.clipboard`, and `h.platform.offer` for what it
+offers besides text), links and files handed to the desktop are kept rather
+than opened (`h.platform.opened`, and notifications in
+`h.platform.notifications`), and pictures come from Sidestep's offscreen
+renderer (the same rasterizer and text engine windows use).
 
 ```rust
 use aizome_kit::testing::{Harness, assert_golden};

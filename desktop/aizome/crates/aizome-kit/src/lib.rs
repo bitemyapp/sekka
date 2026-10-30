@@ -49,6 +49,7 @@ pub mod layout;
 pub mod menu;
 pub mod platform;
 pub mod program;
+pub(crate) mod select;
 pub(crate) mod shell;
 pub mod stats;
 pub mod testing;
@@ -70,7 +71,7 @@ pub use program::{ActivationRequest, Anchors, DragId, KeyboardInteractivity, Lay
 pub use program::{AppInfo, Program, WindowKey, WindowKind, WindowSpec, WindowState};
 pub use sidestep_ui;
 pub use sidestep_ui::{Color, DragSource, DropAction, Image};
-pub use text::{Span, rich_text, text};
+pub use text::{Inline, InlineBox, Span, rich_text, text};
 pub use theme::{Appearance, FontSpec, Role, Theme};
 pub use widgets::controls::{
     Fit, badge, button, checkbox, dropdown, icon_button, image, keycap, meter, progress, progress_indeterminate, radio,
@@ -93,14 +94,14 @@ pub mod prelude {
     pub use crate::layout::{Fill, Shrink};
     pub use crate::{
         Alert, Align, AppInfo, Color, Column, Cx, DragEvent, DragId, DragSource, DropAction, Dropped, Edge,
-        EditorAction, EditorContent, Element, FileDialog, FindRequest, Fit, FontSpec, Icon, Image, Layoutable, Length,
-        Menu, MenuBar, MenuItem, MenuPlacement, MenuRole, MenuStyle, Padding, Point, Program, Rect, Role, Shortcut,
-        ShortcutKey, Sides, Size, Span, Theme, TimerHandle, Tone, TreeItem, Vec2, WindowKey, WindowKind, WindowSpec,
-        badge, button, canvas, caption, checkbox, container, context_menu, divider, dropdown, form_row, form_section,
-        icon, icon_button, image, keycap, list, menu_view, meter, mouse_area, popover, progress,
-        progress_indeterminate, radio, rich_text, scroll, search_field, segmented, segmented_icons, sidebar_item,
-        sidebar_layout, slider, space, spacer, split, status_bar, status_text, stepper, table, text, text_editor,
-        text_field, toggle, toolbar, toolbar_separator, tooltip, tree, virtual_list,
+        EditorAction, EditorContent, Element, FileDialog, FindRequest, Fit, FontSpec, Icon, Image, Inline, InlineBox,
+        Layoutable, Length, Menu, MenuBar, MenuItem, MenuPlacement, MenuRole, MenuStyle, Padding, Point, Program, Rect,
+        Role, Shortcut, ShortcutKey, Sides, Size, Span, Theme, TimerHandle, Tone, TreeItem, Vec2, WindowKey,
+        WindowKind, WindowSpec, badge, button, canvas, caption, checkbox, container, context_menu, divider, dropdown,
+        form_row, form_section, icon, icon_button, image, keycap, list, menu_view, meter, mouse_area, popover,
+        progress, progress_indeterminate, radio, rich_text, scroll, search_field, segmented, segmented_icons,
+        sidebar_item, sidebar_layout, slider, space, spacer, split, status_bar, status_text, stepper, table, text,
+        text_editor, text_field, toggle, toolbar, toolbar_separator, tooltip, tree, virtual_list,
     };
     pub use crate::{column, row, stack};
 }

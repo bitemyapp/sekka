@@ -10,6 +10,23 @@ use sidestep_ui::{Color, Cursor};
 
 use crate::layout::{Rect, Size, Vec2};
 use crate::program::Output;
+
+/// Reads the clipboard as a MIME type, on any thread.
+pub type ClipboardReader = Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>;
+
+/// Run `command` on a thread of its own, which waits for it to end so it
+/// leaves no zombie behind: starting a process is no work for the thread
+/// that draws, and what it starts (xdg-open's app) may run a long while.
+fn launch(mut command: std::process::Command, what: String) {
+    let waiter = std::thread::Builder::new().name("aizome-kit-launch".into()).spawn(move || {
+        if let Err(e) = command.status() {
+            log::warn!("{what}: {e}");
+        }
+    });
+    if let Err(e) = waiter {
+        log::warn!("no thread to launch on: {e}");
+    }
+}
 use sidestep_ui::layer_shell::{Anchors, KeyboardInteractivity, Layer, LayerOptions, Margins};
 
 /// The engine's name for a window (an app's, or a popup).
@@ -85,6 +102,28 @@ pub trait Platform {
     fn begin_move(&mut self, id: WinId);
     fn clipboard_text(&mut self) -> Option<String>;
     fn set_clipboard_text(&mut self, text: &str);
+    /// The clipboard's types (MIME).
+    fn clipboard_types(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Something to read the clipboard with, as one of its types, on
+    /// another thread: another program's data can take a while to come.
+    fn clipboard_reader(&mut self) -> ClipboardReader {
+        Arc::new(|_| None)
+    }
+    /// Hand a link or a file to the desktop to open in its app.
+    fn open_url(&mut self, url: &str) {
+        let mut open = std::process::Command::new("xdg-open");
+        open.arg(url);
+        launch(open, format!("xdg-open {url}"));
+    }
+    /// Post a desktop notification (through `notify-send`, which speaks
+    /// org.freedesktop.Notifications; the shell is that server).
+    fn notify(&mut self, app: &str, summary: &str, body: &str) {
+        let mut send = std::process::Command::new("notify-send");
+        send.arg("--app-name").arg(app).arg(summary).arg(body);
+        launch(send, format!("notification: {summary}: {body}"));
+    }
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
     fn cancel_timer(&mut self, token: u64);

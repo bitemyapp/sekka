@@ -30,6 +30,8 @@ enum Start {
     Ratio(f64),
     /// The first pane this wide (or tall).
     First(f64),
+    /// The second pane this wide (or tall): a panel at the end.
+    Second(f64),
 }
 
 /// Two panes with a divider between them that the pointer drags:
@@ -44,6 +46,7 @@ pub struct Split<Msg> {
     on_resize: Option<MsgMap<f64>>,
     first_tone: Option<Tone>,
     resizable: bool,
+    collapsed: bool,
     _m: PhantomData<fn() -> Msg>,
 }
 
@@ -60,6 +63,7 @@ pub fn split<Msg>(first: impl Into<Element<Msg>>, second: impl Into<Element<Msg>
         on_resize: None,
         first_tone: None,
         resizable: true,
+        collapsed: false,
         _m: PhantomData,
     }
 }
@@ -98,6 +102,13 @@ impl<Msg> Split<Msg> {
         self
     }
 
+    /// The second pane's size to start with: a panel beside the content,
+    /// which keeps its size as the window grows.
+    pub fn second_size(mut self, points: f64) -> Self {
+        self.start = Start::Second(points);
+        self
+    }
+
     /// The least each pane may have.
     pub fn min_sizes(mut self, first: f64, second: f64) -> Self {
         self.min = (first, second);
@@ -107,6 +118,14 @@ impl<Msg> Split<Msg> {
     /// Whether the divider drags (it does by default).
     pub fn resizable(mut self, on: bool) -> Self {
         self.resizable = on;
+        self
+    }
+
+    /// Give the second pane no room, and the divider none: a panel put
+    /// away. The first pane keeps its place in the tree (and its scroll,
+    /// focus and selections) whether the panel shows or not.
+    pub fn collapse_second(mut self, collapsed: bool) -> Self {
+        self.collapsed = collapsed;
         self
     }
 }
@@ -120,6 +139,7 @@ impl<Msg> From<Split<Msg>> for Element<Msg> {
             on_resize: s.on_resize,
             first_tone: s.first_tone,
             resizable: s.resizable,
+            collapsed: s.collapsed,
             at: 0.0,
         };
         Element::from_raw(RawElement { widget: Box::new(w), common: s.common, children: vec![s.first, s.second] })
@@ -141,6 +161,7 @@ struct SplitWidget {
     on_resize: Option<MsgMap<f64>>,
     first_tone: Option<Tone>,
     resizable: bool,
+    collapsed: bool,
     /// The divider's place, as laid out.
     at: f64,
 }
@@ -153,7 +174,7 @@ impl SplitWidget {
     }
 
     fn near(&self, p: Point) -> bool {
-        self.resizable && (self.along(p) - self.at - 0.5).abs() <= GRAB
+        self.resizable && !self.collapsed && (self.along(p) - self.at - 0.5).abs() <= GRAB
     }
 
     fn divider(&self, size: Size) -> Rect {
@@ -184,9 +205,10 @@ impl Widget for SplitWidget {
             Start::Ratio(r) => (total * r).round(),
             Start::First(p) if p < 0.0 => sidebar,
             Start::First(p) => p,
+            Start::Second(p) => (total - 1.0 - p).round(),
         });
         let hi = (total - 1.0 - self.min.1).max(self.min.0.min(total));
-        let at = wanted.clamp(self.min.0.min(hi), hi).round();
+        let at = if self.collapsed { total } else { wanted.clamp(self.min.0.min(hi), hi).round() };
         self.at = at;
         let rest = (total - at - 1.0).max(0.0);
         let (a, b) = match self.axis {
@@ -217,11 +239,13 @@ impl Widget for SplitWidget {
             cx.canvas.fill_rect(r, tone.color(t));
         }
         let dragging = cx.state::<SplitState>().is_some_and(|s| s.dragging.is_some() || s.near);
-        cx.canvas.fill_rect(self.divider(size), if dragging { t.focus() } else { t.line() });
+        if !self.collapsed {
+            cx.canvas.fill_rect(self.divider(size), if dragging { t.focus() } else { t.line() });
+        }
     }
 
     fn hash(&self, h: &mut PaintHasher) {
-        h.f64(self.at).add(&(self.first_tone.is_some(), self.axis));
+        h.f64(self.at).add(&(self.first_tone.is_some(), self.axis, self.collapsed));
     }
 
     fn hit(&self) -> bool {

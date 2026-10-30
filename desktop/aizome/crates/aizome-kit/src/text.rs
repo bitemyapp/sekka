@@ -9,13 +9,19 @@ use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::Arc;
 
-use sidestep_ui::{Alignment, Color, TextLayout, TextStyle, Wrap};
+use sidestep_ui::{Alignment, Canvas, Color, TextAttachment, TextLayout, TextStyle, Wrap};
 
+use crate::element::MsgMap;
 use crate::element::{Common, Element, RawElement};
 use crate::hash::{Fx, FxHashMap, PaintHasher};
 use crate::layout::{Constraints, Length, Point, Size};
+use crate::select::{Selectable, link_ranges};
 use crate::theme::{Family, FontSpec, Role, Theme};
-use crate::widget::{LayoutCx, PaintCx, SemanticRole, Semantics, Widget};
+use crate::widget::{
+    EditCommand, Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, SemanticRole, Semantics, StateView, Status,
+    Widget,
+};
+use sidestep_ui::Cursor;
 
 /// How a piece of text is set.
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +90,82 @@ pub struct Span {
     /// Its colour at this strength (0.0–1.0): a role made quieter (a
     /// heading's #s).
     pub alpha: Option<f32>,
+    /// Its size as a multiple of the text's base size.
+    pub scale: Option<f64>,
+    /// Where it leads when clicked, in selectable rich text with
+    /// `on_link` (its look is the caller's to give: `role`, `underline`).
+    pub link: Option<Arc<str>>,
+    /// Something drawn in the line in its place: see [`Span::inline`].
+    pub inline: Option<Inline>,
+}
+
+/// Something drawn in a line of rich text that isn't text: a formula in a
+/// sentence. It takes a box in the line, measured in ems of its span's
+/// size (so it grows with the text and the desktop's Size), and wraps with
+/// the words around it; selected and copied, it reads as its `text`.
+#[derive(Clone)]
+pub struct Inline {
+    /// The box: its width, and how far it reaches above and below the
+    /// baseline, in ems.
+    pub width: f64,
+    pub ascent: f64,
+    pub descent: f64,
+    /// What copying it gives.
+    pub text: Arc<str>,
+    /// What it shows: two with the same id look the same.
+    pub id: u64,
+    paint: InlinePaint,
+}
+
+type InlinePaint = Arc<dyn Fn(&mut Canvas, InlineBox)>;
+
+/// Where an inline is drawn: its box in the canvas, the points in an em
+/// there, and its span's colour.
+#[derive(Clone, Copy, Debug)]
+pub struct InlineBox {
+    pub rect: crate::layout::Rect,
+    pub em: f64,
+    pub color: Color,
+}
+
+impl InlineBox {
+    /// Its baseline's left end.
+    pub fn origin(&self, ascent: f64) -> Point {
+        Point::new(self.rect.x0, self.rect.y0 + ascent * self.em)
+    }
+}
+
+impl Inline {
+    /// A box of `width` ems, reaching `ascent` above the baseline and
+    /// `descent` below it, that `paint` draws; `text` is what copying it
+    /// gives, and `id` tells what it shows from what others do.
+    pub fn new(
+        width: f64,
+        ascent: f64,
+        descent: f64,
+        text: impl Into<Arc<str>>,
+        id: u64,
+        paint: impl Fn(&mut Canvas, InlineBox) + 'static,
+    ) -> Inline {
+        Inline { width, ascent, descent, text: text.into(), id, paint: Arc::new(paint) }
+    }
+
+    fn attachment(&self, em: f64) -> TextAttachment {
+        TextAttachment { width: self.width * em, height: (self.ascent + self.descent) * em, y: -self.descent * em }
+    }
+}
+
+impl std::fmt::Debug for Inline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Inline").field("text", &self.text).field("width", &self.width).field("id", &self.id).finish()
+    }
+}
+
+impl PartialEq for Inline {
+    fn eq(&self, other: &Inline) -> bool {
+        (self.id, &self.text) == (other.id, &other.text)
+            && [self.width, self.ascent, self.descent] == [other.width, other.ascent, other.descent]
+    }
 }
 
 impl Span {
@@ -100,7 +182,16 @@ impl Span {
             background: None,
             size: None,
             alpha: None,
+            scale: None,
+            link: None,
+            inline: None,
         }
+    }
+
+    /// `inline` drawn in the line: `rich_text([Span::new("so "), Span::inline(formula), Span::new(".")])`.
+    /// It takes the span's size and colour (`scale`, `role`) as text would.
+    pub fn inline(inline: Inline) -> Span {
+        Span { inline: Some(inline), ..Span::new("\u{FFFC}") }
     }
 
     pub fn role(mut self, role: Role) -> Span {
@@ -158,6 +249,20 @@ impl Span {
         self
     }
 
+    /// Its size as a multiple of the text's base size (an answer's inline
+    /// code a little smaller than its words).
+    pub fn scale(mut self, factor: f64) -> Span {
+        self.scale = Some(factor);
+        self
+    }
+
+    /// A link to `target`: a click on it (not a drag) sends the rich
+    /// text's `on_link` message with the target.
+    pub fn link(mut self, target: impl Into<Arc<str>>) -> Span {
+        self.link = Some(target.into());
+        self
+    }
+
     fn hash_into(&self, h: &mut Fx) {
         self.text.hash(h);
         (self.role, self.weight.map(f32::to_bits), self.italic, self.mono, self.underline, self.strikethrough).hash(h);
@@ -168,6 +273,20 @@ impl Span {
         }
         self.size.map(f64::to_bits).hash(h);
         self.alpha.map(f32::to_bits).hash(h);
+        self.scale.map(f64::to_bits).hash(h);
+        self.link.hash(h);
+        if let Some(i) = &self.inline {
+            (i.id, i.width.to_bits(), i.ascent.to_bits(), i.descent.to_bits()).hash(h);
+        }
+    }
+
+    /// Its colour over `base`'s.
+    fn color_over(&self, base: Color, theme: &Theme) -> Color {
+        let color = self.color.or(self.role.map(|r| theme.role(r))).unwrap_or(base);
+        match self.alpha {
+            Some(a) => color.with_alpha(color.a * a),
+            None => color,
+        }
     }
 
     /// Its style over `base`.
@@ -185,15 +304,14 @@ impl Span {
         if let Some(s) = self.size {
             font.size = s;
         }
-        let color = self.color.or(self.role.map(|r| theme.role(r))).unwrap_or(base.color);
-        let color = match self.alpha {
-            Some(a) => color.with_alpha(color.a * a),
-            None => color,
-        };
-        let mut s = TextStyle::new(theme.font(font), color);
+        if let Some(k) = self.scale {
+            font.size *= k;
+        }
+        let mut s = TextStyle::new(theme.font(font), self.color_over(base.color, theme));
         s.underline = self.underline || base.underline;
         s.strikethrough = self.strikethrough || base.strikethrough;
         s.background = self.background;
+        s.attachment = self.inline.as_ref().map(|i| i.attachment(font.size));
         s
     }
 }
@@ -383,6 +501,7 @@ pub struct Text<Msg> {
     color: Option<Color>,
     font: Option<FontSpec>,
     size: Option<f64>,
+    scale: Option<f64>,
     weight: Option<f32>,
     mono: bool,
     italic: bool,
@@ -412,6 +531,7 @@ pub fn text<Msg>(content: impl Into<Arc<str>>) -> Text<Msg> {
         color: None,
         font: None,
         size: None,
+        scale: None,
         weight: None,
         mono: false,
         italic: false,
@@ -444,6 +564,13 @@ impl<Msg> Text<Msg> {
 
     pub fn size(mut self, size: f64) -> Self {
         self.size = Some(size);
+        self
+    }
+
+    /// Its size as a multiple of the theme's body text, so it follows
+    /// the desktop's Size setting (a heading at 1.4).
+    pub fn scale(mut self, factor: f64) -> Self {
+        self.scale = Some(factor);
         self
     }
 
@@ -552,6 +679,7 @@ impl<Msg> From<Text<Msg>> for Element<Msg> {
             color: t.color,
             font: t.font,
             size: t.size,
+            scale: t.scale,
             weight: t.weight,
             mono: t.mono,
             italic: t.italic,
@@ -590,6 +718,7 @@ pub(crate) struct TextWidget {
     color: Option<Color>,
     font: Option<FontSpec>,
     size: Option<f64>,
+    scale: Option<f64>,
     weight: Option<f32>,
     mono: bool,
     italic: bool,
@@ -611,7 +740,7 @@ impl TextWidget {
     fn spec(&self, theme: &Theme, selected: bool) -> TextSpec {
         let m = &theme.metrics;
         let mut font = self.font.unwrap_or_else(|| {
-            let size = self.size.unwrap_or(m.body);
+            let size = self.size.or_else(|| self.scale.map(|s| m.body * s)).unwrap_or(m.body);
             if self.mono { FontSpec::mono(size) } else { FontSpec::ui(size) }
         });
         if let Some(w) = self.weight {
@@ -670,6 +799,9 @@ impl Widget for TextWidget {
 
     fn paint(&self, cx: &mut PaintCx) {
         if let Some(l) = &self.laid {
+            if self.selectable {
+                self.selectable().paint_selection(cx);
+            }
             // Centre the lines in what the parent gave beyond their height.
             let y = ((cx.size().height - l.size().height) / 2.0).max(0.0).floor();
             cx.canvas.draw_text(l, Point::new(0.0, y));
@@ -694,16 +826,61 @@ impl Widget for TextWidget {
     fn hit(&self) -> bool {
         self.selectable
     }
+
+    fn focusable(&self) -> Focusable {
+        if self.selectable { Focusable::Pointer } else { Focusable::No }
+    }
+
+    fn focus_ring(&self) -> FocusRing {
+        FocusRing::Never
+    }
+
+    fn cursor(&self) -> Option<Cursor> {
+        self.selectable.then_some(Cursor::Text)
+    }
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
+        if !self.selectable {
+            return Status::Ignored;
+        }
+        self.selectable().event(cx, event)
+    }
+
+    fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
+        self.selectable && self.selectable().command(cx, command)
+    }
+
+    fn can(&self, state: StateView, command: EditCommand) -> bool {
+        self.selectable && self.selectable().can(state, command)
+    }
+
+    fn selection(&self, state: StateView) -> Option<String> {
+        if self.selectable { self.selectable().selection(state) } else { None }
+    }
+}
+
+impl TextWidget {
+    fn selectable(&self) -> Selectable<'_> {
+        Selectable { laid: self.laid.as_ref(), links: &[], on_link: None, inlines: &[] }
+    }
 }
 
 /// Text in runs of their own look: `rich_text([Span::new("Ln ").role(Role::Text3), Span::new("48").mono()])`.
+///
+/// `.selectable()` lets it be selected and copied (a paragraph of an
+/// answer); `.on_link(Msg::Open)` hears clicks on spans made with
+/// [`Span::link`].
 pub struct RichText<Msg> {
     pub(crate) common: Common,
     spans: Vec<Span>,
     base: Option<FontSpec>,
+    scale: f64,
     role: Role,
     wrap: bool,
     max_lines: usize,
+    line_height: f64,
+    selectable: bool,
+    on_link: Option<MsgMap<String>>,
     _m: std::marker::PhantomData<fn() -> Msg>,
 }
 
@@ -714,9 +891,13 @@ pub fn rich_text<Msg>(spans: impl IntoIterator<Item = Span>) -> RichText<Msg> {
         common: Common::default(),
         spans: spans.into_iter().collect(),
         base: None,
+        scale: 1.0,
         role: Role::Text,
         wrap: false,
         max_lines: 0,
+        line_height: 0.0,
+        selectable: false,
+        on_link: None,
         _m: std::marker::PhantomData,
     }
 }
@@ -724,6 +905,13 @@ pub fn rich_text<Msg>(spans: impl IntoIterator<Item = Span>) -> RichText<Msg> {
 impl<Msg> RichText<Msg> {
     pub fn font(mut self, font: FontSpec) -> Self {
         self.base = Some(font);
+        self
+    }
+
+    /// Its base size as a multiple of the theme's body text (an answer set
+    /// a little larger to read), following the desktop's Size setting.
+    pub fn scale(mut self, factor: f64) -> Self {
+        self.scale = factor;
         self
     }
 
@@ -742,12 +930,58 @@ impl<Msg> RichText<Msg> {
         self.max_lines = n;
         self
     }
+
+    /// Lines this many times their natural height (a paragraph to read).
+    pub fn line_height(mut self, multiple: f64) -> Self {
+        self.line_height = multiple;
+        self
+    }
+
+    /// Let the text be selected by dragging over it, and copied.
+    pub fn selectable(mut self) -> Self {
+        self.selectable = true;
+        self
+    }
+
+    /// The message a click on a link sends, with the link's target. Makes
+    /// the text selectable too.
+    pub fn on_link<M: Send + 'static>(mut self, f: impl Fn(String) -> M + 'static) -> Self
+    where
+        Msg: 'static,
+    {
+        self.on_link = Some(MsgMap::new(f));
+        self.selectable = true;
+        self
+    }
 }
 
 impl<Msg> From<RichText<Msg>> for Element<Msg> {
     fn from(t: RichText<Msg>) -> Element<Msg> {
-        let w =
-            RichWidget { spans: t.spans, base: t.base, role: t.role, wrap: t.wrap, max_lines: t.max_lines, laid: None };
+        let links = if t.selectable { link_ranges(&t.spans) } else { Vec::new() };
+        let (mut inlines, mut copies) = (Vec::new(), Vec::new());
+        let mut at = 0;
+        for (index, s) in t.spans.iter().enumerate() {
+            if let Some(i) = &s.inline {
+                inlines.push((at, index));
+                copies.push((at, i.text.clone()));
+            }
+            at += s.text.len();
+        }
+        let w = RichWidget {
+            inlines,
+            copies,
+            spans: t.spans,
+            base: t.base,
+            scale: t.scale,
+            role: t.role,
+            wrap: t.wrap,
+            max_lines: t.max_lines,
+            line_height: t.line_height,
+            selectable: t.selectable,
+            links,
+            on_link: t.on_link,
+            laid: None,
+        };
         let mut common = t.common;
         if common.width == Length::Shrink && t.wrap {
             common.width = Length::Fill;
@@ -759,10 +993,47 @@ impl<Msg> From<RichText<Msg>> for Element<Msg> {
 struct RichWidget {
     spans: Vec<Span>,
     base: Option<FontSpec>,
+    scale: f64,
     role: Role,
     wrap: bool,
     max_lines: usize,
+    line_height: f64,
+    selectable: bool,
+    links: Vec<(Range<usize>, Arc<str>)>,
+    on_link: Option<MsgMap<String>>,
+    /// The spans that are inlines, by the byte of their U+FFFC.
+    inlines: Vec<(usize, usize)>,
+    /// What each inline copies as, by the same byte.
+    copies: Vec<(usize, Arc<str>)>,
     laid: Option<TextLayout>,
+}
+
+impl RichWidget {
+    fn selectable(&self) -> Selectable<'_> {
+        Selectable {
+            laid: self.laid.as_ref(),
+            links: &self.links,
+            on_link: self.on_link.as_ref(),
+            inlines: &self.copies,
+        }
+    }
+
+    /// Draw the inlines in the boxes the text left them, the text drawn at
+    /// `origin`.
+    fn paint_inlines(&self, cx: &mut PaintCx, laid: &TextLayout, origin: Point) {
+        let base = cx.theme().role(self.role);
+        for (byte, rect) in laid.attachments() {
+            let Some(&(_, index)) = self.inlines.iter().find(|(at, _)| *at == byte) else { continue };
+            let span = &self.spans[index];
+            let Some(inline) = &span.inline else { continue };
+            let rect = rect + origin.to_vec2();
+            let reach = inline.ascent + inline.descent;
+            let em = if reach > 0.0 { rect.height() / reach } else { rect.width() / inline.width.max(f64::EPSILON) };
+            let color = span.color_over(base, cx.theme());
+            let place = InlineBox { rect, em, color };
+            cx.canvas.saved(|c| (inline.paint)(c, place));
+        }
+    }
 }
 
 impl Widget for RichWidget {
@@ -772,10 +1043,11 @@ impl Widget for RichWidget {
 
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
         let theme = cx.env.theme;
-        let font = self.base.unwrap_or(FontSpec::ui(theme.metrics.body));
+        let font = self.base.unwrap_or(FontSpec::ui(theme.metrics.body * self.scale));
         let mut spec = TextSpec::new(font, theme.role(self.role));
         spec.wrap = if self.wrap && self.max_lines != 1 { Wrap::Words } else { Wrap::Truncate };
         spec.max_lines = self.max_lines;
+        spec.line_height = self.line_height;
         let width = bc.max.width.is_finite().then_some(bc.max.width.max(1.0));
         let laid = cx.env.text.layout_spans(theme, &self.spans, &spec, width);
         let s = laid.size();
@@ -784,9 +1056,15 @@ impl Widget for RichWidget {
     }
 
     fn paint(&self, cx: &mut PaintCx) {
+        if self.selectable {
+            self.selectable().paint_selection(cx);
+        }
         if let Some(l) = &self.laid {
             let y = ((cx.size().height - l.size().height) / 2.0).max(0.0).floor();
             cx.canvas.draw_text(l, Point::new(0.0, y));
+            if !self.inlines.is_empty() {
+                self.paint_inlines(cx, l, Point::new(0.0, y));
+            }
         }
     }
 
@@ -794,12 +1072,59 @@ impl Widget for RichWidget {
         for s in &self.spans {
             s.hash_into(h.0);
         }
-        h.add(&(self.role, self.wrap, self.max_lines));
+        h.add(&(
+            self.role,
+            self.wrap,
+            self.max_lines,
+            self.line_height.to_bits(),
+            self.scale.to_bits(),
+            self.selectable,
+        ));
     }
 
     fn semantics(&self) -> Option<Semantics> {
-        let label: String = self.spans.iter().map(|s| s.text.as_str()).collect();
+        let label: String =
+            self.spans.iter().map(|s| s.inline.as_ref().map_or(s.text.as_str(), |i| &*i.text)).collect();
         Some(Semantics { role: SemanticRole::Label, label: Some(label), ..Default::default() })
+    }
+
+    fn text(&self) -> Option<&str> {
+        self.laid.as_ref().map(TextLayout::text)
+    }
+
+    fn hit(&self) -> bool {
+        self.selectable
+    }
+
+    fn focusable(&self) -> Focusable {
+        if self.selectable { Focusable::Pointer } else { Focusable::No }
+    }
+
+    fn focus_ring(&self) -> FocusRing {
+        FocusRing::Never
+    }
+
+    fn cursor(&self) -> Option<Cursor> {
+        self.selectable.then_some(Cursor::Text)
+    }
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
+        if !self.selectable {
+            return Status::Ignored;
+        }
+        self.selectable().event(cx, event)
+    }
+
+    fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
+        self.selectable && self.selectable().command(cx, command)
+    }
+
+    fn can(&self, state: StateView, command: EditCommand) -> bool {
+        self.selectable && self.selectable().can(state, command)
+    }
+
+    fn selection(&self, state: StateView) -> Option<String> {
+        if self.selectable { self.selectable().selection(state) } else { None }
     }
 }
 

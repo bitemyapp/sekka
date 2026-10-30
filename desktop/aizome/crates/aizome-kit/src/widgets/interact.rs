@@ -450,6 +450,7 @@ pub struct CanvasEl<Msg, S> {
     parts: Option<PartsFn<S>>,
     focusable: bool,
     ring: crate::widget::FocusRing,
+    aspect: Option<f64>,
     _m: PhantomData<fn() -> Msg>,
 }
 
@@ -471,6 +472,7 @@ pub fn canvas<Msg, S: Hash + 'static>(
         parts: None,
         focusable: false,
         ring: crate::widget::FocusRing::Keyboard,
+        aspect: None,
         _m: PhantomData,
     }
 }
@@ -507,6 +509,15 @@ impl<Msg: Send + 'static, S: Hash + 'static> CanvasEl<Msg, S> {
         self.parts = Some(Rc::new(f));
         self
     }
+
+    /// Keep its width to its height as `ratio` (a picture, a diagram): as
+    /// wide as it's given, and as tall as that makes it. Cap the width
+    /// with `max_width` to keep it from growing past its own size.
+    pub fn aspect(mut self, ratio: f64) -> Self {
+        self.aspect = Some(ratio).filter(|r| r.is_finite() && *r > 0.0);
+        self.common.height = Length::Shrink;
+        self
+    }
 }
 
 impl<Msg, S: Hash + 'static> From<CanvasEl<Msg, S>> for Element<Msg> {
@@ -520,6 +531,7 @@ impl<Msg, S: Hash + 'static> From<CanvasEl<Msg, S>> for Element<Msg> {
             parts: c.parts,
             focusable: c.focusable,
             ring: c.ring,
+            aspect: c.aspect,
         };
         Element::from_raw(RawElement::new(w, c.common, Vec::new()))
     }
@@ -533,6 +545,7 @@ struct CanvasWidget<S> {
     parts: Option<PartsFn<S>>,
     focusable: bool,
     ring: crate::widget::FocusRing,
+    aspect: Option<f64>,
 }
 
 impl<S: 'static> Widget for CanvasWidget<S> {
@@ -541,10 +554,13 @@ impl<S: 'static> Widget for CanvasWidget<S> {
     }
 
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
-        let size = bc.constrain(Size::new(
-            if bc.max.width.is_finite() { bc.max.width } else { 200.0 },
-            if bc.max.height.is_finite() { bc.max.height } else { 120.0 },
-        ));
+        let width = if bc.max.width.is_finite() { bc.max.width } else { 200.0 };
+        let height = match self.aspect {
+            Some(ratio) => width / ratio,
+            None if bc.max.height.is_finite() => bc.max.height,
+            None => 120.0,
+        };
+        let size = bc.constrain(Size::new(width, height));
         if let Some(f) = &self.parts {
             let now = f(&self.state, size);
             let st = cx.state::<CanvasParts>();
