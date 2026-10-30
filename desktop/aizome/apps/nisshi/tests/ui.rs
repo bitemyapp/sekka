@@ -410,3 +410,22 @@ fn an_apps_launches() {
     h.send(Msg::Launched(vec!["--launch".into(), "--rotate".into()]));
     assert!(h.program().filter.chips.is_empty());
 }
+
+#[test]
+fn a_handoff_resets_the_boot_query_and_uses_the_launchers_token() {
+    let mut h = start();
+    h.program_mut().boot = nisshi::query::Boot::Offset(-1);
+    h.program_mut().journal_search = Some("old search".into());
+    let args = nisshi::instance::handoff_args(
+        &["--launch".into(), "aizome-launch-0123456789abcdef".into()],
+        Some("launchers-input-token"),
+    );
+    h.send(Msg::Launched(args));
+    assert_eq!(h.program().boot, nisshi::query::Boot::Current);
+    assert_eq!(h.program().journal_search, None);
+    assert!(
+        matches!(&h.program().filter.chips[..], [Chip::Launch(id)] if id.as_ref() == "aizome-launch-0123456789abcdef")
+    );
+    assert_eq!(h.platform.activations.last().unwrap().1.as_deref(), Some("launchers-input-token"));
+    assert!(h.platform.activation_requests.is_empty(), "use the forwarded token, not old input");
+}

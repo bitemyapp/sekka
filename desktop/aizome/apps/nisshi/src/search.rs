@@ -88,6 +88,10 @@ fn tokens(input: &str) -> Vec<String> {
     let mut chars = input.chars().peekable();
     while let Some(c) = chars.next() {
         match quote {
+            Some('"') if c == '\\' && chars.peek().is_some_and(|c| matches!(c, '"' | '\\')) => {
+                cur.push(c);
+                cur.push(chars.next().unwrap());
+            }
             Some(q) if c == q => {
                 cur.push(c);
                 // A pattern's slash ends it only before a space or the end.
@@ -102,8 +106,8 @@ fn tokens(input: &str) -> Vec<String> {
                 }
             }
             None => {
-                let starts = cur.is_empty() || cur == "-" || cur.ends_with(':');
-                if (c == '"' || c == '/') && starts {
+                let starts = cur.is_empty() || cur == "-" || cur.ends_with(':') || cur.ends_with('=');
+                if starts && (c == '"' || c == '/' && !cur.ends_with('=')) {
                     quote = Some(c);
                 }
                 cur.push(c);
@@ -116,8 +120,29 @@ fn tokens(input: &str) -> Vec<String> {
     out
 }
 
-fn unquote(s: &str) -> &str {
-    s.strip_prefix('"').map(|s| s.strip_suffix('"').unwrap_or(s)).unwrap_or(s)
+fn unquote(s: &str) -> String {
+    let Some(s) = s.strip_prefix('"') else { return s.to_owned() };
+    let s = s.strip_suffix('"').unwrap_or(s);
+    let mut chars = s.chars().peekable();
+    let mut out = String::new();
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.peek().is_some_and(|c| matches!(c, '"' | '\\')) {
+            out.push(chars.next().unwrap());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// A raw journal field, including values containing spaces, quotes or
+/// backslashes, round-tripped through the same parser as typed searches.
+pub fn field_token(field: &str, value: &str) -> String {
+    if value.contains(|c: char| c.is_whitespace() || c == '"' || c == '\\') {
+        format!("{field}=\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    } else {
+        format!("{field}={value}")
+    }
 }
 
 impl Search {
@@ -134,7 +159,7 @@ impl Search {
                 && crate::query::check_field(f).is_ok()
                 && f.len() > 1
             {
-                s.fields.push((f.to_owned(), unquote(v).to_owned()));
+                s.fields.push((f.to_owned(), unquote(v)));
                 continue;
             }
             if let Some((key, value)) = tok.split_once(':')
@@ -153,14 +178,14 @@ impl Search {
                     },
                     "id" => Some(Term::Id(value.to_ascii_lowercase())),
                     "level" | "priority" | "p" | "lvl" => {
-                        match Priority::parse(value) {
+                        match Priority::parse(&value) {
                             Some(p) => s.level = Some(p),
                             None => s.problems.push(format!("“{value}” isn't a level")),
                         }
                         continue;
                     }
                     k @ ("since" | "after" | "until" | "before") => {
-                        match clock.parse(value) {
+                        match clock.parse(&value) {
                             Some(t) if matches!(k, "since" | "after") => s.since = Some(t),
                             Some(t) => s.until = Some(t),
                             None => s.problems.push(format!("“{value}” isn't a time")),
@@ -187,13 +212,13 @@ impl Search {
             }
             // Smart case: lower case finds any case.
             let exact = text.chars().any(char::is_uppercase);
-            let pattern = format!("{}{}", if exact { "" } else { "(?i)" }, regex::escape(text));
+            let pattern = format!("{}{}", if exact { "" } else { "(?i)" }, regex::escape(&text));
             let fast = if exact {
                 Some(Literal::Exact(Box::new(memchr::memmem::Finder::new(text.as_bytes()).into_owned())))
             } else if text.is_ascii() {
                 aho_corasick::AhoCorasick::builder()
                     .ascii_case_insensitive(true)
-                    .build([text])
+                    .build([text.as_str()])
                     .ok()
                     .map(|a| Literal::Fold(Box::new(a)))
             } else {
@@ -207,7 +232,11 @@ impl Search {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.terms.is_empty() && self.level.is_none() && self.since.is_none() && self.until.is_none()
+        self.terms.is_empty()
+            && self.level.is_none()
+            && self.since.is_none()
+            && self.until.is_none()
+            && self.fields.is_empty()
     }
 
     pub fn matches(&self, e: &Entry) -> bool {
@@ -246,24 +275,6 @@ impl Search {
             }
         }
         merged
-    }
-
-    /// The terms that the journal can find too (`--grep`): the words and
-    /// patterns, joined as one PCRE2 pattern, if there are only those.
-    pub fn grep(&self) -> Option<String> {
-        let mut parts = Vec::new();
-        for (t, not) in &self.terms {
-            match t {
-                Term::Text { re, .. } | Term::Pattern { re } if !*not => parts.push(format!("(?=.*{})", re.as_str())),
-                _ => return None,
-            }
-        }
-        if parts.is_empty() {
-            return None;
-        }
-        // Lookaheads: every word, in any order. `(?i)` inside each holds
-        // for it alone.
-        Some(format!("^{}", parts.join("")).replace("(?=.*(?i)", "(?=(?i).*"))
     }
 }
 
@@ -427,12 +438,25 @@ mod tests {
     }
 
     #[test]
-    fn highlights_and_the_journals_pattern() {
+    fn highlights() {
         let s = Search::parse("fail pass", &clock());
         assert_eq!(s.highlights("Failed password"), [0..4, 7..11]);
-        let g = s.grep().unwrap();
-        assert_eq!(g, "^(?=(?i).*fail)(?=(?i).*pass)");
-        assert_eq!(Search::parse("app:x fail", &clock()).grep(), None);
+    }
+
+    #[test]
+    fn quoted_fields_preserve_the_whole_value() {
+        let typed = Search::parse(r#"_CMDLINE="/bin/example --flag" _HOSTNAME=host app:Koe"#, &clock());
+        assert_eq!(
+            typed.fields,
+            [("_CMDLINE".into(), "/bin/example --flag".into()), ("_HOSTNAME".into(), "host".into())]
+        );
+        assert_eq!(typed.terms.len(), 1);
+        for value in ["/bin/example --flag", "a \"quoted\" name", r"a\b\c", "", "snow 雪"] {
+            let s = Search::parse(&field_token("_CMDLINE", value), &clock());
+            assert_eq!(s.fields, [("_CMDLINE".into(), value.into())]);
+            assert!(s.terms.is_empty());
+            assert!(!s.is_empty());
+        }
     }
 
     #[test]

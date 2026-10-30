@@ -1298,6 +1298,13 @@ last boots a disposable VM to check the installed policy, the setuid
 wrapper and the helper as root through real polkit. Neither types a
 password into a desktop's dialog.
 
+Whole-boot search pages through older journal entries and uses the same
+matcher as the visible messages, including friendly source names and text
+with terminal styling removed. Raw `FIELD=value` terms are sent to the
+helper as journal matches. Opening a second instance replaces the current
+query and passes its `XDG_ACTIVATION_TOKEN` to the existing window; it does
+not request a fresh token from that background window's old input.
+
 
 ## Tatami Bluetooth
 

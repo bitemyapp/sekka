@@ -694,8 +694,8 @@ details below the list.
   picks the boot (this one, the ones before, all of them) and the level.
   A boot with more than 50,000 messages is read newest first; **Read
   Earlier** reads 50,000 more, and **Search the Whole Boot** (Return in
-  search) asks the journal for every match (`journalctl --grep`) rather
-  than only those read.
+  search) continues through older pages using the same search, including
+  source names and text with terminal styling removed.
 - **Copy** (❖C) copies the selected messages as journal lines; **Export**
   (⇧❖E) writes what shows as text, or JSON lines for a `.json` file.
 - `aizome-nisshi --search TEXT --source NAME --unit NAME --level LEVEL

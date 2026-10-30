@@ -226,15 +226,14 @@ fn chips(n: &Nisshi) -> Option<Element<Msg>> {
                 .into(),
         );
     }
-    if let Some(g) = &n.journal_search {
-        let _ = g;
+    if n.journal_search.is_some() {
         items.push(
-            button("Searched the journal")
+            button(if n.store.complete { "Searched the whole boot" } else { "Searching the whole boot…" })
                 .icon(Icon::X)
                 .compact()
                 .selected(true)
                 .on_press(Msg::StopSearchingJournal)
-                .tooltip("The journal was searched for what's typed: read all of the boot again")
+                .tooltip("Return to the newest messages")
                 .key("journal search")
                 .into(),
         );

@@ -79,6 +79,184 @@ fn start(stage: &Stage) -> Harness<Nisshi> {
 
 static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Unlike the general fixture, this journal actually narrows field queries.
+fn field_stage(name: &str) -> Stage {
+    let stage = Stage::new(name);
+    let entries = fixture::journal();
+    let write = |file: &str, entries: Vec<String>| {
+        std::fs::write(stage.dir.join(file), entries.join("\n") + "\n").unwrap();
+    };
+    let sshd: Vec<_> = entries.iter().filter(|e| e.source.as_ref() == "sshd").collect();
+    write("sshd.jsonl", sshd.iter().map(|e| fixture::json(e)).collect());
+    let launch = entries.iter().find_map(|e| e.launch.as_ref()).unwrap();
+    write("launch.jsonl", entries.iter().filter(|e| e.launch.as_ref() == Some(launch)).map(fixture::json).collect());
+    // A different source beside the selected SSH message must reappear
+    // when asking for context, even after a server-side field query.
+    let mut neighbor = (*sshd[0]).clone();
+    neighbor.cursor = nisshi::entry::Cursor::Text("s=context-neighbor".into());
+    neighbor.source = "neighbor".into();
+    neighbor.unit = None;
+    neighbor.message = "surrounding context".into();
+    let mut all: Vec<_> = entries.iter().map(fixture::json).collect();
+    all.push(fixture::json(&neighbor));
+    write("entries.jsonl", all);
+    let path = std::env::var("PATH").unwrap_or_default();
+    let d = stage.dir.display();
+    script(
+        &stage.dir.join("journalctl"),
+        &format!(
+            r#"#!/bin/sh
+export PATH='{path}'
+echo "$*" >> '{d}/asked'
+case " $* " in
+  *" --list-boots "*) cat '{d}/boots.json'; exit 0 ;;
+  *" --follow "*) exec sleep 60 ;;
+  *" _SYSTEMD_UNIT=sshd.service "*) tac '{d}/sshd.jsonl'; exit 0 ;;
+  *" SYSLOG_IDENTIFIER={launch} "*) tac '{d}/launch.jsonl'; exit 0 ;;
+esac
+tac '{d}/entries.jsonl'
+"#
+        ),
+    );
+    stage
+}
+
+#[test]
+fn a_handoff_replaces_the_old_boot_and_field_query() {
+    let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let stage = field_stage("handoff");
+    let mut h = start(&stage);
+    h.send(Msg::Live(false));
+    h.program_mut().boot = nisshi::query::Boot::Offset(-1);
+    h.send(Msg::Search("_SYSTEMD_UNIT=sshd.service".into()));
+    assert!(h.settle(WAIT, |n| !n.loading
+        && !n.store.entries.is_empty()
+        && n.store.entries.iter().all(|e| e.source.as_ref() == "sshd")));
+    h.send(Msg::Launched(vec!["--launch".into(), "aizome-launch-f332d86ed3fac3deb4589d0998c3a08e".into()]));
+    assert!(h.settle(WAIT, |n| !n.loading && n.store.entries.iter().any(|e| e.launch.is_some())));
+    assert_eq!(h.program().boot, nisshi::query::Boot::Current);
+    h.advance(Duration::from_millis(200));
+    assert_eq!(h.program().view.rows.len(), 3);
+    // A FIELD=value passed by a second launch must reach the helper too.
+    h.send(Msg::Launched(vec!["--search".into(), "_SYSTEMD_UNIT=sshd.service".into()]));
+    assert!(h.settle(WAIT, |n| !n.loading
+        && !n.store.entries.is_empty()
+        && n.store.entries.iter().all(|e| e.source.as_ref() == "sshd")));
+    let asked = stage.asked();
+    assert!(asked.lines().any(|l| l.contains("--boot=0") && l.contains("_SYSTEMD_UNIT=sshd.service")), "{asked}");
+}
+
+#[test]
+fn context_reloads_surrounding_records_and_preserves_the_selection() {
+    let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let stage = field_stage("context");
+    let mut h = start(&stage);
+    h.send(Msg::Live(false));
+    h.send(Msg::Search("_SYSTEMD_UNIT=sshd.service".into()));
+    assert!(h.settle(WAIT, |n| !n.loading
+        && !n.store.entries.is_empty()
+        && n.store.entries.iter().all(|e| e.source.as_ref() == "sshd")));
+    let e = h.program().store.entries.first().unwrap();
+    let (seq, cursor) = (e.seq, e.cursor.clone());
+    h.send(Msg::Context(seq));
+    assert!(h.settle(WAIT, |n| !n.loading && n.store.entries.iter().any(|e| e.source.as_ref() == "neighbor")));
+    h.advance(Duration::from_millis(200));
+    let n = h.program();
+    assert_eq!(n.selection().map(|e| &e.cursor), Some(&cursor));
+    assert!(n.view.rows.iter().any(|&i| n.store.entries[i as usize].source.as_ref() == "neighbor"));
+    assert!(n.search_text.is_empty() && n.journal_search.is_none());
+    let asked = stage.asked();
+    assert!(
+        asked
+            .lines()
+            .any(|l| l.contains("--since=@") && l.contains("--until=@") && !l.contains("_SYSTEMD_UNIT=sshd.service")),
+        "{asked}"
+    );
+    h.send(Msg::ClearFilters);
+    assert!(h.settle(WAIT, |n| !n.loading && n.filter.range().is_none()));
+    assert!(!stage.asked().lines().last().unwrap().contains("--since="));
+}
+
+#[test]
+fn raw_identifier_filters_keep_launch_records_with_friendly_names() {
+    let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let stage = field_stage("identifier");
+    let mut h = start(&stage);
+    h.send(Msg::Live(false));
+    let e = h.program().store.entries.iter().find(|e| e.launch.is_some()).unwrap();
+    assert_eq!(e.source.as_ref(), "Koe");
+    let id = e.launch.as_ref().unwrap().to_string();
+    h.send(Msg::FilterField("SYSLOG_IDENTIFIER".into(), id.clone()));
+    assert!(h.settle(WAIT, |n| !n.loading
+        && !n.store.entries.is_empty()
+        && n.store.entries.iter().all(|e| e.launch.as_deref() == Some(id.as_str()))));
+    h.advance(Duration::from_millis(200));
+    assert!(!h.program().view.rows.is_empty());
+    assert_eq!(h.program().filter.search.fields, [("SYSLOG_IDENTIFIER".into(), id.clone())]);
+    assert!(stage.asked().contains(&format!("SYSLOG_IDENTIFIER={id}")));
+}
+
+#[test]
+fn whole_boot_search_keeps_source_and_normalized_message_matches() {
+    let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let stage = Stage::new("whole-boot");
+    let record = |i: usize, source: &str, message: &str| {
+        serde_json::json!({
+            "__CURSOR": format!("s=entry-{i}"), "__REALTIME_TIMESTAMP": (fixture::NOW - i as i64).to_string(),
+            "SYSLOG_IDENTIFIER": source, "MESSAGE": message,
+        })
+        .to_string()
+    };
+    // One full page, with a source-only hit; older records include another
+    // source-only hit and a message whose ANSI runs must be stripped.
+    let mut newest = record(0, "NetworkManager", "link ready") + "\n";
+    for i in 1..50_000 {
+        newest.push_str(&record(i, "other", "unrelated"));
+        newest.push('\n');
+    }
+    std::fs::write(stage.dir.join("newest.jsonl"), newest).unwrap();
+    std::fs::write(
+        stage.dir.join("older.jsonl"),
+        format!(
+            "{}\n{}\n",
+            record(50_000, "NetworkManager", "link down"),
+            record(50_001, "other", "Network\u{1b}[31mManager\u{1b}[0m")
+        ),
+    )
+    .unwrap();
+    let path = std::env::var("PATH").unwrap_or_default();
+    let d = stage.dir.display();
+    script(
+        &stage.dir.join("journalctl"),
+        &format!(
+            r#"#!/bin/sh
+export PATH='{path}'
+echo "$*" >> '{d}/asked'
+case " $* " in
+  *" --list-boots "*) cat '{d}/boots.json'; exit 0 ;;
+  *" --follow "*) exec sleep 60 ;;
+  *" --cursor="*) cat '{d}/older.jsonl'; exit 0 ;;
+esac
+cat '{d}/newest.jsonl'
+"#
+        ),
+    );
+    let mut h = start(&stage);
+    h.send(Msg::Live(false));
+    assert!(!h.program().store.complete);
+    h.send(Msg::Search("networkmanager".into()));
+    h.advance(Duration::from_millis(200));
+    assert_eq!(h.program().view.rows.len(), 1);
+    h.send(Msg::SearchJournal);
+    assert!(h.settle(WAIT, |n| !n.loading && n.store.complete), "{:?}: {}", h.program().notice, stage.asked());
+    h.advance(Duration::from_millis(200));
+    assert_eq!(h.program().view.rows.len(), 3);
+    assert_eq!(h.program().store.entries.len(), 50_002);
+    let asked = stage.asked();
+    assert!(asked.contains("--cursor=s=entry-49999"), "{asked}");
+    assert!(!asked.contains("--grep="), "{asked}");
+}
+
 #[test]
 fn reads_the_boot_then_follows_it() {
     let _one = LOCK.lock().unwrap_or_else(|e| e.into_inner());

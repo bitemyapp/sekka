@@ -52,6 +52,7 @@ pub struct Attempt {
     windows_before: BTreeSet<aizome_ipc::WindowId>,
     /// The processes it started.
     pids: Vec<u32>,
+    units: Vec<String>,
     /// The window that confirmed it.
     window: Option<aizome_ipc::WindowId>,
     exited: bool,
@@ -132,6 +133,7 @@ impl Shell {
             had_window,
             windows_before: self.wm.windows.keys().copied().collect(),
             pids: vec![],
+            units: vec![],
             window: None,
             exited: false,
             notification: None,
@@ -202,8 +204,8 @@ impl Shell {
     /// windows and a successful helper exit are recorded separately.
     ///
     /// A window confirms one launch: the one whose process opened it, else
-    /// the oldest of that app's still waiting. Two quick launches of an app
-    /// need a window each, so a second that never opens one is reported.
+    /// the only attempt still waiting for that app. An ambiguous window
+    /// must not hide another attempt's failure.
     pub(crate) fn startup_window(&mut self, window: &aizome_ipc::WindowInfo) {
         let app_id = &window.app_id;
         if self.startup.attempts.values().any(|a| a.window == Some(window.id)) {
@@ -223,8 +225,18 @@ impl Shell {
             .map(|(id, _)| *id)
             .collect();
         let pid = window.pid.and_then(|p| u32::try_from(p).ok());
-        let own = waiting.iter().copied().find(|id| pid.is_some_and(|p| self.startup.attempts[id].pids.contains(&p)));
-        let Some(id) = own.or_else(|| waiting.first().copied()) else { return };
+        let (ancestors, cgroup) = pid.map(process_lineage).unwrap_or_default();
+        let owns = |a: &Attempt| {
+            a.pids.iter().any(|p| ancestors.contains(p))
+                || a.units.iter().any(|unit| cgroup.split('/').any(|part| part == unit))
+        };
+        let own = waiting.iter().copied().find(|id| owns(&self.startup.attempts[id]));
+        if own.is_none() && self.startup.attempts.values().any(owns) {
+            // Another window from an already confirmed attempt must not
+            // stand in for the remaining launch's missing window.
+            return;
+        }
+        let Some(id) = own.or_else(|| (waiting.len() == 1).then(|| waiting[0])) else { return };
         let a = self.startup.attempts.get_mut(&id).unwrap();
         a.ready = true;
         a.window = Some(window.id);
@@ -264,6 +276,7 @@ impl Shell {
             }
             Event::Process(id, event) => {
                 let Some(a) = self.startup.attempts.get_mut(&id) else { return };
+                let started = matches!(&event, LaunchEvent::Started(_));
                 let mut failed = false;
                 match event {
                     LaunchEvent::Started(p) => {
@@ -274,6 +287,7 @@ impl Shell {
                             p.argv
                         ));
                         a.pids.push(p.pid);
+                        a.units.extend(p.unit);
                         if !a.ready && !a.failed {
                             a.outcome = "Process started; no window confirmed".into();
                         }
@@ -323,6 +337,14 @@ impl Shell {
                 }
                 if failed {
                     self.notify_startup(id, cx);
+                }
+                if started {
+                    // The compositor and launcher report independently. A
+                    // fast app may map before its wrapper PID reaches us.
+                    let windows: Vec<_> = self.wm.windows.values().cloned().collect();
+                    for window in windows {
+                        self.startup_window(&window);
+                    }
                 }
             }
             Event::Failed(id, error) => {
@@ -491,6 +513,29 @@ fn crashed(status: &std::process::ExitStatus) -> bool {
     status.signal().is_some_and(fault) || status.code().is_some_and(|c| c > 128 && fault(c - 128))
 }
 
+/// The launcher returns the waiting shell's PID, while Wayland reports
+/// the app (or one of its children). Walk the small, bounded proc ancestry;
+/// a retained scope also identifies apps that daemonize and get reparented.
+fn process_lineage(pid: u32) -> (Vec<u32>, String) {
+    let cgroup = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+        .ok()
+        .and_then(|s| s.lines().find_map(|l| l.strip_prefix("0::").map(str::to_owned)))
+        .unwrap_or_default();
+    let mut ancestors = Vec::new();
+    let mut current = pid;
+    while current > 0 && ancestors.len() < 64 && !ancestors.contains(&current) {
+        ancestors.push(current);
+        let Ok(stat) = std::fs::read_to_string(format!("/proc/{current}/stat")) else { break };
+        // comm may itself contain parentheses or spaces.
+        let Some(parent) = stat.rsplit_once(')').and_then(|(_, s)| s.split_ascii_whitespace().nth(1)) else {
+            break;
+        };
+        let Ok(parent) = parent.parse() else { break };
+        current = parent;
+    }
+    (ancestors, cgroup)
+}
+
 /// Read only this launch's journal stream. Bound time and memory, drain
 /// stdout concurrently, and keep all journal I/O off the interface thread.
 fn read_logs(identifier: &str) -> String {
@@ -603,6 +648,7 @@ mod tests {
             had_window: false,
             windows_before: BTreeSet::new(),
             pids: vec![],
+            units: vec![],
             window: None,
             exited: false,
             notification: None,
@@ -866,5 +912,87 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(25));
             }
         }
+    }
+
+    #[test]
+    fn window_pid_matches_the_second_real_launch() {
+        let dir = std::env::temp_dir().join(format!("launch-child-pid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pidfile = dir.join("pid");
+        let _ = std::fs::remove_file(&pidfile);
+        let observer = LaunchObserver::new(|_| {});
+        let launched = aizome_sys::apps::launch_command_observed(
+            &[
+                "sh".into(),
+                "-c".into(),
+                "printf '%s' \"$$\" > \"$1\"; sleep 1".into(),
+                "probe".into(),
+                pidfile.display().to_string(),
+            ],
+            None,
+            &LaunchOptions { use_systemd: false, ..Default::default() },
+            &observer,
+        )
+        .unwrap();
+        let until = Instant::now() + Duration::from_secs(3);
+        let real_pid: i32 = loop {
+            if let Ok(text) = std::fs::read_to_string(&pidfile)
+                && let Ok(pid) = text.parse()
+            {
+                break pid;
+            }
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert_ne!(real_pid as u32, launched[0].pid, "the launcher returns the waiting shell PID");
+        let mut h = fixture();
+        h.program_mut().startup.attempts.get_mut(&1).unwrap().pids.push(u32::MAX);
+        let mut second = attempt();
+        second.pids.push(launched[0].pid);
+        h.program_mut().startup.attempts.insert(2, second);
+        h.send(opened(42, Some(real_pid)));
+        let _ = std::fs::remove_dir_all(dir);
+        assert!(h.program().startup.attempts[&2].ready, "the app is a child of the observed shell");
+        assert!(!h.program().startup.attempts[&1].ready);
+        exit(&mut h, 23);
+        assert!(h.program().startup.attempts[&1].failed);
+        assert!(h.program().notes.list.last().unwrap().summary.contains("could not open"));
+    }
+
+    #[test]
+    fn ambiguous_window_does_not_confirm_a_launch() {
+        let mut h = fixture();
+        h.program_mut().startup.attempts.insert(2, attempt());
+        h.send(opened(42, None));
+        assert!(h.program().startup.attempts.values().all(|a| !a.ready));
+        exit(&mut h, 23);
+        assert!(h.program().startup.attempts[&1].failed);
+    }
+
+    #[test]
+    fn window_before_the_process_event_is_matched_when_its_pid_arrives() {
+        let mut h = fixture();
+        h.program_mut().startup.attempts.insert(2, attempt());
+        h.send(opened(42, Some(456)));
+        assert!(h.program().startup.attempts.values().all(|a| !a.ready));
+        h.send(Msg::Startup(Event::Process(
+            2,
+            LaunchEvent::Started(aizome_sys::apps::Launched { pid: 456, unit: None, argv: vec!["koe".into()] }),
+        )));
+        assert!(h.program().startup.attempts[&2].ready);
+        assert!(!h.program().startup.attempts[&1].ready);
+    }
+
+    #[test]
+    fn another_window_from_a_confirmed_attempt_does_not_confirm_the_waiting_one() {
+        let mut h = fixture();
+        h.program_mut().startup.attempts.insert(2, attempt());
+        h.program_mut().startup.attempts.get_mut(&2).unwrap().pids.push(456);
+        h.send(opened(42, Some(456)));
+        h.send(opened(43, Some(456)));
+        assert!(h.program().startup.attempts[&2].ready);
+        assert!(!h.program().startup.attempts[&1].ready);
+        exit(&mut h, 23);
+        assert!(h.program().startup.attempts[&1].failed);
     }
 }

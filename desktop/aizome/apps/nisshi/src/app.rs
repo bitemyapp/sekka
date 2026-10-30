@@ -118,6 +118,8 @@ pub enum Msg {
 /// What a launch asks for.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Request {
+    /// Forwarded by a second instance from its launching application's input.
+    pub activation_token: Option<String>,
     pub search: Option<String>,
     pub source: Option<String>,
     pub unit: Option<String>,
@@ -140,6 +142,7 @@ impl Request {
         let value =
             |flag: &str| args.windows(2).find(|p| p[0] == flag).map(|p| p[1].clone()).filter(|v| !v.starts_with("--"));
         Request {
+            activation_token: value("--activation-token"),
             search: value("--search"),
             source: value("--source").or_else(|| value("--app")),
             unit: value("--unit"),
@@ -202,7 +205,8 @@ pub struct Nisshi {
     /// Typing that hasn't filtered yet (a large boot), by its count.
     search_due: Option<u64>,
     typed: u64,
-    /// The journal's own search (`--grep`), when it's been asked.
+    /// The search whose whole boot is being read, in bounded pages. All
+    /// entries pass through the same matcher as the initial page.
     pub journal_search: Option<String>,
     pub view: View,
     pub selected: Vec<u64>,
@@ -406,7 +410,7 @@ impl Nisshi {
 
     /// Read the boot's newest messages again (and then follow it).
     fn load(&mut self) {
-        self.stop_reads(|w| matches!(w, Want::Load(_) | Want::Older(_) | Want::Follow));
+        self.stop_reads(|w| matches!(w, Want::Load(_) | Want::Older(_) | Want::Follow | Want::Fields(_)));
         self.store.clear();
         self.selected.clear();
         self.fields = None;
@@ -416,7 +420,8 @@ impl Nisshi {
         let q = Query {
             boot: self.boot.clone(),
             matches: self.filter.search.fields.clone(),
-            grep: self.journal_search.clone(),
+            since: self.filter.range().map(|(from, _)| from.max(0)),
+            until: self.filter.range().map(|(_, to)| to),
             limit: Some(PAGE),
             ..Query::default()
         };
@@ -438,7 +443,8 @@ impl Nisshi {
         let q = Query {
             boot: self.boot.clone(),
             matches: self.filter.search.fields.clone(),
-            grep: self.journal_search.clone(),
+            since: self.filter.range().map(|(from, _)| from.max(0)),
+            until: self.filter.range().map(|(_, to)| to),
             limit: Some(PAGE),
             before: Some(cursor),
             ..Query::default()
@@ -464,7 +470,8 @@ impl Nisshi {
         let q = Query {
             boot: self.boot.clone(),
             matches: self.filter.search.fields.clone(),
-            grep: self.journal_search.clone(),
+            since: self.filter.range().map(|(from, _)| from.max(0)),
+            until: self.filter.range().map(|(_, to)| to),
             follow: cursor.is_none(),
             follow_after: cursor,
             ..Query::default()
@@ -607,7 +614,7 @@ impl Nisshi {
 
     /// Whether the journal (not only what's read) could find more.
     pub fn can_search_journal(&self) -> bool {
-        !self.in_file() && !self.store.complete && self.journal_search.is_none() && self.filter.search.grep().is_some()
+        !self.in_file() && !self.store.complete && self.journal_search.is_none() && !self.filter.search.is_empty()
     }
 
     /// A message as a line of text, as journalctl's short format has it.
@@ -658,7 +665,7 @@ impl Nisshi {
             Action::Context(seq) => self.context(seq),
             Action::Search(text) => {
                 cx.focus("search");
-                self.set_search(text);
+                self.apply_search(text);
             }
         }
     }
@@ -683,7 +690,7 @@ impl Nisshi {
         self.filter.search = Search::parse(&text, &self.clock);
         self.search_text = text;
         let mut reload = self.filter.search.fields != before;
-        if self.journal_search.is_some() && self.filter.search.grep() != self.journal_search {
+        if self.journal_search.as_ref().is_some_and(|q| q != &self.search_text) {
             self.journal_search = None;
             reload = true;
         }
@@ -708,13 +715,23 @@ impl Nisshi {
     fn context(&mut self, seq: u64) {
         let Some(e) = self.shown().get(seq) else { return };
         let t = e.time;
+        let cursor = e.cursor.text();
         let scope = if self.in_file() { self.filter.scope.clone() } else { Scope::All };
         self.filter = Filter { scope, ..Filter::default() };
         self.search_text.clear();
+        self.search_due = None;
+        self.journal_search = None;
         self.filter.add(Chip::Range { from: t - 60_000_000, to: t + 60_000_000 });
-        self.selected = vec![seq];
+        if self.live && !self.in_file() {
+            // The initial page or the previous field query may have
+            // omitted the surrounding entries. Read this time range.
+            self.want_cursor = cursor;
+            self.load();
+        } else {
+            self.selected = vec![seq];
+            self.rebuild();
+        }
         self.following = false;
-        self.rebuild();
     }
 
     /// Select the message `--cursor` named, once it's read; say so when
@@ -845,11 +862,17 @@ impl Nisshi {
                     self.store.complete = got < PAGE as usize;
                     self.changed(true, cx);
                     self.follow();
+                    if self.journal_search.is_some() {
+                        self.load_older();
+                    }
                 }
                 Some(Want::Older(got)) => {
                     self.loading = false;
                     self.store.complete = got < PAGE as usize;
                     self.changed(true, cx);
+                    if self.journal_search.is_some() {
+                        self.load_older();
+                    }
                 }
                 Some(Want::File(_)) => {
                     self.loading = false;
@@ -1015,8 +1038,7 @@ impl Program for Nisshi {
                 if search::completing(&self.search_text).is_some()
                     && let Some(Suggestion { action: Action::Search(t), .. }) = self.suggestions.first().cloned()
                 {
-                    self.set_search(t);
-                    self.rebuild();
+                    self.apply_search(t);
                 } else if self.can_search_journal() {
                     cx.send(Msg::SearchJournal);
                 }
@@ -1031,15 +1053,22 @@ impl Program for Nisshi {
                 .apply(Action::Narrow { chips: vec![Chip::Source { name, not: false }], scope: None, level: None }, cx),
             Msg::RemoveChip(i) => {
                 if i < self.filter.chips.len() {
-                    self.filter.chips.remove(i);
-                    self.rebuild();
+                    let removed = self.filter.chips.remove(i);
+                    if self.live && matches!(removed, Chip::Range { .. }) {
+                        self.load();
+                    } else {
+                        self.rebuild();
+                    }
                 }
             }
             Msg::ClearFilters => {
                 let scope = if self.in_file() { self.filter.scope.clone() } else { Scope::All };
-                let reload = !self.filter.search.fields.is_empty() || self.journal_search.is_some();
+                let reload = !self.filter.search.fields.is_empty()
+                    || self.journal_search.is_some()
+                    || self.live && self.filter.range().is_some();
                 self.filter = Filter { scope, ..Filter::default() };
                 self.search_text.clear();
+                self.search_due = None;
                 self.journal_search = None;
                 if reload {
                     self.load();
@@ -1102,9 +1131,9 @@ impl Program for Nisshi {
             }
             Msg::LoadOlder => self.load_older(),
             Msg::SearchJournal => {
-                if let Some(g) = self.filter.search.grep() {
-                    self.journal_search = Some(g);
-                    self.load();
+                if self.can_search_journal() {
+                    self.journal_search = Some(self.search_text.clone());
+                    self.load_older();
                 }
             }
             Msg::StopSearchingJournal => {
@@ -1241,14 +1270,6 @@ impl Program for Nisshi {
                             self.filter.add(Chip::Pid(p));
                         }
                     }
-                    "SYSLOG_IDENTIFIER" => self.apply(
-                        Action::Narrow {
-                            chips: vec![Chip::Source { name: value.as_str().into(), not: false }],
-                            scope: None,
-                            level: None,
-                        },
-                        cx,
-                    ),
                     "_SYSTEMD_UNIT" | "_SYSTEMD_USER_UNIT" | "UNIT" | "USER_UNIT" => {
                         self.filter.add(Chip::Unit { name: value.as_str().into(), not: false })
                     }
@@ -1267,11 +1288,7 @@ impl Program for Nisshi {
                     }
                     f => {
                         // Any other field: read again, matched by the journal.
-                        let token = if value.contains(char::is_whitespace) {
-                            format!("{f}=\"{value}\"")
-                        } else {
-                            format!("{f}={value}")
-                        };
+                        let token = search::field_token(f, &value);
                         let text = if self.search_text.trim().is_empty() {
                             token
                         } else {
@@ -1296,19 +1313,30 @@ impl Program for Nisshi {
                 self.ask_boots_and_files();
             }
             Msg::Launched(args) => {
-                cx.activate(self.window);
                 let r = Request::parse(&args);
-                let reads = r.boot.is_some() || r.file.is_some();
+                if let Some(token) = &r.activation_token {
+                    cx.activate_with_token(self.window, token);
+                } else {
+                    cx.activate(self.window);
+                }
+                self.stop_reads(|w| matches!(w, Want::File(_) | Want::Fields(_)));
                 self.filter = Filter::default();
                 self.search_text.clear();
+                self.search_due = None;
+                self.journal_search = None;
+                self.want_cursor = None;
+                self.after_unlock = None;
+                self.selected.clear();
+                self.fields = None;
+                self.boot = r.boot.map_or(Boot::Current, |b| if b == 0 { Boot::Current } else { Boot::Offset(b) });
                 self.take_request(r.clone());
-                if let Some(b) = r.boot {
-                    self.boot = if b == 0 { Boot::Current } else { Boot::Offset(b) };
-                }
                 if let Some(f) = r.file {
                     self.read_file(f);
+                    if self.after_unlock.is_some() && self.unlock != Unlock::Asking {
+                        cx.send(Msg::Unlock);
+                    }
                 }
-                if reads && !self.in_file() {
+                if self.live && !self.in_file() {
                     self.load();
                 } else {
                     self.rebuild();

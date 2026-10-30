@@ -22,6 +22,7 @@ pub enum Claim {
 
 pub fn claim(args: &[String]) -> Claim {
     let path = socket_path();
+    let args = handoff_args(args, std::env::var("XDG_ACTIVATION_TOKEN").ok().as_deref());
     if let Ok(mut s) = UnixStream::connect(&path)
         && s.write_all(args.join("\0").as_bytes()).is_ok()
     {
@@ -35,6 +36,17 @@ pub fn claim(args: &[String]) -> Claim {
             Claim::Alone
         }
     }
+}
+
+/// Keep the existing argument protocol, including for an older running
+/// instance, while carrying the launcher's permission to take focus.
+pub fn handoff_args(args: &[String], token: Option<&str>) -> Vec<String> {
+    let mut forwarded = args.to_vec();
+    if let Some(token) = token.filter(|t| !t.is_empty()) {
+        // The environment token belongs to this launch, so put it first.
+        forwarded.splice(0..0, ["--activation-token".to_owned(), token.to_owned()]);
+    }
+    forwarded
 }
 
 /// Hear later launches on a thread: `heard(args)` for each, until it
