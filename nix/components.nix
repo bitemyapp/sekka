@@ -35,13 +35,23 @@ rec {
   };
   kakehashi = {
     outPath = ../apps/kakehashi;
-    packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
+    packages.${system} = { inherit (catalog.packages.${system}) kakehashi; };
   };
   # The catalog's applications from this flake (source "sekka"): its own, and
   # those other flakes package, built with the applications' Nixpkgs.
-  catalog.packages.${system} = kakehashi.packages.${system} // {
-    superluminal = superluminal.packages.${system}.default;
-    tracy = tracy.packages.${system}.tracy;
+  # checks.application-platforms resolves the same definition for ARM.
+  catalog = {
+    packagesFor = target: {
+      kakehashi =
+        (import ./kakehashi.nix {
+          pkgs = nixpkgs.legacyPackages.${target};
+        }).package;
+      # Some upstream flakes have no output for a target (Superluminal on ARM).
+      # Let checks report that absence without evaluating a missing attribute.
+      superluminal = superluminal.packages.${target}.default or null;
+      tracy = tracy.packages.${target}.tracy or null;
+    };
+    packages.${system} = catalog.packagesFor system;
   };
   calamares = {
     outPath = ../installer/genkan;

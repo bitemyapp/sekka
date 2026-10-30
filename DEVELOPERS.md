@@ -1145,6 +1145,53 @@ and workspace manifest. Helper-only changes do not rebuild the window.
 `nix build .#checks.x86_64-linux.yukimi-tatami` and
 `nix build .#checks.x86_64-linux.yukimi-x11`; these are not ISO qualification.
 
+Yukimi's own catalog and Genkan's catalog record availability against the
+target system and the package source each entry actually installs from. The
+shared resolver in `apps/yukimi/nix/catalog.nix` checks platform metadata,
+broken packages, missing packages and required applications. It builds
+nothing and follows the policy of the Nixpkgs the packages come from: broken
+or unsupported packages are offered only where that Nixpkgs allows them
+(`allowBroken`, `allowUnsupportedSystem`). Yukimi keeps unavailable cards
+visible with a reason; the helper refuses new unavailable catalog selections
+before editing configuration, while allowing existing entries to be removed.
+Older system metadata retains its previous catalog behavior until the next
+successful system update.
+
+Systems read Nixpkgs' metadata only. Instantiating every catalog package as
+well took a reference Aizome system's evaluation from 8.6 to 15.9 s of CPU
+and its peak memory from 2.1 to 3.7 GB, and it met Nixpkgs' policy, so
+systems refusing unfree packages reported those as unsupported. Wrappers
+whose metadata claims more than their dependencies support list their
+`platforms` in the catalog instead: Steam and Heroic bring 32-bit x86
+libraries, and Lutris brings the x86-only libstrangle. An application whose
+package pulls in an unfree one is marked `unfree`, as Lutris is for Steam's
+runtime.
+
+Genkan's entries with a `source` (the AI assistants, oh-my-pi, Superluminal,
+Tracy and Kakehashi) are decided by their `platforms` lists alone, which
+Genkan's tests require. All but Kakehashi, Sekka's own, are packaged by other
+flakes, and reading their packages would fetch and evaluate those flakes and
+two more Nixpkgs revisions on every system, whatever was picked. From a fresh
+store, a reference installation's evaluation (Aizome and Firefox) then
+downloaded ten more flake sources, 0.8 GB that the live session keeps in
+memory, and took 7 s longer. Without reading them it fetches exactly the
+sources it does without resolving the catalogs, and its peak memory (2.4 GB)
+and allocations stay within 1% of that.
+
+`checks.x86_64-linux.application-platforms` keeps the lists and flags honest.
+It resolves both catalogs for x86 and ARM Linux as systems do, with the
+packages of entries with a `source` set to abort the evaluation if read, and
+again with every package read and instantiated
+(`programs.yukimi.instantiateCatalogs`, an internal option). It fails when a
+system would offer something that doesn't instantiate, or when an application
+needs unfree packages that a system refusing them would not be warned about.
+It also checks that each catalog follows the Nixpkgs its packages come from:
+Yukimi's own the system's, and Genkan's `applicationPkgs`, which installed
+systems configure apart from `nixpkgs.config`. Its Sekka packages come from
+`catalog.packagesFor` in `nix/components.nix`, the definition that also gives
+systems theirs (x86_64-linux's today). Nothing is built. This is component
+evaluation coverage, not an ISO or hardware qualification.
+
 The [October 2026 resource comparison](docs/test-results/yukimi-unified-2026-10-27.json)
 records three trials of each frontend in a private GPU-backed Tatami compositor
 on Intel integrated graphics, plus a Tatami-only software-rendered VM with no

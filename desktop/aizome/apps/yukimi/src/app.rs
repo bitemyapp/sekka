@@ -814,6 +814,9 @@ impl Yukimi {
     }
 
     fn install_app(&mut self, app: &Application, cx: &mut Cx<Msg>) {
+        if app.unavailable.is_some() {
+            return;
+        }
         let change = app_change(&self.model, app);
         self.confirm(
             format!("Install {}?", app.name),

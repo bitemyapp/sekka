@@ -843,6 +843,28 @@ fn change(args: &[String]) -> Result<String> {
             setup.dir.display()
         )));
     }
+    if let (Some(setting), Some(requested), Some(main)) = (&change.setting, &change.applications, &main) {
+        let configuration = std::fs::read_to_string(main)?;
+        let path: Vec<&str> = setting.split('.').collect();
+        let previous = edit::string_list(&configuration, &path)?.unwrap_or_default();
+        catalog::validate_selection(&catalog::for_system(&setup.facts), setting, &previous, requested)
+            .map_err(Failure)?;
+    }
+    if change.packages.is_some() || change.programs.is_some() {
+        let previous = packages_file
+            .as_ref()
+            .filter(|file| file.exists())
+            .map(std::fs::read_to_string)
+            .transpose()?
+            .map(|text| packages::read(&text))
+            .transpose()?
+            .unwrap_or_default();
+        let requested = packages::Choices {
+            packages: change.packages.clone().unwrap_or_else(|| previous.packages.clone()),
+            programs: change.programs.clone().unwrap_or_else(|| previous.programs.clone()),
+        };
+        catalog::validate_standalone(&catalog::for_system(&setup.facts), &previous, &requested).map_err(Failure)?;
+    }
 
     // The configuration as it is belongs to the running generation: keep it,
     // so going back to that generation brings it back.

@@ -181,6 +181,45 @@ fn implicit_catalog_apps_are_installed_but_are_not_written_when_adding_another_a
 }
 
 #[test]
+fn unavailable_catalog_apps_cannot_start_an_install() {
+    let mut model = aizome_yukimi::fixture::model();
+    model.catalog = yukimi_system::catalog::parse(
+        r#"[{"id":"discord","name":"Discord","description":"Chat.","category":"Communication",
+             "packages":["discord"],"unavailable":"Not available for aarch64-linux."}]"#,
+    )
+    .unwrap();
+    let runner = Runner::Mock(Arc::new(|_| panic!("an unavailable app must not run an operation")));
+    let app = Yukimi::with(Source::Sample(Arc::new(model)), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
+    let mut h = Harness::new(app);
+    let w = h.window();
+    h.send(Msg::Show(Page::Discover));
+    assert!(has(&h, w, "Discord"));
+    assert!(has(&h, w, "Not available for aarch64-linux."));
+    assert!(h.semantics(w).iter().any(|(s, _)| s.label.as_deref() == Some("Unavailable") && s.disabled));
+    h.send(Msg::InstallApp("discord".into()));
+    assert!(!has(&h, w, "Install Discord?"));
+    assert!(h.program().job.is_none());
+}
+
+#[test]
+fn package_details_respect_an_unavailable_catalog_program() {
+    let mut model = aizome_yukimi::fixture::model();
+    model.configured.yukimi.programs.clear();
+    model.store = None;
+    model.catalog = yukimi_system::catalog::parse(
+        r#"[{"id":"steam","name":"Steam","description":"Games.","category":"Games",
+             "program":"steam","unavailable":"A dependency is unavailable on ARM."}]"#,
+    )
+    .unwrap();
+    let runner = Runner::Mock(Arc::new(|_| panic!("an unavailable app must not run an operation")));
+    let app = Yukimi::with(Source::Sample(Arc::new(model)), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
+    let mut h = Harness::new(app);
+    h.send(Msg::Open(aizome_yukimi::fixture::index().get("steam").unwrap().clone()));
+    let sheet = h.program().details.as_ref().unwrap().0;
+    assert!(h.semantics(sheet).iter().any(|(s, _)| s.label.as_deref() == Some("Install for Everyone") && s.disabled));
+}
+
+#[test]
 fn install_for_everyone_asks_first_then_runs_the_helper() {
     let (mut h, w, ran) = sample(WORKS);
     h.send(Msg::Show(Page::Discover));

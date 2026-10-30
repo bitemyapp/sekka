@@ -96,11 +96,13 @@ impl<'a> Installed<'a> {
 
 fn app_card(model: &Model, system: &BTreeSet<&str>, app: &Application) -> Element<Msg> {
     let installed = model.app_installed(app, system);
-    let why_not = blocked(model, app.unfree);
+    let why_not = app.unavailable.clone().or_else(|| blocked(model, app.unfree));
     let mut install = if installed {
         button("Installed").icon(Icon::Check).enabled(false)
     } else {
-        button("Install").primary().on_press_maybe(why_not.is_none().then(|| Msg::InstallApp(app.id.clone())))
+        button(if app.unavailable.is_some() { "Unavailable" } else { "Install" })
+            .primary()
+            .on_press_maybe(why_not.is_none().then(|| Msg::InstallApp(app.id.clone())))
     };
     if let (Some(why), false) = (&why_not, installed) {
         install = install.tooltip(why.clone());
@@ -111,7 +113,7 @@ fn app_card(model: &Model, system: &BTreeSet<&str>, app: &Application) -> Elemen
     } else if app.program.is_some() {
         foot = foot.push(spacer()).push(tag("program", Role::Violet));
     }
-    let body = column![
+    let mut body = column![
         row![
             monogram(&app.name, 36.0),
             column![text(app.name.clone()).weight(650.0), text(app.category.clone()).size(11.5).role(Role::Text3)]
@@ -119,12 +121,12 @@ fn app_card(model: &Model, system: &BTreeSet<&str>, app: &Application) -> Elemen
         ]
         .spacing(10.0),
         text(app.description.clone()).wrap().size(12.0).role(Role::Text2).line_height(1.3),
-        spacer(),
-        foot,
     ]
-    .spacing(10.0)
-    .width(Fill)
-    .height(Fill);
+    .spacing(10.0);
+    if let Some(reason) = &app.unavailable {
+        body = body.push(text(reason.clone()).wrap().size(11.5).role(Role::Text3));
+    }
+    let body = body.push(spacer()).push(foot).width(Fill).height(Fill);
     panel(body).padding(12.0).width(Fill).height(Fill).into()
 }
 
@@ -342,7 +344,9 @@ pub fn details(app: &Yukimi, package: &Package, sheet: WindowKey) -> Element<Msg
     }
 
     let installable = package.available && !package.broken;
-    let why_not = blocked(model, package.unfree || needing.is_some_and(|a| a.unfree));
+    let why_not = needing
+        .and_then(|a| a.unavailable.clone())
+        .or_else(|| blocked(model, package.unfree || needing.is_some_and(|a| a.unfree)));
     let done = match needing {
         Some(a) => model.app_installed(a, &installed.system),
         None => installed.for_everyone(&package.attr),

@@ -164,7 +164,7 @@ impl Model {
             generations: generations::system(),
             user_packages: profile::user_elements(),
             user: std::env::var("USER").unwrap_or_default(),
-            catalog: catalog::load(&setup.facts.catalogs),
+            catalog: catalog::for_system(&setup.facts),
             nixpkgs: setup.facts.nixpkgs.clone(),
             setup,
             paths: paths.clone(),
@@ -546,6 +546,7 @@ mod tests {
             needs: None,
             unfree: false,
             requires: Vec::new(),
+            unavailable: None,
             setting: setting.map(str::to_owned),
         }
     }
