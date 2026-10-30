@@ -26,7 +26,7 @@
 //! "returns". [`launch`] therefore only waits for that line (milliseconds),
 //! then hands the child to a small thread that reaps it when it exits. The
 //! program's output goes to the journal (a journald stream tagged with the
-//! app's ID, as systemd gives services; `/dev/null` without journald):
+//! app's ID, or the observer's unique launch ID; `/dev/null` without journald):
 //! that is its stdout, and the `sh` wrapper points its stderr there too,
 //! closing the pipe the line came through; without that the app would hold
 //! a pipe to the launcher and die of `SIGPIPE` when the launcher went away.
@@ -43,7 +43,7 @@
 //!
 //! **Either way** the process starts in its own session (`setsid`, so a
 //! terminal's Ctrl-C or the launcher's process group don't reach it), with
-//! stdin, stdout and stderr on `/dev/null`, and a thread reaps it, so no
+//! stdin on `/dev/null` and output in the journal, and a thread reaps it, so no
 //! zombies are left. `XDG_ACTIVATION_TOKEN` and `DESKTOP_STARTUP_ID` are
 //! never inherited from the launcher; with an activation token both are
 //! set to it.
@@ -67,6 +67,7 @@ use std::io::BufRead;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -127,6 +128,38 @@ pub struct Launched {
     pub argv: Vec<String>,
 }
 
+/// Process creation and exit are distinct from a window becoming ready.
+#[derive(Clone, Debug)]
+pub enum LaunchEvent {
+    Started(Launched),
+    Exited { pid: u32, status: std::result::Result<std::process::ExitStatus, String> },
+    Activated,
+    Message(String),
+}
+
+/// Observe a launch without keeping its output connected to the desktop
+/// shell. Output goes straight to journald under this attempt's unique ID,
+/// so replacing the shell cannot break a running application's stdout.
+#[derive(Clone)]
+pub struct LaunchObserver {
+    journal_id: String,
+    send: Arc<dyn Fn(LaunchEvent) + Send + Sync>,
+}
+
+impl LaunchObserver {
+    pub fn new(send: impl Fn(LaunchEvent) + Send + Sync + 'static) -> Self {
+        Self { journal_id: format!("aizome-launch-{}", super::random_hex(16)), send: Arc::new(send) }
+    }
+
+    pub fn journal_id(&self) -> &str {
+        &self.journal_id
+    }
+
+    fn emit(&self, event: LaunchEvent) {
+        (self.send)(event);
+    }
+}
+
 /// How to start processes; tests point `Systemd` at fakes.
 #[derive(Clone, Debug)]
 enum Backend {
@@ -142,14 +175,35 @@ enum Backend {
 /// instead ([`activate_dbus`]), and the result is then empty: the bus
 /// starts the process, or the running instance opens a window.
 pub fn launch(entry: &DesktopEntry, options: &LaunchOptions) -> Result<Vec<Launched>> {
+    launch_observed(entry, options, None)
+}
+
+/// Like [`launch`], with asynchronous lifecycle events and isolated journal
+/// output. An accepted D-Bus request is reported as such, not as a window.
+pub fn launch_observed(
+    entry: &DesktopEntry,
+    options: &LaunchOptions,
+    observer: Option<&LaunchObserver>,
+) -> Result<Vec<Launched>> {
     if entry.dbus_activatable && options.use_dbus_activation && entry.kind == EntryKind::Application {
         match crate::Bus::session().and_then(|bus| activate_dbus(entry, options, &bus)) {
-            Ok(()) => return Ok(Vec::new()),
-            Err(error) => log::info!("apps: D-Bus activation of {} failed ({error}); running its Exec", entry.id),
+            Ok(()) => {
+                if let Some(o) = observer {
+                    o.emit(LaunchEvent::Activated);
+                }
+                return Ok(Vec::new());
+            }
+            Err(error) => {
+                let message = format!("D-Bus activation of {} failed ({error}); running its Exec", entry.id);
+                log::info!("apps: {message}");
+                if let Some(o) = observer {
+                    o.emit(LaunchEvent::Message(message));
+                }
+            }
         }
     }
     let backend = if options.use_systemd { systemd_backend() } else { None };
-    launch_with(entry, options, &backend.unwrap_or(Backend::Plain))
+    launch_with_observer(entry, options, &backend.unwrap_or(Backend::Plain), observer)
 }
 
 /// The object path `org.freedesktop.Application` lives at for an app ID,
@@ -244,25 +298,92 @@ pub fn command_lines(entry: &DesktopEntry, options: &LaunchOptions) -> Result<Ve
     Ok(argvs)
 }
 
+#[cfg(test)]
 fn launch_with(entry: &DesktopEntry, options: &LaunchOptions, backend: &Backend) -> Result<Vec<Launched>> {
+    launch_with_observer(entry, options, backend, None)
+}
+
+fn launch_with_observer(
+    entry: &DesktopEntry,
+    options: &LaunchOptions,
+    backend: &Backend,
+    observer: Option<&LaunchObserver>,
+) -> Result<Vec<Launched>> {
     let argvs = command_lines(entry, options)?;
+    launch_commands(entry, argvs, options, backend, observer)
+}
+
+/// Launch an already parsed command, without passing it through a shell's
+/// parser or desktop-entry field-code expansion. `app_id` is the app the
+/// caller knows the command runs, if any; its scope is named for that app,
+/// else for the program, as an app's own launch would be.
+pub fn launch_command_observed(
+    argv: &[String],
+    app_id: Option<&str>,
+    options: &LaunchOptions,
+    observer: &LaunchObserver,
+) -> Result<Vec<Launched>> {
+    let entry = command_entry(argv, app_id)?;
+    let backend = if options.use_systemd { systemd_backend() } else { None };
+    launch_commands(&entry, vec![argv.to_vec()], options, &backend.unwrap_or(Backend::Plain), Some(observer))
+}
+
+/// The stand-in entry a command launches as: only its ID (which names the
+/// scope) and its name come from the command; nothing else of an app's
+/// entry (its folder, its terminal) applies.
+fn command_entry(argv: &[String], app_id: Option<&str>) -> Result<DesktopEntry> {
+    let program = argv.first().map(String::as_str).unwrap_or("");
+    let program = program.rsplit('/').next().unwrap_or(program);
+    let id = match app_id.filter(|id| !id.is_empty()) {
+        Some(id) => format!("{id}.desktop"),
+        None if !program.is_empty() => program.to_owned(),
+        None => "command".to_owned(),
+    };
+    let mut entry = DesktopEntry::parse(
+        "[Desktop Entry]\nType=Application\nName=Command\nExec=true\n",
+        &id,
+        &super::Locale::parse("C"),
+    )?;
+    entry.name = argv.first().cloned().unwrap_or_else(|| "Command".into());
+    Ok(entry)
+}
+
+fn launch_commands(
+    entry: &DesktopEntry,
+    argvs: Vec<Vec<String>>,
+    options: &LaunchOptions,
+    backend: &Backend,
+    observer: Option<&LaunchObserver>,
+) -> Result<Vec<Launched>> {
     for argv in &argvs {
         let program = argv.first().map(String::as_str).unwrap_or("");
-        if find_program(program).is_none() {
-            return Err(Error::NotFound(format!("program {program} (to run {})", entry.id)));
+        let resolved =
+            find_program(program).ok_or_else(|| Error::NotFound(format!("program {program} (to run {})", entry.id)))?;
+        if let Some(o) = observer {
+            let target = std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
+            o.emit(LaunchEvent::Message(format!(
+                "Executable: {} (resolved to {})",
+                resolved.display(),
+                target.display()
+            )));
         }
     }
     let dir = working_dir(entry, options)?;
     let mut launched = Vec::with_capacity(argvs.len());
     for argv in argvs {
         let started = match backend {
-            Backend::Plain => spawn_plain(&argv, &dir, options),
+            Backend::Plain => spawn_plain(&argv, &dir, options, observer),
             Backend::Systemd { command, timeout } => {
-                match spawn_scope(command, *timeout, entry, &argv, &dir, options) {
+                match spawn_scope(command, *timeout, entry, &argv, &dir, options, observer) {
                     Ok(started) => Ok(started),
                     Err(Fallback(why)) => {
                         log::warn!("apps: systemd-run failed for {} ({why}); starting it directly", entry.id);
-                        spawn_plain(&argv, &dir, options)
+                        if let Some(o) = observer {
+                            o.emit(LaunchEvent::Message(format!(
+                                "systemd scope unavailable: {why}; starting directly"
+                            )));
+                        }
+                        spawn_plain(&argv, &dir, options, observer)
                     }
                 }
             }
@@ -344,19 +465,25 @@ fn set_activation_env(command: &mut Command, token: Option<&str>) {
     }
 }
 
-fn spawn_plain(argv: &[String], dir: &Path, options: &LaunchOptions) -> Result<Launched> {
+fn spawn_plain(
+    argv: &[String],
+    dir: &Path,
+    options: &LaunchOptions,
+    observer: Option<&LaunchObserver>,
+) -> Result<Launched> {
     let Some(program) = argv.first() else {
         return Err(Error::InvalidArgument("empty command line".into()));
     };
     let mut command = Command::new(app_shell());
     command.args(["-c", APP_WAIT, "aizome-launch"]).args(argv);
     let identifier = Path::new(program).file_name().map_or(program.clone(), |n| n.to_string_lossy().into_owned());
-    prepare(&mut command, dir, options, &identifier);
+    prepare(&mut command, dir, options, observer.map_or(identifier.as_str(), LaunchObserver::journal_id));
     let child =
         command.spawn().map_err(|error| Error::Command { program: program.clone(), message: error.to_string() })?;
     let pid = child.id();
-    reap(child);
-    Ok(Launched { pid, unit: None, argv: argv.to_vec() })
+    let launched = Launched { pid, unit: None, argv: argv.to_vec() };
+    observe_child(child, &launched, observer);
+    Ok(launched)
 }
 
 /// Why the systemd route didn't work; the caller falls back.
@@ -377,6 +504,7 @@ fn spawn_scope(
     argv: &[String],
     dir: &Path,
     options: &LaunchOptions,
+    observer: Option<&LaunchObserver>,
 ) -> std::result::Result<Launched, Fallback> {
     let Some((program, prefix)) = systemd_run.split_first() else {
         return Err(Fallback("no systemd-run".into()));
@@ -390,7 +518,7 @@ fn spawn_scope(
         command.arg("--expand-environment=no");
     }
     command.args(["--", app_shell(), "-c", APP_WAIT, "aizome-launch"]).args(argv);
-    prepare(&mut command, dir, options, entry.app_id());
+    prepare(&mut command, dir, options, observer.map_or(entry.app_id(), LaunchObserver::journal_id));
     command.stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|error| Fallback(format!("{program}: {error}")))?;
     let pid = child.id();
@@ -434,7 +562,7 @@ fn spawn_scope(
     }
     match receiver.recv_timeout(timeout) {
         Ok(None) => {
-            reap(child);
+            observe_child(child, &launched(), observer);
             Ok(launched())
         }
         Ok(Some(said)) => {
@@ -444,11 +572,17 @@ fn spawn_scope(
             let deadline = Instant::now() + Duration::from_millis(500);
             loop {
                 match child.try_wait() {
-                    Ok(Some(status)) if status.success() => return Ok(launched()),
+                    Ok(Some(status)) if status.success() => {
+                        if let Some(o) = observer {
+                            o.emit(LaunchEvent::Started(launched()));
+                            o.emit(LaunchEvent::Exited { pid, status: Ok(status) });
+                        }
+                        return Ok(launched());
+                    }
                     Ok(Some(status)) => return Err(Fallback(format!("{status}: {said}"))),
                     Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
                     Ok(None) => {
-                        reap(child);
+                        observe_child(child, &launched(), observer);
                         return Ok(launched());
                     }
                     Err(error) => {
@@ -470,9 +604,17 @@ fn spawn_scope(
 }
 
 /// Wait for `child` on a small thread so it doesn't stay a zombie.
-fn reap(mut child: Child) {
+fn observe_child(mut child: Child, launched: &Launched, observer: Option<&LaunchObserver>) {
+    let observer = observer.cloned();
+    let pid = child.id();
+    if let Some(o) = &observer {
+        o.emit(LaunchEvent::Started(launched.clone()));
+    }
     let spawned = std::thread::Builder::new().name("aizome-sys reaper".into()).stack_size(64 * 1024).spawn(move || {
-        let _ = child.wait();
+        let status = child.wait().map_err(|e| e.to_string());
+        if let Some(o) = observer {
+            o.emit(LaunchEvent::Exited { pid, status });
+        }
     });
     if let Err(error) = spawned {
         log::warn!("apps: no thread to reap a launched process: {error}");
@@ -583,6 +725,14 @@ mod tests {
         assert_eq!(systemd_escape(r"back\slash"), r"back\x5cslash");
         assert_eq!(unit_name("foot", "0123abcd"), "app-aizome-foot-0123abcd.scope");
         assert_eq!(unit_name("org.foo-bar", "ff"), r"app-aizome-org.foo\x2dbar-ff.scope");
+        // A command's scope is named for the app it runs, else its program.
+        let settings =
+            command_entry(&["aizome-settei".into(), "--pane=sound".into()], Some("org.aizome.Settei")).unwrap();
+        assert_eq!(settings.app_id(), "org.aizome.Settei");
+        assert_eq!(settings.name, "aizome-settei");
+        let open = command_entry(&["/run/current-system/sw/bin/xdg-open".into(), "x".into()], None).unwrap();
+        assert_eq!(unit_name(open.app_id(), "ff"), r"app-aizome-xdg\x2dopen-ff.scope");
+        assert_eq!(command_entry(&[], None).unwrap().app_id(), "command");
         let long = unit_name(&"-".repeat(200), "0123456789abcdef");
         assert!(long.len() <= 255, "{}", long.len());
         assert!(long.ends_with(r"\x2d-0123456789abcdef.scope"));
@@ -857,10 +1007,11 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
                     &argv,
                     &dir,
                     &options,
+                    None,
                 )
                 .unwrap_or_else(|e| panic!("scope failed: {}", e.0))
             } else {
-                spawn_plain(&argv, &dir, &options).unwrap()
+                spawn_plain(&argv, &dir, &options, None).unwrap()
             };
             std::fs::write(dir.join("supervisor"), launched.pid.to_string()).unwrap();
             std::thread::sleep(Duration::from_secs(20));
@@ -921,5 +1072,79 @@ Exec=echo "\\$HOME" "a\\\\b" 100%% two\sspaces
         let task = launch_in_background(app, options, &Wake::none());
         let launched = task.wait_timeout(Duration::from_secs(10)).expect("finished").unwrap();
         probe.report(launched[0].pid);
+    }
+
+    #[test]
+    fn observed_launch_reports_delayed_failure_after_process_creation() {
+        let tmp = TempDir::new("launch-observed");
+        let script = tmp.write("fail.sh", "sleep 0.15\necho 'koe: daemon did not become ready' >&2\nexit 23\n");
+        let shim = tmp.write("systemd-run", "if [ \"$1\" = --version ]; then echo 'systemd 256'; exit 0; fi\nwhile [ \"$1\" != -- ]; do\ncase $1 in --unit=*) echo \"Running as unit: ${1#--unit=}\" >&2;; esac\nshift\ndone\nshift\nexec \"$@\"\n");
+        for backend in [
+            Backend::Plain,
+            Backend::Systemd { command: vec!["sh".into(), shim.display().to_string()], timeout: SYSTEMD_TIMEOUT },
+        ] {
+            let (tx, rx) = mpsc::channel();
+            let observer = LaunchObserver::new(move |event| {
+                let _ = tx.send(event);
+            });
+            let app = entry(&format!(
+                "[Desktop Entry]\nType=Application\nName=Koe failure fixture\nExec=sh {}\n",
+                script.display()
+            ));
+            let launched = launch_with_observer(&app, &LaunchOptions::default(), &backend, Some(&observer)).unwrap();
+            assert!(
+                matches!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), LaunchEvent::Message(s) if s.contains("Executable:"))
+            );
+            let LaunchEvent::Started(started) = rx.recv_timeout(Duration::from_secs(2)).unwrap() else {
+                panic!("missing start")
+            };
+            assert_eq!(started, launched[0]);
+            let LaunchEvent::Exited { pid, status } = rx.recv_timeout(Duration::from_secs(5)).unwrap() else {
+                panic!("missing exit")
+            };
+            assert_eq!(pid, started.pid);
+            assert_eq!(status.unwrap().code(), Some(23));
+            assert_reaped(pid);
+        }
+    }
+
+    #[test]
+    fn observed_commands_preserve_literal_arguments_and_successful_handoffs() {
+        let (tx, rx) = mpsc::channel();
+        let observer = LaunchObserver::new(move |event| {
+            let _ = tx.send(event);
+        });
+        let argv = vec![
+            "sh".into(),
+            "-c".into(),
+            "test \"$1\" = '%F $HOME `false`'".into(),
+            "test".into(),
+            "%F $HOME `false`".into(),
+        ];
+        let launched = launch_command_observed(
+            &argv,
+            None,
+            &LaunchOptions { use_systemd: false, ..Default::default() },
+            &observer,
+        )
+        .unwrap();
+        assert_eq!(launched[0].argv, argv);
+        assert!(
+            matches!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), LaunchEvent::Message(s) if s.contains("Executable:"))
+        );
+        assert!(matches!(rx.recv_timeout(Duration::from_secs(2)).unwrap(), LaunchEvent::Started(_)));
+        let LaunchEvent::Exited { status, .. } = rx.recv_timeout(Duration::from_secs(2)).unwrap() else {
+            panic!("no exit")
+        };
+        assert!(status.unwrap().success());
+        let other = LaunchObserver::new(|_| {});
+        assert_ne!(observer.journal_id(), other.journal_id());
+        let missing = launch_command_observed(
+            &["/definitely/not/an/application".into()],
+            None,
+            &LaunchOptions::default(),
+            &other,
+        );
+        assert!(missing.is_err());
     }
 }

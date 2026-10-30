@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Aizome</vendor>
+  <vendor_url>https://github.com/bitemyapp/sekka/tree/main/desktop/aizome</vendor_url>
+  <icon_name>org.aizome.Nisshi</icon_name>
+  <!-- Nisshi's reader as root: it only reads the journal and the files
+       under /var/log, and ends when the window closes. -->
+  <action id="org.aizome.Nisshi.read-system-logs">
+    <description>Read the system's logs</description>
+    <message>Nisshi needs an administrator's password to read the system's logs</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@helper@</annotate>
+  </action>
+</policyconfig>

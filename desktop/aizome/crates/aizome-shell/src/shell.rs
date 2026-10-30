@@ -53,6 +53,8 @@ pub enum Msg {
     /// The settings file changed.
     SettingsChanged,
     Run(Action),
+    Startup(crate::startup::Event),
+    ActivationExpired(ActivationRequest),
     Bar(WindowKey, BarMsg),
     Deskbar(crate::deskbar::DeskbarMsg),
     Palette(crate::palette::PaletteEvent),
@@ -154,6 +156,7 @@ pub enum Surface {
     TearOff(usize),
     Confirm,
     Cards,
+    Startup,
     /// The bell's flash.
     Flash,
 }
@@ -355,7 +358,8 @@ pub struct Shell {
     /// What's shared (screen and window sharing), as the compositor says.
     pub(crate) shares: Vec<crate::sharing::Share>,
     pub text: aizome_kit::text::TextCache,
-    launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
+    pub(crate) launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
+    pub(crate) startup: crate::startup::Startup,
     stream: Option<MsgSender<Msg>>,
     _settings_watch: Option<aizome_config::Watcher>,
     _apps_watch: Option<aizome_sys::apps::Watcher>,
@@ -467,6 +471,7 @@ impl Shell {
             shares: Vec::new(),
             text: aizome_kit::text::TextCache::default(),
             launches: HashMap::new(),
+            startup: Default::default(),
             stream: None,
             _settings_watch: None,
             _apps_watch: None,
@@ -837,6 +842,7 @@ impl Shell {
             }
             Action::NewWindow { app_id } => self.launch(Launch::App { app_id, targets: vec![] }, cx),
             Action::Spawn { argv } => self.launch(Launch::Argv(argv), cx),
+            Action::LaunchDetails { id } => self.show_startup(id, cx),
             Action::Open { path } => {
                 let l = crate::launch::open_path(self.apps.as_deref(), &path);
                 self.launch(l, cx);
@@ -960,6 +966,8 @@ impl Shell {
         }
         let req = cx.request_activation_token(l.app_id());
         self.launches.insert(req, (l, cwd));
+        // An unavailable activation-token protocol must not swallow a launch.
+        cx.after(Duration::from_secs(5), Msg::ActivationExpired(req));
     }
 
     pub(crate) fn save_section(&mut self, section: &str) {
@@ -1148,12 +1156,14 @@ impl Shell {
                 self.wm.apply(&e);
                 match e {
                     Event::WindowOpened { window } => {
+                        self.startup_window(&window);
                         // Foot starts with its configured default palette.
                         // Once mapped, its signal handlers are ready and it
                         // can follow the current theme without a restart.
                         self.follow_foot(window.pid);
                     }
                     Event::ConfigChanged => self.reload_settings(),
+                    Event::WindowChanged { window } => self.startup_window(&window),
                     Event::Binding { action, pointer, output } => self.binding(&action, pointer, output, cx),
                     Event::Idle { kind } if kind == "lock" => self.lock(cx),
                     // The monitors went off for idleness: lock, unless the
@@ -1321,6 +1331,10 @@ impl Shell {
                 (true, String::new())
             }
             proto::ShellRequest::Open { what } => {
+                if what == "launches" {
+                    self.show_startup(None, cx);
+                    return (true, String::new());
+                }
                 let Some(screen) = self.primary().cloned() else { return (false, "no output".into()) };
                 let Some(bar) = screen.bar else { return (false, "no bar".into()) };
                 if let Some(w) = TrayWidget::named(&what) {
@@ -1414,6 +1428,10 @@ impl Shell {
             "pid": std::process::id(),
             // The notifications it keeps (summaries).
             "notes": self.notes.list.iter().map(|n| n.summary.clone()).collect::<Vec<_>>(),
+            "launches": self.startup.attempts.iter().map(|(id, a)| serde_json::json!({
+                "id": id, "name": a.name, "outcome": a.outcome, "window_observed": a.ready,
+                "journal_id": a.journal_id,
+            })).collect::<Vec<_>>(),
             "recording": self.recording_json(),
             "sharing": self.sharing_json(),
         })
@@ -1508,6 +1526,12 @@ impl Program for Shell {
             Msg::Located(found) => self.located(found),
             Msg::VolumeFeedback => self.play_feedback(),
             Msg::Run(a) => self.run(a, cx),
+            Msg::Startup(e) => self.startup_event(e, cx),
+            Msg::ActivationExpired(request) => {
+                if let Some((launch, cwd)) = self.launches.remove(&request) {
+                    self.startup_event(crate::startup::Event::Begin { launch, token: None, cwd }, cx);
+                }
+            }
             Msg::Bar(w, m) => self.bar(w, m, cx),
             Msg::Deskbar(m) => self.deskbar_msg(m, cx),
             Msg::Palette(e) => self.palette_event(e, cx),
@@ -1612,6 +1636,7 @@ impl Program for Shell {
             }
             Some(Surface::TearOff(i)) => self.tear_view(*i),
             Some(Surface::Cards) => crate::notifications::cards::view(&self.card_views()).map(Msg::Card),
+            Some(Surface::Startup) => self.startup_view(),
             Some(Surface::Flash) => crate::bell::view(),
             Some(Surface::Confirm) => match &self.confirm {
                 Some(c) => crate::confirm::view(c.verb, c.left, c.power).map(Msg::Confirm),
@@ -1649,6 +1674,9 @@ impl Program for Shell {
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if self.startup.window == Some(window) {
+            self.startup.window = None;
+        }
         if self.panel.as_ref().is_some_and(|p| p.window == window) {
             self.panel = None;
         }
@@ -1704,9 +1732,9 @@ impl Program for Shell {
         }
     }
 
-    fn activation_token(&mut self, request: ActivationRequest, token: Option<String>, _cx: &mut Cx<Msg>) {
+    fn activation_token(&mut self, request: ActivationRequest, token: Option<String>, cx: &mut Cx<Msg>) {
         if let Some((l, cwd)) = self.launches.remove(&request) {
-            crate::launch::start(self.apps.as_deref(), &l, token, cwd);
+            self.startup_event(crate::startup::Event::Begin { launch: l, token, cwd }, cx);
         }
     }
 
