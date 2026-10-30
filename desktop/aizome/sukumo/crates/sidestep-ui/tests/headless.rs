@@ -125,11 +125,12 @@ mod linux {
                     let mut window = cx.window(w).expect("open");
                     assert_eq!(window.size(), Size::new(200.0, 100.0));
                     window.invalidate(Rect::new(100.0, 60.0, 120.0, 80.0));
+                    window.activate_with_token("forwarded-launch-token");
                     self.next(1);
                 }
                 // Only what was invalidated is drawn again.
                 1 => {
-                    if self.draws.len() < 2 {
+                    if self.draws.len() < 2 || !testing::render_idle() {
                         return;
                     }
                     assert_eq!(self.draws[1], [Rect::new(100.0, 60.0, 120.0, 80.0)]);
@@ -230,6 +231,13 @@ mod linux {
                         return;
                     }
                     let log = testing::take_render_log();
+                    assert!(
+                        log.contains(&Seen::Request {
+                            window: testing::render_id(w),
+                            request: "ActivateWithToken(\"forwarded-launch-token\")".into(),
+                        }),
+                        "the launcher's exact token reaches the render thread: {log:?}"
+                    );
                     let id = testing::render_id(w);
                     assert!(log.contains(&Seen::Cursor { window: id, name: "pointer".into() }), "{log:?}");
                     assert!(log.contains(&Seen::ForeignParent { window: id, handle: "exported-1".into() }), "{log:?}");
