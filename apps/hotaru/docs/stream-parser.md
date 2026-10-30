@@ -68,12 +68,24 @@ dependency.
   all) and DECST8C (`CSI ? 5 W`) manage tab stops.
 - **RI at the top margin** scrolls without clearing a pending wrap, as the
   reference's scroll-down does.
+- **ED and EL modes:**
+  - An unknown mode is a no-op, so it keeps a pending wrap.
+  - ED 3 erases scrollback without clearing one.
+- **ED 22** works as the reference's scroll clear does:
+  - every row down to the last non-empty one scrolls into scrollback;
+  - the cursor follows its row, or goes home when that row leaves the screen;
+  - a pending wrap is cleared.
+- **CBT** (`CSI Z`) keeps a pending wrap, as the reference's back tab does.
 
 ## Evidence
 
 Evidence is in [`upstream/stream-parser/`](../upstream/stream-parser/). The
-final build is `6c4f06ad…`
+rules were first checked on `6c4f06ad…`
 ([`upstream/candidate-stream-parser-build.json`](../upstream/candidate-stream-parser-build.json)).
+The ED, EL and back-tab rules came later. The oracle, the suite inputs, the
+fuzzing and the sweep were rerun on their build, `66ac43ad…`
+([`upstream/candidate-erase-modes-build.json`](../upstream/candidate-erase-modes-build.json)).
+The fresh generator seeds and the widths were checked on `6c4f06ad…` only.
 
 - **Ghostty's suite inputs:** all seven 64 MiB generated inputs from the
   comparison now leave the same screen as the library at 120×80. The seeded
@@ -84,15 +96,22 @@ final build is `6c4f06ad…`
   every power-of-two prefix and at the end.
 - **Widths:** every scalar from U+00A0 to U+10FFFF prints with the library's
   width, 1,111,904 comparisons.
-- **Oracle cases:** `tools/stream-parser-oracle.py` records 855 targeted and
+- **Oracle cases:** `tools/stream-parser-oracle.py` records 937 targeted and
   seeded cases from the actual library. All match at chunk sizes of 1, 7 and
-  65,536 bytes: 2,565 comparisons. The Cargo test
+  65,536 bytes: 2,811 comparisons. The Cargo test
   `stream_parser_and_widths_match_actual_pinned_library` replays them without
   linking Ghostty.
-- **Fuzzing:** on the final build, 60,000 fresh control-heavy cases (six seeds)
-  show no difference.
-- **CSI sweep:** `sweep.json` covers 44,100 sequences: every final byte with
-  each private marker and intermediate, and 0–4 parameters from six value sets.
+- **Fuzzing:** 70,000 control-heavy cases show no difference:
+  - seed 302, which found the ED and EL difference;
+  - six fresh seeds.
+
+  Before the ED and EL fix, 60,000 cases on `6c4f06ad…` showed none.
+- **CSI sweep:** `sweep.json` covers 88,200 sequences. That's every final byte
+  with each private marker and intermediate, and 0–4 parameters from six value
+  sets, run twice:
+  - with the cursor away from home;
+  - with a wrap pending at the right margin.
+
   Four commands still differ, all named below.
 
 ## Remaining differences

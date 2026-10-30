@@ -273,6 +273,34 @@ impl Screen {
             Arc::make_mut(&mut self.lines[self.cursor.row - 1]).clear_spacer_head();
         }
     }
+    /// Scrolls every row down to the last non-empty one into history,
+    /// ignoring margins. The cursor follows its row, or goes home when that
+    /// row leaves the screen.
+    fn scroll_clear(&mut self) {
+        let count = self
+            .lines
+            .iter()
+            .rposition(|row| {
+                row.cells.iter().any(|cell| {
+                    cell.has_text()
+                        || (cell.background_only() && row.style(*cell).background != Color::Default)
+                })
+            })
+            .map_or(0, |row| row + 1);
+        let margins = (self.top, self.bottom, self.left, self.right);
+        self.top = 0;
+        self.bottom = self.lines.len() - 1;
+        self.left = 0;
+        self.right = self.cols - 1;
+        self.scroll_up(count, true, Style::default());
+        (self.top, self.bottom, self.left, self.right) = margins;
+        if self.cursor.row < count {
+            self.cursor.col = 0;
+            self.cursor.row = 0;
+        } else {
+            self.cursor.row -= count;
+        }
+    }
     fn scroll_up(&mut self, count: usize, history: bool, style: Style) {
         if !self.full_width() {
             self.scroll_rectangle(count, false, style);
@@ -2628,6 +2656,23 @@ impl Handler for State {
                 self.move_to(p(0, 1) - 1, col);
             }
             b'J' => {
+                // The reference ignores an unknown mode, keeping a pending
+                // wrap. ED 3 only erases scrollback, which keeps it too, and
+                // ED 22 scrolls the screen's contents into scrollback.
+                match first {
+                    0..=2 => {}
+                    3 => {
+                        self.screen_mut().history.clear();
+                        return;
+                    }
+                    22 => {
+                        let s = self.screen_mut();
+                        s.scroll_clear();
+                        s.wrap_pending = false;
+                        return;
+                    }
+                    _ => return,
+                }
                 // Prompt-marked ED2 preserves prior content in scrollback,
                 // including when the shell first homes the cursor.
                 if first == 2 && self.semantic_markers_seen && !self.modes.alternate_screen {
@@ -2639,37 +2684,7 @@ impl Handler for State {
                         .find(|row| row.prompt != RowPrompt::None || row.has_text())
                         .is_some_and(|row| row.prompt != RowPrompt::None);
                     if at_prompt {
-                        let screen = self.screen_mut();
-                        let count = screen
-                            .lines
-                            .iter()
-                            .rposition(|row| {
-                                row.cells.iter().any(|cell| {
-                                    cell.has_text()
-                                        || (cell.background_only()
-                                            && row.style(*cell).background != Color::Default)
-                                })
-                            })
-                            .map_or(0, |row| row + 1);
-                        let top = screen.top;
-                        let bottom = screen.bottom;
-                        let left = screen.left;
-                        let right = screen.right;
-                        screen.top = 0;
-                        screen.bottom = screen.lines.len() - 1;
-                        screen.left = 0;
-                        screen.right = screen.cols - 1;
-                        screen.scroll_up(count, true, Style::default());
-                        screen.top = top;
-                        screen.bottom = bottom;
-                        screen.left = left;
-                        screen.right = right;
-                        if screen.cursor.row < count {
-                            screen.cursor.col = 0;
-                            screen.cursor.row = 0;
-                        } else {
-                            screen.cursor.row -= count;
-                        }
+                        self.screen_mut().scroll_clear();
                     }
                 }
                 let s = self.screen_mut();
@@ -2709,12 +2724,16 @@ impl Handler for State {
                             Arc::make_mut(line).reset(cols, style);
                         }
                     }
-                    3 => s.history.clear(),
                     _ => {}
                 }
                 s.wrap_pending = false;
             }
             b'K' => {
+                // The reference ignores an unknown mode, keeping a pending
+                // wrap.
+                if first > 2 {
+                    return;
+                }
                 let s = self.screen_mut();
                 let col = s.cursor.col;
                 let cols = s.cols;
@@ -2852,9 +2871,8 @@ impl Handler for State {
                         break;
                     }
                     let previous = (left..col).rev().find(|&c| self.tabs[c]).unwrap_or(left);
-                    let s = self.screen_mut();
-                    s.cursor.col = previous;
-                    s.wrap_pending = false;
+                    // The reference's back tab keeps a pending wrap.
+                    self.screen_mut().cursor.col = previous;
                 }
             }
             b'n' => match first {

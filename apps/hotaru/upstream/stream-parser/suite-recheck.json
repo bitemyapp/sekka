@@ -2,7 +2,7 @@
   "scope": "Recheck the final screens of the Ghostty suite's generated inputs.\n\nRegenerates each 64 MiB input of ../ghostty-suite/run.py with the same\nghostty-gen arguments and compares the final screen between the pinned\nlibghostty-vt and hotaru-replay (zero history, 120x80), without timing.\nThe random UTF-8 and styled inputs are seeded and reproduce the recorded\nfiles; the ASCII and OSC generators take time-based seeds. Paths are wx's.\n\nUsage: suite-recheck.py REPLAY REPORT\n",
   "ghostty_gen_sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362",
   "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
-  "replay_sha256": "6c4f06ad3e839756869ed02737db134605d883d981d699e01fd702aa032630a2",
+  "replay_sha256": "66ac43ad36fa86b847de7c8824b319f0d1f45c25bf3c86798e2784927cc24870",
   "rows": 80,
   "cols": 120,
   "input_bytes": 67108864,
@@ -11,7 +11,7 @@
       "generator": [
         "+ascii"
       ],
-      "sha256": "522f2a6a054512141524c7a889d13139f45ee14b0e8e8663d027dc30f5e14156",
+      "sha256": "4ea1a105be54088b2109082117b761b7441f3f43d3b186d9b133c9369f92c6fc",
       "bytes": 67108864,
       "state_matched": true,
       "state_differences": []
@@ -81,7 +81,7 @@
       "generator": [
         "+osc"
       ],
-      "sha256": "7e9fa1b2350ac4f0a2d86ec1568ae9a458ccd034d7f990c0607b6881617d7b59",
+      "sha256": "8a018fc5b68a3e743886268f0968c1dae36532fc6bd08b985bfadc1d3d999bb9",
       "bytes": 67108864,
       "state_matched": true,
       "state_differences": []

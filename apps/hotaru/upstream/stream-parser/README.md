@@ -7,12 +7,17 @@ paths are wx's.
 
 ## Records
 
+`oracle-report.json`, `sweep.json` and `suite-recheck.json` are from the ED,
+EL and back-tab build
+([`../candidate-erase-modes-build.json`](../candidate-erase-modes-build.json)).
+
 - **`oracle-report.json`:** `tools/stream-parser-oracle.py` comparing every
   case at chunk sizes of 1, 7 and 65,536 bytes. Its compact expectations are
   [`../stream-parser-fixtures.json`](../stream-parser-fixtures.json), which the
   Cargo test reads.
-- **`sweep.json`:** the CSI sweep of the final build; only the four named
-  differences remain.
+- **`sweep.json`:** the CSI sweep. It runs once with the cursor away from home,
+  and once with a wrap pending, which it reports with a `wrap:` prefix. Only
+  the four named differences remain, under both.
 - **`suite-recheck.py` and `suite-recheck.json`:** the final screens of the
   Ghostty suite's seven 64 MiB generated inputs (see
   [`../ghostty-suite/`](../ghostty-suite/)), without timing.

@@ -154,6 +154,8 @@ The records are in
     tried were ED 3, 4, 6, 9 and 22, EL 3, 6 and 9, and `?6J` and `?6K`.
   - The reference also implements ED 22.
   - The sweep missed both because its probes never start with a wrap pending.
+  - Both are fixed in the next commit, with back tab (CBT), which a new
+    pending-wrap sweep turned up; see [stream-parser.md](stream-parser.md).
 - **Tests:** the Hotaru workspace's tests pass, including the history budget
   tests in release. rustfmt is clean, and Clippy is clean on `hotaru-core` and
   `hotaru-replay`.

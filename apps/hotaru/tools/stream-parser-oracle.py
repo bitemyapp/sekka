@@ -13,7 +13,8 @@ CSI parameter counts. The rules:
 - Escape intermediates.
 - Commands with more parameters than they take, and explicit zero counts.
 - HPB, VPB, CTC and DECST8C.
-- A pending wrap across scrolling.
+- A pending wrap across scrolling, back tab and ED and EL modes.
+- ED 22's scroll clear.
 - The per-scalar width table, in both width modes.
 
 Uses differential.py's checks and options; expected data comes only from the
@@ -122,10 +123,21 @@ def fixtures():
                     screen + b"\x1b[" + private + params + bytes([final]) + b"Z" + query, 12, 4)
     # A pending wrap survives scrolling (RI at the top margin, SU, SD) but
     # not movement.
+    # ED 3, back tab and unknown ED and EL modes keep it too.
     for i, prefix in enumerate((b"", b"\r\n", b"\x1b[2;3r\x1b[2;1H", b"\x1b[?69h\x1b[2;5s\x1b[1;2H")):
         for sequence in (b"\x1bM", b"\x1bD", b"\x1bE", b"\x9d\x1b\\", b"\x1b[S", b"\x1b[T", b"\x1b[0S",
-                         b"\x1b[0a", b"\x1b[0e", b"\x1b[0I", b"\x1b[0L", b"\x1b[0P", b"\x1b[k", b"\x1b[j"):
+                         b"\x1b[0a", b"\x1b[0e", b"\x1b[0I", b"\x1b[0L", b"\x1b[0P", b"\x1b[k", b"\x1b[j",
+                         b"\x1b[J", b"\x1b[2J", b"\x1b[3J", b"\x1b[4J", b"\x1b[6J", b"\x1b[22J", b"\x1b[?3J",
+                         b"\x1b[?6J", b"\x1b[?22J", b"\x1b[K", b"\x1b[3K", b"\x1b[4K", b"\x1b[6K", b"\x1b[?6K",
+                         b"\x1b[Z", b"\x1b[2Z"):
             add(f"pending-wrap-{i}-{sequence.hex()}", prefix + b"a" * 10 + sequence + b"X" + query)
+    # ED 22 scrolls every row down to the last non-empty one into scrollback;
+    # the cursor follows its row, or goes home when that row leaves.
+    for i, setup in enumerate((b"", b"ab", b"ab\r\ncd", b"ab\x1b[3;2H", b"\x1b[3;1Hab\x1b[1;4H",
+                               b"\x1b[41m\x1b[2;1H\x1b[K\x1b[m\x1b[3;5H", b"\x1b[2;3rab\r\ncd\x1b[3;2H",
+                               b"\x1b[?1049hab\r\ncd", b"\x1b[?69h\x1b[2;5sab\x1b[3;3H")):
+        for sequence in (b"\x1b[22J", b"\x1b[?22J"):
+            add(f"scroll-clear-{i}-{sequence.hex()}", setup + sequence + b"X" + query, 10, 4)
     # CTC and DECST8C, from default and cleared tab stops.
     tabs = b"\r\t\x1b[6n\t\x1b[6n\t\x1b[6n"
     for start in (b"", b"\x1b[3g"):

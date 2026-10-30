@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "recorded_at": "2026-10-30T08:56:00.091648+00:00",
+  "recorded_at": "2026-10-30T19:16:04.884312+00:00",
   "upstream_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
   "library": "/home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so.0.1.0",
   "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
-  "candidate": "/dev/shm/hotaru-divergence/final2/hotaru-replay",
-  "candidate_sha256": "6c4f06ad3e839756869ed02737db134605d883d981d699e01fd702aa032630a2",
+  "candidate": "/dev/shm/hotaru-ed-wrap/final/hotaru-replay",
+  "candidate_sha256": "66ac43ad36fa86b847de7c8824b319f0d1f45c25bf3c86798e2784927cc24870",
   "fixture_configuration": {
     "scrollback_bytes": 0,
     "palette": "xterm fixture_palette()",
@@ -15316,6 +15316,486 @@
       "differences": []
     },
     {
+      "name": "pending-wrap-0-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "c53b9da6a532d369b51dc02350d77440e067c85df2f59382a0a9a44b032587b7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "c53b9da6a532d369b51dc02350d77440e067c85df2f59382a0a9a44b032587b7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "c53b9da6a532d369b51dc02350d77440e067c85df2f59382a0a9a44b032587b7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "858906a2840324a7260beb585152f73f373b6bfd0679a6640acfaca6ab014fea",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "858906a2840324a7260beb585152f73f373b6bfd0679a6640acfaca6ab014fea",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "858906a2840324a7260beb585152f73f373b6bfd0679a6640acfaca6ab014fea",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "47fffbfd8f15ba2783c96c3a232af5307bd0c303ab357d686e8b4cbf418ff5f8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "47fffbfd8f15ba2783c96c3a232af5307bd0c303ab357d686e8b4cbf418ff5f8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "47fffbfd8f15ba2783c96c3a232af5307bd0c303ab357d686e8b4cbf418ff5f8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "21573e990d85100acd994096965e38a11fc5789bcad27571b56c019f8d3abdbf",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "21573e990d85100acd994096965e38a11fc5789bcad27571b56c019f8d3abdbf",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "21573e990d85100acd994096965e38a11fc5789bcad27571b56c019f8d3abdbf",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "3b7d4b073934a1691c6c560c56e83da728cfc93582e7f47d44c9448375c292a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "3b7d4b073934a1691c6c560c56e83da728cfc93582e7f47d44c9448375c292a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "3b7d4b073934a1691c6c560c56e83da728cfc93582e7f47d44c9448375c292a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "aff253679a2f91c87713ac96f5dd2c9d2b47efdebe849c985e09273c8ce3220f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "aff253679a2f91c87713ac96f5dd2c9d2b47efdebe849c985e09273c8ce3220f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "aff253679a2f91c87713ac96f5dd2c9d2b47efdebe849c985e09273c8ce3220f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "9b0a5e71a20c0ed1c1b0b86d6db1b8cf13d7abe9e3cc087b6249f9c674330ab7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "9b0a5e71a20c0ed1c1b0b86d6db1b8cf13d7abe9e3cc087b6249f9c674330ab7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "9b0a5e71a20c0ed1c1b0b86d6db1b8cf13d7abe9e3cc087b6249f9c674330ab7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "3c41c99ad1d3b9031f47c678c693dd8a2c2708a896e93381b7a2a7e7df2ce49d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "3c41c99ad1d3b9031f47c678c693dd8a2c2708a896e93381b7a2a7e7df2ce49d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "3c41c99ad1d3b9031f47c678c693dd8a2c2708a896e93381b7a2a7e7df2ce49d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "518523dce3be57e0e0af6080466335698324caf20a9c199c02b0755d7e63d0d5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "518523dce3be57e0e0af6080466335698324caf20a9c199c02b0755d7e63d0d5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "518523dce3be57e0e0af6080466335698324caf20a9c199c02b0755d7e63d0d5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "d3fb2acfea532201759ad6589d7f14f1618c3fc5fcc34a899bd5f8ad93f732d4",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "d3fb2acfea532201759ad6589d7f14f1618c3fc5fcc34a899bd5f8ad93f732d4",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "d3fb2acfea532201759ad6589d7f14f1618c3fc5fcc34a899bd5f8ad93f732d4",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "ac436f61274fa31397f8ac4af574df947111a86dda102610415cec56d2132378",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "ac436f61274fa31397f8ac4af574df947111a86dda102610415cec56d2132378",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "ac436f61274fa31397f8ac4af574df947111a86dda102610415cec56d2132378",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "cb09f5f6ffe16b2a8e3f4f829026c74e701ead47868b56625065fee3c09fc58c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "cb09f5f6ffe16b2a8e3f4f829026c74e701ead47868b56625065fee3c09fc58c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "cb09f5f6ffe16b2a8e3f4f829026c74e701ead47868b56625065fee3c09fc58c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "c9c29f0be7f56945bd22d1e660b275d2113fd2d91e72a12069c984bf82820b33",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "c9c29f0be7f56945bd22d1e660b275d2113fd2d91e72a12069c984bf82820b33",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "c9c29f0be7f56945bd22d1e660b275d2113fd2d91e72a12069c984bf82820b33",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "47372456f79471ebc327eb273a714bbb4b54775599b619062b25509ecdf16d9d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "47372456f79471ebc327eb273a714bbb4b54775599b619062b25509ecdf16d9d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "47372456f79471ebc327eb273a714bbb4b54775599b619062b25509ecdf16d9d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "de3f747933b27a105a5443adc18c780a4896c3abad0f2905a3cbda344c420f2e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "de3f747933b27a105a5443adc18c780a4896c3abad0f2905a3cbda344c420f2e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "de3f747933b27a105a5443adc18c780a4896c3abad0f2905a3cbda344c420f2e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "ad4d1b2775d76c7b43b3ced415d316310137b1202348c263ae0d4edc7342efb8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "ad4d1b2775d76c7b43b3ced415d316310137b1202348c263ae0d4edc7342efb8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-0-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "ad4d1b2775d76c7b43b3ced415d316310137b1202348c263ae0d4edc7342efb8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
       "name": "pending-wrap-1-1b4d",
       "cols": 10,
       "rows": 3,
@@ -15731,6 +16211,486 @@
       "rows": 3,
       "chunk": 65536,
       "input_sha256": "caf13a1be78339880de5cd8576387441edfc074a62358569fca4bf2c1558ecf8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "82931cb927ae5f743a20f267610b81a76133cdc4673c52e0dff915bd0c4b52a8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "82931cb927ae5f743a20f267610b81a76133cdc4673c52e0dff915bd0c4b52a8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "82931cb927ae5f743a20f267610b81a76133cdc4673c52e0dff915bd0c4b52a8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "71dcaf5fed3c47d10c778233bd8e9a76d157373e9d44a2b5ed15feb808a7c838",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "71dcaf5fed3c47d10c778233bd8e9a76d157373e9d44a2b5ed15feb808a7c838",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "71dcaf5fed3c47d10c778233bd8e9a76d157373e9d44a2b5ed15feb808a7c838",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "1494a279cd20b79ef361c1f91bde5fd998bb467917d91339dc871b3557f267e7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "1494a279cd20b79ef361c1f91bde5fd998bb467917d91339dc871b3557f267e7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "1494a279cd20b79ef361c1f91bde5fd998bb467917d91339dc871b3557f267e7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "a7ad7e914adc5c2ee9ef0e11190225e73c7de432ec3506d4de6c7b8414d54969",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "a7ad7e914adc5c2ee9ef0e11190225e73c7de432ec3506d4de6c7b8414d54969",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "a7ad7e914adc5c2ee9ef0e11190225e73c7de432ec3506d4de6c7b8414d54969",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "9a76eff68e38aa6539090f5ef4ed11ca13ae9129b051d9b99ed16487890726d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "9a76eff68e38aa6539090f5ef4ed11ca13ae9129b051d9b99ed16487890726d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "9a76eff68e38aa6539090f5ef4ed11ca13ae9129b051d9b99ed16487890726d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "17df7cc752024dcebc1b5ba5be3c926a1d0db04c481255ff5babacdc2a26f46a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "17df7cc752024dcebc1b5ba5be3c926a1d0db04c481255ff5babacdc2a26f46a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "17df7cc752024dcebc1b5ba5be3c926a1d0db04c481255ff5babacdc2a26f46a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "3380f7260b2e65b86c6408d75e1c4106e491058a46fc74fc4f64a4779bb807cc",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "3380f7260b2e65b86c6408d75e1c4106e491058a46fc74fc4f64a4779bb807cc",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "3380f7260b2e65b86c6408d75e1c4106e491058a46fc74fc4f64a4779bb807cc",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "a188de6771907cbf9d8ebf558a4b27b21f5ded759d1dc382b352658c6d382a4e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "a188de6771907cbf9d8ebf558a4b27b21f5ded759d1dc382b352658c6d382a4e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "a188de6771907cbf9d8ebf558a4b27b21f5ded759d1dc382b352658c6d382a4e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "7bac933bc832eb8513667da33a40324883881b04b1994001d85e23ebd7701d42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "7bac933bc832eb8513667da33a40324883881b04b1994001d85e23ebd7701d42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "7bac933bc832eb8513667da33a40324883881b04b1994001d85e23ebd7701d42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "08c690cc44881c90dd7f2555fc3c33e43788d30988d5029ba357029f99d9db1a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "08c690cc44881c90dd7f2555fc3c33e43788d30988d5029ba357029f99d9db1a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "08c690cc44881c90dd7f2555fc3c33e43788d30988d5029ba357029f99d9db1a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "1ecadbc5553ddb3d7e724b7b5f769e28ad910d875ea02fa59307aae8fc695c69",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "1ecadbc5553ddb3d7e724b7b5f769e28ad910d875ea02fa59307aae8fc695c69",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "1ecadbc5553ddb3d7e724b7b5f769e28ad910d875ea02fa59307aae8fc695c69",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "af0224979ef535e991e1ad31d256185426e0e266bab7fdce221002891d1ae9d0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "af0224979ef535e991e1ad31d256185426e0e266bab7fdce221002891d1ae9d0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "af0224979ef535e991e1ad31d256185426e0e266bab7fdce221002891d1ae9d0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "4983f440cd3adf5f3ef98ad0e82fbb710111de625a26a2383e36f7beb56e1c6c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "4983f440cd3adf5f3ef98ad0e82fbb710111de625a26a2383e36f7beb56e1c6c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "4983f440cd3adf5f3ef98ad0e82fbb710111de625a26a2383e36f7beb56e1c6c",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "602288f888acee7d954e2ce830f0926aa5dcc3cd4ac5908b996f9f1a83ffd28e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "602288f888acee7d954e2ce830f0926aa5dcc3cd4ac5908b996f9f1a83ffd28e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "602288f888acee7d954e2ce830f0926aa5dcc3cd4ac5908b996f9f1a83ffd28e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "df893faa619388050ed250a9dcc06723376744b57b1d5cfa05459423e5874085",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "df893faa619388050ed250a9dcc06723376744b57b1d5cfa05459423e5874085",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "df893faa619388050ed250a9dcc06723376744b57b1d5cfa05459423e5874085",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "81a4eb190216120eb22e14a3924fe5814d58d0f56b8fb6951a9c4bbb63ebb56b",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "81a4eb190216120eb22e14a3924fe5814d58d0f56b8fb6951a9c4bbb63ebb56b",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-1-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "81a4eb190216120eb22e14a3924fe5814d58d0f56b8fb6951a9c4bbb63ebb56b",
       "reference_chunk_invariant": true,
       "status": "matched",
       "differences": []
@@ -16156,6 +17116,486 @@
       "differences": []
     },
     {
+      "name": "pending-wrap-2-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "38aef758555caf8a63a3ab5f168452425f57a6cdbe66c5548debe3c11a31adc5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "38aef758555caf8a63a3ab5f168452425f57a6cdbe66c5548debe3c11a31adc5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "38aef758555caf8a63a3ab5f168452425f57a6cdbe66c5548debe3c11a31adc5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "d7422c268a9c2f3660bad59fa1e3653994f4175e43087cde1ff1b5d92072d7b8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "d7422c268a9c2f3660bad59fa1e3653994f4175e43087cde1ff1b5d92072d7b8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "d7422c268a9c2f3660bad59fa1e3653994f4175e43087cde1ff1b5d92072d7b8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "b8ac50bb3cf3ad406642257f0b6d14a56f029f0ed86604bb184dc4b088b34ab5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "b8ac50bb3cf3ad406642257f0b6d14a56f029f0ed86604bb184dc4b088b34ab5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "b8ac50bb3cf3ad406642257f0b6d14a56f029f0ed86604bb184dc4b088b34ab5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "403f4c907cc2a328436a37ff4a3182fb0347a3158e85bca04c76e6a6628ae856",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "403f4c907cc2a328436a37ff4a3182fb0347a3158e85bca04c76e6a6628ae856",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "403f4c907cc2a328436a37ff4a3182fb0347a3158e85bca04c76e6a6628ae856",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "aa0a7c5f71bdc6a31a089f207f579b0b6d285c381dc3267e35a71bf47f4078a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "aa0a7c5f71bdc6a31a089f207f579b0b6d285c381dc3267e35a71bf47f4078a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "aa0a7c5f71bdc6a31a089f207f579b0b6d285c381dc3267e35a71bf47f4078a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "355bb9cff2f3191cdff5bb364322a7b8dd8fb36fc03e0b8d305a3bf06a2468bd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "355bb9cff2f3191cdff5bb364322a7b8dd8fb36fc03e0b8d305a3bf06a2468bd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "355bb9cff2f3191cdff5bb364322a7b8dd8fb36fc03e0b8d305a3bf06a2468bd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "9ab842e78b7ec89e2389df8545a210b796378b325dffab765988765be7def787",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "9ab842e78b7ec89e2389df8545a210b796378b325dffab765988765be7def787",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "9ab842e78b7ec89e2389df8545a210b796378b325dffab765988765be7def787",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "5a3e1959fef7479165e64c1440dfbbcd07b7728505f44946fb89b0213dd614a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "5a3e1959fef7479165e64c1440dfbbcd07b7728505f44946fb89b0213dd614a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "5a3e1959fef7479165e64c1440dfbbcd07b7728505f44946fb89b0213dd614a0",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "41b31b6f63880833a45323b2facd7f9368df34be1ba327dcd94073a3bb75f9c3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "41b31b6f63880833a45323b2facd7f9368df34be1ba327dcd94073a3bb75f9c3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "41b31b6f63880833a45323b2facd7f9368df34be1ba327dcd94073a3bb75f9c3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "a6d490ed6ce28fc4a507f53ead1a25474f578d44d2d9e451e69b4c8aa39c9364",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "a6d490ed6ce28fc4a507f53ead1a25474f578d44d2d9e451e69b4c8aa39c9364",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "a6d490ed6ce28fc4a507f53ead1a25474f578d44d2d9e451e69b4c8aa39c9364",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "ab3c5c6d400be5b756351f61ae28e75bff0b8987d07854f59713eb027b0625db",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "ab3c5c6d400be5b756351f61ae28e75bff0b8987d07854f59713eb027b0625db",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "ab3c5c6d400be5b756351f61ae28e75bff0b8987d07854f59713eb027b0625db",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "d1232793d0939bc6ca05486d4c675c06bfb01934c8120add441a023779e38a63",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "d1232793d0939bc6ca05486d4c675c06bfb01934c8120add441a023779e38a63",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "d1232793d0939bc6ca05486d4c675c06bfb01934c8120add441a023779e38a63",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "9651fdc59ae0b1d35d00da7b0e26c028730a0cf90fe3a6a719af7a38e9b063e5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "9651fdc59ae0b1d35d00da7b0e26c028730a0cf90fe3a6a719af7a38e9b063e5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "9651fdc59ae0b1d35d00da7b0e26c028730a0cf90fe3a6a719af7a38e9b063e5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "8d9963c12736bfce0783b533c6356bc8eda6955e6308dea7176dcc3633a61a07",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "8d9963c12736bfce0783b533c6356bc8eda6955e6308dea7176dcc3633a61a07",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "8d9963c12736bfce0783b533c6356bc8eda6955e6308dea7176dcc3633a61a07",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "aab4dd7f3632d957fe588f837c5a49634ed8b4d651008e5262b0fdb307ee772e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "aab4dd7f3632d957fe588f837c5a49634ed8b4d651008e5262b0fdb307ee772e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "aab4dd7f3632d957fe588f837c5a49634ed8b4d651008e5262b0fdb307ee772e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "68035e3665d9bd1ae039414ddd5228ff3765d4cb715a11ad39eafe2d9a1cc673",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "68035e3665d9bd1ae039414ddd5228ff3765d4cb715a11ad39eafe2d9a1cc673",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-2-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "68035e3665d9bd1ae039414ddd5228ff3765d4cb715a11ad39eafe2d9a1cc673",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
       "name": "pending-wrap-3-1b4d",
       "cols": 10,
       "rows": 3,
@@ -16571,6 +18011,1026 @@
       "rows": 3,
       "chunk": 65536,
       "input_sha256": "9406b8ed6555dc25308c5f3f45c494006f5d951ae7ba021e9d46f1871cf37872",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "de12dd9f8dc7ed2e7423e6792bd20cd7bbd314cfe649dd4ff2719f5e809fd50a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "de12dd9f8dc7ed2e7423e6792bd20cd7bbd314cfe649dd4ff2719f5e809fd50a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "de12dd9f8dc7ed2e7423e6792bd20cd7bbd314cfe649dd4ff2719f5e809fd50a",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "4f1e2d1bad43c891d1397fb638d8969931cb9751c8b259e025e860d06ceba5c5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "4f1e2d1bad43c891d1397fb638d8969931cb9751c8b259e025e860d06ceba5c5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "4f1e2d1bad43c891d1397fb638d8969931cb9751c8b259e025e860d06ceba5c5",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "c710ab0f81a8ecd822c2318f60101b731dc755c451f2554caa886401c654f125",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "c710ab0f81a8ecd822c2318f60101b731dc755c451f2554caa886401c654f125",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "c710ab0f81a8ecd822c2318f60101b731dc755c451f2554caa886401c654f125",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "14f98429a454f266eac697f27f35a7f84a9c91806b895ec51df4a2725fe88f08",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "14f98429a454f266eac697f27f35a7f84a9c91806b895ec51df4a2725fe88f08",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "14f98429a454f266eac697f27f35a7f84a9c91806b895ec51df4a2725fe88f08",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "cf4a65bf4f7b124156462cb32db7bcbae714126e4e4d8e1deff9c4dfb56de3d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "cf4a65bf4f7b124156462cb32db7bcbae714126e4e4d8e1deff9c4dfb56de3d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "cf4a65bf4f7b124156462cb32db7bcbae714126e4e4d8e1deff9c4dfb56de3d8",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "f233704af550df9cda8b32175f726b066bbc5542feea5ca83d95d5564dc9468f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "f233704af550df9cda8b32175f726b066bbc5542feea5ca83d95d5564dc9468f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "f233704af550df9cda8b32175f726b066bbc5542feea5ca83d95d5564dc9468f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "b9f43042a4f4224d0621a8c04eb640f672b9b06937a105c2b771ea9f9c3b13a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "b9f43042a4f4224d0621a8c04eb640f672b9b06937a105c2b771ea9f9c3b13a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f334a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "b9f43042a4f4224d0621a8c04eb640f672b9b06937a105c2b771ea9f9c3b13a2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "a042b3ed05cbd51fa5f0aff11b8ad957dd24b49dea9719dde27aea3bf345c5b6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "a042b3ed05cbd51fa5f0aff11b8ad957dd24b49dea9719dde27aea3bf345c5b6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "a042b3ed05cbd51fa5f0aff11b8ad957dd24b49dea9719dde27aea3bf345c5b6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "c9e981d225f11c7b7ea95d7c3003f184703911e04da0535abd371eb43755d50e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "c9e981d225f11c7b7ea95d7c3003f184703911e04da0535abd371eb43755d50e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "c9e981d225f11c7b7ea95d7c3003f184703911e04da0535abd371eb43755d50e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "f9d2e1a89b25d01892c7a1633b902d59696ced7e78564ed5e6cac8a34047e46f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "f9d2e1a89b25d01892c7a1633b902d59696ced7e78564ed5e6cac8a34047e46f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b4b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "f9d2e1a89b25d01892c7a1633b902d59696ced7e78564ed5e6cac8a34047e46f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "cf181db85ade74a241d591eeb094b5c29c0d8a08179d7081fdf31bb04ed343b3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "cf181db85ade74a241d591eeb094b5c29c0d8a08179d7081fdf31bb04ed343b3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b334b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "cf181db85ade74a241d591eeb094b5c29c0d8a08179d7081fdf31bb04ed343b3",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "eef276b74b373a68a796058a17464758d3f00aadd912da0e018f700ed34d7d7f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "eef276b74b373a68a796058a17464758d3f00aadd912da0e018f700ed34d7d7f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b344b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "eef276b74b373a68a796058a17464758d3f00aadd912da0e018f700ed34d7d7f",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "ce42f10b5afc358e8121df14060bb6efaf5516d92ce2b7778388b54c878f4ae2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "ce42f10b5afc358e8121df14060bb6efaf5516d92ce2b7778388b54c878f4ae2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "ce42f10b5afc358e8121df14060bb6efaf5516d92ce2b7778388b54c878f4ae2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "466b0d62eba18a70b54933d4234926737c329ebbfb95ce2464612589bd715d4b",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "466b0d62eba18a70b54933d4234926737c329ebbfb95ce2464612589bd715d4b",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b3f364b",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "466b0d62eba18a70b54933d4234926737c329ebbfb95ce2464612589bd715d4b",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "1e687ba526ec04609670eede521b6d88bc4d7eebf78ed7cf120386a70ab69244",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "1e687ba526ec04609670eede521b6d88bc4d7eebf78ed7cf120386a70ab69244",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b5a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "1e687ba526ec04609670eede521b6d88bc4d7eebf78ed7cf120386a70ab69244",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 1,
+      "input_sha256": "e650a1d8483654b99ad038012fbe55f53a47dca33e1c4b061f8e254aa275a6e6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 7,
+      "input_sha256": "e650a1d8483654b99ad038012fbe55f53a47dca33e1c4b061f8e254aa275a6e6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "pending-wrap-3-1b5b325a",
+      "cols": 10,
+      "rows": 3,
+      "chunk": 65536,
+      "input_sha256": "e650a1d8483654b99ad038012fbe55f53a47dca33e1c4b061f8e254aa275a6e6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "bb47711a80e137985a6e0dad66d733379584211d57bd1873b35cbdcdd91dfaab",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "bb47711a80e137985a6e0dad66d733379584211d57bd1873b35cbdcdd91dfaab",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "bb47711a80e137985a6e0dad66d733379584211d57bd1873b35cbdcdd91dfaab",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "b1c3d9a16e80842dbea2f2f18d101bdc25b3f8be1e05c3017bbbd5fa8465ccf1",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "b1c3d9a16e80842dbea2f2f18d101bdc25b3f8be1e05c3017bbbd5fa8465ccf1",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-0-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "b1c3d9a16e80842dbea2f2f18d101bdc25b3f8be1e05c3017bbbd5fa8465ccf1",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "98906089477ef7d46c7e8514baf6401193cf5afcdb16c06c10362a6be1a21af7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "98906089477ef7d46c7e8514baf6401193cf5afcdb16c06c10362a6be1a21af7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "98906089477ef7d46c7e8514baf6401193cf5afcdb16c06c10362a6be1a21af7",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "99327b9ed7f133d0459cb96e5bafbe1a0434b3a025c631f2e42e0ce7d6b49ce2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "99327b9ed7f133d0459cb96e5bafbe1a0434b3a025c631f2e42e0ce7d6b49ce2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-1-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "99327b9ed7f133d0459cb96e5bafbe1a0434b3a025c631f2e42e0ce7d6b49ce2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "5a039a868bf5e972a773b7e46a63ca9c724ce9efdf515b25e9e039aba22f5d55",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "5a039a868bf5e972a773b7e46a63ca9c724ce9efdf515b25e9e039aba22f5d55",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "5a039a868bf5e972a773b7e46a63ca9c724ce9efdf515b25e9e039aba22f5d55",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "f5a936d1b86cff89dcd02baed15b30a5bb5dc08c7fddfe3840c3d8a026363105",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "f5a936d1b86cff89dcd02baed15b30a5bb5dc08c7fddfe3840c3d8a026363105",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-2-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "f5a936d1b86cff89dcd02baed15b30a5bb5dc08c7fddfe3840c3d8a026363105",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "f2a05b6d29168224d4060dc7f9f7b88010cb53bd65b778ab55bbbdcb2418b501",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "f2a05b6d29168224d4060dc7f9f7b88010cb53bd65b778ab55bbbdcb2418b501",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "f2a05b6d29168224d4060dc7f9f7b88010cb53bd65b778ab55bbbdcb2418b501",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "e33d00f7429d7569c95b92a7f08f4a659254dbfe23b53a7e6f93f23f76977416",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "e33d00f7429d7569c95b92a7f08f4a659254dbfe23b53a7e6f93f23f76977416",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-3-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "e33d00f7429d7569c95b92a7f08f4a659254dbfe23b53a7e6f93f23f76977416",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "94d15eb803eb6c93dd3382e80fb94c143837477137489e0cd6b7ba818936d7b2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "94d15eb803eb6c93dd3382e80fb94c143837477137489e0cd6b7ba818936d7b2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "94d15eb803eb6c93dd3382e80fb94c143837477137489e0cd6b7ba818936d7b2",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "cbf1a09127449e5ad0d71e0c7c8e898278108e64adfe3127d45fd9ae7d82f0dd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "cbf1a09127449e5ad0d71e0c7c8e898278108e64adfe3127d45fd9ae7d82f0dd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-4-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "cbf1a09127449e5ad0d71e0c7c8e898278108e64adfe3127d45fd9ae7d82f0dd",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "23c6b47917ee4ee8c04f6849528cfaac02b7cb92d54dbca0ad25ecb02811cf60",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "23c6b47917ee4ee8c04f6849528cfaac02b7cb92d54dbca0ad25ecb02811cf60",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "23c6b47917ee4ee8c04f6849528cfaac02b7cb92d54dbca0ad25ecb02811cf60",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "3a6066d5307bfe7837a0de9828643d4776bdbe305f7f91cbfaf6f201c8301007",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "3a6066d5307bfe7837a0de9828643d4776bdbe305f7f91cbfaf6f201c8301007",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-5-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "3a6066d5307bfe7837a0de9828643d4776bdbe305f7f91cbfaf6f201c8301007",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "fc5aa3a2d3a2954c7af89b562a980c1ae3ea8f6e97beaafc835482646852e9af",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "fc5aa3a2d3a2954c7af89b562a980c1ae3ea8f6e97beaafc835482646852e9af",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "fc5aa3a2d3a2954c7af89b562a980c1ae3ea8f6e97beaafc835482646852e9af",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "7a64283b5eee554ed8ff4748aa9cdac0cf6a977ca09905e6df9660220f36e38e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "7a64283b5eee554ed8ff4748aa9cdac0cf6a977ca09905e6df9660220f36e38e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-6-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "7a64283b5eee554ed8ff4748aa9cdac0cf6a977ca09905e6df9660220f36e38e",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "2486125ec8158a9ae86c6b77c68a969d1d69d096833544187509ebf0cc69ced6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "2486125ec8158a9ae86c6b77c68a969d1d69d096833544187509ebf0cc69ced6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "2486125ec8158a9ae86c6b77c68a969d1d69d096833544187509ebf0cc69ced6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "9fd54ffe794922d638abbe32a388c7204e75a7adc44de96ce21bb9e6069a2fd6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "9fd54ffe794922d638abbe32a388c7204e75a7adc44de96ce21bb9e6069a2fd6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-7-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "9fd54ffe794922d638abbe32a388c7204e75a7adc44de96ce21bb9e6069a2fd6",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "3994b4a196a47c3f21f019a27143d8a74e390f1c7c60cad9a4d1f749cd623c42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "3994b4a196a47c3f21f019a27143d8a74e390f1c7c60cad9a4d1f749cd623c42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "3994b4a196a47c3f21f019a27143d8a74e390f1c7c60cad9a4d1f749cd623c42",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 1,
+      "input_sha256": "704c1fd9ace26fcfe128d7d520f3a6c08f0a8a172f32073c1878a7903259685d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 7,
+      "input_sha256": "704c1fd9ace26fcfe128d7d520f3a6c08f0a8a172f32073c1878a7903259685d",
+      "reference_chunk_invariant": true,
+      "status": "matched",
+      "differences": []
+    },
+    {
+      "name": "scroll-clear-8-1b5b3f32324a",
+      "cols": 10,
+      "rows": 4,
+      "chunk": 65536,
+      "input_sha256": "704c1fd9ace26fcfe128d7d520f3a6c08f0a8a172f32073c1878a7903259685d",
       "reference_chunk_invariant": true,
       "status": "matched",
       "differences": []
