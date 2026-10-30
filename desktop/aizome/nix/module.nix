@@ -338,7 +338,7 @@ in
     # The processor's energy counters (RAPL) for Myaku's Energy view:
     # readable by root only, as quick samples can leak secrets
     # (CVE-2020-8694), and on a Ryzen desktop processor nothing else
-    # measures the package. The meter reads them at most twice a second,
+    # measures the package. The meter reads them at most once a second,
     # started by its socket when Myaku asks and gone after a minute
     # without a question. Root for the read alone: no capabilities,
     # network or writable files.

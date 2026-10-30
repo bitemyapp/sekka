@@ -9,7 +9,14 @@ fn print() {
     let mut s = myaku::sampler::Sampler::new();
     let _ = s.sample();
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    let f = s.sample();
+    let mut f = s.sample();
+    // Aizome's power meter reads RAPL at most once a second: asked a moment
+    // early, it answers its first reading again. A second later it has a
+    // new one.
+    if f.power.meter == model::Meter::Rapl && f.power.cpu.is_none() {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        f = s.sample();
+    }
     let sys = &f.system;
     println!(
         "{}: {}% ({}% user, {}% system), {}, {}; read in {:?}",

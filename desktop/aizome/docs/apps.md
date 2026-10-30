@@ -602,9 +602,20 @@ quick samples can leak secrets (CVE-2020-8694), so Myaku, running as you,
 asks Aizome's power meter for them. `aizome-power-meter` runs as root when
 something connects to `/run/aizome/power.sock` (the module's
 `aizome-power-meter.socket`), with no capabilities, network or writable
-files. It reads the package domains at most twice a second, answers every
-connection with "NAME ENERGY_UJ RANGE_UJ" lines, and exits after a minute
-without one. A repeated answer leaves Myaku's last rate standing.
+files. It reads the package domains at most once a second, as Tatami's
+meter does, answers every connection with "NAME ENERGY_UJ RANGE_UJ
+READ_US" lines, and exits after a minute without one. `READ_US` is when
+it read them, in microseconds of `CLOCK_BOOTTIME`: Myaku's rates are over
+the time between two readings, whoever asked for them, and a repeated
+answer leaves its last rate standing: at Myaku's one-second frames, the
+processor's figure changes every second or two. The package domains are
+the `intel-rapl:N` named `package…`: a laptop's `psys` (Intel's platform
+domain, `intel-rapl:1` on the X1 Carbon Gen 14) measures the whole
+computer, the package included, and is left out. After the computer
+sleeps, the first interval is not measured: RAPL's counters went on
+through the night while Myaku's clock stopped, so its rate starts over
+(the processor shows a dash for a second or two) and no one's energy
+grows by it.
 `nix build .#aizome-checks.power-meter` boots a disposable VM: the socket
 must start the meter as root with no capabilities, and a user may ask it.
 A VM has no RAPL counters, so a stand-in then answers on the socket with

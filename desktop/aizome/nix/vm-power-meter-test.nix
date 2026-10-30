@@ -1,9 +1,10 @@
 # Aizome's processor power meter in a disposable VM: its socket starts the
 # root service under its sandbox, and anyone may ask it; a VM has no RAPL
 # counters, so it answers nothing. A stand-in then answers on the same
-# socket with a package drawing 20 W, and Myaku, run as a user, measures
-# the processor through it. Component evidence: reading real RAPL counters
-# as root needs physical hardware.
+# socket with a package drawing 20 W, reading at most once a second and
+# saying when, as the meter does, and Myaku, run as a user, measures the
+# processor through it. Component evidence: reading real RAPL counters as
+# root needs physical hardware.
 {
   pkgs,
   self,
@@ -18,7 +19,12 @@ let
 
     PATH = "/run/aizome/power.sock"
 
-    start = time.monotonic()
+
+    def now_us():
+        return time.clock_gettime_ns(time.CLOCK_BOOTTIME) // 1000
+
+
+    start = now_us()
     os.makedirs("/run/aizome", exist_ok=True)
     if os.path.exists(PATH):
         os.unlink(PATH)
@@ -26,10 +32,16 @@ let
     server.bind(PATH)
     os.chmod(PATH, 0o666)
     server.listen()
+    # As the meter: a new reading at most once a second, and when it was
+    # read on every line.
+    read = None
     while True:
         connection, _ = server.accept()
-        energy = int((time.monotonic() - start) * 20e6)
-        connection.sendall(f"package-0 {energy} 0\n".encode())
+        now = now_us()
+        if read is None or now - read >= 1000000:
+            read = now
+        energy = (read - start) * 20
+        connection.sendall(f"package-0 {energy} 0 {read}\n".encode())
         connection.close()
   '';
 in
