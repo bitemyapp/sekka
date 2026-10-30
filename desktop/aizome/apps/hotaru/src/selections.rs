@@ -1,5 +1,6 @@
 //! The primary selection, and programs reading and writing the clipboard
-//! themselves (OSC 52).
+//! themselves: OSC 52's text, and Kitty's clipboard protocol (OSC 5522),
+//! which names types, so programs can copy and paste pictures and rich text.
 //!
 //! Both run on a worker of their own beside the user's copy and paste
 //! (`clipboard`), so neither waits behind the other or replaces its job. A
@@ -20,10 +21,12 @@ use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 
 use crate::app::Msg;
 use crate::clipboard::CopySource;
+use hotaru_core::kitty_clipboard::{self, Location, Status};
 
-/// Requests a pane may have waiting at once, and the bytes they may hold.
+/// Requests a pane may have waiting at once, and the bytes they may hold;
+/// one Kitty write may hold as much.
 const MAX_PENDING: usize = 16;
-const MAX_PENDING_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_PENDING_BYTES: usize = 32 * 1024 * 1024;
 /// The most a read answers with: 8 MiB once encoded, as much as a write
 /// may carry.
 pub const READ_LIMIT: usize = 6 * 1024 * 1024;
@@ -57,6 +60,12 @@ impl Target {
         match self {
             Self::Clipboard => "the clipboard",
             Self::Primary => "the primary selection",
+        }
+    }
+    fn at(location: Location) -> Self {
+        match location {
+            Location::Primary => Self::Primary,
+            Location::Standard => Self::Clipboard,
         }
     }
 }
@@ -97,6 +106,8 @@ impl Drop for Ticket {
 pub struct Preview {
     pub text: String,
     pub bytes: usize,
+    /// The types a Kitty request reads or writes, to name in a question.
+    pub types: Vec<String>,
 }
 
 impl Preview {
@@ -109,7 +120,16 @@ impl Preview {
         if lossy.chars().count() > PREVIEW_CHARS || bytes.len() > PREVIEW_CHARS * 4 {
             text.push('…');
         }
-        Self { text, bytes: bytes.len() }
+        Self { text, bytes: bytes.len(), types: Vec::new() }
+    }
+    /// The types, as a question names them: a few, then how many more.
+    pub fn named_types(&self) -> String {
+        const SHOWN: usize = 4;
+        let mut named = self.types.iter().take(SHOWN).cloned().collect::<Vec<_>>().join(", ");
+        if self.types.len() > SHOWN {
+            named.push_str(&format!(" and {} more", self.types.len() - SHOWN));
+        }
+        named.chars().filter(|c| !c.is_control()).take(200).collect()
     }
     /// Its size as people read one: "12 bytes", "3.4 KB", "1.2 MB".
     pub fn size(&self) -> String {
@@ -127,6 +147,14 @@ pub enum Kind {
     Read,
     /// The decoded bytes, offered exactly as sent.
     Write {
+        data: PreparedClipboard,
+        preview: Preview,
+    },
+    /// A Kitty clipboard protocol read: types by name, the listing, or both.
+    KittyRead(Arc<kitty_clipboard::Read>),
+    /// A committed Kitty write, its types prepared to offer as sent.
+    KittyWrite {
+        write: Arc<kitty_clipboard::Write>,
         data: PreparedClipboard,
         preview: Preview,
     },
@@ -157,6 +185,131 @@ pub fn request(pane: u64, tag: u8, data: &[u8], bounds: &Arc<Bounds>) -> Option<
     let preview = Preview::of(&bytes);
     let data = PreparedClipboard::from_text_bytes(bytes.into());
     Some(Request { pane, tag, target, kind: Kind::Write { data, preview }, _ticket: ticket })
+}
+
+impl Request {
+    /// A Kitty request's answer with `status` alone; none for OSC 52's.
+    pub fn status(&self, status: Status) -> Option<Arc<[u8]>> {
+        let mut answer = Vec::new();
+        match &self.kind {
+            Kind::KittyRead(read) => read.status(status, &mut answer),
+            Kind::KittyWrite { write, .. } => write.status(status, &mut answer),
+            Kind::Read | Kind::Write { .. } => return None,
+        }
+        Some(answer.into())
+    }
+    /// What a refused request is answered with, if anything: OSC 52's
+    /// reads an empty answer, Kitty's EPERM.
+    pub fn refusal(&self) -> Option<Arc<[u8]>> {
+        match self.kind {
+            Kind::Read => Some(reply(self.tag, b"")),
+            Kind::Write { .. } => None,
+            _ => self.status(Status::Eperm),
+        }
+    }
+    /// What a request nobody can take now is answered with: Kitty's hear
+    /// EBUSY, to try again.
+    pub fn busy(&self) -> Option<Arc<[u8]>> {
+        match self.kind {
+            Kind::Read | Kind::Write { .. } => self.refusal(),
+            _ => self.status(Status::Ebusy),
+        }
+    }
+}
+
+/// A Kitty clipboard request on the PTY worker, a write's types prepared to
+/// offer there. Past the pane's bounds, or a write of no type this desktop
+/// can offer, it comes to the program's answer instead.
+pub fn kitty(pane: u64, request: kitty_clipboard::Request, bounds: &Arc<Bounds>) -> Result<Request, Arc<[u8]>> {
+    let mut answer = Vec::new();
+    match request {
+        kitty_clipboard::Request::Read(read) => {
+            let Some(ticket) = Ticket::take(bounds, 0) else {
+                read.status(Status::Ebusy, &mut answer);
+                return Err(answer.into());
+            };
+            let target = Target::at(read.loc);
+            Ok(Request { pane, tag: 0, target, kind: Kind::KittyRead(Arc::from(read)), _ticket: Arc::new(ticket) })
+        }
+        kitty_clipboard::Request::Write(write) => {
+            let Some(ticket) = Ticket::take(bounds, write.size()) else {
+                write.status(Status::Ebusy, &mut answer);
+                return Err(answer.into());
+            };
+            // Names the desktop can't carry go; an empty write clears.
+            let offered: Vec<_> = write
+                .contents
+                .iter()
+                .filter(|(mime, _)| mime.len() <= 255 && mime.bytes().all(|byte| (0x20..=0x7e).contains(&byte)))
+                .cloned()
+                .collect();
+            let data = if write.contents.is_empty() {
+                Ok(PreparedClipboard::from_text_bytes(Arc::from(&[][..])))
+            } else {
+                PreparedClipboard::from_representations(offered)
+            };
+            let Ok(data) = data else {
+                write.status(Status::Einval, &mut answer);
+                return Err(answer.into());
+            };
+            let text = data.text_bytes().map(|bytes| Preview::of(&bytes).text).unwrap_or_default();
+            let types = write.contents.iter().map(|(mime, _)| mime.clone()).collect();
+            let preview = Preview { text, bytes: write.size(), types };
+            let target = Target::at(write.loc);
+            let kind = Kind::KittyWrite { write: Arc::from(write), data, preview };
+            Ok(Request { pane, tag: 0, target, kind, _ticket: Arc::new(ticket) })
+        }
+    }
+}
+
+/// What a Kitty read will be answered with, captured as OSC 52's is: the
+/// types asked for that the selection offers (a text type answering for
+/// any other, as Ghostty serves them), at most [`READ_LIMIT`] together, and
+/// the listing if it was asked for. The preview counts what it discloses.
+fn capture_kitty(request: &kitty_clipboard::Read, read: &ClipboardRead) -> (Arc<[u8]>, Preview) {
+    let deadline = std::time::Instant::now() + READ_TIMEOUT;
+    let types = read.types();
+    let mut served: Vec<(String, Arc<[u8]>)> = Vec::new();
+    let mut left = READ_LIMIT;
+    for mime in &request.mimes {
+        let timeout = deadline.saturating_duration_since(std::time::Instant::now());
+        let data = if types.contains(mime) {
+            read.read_type(mime, timeout, left)
+        } else if kitty_clipboard::is_text_mime(mime) && types.iter().any(|t| kitty_clipboard::is_text_mime(t)) {
+            read.read_bytes(timeout, left)
+        } else {
+            None
+        };
+        if let Some(data) = data.filter(|data| !data.is_empty()) {
+            left -= data.len();
+            served.push((mime.clone(), data));
+        }
+    }
+    let available: Vec<String> =
+        if request.list { types.into_iter().take(kitty_clipboard::MAX_LISTING_MIMES).collect() } else { Vec::new() };
+    let mut answer = Vec::new();
+    request.success(&available, &served, &mut answer);
+    let text = served
+        .iter()
+        .find(|(mime, _)| kitty_clipboard::is_text_mime(mime))
+        .map(|(_, data)| Preview::of(data).text)
+        .unwrap_or_default();
+    let preview = Preview {
+        text,
+        bytes: served.iter().map(|(_, data)| data.len()).sum(),
+        types: served.into_iter().map(|(mime, _)| mime).collect(),
+    };
+    (answer.into(), preview)
+}
+
+/// The answer a request chose, under its question's token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    Refuse,
+    Allow,
+    /// Allow, and the program's later requests with its password, until the
+    /// terminal resets (Kitty's protocol only).
+    Remember,
 }
 
 /// A request being asked about, under the token its answer comes with; a
@@ -208,12 +361,17 @@ fn run(jobs: mpsc::Receiver<Job>, tx: MsgSender<Msg>) {
     for job in jobs {
         let sent = match job {
             Job::Read { request, read } => {
-                // Nothing came (empty, unreadable, too large or too slow):
-                // there's no answer to ask about.
-                let bytes = read.read_bytes(READ_TIMEOUT, READ_LIMIT).filter(|bytes| !bytes.is_empty());
-                let preview = bytes.as_deref().map(Preview::of).unwrap_or_default();
-                let answer = bytes.map(|bytes| reply(request.tag, &bytes));
-                tx.send(Msg::ClipboardCaptured(request, answer, preview))
+                if let Kind::KittyRead(kitty) = &request.kind {
+                    let (answer, preview) = capture_kitty(kitty, &read);
+                    tx.send(Msg::ClipboardCaptured(request, Some(answer), preview))
+                } else {
+                    // Nothing came (empty, unreadable, too large or too slow):
+                    // there's no answer to ask about.
+                    let bytes = read.read_bytes(READ_TIMEOUT, READ_LIMIT).filter(|bytes| !bytes.is_empty());
+                    let preview = bytes.as_deref().map(Preview::of).unwrap_or_default();
+                    let answer = bytes.map(|bytes| reply(request.tag, &bytes));
+                    tx.send(Msg::ClipboardCaptured(request, answer, preview))
+                }
             }
             Job::Primary { token, pane, source, cancel } => {
                 match crate::clipboard::prepare_copy(token, pane, source, crate::settings::CopyFormat::Plain, &cancel) {
@@ -295,6 +453,97 @@ mod tests {
         assert!(request(1, b'c', b"?", &bounds).is_some(), "answered requests free their place");
     }
 
+    fn kitty_requests(input: &[u8]) -> Vec<kitty_clipboard::Request> {
+        let mut terminal = hotaru_core::Terminal::new(10, 2, 0);
+        terminal.feed(input);
+        let events = terminal.take_events().into_iter();
+        events
+            .filter_map(|event| if let hotaru_core::TerminalEvent::KittyClipboard(r) = event { Some(r) } else { None })
+            .collect()
+    }
+
+    #[test]
+    fn kitty_writes_offer_what_was_sent_and_past_bounds_or_with_nothing_to_offer_are_answered() {
+        let bounds = Arc::new(Bounds::default());
+        // "hi" as text/plain, aliased as UTF8_STRING; PNG bytes under a name
+        // that isn't ASCII ("text/é"), which the desktop can't carry.
+        let input = concat!(
+            "\x1b]5522;type=write:id=w\x1b\\",
+            "\x1b]5522;type=wdata:mime=dGV4dC9wbGFpbg==;aGk=\x1b\\",
+            "\x1b]5522;type=wdata:mime=dGV4dC/DqQ==;iVBORw==\x1b\\",
+            "\x1b]5522;type=walias:mime=dGV4dC9wbGFpbg==;VVRGOF9TVFJJTkc=\x1b\\",
+            "\x1b]5522;type=wdata\x1b\\",
+        );
+        let [request] = <[_; 1]>::try_from(kitty_requests(input.as_bytes())).unwrap();
+        let Ok(Request { target, kind: Kind::KittyWrite { data, preview, .. }, .. }) = kitty(1, request, &bounds)
+        else {
+            panic!("a write");
+        };
+        assert_eq!((target, data.text(), data.data("UTF8_STRING")), (Target::Clipboard, Some("hi"), Some(&b"hi"[..])));
+        assert_eq!(data.data("text/é"), None);
+        assert_eq!((preview.text.as_str(), preview.bytes), ("hi", 6), "aliases count once");
+        assert_eq!(preview.types, ["text/plain", "text/é", "UTF8_STRING"]);
+
+        let only_unofferable = "\x1b]5522;type=write:id=x\x1b\\\x1b]5522;type=wdata:mime=dGV4dC/DqQ==;aGk=\x1b\\\x1b]5522;type=wdata\x1b\\";
+        let [request] = <[_; 1]>::try_from(kitty_requests(only_unofferable.as_bytes())).unwrap();
+        assert_eq!(&*kitty(1, request, &bounds).err().unwrap(), b"\x1b]5522;type=write:status=EINVAL:id=x\x1b\\");
+
+        let clear = "\x1b]5522;type=write:loc=primary\x07\x1b]5522;type=wdata\x07";
+        let [request] = <[_; 1]>::try_from(kitty_requests(clear.as_bytes())).unwrap();
+        let Ok(cleared) = kitty(1, request, &bounds) else { panic!("an empty write clears") };
+        assert_eq!(cleared.target, Target::Primary);
+        assert_eq!(cleared.status(Status::Done).as_deref(), Some(&b"\x1b]5522;type=write:status=DONE\x07"[..]));
+        drop(cleared);
+
+        let read = "\x1b]5522;type=read:id=r;dGV4dC9wbGFpbg==\x1b\\".repeat(MAX_PENDING + 1);
+        let mut held = Vec::new();
+        let mut answers = Vec::new();
+        for request in kitty_requests(read.as_bytes()) {
+            match kitty(1, request, &bounds) {
+                Ok(request) => held.push(request),
+                Err(answer) => answers.push(answer),
+            }
+        }
+        assert_eq!(held.len(), MAX_PENDING);
+        assert_eq!(answers, [Arc::from(&b"\x1b]5522;type=read:status=EBUSY:id=r\x1b\\"[..])]);
+        assert_eq!(held[0].refusal().as_deref(), Some(&b"\x1b]5522;type=read:status=EPERM:id=r\x1b\\"[..]));
+    }
+
+    #[test]
+    fn kitty_reads_capture_named_types_text_under_any_text_name_and_the_listing() {
+        let html: Arc<[u8]> = Arc::from(&b"<b>hi</b>"[..]);
+        let data = PreparedClipboard::new(Some("hi".into()), vec![("text/html".into(), html)]).unwrap();
+        let read = ClipboardRead::from_prepared(&data);
+        // "text/plain text/html ." and an unknown type.
+        let input = "\x1b]5522;type=read:id=r;dGV4dC9wbGFpbiB0ZXh0L2h0bWwgLg==\x1b\\";
+        let [kitty_clipboard::Request::Read(request)] = <[_; 1]>::try_from(kitty_requests(input.as_bytes())).unwrap()
+        else {
+            panic!("a read");
+        };
+        let (answer, preview) = capture_kitty(&request, &read);
+        let answer = String::from_utf8(answer.to_vec()).unwrap();
+        assert!(
+            answer
+                .starts_with("\x1b]5522;type=read:status=OK:id=r\x1b\\\x1b]5522;type=read:status=DATA:id=r:mime=Lg==;")
+        );
+        assert!(answer.contains(":mime=dGV4dC9wbGFpbg==;aGk=\x1b\\"));
+        assert!(answer.contains(":mime=dGV4dC9odG1s;PGI+aGk8L2I+\x1b\\"));
+        assert!(answer.ends_with("\x1b]5522;type=read:status=DONE:id=r\x1b\\"));
+        assert_eq!((preview.text.as_str(), preview.bytes, preview.types.len()), ("hi", 11, 2));
+        // A text name the clipboard doesn't list still gets its text.
+        let mut request = (*request).clone();
+        request.mimes = vec!["STRING".into(), "image/png".into()];
+        request.list = false;
+        let only_html = ClipboardRead::from_prepared(
+            &PreparedClipboard::new(None, vec![("text/html".into(), Arc::from(&b"x"[..]))]).unwrap(),
+        );
+        let (_, preview) = capture_kitty(&request, &only_html);
+        assert_eq!(preview.bytes, 0, "no text there, and no picture");
+        let (answer, preview) = capture_kitty(&request, &ClipboardRead::from_text(Some(Arc::from("t"))));
+        assert_eq!(preview.types, ["STRING"]);
+        assert!(String::from_utf8(answer.to_vec()).unwrap().contains(":mime=U1RSSU5H;dA==\x1b\\"));
+    }
+
     #[test]
     fn replies_carry_the_tag_and_exact_bytes() {
         assert_eq!(&*reply(b'c', b"hi"), b"\x1b]52;c;aGk=\x1b\\");
@@ -307,8 +556,10 @@ mod tests {
         let preview = Preview::of(b"line one\nline two\x1b[31m");
         assert_eq!(preview.text, "line one line two [31m");
         assert_eq!(Preview::of(&[b'x'; 500]).text.chars().count(), PREVIEW_CHARS + 1);
-        assert_eq!(Preview { text: String::new(), bytes: 2400 }.size(), "2.4 KB");
-        assert_eq!(Preview { text: String::new(), bytes: 1 }.size(), "1 byte");
+        assert_eq!(Preview { bytes: 2400, ..Preview::default() }.size(), "2.4 KB");
+        assert_eq!(Preview { bytes: 1, ..Preview::default() }.size(), "1 byte");
+        let types = (0..6).map(|i| format!("x/{i}")).collect();
+        assert_eq!(Preview { types, ..Preview::default() }.named_types(), "x/0, x/1, x/2, x/3 and 2 more");
     }
 
     #[test]

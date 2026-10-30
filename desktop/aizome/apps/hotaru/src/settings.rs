@@ -67,8 +67,8 @@ impl CursorStyle {
     }
 }
 
-/// What a program gets when it reads or writes the clipboard itself (OSC 52),
-/// as Ghostty's `clipboard-read` and `clipboard-write`.
+/// What a program gets when it reads or writes the clipboard itself (OSC 52
+/// or Kitty's OSC 5522), as Ghostty's `clipboard-read` and `clipboard-write`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Access {
@@ -239,9 +239,9 @@ pub struct Settings {
     pub copy_format: CopyFormat,
     /// Applies only to future default-shell panes; explicit commands bypass it.
     pub shell_integration: bool,
-    /// Programs reading the clipboard (OSC 52); asked by default.
+    /// Programs reading the clipboard (OSC 52 and 5522); asked by default.
     pub clipboard_read: Access,
-    /// Programs writing the clipboard (OSC 52); allowed by default.
+    /// Programs writing the clipboard (OSC 52 and 5522); allowed by default.
     pub clipboard_write: Access,
     /// A finished selection also becomes the primary selection, which a
     /// middle click pastes, as other Linux programs do.

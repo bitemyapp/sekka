@@ -1302,6 +1302,265 @@ fn osc52_read_child() {
     out.flush().unwrap();
 }
 
+/// A program speaking Kitty's clipboard protocol: each request goes once
+/// the test says (`go`), and its answer is shown alone as `REPLY n …`.
+fn kitty_child(requests: &[&str]) -> Hotaru {
+    let mut command = PtyCommand::new(std::env::current_exe().unwrap());
+    command.args = ["--ignored", "--exact", "kitty_clipboard_child", "--nocapture", "--test-threads=1"]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    command.env.push(("HOTARU_KITTY_CHILD".into(), requests.join("\n").into()));
+    keeping(command)
+}
+
+/// The program's `n`th answer (from 1), escaped.
+fn kitty_reply(app: &Hotaru, n: usize) -> Option<String> {
+    let text = app.active_pane()?.snapshot.plain_text();
+    let prefix = format!("REPLY {n} ");
+    let line = text.lines().find(|line| line.starts_with(&prefix))?;
+    Some(line[prefix.len()..].to_owned())
+}
+
+fn kitty_answered(h: &mut Harness<Hotaru>, n: usize) -> String {
+    let found = h.settle(Duration::from_secs(5), |app| kitty_reply(app, n).is_some());
+    let pane = h.program().active_pane().unwrap();
+    assert!(found, "no answer {n}: status {:?}, screen {:?}", pane.status, pane.snapshot.plain_text());
+    kitty_reply(h.program(), n).unwrap()
+}
+
+#[test]
+fn kitty_writes_offer_every_type_and_asking_can_be_remembered_for_the_session() {
+    use aizome_hotaru::settings::Access;
+    // Allowed by default: each type as sent, answered DONE.
+    let write = concat!(
+        "\x1b]5522;type=write:id=w\x1b\\",
+        "\x1b]5522;type=wdata:mime=dGV4dC9wbGFpbg==;aGk=\x1b\\",
+        "\x1b]5522;type=wdata:mime=dGV4dC9odG1s;PGI+aGk8L2I+\x1b\\",
+        "\x1b]5522;type=wdata\x1b\\",
+    );
+    let mut h = Harness::new(kitty_child(&[write]));
+    go(&mut h);
+    assert_eq!(kitty_answered(&mut h, 1), r"\x1b]5522;type=write:status=DONE:id=w\x1b\\");
+    assert_eq!(h.platform.clipboard.as_deref(), Some("hi"));
+    assert_eq!(h.platform.clipboard_data.as_ref().unwrap().data("text/html"), Some(&b"<b>hi</b>"[..]));
+    assert!(!h.program().asking_about_clipboard());
+
+    // Asked: the question names the program and what it writes. Allowed
+    // for the session, the same password writes again without a question.
+    let named = concat!(
+        "\x1b]5522;type=write:id=n:pw=c2VjcmV0:name=dmlt\x1b\\",
+        "\x1b]5522;type=wdata:mime=dGV4dC9wbGFpbg==;aGk=\x1b\\",
+        "\x1b]5522;type=wdata\x1b\\",
+    );
+    let mut app = kitty_child(&[named, named]);
+    app.settings.clipboard_write = Access::Ask;
+    let mut h = Harness::new(app);
+    h.platform.clipboard = Some("mine".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    let win = h.window();
+    let texts = h.texts(win).join("\n");
+    assert!(texts.contains("Let “vim” in “") && texts.contains("replace the clipboard?"), "{texts}");
+    assert!(texts.contains("It would hold text/plain: 2 bytes") && texts.contains("“hi”"), "{texts}");
+    assert_eq!(h.platform.clipboard.as_deref(), Some("mine"), "nothing changes before the answer");
+    assert!(h.click_text(win, "Allow for This Session"));
+    assert_eq!(kitty_answered(&mut h, 1), r"\x1b]5522;type=write:status=DONE:id=n\x1b\\");
+    assert_eq!(h.platform.clipboard.as_deref(), Some("hi"));
+    h.platform.clipboard = Some("mine again".into());
+    go(&mut h);
+    assert_eq!(kitty_answered(&mut h, 2), r"\x1b]5522;type=write:status=DONE:id=n\x1b\\");
+    assert!(!h.program().asking_about_clipboard());
+    assert_eq!(h.platform.clipboard.as_deref(), Some("hi"));
+
+    // Refused when asked, and never allowed: EPERM, the clipboard as it was.
+    for access in [Access::Ask, Access::Deny] {
+        let mut app = kitty_child(&[write]);
+        app.settings.clipboard_write = access;
+        let mut h = Harness::new(app);
+        h.platform.clipboard = Some("mine".into());
+        go(&mut h);
+        if access == Access::Ask {
+            assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+            let win = h.window();
+            assert!(!h.texts(win).iter().any(|text| text == "Allow for This Session"), "no password, no session");
+            assert!(h.click_text(win, "Don’t Allow"));
+        }
+        assert_eq!(kitty_answered(&mut h, 1), r"\x1b]5522;type=write:status=EPERM:id=w\x1b\\");
+        assert_eq!(h.platform.clipboard.as_deref(), Some("mine"));
+    }
+}
+
+#[test]
+fn kitty_reads_name_their_types_and_neither_listings_nor_session_grants_are_asked_about() {
+    use aizome_hotaru::settings::Access;
+    let clipboard = || {
+        let html: Arc<[u8]> = Arc::from(&b"<b>hi</b>"[..]);
+        aizome_kit::PreparedClipboard::new(Some("hi".into()), vec![("text/html".into(), html)]).unwrap()
+    };
+    // "text/plain text/html ." from "vim", with a password.
+    let read = "\x1b]5522;type=read:id=r:pw=c2VjcmV0:name=dmlt;dGV4dC9wbGFpbiB0ZXh0L2h0bWwgLg==\x1b\\";
+    let listing = "\x1b]5522;type=read:id=l;Lg==\x1b\\";
+    let mut h = Harness::new(kitty_child(&[read, read, listing]));
+    h.platform.clipboard = Some("hi".into());
+    h.platform.clipboard_data = Some(clipboard());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+    let win = h.window();
+    let texts = h.texts(win).join("\n");
+    assert!(texts.contains("Let “vim” in “") && texts.contains("read the clipboard?"), "{texts}");
+    assert!(texts.contains("It asks for text/plain, text/html: 11 bytes") && texts.contains("“hi”"), "{texts}");
+    assert!(h.click_text(win, "Allow for This Session"));
+    let types = "dGV4dC9wbGFpbjtjaGFyc2V0PXV0Zi04IFVURjhfU1RSSU5HIHRleHQvcGxhaW4gU1RSSU5HIFRFWFQgdGV4dC9odG1sCg==";
+    let whole = format!(
+        r"\x1b]5522;type=read:status=OK:id=r\x1b\\\x1b]5522;type=read:status=DATA:id=r:mime=Lg==;{types}\x1b\\\x1b]5522;type=read:status=DATA:id=r:mime=dGV4dC9wbGFpbg==;aGk=\x1b\\\x1b]5522;type=read:status=DATA:id=r:mime=dGV4dC9odG1s;PGI+aGk8L2I+\x1b\\\x1b]5522;type=read:status=DONE:id=r\x1b\\"
+    );
+    assert_eq!(kitty_answered(&mut h, 1), whole);
+    go(&mut h);
+    assert_eq!(kitty_answered(&mut h, 2), whole);
+    assert!(!h.program().asking_about_clipboard(), "granted for the session");
+    go(&mut h);
+    assert_eq!(
+        kitty_answered(&mut h, 3),
+        format!(
+            r"\x1b]5522;type=read:status=OK:id=l\x1b\\\x1b]5522;type=read:status=DATA:id=l:mime=Lg==;{types}\x1b\\\x1b]5522;type=read:status=DONE:id=l\x1b\\"
+        )
+    );
+    assert!(!h.program().asking_about_clipboard(), "a listing reads no data");
+
+    // Refused when asked, and never allowed: EPERM. Nothing there to read
+    // needs no question.
+    for access in [Access::Ask, Access::Deny] {
+        let mut app = kitty_child(&[read]);
+        app.settings.clipboard_read = access;
+        let mut h = Harness::new(app);
+        h.platform.clipboard = Some("hi".into());
+        h.platform.clipboard_data = Some(clipboard());
+        go(&mut h);
+        if access == Access::Ask {
+            assert!(h.settle(Duration::from_secs(5), |app| app.asking_about_clipboard()));
+            let win = h.window();
+            assert!(h.click_text(win, "Don’t Allow"));
+        }
+        assert_eq!(kitty_answered(&mut h, 1), r"\x1b]5522;type=read:status=EPERM:id=r\x1b\\");
+    }
+    let mut h = Harness::new(kitty_child(&[read]));
+    go(&mut h);
+    assert_eq!(
+        kitty_answered(&mut h, 1),
+        r"\x1b]5522;type=read:status=OK:id=r\x1b\\\x1b]5522;type=read:status=DATA:id=r:mime=Lg==\x1b\\\x1b]5522;type=read:status=DONE:id=r\x1b\\"
+    );
+    assert!(!h.program().asking_about_clipboard());
+}
+
+#[test]
+fn paste_events_list_the_clipboards_types_and_their_password_reads_once_without_asking() {
+    // The program turns paste events on (mode 5522); a paste then sends it
+    // the types, never the text, and its read with the password goes
+    // without a question though reads are asked about.
+    let mut h = Harness::new(kitty_child(&["paste"]));
+    h.platform.clipboard = Some("pasted".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| kitty_reply(app, 0).is_some()));
+    h.send(Msg::Paste);
+    let event = kitty_answered(&mut h, 1);
+    let types = "dGV4dC9wbGFpbjtjaGFyc2V0PXV0Zi04IFVURjhfU1RSSU5HIHRleHQvcGxhaW4gU1RSSU5HIFRFWFQK";
+    let pw = event.strip_prefix(r"\x1b]5522;type=read:status=OK:pw=").unwrap();
+    let pw = &pw[..pw.find('\\').unwrap()];
+    assert_eq!(pw.len(), 32);
+    go(&mut h);
+    assert_eq!(
+        event,
+        format!(
+            r"\x1b]5522;type=read:status=OK:pw={pw}\x1b\\\x1b]5522;type=read:status=DATA:mime=Lg==:pw={pw};{types}\x1b\\\x1b]5522;type=read:status=DONE:pw={pw}\x1b\\"
+        )
+    );
+    assert_eq!(
+        kitty_answered(&mut h, 2),
+        r"\x1b]5522;type=read:status=OK\x1b\\\x1b]5522;type=read:status=DATA:mime=dGV4dC9wbGFpbg==;cGFzdGVk\x1b\\\x1b]5522;type=read:status=DONE\x1b\\"
+    );
+    assert!(!h.program().asking_about_clipboard());
+    assert!(!h.program().active_pane().unwrap().snapshot.plain_text().contains("pasted"));
+
+    // A middle click's paste event is of the primary selection.
+    let mut h = Harness::new(kitty_child(&["paste"]));
+    h.platform.primary = Some("picked".into());
+    go(&mut h);
+    assert!(h.settle(Duration::from_secs(5), |app| kitty_reply(app, 0).is_some()));
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::PastePrimary(id));
+    assert!(kitty_answered(&mut h, 1).starts_with(r"\x1b]5522;type=read:status=OK:loc=primary:pw="));
+    go(&mut h);
+    assert_eq!(
+        kitty_answered(&mut h, 2),
+        r"\x1b]5522;type=read:status=OK:loc=primary\x1b\\\x1b]5522;type=read:status=DATA:mime=dGV4dC9wbGFpbg==;cGlja2Vk\x1b\\\x1b]5522;type=read:status=DONE\x1b\\"
+    );
+}
+
+#[test]
+#[ignore]
+fn kitty_clipboard_child() {
+    let Some(requests) = std::env::var_os("HOTARU_KITTY_CHILD") else { return };
+    use std::io::{Read, Write};
+    let mut attributes = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: this isolated subprocess owns its PTY; termios is initialized
+    // before access and each libc call receives a live, correctly sized value.
+    unsafe {
+        assert_eq!(libc::tcgetattr(0, attributes.as_mut_ptr()), 0);
+        let mut attributes = attributes.assume_init();
+        libc::cfmakeraw(&mut attributes);
+        assert_eq!(libc::tcsetattr(0, libc::TCSANOW, &attributes), 0);
+    }
+    let mut out = std::io::stdout();
+    // An answer ends with DONE or an error.
+    let answer = || {
+        let mut reply = Vec::new();
+        loop {
+            let mut byte = [0];
+            std::io::stdin().read_exact(&mut byte).unwrap();
+            reply.push(byte[0]);
+            if reply.ends_with(b"\x1b\\") || reply.ends_with(b"\x07") {
+                let packet = &reply[reply[..reply.len() - 1].iter().rposition(|&b| b == b']').unwrap_or(0)..];
+                let text = String::from_utf8_lossy(packet);
+                if text.contains("status=DONE") || text.contains("status=E") {
+                    return reply;
+                }
+            }
+        }
+    };
+    let mut show = |n: usize, reply: &[u8]| {
+        write!(out, "\x1b[H\x1b[2JREPLY {n} {}\r\n", reply.escape_ascii()).unwrap();
+        out.flush().unwrap();
+    };
+    let go = || std::io::stdin().read_exact(&mut [0]).unwrap();
+    let requests = requests.into_string().unwrap();
+    if requests == "paste" {
+        // Paste events on, then the event and a read with its password.
+        go();
+        write!(std::io::stdout(), "\x1b[?5522h").unwrap();
+        show(0, b"ready");
+        let event = answer();
+        show(1, &event);
+        let text = String::from_utf8(event).unwrap();
+        let pw = &text[text.find(":pw=").unwrap() + 4..];
+        let pw = &pw[..pw.find('\x1b').unwrap()];
+        let loc = if text.contains("loc=primary") { ":loc=primary" } else { "" };
+        // As "Paste event", for text/plain, once the test has seen it.
+        go();
+        write!(std::io::stdout(), "\x1b]5522;type=read{loc}:pw={pw}:name=UGFzdGUgZXZlbnQ=;dGV4dC9wbGFpbg==\x1b\\")
+            .unwrap();
+        std::io::stdout().flush().unwrap();
+        show(2, &answer());
+        return;
+    }
+    for (n, request) in requests.split('\n').enumerate() {
+        go();
+        write!(std::io::stdout(), "{request}").unwrap();
+        std::io::stdout().flush().unwrap();
+        show(n + 1, &answer());
+    }
+}
+
 #[test]
 fn selecting_words_and_lines_fills_the_primary_selection_and_a_middle_click_pastes_it() {
     use aizome_kit::Vec2;

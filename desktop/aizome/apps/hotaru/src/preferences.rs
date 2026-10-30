@@ -230,8 +230,8 @@ fn general(app: &Hotaru) -> Vec<Element<Msg>> {
                         .on_select(|i| Msg::SetClipboardRead(ACCESS[i.min(2)].0)),
                 )
                 .description(
-                    "Editors and tmux, even over SSH, can ask for the clipboard (OSC 52). Hotaru shows you what \
-                     they'd get first.",
+                    "Editors and tmux, even over SSH, can ask for the clipboard (OSC 52), and some programs for \
+                     pictures and rich text too (Kitty's protocol). Hotaru shows you what they'd get first.",
                 )
                 .into(),
                 form_row(

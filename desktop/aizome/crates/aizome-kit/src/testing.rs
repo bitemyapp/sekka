@@ -244,7 +244,7 @@ impl Platform for TestPlatform {
     }
 
     fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
-        sidestep_ui::ClipboardRead::from_text(self.clipboard.as_deref().map(Arc::from))
+        snapshot(&self.clipboard, &self.clipboard_data)
     }
 
     fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText) {
@@ -257,7 +257,7 @@ impl Platform for TestPlatform {
     }
 
     fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
-        sidestep_ui::ClipboardRead::from_text(self.primary.as_deref().map(Arc::from))
+        snapshot(&self.primary, &self.primary_data)
     }
 
     fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
@@ -1421,5 +1421,14 @@ pub fn assert_golden<P: Program>(h: &mut Harness<P>, key: WindowKey, path: impl 
             diff * 100.0,
             actual.display()
         );
+    }
+}
+
+/// What a selection holds: every type of the prepared data while its text is
+/// still what the test put there, else just that text.
+fn snapshot(text: &Option<String>, data: &Option<sidestep_ui::PreparedClipboard>) -> sidestep_ui::ClipboardRead {
+    match data {
+        Some(data) if data.text() == text.as_deref() => sidestep_ui::ClipboardRead::from_prepared(data),
+        _ => sidestep_ui::ClipboardRead::from_text(text.as_deref().map(Arc::from)),
     }
 }

@@ -28,8 +28,8 @@ The checkpoint passed private Sway tests; it has not newly qualified an Aizome
 VM, installed ISO or physical desktop. Test the packaged menu entry and command,
 fonts/resources, scaling, shell startup and terminfo, tabs/splits, the Settings
 window and shortcut recording (`tests/wayland/settings.py`), programs' clipboard
-use, the primary selection and panes ending (`tests/wayland/selections.py`),
-both so far in private Sway only, search and link activation in Aizome. Exercise large
+use (OSC 52 and Kitty's OSC 5522), the primary selection and panes ending
+(`tests/wayland/selections.py`), both so far in private Sway only, search and link activation in Aizome. Exercise large
 plain/HTML copy and paste
 while output and UI input continue, including stalled readers, cancellation,
 pane closure and session shutdown. Keep the existing default terminal until
@@ -41,7 +41,7 @@ artifacts and runtime roots in the original worktree; it is not a portable
 installation supplied by a fresh clone. Remote shells require Hotaru terminfo
 or the documented `TERM=xterm-256color ssh host` fallback.
 
-## 3. Add Kitty's clipboard protocol beside OSC 52
+## 3. Programs' clipboard protocols: OSC 52 and Kitty's OSC 5522
 
 Updated 2026-10-29. OSC 52 is on in the application: writes allowed and reads
 asked by default, with Allow, Ask and Never for each in Settings. The core takes
@@ -75,9 +75,41 @@ clipboard is answered at once without asking. Byte reads wait out a new owner's
 read-ahead rather than answering from the previous owner's cached bytes, a race
 the stalled-owner case found in the toolkit.
 
-**Gate:** Kitty's clipboard protocol (OSC 5522: several MIME types, chunked
-writes, aliases, remembered permission and mode 5522 paste events), which the
-pinned Ghostty implements, is the remaining clipboard protocol.
+Kitty's clipboard protocol (OSC 5522) is ported from the pinned Ghostty
+(`hotaru-core/src/kitty_clipboard.rs`). Requests name MIME types, so programs
+read and write pictures, rich text or anything else. The core decodes metadata
+and payloads by Ghostty's strict rules, runs each pane's write transaction
+(chunked base64 streams, aliases, a reused type starting over), answers
+`EINVAL` and `EFBIG` itself, and keeps the session's password grants (32, gone
+at a reset). Reads (up to four types and the `.` listing) and committed writes
+join OSC 52's ordered, bounded queue. The same Settings apply: Never answers
+`EPERM`; Ask names the program (its own name with the pane's title), the types
+and the start of any text, and a program with a name and password can be
+allowed for the session. Reads are captured before anyone is asked, a text
+type answering for any other as Ghostty serves them; listings, granted reads
+and reads with nothing to disclose aren't asked about. With mode 5522 a paste,
+or a middle click's, becomes a paste event: the clipboard's types and a
+one-time password that reads once without asking. Sukumo gained a snapshot's
+type listing and per-type reads, and offers of a program's own types.
+
+Ghostty's tests are ported with their exact response bytes (16 terminal and 12
+module cases), beside harness tests of writes, reads, grants and paste events
+and private-Sway checks against wl-clipboard: a write's three types pasted by
+type, a 5 KB PNG another program copied read byte for byte, asked and then
+granted, and a paste event whose password reads once and only once.
+
+Deliberate differences from Ghostty: a write may hold 32 MiB (Ghostty's 64)
+so one fits a pane's bounds; a read past those bounds, behind another
+question or past the shared queue hears `EBUSY`; a write under Never is
+refused at its commit rather than its start; a read answers with at most
+6 MiB together, as OSC 52 does; type names that aren't printable ASCII of at
+most 255 bytes aren't offered to the desktop, and a write of nothing else
+answers `EINVAL`. A reset (RIS) now keeps replies, requests and a write
+already under way, as Ghostty's stream does, where it used to drop them.
+
+**Gate:** compare the protocol differentially against the pinned library (its
+six modules stay `partial` in `upstream/modules.json` until then) and try real
+programs, such as kitty's `kitten clipboard` and Neovim, in an Aizome session.
 
 ## 4. Recover the last horizontal-margin cost on Unicode text
 
@@ -129,7 +161,7 @@ default; whole-application performance comparisons remain separate.
 
 Use [`upstream/modules.json`](../upstream/modules.json) as the source inventory;
 pending or partial modules must not be counted as a finished port. Remaining
-work includes VT modes/replies, Kitty graphics and clipboard, tmux integration,
+work includes VT modes/replies, Kitty graphics, tmux integration,
 config/theme compatibility, semantic command navigation and remote shell hooks,
 broader terminfo, accessibility, remaining sprites and font behavior. Automatic
 links still need full scrollback context and configurable patterns; selection

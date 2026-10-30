@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Programs' clipboard requests, the primary selection and panes ending, natively.
+"""Programs' clipboard requests (OSC 52 and Kitty's OSC 5522), the primary
+selection and panes ending, natively.
 
 Usage: selections.py BINARY EVIDENCE_DIRECTORY
 Uses a private disposable headless Sway, never the user's session. Every pane
@@ -21,7 +22,32 @@ import time
 from smoke import wait
 
 # Linux evdev codes.
-D, T, Q, W, ENTER = 32, 20, 16, 17, 28
+D, T, Q, W, V, ENTER = 32, 20, 16, 17, 47, 28
+
+
+def packet(metadata, payload=None):
+    """One Kitty clipboard protocol packet, its payload encoded."""
+    body = b"\x1b]5522;" + metadata.encode()
+    if payload is not None:
+        body += b";" + base64.b64encode(payload)
+    return body + b"\x1b\\"
+
+
+def b64(text):
+    return base64.b64encode(text.encode()).decode()
+
+
+def packets(data):
+    """Kitty answers as (fields, decoded payload), in order."""
+    parsed = []
+    for raw in data.split(b"\x1b\\"):
+        if not raw:
+            continue
+        assert raw.startswith(b"\x1b]5522;"), raw
+        metadata, _, payload = raw[len(b"\x1b]5522;"):].partition(b";")
+        fields = dict(item.decode().split("=", 1) for item in metadata.split(b":"))
+        parsed.append((fields, base64.b64decode(payload) if payload else b""))
+    return parsed
 
 
 def run(binary, evidence):
@@ -72,6 +98,8 @@ def commands():
                 os.write(1, b'\x1b]52;' + tag.encode() + b';' + base64.b64encode(bytes.fromhex(data[0])) + b'\x07')
             elif verb == 'read':
                 os.write(1, b'\x1b]52;' + tag.encode() + b';?\x07')
+            elif verb == 'kitty':
+                os.write(1, bytes.fromhex(data[0]))
             elif verb == 'flood-read':
                 os.write(1, (b'\x1b]52;' + tag.encode() + b';?\x07') * int(data[0]))
             elif verb == 'flood-write':
@@ -94,6 +122,13 @@ while True:
                 break
             replies += 1
             (here / f'reply-{replies}').write_bytes(pending[:end + 2])
+            pending = pending[end + 2:]
+        elif pending.startswith(b'\x1b]5522;'):
+            end = pending.find(b'\x1b\\')
+            if end < 0:
+                break
+            with open(here / 'kitty', 'ab') as kitty:
+                kitty.write(pending[:end + 2])
             pending = pending[end + 2:]
         elif pending[:1] == b'\x04':
             raise SystemExit(0)
@@ -237,6 +272,77 @@ while True:
         full = [n for n in range(4, 204) if reply(first, n) != empty]
         assert len(full) == 1 and reply(first, full[0]).endswith(base64.b64encode(b"changed meanwhile") + b"\x1b\\")
         result["checks"]["read_flood"] = {"reads": 200, "answered_empty": 199, "allowed": 1}
+
+        # Kitty's clipboard protocol (OSC 5522). A write names its types,
+        # offered as sent, an alias with them: other programs paste each.
+        kitty = lambda: (panes / first / "kitty").exists() and (panes / first / "kitty").read_bytes() or b""
+        send = lambda *parts: command(first, "kitty - " + b"".join(parts).hex())
+        send(packet("type=write:id=w"),
+             packet("type=wdata:mime=" + b64("text/plain"), b"kitty text"),
+             packet("type=wdata:mime=" + b64("text/html"), b"<b>kitty</b>"),
+             packet("type=walias:mime=" + b64("text/html"), b"application/x-kitty-html"),
+             packet("type=wdata"))
+        wait("kitty write answered", lambda: kitty().endswith(b"\x1b]5522;type=write:status=DONE:id=w\x1b\\"))
+        offered = paste("--list-types").decode().split()
+        assert {"text/plain", "text/html", "application/x-kitty-html"} <= set(offered), offered
+        assert paste("--type", "text/html") == paste("--type", "application/x-kitty-html") == b"<b>kitty</b>"
+        assert paste() == b"kitty text"
+        result["checks"]["kitty_write"] = {"offered": offered}
+
+        # A read names the types it wants, here another program's picture,
+        # and is asked about; allowed for the session, the same password
+        # reads again without a question.
+        png = b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 20
+        subprocess.run(["wl-copy", "--type", "image/png"], input=png, env=env, check=True, timeout=3)
+        time.sleep(.3)
+        def kitty_answer(start, id):
+            done = lambda: (data := kitty()[start:]) and data.endswith(f"status=DONE:id={id}\x1b\\".encode()) and data
+            return packets(wait(f"kitty answer {id}", done))
+        def served(answer, mime):
+            return b"".join(data for fields, data in answer if fields.get("mime") == b64(mime))
+        read = packet("type=read:id=r:pw=" + b64("kitty-secret") + ":name=" + b64("kitten"), b"image/png .")
+        start = len(kitty())
+        send(read)
+        wait("kitty read question", lambda: any("read the clipboard?" in text for text in texts()))
+        assert any("“kitten” in “pane-" in text for text in texts()), texts()
+        assert any("It asks for image/png: 5.1 KB" in text for text in texts()), texts()
+        subprocess.run(["grim", str(evidence / "kitty-read-question.png")], env=env, check=True, timeout=3)
+        point(element(lambda item: item.get("text") == "Allow for This Session"))
+        answer = kitty_answer(start, "r")
+        assert answer[0][0]["status"] == "OK" and served(answer, "image/png") == png, answer[:2]
+        listing = served(answer, ".").decode().split()
+        assert "image/png" in listing and len([a for a in answer if a[0]["status"] == "DATA"]) == 3, answer
+        start = len(kitty())
+        send(read)
+        assert served(kitty_answer(start, "r"), "image/png") == png
+        assert not any("read the clipboard?" in text for text in texts())
+        result["checks"]["kitty_read"] = {"png_bytes": len(png), "listing": listing, "granted_again": True}
+
+        # Paste events (mode 5522): a paste tells the program the types,
+        # never the data, and their one-time password reads once, unasked.
+        send(b"\x1b[?5522h")
+        time.sleep(.3)
+        typed_before = (panes / first / "typed").exists() and (panes / first / "typed").read_bytes()
+        start = len(kitty())
+        keys((V, "super"))
+        event = packets(wait("paste event", lambda: (data := kitty()[start:]) and b"status=DONE" in data and data))
+        assert [fields["status"] for fields, _ in event] == ["OK", "DATA", "DONE"], event
+        assert "image/png" in event[1][1].decode().split()
+        password = base64.b64decode(event[0][0]["pw"]).decode()
+        assert len(password) == 22 and all(fields["pw"] == event[0][0]["pw"] for fields, _ in event)
+        start = len(kitty())
+        send(packet(f"type=read:id=e:pw={b64(password)}:name={b64('Paste event')}", b"image/png"))
+        assert served(kitty_answer(start, "e"), "image/png") == png
+        assert not any("read the clipboard?" in text for text in texts())
+        start = len(kitty())
+        send(packet(f"type=read:id=f:pw={b64(password)}:name={b64('Paste event')}", b"image/png"))
+        wait("spent password asked about", lambda: any("read the clipboard?" in text for text in texts()))
+        point(element(lambda item: item.get("text") == "Don’t Allow"))
+        wait("refused", lambda: kitty()[start:] == b"\x1b]5522;type=read:status=EPERM:id=f\x1b\\")
+        typed_after = (panes / first / "typed").exists() and (panes / first / "typed").read_bytes()
+        assert typed_after == typed_before, "nothing was pasted as text"
+        send(b"\x1b[?5522l")
+        result["checks"]["kitty_paste_event"] = {"listing": event[1][1].decode().split(), "read_once": True}
 
         # A clipboard owner that never sends: the read is answered empty, with
         # neither the last owner's bytes nor a question, while the terminal

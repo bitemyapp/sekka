@@ -44,7 +44,10 @@ The desktop's default terminal remains unchanged during qualification.
 What Hotaru needed of the toolkit, once six patches over Sidestep (clipboard
 MIME bundles and bounded reads, input, MIME, the font grid, sprites, and the
 primary selection with raw-byte clipboard text), now lives in Sukumo's own
-sources: edit them there, as any Aizome toolkit change. Git history keeps the
+sources: edit them there, as any Aizome toolkit change. Kitty's clipboard
+protocol added a snapshot's type listing and per-type reads
+(`ClipboardRead::types`, `read_type`) and offers of a program's own types
+(`PreparedClipboard::from_representations`). Git history keeps the
 former `upstream/sidestep-*.patch` files that historical receipts name.
 
 The latest Ghostty checkout is an **external reference**, not part of Hotaru's
@@ -132,7 +135,7 @@ experiments. The later [SIMD audit](docs/utf8-simd.md) records the repaired
 dependency now included in both workspaces and the package.
 
 Major outstanding work includes page/arena and compressed-history performance
-parity, complete VT modes and replies, Kitty graphics/clipboard,
+parity, complete VT modes and replies, Kitty graphics,
 tmux integration, incremental live-search equivalence, complete selection behavior, Ghostty config/theme
 compatibility, complete shell integration and terminfo, accessibility and renderer/font
 behavior. Unhandled protocols must not be advertised as implemented.

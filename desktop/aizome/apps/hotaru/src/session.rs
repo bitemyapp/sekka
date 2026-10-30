@@ -18,6 +18,9 @@ const REPLY_LIMIT: usize = 64 * 1024;
 // A failing command that ends this soon is abnormal (Ghostty's
 // `abnormal-command-exit-runtime` on Linux): its pane stays to be read.
 const ABNORMAL_EXIT: Duration = Duration::from_millis(250);
+// A paste event's listing is one data packet of at most 4 KiB, encoded, in
+// three packets carrying the password.
+const PASTE_EVENT: usize = 6 * 1024;
 
 pub enum Command {
     Input(Arc<[u8]>),
@@ -38,8 +41,14 @@ pub enum Command {
     Clear,
     // A hard reset of the terminal, as RIS.
     Reset,
-    // A program's answer from the clipboard (OSC 52), written whole.
+    // A program's answer from the clipboard (OSC 52 or 5522), written whole.
     Reply(Arc<[u8]>),
+    // Let the program's Kitty clipboard requests with this password go
+    // without asking, that way, until the terminal resets.
+    KittyGrant(Arc<str>, hotaru_core::kitty_clipboard::Direction),
+    // A user's paste, for a program that asked for paste events (mode
+    // 5522): the clipboard's types, which it may read once.
+    PasteEvent { primary: bool, types: Arc<[String]> },
 }
 /// What a new pane's terminal starts with.
 #[derive(Clone)]
@@ -166,6 +175,7 @@ impl Session {
             // The form feed a prompt's redraw takes.
             Command::Clear => 1,
             Command::Reply(bytes) => bytes.len(),
+            Command::PasteEvent { .. } => PASTE_EVENT,
             _ => 0,
         };
         if self
@@ -221,6 +231,15 @@ fn encoded_input(
     Ok(())
 }
 
+/// Bytes for a one-time password: far more than its 22 characters need,
+/// though rejection sampling discards some.
+fn secure_random() -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut random = vec![0; 128];
+    std::fs::File::open("/dev/urandom").and_then(|mut source| source.read_exact(&mut random)).ok()?;
+    Some(random)
+}
+
 fn publish_events(
     terminal: &mut Terminal,
     id: u64,
@@ -262,6 +281,12 @@ fn publish_events(
                     None => {}
                 }
             }
+            TerminalEvent::KittyClipboard(request) => match crate::selections::kitty(id, request, clipboard) {
+                Ok(request) => {
+                    tx.send(Msg::Clipboard(request));
+                }
+                Err(answer) => replies.extend_from_slice(&answer),
+            },
             TerminalEvent::Notification { title, body } => notification = Some((title, body)),
         }
     }
@@ -296,6 +321,8 @@ fn run(
     terminal.set_default_cursor(defaults.cursor.0, defaults.cursor.1);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.set_default_colors(defaults.colors);
+    // One Kitty write can be as large as a pane's requests in waiting.
+    terminal.set_kitty_clipboard_write_limit(crate::selections::MAX_PENDING_BYTES);
     let mut output = VecDeque::<PendingWrite>::new();
     let (mut output_at, mut reply_bytes) = (0usize, 0usize);
     let mut buffer = [0u8; 65_536];
@@ -458,6 +485,21 @@ fn run(
                         shared.input_bytes.fetch_sub(bytes.len(), Ordering::AcqRel);
                     } else if !bytes.is_empty() {
                         output.push_back(PendingWrite { bytes, user: true });
+                    }
+                }
+                Ok(Command::KittyGrant(pw, direction)) => terminal.kitty_clipboard_grant(&pw, direction),
+                Ok(Command::PasteEvent { primary, types }) => {
+                    // Nothing goes if the program turned paste events off
+                    // meanwhile, as in Ghostty.
+                    let bytes = if eof || hung_up {
+                        None
+                    } else {
+                        secure_random().and_then(|random| terminal.kitty_paste_event(primary, &types, &random))
+                    };
+                    encoded_input(&mut output, &shared, bytes.unwrap_or_default(), PASTE_EVENT)?;
+                    if scrollback != 0 {
+                        scrollback = 0;
+                        changed = true;
                     }
                 }
                 Ok(

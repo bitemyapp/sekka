@@ -59,6 +59,9 @@ pub struct Modes {
     pub mouse_format: MouseFormat,
     pub mouse_alternate_scroll: bool,
     pub grapheme_cluster: bool,
+    /// Mode 5522: a paste becomes a Kitty clipboard protocol paste event,
+    /// which lists the clipboard's types for the program to read itself.
+    pub kitty_paste_events: bool,
 }
 impl Default for Modes {
     fn default() -> Self {
@@ -77,6 +80,7 @@ impl Default for Modes {
             mouse_format: MouseFormat::X10,
             mouse_alternate_scroll: true,
             grapheme_cluster: false,
+            kitty_paste_events: false,
         }
     }
 }
@@ -101,6 +105,10 @@ pub enum TerminalEvent {
         title: String,
         body: String,
     },
+    /// A Kitty clipboard protocol (OSC 5522) read, or a committed write.
+    /// Malformed and oversized writes were answered already; the
+    /// application applies its policy and answers these.
+    KittyClipboard(crate::kitty_clipboard::Request),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -119,8 +127,14 @@ struct SavedCursor {
 // configured default for mode 2027 differs. Keep unknown modes unrecognized.
 const SAVED_MODE_NUMBERS: &[u16] = &[
     1, 6, 7, 9, 12, 25, 47, 66, 67, 69, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035,
-    1036, 1047, 1048, 1049, 2004, 2027,
+    1036, 1047, 1048, 1049, 2004, 2027, 5522,
 ];
+
+// Clipboard requests keep their order, up to a bounded prefix per feed:
+// callers drain events after each bounded feed, as the PTY worker does.
+// Limits apply before copying; other UI events retain their own slots.
+const MAX_CLIPBOARD_EVENTS: usize = 64;
+const MAX_CLIPBOARD_BYTES: usize = 8 * 1024 * 1024;
 
 struct SavedModes(u32);
 
@@ -673,6 +687,7 @@ pub(crate) struct State {
     background: Rgb,
     foreground_overridden: bool,
     background_overridden: bool,
+    kitty_clipboard: crate::kitty_clipboard::Protocol,
     pub generation: u64,
     pub responses: Vec<u8>,
     pub events: Vec<TerminalEvent>,
@@ -717,6 +732,7 @@ impl State {
             background: Rgb(0, 0, 0),
             foreground_overridden: false,
             background_overridden: false,
+            kitty_clipboard: Default::default(),
             generation: 0,
             responses: Vec::new(),
             events: Vec::new(),
@@ -736,8 +752,17 @@ impl State {
         let foreground = self.foreground_overridden.then_some(self.foreground);
         let background = self.background_overridden.then_some(self.background);
         let generation = self.generation;
+        // Answers and requests already made still go, and a write in flight
+        // goes on; the session's clipboard grants end, as Ghostty's do.
+        let responses = std::mem::take(&mut self.responses);
+        let events = std::mem::take(&mut self.events);
+        let mut kitty_clipboard = std::mem::take(&mut self.kitty_clipboard);
+        kitty_clipboard.grants.clear();
         *self = Self::new(cols, rows, limits);
         self.generation = generation.wrapping_add(1);
+        self.responses = responses;
+        self.events = events;
+        self.kitty_clipboard = kitty_clipboard;
         self.set_default_cursor(cursor_default.0, cursor_default.1);
         self.default_grapheme_cluster = grapheme_cluster;
         self.modes.grapheme_cluster = grapheme_cluster;
@@ -1672,22 +1697,8 @@ impl State {
             [selection, b';', data @ ..] if *selection != b';' => (*selection, data),
             _ => return,
         };
-        // Requests keep their order, up to a bounded prefix per feed: callers
-        // drain events after each bounded feed, as the PTY worker does. Limits
-        // apply before copying; other UI events retain their own slots.
-        const MAX_EVENTS: usize = 64;
-        const MAX_BYTES: usize = 8 * 1024 * 1024;
-        let (count, bytes) = self
-            .events
-            .iter()
-            .fold((0usize, 0usize), |(count, bytes), event| {
-                if let TerminalEvent::Clipboard { data, .. } = event {
-                    (count + 1, bytes.saturating_add(data.capacity()))
-                } else {
-                    (count, bytes)
-                }
-            });
-        if count >= MAX_EVENTS || data.len() > MAX_BYTES.saturating_sub(bytes) {
+        let (count, bytes) = self.clipboard_prefix();
+        if count >= MAX_CLIPBOARD_EVENTS || data.len() > MAX_CLIPBOARD_BYTES.saturating_sub(bytes) {
             // A read past the bounds is answered empty, so the program
             // asking doesn't wait for an answer that won't come.
             if data == b"?" {
@@ -1697,7 +1708,7 @@ impl State {
         }
         let mut owned = Vec::new();
         if owned.try_reserve_exact(data.len()).is_err()
-            || owned.capacity() > MAX_BYTES.saturating_sub(bytes)
+            || owned.capacity() > MAX_CLIPBOARD_BYTES.saturating_sub(bytes)
             || self.events.try_reserve(1).is_err()
         {
             return;
@@ -1707,6 +1718,66 @@ impl State {
             selection,
             data: owned,
         });
+    }
+    /// Clipboard requests waiting in this feed's events, and the OSC 52 bytes
+    /// they hold. Kitty writes are bounded by their transaction's limit.
+    fn clipboard_prefix(&self) -> (usize, usize) {
+        self.events
+            .iter()
+            .fold((0usize, 0usize), |(count, bytes), event| match event {
+                TerminalEvent::Clipboard { data, .. } => {
+                    (count + 1, bytes.saturating_add(data.capacity()))
+                }
+                TerminalEvent::KittyClipboard(_) => (count + 1, bytes),
+                _ => (count, bytes),
+            })
+    }
+    fn kitty_clipboard_event(&mut self, body: &[u8], bell_terminated: bool) {
+        use crate::kitty_clipboard::Terminator;
+        let (metadata, payload) = match body.iter().position(|&b| b == b';') {
+            Some(at) => (&body[..at], Some(&body[at + 1..])),
+            None => (body, None),
+        };
+        let terminator = if bell_terminated {
+            Terminator::Bel
+        } else {
+            Terminator::St
+        };
+        let Some(request) =
+            self.kitty_clipboard
+                .packet(metadata, payload, terminator, &mut self.responses)
+        else {
+            return;
+        };
+        // In order with OSC 52's, in the same bounded prefix. Past it the
+        // program hears EBUSY rather than waiting for an answer.
+        if self.clipboard_prefix().0 >= MAX_CLIPBOARD_EVENTS || self.events.try_reserve(1).is_err()
+        {
+            request.busy(&mut self.responses);
+            return;
+        }
+        self.events.push(TerminalEvent::KittyClipboard(request));
+    }
+    pub fn kitty_clipboard_grant(
+        &mut self,
+        pw: &str,
+        direction: crate::kitty_clipboard::Direction,
+    ) {
+        self.kitty_clipboard.grants.grant(pw, direction, false);
+    }
+    pub fn kitty_paste_event(
+        &mut self,
+        primary: bool,
+        available: &[String],
+        random: &[u8],
+    ) -> Option<Vec<u8>> {
+        if !self.modes.kitty_paste_events {
+            return None;
+        }
+        self.kitty_clipboard.paste_event(primary, available, random)
+    }
+    pub fn set_kitty_clipboard_write_limit(&mut self, bytes: usize) {
+        self.kitty_clipboard.write_limit = bytes;
     }
     fn semantic_prompt(&mut self, data: &[u8]) {
         let Some(&action) = data.first() else { return };
@@ -1940,6 +2011,7 @@ impl State {
             1004 => self.modes.focus_events = set,
             2004 => self.modes.bracketed_paste = set,
             2027 => self.modes.grapheme_cluster = set,
+            5522 => self.modes.kitty_paste_events = set,
             _ => {}
         }
     }
@@ -2000,6 +2072,7 @@ impl State {
                 1004 => Some(self.modes.focus_events),
                 2004 => Some(self.modes.bracketed_paste),
                 2027 => Some(self.modes.grapheme_cluster),
+                5522 => Some(self.modes.kitty_paste_events),
                 _ => None,
             }
         } else {
@@ -2794,6 +2867,10 @@ impl Handler for State {
     fn osc(&mut self, bytes: &[u8], bell_terminated: bool) {
         if let Some(body) = bytes.strip_prefix(b"52;") {
             self.clipboard_event(body);
+            return;
+        }
+        if let Some(body) = bytes.strip_prefix(b"5522;") {
+            self.kitty_clipboard_event(body, bell_terminated);
             return;
         }
         if let Some(body) = bytes.strip_prefix(b"133;") {

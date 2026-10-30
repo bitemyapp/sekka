@@ -115,6 +115,27 @@ impl TextRead {
         let deadline = Instant::now().checked_add(timeout.min(TRANSFER_TIMEOUT))?;
         shared_for(self.source).read_bytes_snapshot(
             self.identity,
+            None,
+            self.cancelled.clone(),
+            deadline,
+            maximum.min(READ_LIMIT),
+        )
+    }
+
+    /// The types the selection offers (this program's own internal ones
+    /// left out), while it is still the one this read was taken of: what a
+    /// terminal program asking for the clipboard's types is told.
+    pub fn mimes(&self) -> Option<Vec<String>> {
+        shared_for(self.source).mimes_snapshot(self.identity, &self.cancelled)
+    }
+
+    /// The selection as `mime`, byte for byte, if it offers that type.
+    /// Belongs on a worker, as [`read`](Self::read) does.
+    pub fn read_type(&self, mime: &str, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        let deadline = Instant::now().checked_add(timeout.min(TRANSFER_TIMEOUT))?;
+        shared_for(self.source).read_bytes_snapshot(
+            self.identity,
+            Some(mime),
             self.cancelled.clone(),
             deadline,
             maximum.min(READ_LIMIT),
@@ -578,9 +599,20 @@ impl Shared {
         }
     }
 
+    fn mimes_snapshot(&self, identity: ClipboardIdentity, cancelled: &AtomicBool) -> Option<Vec<String>> {
+        self.used.store(true, Ordering::Relaxed);
+        let f = self.lock();
+        if f.identity() != identity || cancelled.load(Ordering::Relaxed) {
+            return None;
+        }
+        Some(f.mimes.iter().filter(|mime| !mime.starts_with(OWNER_PREFIX)).cloned().collect())
+    }
+
+    /// The bytes of `mime`, or of the text when none is named.
     fn read_bytes_snapshot(
         &self,
         identity: ClipboardIdentity,
+        mime: Option<&str>,
         cancelled: Arc<AtomicBool>,
         deadline: Instant,
         maximum: usize,
@@ -596,7 +628,10 @@ impl Shared {
                 // change count, and the cache it keys, are still the last
                 // offer's: its bytes mustn't answer for this one.
                 if !matches!(f.text, Text::Reading { .. }) {
-                    break text_mime(&f.mimes)?;
+                    break match mime {
+                        Some(mime) => f.mimes.iter().find(|offered| *offered == mime)?.clone(),
+                        None => text_mime(&f.mimes)?,
+                    };
                 }
                 let left = deadline.saturating_duration_since(Instant::now());
                 f = self.arrived.wait_timeout(f, left).unwrap_or_else(|e| e.into_inner()).0;
@@ -962,7 +997,7 @@ mod tests {
         s.text_arrived(offer, ReadAhead::Text(Some("old".into())));
         let feeder = answer_next(&s, b"old");
         let read = |s: &Shared, wait| {
-            s.read_bytes_snapshot(s.identity(), Arc::new(AtomicBool::new(false)), Instant::now() + wait, 16)
+            s.read_bytes_snapshot(s.identity(), None, Arc::new(AtomicBool::new(false)), Instant::now() + wait, 16)
         };
         assert_eq!(read(&s, Duration::from_secs(1)).as_deref(), Some(&b"old"[..]));
         feeder.join().unwrap();
@@ -978,6 +1013,41 @@ mod tests {
         let feeder = answer_next(&s, b"new");
         assert_eq!(read(&s, Duration::from_secs(1)).as_deref(), Some(&b"new"[..]));
         feeder.join().unwrap();
+    }
+
+    #[test]
+    fn type_reads_name_offered_types_and_wait_out_a_new_offers_read_ahead() {
+        let s = std::sync::Arc::new(fresh());
+        let owner = format!("{OWNER_PREFIX}-1");
+        let mimes = vec!["text/plain;charset=utf-8".to_string(), "image/png".to_string(), owner];
+        let offer = s.foreign_offered(mimes.clone(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::Text(Some("hi".into())));
+        let read = TextRead { source: Source::Selection, identity: s.identity(), cancelled: Arc::default() };
+        let snapshot = |s: &Shared, mime, wait| {
+            s.read_bytes_snapshot(
+                read.identity,
+                Some(mime),
+                Arc::new(AtomicBool::new(false)),
+                Instant::now() + wait,
+                16,
+            )
+        };
+        assert_eq!(
+            s.mimes_snapshot(read.identity, &AtomicBool::new(false)).unwrap(),
+            ["text/plain;charset=utf-8", "image/png"],
+            "without the internal owner type"
+        );
+        let feeder = answer_next(&s, b"\x89PNG");
+        assert_eq!(snapshot(&s, "image/png", Duration::from_secs(1)).as_deref(), Some(&b"\x89PNG"[..]));
+        feeder.join().unwrap();
+        let start = Instant::now();
+        assert_eq!(snapshot(&s, "text/html", Duration::from_secs(1)), None, "not offered");
+        assert!(start.elapsed() < READ_TIMEOUT / 4);
+        // Another owner: the old read is stale, its types and data with it.
+        let newer = s.foreign_offered(mimes, true).unwrap();
+        assert_eq!(s.mimes_snapshot(read.identity, &AtomicBool::new(false)), None);
+        assert_eq!(snapshot(&s, "image/png", Duration::from_millis(20)), None);
+        s.text_arrived(newer, ReadAhead::Text(Some("ho".into())));
     }
 
     #[test]

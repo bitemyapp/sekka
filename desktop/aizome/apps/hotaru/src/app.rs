@@ -96,12 +96,12 @@ pub enum Msg {
     PrimaryReady(u64, PreparedClipboard),
     /// Paste the primary selection, as a middle click does.
     PastePrimary(u64),
-    /// A program's own clipboard request (OSC 52), from its PTY worker.
+    /// A program's own clipboard request (OSC 52 or 5522), from its PTY worker.
     Clipboard(crate::selections::Request),
     /// What a read will be answered with, captured before anyone is asked.
     ClipboardCaptured(crate::selections::Request, Option<Arc<[u8]>>, crate::selections::Preview),
-    /// The request being asked about is allowed, or not.
-    ClipboardAnswer(u64, bool),
+    /// What was chosen about the request being asked about.
+    ClipboardAnswer(u64, crate::selections::Answer),
     /// A program's notification (OSC 9 or 777): its title and body.
     Notify(u64, String, String),
     Find,
@@ -576,7 +576,7 @@ impl Hotaru {
 
     fn send(&mut self, id: u64, command: Command) {
         let input = match &command {
-            Command::Input(_) | Command::Paste(_) => true,
+            Command::Input(_) | Command::Paste(_) | Command::PasteEvent { .. } => true,
             Command::Key(key) => key.action != hotaru_core::input::KeyAction::Release,
             _ => false,
         };
@@ -816,14 +816,41 @@ impl Hotaru {
         }
     }
 
-    /// A program asks to read or write the clipboard (OSC 52): settings say
-    /// whether it may, whether to ask, or not.
+    /// A program asks to read or write the clipboard (OSC 52 or 5522):
+    /// settings say whether it may, whether to ask, or not.
     fn program_clipboard(&mut self, request: crate::selections::Request, cx: &mut Cx<Msg>) {
-        use crate::selections::{Kind, Target};
+        use crate::selections::{Answer, Kind, Target};
         if !self.panes.iter().any(|pane| pane.id == request.pane && !pane.ended) {
             return;
         }
         match &request.kind {
+            Kind::KittyWrite { write, preview, .. } => match self.settings.clipboard_write {
+                Access::Allow => self.answer(request, None, Answer::Allow, cx),
+                // A session grant needs nobody asked.
+                Access::Ask if write.granted => self.answer(request, None, Answer::Allow, cx),
+                Access::Ask => {
+                    let preview = preview.clone();
+                    self.ask(request, None, &preview, cx);
+                }
+                Access::Deny => self.answer(request, None, Answer::Refuse, cx),
+            },
+            Kind::KittyRead(_) => {
+                // Refused at once, so the program doesn't wait on an answer.
+                if self.settings.clipboard_read == Access::Deny {
+                    return self.answer(request, None, Answer::Refuse, cx);
+                }
+                let read = match request.target {
+                    Target::Clipboard => cx.clipboard_read(),
+                    Target::Primary => cx.primary_read(),
+                };
+                let (pane, busy) = (request.pane, request.busy());
+                let job = crate::selections::Job::Read { request, read };
+                if !self.selections.as_ref().is_some_and(|worker| worker.submit(job))
+                    && let Some(busy) = busy
+                {
+                    self.send(pane, Command::Reply(busy));
+                }
+            }
             Kind::Write { data, preview } => match self.settings.clipboard_write {
                 Access::Allow => publish(request.target, data.clone(), cx),
                 Access::Ask => {
@@ -850,6 +877,19 @@ impl Hotaru {
         }
     }
 
+    /// A program that asked for paste events (mode 5522) is told a paste's
+    /// types instead of given its text, and reads what it wants itself.
+    fn paste_event(&mut self, id: u64, primary: bool, read: &ClipboardRead) -> bool {
+        let Some(pane) = self.panes.iter().find(|pane| pane.id == id && !pane.ended) else { return false };
+        if !pane.snapshot.modes.kitty_paste_events {
+            return false;
+        }
+        let types: Vec<String> =
+            read.types().into_iter().take(hotaru_core::kitty_clipboard::MAX_LISTING_MIMES).collect();
+        self.send(id, Command::PasteEvent { primary, types: types.into() });
+        true
+    }
+
     /// Ask whether a program may have `request`; one question at a time.
     fn ask(
         &mut self,
@@ -858,17 +898,29 @@ impl Hotaru {
         preview: &crate::selections::Preview,
         cx: &mut Cx<Msg>,
     ) {
-        use crate::selections::Kind;
+        use crate::selections::{Answer, Kind};
         let Some(pane) = self.panes.iter().find(|pane| pane.id == request.pane) else { return };
         if self.asking.is_some() {
             let id = pane.id;
             self.notice(id, "A clipboard request was refused while another waits for an answer.");
-            self.answer(request, reply, false, cx);
+            // Kitty's programs hear EBUSY, to ask again.
+            if let Some(busy) = request.busy() {
+                self.send(id, Command::Reply(busy));
+            }
             return;
         }
-        let program = pane.title.chars().take(60).collect::<String>();
+        let title = pane.title.chars().take(60).collect::<String>();
+        // Kitty's programs give a name, theirs to choose: shown with the pane's title.
+        let (name, pw) = match &request.kind {
+            Kind::KittyRead(read) => (read.name.as_str(), read.pw.as_str()),
+            Kind::KittyWrite { write, .. } => (write.name.as_str(), write.pw.as_str()),
+            Kind::Read | Kind::Write { .. } => ("", ""),
+        };
+        let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+        let program = if name.is_empty() { title } else { format!("{name}” in “{title}") };
         let place = request.target.name();
         let shown = if preview.text.is_empty() { String::new() } else { format!(":\n\n“{}”", preview.text) };
+        let types = preview.named_types();
         let (title, message, allow) = match request.kind {
             Kind::Read => {
                 (format!("Let “{program}” read {place}?"), format!("It holds {}{shown}", preview.size()), "Allow")
@@ -878,34 +930,70 @@ impl Hotaru {
                 format!("It would hold {}{shown}", preview.size()),
                 "Replace",
             ),
+            Kind::KittyRead(_) => (
+                format!("Let “{program}” read {place}?"),
+                format!("It asks for {types}: {}{shown}", preview.size()),
+                "Allow",
+            ),
+            Kind::KittyWrite { .. } => (
+                format!("Let “{program}” replace {place}?"),
+                format!("It would hold {types}: {}{shown}", preview.size()),
+                "Replace",
+            ),
         };
         self.ask_token = self.ask_token.wrapping_add(1);
         let token = self.ask_token;
         // The question comes while someone may be typing: Return doesn't
-        // answer it; Escape refuses.
-        cx.alert(
-            self.window,
-            Alert::new(title, format!("{message}\n\nSettings → General chooses what programs may do."))
-                .button(allow, Msg::ClipboardAnswer(token, true))
-                .cancel_with("Don’t Allow", Msg::ClipboardAnswer(token, false)),
-        );
+        // answer it; Escape refuses. A program with a password may be let
+        // go on without asking, until its pane resets.
+        let mut alert = Alert::new(title, format!("{message}\n\nSettings → General chooses what programs may do."))
+            .button(allow, Msg::ClipboardAnswer(token, Answer::Allow));
+        if !pw.is_empty() {
+            alert = alert.button("Allow for This Session", Msg::ClipboardAnswer(token, Answer::Remember));
+        }
+        cx.alert(self.window, alert.cancel_with("Don’t Allow", Msg::ClipboardAnswer(token, Answer::Refuse)));
         self.asking = Some(crate::selections::Question { token, request, reply });
     }
 
     /// Carry out the answer about `request`: publish a write, send a read
-    /// its captured answer, or refuse it (a read gets an empty answer).
+    /// its captured answer, or refuse it (OSC 52's reads get an empty
+    /// answer, Kitty's requests EPERM).
     fn answer(
         &mut self,
         request: crate::selections::Request,
         reply: Option<Arc<[u8]>>,
-        allowed: bool,
+        answer: crate::selections::Answer,
         cx: &mut Cx<Msg>,
     ) {
-        use crate::selections::Kind;
+        use crate::selections::{Answer, Kind};
+        use hotaru_core::kitty_clipboard::{Direction, Status};
         if !self.panes.iter().any(|pane| pane.id == request.pane && !pane.ended) {
             return;
         }
+        let allowed = matches!(answer, Answer::Allow | Answer::Remember);
+        let refusal = request.refusal();
         match request.kind {
+            Kind::KittyRead(read) => {
+                if answer == Answer::Remember && !read.pw.is_empty() {
+                    self.send(request.pane, Command::KittyGrant(read.pw.as_str().into(), Direction::Read));
+                }
+                if let Some(reply) = reply.filter(|_| allowed).or(refusal) {
+                    self.send(request.pane, Command::Reply(reply));
+                }
+            }
+            Kind::KittyWrite { write, data, .. } => {
+                let mut status = Vec::new();
+                if allowed {
+                    if answer == Answer::Remember && !write.pw.is_empty() {
+                        self.send(request.pane, Command::KittyGrant(write.pw.as_str().into(), Direction::Write));
+                    }
+                    publish(request.target, data, cx);
+                    write.status(Status::Done, &mut status);
+                } else {
+                    write.status(Status::Eperm, &mut status);
+                }
+                self.send(request.pane, Command::Reply(status.into()));
+            }
             Kind::Write { data, .. } if allowed => publish(request.target, data, cx),
             Kind::Write { .. } => {}
             Kind::Read => {
@@ -1894,8 +1982,12 @@ impl Program for Hotaru {
                 }
             }
             Msg::PastePrimary(id) => {
+                // A newer paste, or paste event, replaces one still reading.
                 let token = self.clipboard_request();
                 let read = cx.primary_read();
+                if self.paste_event(id, true, &read) {
+                    return;
+                }
                 self.clipboard_read = Some(read.clone());
                 if let Some(worker) = &self.clipboard {
                     worker.submit(Job::Paste { token, tab: id, read });
@@ -1903,6 +1995,19 @@ impl Program for Hotaru {
             }
             Msg::Clipboard(request) => self.program_clipboard(request, cx),
             Msg::ClipboardCaptured(request, reply, preview) => {
+                use crate::selections::{Answer, Kind};
+                // A Kitty read discloses nothing past the listing when nothing
+                // came, or only the listing was asked for; a grant needs no
+                // question either.
+                if let Kind::KittyRead(read) = &request.kind {
+                    let open = read.granted || read.prompt_exempt() || preview.bytes == 0;
+                    match self.settings.clipboard_read {
+                        Access::Deny => self.answer(request, None, Answer::Refuse, cx),
+                        Access::Ask if !open => self.ask(request, reply, &preview, cx),
+                        _ => self.answer(request, reply, Answer::Allow, cx),
+                    }
+                    return;
+                }
                 // Settings may have changed while the read was captured. With
                 // nothing to read there's nothing to ask about: it's answered empty.
                 match (self.settings.clipboard_read, reply) {
@@ -1912,9 +2017,9 @@ impl Program for Hotaru {
                     (Access::Ask, Some(reply)) => self.ask(request, Some(reply), &preview, cx),
                 }
             }
-            Msg::ClipboardAnswer(token, allowed) => {
+            Msg::ClipboardAnswer(token, answer) => {
                 let Some(question) = self.asking.take_if(|question| question.token == token) else { return };
-                self.answer(question.request, question.reply, allowed, cx);
+                self.answer(question.request, question.reply, answer, cx);
                 self.focus_active(cx);
             }
             Msg::Notify(id, title, body) => self.notify(id, &title, &body, cx),
@@ -1979,6 +2084,9 @@ impl Program for Hotaru {
                 let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
                 let token = self.clipboard_request();
                 let read = cx.clipboard_read();
+                if self.paste_event(id, false, &read) {
+                    return;
+                }
                 self.clipboard_read = Some(read.clone());
                 if let Some(worker) = &self.clipboard {
                     worker.submit(Job::Paste { token, tab: id, read });

@@ -9,7 +9,8 @@ macOS application code or Zig runtime.
 performance-qualified replacement.** The current app provides shell sessions,
 tabs, split panes that zoom, a Settings window (❖,) for text, colours, the
 cursor and every keyboard shortcut, selection with the primary selection and
-middle-click paste, programs' own clipboard use (OSC 52, asked or allowed in
+middle-click paste, programs' own clipboard use (OSC 52, and Kitty's clipboard
+protocol for pictures, rich text and paste events; asked or allowed in
 Settings), desktop notifications, scrollback and native text input. Panes close
 as their shells end.
 The port targets the pinned

@@ -98,6 +98,40 @@ impl PreparedClipboard {
         Self { text: Some(text), contents: Arc::new(Contents { items }) }
     }
 
+    /// A terminal program's own types, byte for byte, in its order (at most
+    /// 128; names distinct, printable ASCII, no longer than 255 bytes).
+    /// Text types it left out are offered with its first text type's bytes.
+    pub fn from_representations(representations: Vec<(String, Arc<[u8]>)>) -> std::io::Result<Self> {
+        let invalid = || std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid clipboard MIME bundle");
+        if representations.is_empty() || representations.len() > 128 {
+            return Err(invalid());
+        }
+        let mut items: Vec<(String, Option<Arc<[u8]>>)> = Vec::with_capacity(representations.len() + 4);
+        for (mime, bytes) in representations {
+            if mime.is_empty()
+                || mime.len() > 255
+                || !mime.bytes().all(|byte| (0x20..=0x7e).contains(&byte))
+                || items.iter().any(|(existing, _)| existing == &mime)
+            {
+                return Err(invalid());
+            }
+            items.push((mime, Some(bytes)));
+        }
+        let text_bytes = items
+            .iter()
+            .find(|(mime, _)| clipboard::TEXT_MIMES.contains(&mime.as_str()))
+            .and_then(|(_, bytes)| bytes.clone());
+        let text = text_bytes.as_ref().map(|bytes| Arc::from(String::from_utf8_lossy(bytes).as_ref()));
+        if let Some(bytes) = text_bytes {
+            for mime in clipboard::TEXT_MIMES {
+                if !items.iter().any(|(existing, _)| existing == mime) {
+                    items.push(((*mime).to_owned(), Some(bytes.clone())));
+                }
+            }
+        }
+        Ok(Self { text, contents: Arc::new(Contents { items }) })
+    }
+
     pub fn text(&self) -> Option<&str> {
         self.text.as_deref()
     }
@@ -125,6 +159,7 @@ pub struct ClipboardRead {
     foreign: Option<clipboard::TextRead>,
     local: Option<Arc<str>>,
     local_bytes: Option<Arc<[u8]>>,
+    local_contents: Option<Arc<Contents>>,
     local_selection: bool,
     cancelled: Arc<AtomicBool>,
 }
@@ -133,10 +168,27 @@ impl ClipboardRead {
     /// A fixed headless/test clipboard; current until explicitly cancelled.
     pub fn from_text(text: Option<Arc<str>>) -> Self {
         let local_bytes = text.clone().map(Arc::<[u8]>::from);
+        let local_contents = local_bytes.as_ref().map(|bytes| {
+            let items = clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))).collect();
+            Arc::new(Contents { items })
+        });
         Self {
             foreign: None,
             local: text,
             local_bytes,
+            local_contents,
+            local_selection: true,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// A fixed headless/test clipboard holding `data`, every type of it.
+    pub fn from_prepared(data: &PreparedClipboard) -> Self {
+        Self {
+            foreign: None,
+            local: data.text.clone(),
+            local_bytes: data.text_bytes(),
+            local_contents: Some(data.contents.clone()),
             local_selection: true,
             cancelled: Arc::new(AtomicBool::new(false)),
         }
@@ -177,6 +229,33 @@ impl ClipboardRead {
             self.local_bytes.clone()
         } else {
             self.foreign.as_ref().and_then(|read| read.read_bytes(timeout, maximum))
+        };
+        bytes.filter(|bytes| bytes.len() <= maximum && self.is_current())
+    }
+
+    /// The types the snapshot's selection offers, none once it isn't
+    /// current. Never waits.
+    pub fn types(&self) -> Vec<String> {
+        if !self.is_current() {
+            return Vec::new();
+        }
+        if self.local_selection {
+            let items = self.local_contents.as_ref().map(|contents| contents.items.as_slice()).unwrap_or_default();
+            return items.iter().filter(|(_, bytes)| bytes.is_some()).map(|(mime, _)| mime.clone()).collect();
+        }
+        self.foreign.as_ref().and_then(clipboard::TextRead::mimes).unwrap_or_default()
+    }
+
+    /// As [`read_bytes`](Self::read_bytes), but the selection as `mime`
+    /// (one of [`types`](Self::types)), byte for byte.
+    pub fn read_type(&self, mime: &str, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        if !self.is_current() || timeout.is_zero() {
+            return None;
+        }
+        let bytes = if self.local_selection {
+            self.local_contents.as_ref().and_then(|contents| contents.data(mime)).flatten()
+        } else {
+            self.foreign.as_ref().and_then(|read| read.read_type(mime, timeout, maximum))
         };
         bytes.filter(|bytes| bytes.len() <= maximum && self.is_current())
     }
@@ -1058,6 +1137,7 @@ impl Cx {
         ClipboardRead {
             local: cached.and_then(|(_, data)| data.text.clone()),
             local_bytes: cached.and_then(|(_, data)| data.text_bytes()),
+            local_contents: cached.map(|(_, data)| data.contents.clone()),
             local_selection: cached.is_some(),
             foreign: Some(foreign),
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -1887,6 +1967,49 @@ mod tests {
             PreparedClipboard::new(None, (0..17).map(|i| (format!("x/type{i}"), bytes.clone())).collect()).is_err()
         );
         assert!(PreparedClipboard::new(Some(String::new()), vec![]).is_ok());
+    }
+
+    #[test]
+    fn a_programs_own_types_are_offered_as_sent_with_its_text_under_every_text_name() {
+        let plain: Arc<[u8]> = Arc::from(&b"hi\xff"[..]);
+        let png: Arc<[u8]> = Arc::from(&b"\x89PNG"[..]);
+        let prepared = PreparedClipboard::from_representations(vec![
+            ("image/png".into(), png.clone()),
+            ("text/plain".into(), plain.clone()),
+            ("TEXT".into(), Arc::from(&b"other"[..])),
+        ])
+        .unwrap();
+        let types: Vec<&str> = prepared.contents.items.iter().map(|(mime, _)| mime.as_str()).collect();
+        assert_eq!(types, ["image/png", "text/plain", "TEXT", "text/plain;charset=utf-8", "UTF8_STRING", "STRING"]);
+        assert_eq!(prepared.text(), Some("hi\u{fffd}"));
+        assert_eq!(prepared.data("TEXT"), Some(&b"other"[..]), "the program's own text names keep their bytes");
+        assert_eq!(prepared.data("UTF8_STRING"), Some(&*plain));
+        assert!(Arc::ptr_eq(prepared.contents.items[0].1.as_ref().unwrap(), &png));
+        let png_only = PreparedClipboard::from_representations(vec![("image/png".into(), png.clone())]).unwrap();
+        assert_eq!((png_only.text(), png_only.contents.items.len()), (None, 1));
+        for bad in [vec![], vec![("".into(), png.clone())], vec![("a/b".into(), png.clone()); 2]] {
+            assert!(PreparedClipboard::from_representations(bad).is_err());
+        }
+        assert!(PreparedClipboard::from_representations(vec![("text/x\u{e9}".into(), png.clone())]).is_err());
+        let many = (0..129).map(|i| (format!("x/type{i}"), png.clone())).collect();
+        assert!(PreparedClipboard::from_representations(many).is_err());
+    }
+
+    #[test]
+    fn a_snapshot_lists_and_reads_each_type() {
+        let prepared = PreparedClipboard::new(Some("hi".into()), vec![("text/html".into(), Arc::from(&b"<b>"[..]))]);
+        let read = ClipboardRead::from_prepared(&prepared.unwrap());
+        assert_eq!(read.types().len(), clipboard::TEXT_MIMES.len() + 1);
+        assert!(read.types().iter().any(|mime| mime == "text/html"));
+        assert_eq!(read.read_type("text/html", Duration::from_secs(1), 16).as_deref(), Some(&b"<b>"[..]));
+        assert_eq!(read.read_type("text/html", Duration::from_secs(1), 2), None, "past the limit");
+        assert_eq!(read.read_type("image/png", Duration::from_secs(1), 16), None);
+        assert_eq!(read.read_bytes(Duration::from_secs(1), 16).as_deref(), Some(&b"hi"[..]));
+        let text = ClipboardRead::from_text(Some(Arc::from("x")));
+        assert_eq!(text.read_type("UTF8_STRING", Duration::from_secs(1), 16).as_deref(), Some(&b"x"[..]));
+        assert!(ClipboardRead::from_text(None).types().is_empty());
+        read.cancel();
+        assert!(read.types().is_empty() && read.read_type("text/html", Duration::from_secs(1), 16).is_none());
     }
 
     #[test]

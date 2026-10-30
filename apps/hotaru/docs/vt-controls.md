@@ -37,7 +37,8 @@ sentinel used to leave the bulk path; Unicode property tables are unchanged.
 XTSAVE/XTRESTORE use a fixed 32-bit saved-value field. Repeated saves replace
 the slot; restores can be repeated. Unsaved slots use protocol defaults,
 including a reset 2027 slot even when the application configures Unicode width
-by default. Restores invoke actual mode side effects. Unknown modes stay
+by default. Mode 5522 (Kitty clipboard paste events) has a slot too and
+resets to off. Restores invoke actual mode side effects. Unknown modes stay
 unrecognized. DECECM 117 and the reference's fixed-reset ANSI modes report
 permanently reset without pretending to implement mutable behavior.
 

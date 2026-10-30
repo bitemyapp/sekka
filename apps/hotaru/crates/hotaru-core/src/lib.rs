@@ -9,6 +9,7 @@ mod grapheme;
 mod history;
 pub mod hyperlink;
 pub mod input;
+pub mod kitty_clipboard;
 mod memory;
 mod parser;
 mod position;
@@ -175,6 +176,29 @@ impl Terminal {
     pub fn reset(&mut self) {
         self.parser = parser::Parser::default();
         self.state.full_reset();
+    }
+    /// Let requests carrying `pw` (Kitty's clipboard protocol) go without
+    /// asking in `direction` until a reset: someone chose to remember an
+    /// answer.
+    pub fn kitty_clipboard_grant(&mut self, pw: &str, direction: kitty_clipboard::Direction) {
+        self.state.kitty_clipboard_grant(pw, direction);
+    }
+    /// What a user's paste sends when the program asked for paste events
+    /// (mode 5522), else none: a listing of the clipboard's `available`
+    /// types, with a one-time password from `random` (secure bytes) the
+    /// program may read them with once. None too when `random` runs out.
+    pub fn kitty_paste_event(
+        &mut self,
+        primary: bool,
+        available: &[String],
+        random: &[u8],
+    ) -> Option<Vec<u8>> {
+        self.state.kitty_paste_event(primary, available, random)
+    }
+    /// The most one Kitty clipboard write may hold; past it the program
+    /// hears EFBIG. Ghostty's 64 MiB unless set.
+    pub fn set_kitty_clipboard_write_limit(&mut self, bytes: usize) {
+        self.state.set_kitty_clipboard_write_limit(bytes);
     }
     /// Clear the scrollback and the screen as Ghostty's `clear_screen` does.
     /// True when the cursor was at a marked shell prompt: send the shell a
