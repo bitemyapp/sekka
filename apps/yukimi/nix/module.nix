@@ -13,6 +13,7 @@ let
   cfg = config.programs.yukimi;
   ownCatalog = import ./catalog.nix {
     inherit lib;
+    inherit (pkgs) config;
     inherit (pkgs.stdenv) hostPlatform;
     instantiate = cfg.instantiateCatalogs;
     packagesFor =

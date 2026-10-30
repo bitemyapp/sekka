@@ -244,7 +244,7 @@ mod tests {
             "installer",
             r#"[{"id":"firefox","name":"Firefox","description":"Browse.","category":"Browsers","packages":["firefox"]},
                 {"id":"rustup","name":"Rustup","description":"Toolchains.","category":"Development tools","packages":["rustup"],"requires":["build-tools"]},
-                {"id":"uta","name":"Uta for YouTube Music","description":"Downloads when selected.","category":"Media & creativity","source":"sekka","packages":["uta"],"preload":false},
+                {"id":"uta","name":"Uta for YouTube Music","description":"Downloads when selected.","category":"Media & creativity","source":"sekka","packages":["uta"],"preload":false,"platforms":["x86_64-linux","aarch64-linux"]},
                 {"id":"Bad Id","name":"Bad","description":"","category":"x"}]"#,
         );
         let firefoxes: Vec<&Application> = apps.iter().filter(|a| a.name == "Firefox").collect();
