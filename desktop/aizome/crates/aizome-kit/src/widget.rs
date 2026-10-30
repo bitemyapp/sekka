@@ -245,6 +245,17 @@ pub trait Widget: std::any::Any {
         self.hit()
     }
 
+    /// Whether it takes only drags with the left button (an edge to resize
+    /// by, over rows that take clicks). A left press that ends without a
+    /// drag reaches what's under it as a click, once released. Other
+    /// buttons, the wheel and drops go straight there. It still shows its
+    /// cursor and hover, and what's under it shows its hover and tooltip
+    /// too. Its press ends if the pointer leaves the window meanwhile (the
+    /// compositor took it: the release won't come).
+    fn drags_only(&self) -> bool {
+        false
+    }
+
     /// Whether hovering it changes how it draws.
     fn hover_paints(&self) -> bool {
         self.hit()
@@ -277,6 +288,19 @@ pub trait Widget: std::any::Any {
 
     fn semantics(&self) -> Option<Semantics> {
         None
+    }
+
+    /// The video it shows, if it's a video's place (see
+    /// [`widgets::video`](crate::widgets::video)), as last laid out: the
+    /// kit places the window's video there.
+    fn video(&self) -> Option<crate::widgets::video::VideoSpec> {
+        None
+    }
+
+    /// Whether it's drawn over the window's videos ([`over_video`](crate::widgets::video::over_video)):
+    /// a video it overlaps goes under the window's drawing.
+    fn over_video(&self) -> bool {
+        false
     }
 
     /// Carry out an Edit menu command (it has the focus): whether it did.

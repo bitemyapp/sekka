@@ -18,6 +18,16 @@
   inputs.superluminal.inputs.nixpkgs.follows = "applications";
   inputs.tracy.url = "github:bitemyapp/tracy-flake";
   inputs.tracy.inputs.nixpkgs.follows = "applications";
+  # Uta, the YouTube Music client, as source: Sekka builds it against
+  # Aizome's kit from this checkout (nix/uta.nix), not the Aizome its own
+  # lock names. Pinned by revision, so the nightly's input update doesn't
+  # move it: a Uta that needs a different Aizome would fail the nightly's
+  # checks and hold back every other input. Re-pin as DEVELOPERS.md (Aizome)
+  # describes: from a sekka branch of bitemyapp/uta, never its main.
+  inputs.uta = {
+    url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
+    flake = false;
+  };
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
@@ -44,7 +54,12 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) superluminal tracy;
+        inherit (externalInputs)
+          applications
+          superluminal
+          tracy
+          uta
+          ;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -180,8 +195,8 @@
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
-        # The catalog installs this same package (nix/components.nix).
-        inherit (inputs.kakehashi.packages.${system}) kakehashi;
+        # The catalog installs these same packages (nix/components.nix).
+        inherit (inputs.catalog.packages.${system}) kakehashi uta;
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
@@ -288,9 +303,13 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         xapp-packages = import ./nix/xapp-packages-test.nix {
-          inherit pkgs inputs applicationCatalog;
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            installer
+            ;
           patched = xappPkgs.xdg-desktop-portal-xapp;
-          compatibility = installer.config.specialisation.compatibility.configuration;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
           inherit pkgs;
@@ -350,6 +369,35 @@
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
+        uta-installation = import ./nix/uta-installation-test.nix {
+          inherit pkgs applicationCatalog installer;
+          uta = self.packages.${system}.uta;
+        };
+        # Uta is third-party code: it runs here, in the build sandbox, not in
+        # the workflows' jobs, which go on to hold the cache's secrets.
+        uta-rustypipe =
+          let
+            inherit (self.packages.${system}) uta;
+          in
+          pkgs.runCommand "uta-rustypipe-check" { } ''
+            version=$(${uta}/bin/aizome-uta --version)
+            echo "$version"
+            grep -qF '(RustyPipe: true)' <<< "$version"
+            # The GPL-3.0-only build's notices and directions to its source,
+            # and the source push-cache publishes beside it.
+            doc=${uta}/share/doc/aizome-uta
+            for notice in LICENSE-RustyPipe LICENSE-EJS; do
+              if [[ ! -s $doc/$notice ]]; then
+                echo "$doc/$notice is missing or empty" >&2
+                exit 1
+              fi
+            done
+            grep -qF "github:bitemyapp/uta/${inputs.uta.rev or "(not a Git revision)"}" "$doc/SOURCE"
+            test -f ${uta.source}/uta/vendor/rustypipe/LICENSE
+            test -f ${uta.source}/aizome/crates/aizome-kit/Cargo.toml
+            test -f ${uta.source}/sekka/nix/uta.nix
+            echo "$version" > $out
+          '';
         application-cache = applicationCatalog.cache;
         live-profiles =
           let

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Shiori
+GenericName=Documents
+Comment=Read PDF documents: find, select and copy text, follow links and the contents, and keep your place
+Keywords=pdf;documents;document viewer;reader;viewer;books;papers;
+Categories=Office;Viewer;Graphics;
+MimeType=application/pdf;application/x-pdf;
+Icon=org.aizome.Shiori
+Exec=aizome-shiori %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Shiori
+DBusActivatable=false

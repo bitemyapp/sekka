@@ -26,7 +26,8 @@ Aizome's look.
 | Surface | Layer | Namespace | Per | Anchors / size | Keyboard |
 |---|---|---|---|---|---|
 | Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand |
-| Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top, right; 232pt wide, as tall as its content; margin-top 24 | on demand |
+| Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top and `[deskbar] side` (right by default); `[deskbar] width` (232pt by default) plus its 3pt shadow, as tall as its content; margin-top 24 | on demand |
+| Deskbar width, while its edge is dragged | overlay | `aizome-deskbar-preview` | the main display | top and the Deskbar's side; as wide as the Deskbar can be there; no input | none |
 | Menus, systray panels | popups of the bar or Deskbar | — | — | — | grab |
 | Palette, Toolchest typed into | overlay | `aizome-palette` | the output with the focus (the focused window's, else the one showing the current Desk) | centred, 720 × up to 480pt | exclusive |
 | Menu at the pointer, torn-off palettes | overlay / top | `aizome-menu` | — | positioned with margins | on demand |
@@ -48,7 +49,8 @@ Aizome's look.
   fallback menus for apps that publish none: an app menu (About, Hide ❖H,
   Hide Others ⌥❖H, Quit ❖Q — Quit closes all its windows through the
   compositor) and a Window menu (Minimise ❖M, Fill, Split Left, Split Right,
-  Stack with…, Move to Desk ▸, Full Screen ⌃❖F, Close). With no window
+  Stack with… ⌃❖S, Show Previous Tab ⇧❖[, Show Next Tab ⇧❖], Move Tab to
+  New Window ⌃⇧❖S, Move to Desk ▸, Full Screen ⌃❖F, Close). With no window
   focused, the "app" is the desktop: Aizome's own menus (Aizome ▸ About
   Aizome, Settings…, Lock, Log Out; File ▸ New Folder on Desktop; Desks ▸;
   Help ▸).
@@ -85,7 +87,9 @@ Aizome's look.
   its own when it has none; a middle click is its secondary action.
 - **The clock**, IBM Plex Mono 600, tabular digits, 24h by default (config).
 - When the Deskbar is collapsed: `N apps ⌄` before the clock, which expands
-  it, in place of the widgets and status items.
+  it, in place of the widgets and status items. With the Deskbar at the
+  left (`[deskbar] side`), this control and Hide Deskbar sit after the
+  Toolchest instead, above the Deskbar, and the widgets stay.
 
 Each systray widget opens a panel (a popup under it, `raised`, hard 3pt
 shadow, 320pt wide) of quick controls, and its last row opens the matching
@@ -260,9 +264,66 @@ keys), so the palette learns.
 
 ## Deskbar
 
-At the top right under the bar (C2-Desktop): `chrome`, 232pt, hard shadow.
-The menu bar's Hide Deskbar control collapses it; the `N apps ⌄` control
-brings it back.
+At the top right under the bar by default (C2-Desktop): `chrome`, 232pt,
+hard shadow. It can stand at the left instead, and be narrower or wider
+(below). The menu bar's Hide Deskbar control collapses it; the
+`N apps ⌄` control brings it back.
+
+### Where it stands, and how wide
+
+```toml
+[deskbar]
+side = "right"   # or "left"
+width = 232.0    # points
+```
+
+- **`side`** is the screen edge it hangs from, under the menu bar. At the
+  left its shadow falls right and down, as other floating things' do, and
+  its edge highlights face the screen. Filled, split and maximised windows
+  sit beside it at either edge.
+- **`width`** is rounded to whole points and kept between 120 and 400pt.
+  Anything below 84pt (halfway between Slim's narrowest and the Rail's)
+  snaps to 48pt, Icons Only. On the main display it's also kept within
+  45% of the display's width: the compositor sets windows beside a
+  Deskbar only while it stands in one half of the screen. The setting
+  itself is left as it is, so a wider display gives the width back.
+- **The grip**: a 10pt strip of dots along its top, always shown, above
+  the scrolling rows. Drag it and let go over the other half of the
+  screen, and the Deskbar moves to that edge (it closes and opens again
+  with the other anchor). Right-click it for **At the Left** and **At the
+  Right**, and the named sizes **Icons Only** (48), **Slim** (150),
+  **Standard** (232), **Wide** (300) and **Wider** (360); ticks mark the
+  current ones, and sizes wider than the display allows are off. When the
+  display holds the Deskbar narrower than `width` asks, no size is
+  ticked and **As Wide as This Display Allows** gives the width it has.
+- **The inner edge**: a 5pt strip over the rows' inner edge, which shows
+  the resize cursor and a `focus` line under the pointer. Drag it to
+  change the width: an outline of the Deskbar at the new width shows on a
+  surface of its own over it while the button's held. The Deskbar takes
+  that width and saves it when you let go, so the windows beside it are
+  fitted once, not at every step of the drag. If the release never
+  reaches the Deskbar (the compositor took the pointer, the Deskbar or
+  its display went, or the screen locked), the drag ends there and the
+  width stays. The strip takes drags only: a click there, other buttons
+  and the wheel reach the row under it, which shows its hover and tooltip
+  there too.
+- Settings → Desktop & Deskbar has **Stands at** (Left / Right) and
+  **Width** (the same named sizes; none is lit after a drag to another
+  width).
+
+How much it shows follows the width:
+
+| Width | Layout |
+|---|---|
+| 200–400pt | Full: everything below |
+| 120–199pt | Slim: the same rows a size smaller; each notification a single line with a `red` mark; the unread count a badge on the app |
+| 48pt | Icons Only (the Rail): each app's icon with a `red` unread badge, a small window-shaped mark per window (the focused one filled, hidden ones dashed), Shelf items as tiles; names in tooltips |
+
+The compact layouts don't take drag-to-reorder yet (use the app's Move Up
+and Move Down). The bar's systray header lines up with a full-width
+Deskbar at the right and keeps its usual width otherwise. Critical
+notification cards stay clear of a Deskbar at the right, and desktop icons
+of one at the left, unless it hides itself.
 
 Its height is limited to the space below the menu bar on the owning
 output. Scroll to reach overflowing app groups, notifications and Shelf
@@ -308,7 +369,15 @@ ones stay as a card under the bar until acted on. Actions appear as buttons
 on the card and in the Deskbar preview. Do Not Disturb (from the palette,
 the clock panel, or a schedule in settings) files them without the line.
 Screenshots post a notification with the image's thumbnail and "Show in
-Hako".
+Hako". A USB or Bluetooth keyboard without keys of its own
+(`[[input.keyboards]]`), there when the shell connects or plugged in
+later (`keyboard-added`), gets "Set up …?" with **Set Up…**, which opens
+Settei's keyboard setup (`keyboard.setup`) with that keyboard chosen
+(`--keyboard`), and **Same as Others**, which writes an entry without
+`options` for it (as Settei's **Same as Other Keyboards** does), so a
+device that only says it's a keyboard (a security key, a mouse's receiver)
+isn't asked about again; each is asked about once a session
+(`keyboards.rs`).
 
 Opening a notification raises its application's most recent window on the
 current Desk, falling back to another Desk if necessary. It reveals minimised

@@ -89,6 +89,14 @@ pub use widgets::scroll::{Direction, list, scroll, virtual_list};
 pub use widgets::table::{Column, TreeItem, table, tree};
 pub use widgets::text_editor::{FindRequest, text_editor};
 pub use widgets::text_field::{search_field, text_field};
+pub use widgets::video::{over_video, video_surface};
+
+/// Video in windows: frames from a player's thread, shown by the compositor
+/// (see [`widgets::video`]).
+pub mod video {
+    pub use crate::widgets::video::{VideoEl, VideoId, VideoSpec, fit, over_video};
+    pub use sidestep_ui::video::*;
+}
 
 /// Everything an app usually needs: `use aizome_kit::prelude::*;`.
 pub mod prelude {
@@ -102,7 +110,7 @@ pub mod prelude {
         icon, icon_button, image, keycap, list, menu_view, meter, mouse_area, popover, progress,
         progress_indeterminate, radio, rich_text, scroll, search_field, segmented, segmented_icons, sidebar_item,
         sidebar_layout, slider, space, spacer, split, status_bar, status_text, stepper, table, text, text_editor,
-        text_field, toggle, toolbar, toolbar_separator, tooltip, tree, virtual_list,
+        text_field, toggle, toolbar, toolbar_separator, tooltip, tree, video_surface, virtual_list,
     };
     pub use crate::{column, row, stack};
 }

@@ -163,6 +163,9 @@ pub trait Program: Sized + 'static {
 pub struct WindowState {
     pub fullscreen: bool,
     pub maximized: bool,
+    /// The desktop isn't showing it (on a Desk no one is looking at):
+    /// what draws continuously can stop.
+    pub suspended: bool,
 }
 
 /// Who an app is.
@@ -254,6 +257,9 @@ pub struct WindowSpec {
     /// program exported (xdg-foreign v2), as a portal's dialog is over
     /// the app that asked for it. Normal windows only.
     pub foreign_parent: Option<String>,
+    /// Shows video under its drawing (see [`widgets::video`](crate::widgets::video)):
+    /// see-through where it draws clear.
+    pub video: bool,
 }
 
 impl WindowSpec {
@@ -267,6 +273,7 @@ impl WindowSpec {
             kind: WindowKind::Normal,
             hidden: false,
             foreign_parent: None,
+            video: false,
         }
     }
 
@@ -275,6 +282,15 @@ impl WindowSpec {
     /// ahead: [`Cx::prepare_window`](crate::Cx::prepare_window)).
     pub fn hidden(mut self) -> Self {
         self.hidden = true;
+        self
+    }
+
+    /// Show video under the window's drawing, where a video element
+    /// draws it clear (`video_surface(id).below(true)`): its pixels carry
+    /// alpha, and the kit tells the compositor it's opaque but there.
+    /// Videos over the drawing need nothing of the window.
+    pub fn video(mut self) -> Self {
+        self.video = true;
         self
     }
 

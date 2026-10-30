@@ -86,7 +86,7 @@ fn toolbar(n: &Nisshi) -> Element<Msg> {
             .toolbar()
             .selected(n.sidebar)
             .on_press(Msg::ToggleSidebar)
-            .tooltip("Sidebar (⌃❖S)")
+            .tooltip("Sidebar (⌥❖S)")
             .label("Sidebar")
             .into(),
         toolbar_separator(),

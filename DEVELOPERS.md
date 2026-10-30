@@ -397,16 +397,20 @@ the new font invalidates that context before GTK has initialized its CSS node.
 `nix/overlays/xapp.nix` carries a local source patch that coalesces the theme
 notification at GLib idle priority, after the pending settings events. It
 preserves Settings reads and change signals, without delaying portal startup.
-`modules/portal-fixes.nix` applies it to installed desktops and the live
-compatibility session. Review the patch when updating XApp; remove it when
-upstream handles this case correctly.
+`modules/portal-fixes.nix` applies it to installed desktops and to the live
+media. Every live boot entry runs Aizome, the software one included, so the
+media carry Xfce and the portal only in their prebuilt installed systems.
+Review the patch when updating XApp; remove it when upstream handles this case
+correctly.
 
 `nix build .#checks.x86_64-linux.xapp-settings .#checks.x86_64-linux.xapp-packages`
 checks the real backend under private X and D-Bus sessions. The original
 package must crash for the same theme/font batch; the patched package must
 read two distinct accent colors and emit their change notifications. Package
-selection assertions cover installed Xfce, its ISO reference and the live
-compatibility configuration. This is component evidence, not ISO qualification.
+selection assertions cover installed Xfce and the media's prebuilt Xfce and
+every-desktop systems, which must select the patched portal and no other XApp
+package, and every live boot entry, where any XApp portal must be the patched
+one. This is component evidence, not ISO qualification.
 
 Sekka backports Aquamarine's upstream null-connector teardown fix
 [`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
@@ -727,7 +731,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -918,7 +922,8 @@ hand, from a clean checkout of reviewed `main`:
 nix run .#push-cache
 ```
 
-It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
+It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
+`uta.source` (Uta's GPL-3.0-only build's sources, published beside it),
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
@@ -1114,6 +1119,80 @@ would rebuild Aizome. The source hash already tells the builds apart.
 The workspace builds against Sukumo, Aizome's toolkit, in
 `desktop/aizome/sukumo` ([Sukumo](#sukumo)).
 
+The catalog's Uta, from [bitemyapp/uta](https://github.com/bitemyapp/uta),
+depends on `aizome-kit` by path, and Sekka builds it against the kit here
+and Sukumo (`nix/uta.nix`), with Uta's own `Cargo.lock`. A change to the
+interface or dependencies of the kit or Sukumo must keep
+`nix build .#uta` building; the `applications` check builds it too. Uta's
+source holds only the kit's and Sukumo's crates, so a crate the kit comes to
+depend on joins the list in `nix/uta.nix`.
+
+That `Cargo.lock` lives in bitemyapp/uta, at the revision `flake.nix` pins,
+and Nix vendors exactly the crates it names. A kit or Sukumo change that adds
+or bumps a crates.io dependency, or gives the kit a new path crate, therefore
+breaks `.#uta` until Uta's lock is regenerated and re-pinned, even though
+nothing in Sekka's own locks is wrong. `.#uta` is built by the cache
+workflow's and the nightly's first step, by `nix flake check` and by
+`push-cache`, so a broken Uta stops publication for that push to `main` and
+holds `nightly`, with every other input update, until it is fixed. Build
+`.#uta` before merging a kit or Sukumo change. When it fails, re-pin Uta in the
+same pull request.
+
+Re-pin from a `sekka` branch of bitemyapp/uta, never from its `main`. Uta's
+own flake builds against Aizome's former repository with the same
+`Cargo.lock`, and a lock regenerated against the kit here need not build
+there. The first time, create `sekka` from the revision `flake.nix` pins.
+
+1. In a scratch directory, put a checkout of bitemyapp/uta's `sekka` branch at
+   `uta/` and this worktree's `desktop/aizome` at `aizome/` beside it (a
+   symlink works), which is the layout Uta's path dependency
+   `../aizome/crates/aizome-kit` and its `nix/package.nix` expect.
+2. In `uta/`, inside this worktree's `nix develop .#aizome` shell, run
+   `cargo update --workspace`, which adds what the kit and Sukumo now need
+   and leaves the other locked versions alone, check that
+   `cargo build --locked` works, and commit and push `Cargo.lock` (with any
+   source change Uta needs) to `sekka`. Cargo applies only the `[patch]`
+   sections of the workspace it builds, Uta's: a patch the kit or Sukumo
+   relies on in `desktop/aizome/Cargo.toml` must be repeated in Uta's
+   `Cargo.toml`.
+3. Put the new `sekka` revision in `inputs.uta.url` in `flake.nix`, run
+   `nix flake update uta`, update the pin in `docs/applications.md`, and build
+   `.#uta`, `.#checks.x86_64-linux.uta-rustypipe` and
+   `.#checks.x86_64-linux.uta-installation`.
+
+To move to a newer Uta, merge its revision into `sekka` and run steps 2 and 3.
+Sekka's lock reaches Uta's `main` only together with a change to Uta's flake
+that builds it against the same kit, made and built in Uta.
+
+With RustyPipe, Uta's build is GPL-3.0-only. `share/doc/aizome-uta` holds
+RustyPipe's and EJS's notices and a `SOURCE` note naming Uta's repository,
+revision and narHash, and where Sekka's recipe lives. The note leaves out
+Sekka's own revision, which would rebuild Uta on every Sekka commit; it points
+to the `sekka` input of an installed system's `/etc/nixos/flake.lock`
+instead. `uta.source` links the exact sources it was built from: the pinned
+Uta source (with its vendored, patched RustyPipe), the kit and Sukumo fileset
+from `nix/uta.nix`, and that recipe.
+`push-cache` publishes `uta.source` beside `uta`, so the cache that serves the
+binary also serves its source; the crates.io sources are named, by checksum, in
+Uta's `Cargo.lock`. `checks.x86_64-linux.uta-rustypipe` runs
+`aizome-uta --version` in the build sandbox to confirm RustyPipe is enabled,
+and checks the notices, the note and the source links. The workflows only
+build Uta: no Uta code runs in a job that holds the cache's secrets.
+
+Uta is an optional download in Genkan and Yukimi, with RustyPipe enabled. Its
+catalog `preload: false` excludes it from `application-cache` and the ISO's
+application closure lists; it remains in the free-application systems published
+to the binary cache. New catalog entries preload by default. Keep the two
+policies separate: catalog availability does not require offline media inclusion.
+Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation`
+after changing the pin or preload policy. This checks the package, package
+selection and evaluated ISO contents; it does not certify an ISO boot or
+installation. Because the ISO doesn't carry Uta, installing it from that ISO
+needs the network and a cache.sekka.computer entry for the exact Uta that
+ISO's revision builds; otherwise Genkan compiles it in the live session. ISO
+qualification checks that entry first
+(`.agents/skills/sekka-iso-qualification/references/prepare.md`).
+
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix
 shell. Without `--checkout`, `aizome-dev` uses `$AIZOME_CHECKOUT`, then the
@@ -1181,6 +1260,74 @@ session inspection without helper privileges; the helper's system-only check
 never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
+
+Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
+reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
+PDF renderer in Rust, from [bitemyapp/hayro](https://github.com/bitemyapp/hayro)'s
+`aizome-perf` branch. The fork is about twice as fast as PDFium over the
+pdf.js corpus and gives an encrypted document's permissions
+([record](docs/test-results/hayro-fork-2026-10-28.json)). Shiori's
+`Cargo.toml` pins it by revision; it brings bitemyapp/zune-image's
+`scaled-idct` zune-jpeg (pinned by `Cargo.lock`), and Aizome's workspace
+patches moxcms to bitemyapp/moxcms's `gamma-table-cache-0.8`
+(awxkee/moxcms#209). Each git dependency has a hash in `cargoLock.outputHashes`
+in `desktop/aizome/nix/package.nix`. To move the fork, push it, change both
+revisions in Shiori's `Cargo.toml`, run `cargo update -p hayro`, and put the
+new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
+--fetch-submodules` hash in `outputHashes`.
+
+The zune-core and moxcms entries in the `[patch.crates-io]` of
+`desktop/aizome/Cargo.toml` aren't Shiori's alone: Cargo applies a patch to
+the whole workspace. Everything that reaches `image` builds it against the
+forks: the compositor (`aizome-comp`, `aizome-comp-core` and
+`aizome-comp-logic`, through Sukumo's `sidestep-ui` and `sidestep-engine`),
+`aizome-kit` the same way, and so the shell and every app (Hako and Shashin
+use `sidestep-engine` directly too, and Shashin `image`). `image` still
+decodes JPEGs with crates.io's zune-jpeg, compiled against the forked
+zune-core, and manages colour with the forked moxcms. Sukumo's own
+workspace has its own `Cargo.lock` and no patch. A change to either fork
+can change how wallpapers, icons and thumbnails decode, so moving one needs
+Shashin's tests, the `aizome` package's check phase and a look at a
+session, not only Shiori's tests:
+
+- zune-core is named by its branch, `scaled-idct`, as hayro names its
+  zune-jpeg, so a plain `cargo update` moves both (one repository) to the
+  branch's head. Choose the commit with `cargo update -p zune-core
+  --precise REV`, and replace the zune-image hash in `outputHashes`.
+- moxcms is pinned by `rev`: change it, run `cargo update -p moxcms`, and
+  replace its hash.
+- The moxcms patch only saves work (its tables are the same), so dropping
+  it with its hash costs Shiori time on ICC-based and Lab colour, nothing
+  else; it can go once awxkee/moxcms#209 is released.
+- The zune-core patch can go only once hayro's zune-jpeg and `image`'s
+  agree on a zune-core Nix can vendor, as it can't hold two crates of one
+  name and version: the fork's work released and hayro's fork moved to
+  it, or the fork's zune-core given a version of its own.
+
+Only the worker process, `aizome-shiori --worker`, one for each open
+document, runs hayro: a document can panic it or keep it busy, and the
+SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
+`unsafe` code on the document's bytes. A panic costs the job it was on (a page it was drawing shows as
+unreadable at that size; one whose text it was reading has none); the
+reader restarts a worker that dies or spends too long on a page, and
+refuses a drawing it couldn't have asked for (too large, or of a page the document hasn't). Fonts a document names but doesn't carry come from hayro's built-in
+Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
+fontconfig for. Its tests start real workers over generated documents and a
+qpdf-encrypted fixture:
+
+```sh
+cargo test -p aizome-shiori
+cargo test -p aizome-shiori --release --test budget -- --nocapture
+cargo run --release -p aizome-shiori --example corpus -- DIR
+nix build .#aizome-checks.shiori -L
+```
+
+The last runs the packaged reader in an Aizome VM, including a worker
+killed and replaced.
+
+The engine evaluation (PDFium against hayro over the pdf.js corpus, and
+why MuPDF and Poppler were ruled out by licence), the fork's work, and the
+reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
@@ -2047,9 +2194,17 @@ on. One run builds at a time; while it does, GitHub keeps only the newest
 waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
-It runs `nix flake check` on the revision as merged, without updating inputs,
-then `nix run .#push-cache` and `scripts/check_cache_coverage.py`, as the
-nightly does. A failed check publishes nothing. It builds no ISO, moves no
+It builds `.#uta` first, so a kit or Sukumo change that breaks Uta fails by
+name (see [Aizome](#aizome)), then runs `nix flake check` on the revision as
+merged, without updating inputs; its `uta-rustypipe` check confirms, in the
+build sandbox, that RustyPipe is enabled. Nothing of Uta runs in the job
+itself, which goes on to hold the cache's secrets.
+`nix run .#push-cache` signs and uploads the packages, including Uta and its
+source, to the `sekka-cache` R2 bucket. `scripts/check_cache_coverage.py .#uta .#installed-systems`
+then verifies that a fresh store can download Uta and the installed systems
+without compiling them. The nightly uses the same build, upload and coverage
+checks. Uta remains excluded from the ISO preload list. A failed build or check
+stops the job. It builds no ISO, moves no
 branch and publishes no download; machines following `main` substitute its
 packages instead of building them, and the next nightly finds them already
 built. It uses the `nightly` environment's three cache secrets, and fails

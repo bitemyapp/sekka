@@ -189,12 +189,25 @@ impl Udev {
                         {
                             d.led_update(kb.led_state().into());
                         }
-                        u.input_devices.push(d);
+                        u.input_devices.push(d.clone());
                     }
-                } else if let InputEvent::DeviceRemoved { device } = &event
-                    && let crate::backend::Backend::Udev(u) = &mut state.backend
-                {
-                    u.input_devices.retain(|d| d != device);
+                    // One that types (a space bar and letters), not a power
+                    // button.
+                    if d.has_capability(DeviceCapability::Keyboard)
+                        && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
+                    {
+                        let bustype = smithay::backend::input::Device::syspath(&d)
+                            .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
+                            .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());
+                        let bus = crate::keyboards::bus(bustype, d.id_vendor());
+                        let k = crate::keyboards::Keyboard::new(d.name(), d.id_vendor(), d.id_product(), bus);
+                        state.keyboard_added(d.sysname().to_owned(), k);
+                    }
+                } else if let InputEvent::DeviceRemoved { device } = &event {
+                    if let crate::backend::Backend::Udev(u) = &mut state.backend {
+                        u.input_devices.retain(|d| d != device);
+                    }
+                    state.keyboard_removed(device.sysname());
                 }
                 state.process_input(event);
             })

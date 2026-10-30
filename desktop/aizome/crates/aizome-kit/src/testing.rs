@@ -99,6 +99,14 @@ pub struct TestPlatform {
     /// What was drawn ahead into hidden windows (their pictures' bands),
     /// since the test last took it ([`Harness::take_drawn_ahead`]).
     pub ahead: HashMap<WinId, Vec<Rect>>,
+    /// Videos where they were last placed, by window and video.
+    pub videos: BTreeMap<(WinId, sidestep_ui::video::VideoId), sidestep_ui::video::VideoPlace>,
+    /// What the videos' sinks were given: a detached sink each, made at the
+    /// first ask.
+    pub video_sinks: HashMap<
+        (WinId, sidestep_ui::video::VideoId),
+        (sidestep_ui::video::VideoSink, std::sync::Arc<sidestep_ui::video::Detached>),
+    >,
 }
 
 impl TestPlatform {
@@ -140,6 +148,8 @@ impl TestPlatform {
             pictures: HashMap::new(),
             first: HashMap::new(),
             ahead: HashMap::new(),
+            videos: BTreeMap::new(),
+            video_sinks: HashMap::new(),
         }
     }
 
@@ -421,6 +431,26 @@ impl Platform for TestPlatform {
                 self.pictures.remove(&id);
             }
         }
+    }
+
+    fn place_video(
+        &mut self,
+        id: WinId,
+        video: sidestep_ui::video::VideoId,
+        place: Option<sidestep_ui::video::VideoPlace>,
+    ) {
+        match place {
+            Some(p) => {
+                self.videos.insert((id, video), p);
+            }
+            None => {
+                self.videos.remove(&(id, video));
+            }
+        }
+    }
+
+    fn video_sink(&mut self, id: WinId, video: sidestep_ui::video::VideoId) -> Option<sidestep_ui::video::VideoSink> {
+        Some(self.video_sinks.entry((id, video)).or_insert_with(sidestep_ui::video::VideoSink::detached).0.clone())
     }
 }
 

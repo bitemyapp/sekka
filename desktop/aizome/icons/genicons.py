@@ -207,6 +207,31 @@ def shashin():
     return g
 
 
+@icon("org.aizome.Shiori", "Shiori (Documents)")
+def shiori():
+    # A page bound in the deepest dye, its lines of text, and the 栞 the
+    # name means: an amber ribbon laid over the page and hanging below,
+    # cut in a notch.
+    g = R(12, 10, 4, 38, AI) + R(16, 10, 30, 38, PAPER)
+    for y, w in ((16, 22), (20, 22), (24, 18), (30, 22), (34, 22), (38, 14)):
+        g += R(20, y, w, 2, MID)
+    g += f'<path d="M34 8 H42 V52 L38 48 L34 52 Z" fill="{AMBER}"/>'
+    return g
+
+
+@icon("org.aizome.Utsushi", "Utsushi (Media Player)")
+def utsushi():
+    # A frame of film: sprockets along the strip, the picture deep in it,
+    # and amber light playing through it.
+    g = R(10, 12, 40, 36, MID)
+    for x in range(13, 48, 6):
+        g += R(x, 14, 3, 3, KON) + R(x, 43, 3, 3, KON)
+    g += R(12, 19, 36, 22, AI)
+    for i, (y, h) in enumerate(((22, 16), (24, 12), (26, 8), (28, 4))):
+        g += R(28 + 2 * i, y, 2, h, AMBER)
+    return g
+
+
 @icon("org.aizome.Annai", "Annai (Welcome)")
 def annai():
     # A signpost made of the mark: the amber tab, then boards in the dye

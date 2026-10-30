@@ -59,8 +59,20 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 - The Toolchest launches apps and places, the Deskbar lists each app with
   its windows and files its notifications beneath it, and Desks keep work
   apart (**Super + Ctrl + ↑** shows them all).
+- Drag the strip along the Deskbar's top to stand it at the left or right,
+  and its inner edge to make it wider, slimmer or icons only. Right-click
+  the strip for its named sizes.
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
   and the terminal opens in fish.
+- Each keyboard keeps its own modifier keys, Caps Lock and Compose key. When
+  you plug in or pair a keyboard, Aizome offers to set it up: press the key
+  beside its space bar and Settings suggests where Super should go, so it
+  sits under your thumb on a Mac keyboard and a PC keyboard alike. A
+  laptop's own keyboard is set up from Settings → Keyboard. Layouts and
+  shortcuts are the same on every keyboard. Keyboards don't yet keep their
+  own keys under an input method (IBus or Fcitx 5): while one handles your
+  typing, every keyboard types with the keys of the one in use when it
+  began.
 - Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop
@@ -69,12 +81,12 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
-(Activity), Nisshi (Logs), Shashin (Images) and Koe (Dictation). Nisshi reads
-the system's journal and /var/log, suggests filters from what wrote each
-message, and asks for an administrator's password only to read what you
-can't. Aizome is new, and so far it
-has run only in virtual machines. See [its README](desktop/aizome/README.md)
-for what is done and what isn't.
+(Activity), Nisshi (Logs), Shashin (Images), Shiori (Documents, a PDF
+reader), Utsushi (Media Player) and Koe (Dictation).
+Nisshi reads the system's journal and /var/log, suggests filters from what
+wrote each message, and asks for an administrator's password only to read
+what you can't. Aizome is new, and so far it has run only in virtual machines.
+See [its README](desktop/aizome/README.md) for what is done and what isn't.
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
 need a terminal open in it too. Hotaru is new, and it draws with the processor

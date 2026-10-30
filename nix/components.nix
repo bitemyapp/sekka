@@ -1,10 +1,12 @@
 # First-party source is always taken from this checkout, Aizome's with its
 # toolkit, Sukumo (desktop/aizome/sukumo), and the catalog's applications
-# from other flakes from Sekka's own inputs of those names.
+# from other repositories from Sekka's own inputs of those names.
 {
   nixpkgs,
+  applications,
   superluminal,
   tracy,
+  uta,
 }:
 let
   system = "x86_64-linux";
@@ -38,10 +40,16 @@ rec {
     packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
   };
   # The catalog's applications from this flake (source "sekka"): its own, and
-  # those other flakes package, built with the applications' Nixpkgs.
+  # those other repositories package, built with the applications' Nixpkgs.
   catalog.packages.${system} = kakehashi.packages.${system} // {
     superluminal = superluminal.packages.${system}.default;
     tracy = tracy.packages.${system}.tracy;
+    # With the session's fonts, which it draws with too.
+    uta = import ./uta.nix {
+      pkgs = applications.legacyPackages.${system};
+      inherit uta;
+      inherit (aizome.packages.${system}) fonts;
+    };
   };
   calamares = {
     outPath = ../installer/genkan;

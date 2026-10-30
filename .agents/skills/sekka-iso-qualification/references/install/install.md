@@ -33,6 +33,10 @@ cover the remaining storage combinations, recording the distinction.
   review summary. Back navigation preserves selection. Applications: none,
   representative categories, all supported catalog apps; search and selection
   remain responsive and no hidden selection is installed.
+  Uta and every case that selects all applications need the guest's network
+  and the Q0 cache check: record them as network cases. Their install log must
+  show Uta downloaded, not compiled. The same selection offline must stop
+  before erasure with a clear error.
 - Review: every chosen value matches; cancellation and back-navigation remain
   safe. Install via the actual button; visible progress/errors; window remains
   responsive. Capture timing without claiming physical-disk performance.

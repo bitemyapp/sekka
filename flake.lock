@@ -584,7 +584,8 @@
         "nixpkgs": "nixpkgs_5",
         "omp": "omp",
         "superluminal": "superluminal",
-        "tracy": "tracy"
+        "tracy": "tracy",
+        "uta": "uta"
       }
     },
     "rust-analyzer-src": {
@@ -772,6 +773,23 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "uta": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793218122,
+        "narHash": "sha256-Fpo56bPvO23p0DuJkLOiuCA+PNRMyZ5y3SwUqDixz74=",
+        "owner": "bitemyapp",
+        "repo": "uta",
+        "rev": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "uta",
+        "rev": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
         "type": "github"
       }
     }

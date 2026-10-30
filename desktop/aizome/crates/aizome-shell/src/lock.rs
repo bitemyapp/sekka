@@ -309,9 +309,11 @@ impl Shell {
         if self.lock.phase != Phase::Unlocked {
             return;
         }
-        // Menus, panels and the palette go.
+        // Menus, panels and the palette go, and an edge drag of the
+        // Deskbar's ends where it began.
         self.close_palette(cx);
         self.close_panel(cx);
+        self.end_deskbar_resize(cx);
         for s in self.screens.clone() {
             if let Some(b) = s.bar {
                 cx.close_menus(b);

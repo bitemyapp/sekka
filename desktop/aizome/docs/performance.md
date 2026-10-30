@@ -133,6 +133,11 @@ noise (`docs/reload.md`). Two kinds of number:
 | | Pinching † | 2.81–2.84 | 3.22–3.65 | within (10) |
 | | A zoom step, ❖+ ❖− (live, 6000 × 4000 JPEG) | 1.2–1.5 | 1.6–2.2 | within (10) |
 | | The next picture † | 2.48–3.25 | 2.70–3.73 | within |
+| Shiori ‡ | Scrolling a wheel's notch | 0.09 | 0.11–0.15 | within |
+| | Moving the pointer over text | 0.00 | 0.00 | within |
+| | Page Down, a window of new tiles | 1.22–1.38 | 1.68–1.73 | within (11) |
+| | A zoom step, ❖+, to a zoom not drawn yet | 4.25–4.43 | 4.38–4.60 | **at** (12) |
+| | Pinching, a step from pages drawn sharp | 3.46–3.49 | 3.96–4.02 | within (12) |
 | Annai | A frame of a scene | 0.43 | 0.57 | within |
 | | Turning a page | 1.00 | 1.09 | within |
 | Greeter (login screen) | Typing a password | 0.06 | 0.07 | within |
@@ -223,6 +228,33 @@ summary of six or seven frames is in effect its largest frame.
     after typing pauses, while each character typed costs 0.1 ms. Below
     that, where it runs at each character, a desktop's 4,000 messages take
     2.2 ms (p95 3.5–3.8).
+
+11. **Shiori's Page Down** (measured 28 October 2026, not with the rest:
+    release, not thin LTO, `apps/shiori/tests/budget.rs`): p50 3.19 ms,
+    p95 3.77 ms at load average 2 to 3; at load average 10.5 it was 5.74 and
+    7.96 ms, over the budget. It shows a 2880 × 1800 window of tiles never
+    drawn before, so all of it is drawn: Shiori's own part is 0.04 ms, the
+    rest the toolkit copying 21 MB of new pixels one to one, which the
+    load slows. The test measures the window with the drawings already
+    made, so the engine drawing them (PDFium then, hayro now) isn't in it.
+    Scrolling, which moves what was drawn, is 0.17 ms; a canvas that drew
+    everything took 9.9 ms a notch. See `docs/shiori.md`.
+    Measured again on 29 October 2026 at load average 1 to 2 (two runs):
+    Page Down p50 1.22–1.38, p95 1.68–1.73 ms; a notch 0.09 ms.
+12. **Shiori's zooms** (29 October 2026, as (11), load average 1 to 2,
+    two runs): a zoom step p50 4.25–4.43, p95 4.38–4.60 ms, *at* the
+    budget; pinching p50 3.46–3.49, p95 3.96–4.02 ms. Every pixel of the
+    window changes: Shiori makes what stands in for the tiles not drawn at
+    the new zoom from those it has (2.2–2.7 ms of it, on up to 16 threads,
+    into buffers it uses again), and the toolkit copies it one to one.
+    When the window scaled the drawings itself as it drew, bicubic and on
+    one thread, the same test took 382 ms at p50 and 508 ms at p95 for a
+    step, and 357 and 474–479 ms for pinching. The worker's new drawings
+    replace the stand-ins as they come: on a 4K window of A4 pages, the
+    tiles in view were sharp 35–53 ms after the key. See `docs/shiori.md`.
+
+‡ Measured on 29 October 2026 under the conditions of (11) and (12), not
+in the 18 October run.
 
 Within the budget now, though written up below as exceptions earlier:
 Hako's preview column (↓ p95 2.44 ms), Tenki's choosing a place (p95
@@ -992,6 +1024,57 @@ five-second summary (24.7/30.8 ms before), damage 93%. Pinching, at 4.6 ms
 p95 in the harness (not measured live), is the one interaction left above
 the budget.
 
+
+## Utsushi (Media Player)
+
+A player's budget is power more than frame time: what wakes the machine,
+how often, and what the GPU and the compositor do per frame. Utsushi's
+answers (`docs/apps.md`, Utsushi) are frames shown as decoded, nothing
+decoded out of sight, long audio cycles and a window that redraws a
+digit a second; these are the measurements.
+
+On 28 October, on the X1 Carbon (Intel Core Ultra 7 365, Xe graphics,
+the iHD VA-API driver 26.3.5), the installed Aizome compositor running
+headless at 1920 × 1080 on its GPU (GLES), each player in turn, release
+builds, CPU time and context switches (the sum over the process's
+threads) over 30 seconds after six of settling, sound off (Utsushi's null
+output, mpv's `--ao=null`). A 1080p24 H.264 file at 6 Mbit/s:
+
+| Player | Player CPU | Switches/s | Compositor CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi (VA-API, dmabufs) | 1.2% | 115 | 1.5% | 92 |
+| mpv `--hwdec=vaapi --vo=dmabuf-wayland` | 2.2% | 405 | 1.1% | 79 |
+| mpv `--hwdec=vaapi --vo=gpu-next` | 3.5% | 376 | 1.7% | 127 |
+| mpv with Sekka's `mpv.conf` | 11.3% | 401 | 1.2% | 79 |
+
+Utsushi's switches per thread: the render thread 61 a second (each frame
+is a message in, then its presentation feedback and release back), the
+video thread 34, the null output's 50 ms cycles 20 (PipeWire's in normal
+use), the interface 9.5 (ticks were four a second then; now one). The
+same headless setup over 10 seconds for other codecs, 1080p24 at
+3–4 Mbit/s: HEVC Main 10 (P010 dmabufs) 1.3% and 89 switches a second,
+VP9 1.0% and 86, AV1 1.0% and 86, all with every frame presented and
+none dropped. AV1 was 9.1% before Utsushi chose FFmpeg's own AV1 decoder
+(which uses VA-API) over libdav1d (which can't).
+
+Music, a 3-minute 192 kbit/s MP3 at 44.1 kHz, muted, PipeWire otherwise
+idle, the daemon's switches counted too:
+
+| Player | Player CPU | Switches/s | PipeWire CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi | 0.4% | 46 | 0.2% | 50 |
+| mpv `--no-video` | 1.0% | 246 | 0.3% | 99 |
+
+Utsushi's stream asked for 8192-frame cycles but got PipeWire's cap,
+2048 at 48 kHz (`clock.max-quantum`, before Aizome's module raised it to
+8192); its data thread woke 91 times a second, about four per cycle.
+
+Headless, the compositor composes every frame for every player: these
+numbers don't include display planes, which only a KMS backend has, and
+which only lower the compositor's share for a player whose video is the
+topmost surface (Utsushi's, while nothing covers the picture). Not yet
+measured: whole-system power on battery (`/sys/class/power_supply`
+over minutes, screen on, live session), which is the number that matters.
 
 ## Annai (Welcome)
 

@@ -1,0 +1,31 @@
+[package]
+name = "aizome-utsushi"
+description = "Utsushi 映し (Media Player), Aizome's video and music player: hardware-decoded frames shown as they are, audio in long cycles, nothing decoded out of sight"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_utsushi"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-utsushi"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-media = { path = "../../crates/aizome-media" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# Desktop media controls and the media keys (MPRIS), as Uta and the shell
+# speak it.
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+# A picture taken from the video, as PNG for the clipboard (offered
+# through the engine's clipboard, as Shashin does) or a file.
+image = { version = "0.25", default-features = false, features = ["png"] }
+sidestep-engine.workspace = true

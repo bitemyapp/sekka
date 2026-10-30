@@ -461,25 +461,36 @@ impl Tree {
     /// the pointer or stops it. Later siblings are over earlier ones; one
     /// that doesn't stop the pointer there lets it through to what's under.
     pub fn path_at(&self, p: Point, within: Option<usize>) -> Vec<usize> {
+        self.path_through(p, within, false)
+    }
+
+    /// [`path_at`](Self::path_at) past what takes only drags
+    /// ([`Widget::drags_only`]): the nodes under it, which clicks, other
+    /// buttons, the wheel and drops reach.
+    pub fn path_under(&self, p: Point, within: Option<usize>) -> Vec<usize> {
+        self.path_through(p, within, true)
+    }
+
+    fn path_through(&self, p: Point, within: Option<usize>, under: bool) -> Vec<usize> {
         let mut path = Vec::new();
         let start = within.unwrap_or_else(|| self.root());
         if !self.nodes[start].rect.contains(p) {
             return path;
         }
-        self.hit(start, p, &mut path);
+        self.hit(start, p, &mut path, under);
         path
     }
 
-    fn hit(&self, idx: usize, p: Point, path: &mut Vec<usize>) -> bool {
+    fn hit(&self, idx: usize, p: Point, path: &mut Vec<usize>, under: bool) -> bool {
         path.push(idx);
         let n = &self.nodes[idx];
         for &k in n.children.iter().rev() {
             let c = &self.nodes[k];
-            if c.dead || !c.rect.contains(p) || !c.clip.contains(p) {
+            if c.dead || !c.rect.contains(p) || !c.clip.contains(p) || (under && c.widget.drags_only()) {
                 continue;
             }
             let len = path.len();
-            if self.hit(k, p, path) {
+            if self.hit(k, p, path, under) {
                 return true;
             }
             path.truncate(len);
@@ -560,7 +571,7 @@ impl Tree {
                 text: env.text,
                 state: crate::widget::StateView::new(env.states, n.id),
                 size: n.size,
-                hovered: env.hot == Some(n.id),
+                hovered: env.hot == Some(n.id) || env.hot_under == Some(n.id),
                 pressed: env.active == Some(n.id) && env.hot == Some(n.id),
                 focused,
                 focus_visible: env.focus_visible,
@@ -595,6 +606,7 @@ pub(crate) struct PaintEnv<'a> {
     pub text: &'a mut crate::text::TextCache,
     pub states: &'a StateMap,
     pub hot: Option<NodeId>,
+    pub hot_under: Option<NodeId>,
     pub active: Option<NodeId>,
     pub focused: Option<NodeId>,
     pub focus_visible: bool,

@@ -53,7 +53,7 @@ fn full_screen_is_asked_for_and_told_once_per_change() {
     let w = h.window();
     h.send(Msg::FullScreen(true));
     assert_eq!(h.fullscreen_asked(w), Some(true));
-    let full = WindowState { fullscreen: true, maximized: false };
+    let full = WindowState { fullscreen: true, maximized: false, suspended: false };
     h.window_state(w, full);
     h.window_state(w, full);
     h.window_state(w, WindowState::default());

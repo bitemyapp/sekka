@@ -23,7 +23,10 @@ use std::time::{Duration, Instant};
 use aizome_sys::apps::AppIndex;
 use aizome_sys::sysinfo::detail::{ProcReader, ProcessMaps, pressure};
 use aizome_sys::sysinfo::drm::{ClientUse, DrmClient, gpu_stats, parse_fdinfo};
-use aizome_sys::sysinfo::power::{EnergyCounter, Floor, battery_draw, joules, rapl_counters, rapl_domains, split};
+use aizome_sys::sysinfo::power::{
+    Floor, RaplReading, battery_draw, boottime_us, joules, meter_counters, meters_package, rapl_counters, rapl_domains,
+    split,
+};
 use aizome_sys::sysinfo::{self, CpuSampler, DiskIoSampler, NetSampler, ProcessSampler};
 
 use crate::group::{self, Node};
@@ -69,15 +72,21 @@ fn merge_nvidia(gpus: &mut [model::Gpu], processes: &mut [Process], readings: &[
 }
 
 /// The meters, as `Power` gives them: the processor package's counters
-/// (RAPL) where readable, else the package's meter as AMD's integrated
-/// graphics report it (the processor included), else the battery while it
-/// discharges, else nothing for the processor; and beside any of them, the
-/// discrete cards' own meters.
-pub(crate) fn meters(rapl: Option<f64>, battery: Option<f64>, discharging: bool, gpus: &[model::Gpu]) -> model::Power {
-    let package = gpus.iter().filter(|g| g.integrated && g.driver == "amdgpu").find_map(|g| g.power);
+/// (RAPL) where readable, else the package's meter as an AMD APU's
+/// integrated graphics report it (the processor included), else the
+/// battery while it discharges, else nothing for the processor; and beside
+/// any of them, the discrete cards' own meters. `rapl` is RAPL's power
+/// when its counters are read: `Some(None)` until two readings give one.
+pub(crate) fn meters(
+    rapl: Option<Option<f64>>,
+    battery: Option<f64>,
+    discharging: bool,
+    gpus: &[model::Gpu],
+) -> model::Power {
+    let package = gpus.iter().filter(|g| g.package_meter).find_map(|g| g.power);
     let graphics = gpus.iter().filter(|g| !g.integrated).filter_map(|g| g.power).reduce(|a, b| a + b);
     let (meter, cpu) = match (rapl, package) {
-        (Some(w), _) => (Meter::Rapl, Some(w)),
+        (Some(w), _) => (Meter::Rapl, w),
         (None, Some(w)) => (Meter::Package, Some(w)),
         (None, None) if discharging && battery.is_some() => (Meter::Battery, None),
         (None, None) if graphics.is_some() => (Meter::Graphics, None),
@@ -86,7 +95,8 @@ pub(crate) fn meters(rapl: Option<f64>, battery: Option<f64>, discharging: bool,
     let total = match meter {
         Meter::Battery => battery,
         Meter::None => None,
-        _ => Some(cpu.unwrap_or(0.0) + graphics.unwrap_or(0.0)),
+        Meter::Graphics => graphics,
+        Meter::Rapl | Meter::Package => cpu.map(|w| w + graphics.unwrap_or(0.0)),
     };
     model::Power { meter, cpu, graphics, battery, on_battery: discharging, total, attributed: 0.0 }
 }
@@ -199,6 +209,74 @@ struct Card {
     gpu: sysinfo::Gpu,
     pci: String,
     integrated: bool,
+    package_meter: bool,
+}
+
+/// The package's power from RAPL's counters, read directly or through
+/// Aizome's power meter. The meter answers with its last reading until it
+/// may take the next (once a second), so the same counters again leave the
+/// last rate standing. Each reading says when it was taken, so a rate is
+/// over the time between two readings, not between Myaku's questions.
+#[derive(Default)]
+struct Rapl {
+    /// The last new reading.
+    before: Option<RaplReading>,
+    watts: Option<f64>,
+}
+
+impl Rapl {
+    /// The power by `reading`, for [`meters`]: `None` when the counters
+    /// can't be read, `Some(None)` until a second reading gives it.
+    fn read(&mut self, reading: Option<RaplReading>) -> Option<Option<f64>> {
+        let Some(reading) = reading else {
+            *self = Rapl::default();
+            return None;
+        };
+        match self.before.take() {
+            Some(before) if before.counters == reading.counters => self.before = Some(before),
+            Some(before) if before.counters.len() == reading.counters.len() && reading.at > before.at => {
+                let joules: f64 = before.counters.iter().zip(&reading.counters).map(|(b, a)| joules(b, a)).sum();
+                self.watts = Some(joules / ((reading.at - before.at) as f64 / 1e6));
+                self.before = Some(reading);
+            }
+            _ => {
+                self.watts = None;
+                self.before = Some(reading);
+            }
+        }
+        Some(self.watts)
+    }
+}
+
+/// A reading's time on both clocks: `Instant` (`CLOCK_MONOTONIC`), which
+/// stops while the computer sleeps, and `CLOCK_BOOTTIME`, which doesn't.
+#[derive(Clone, Copy, Debug)]
+struct Moment {
+    monotonic: Instant,
+    /// Microseconds of `CLOCK_BOOTTIME`.
+    boot: u64,
+}
+
+/// More time asleep between readings than this, and the interval is
+/// measured no more: readings a second apart differ on the two clocks by
+/// microseconds, and a suspend takes seconds.
+const ASLEEP: Duration = Duration::from_millis(250);
+
+impl Moment {
+    fn now() -> Moment {
+        Moment { monotonic: Instant::now(), boot: boottime_us() }
+    }
+}
+
+/// The seconds from the last reading to `now`, to measure rates and energy
+/// over, and whether the computer slept between them: then `0.0`. RAPL's
+/// counters, and some cards' energy counters, counted on while it slept;
+/// over the second awake, that would be a night's energy in a second.
+fn interval(last: Option<Moment>, now: Moment) -> (f64, bool) {
+    let Some(last) = last else { return (0.0, false) };
+    let awake = now.monotonic.saturating_duration_since(last.monotonic);
+    let passed = Duration::from_micros(now.boot.saturating_sub(last.boot));
+    if passed.saturating_sub(awake) > ASLEEP { (0.0, true) } else { (awake.as_secs_f64(), false) }
 }
 
 pub struct Sampler {
@@ -208,14 +286,14 @@ pub struct Sampler {
     disks: DiskIoSampler,
     net: NetSampler,
     tick: u64,
-    last: Option<Instant>,
+    last: Option<Moment>,
     before: HashMap<Key, Known>,
     drm_fds: HashMap<Key, Vec<u32>>,
     clients: HashMap<(String, u64), (DrmClient, Instant)>,
     cards: Vec<Card>,
     nvml: Option<Nvml>,
-    rapl: Vec<PathBuf>,
-    rapl_before: Option<Vec<EnergyCounter>>,
+    rapl_domains: Vec<PathBuf>,
+    rapl: Rapl,
     /// Each card's energy counter at the last reading, in joules.
     gpu_energy: Vec<Option<f64>>,
     floor: Floor,
@@ -245,10 +323,14 @@ impl Sampler {
     pub fn new() -> Sampler {
         let cards: Vec<Card> = sysinfo::gpus()
             .into_iter()
-            .map(|g| Card {
-                pci: aizome_sys::sysinfo::drm::card_pci(&g.card).unwrap_or_default(),
-                integrated: aizome_sys::sysinfo::drm::card_integrated(&g.card),
-                gpu: g,
+            .map(|g| {
+                let integrated = aizome_sys::sysinfo::drm::card_integrated(&g.card);
+                Card {
+                    pci: aizome_sys::sysinfo::drm::card_pci(&g.card).unwrap_or_default(),
+                    integrated,
+                    package_meter: meters_package(&g, integrated),
+                    gpu: g,
+                }
             })
             .collect();
         let nvml = cards.iter().any(|c| c.gpu.driver.as_deref() == Some("nvidia")).then(Nvml::open).flatten();
@@ -266,8 +348,8 @@ impl Sampler {
             clients: HashMap::new(),
             cards,
             nvml,
-            rapl: rapl_domains(),
-            rapl_before: None,
+            rapl_domains: rapl_domains(),
+            rapl: Rapl::default(),
             gpu_energy: vec![None; count],
             floor: Floor::default(),
             gpu_floors: vec![Floor::default(); count],
@@ -286,11 +368,20 @@ impl Sampler {
 
     /// One reading.
     pub fn sample(&mut self) -> Frame {
-        let started = Instant::now();
+        self.sample_at(Moment::now(), |domains| rapl_counters(domains).or_else(meter_counters))
+    }
+
+    /// One reading taken `now`, with RAPL's counters from `rapl` (given the
+    /// package domains): what [`Sampler::sample`] does with the clocks and
+    /// the counters, which a test can script instead.
+    fn sample_at(&mut self, now: Moment, rapl: impl FnOnce(&[PathBuf]) -> Option<RaplReading>) -> Frame {
+        let started = now.monotonic;
         self.tick += 1;
         let tick = self.tick;
-        let seconds = self.last.map_or(0.0, |l| started.duration_since(l).as_secs_f64());
-        self.last = Some(started);
+        // After the computer slept, the energy counters' interval is
+        // measured no more: no one's energy grows by it.
+        let (seconds, slept) = interval(self.last, now);
+        self.last = Some(now);
         if tick.is_multiple_of(30)
             && let Some(a) = &mut self.apps
         {
@@ -536,6 +627,7 @@ impl Sampler {
                     driver: c.gpu.driver.clone().unwrap_or_default(),
                     pci: c.pci.clone(),
                     integrated: c.integrated,
+                    package_meter: c.package_meter,
                     busy,
                     video: s.video.map(f64::from),
                     vram_used: s.vram_used,
@@ -572,17 +664,16 @@ impl Sampler {
             *before = counter;
         }
 
-        // Power: the meters, shared by use of what each measures.
-        let counters = rapl_counters(&self.rapl);
-        let rapl_watts = match (&self.rapl_before, &counters) {
-            (Some(b), Some(a)) if seconds > 0.0 && b.len() == a.len() => {
-                Some(b.iter().zip(a).map(|(b, a)| joules(b, a)).sum::<f64>() / seconds)
-            }
-            _ => None,
-        };
-        self.rapl_before = counters;
+        // Power: the meters, shared by use of what each measures. RAPL
+        // directly where Myaku may read it (as root), else through Aizome's
+        // power meter. After the computer slept, RAPL's rate starts over:
+        // its counters went on through the night.
+        if slept {
+            self.rapl = Rapl::default();
+        }
+        let rapl = self.rapl.read(rapl(&self.rapl_domains));
         let (battery, discharging) = battery_draw();
-        let mut power = meters(rapl_watts, battery, discharging, &gpus);
+        let mut power = meters(rapl, battery, discharging, &gpus);
         let parts = attribute(&power, &gpus, &processes, ncpu, &mut self.floor, &mut self.gpu_floors);
         power.attributed = parts.iter().flatten().sum();
         for (p, part) in processes.iter_mut().zip(parts) {
@@ -694,6 +785,7 @@ impl Sampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aizome_sys::sysinfo::power::EnergyCounter;
 
     #[test]
     fn nvidia_matches_pci_and_keeps_amd_allocations_separate() {
@@ -729,18 +821,33 @@ mod tests {
 
     #[test]
     fn graphics_cards_measure_without_root_or_a_battery() {
-        let radeon = model::Gpu { driver: "amdgpu".into(), integrated: true, power: Some(48.0), ..Default::default() };
+        let apu = model::Gpu {
+            driver: "amdgpu".into(),
+            integrated: true,
+            package_meter: true,
+            power: Some(48.0),
+            ..Default::default()
+        };
         let rtx = model::Gpu { driver: "nvidia".into(), power: Some(400.0), ..Default::default() };
-        // A desktop: RAPL is root's and there's no battery, but the Radeon's
-        // meter is the processor package's, and the RTX has its own.
-        let p = meters(None, None, false, &[radeon.clone(), rtx.clone()]);
+        // RAPL is root's and there's no battery, but an APU's Radeon meters
+        // the processor package, and the RTX has its own meter.
+        let p = meters(None, None, false, &[apu.clone(), rtx.clone()]);
         assert_eq!((p.meter, p.cpu, p.graphics, p.total), (Meter::Package, Some(48.0), Some(400.0), Some(448.0)));
-        let p = meters(Some(60.0), None, false, &[radeon, rtx.clone()]);
+        let p = meters(Some(Some(60.0)), None, false, &[apu.clone(), rtx.clone()]);
         assert_eq!(
             (p.meter, p.cpu, p.total),
             (Meter::Rapl, Some(60.0), Some(460.0)),
             "the package isn't counted twice"
         );
+        // A Ryzen desktop processor's Radeon meters itself alone: a tenth of
+        // a watt with every core busy is not the processor's.
+        let granite_ridge = model::Gpu { package_meter: false, power: Some(0.11), ..apu };
+        let p = meters(None, None, false, &[granite_ridge.clone(), rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Graphics, None, Some(400.0)));
+        let p = meters(Some(Some(95.0)), None, false, &[granite_ridge.clone(), rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Rapl, Some(95.0), Some(495.0)));
+        let p = meters(Some(None), None, false, &[granite_ridge, rtx.clone()]);
+        assert_eq!((p.meter, p.cpu, p.total), (Meter::Rapl, None, None), "RAPL, before its first rate");
         let p = meters(None, None, false, std::slice::from_ref(&rtx));
         assert_eq!((p.meter, p.cpu, p.total), (Meter::Graphics, None, Some(400.0)));
         // A laptop: Intel's integrated graphics have no meter of their own.
@@ -748,6 +855,224 @@ mod tests {
         let p = meters(None, Some(32.0), true, std::slice::from_ref(&xe));
         assert_eq!((p.meter, p.graphics, p.total), (Meter::Battery, None, Some(32.0)));
         assert_eq!(meters(None, Some(32.0), false, &[xe]).meter, Meter::None, "charging measures nothing");
+    }
+
+    /// A reading of package-0's counter at `ms` milliseconds of
+    /// `CLOCK_BOOTTIME`.
+    fn package(ms: u64, microjoules: u64) -> Option<RaplReading> {
+        let counters = vec![EnergyCounter { name: "package-0".into(), microjoules, range: 65_532_610_987 }];
+        Some(RaplReading { at: ms * 1000, counters })
+    }
+
+    #[test]
+    fn rapl_through_the_meter_keeps_its_rate_between_new_readings() {
+        let mut rapl = Rapl::default();
+        assert_eq!(rapl.read(None), None, "neither readable nor answered");
+        assert_eq!(rapl.read(package(0, 1_000_000)), Some(None));
+        // The first frame comes 300 ms after the first reading, before the
+        // meter takes another: its answer is the same.
+        assert_eq!(rapl.read(package(0, 1_000_000)), Some(None));
+        assert_eq!(rapl.read(package(1250, 96_000_000)), Some(Some(76.0)));
+        assert_eq!(rapl.read(package(1250, 96_000_000)), Some(Some(76.0)), "asked again too soon");
+        assert_eq!(rapl.read(package(2250, 191_000_000)), Some(Some(95.0)), "from the last new reading");
+        // The counter wraps at its range.
+        let mut rapl = Rapl::default();
+        rapl.read(package(0, 65_532_000_000));
+        assert_eq!(rapl.read(package(1000, 10_000_000)), Some(Some(10.610987)));
+        assert_eq!(rapl.read(None), None, "the meter went away");
+        assert_eq!(rapl.read(package(3000, 20_000_000)), Some(None), "a new start");
+    }
+
+    #[test]
+    fn rapl_rates_are_over_the_time_between_readings_not_questions() {
+        // A package drawing 10 W. The window asks every second, at 2, 3, 4
+        // and 5 s; `aizome-myaku --print` asked the meter at 2.6 and 3.6 s,
+        // so the window's questions at 3 and 4 s get those readings. Timed
+        // by its own questions, the window would show 6 W, then 10 W, then
+        // 14 W.
+        let ten_watts = |ms: u64| package(ms, ms * 10_000);
+        let near = |rate: Option<Option<f64>>| rate.flatten().map(|w| (w * 1e6).round() / 1e6);
+        let mut rapl = Rapl::default();
+        assert_eq!(rapl.read(ten_watts(2000)), Some(None));
+        assert_eq!(near(rapl.read(ten_watts(2600))), Some(10.0));
+        assert_eq!(near(rapl.read(ten_watts(3600))), Some(10.0));
+        assert_eq!(near(rapl.read(ten_watts(5000))), Some(10.0));
+    }
+
+    #[test]
+    fn a_night_asleep_measures_nothing() {
+        let start = Instant::now();
+        let at = |awake_ms: u64, boot_ms: u64| Moment {
+            monotonic: start + Duration::from_millis(awake_ms),
+            boot: boot_ms * 1000,
+        };
+        assert_eq!(interval(None, at(0, 5000)), (0.0, false), "the first reading");
+        assert_eq!(interval(Some(at(0, 5000)), at(1000, 6000)), (1.0, false));
+        // Readings a second apart on Myaku's clock, with eight hours asleep
+        // between them: CLOCK_BOOTTIME and RAPL's counters went on.
+        let night = 8 * 3600 * 1000;
+        assert_eq!(interval(Some(at(1000, 6000)), at(2000, 7000 + night)), (0.0, true));
+        // No one's energy grows by that interval, and RAPL's rate starts over
+        // (`Sampler::sample`): over the night it would be the night's
+        // average, not what the processor draws now. A second later it is
+        // all measured again.
+        assert_eq!(interval(Some(at(2000, 7000 + night)), at(3000, 8000 + night)), (1.0, false));
+        // The two clocks never differ by much more than the time between
+        // reading them, awake.
+        let jitter = Moment { boot: 9_000_040, ..at(4000, 0) };
+        assert_eq!(interval(Some(at(3000, 8000)), jitter), (1.0, false));
+    }
+
+    /// Myaku sampling this computer through Aizome's power meter, with the
+    /// clocks and the package's counter scripted: the counter reads
+    /// `energy(ms)` microjoules at `ms` milliseconds of `CLOCK_BOOTTIME`,
+    /// and the meter reads it at most once a second, answering in between
+    /// with its last reading, as `aizome-power-meter` does. No card's meter
+    /// or energy counter: the processor's alone.
+    struct Scripted<E: Fn(u64) -> u64> {
+        sampler: Sampler,
+        energy: E,
+        start: Instant,
+        /// When the meter last read the counter, and how many times it has.
+        read: Option<u64>,
+        reads: usize,
+    }
+
+    impl<E: Fn(u64) -> u64> Scripted<E> {
+        fn new(energy: E) -> Scripted<E> {
+            let mut sampler = Sampler::new();
+            sampler.cards.clear();
+            sampler.nvml = None;
+            sampler.gpu_energy.clear();
+            sampler.gpu_floors.clear();
+            Scripted { sampler, energy, start: Instant::now(), read: None, reads: 0 }
+        }
+
+        /// A frame `awake` milliseconds into Myaku's clock and `boot` into
+        /// `CLOCK_BOOTTIME`, asking the meter `late` milliseconds into it
+        /// (after the process scan).
+        fn frame(&mut self, awake: u64, boot: u64, late: u64) -> Frame {
+            // Some processor time, so that this process has a part of the
+            // package's power.
+            let spin = Instant::now();
+            while spin.elapsed() < Duration::from_millis(30) {
+                std::hint::spin_loop();
+            }
+            let asked = boot + late;
+            let at = match self.read {
+                Some(at) if asked - at < 1000 => at,
+                _ => {
+                    self.reads += 1;
+                    asked
+                }
+            };
+            self.read = Some(at);
+            let reading = package(at, (self.energy)(at));
+            let now = Moment { monotonic: self.start + Duration::from_millis(awake), boot: boot * 1000 };
+            self.sampler.sample_at(now, |_| reading)
+        }
+    }
+
+    /// The processor's power in a frame, to the microwatt.
+    fn processor(f: &Frame) -> Option<f64> {
+        f.power.cpu.map(|w| (w * 1e6).round() / 1e6)
+    }
+
+    /// No process is held to have used more than the package drew, `watts`.
+    fn within(f: &Frame, watts: f64) {
+        for p in &f.processes {
+            assert!(
+                p.usage.energy <= watts * p.usage.measured + 1e-9,
+                "{} ({}): {} J in {} s",
+                p.name,
+                p.pid,
+                p.usage.energy,
+                p.usage.measured
+            );
+        }
+    }
+
+    fn this_process(f: &Frame) -> &Process {
+        f.processes.iter().find(|p| p.pid == std::process::id()).expect("this process is in the frame")
+    }
+
+    #[test]
+    fn the_meters_repeated_answers_keep_the_processor_measured() {
+        // A package drawing 10 W. Myaku's timer gives a frame 300 ms after
+        // the first reading, then one every second, each asking the meter a
+        // few milliseconds in: a question a moment under a second after the
+        // meter's last reading gets that reading again.
+        let mut m = Scripted::new(|ms| ms * 10_000);
+        let _ = m.frame(0, 5000, 12);
+        assert_eq!(processor(&m.frame(300, 5300, 3)), None, "no rate before a second reading");
+        let mut f = None;
+        for (awake, late) in (1300..).step_by(1000).zip([5, 31, 2, 18, 40, 1, 25, 9, 9, 33]) {
+            let frame = m.frame(awake, 5000 + awake, late);
+            assert_eq!(processor(&frame), Some(10.0), "at {awake} ms: neither a dash, nor 0 W, nor off");
+            assert_eq!(frame.power.total.map(|w| (w * 1e6).round() / 1e6), Some(10.0));
+            within(&frame, 10.0);
+            f = Some(frame);
+        }
+        // Of twelve questions, the meter read for eight: the frames at 0.3,
+        // 3.3, 6.3 and 8.3 s got the last reading again.
+        assert_eq!(m.reads, 8);
+        // This process was measured over each of the ten seconds that showed
+        // a rate, by its share of the package.
+        let me = this_process(f.as_ref().unwrap());
+        assert_eq!(me.usage.measured, 10.0);
+        assert!(me.usage.energy > 0.0 && me.usage.energy <= 100.0, "{} J", me.usage.energy);
+    }
+
+    #[test]
+    fn a_night_asleep_neither_spikes_nor_adds_to_anyones_energy() {
+        // A package drawing 10 W awake. The lid closes at 8.5 s of
+        // CLOCK_BOOTTIME for eight hours, in which it draws 0.5 W and its
+        // counter goes on, as RAPL's does: 14.4 kJ. Myaku's clock stops, so
+        // its next frame comes a second after the last on that clock, eight
+        // hours later on CLOCK_BOOTTIME. Over that second, the night would be
+        // 14.4 kW, and each process's share of it its energy for good.
+        const NIGHT: u64 = 8 * 3600 * 1000;
+        const CLOSED: u64 = 8500;
+        let mut m = Scripted::new(|ms: u64| {
+            let asleep = ms.saturating_sub(CLOSED).min(NIGHT);
+            (ms - asleep) * 10_000 + asleep * 500
+        });
+        let _ = m.frame(0, 5000, 12);
+        let _ = m.frame(300, 5300, 3);
+        let mut last = None;
+        for (awake, late) in [(1300, 5), (2300, 31), (3300, 2)] {
+            let frame = m.frame(awake, 5000 + awake, late);
+            assert_eq!(processor(&frame), Some(10.0));
+            last = Some(frame);
+        }
+        let before: HashMap<Key, (f64, f64)> =
+            last.unwrap().processes.iter().map(|p| (p.key(), (p.usage.energy, p.usage.measured))).collect();
+
+        let woke = m.frame(4300, 5000 + 4300 + NIGHT, 30);
+        assert_eq!(processor(&woke), None, "RAPL's rate starts over: no spike");
+        assert_eq!(woke.power.total, None);
+        within(&woke, 10.0);
+        let mut kept = 0;
+        for p in &woke.processes {
+            if let Some(&was) = before.get(&p.key()) {
+                assert_eq!((p.usage.energy, p.usage.measured), was, "{} ({}) used nothing asleep", p.name, p.pid);
+                kept += 1;
+            }
+        }
+        assert!(kept > 0);
+        // The next frame asks a moment under a second after the meter's
+        // first reading since waking and gets it again: the processor shows
+        // a dash for a second or two, then what it draws.
+        assert_eq!(processor(&m.frame(5300, 5000 + 5300 + NIGHT, 4)), None);
+        assert_eq!(processor(&m.frame(6300, 5000 + 6300 + NIGHT, 10)), Some(10.0));
+        let last = m.frame(7300, 5000 + 7300 + NIGHT, 6);
+        assert_eq!(processor(&last), Some(10.0));
+        within(&last, 10.0);
+        // Measured over the five seconds that showed a rate, three before the
+        // night and two after: not the night, nor the dash.
+        let me = this_process(&last);
+        assert_eq!(me.usage.measured, 5.0);
+        assert!(me.usage.energy > 0.0 && me.usage.energy <= 50.0, "{} J", me.usage.energy);
     }
 
     #[test]

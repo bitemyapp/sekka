@@ -17,7 +17,10 @@ Rust on Sukumo 蒅, its native toolkit, from the compositor to the calculator.
 - **A command palette for everything** (❖Space): every menu command of the
   focused app, with its shortcut taught back to you, plus windows, files,
   apps, settings and arithmetic.
-- **Super is the command key** (❖C, ❖V, ❖Z), in every app.
+- **Super is the command key** (❖C, ❖V, ❖Z), in every app, and on every
+  keyboard where your thumb finds it: plug one in, press the key beside its
+  space bar, and Settei suggests whether to swap Alt and Super on that
+  keyboard alone.
 - **One file chooser**: apps that open and save through the desktop
   portal (browsers, Electron apps, Zed, Flatpaks) get Files in miniature,
   over their window, with their filters and options.
@@ -31,8 +34,9 @@ The design lives in [aizome-design](https://github.com/bitemyapp/aizome-design).
 
 Settei (Settings), Yukimi (Software), Hako (Files), Sumi (Text Editor),
 Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban (Calculator), Tenki
-(Weather), Tansu (Disks), Kura (Disk Usage), Myaku (Activity), Nisshi (Logs)
-and Koe (Dictation), with Hotaru, Aizome's own terminal
+(Weather), Tansu (Disks), Kura (Disk Usage), Myaku (Activity), Nisshi (Logs),
+Shashin (Images), Shiori (Documents), Utsushi (Media Player) and Koe
+(Dictation), with Hotaru, Aizome's own terminal
 ([its README](apps/hotaru/README.md)). foot stays installed and can replace it
 in Settei's Default Apps. See [docs/apps.md](docs/apps.md).
 

@@ -57,6 +57,13 @@ pub fn settings(pane: &str, anchor: Option<&str>) -> Launch {
     Launch::Argv(argv)
 }
 
+/// Settei's keyboard setup, with keyboard `name` (`vendor:product` `id`)
+/// chosen in its sheet.
+pub fn keyboard_setup(name: &str, id: &str) -> Launch {
+    let argv = ["aizome-settei", "--pane", "keyboard.setup", "--keyboard"].map(str::to_owned);
+    Launch::Argv(argv.into_iter().chain([format!("{name} ({id})")]).collect())
+}
+
 /// The home folder's usual places: (name, path).
 pub fn places() -> Vec<(String, PathBuf)> {
     let home = aizome_config::home_dir();
@@ -186,6 +193,17 @@ mod tests {
                 "keyboard".into(),
                 "--option".into(),
                 "keyboard.caps".into()
+            ])
+        );
+        // Settei reads `--keyboard` as “Name (vendor:product)”.
+        assert_eq!(
+            keyboard_setup("Logitech USB Receiver", "046d:c548"),
+            Launch::Argv(vec![
+                "aizome-settei".into(),
+                "--pane".into(),
+                "keyboard.setup".into(),
+                "--keyboard".into(),
+                "Logitech USB Receiver (046d:c548)".into()
             ])
         );
     }

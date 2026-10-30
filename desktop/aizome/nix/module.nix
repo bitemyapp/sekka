@@ -335,6 +335,54 @@ in
     systemd.services."user@".serviceConfig.AmbientCapabilities = lib.mkIf cfg.alarmsWakeSystem [
       "CAP_WAKE_ALARM"
     ];
+    # The processor's energy counters (RAPL) for Myaku's Energy view:
+    # readable by root only, as quick samples can leak secrets
+    # (CVE-2020-8694), and on a Ryzen desktop processor nothing else
+    # measures the package. The meter reads them at most once a second,
+    # started by its socket when Myaku asks and gone after a minute
+    # without a question. Root for the read alone: no capabilities,
+    # network or writable files.
+    systemd.sockets.aizome-power-meter = {
+      description = "Aizome's processor power meter";
+      wantedBy = [ "sockets.target" ];
+      socketConfig = {
+        ListenStream = "/run/aizome/power.sock";
+        SocketMode = "0666";
+        DirectoryMode = "0755";
+      };
+    };
+    systemd.services.aizome-power-meter = {
+      description = "Aizome's processor power meter";
+      serviceConfig = {
+        ExecStart = "${cfg.package}/bin/aizome-power-meter";
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateNetwork = true;
+        PrivateTmp = true;
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProtectSystem = "strict";
+        RestrictAddressFamilies = "AF_UNIX";
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [
+          "@system-service"
+          "~@privileged @resources"
+        ];
+        UMask = "0077";
+      };
+    };
 
     environment.etc = {
       "xdg/aizome/environment".text = lib.concatStrings (
@@ -378,6 +426,39 @@ in
           "application/toml"
           "application/json"
           "application/x-yaml"
+        ]
+        + entry "Shiori" [
+          "application/pdf"
+          "application/x-pdf"
+        ]
+        + entry "Utsushi" [
+          "video/mp4"
+          "video/x-matroska"
+          "video/webm"
+          "video/quicktime"
+          "video/x-msvideo"
+          "video/vnd.avi"
+          "video/mpeg"
+          "video/ogg"
+          "video/3gpp"
+          "video/mp2t"
+          "video/x-flv"
+          "video/x-m4v"
+          "video/av1"
+          "audio/mpeg"
+          "audio/mp4"
+          "audio/x-m4a"
+          "audio/aac"
+          "audio/flac"
+          "audio/x-flac"
+          "audio/ogg"
+          "audio/x-vorbis+ogg"
+          "audio/opus"
+          "audio/x-opus+ogg"
+          "audio/wav"
+          "audio/x-wav"
+          "audio/webm"
+          "audio/x-matroska"
         ]
         + entry "Hako" [ "inode/directory" ]
         + entry "Koyomi" [ "text/calendar" ]
@@ -493,6 +574,23 @@ in
       enable = lib.mkDefault true;
       pulse.enable = lib.mkDefault true;
       wireplumber.enable = lib.mkDefault true;
+      # Streams that ask for long graph cycles get them: Utsushi's music
+      # asks for 8192 frames (170 ms), so with nothing else playing the
+      # sound card, PipeWire and the player wake about six times a second
+      # rather than twenty-three at PipeWire's usual cap of 2048. Streams
+      # asking for short cycles (calls, games, the shell's sounds, which
+      # ask pw-play for 20 ms) still get theirs, and the graph runs at
+      # theirs while they play. One that starts over music still waits for
+      # the sound card to play out the long cycles it has queued, though:
+      # 170 to 340 ms, where at the usual cap it would be 40 to 85 ms.
+      # And the cap is system-wide (Tatami sessions too), so it isn't
+      # Utsushi's alone: any stream asking for
+      # more than 2048 frames gets more, such as pw-play left at its
+      # default 100 ms (4096 frames, not 2048), and streams that ask for
+      # nothing, such as pw-record's, run at whatever cycle the graph has,
+      # 8192 while music plays.
+      extraConfig.pipewire."90-aizome-long-cycles"."context.properties"."default.clock.max-quantum" =
+        lib.mkDefault 8192;
     };
     security.rtkit.enable = lib.mkDefault true;
 

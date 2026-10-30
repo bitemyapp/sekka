@@ -77,6 +77,20 @@ impl Image {
         Some(Image::of(width, height, Pixels::Rgba(Arc::from(premultiplied)), 1.0))
     }
 
+    /// An image of premultiplied RGBA pixels, laid out as
+    /// [`from_rgba`](Image::from_rgba) takes them, taken as they are: for
+    /// pixels made premultiplied, or opaque ones, which are the same
+    /// either way, without the pass `from_rgba` makes over them. `None` if
+    /// there aren't `width × height` of them.
+    pub fn from_premultiplied_rgba(width: u32, height: u32, rgba: impl Into<Arc<[u8]>>) -> Option<Image> {
+        let rgba = rgba.into();
+        let len = (width as usize).checked_mul(height as usize)?.checked_mul(4)?;
+        if width == 0 || height == 0 || rgba.len() != len {
+            return None;
+        }
+        Some(Image::of(width, height, Pixels::Rgba(rgba), 1.0))
+    }
+
     /// An image file's (PNG, JPEG, GIF, WebP, BMP, TIFF or ICO), turned
     /// upright by its orientation, at its density (72 dots per inch is a
     /// point per pixel). Only its header is read now; `None` if the codecs
@@ -156,6 +170,17 @@ impl Image {
         premultiplied(self.data())
     }
 
+    /// Its pixels as [`to_premultiplied_rgba8`](Image::to_premultiplied_rgba8)
+    /// lays them out, borrowed rather than copied, for an image made of
+    /// pixels (`from_rgba`, `from_premultiplied_rgba`, a drawing made
+    /// offscreen); `None` for a file's, or a part of another image.
+    pub fn premultiplied_pixels(&self) -> Option<&[u8]> {
+        match &self.data().pixels {
+            Pixels::Rgba(px) => Some(px),
+            _ => None,
+        }
+    }
+
     pub(crate) fn data(&self) -> &Arc<ImageData> {
         &self.pixels.0
     }
@@ -209,6 +234,16 @@ mod tests {
         assert_eq!(image.to_premultiplied_rgba8(), Some(vec![100, 50, 25, 128, 0, 0, 0, 0]));
         // Straight again, as near as 8 bits keep it.
         assert_eq!(image.to_rgba8(), Some(vec![199, 100, 50, 128, 0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn premultiplied_pixels_are_taken_and_lent_as_they_are() {
+        let image = Image::from_premultiplied_rgba(2, 1, vec![100, 50, 25, 128, 9, 8, 7, 255]).expect("an image");
+        assert_eq!(image.premultiplied_pixels(), Some(&[100, 50, 25, 128, 9, 8, 7, 255][..]));
+        assert_eq!(image.to_premultiplied_rgba8(), Some(vec![100, 50, 25, 128, 9, 8, 7, 255]));
+        assert!(Image::from_premultiplied_rgba(2, 2, vec![0; 8]).is_none());
+        let png = codec::encode(codec::Encoding::Png, 1, 1, &[255; 4], None).expect("a PNG");
+        assert!(Image::decode(png).expect("decoded").premultiplied_pixels().is_none(), "a file's aren't lent");
     }
 }
 

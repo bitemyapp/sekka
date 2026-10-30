@@ -60,5 +60,5 @@ in
     ++ map (app: {
       source = paths (applicationCatalog.packageList app);
       target = "/calamares/closures/application-${app.id}.paths";
-    }) applicationCatalog.catalog;
+    }) applicationCatalog.preloaded;
 }

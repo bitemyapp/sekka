@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-28",
+  "sekka_code_commit": "314572ce0870514f7a4e91ba05064a87493f6b51",
+  "applies_to": "314572ce only: an earlier revision of this change, not in the merged history, that still built Uta against Sekka's former sidestep input. Uta was later rebuilt against Sukumo (desktop/aizome/sukumo), merged with a newer main and given its SOURCE note, which changes the Uta store path and the ISO derivation. The paths and counts below are that revision's, not those of any later one.",
+  "uta_commit": "a70e8f6fda8f4744ee8bfc27d93657176d9860ff",
+  "scope": "Package and catalog checks plus evaluation of the ISO dependency graph; not release-image qualification.",
+  "workstation_checks": {
+    "host": "wx-workstation",
+    "uta_package": "/nix/store/wvar7mbjpxp6fkcc1si1dhyriawk26nl-aizome-uta-0.1.0",
+    "version": "Uta 0.1.0 (RustyPipe: true)",
+    "uta_rust_tests": "passed",
+    "uta_python_tests": 30,
+    "genkan_catalog_tests": 4,
+    "yukimi_catalog_tests": 6,
+    "license_files": [
+      "LICENSE-RustyPipe",
+      "LICENSE-EJS"
+    ]
+  },
+  "local_evaluation": {
+    "reason": "Workstation garbage collection repeatedly delayed read-only evaluation; builds and executed test suites stayed on the workstation.",
+    "memory_limit_gib": 8,
+    "uta_installation_assertions": "passed",
+    "iso_dependency_graph": {
+      "iso_derivation": "/nix/store/x2kbzwdffcifj0hsnn4pcqa8c1yrcr60-sekka-26.11.20261020.02c087f-x86_64-linux.iso.drv",
+      "uta_derivation": "/nix/store/r9xs5sr5znzf6kbfqmdxiyv5xcr7cncd-aizome-uta-0.1.0.drv",
+      "iso_dependency_paths": 32364,
+      "uta_in_iso_dependency_graph": false,
+      "uta_or_rustypipe_paths": [],
+      "firefox_present": true
+    }
+  },
+  "iso_built": false,
+  "vm_installation_tested": false
+}
