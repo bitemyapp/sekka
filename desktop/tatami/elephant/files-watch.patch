@@ -1,0 +1,519 @@
+diff --git a/internal/providers/files/db.go b/internal/providers/files/db.go
+index 581de67..c5a69db 100644
+--- a/internal/providers/files/db.go
++++ b/internal/providers/files/db.go
+@@ -81,7 +81,7 @@ func openDB() error {
+ 		return fmt.Errorf("prepare get: %v", err)
+ 	}
+ 
+-	delFileStmt, err = db.Prepare("DELETE FROM files WHERE path LIKE ?")
++	delFileStmt, err = db.Prepare("DELETE FROM files WHERE path = ? OR substr(path, 1, length(?)) = ?")
+ 	if err != nil {
+ 		return fmt.Errorf("prepare delete: %v", err)
+ 	}
+@@ -97,12 +97,27 @@ func openDB() error {
+ }
+ 
+ func putFileBatch(files []File) error {
++	return writeFileBatch("", files)
++}
++
++func replaceFileTree(path string, files []File) error {
++	return writeFileBatch(filepath.Clean(path), files)
++}
++
++func writeFileBatch(root string, files []File) error {
+ 	tx, err := db.Begin()
+ 	if err != nil {
+ 		return err
+ 	}
+ 	defer tx.Rollback()
+ 
++	if root != "" {
++		prefix := root + string(os.PathSeparator)
++		if _, err := tx.Stmt(delFileStmt).Exec(root, prefix, prefix); err != nil {
++			return err
++		}
++	}
++
+ 	stmt := tx.Stmt(putFileStmt)
+ 	defer stmt.Close()
+ 
+@@ -193,7 +208,7 @@ func getFilesByQuery(query string, _ bool) []File {
+ }
+ 
+ func deleteFileByPath(path string) {
+-	_, err := delFileStmt.Exec(path + "%")
++	_, err := delFileStmt.Exec(filepath.Clean(path), filepath.Clean(path)+string(os.PathSeparator), filepath.Clean(path)+string(os.PathSeparator))
+ 	if err != nil {
+ 		slog.Error(Name, "delete", err)
+ 	}
+diff --git a/internal/providers/files/setup.go b/internal/providers/files/setup.go
+index b47eee0..d00b57e 100644
+--- a/internal/providers/files/setup.go
++++ b/internal/providers/files/setup.go
+@@ -2,15 +2,18 @@ package main
+ 
+ import (
+ 	"bufio"
++	"bytes"
+ 	_ "embed"
+ 	"fmt"
+ 	"log"
+ 	"log/slog"
+ 	"os"
+ 	"os/exec"
++	"path/filepath"
+ 	"regexp"
+ 	"slices"
+ 	"strings"
++	"sync"
+ 	"time"
+ 
+ 	"github.com/abenz1267/elephant/v2/internal/util"
+@@ -31,6 +34,7 @@ var (
+ 	watcher      *fsnotify.Watcher
+ 	ignoreRegexp []*regexp.Regexp
+ 	hasLocalsend bool
++	indexMu      sync.Mutex
+ )
+ 
+ type IgnoredPreview struct {
+@@ -75,30 +79,34 @@ func Setup() {
+ 		log.Fatal(err)
+ 	}
+ 
+-	deleteChan := make(chan string)
+-	regularChan := make(chan string)
+-
+-	go handleDelete(deleteChan)
+-	go handleRegular(regularChan)
++	changes := make(chan string)
++	go handleChanges(changes)
+ 
+ 	go func() {
+ 		for {
+ 			select {
+ 			case event, ok := <-watcher.Events:
+ 				if !ok {
+-					continue
++					return
+ 				}
+-
+-				if event.Op == fsnotify.Remove || event.Op == fsnotify.Rename {
+-					deleteChan <- event.Name
+-					continue
++				if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
++					path := filepath.Clean(event.Name)
++					// fd ignore files change inclusion for the whole subtree.
++					switch filepath.Base(path) {
++					case ".ignore", ".fdignore", ".gitignore":
++						path = filepath.Dir(path)
++					}
++					changes <- path
+ 				}
+-
+-				regularChan <- event.Name
+-			case _, ok := <-watcher.Errors:
++			case err, ok := <-watcher.Errors:
+ 				if !ok {
+ 					return
+ 				}
++				slog.Error(Name, "watch", err)
++				// Recover from lost events (including inotify queue overflow).
++				for _, root := range searchRoots() {
++					changes <- root
++				}
+ 			}
+ 		}
+ 	}()
+@@ -123,123 +131,124 @@ func LoadConfig() {
+ 	common.LoadConfig(Name, config)
+ }
+ 
+-func index() {
+-	start := time.Now()
+-	dropAll()
+-
+-	searchDirs := config.SearchDirs
+-	if len(searchDirs) == 0 {
+-		home, _ := os.UserHomeDir()
+-		searchDirs = []string{home}
++func searchRoots() []string {
++	if len(config.SearchDirs) > 0 {
++		return config.SearchDirs
+ 	}
++	home, _ := os.UserHomeDir()
++	return []string{home}
++}
+ 
+-	for _, v := range config.IgnoredDirs {
+-		r, err := regexp.Compile(v)
+-		if err != nil {
+-			slog.Error(Name, "ignoredirs regexp", err)
+-			continue
++func watch(path string) {
++	if shouldWatch(path) {
++		if err := watcher.Add(path); err != nil {
++			slog.Error(Name, "watch path", path, "error", err)
+ 		}
++	}
++}
+ 
+-		ignoreRegexp = append(ignoreRegexp, r)
++func ignored(path string) bool {
++	for _, pattern := range ignoreRegexp {
++		if pattern.MatchString(path) {
++			return true
++		}
+ 	}
++	return false
++}
+ 
+-	cmd := exec.Command("fd", ".")
+-	cmd.Args = append(cmd.Args, searchDirs...)
++// Use the same fd policy for the initial index and updates: hidden files and
++// ignored paths must not become visible merely because they changed later.
++func listedPaths(root string, shallow bool) ([]string, error) {
++	cmd := exec.Command("fd", ".", root)
+ 	cmd.Args = append(cmd.Args, config.FdFlags...)
+-
++	cmd.Args = append(cmd.Args, "--print0")
++	if shallow {
++		cmd.Args = append(cmd.Args, "--max-depth", "1")
++	}
+ 	stdout, err := cmd.StdoutPipe()
+ 	if err != nil {
+-		slog.Error(Name, "files", err)
+-		return
++		return nil, err
+ 	}
+-
+-	if err := cmd.Start(); err != nil {
+-		slog.Error(Name, "files", err)
+-		return
++	if err = cmd.Start(); err != nil {
++		return nil, err
+ 	}
+-
+-	for _, path := range config.SearchDirs {
+-		if shouldWatch(path) {
+-			watcher.Add(path)
++	paths := []string{}
++	scanner := bufio.NewScanner(stdout)
++	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
++		if end := bytes.IndexByte(data, 0); end >= 0 {
++			return end + 1, data[:end], nil
+ 		}
+-
+-		if info, err := times.Stat(path); err == nil {
+-			diff := start.Sub(info.ChangeTime())
+-
+-			id := fmt.Sprintf("%x", xxhash.Sum64String(path))
+-
+-			f := File{
+-				Identifier: id,
+-				Path:       path,
+-				Changed:    time.Time{},
+-			}
+-
+-			res := 3600 - diff.Seconds()
+-			if res > 0 {
+-				f.Changed = info.ChangeTime()
+-			}
+-
+-			putFile(f)
++		return 0, nil, nil
++	})
++	for scanner.Scan() {
++		path := scanner.Text()
++		if path != "" && !ignored(path) {
++			paths = append(paths, path)
+ 		}
+ 	}
++	scanErr := scanner.Err()
++	if err = cmd.Wait(); err != nil {
++		return nil, err
++	}
++	return paths, scanErr
++}
+ 
+-	scanner := bufio.NewScanner(stdout)
+-
+-	batch := make([]File, 0, 5000)
+-
+-outer:
+-	for scanner.Scan() {
+-		path := strings.TrimSpace(scanner.Text())
+-
+-		if len(path) > 0 {
+-			for _, v := range ignoreRegexp {
+-				if v.Match([]byte(path)) {
+-					continue outer
+-				}
+-			}
+-
+-			if strings.HasSuffix(path, "/") {
+-				if shouldWatch(path) {
+-					watcher.Add(path)
+-				}
+-			}
+-
+-			if info, err := times.Stat(path); err == nil {
+-				diff := start.Sub(info.ChangeTime())
+-
+-				id := fmt.Sprintf("%x", xxhash.Sum64String(path))
+-
+-				f := File{
+-					Identifier: id,
+-					Path:       path,
+-					Changed:    time.Time{},
+-				}
+-
+-				res := 3600 - diff.Seconds()
+-				if res > 0 {
+-					f.Changed = info.ChangeTime()
+-				}
+-
+-				batch = append(batch, f)
++func fileEntry(path string) (File, error) {
++	info, err := times.Stat(path)
++	if err != nil {
++		return File{}, err
++	}
++	f := File{Identifier: fmt.Sprintf("%x", xxhash.Sum64String(path)), Path: path}
++	if time.Since(info.ChangeTime()) < time.Hour {
++		f.Changed = info.ChangeTime()
++	}
++	return f, nil
++}
+ 
+-				if len(batch) >= 5000 {
+-					if err := putFileBatch(batch); err != nil {
+-						slog.Error(Name, "batch insert", err)
+-					}
+-					batch = batch[:0]
+-				}
+-			}
++func scanDirectory(root string) ([]File, error) {
++	// Watch the search root too (the default home is absent from SearchDirs).
++	watch(root)
++	paths, err := listedPaths(root, false)
++	if err != nil {
++		return nil, err
++	}
++	paths = append(paths, filepath.Clean(root)+string(os.PathSeparator))
++	files := make([]File, 0, len(paths))
++	for _, path := range paths {
++		if strings.HasSuffix(path, "/") {
++			watch(path)
++		}
++		if f, err := fileEntry(path); err == nil {
++			files = append(files, f)
+ 		}
+ 	}
++	return files, nil
++}
+ 
+-	if len(batch) > 0 {
+-		if err := putFileBatch(batch); err != nil {
+-			slog.Error(Name, "final batch insert", err)
++func index() {
++	indexMu.Lock()
++	defer indexMu.Unlock()
++	ignoreRegexp = nil
++	for _, value := range config.IgnoredDirs {
++		pattern, err := regexp.Compile(value)
++		if err != nil {
++			slog.Error(Name, "ignoredirs regexp", err)
++			continue
+ 		}
++		ignoreRegexp = append(ignoreRegexp, pattern)
+ 	}
+-
+-	if err := cmd.Wait(); err != nil {
+-		slog.Error(Name, "cmd wait", err)
++	files := []File{}
++	for _, root := range searchRoots() {
++		entries, err := scanDirectory(root)
++		if err != nil {
++			slog.Error(Name, "index", err)
++			return
++		}
++		files = append(files, entries...)
++	}
++	dropAll()
++	if err := putFileBatch(files); err != nil {
++		slog.Error(Name, "index insert", err)
+ 	}
+ }
+ 
+@@ -250,79 +259,106 @@ func Available() bool {
+ 	return p1 != "" || p2 != ""
+ }
+ 
+-func handleDelete(deleteChan chan string) {
+-	timer := time.NewTimer(time.Millisecond * time.Duration(config.WatchBuffer))
+-	do := false
+-	toDelete := []string{}
+-
+-	for {
+-		select {
+-		case path := <-deleteChan:
+-			timer.Reset(time.Millisecond * time.Duration(config.WatchBuffer))
+-			toDelete = append(toDelete, path)
+-			do = true
+-		case <-timer.C:
+-			if do {
+-				slices.Sort(toDelete)
+-				toDelete = slices.Compact(toDelete)
+-
+-				for _, path := range toDelete {
+-					deleteFileByPath(path)
+-				}
++func within(path, root string) bool {
++	path, root = filepath.Clean(path), filepath.Clean(root)
++	return path == root || strings.HasPrefix(path, root+string(os.PathSeparator))
++}
+ 
+-				toDelete = []string{}
+-				do = false
+-			}
++func included(path string) (bool, error) {
++	for _, root := range searchRoots() {
++		if filepath.Clean(path) == filepath.Clean(root) {
++			return true, nil
+ 		}
+ 	}
++	// Events queued before a directory moved out or became ignored cannot
++	// reintroduce its children after the parent watcher has been removed.
++	parent := filepath.Dir(path)
++	if !slices.ContainsFunc(watcher.WatchList(), func(p string) bool { return filepath.Clean(p) == parent }) {
++		return false, nil
++	}
++	paths, err := listedPaths(parent, true)
++	if err != nil {
++		return false, err
++	}
++	return slices.ContainsFunc(paths, func(p string) bool { return filepath.Clean(p) == path }), nil
+ }
+ 
+-func handleRegular(regularChan chan string) {
+-	timer := time.NewTimer(time.Millisecond * time.Duration(config.WatchBuffer))
+-	do := false
+-	data := []string{}
++func refresh(path string) error {
++	info, err := os.Stat(path)
++	present := err == nil
++	if err != nil && !os.IsNotExist(err) {
++		return err
++	}
++	if present {
++		present, err = included(path)
++		if err != nil {
++			return err
++		}
++	}
++	// Keep existing watches and data until the replacement scan succeeds.
++	// A transient fd/read error must not silently stop watching descendants.
++	files := []File{}
++	if present {
++		if info.IsDir() {
++			files, err = scanDirectory(path)
++		} else {
++			var f File
++			f, err = fileEntry(path)
++			files = append(files, f)
++		}
++		if err != nil {
++			return err
++		}
++	}
++	if err := replaceFileTree(path, files); err != nil {
++		return err
++	}
++	keep := map[string]bool{}
++	for _, file := range files {
++		if strings.HasSuffix(file.Path, string(os.PathSeparator)) {
++			keep[filepath.Clean(file.Path)] = true
++		}
++	}
++	for _, watched := range watcher.WatchList() {
++		if within(watched, path) && !keep[filepath.Clean(watched)] {
++			_ = watcher.Remove(watched)
++		}
++	}
++	return nil
++}
+ 
++func handleChanges(changes chan string) {
++	timer := time.NewTimer(time.Hour)
++	timer.Stop()
++	pending := map[string]bool{}
+ 	for {
+ 		select {
+-		case path := <-regularChan:
++		case path := <-changes:
++			pending[path] = true
+ 			timer.Reset(time.Millisecond * time.Duration(config.WatchBuffer))
+-			data = append(data, path)
+-			do = true
+ 		case <-timer.C:
+-			if do {
+-				slices.Sort(data)
+-				data = slices.Compact(data)
+-
+-				for _, path := range data {
+-					if info, err := times.Stat(path); err == nil {
+-						fileInfo, err := os.Stat(path)
+-						if err == nil {
+-							if fileInfo.IsDir() {
+-								path = path + "/"
+-
+-								if shouldWatch(path) {
+-									watcher.Add(path)
+-								}
+-							}
+-
+-							id := fmt.Sprintf("%x", xxhash.Sum64String(path))
+-
+-							if val := getFile(id); val != nil {
+-								val.Changed = info.ChangeTime()
+-								putFile(*val)
+-							} else {
+-								putFile(File{
+-									Identifier: id,
+-									Path:       path,
+-									Changed:    info.ChangeTime(),
+-								})
+-							}
+-						}
+-					}
++			paths := make([]string, 0, len(pending))
++			for path := range pending {
++				paths = append(paths, path)
++			}
++			pending = map[string]bool{}
++			slices.Sort(paths)
++			indexMu.Lock()
++			last := ""
++			for _, path := range paths {
++				if last != "" && within(path, last) {
++					continue
+ 				}
+-
+-				data = []string{}
+-				do = false
++				if err := refresh(path); err != nil {
++					slog.Error(Name, "refresh", path, "error", err)
++					pending[path] = true
++					continue
++				}
++				last = path
++			}
++			indexMu.Unlock()
++			if len(pending) > 0 {
++				timer.Reset(time.Millisecond * time.Duration(config.WatchBuffer))
+ 			}
+ 		}
+ 	}
