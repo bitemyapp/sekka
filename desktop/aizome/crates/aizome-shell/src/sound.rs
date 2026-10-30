@@ -6,9 +6,13 @@
 //! `pw-play` (else `paplay`, else `aplay`, which can't set a volume), each
 //! in a process of its own, reaped on a thread.
 //!
-//! `pw-play` asks for short graph cycles ([`LATENCY`]), so a sound starts
-//! at once. Left to its default (100 ms) it would take whatever cycle up
-//! to that the graph allows: with Aizome's long-cycle cap, 4096 frames.
+//! `pw-play` asks for short graph cycles ([`LATENCY`]), and the whole graph
+//! runs at those while a sound plays, so with nothing on long cycles a
+//! sound starts within one. Over Utsushi's music it still waits for the
+//! sound card to play out the long cycles it has already queued, one to
+//! two of them (170 to 340 ms at 8192 frames): PipeWire doesn't drop them.
+//! Left to its default (100 ms), `pw-play` would take whatever cycle up to
+//! that the graph allows: with Aizome's long-cycle cap, 4096 frames.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

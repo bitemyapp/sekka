@@ -872,9 +872,13 @@ frames through the kit's video element (`docs/kit.md`, Video).
   8192 frames so the long cycles are granted (`default.clock.max-quantum`).
   Streams asking for short cycles still get theirs, and while one plays
   the whole graph runs at its cycle: the shell's sounds, and Settei's
-  preview of the alert, ask `pw-play` for 20 ms, so they start at once
-  even over music (the graph runs at 1024 frames while one plays, and
-  goes back to music's 8192 after). The limit is the whole system's:
+  preview of the alert, ask `pw-play` for 20 ms, so the graph runs at
+  1024 frames while one plays and goes back to music's 8192 after. With
+  nothing on long cycles, such a sound starts within a short one. Over
+  music it waits for the sound card to play out what it already holds,
+  one to two of music's cycles (170 to 340 ms; PipeWire doesn't drop
+  them), where with PipeWire's usual limit of 2048 frames it would wait
+  40 to 85 ms. The limit is the whole system's:
   other streams asking for more than 2048 frames get longer cycles too
   (`pw-play` left at its default 100 ms gets 4096 frames), and those
   asking for nothing run at the graph's cycle, which is long while music

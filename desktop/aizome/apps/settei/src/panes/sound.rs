@@ -231,7 +231,8 @@ impl Sound {
             return;
         }
         // On short cycles, as the shell plays it, so it's heard as the
-        // slider's let go, even over music.
+        // slider's let go (over music, once the sound card has played out
+        // the long cycles it holds).
         let spawned = std::process::Command::new("pw-play")
             .arg("--volume")
             .arg(format!("{volume:.2}"))
