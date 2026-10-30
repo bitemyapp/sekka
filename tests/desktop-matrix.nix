@@ -142,16 +142,19 @@ assert
       flake.inputs.nixpkgs.lib.hasInfix "Hidden=true"
         system.config.environment.etc."X11/sessions/${name}.desktop".text
   ) system.config.services.displayManager.sessionData.sessionNames;
-# One keyring: GNOME Keyring everywhere, also behind Plasma's KWallet API.
+# One keyring: GNOME Keyring everywhere, also behind the KWallet API, which
+# stays on the session bus without Plasma for profiles that recorded it.
 assert system.config.services.gnome.gnome-keyring.enable;
+assert flake.inputs.nixpkgs.lib.hasInfix "[KSecretD]\nEnabled=false"
+  system.config.environment.etc."xdg/kwalletrc".text;
 assert
   builtins.elem "plasma" system.config.calamares.desktops
-  -> (
-    !system.config.security.pam.services.login.kwallet.enable
-    &&
-      flake.inputs.nixpkgs.lib.hasInfix "[KSecretD]\nEnabled=false"
-        system.config.environment.etc."xdg/kwalletrc".text
-  );
+  -> !system.config.security.pam.services.login.kwallet.enable;
+assert
+  !builtins.elem "plasma" system.config.calamares.desktops
+  -> builtins.any (
+    package: (package.name or "") == "kwallet-daemon"
+  ) system.config.services.dbus.packages;
 # Every desktop offers Tatami's wallpapers, and each starts with its own.
 assert
   builtins.elem system.config.programs.tatami.wallpapers system.config.environment.systemPackages

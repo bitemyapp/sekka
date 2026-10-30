@@ -1,5 +1,7 @@
 """The real catalog wrapper must preserve a profile when desktops change."""
 
+from contextlib import ExitStack
+import itertools
 import json
 import os
 from pathlib import Path
@@ -7,12 +9,46 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 
 wrapped, original = map(Path, sys.argv[1:])
 executable = wrapped / "bin/signal-desktop"
+keyrings = ["org.freedesktop.secrets", "org.kde.kwalletd", "org.kde.kwalletd5", "org.kde.kwalletd6"]
+buses = itertools.count()
 
-with tempfile.TemporaryDirectory() as directory:
+# The buses stop before their directory is removed, also when a check fails.
+with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
     root = Path(directory)
+
+    def start(*command, **options):
+        process = subprocess.Popen(command, **options)
+        cleanup.callback(process.wait)
+        cleanup.callback(process.terminate)
+        return process
+
+    def bus(*activatable):
+        """A private session bus on which the named services are activatable."""
+        services = root / f"bus-{next(buses)}"
+        services.mkdir()
+        for name in activatable:
+            (services / f"{name}.service").write_text(f"[D-BUS Service]\nName={name}\nExec=/bin/false\n")
+        (services / "bus.conf").write_text(f"""<busconfig>
+  <type>session</type>
+  <listen>unix:path={services}/socket</listen>
+  <servicedir>{services}</servicedir>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+""")
+        daemon = start(
+            "dbus-daemon", "--nofork", "--print-address", f"--config-file={services}/bus.conf",
+            stdout=subprocess.PIPE, text=True,
+        )
+        return daemon.stdout.readline().strip()
+
     config_home = root / "configuration with spaces"
     profile = config_home / "Signal"
     profile.mkdir(parents=True)
@@ -21,8 +57,12 @@ with tempfile.TemporaryDirectory() as directory:
     database = profile / "sql/db.sqlite"
     database.parent.mkdir()
     database.write_bytes(b"encrypted database fixture")
-    env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(config_home))
+    env = dict(
+        os.environ, HOME=str(root), XDG_CONFIG_HOME=str(config_home),
+        DBUS_SESSION_BUS_ADDRESS=bus(*keyrings),
+    )
     env.pop("NODE_CONFIG", None)
+    env.pop("XDG_RUNTIME_DIR", None)
 
     def run(*args, desktop="Aizome", path=executable, extra_env=None):
         before = config.read_bytes() if config.exists() else None
@@ -53,7 +93,31 @@ with tempfile.TemporaryDirectory() as directory:
                 f"--password-store={flag}", "--use-tray-icon", "sgnl://test?one=two&three=four",
             ]
 
+    # A recorded keyring the session can't reach, as when Plasma (and with it
+    # KWallet) was removed: Electron would report it selected but unusable,
+    # and Signal would show a generic error offering to delete its data.
+    # Without the flag, Signal reports the changed keyring instead.
+    bare = {"DBUS_SESSION_BUS_ADDRESS": bus()}
+    absent = {"DBUS_SESSION_BUS_ADDRESS": f"unix:path={root}/no-bus"}
+    for backend in ["kwallet6", "kwallet5", "kwallet", "gnome_libsecret"]:
+        config.write_text(json.dumps({"safeStorageBackend": backend, "encryptedKey": "fixture"}))
+        assert run("sgnl://test", extra_env=bare) == ["sgnl://test"]
+        assert run(extra_env=absent) == []
+    config.write_text(json.dumps({"safeStorageBackend": "basic_text", "encryptedKey": "fixture"}))
+    assert run(extra_env=bare) == ["--password-store=basic"]
+    config.unlink()
+    assert run(extra_env=bare) == []
+
+    # A keyring that is running but not activatable counts as reachable.
     config.write_text(json.dumps({"safeStorageBackend": "kwallet6", "encryptedKey": "fixture"}))
+    start("dbus-test-tool", "black-hole", "--session", "--name=org.kde.kwalletd6", env=dict(env, **bare))
+    for _ in range(100):
+        if run(extra_env=bare) == ["--password-store=kwallet6"]:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("a running kwalletd6 was not found")
+
     for args in [
         ["--password-store=gnome-libsecret", "sgnl://test"],
         ["--password-store", "kwallet6"],

@@ -320,13 +320,30 @@ respected; custom `NODE_CONFIG` launches (Signal's `storagePath` and
 `storageProfile`) retain their own policy. Unrecognized, unreadable or
 malformed metadata is left to Signal's recovery handling.
 
+A keyring is selected only when its service is on the session bus, running
+or activatable (`org.kde.kwalletd6`, `org.kde.kwalletd5`, `org.kde.kwalletd`
+or `org.freedesktop.secrets`). Electron reports a requested keyring as
+selected even when it cannot reach it; Signal's `getSQLKey` then throws
+"Can't decrypt database key" and shows its generic database error, which
+offers "Delete and Restart". Without the flag the backend check fails
+instead and Signal names the keyring it needs. To keep `kwallet6` profiles
+working, `installer/genkan/rust/system/desktops.nix` keeps kwalletd6's D-Bus
+service files (bridged into GNOME Keyring by `[KSecretD] Enabled=false`)
+on systems without Plasma, including after Plasma is deselected. They only
+help when GNOME Keyring still holds the profile's entry: KWallet contents
+from before the bridge were never migrated.
+
 `nix build .#checks.x86_64-linux.signal-keyring` exercises the packaged
 launcher and desktop entry with profiles from each supported backend,
-desktop changes, explicit flags, alternate paths and invalid metadata.
-It does not log into Signal or test a live keyring. The original failure was
+desktop changes, explicit flags, alternate paths and invalid metadata. Each
+run has a private session bus, with the keyrings activatable, absent,
+unreachable, or running without a service file. It does not log into
+Signal or test a live keyring. The original failure was
 also reproduced on hardware: `kwallet6` became `basic_text` after switching
 to Aizome; selecting the recorded backend reopened the existing database and
-restored the interface without a profile reset.
+restored the interface without a profile reset. The unreachable case came
+from the same laptop after Plasma was removed: KWallet was no longer
+activatable and Signal showed the generic error.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 

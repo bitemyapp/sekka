@@ -22,7 +22,14 @@ let
   };
   wrapped = withKeyring { id = "signal"; } package;
 in
-pkgs.runCommand "signal-keyring-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-  python3 ${../tests/test_signal_keyring.py} ${wrapped} ${package}
-  touch $out
-''
+pkgs.runCommand "signal-keyring-check"
+  {
+    nativeBuildInputs = [
+      pkgs.python3
+      pkgs.dbus
+    ];
+  }
+  ''
+    python3 ${../tests/test_signal_keyring.py} ${wrapped} ${package}
+    touch $out
+  ''

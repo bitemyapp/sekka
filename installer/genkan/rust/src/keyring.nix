@@ -10,7 +10,8 @@
 # still opens.
 #
 # Signal records its backend and refuses to open its database if it changes.
-# Keep that recorded backend across desktops; new profiles use GNOME Keyring.
+# Keep that recorded backend across desktops while its service is on the
+# session bus; new profiles use GNOME Keyring.
 # Bitwarden reaches the keyring by itself.
 #
 # Used by applications.nix and by the ISO's per-application closures
@@ -31,7 +32,9 @@ let
     "slack"
   ];
   signalKeyring = pkgs.writeText "signal-keyring.sh" (
-    builtins.replaceStrings [ "@jq@" ] [ "${pkgs.jq}/bin/jq" ] (builtins.readFile ./signal-keyring.sh)
+    builtins.replaceStrings [ "@jq@" "@busctl@" ] [ "${pkgs.jq}/bin/jq" "${pkgs.systemd}/bin/busctl" ] (
+      builtins.readFile ./signal-keyring.sh
+    )
   );
   launchPolicy =
     if app.id == "signal" then
