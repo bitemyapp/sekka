@@ -502,6 +502,149 @@ fn an_edge_drag_ends_with_the_deskbar() {
     h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-80.0, 100.0)))));
     assert_eq!(h.program().deskbar_preview_width(), None, "the old drag is over");
     assert_eq!(h.program().settings.deskbar_settings().width, 232.0);
+
+    // Its display going goes the same way.
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Start(Point::new(5.0, 100.0)))));
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-40.0, 100.0)))));
+    assert!(h.program().deskbar_preview_width().is_some());
+    h.set_outputs(Vec::new());
+    assert_eq!(h.program().deskbar_preview_width(), None);
+    h.set_outputs(vec![output()]);
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-80.0, 100.0)))));
+    assert_eq!(h.program().deskbar_preview_width(), None);
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar width"));
+    assert_eq!(h.program().settings.deskbar_settings().width, 232.0);
+}
+
+#[test]
+fn locking_the_screen_ends_an_edge_drag_where_it_began() {
+    use aizome_kit::sidestep_ui::PointerButton;
+    use aizome_shell::actions::{Action, SessionVerb};
+    use aizome_shell::deskbar::{SHADOW, WIDTH};
+    let mut h = scene(false);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    let at = Point::new(SHADOW + 2.0, h.find(db, "Foot").expect("Foot's row").center().y);
+    h.enter(db, at);
+    h.press(db, at, PointerButton::Left, 1);
+    h.move_to(db, at - Vec2::new(60.0, 0.0));
+    assert_eq!(h.program().deskbar_preview_width(), Some(WIDTH + 60.0));
+    h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
+    assert_eq!(h.program().deskbar_preview_width(), None, "the outline goes with the lock");
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar width"));
+    // The release still comes to the Deskbar, and takes nothing.
+    h.release(db, at - Vec2::new(60.0, 0.0), PointerButton::Left);
+    assert_eq!(h.program().settings.deskbar_settings().width, WIDTH);
+    assert_eq!(h.program().deskbar_width(), WIDTH);
+}
+
+#[test]
+fn the_grip_menu_says_how_wide_a_narrowed_deskbar_is() {
+    use aizome_shell::deskbar::MAX_WIDTH;
+    use aizome_shell::menus::model::{Entry, Kind};
+    let sizes = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        let items = h.program().deskbar_place_menu().items;
+        // Past At the Left and At the Right.
+        items.into_iter().filter(|e| e.kind == Kind::Action).skip(2).collect::<Vec<_>>()
+    };
+    let ticked = |items: &[Entry]| items.iter().filter(|e| e.checked).map(|e| e.label.clone()).collect::<Vec<_>>();
+    let set_width = |h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, w: f64| {
+        let mut d = h.program().settings.deskbar_settings();
+        d.width = w;
+        h.program_mut().settings.set_shell_section("deskbar", &d);
+        h.send(Msg::SettingsChanged);
+    };
+    let mut h = scene(false);
+    set_width(&mut h, 360.0);
+    let items: Vec<Entry> = sizes(&h);
+    assert_eq!(ticked(&items), ["Wider"], "room for it: the size it is");
+    assert_eq!(items.len(), 5, "no line about the display: {items:?}");
+
+    // 400pt asked for, on an 800pt display: 360pt, which is Wider's width,
+    // but Wider isn't what was asked for.
+    set_width(&mut h, MAX_WIDTH);
+    let mut narrow = output();
+    narrow.frame.x1 = 800.0;
+    h.set_outputs(vec![narrow.clone()]);
+    let items: Vec<Entry> = sizes(&h);
+    assert_eq!(ticked(&items), ["As Wide as This Display Allows"]);
+    let line = items.last().unwrap();
+    assert_eq!((line.detail.as_deref(), line.enabled), (Some("360pt"), false));
+    let wider = items.iter().find(|e| e.label == "Wider").unwrap();
+    assert!(wider.enabled, "Wider can still be chosen: it fits");
+
+    // Wide (300pt) on a 600pt display: 270pt, and Wide doesn't fit.
+    set_width(&mut h, 300.0);
+    narrow.frame.x1 = 600.0;
+    h.set_outputs(vec![narrow]);
+    let items: Vec<Entry> = sizes(&h);
+    assert_eq!(ticked(&items), ["As Wide as This Display Allows"]);
+    assert_eq!(items.last().unwrap().detail.as_deref(), Some("270pt"));
+    assert!(!items.iter().find(|e| e.label == "Wide").unwrap().enabled);
+    assert_eq!(h.program().settings.deskbar_settings().width, 300.0, "the setting stays");
+
+    // Back on the wide display: Wide again.
+    h.set_outputs(vec![output()]);
+    let items: Vec<Entry> = sizes(&h);
+    assert_eq!(ticked(&items), ["Wide"]);
+    assert_eq!(items.len(), 5);
+}
+
+#[test]
+fn rows_under_the_edge_show_their_hover_and_tooltip() {
+    use aizome_shell::deskbar::{RAIL_WIDTH, SHADOW};
+    use std::time::Duration;
+    let mut h = scene(false);
+    let mut d = h.program().settings.deskbar_settings();
+    d.width = RAIL_WIDTH;
+    h.program_mut().settings.set_shell_section("deskbar", &d);
+    h.send(Msg::SettingsChanged);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    let tile = h.find(db, "Foot").expect("Foot's tile");
+    // A pixel of the tile's background, clear of its icon and the edge, and
+    // one where the edge draws its line.
+    let (bg, line) = (Point::new(tile.x1 - 3.0, tile.y0 + 2.0), Point::new(SHADOW + 2.0, tile.y0 + 2.0));
+    // The tooltips showing, by what they hang from.
+    let tips = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        h.platform
+            .windows
+            .values()
+            .filter_map(|w| match w.spec.kind {
+                aizome_kit::platform::OpenKind::Popup { anchor, .. } => Some(anchor),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let pixels = |h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        let (w, _, rgba) = h.render_rgba(db, 1.0);
+        let at = |p: Point| {
+            let i = (p.y as usize * w as usize + p.x as usize) * 4;
+            rgba[i..i + 4].to_vec()
+        };
+        (at(bg), at(line))
+    };
+    let (bg_still, line_still) = pixels(&mut h);
+    h.enter(db, tile.center());
+    let (bg_over, line_over) = pixels(&mut h);
+    assert_ne!(bg_over, bg_still, "the tile shows it's hovered");
+    h.advance(Duration::from_millis(700));
+    let name = tips(&h);
+    assert_eq!(name.len(), 1, "the tile's name, over its middle");
+    // Under the edge: the edge shows its line, and the tile under it its
+    // hover and its name, as in its middle.
+    h.move_to(db, Point::new(SHADOW + 2.0, tile.center().y));
+    assert!(tips(&h).is_empty(), "moved onto the edge, the tooltip waits again");
+    let (bg_under, line_under) = pixels(&mut h);
+    assert_ne!(line_under, line_over, "the edge's line");
+    assert_eq!(bg_under, bg_over, "the tile's hover, under the edge");
+    h.advance(Duration::from_millis(700));
+    assert_eq!(tips(&h), name, "the tile's name, under the edge");
+    // Off the Deskbar, both go.
+    h.leave(db);
+    assert!(tips(&h).is_empty());
+    let (bg_gone, line_gone) = pixels(&mut h);
+    assert_eq!((bg_gone, line_gone), (bg_still, line_still));
 }
 
 #[test]

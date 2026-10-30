@@ -369,6 +369,12 @@ impl Widget for DrawnWidget {
                 Status::Handled
             }
             Event::PointerMove { pos, .. } => {
+                // A press the kit has let go of (the compositor took the
+                // pointer before the release): it's over, and so is its drag.
+                if !cx.is_pressed() && cx.state::<PressState>().from.is_some() {
+                    let s = cx.state::<PressState>();
+                    (s.from, s.dragging) = (None, false);
+                }
                 if !cx.state::<PressState>().over {
                     cx.state::<PressState>().over = true;
                     if let Some(m) = &self.hovered_msg {
@@ -559,5 +565,71 @@ impl Widget for FreeWidget {
             cx.place_child(i, self.points.get(i).copied().unwrap_or(Point::ZERO));
         }
         bc.constrain(bc.max)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aizome_kit::prelude::{AppInfo, Cx, Program, WindowKey, WindowSpec};
+    use aizome_kit::testing::Harness;
+
+    /// A row that takes clicks, and over its left end an edge that takes
+    /// only drags.
+    #[derive(Default)]
+    struct Probe {
+        phases: Vec<DragPhase>,
+        clicks: u32,
+    }
+
+    #[derive(Clone)]
+    enum M {
+        Drag(DragPhase),
+        Click,
+    }
+
+    impl Program for Probe {
+        type Msg = M;
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.EdgeProbe", "Edge Probe", "Test")
+        }
+        fn launched(&mut self, cx: &mut Cx<M>) {
+            cx.open_window(WindowSpec::new("Edge Probe").size(200.0, 100.0));
+        }
+        fn update(&mut self, m: M, _: &mut Cx<M>) {
+            match m {
+                M::Drag(p) => self.phases.push(p),
+                M::Click => self.clicks += 1,
+            }
+        }
+        fn view(&self, _: WindowKey) -> Element<M> {
+            aizome_kit::stack(vec![
+                drawn(200.0, 100.0, "row", |_| {}).on_click(M::Click).into(),
+                drawn(10.0, 100.0, "edge", |_| {}).on_drag(M::Drag).drags_only().into(),
+            ])
+            .into()
+        }
+    }
+
+    #[test]
+    fn a_press_whose_release_goes_elsewhere_drags_no_more() {
+        let mut h = Harness::new(Probe::default());
+        let w = h.window();
+        let at = Point::new(5.0, 50.0);
+        h.enter(w, at);
+        h.press(w, at, PointerButton::Left, 1);
+        h.move_to(w, at + Vec2::new(20.0, 0.0));
+        let started = matches!(h.program().phases[..], [DragPhase::Start(_), DragPhase::Move(_)]);
+        assert!(started, "{:?}", h.program().phases);
+        // The pointer leaves with the button down: the compositor took it,
+        // and the release goes elsewhere.
+        h.leave(w);
+        h.enter(w, at);
+        h.move_to(w, at + Vec2::new(3.0, 0.0));
+        assert_eq!(h.program().phases.len(), 2, "moving over it drags nothing: {:?}", h.program().phases);
+        // A click there is the row's, as before the drag.
+        h.click(w, at);
+        assert_eq!(h.program().clicks, 1);
+        assert_eq!(h.program().phases.len(), 2);
     }
 }

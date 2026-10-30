@@ -247,7 +247,9 @@ pub trait Widget: 'static {
     /// by, over rows that take clicks). A left press that ends without a
     /// drag reaches what's under it as a click, once released. Other
     /// buttons, the wheel and drops go straight there. It still shows its
-    /// cursor and hover.
+    /// cursor and hover, and what's under it shows its hover and tooltip
+    /// too. Its press ends if the pointer leaves the window meanwhile (the
+    /// compositor took it: the release won't come).
     fn drags_only(&self) -> bool {
         false
     }

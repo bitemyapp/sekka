@@ -494,25 +494,43 @@ impl Shell {
             }
             DeskbarMsg::PlaceMenu(at) => {
                 let Some(k) = self.deskbar else { return };
-                let side = self.deskbar_cfg.side;
-                let width = self.deskbar_width();
-                let most = self.deskbar_most();
-                let place = |s| Action::PlaceDeskbar { side: Some(s), width: None };
-                let size = |w| Action::PlaceDeskbar { side: None, width: Some(w) };
-                let mut entries = vec![
-                    Entry::action("At the Left", place(DeskbarSide::Left)).checked(side == DeskbarSide::Left),
-                    Entry::action("At the Right", place(DeskbarSide::Right)).checked(side == DeskbarSide::Right),
-                    Entry::separator(),
-                ];
-                // Sizes wider than the main display has room for are off.
-                for (label, w) in aizome_config::DESKBAR_SIZES {
-                    entries.push(Entry::action(label, size(w)).checked(width == w).enabled(w <= most));
-                }
-                let menu = ShellMenu::new("Deskbar".to_owned(), entries);
+                let menu = self.deskbar_place_menu();
                 let style = self.deskbar_menu_style();
                 self.show_menu(k, at_point(at), &menu, style, cx);
             }
         }
+    }
+
+    /// The grip's menu: which edge, how wide. Ticks mark the side and the
+    /// width the Deskbar has. When the main display hasn't room for the
+    /// width asked for, no size is ticked (none is what it is), and a line
+    /// says how wide it is instead.
+    pub fn deskbar_place_menu(&self) -> ShellMenu {
+        let side = self.deskbar_cfg.side;
+        let width = self.deskbar_width();
+        let most = self.deskbar_most();
+        let narrowed = width < crate::deskbar::clamp_width(self.deskbar_cfg.width);
+        let place = |s| Action::PlaceDeskbar { side: Some(s), width: None };
+        let size = |w| Action::PlaceDeskbar { side: None, width: Some(w) };
+        let mut entries = vec![
+            Entry::action("At the Left", place(DeskbarSide::Left)).checked(side == DeskbarSide::Left),
+            Entry::action("At the Right", place(DeskbarSide::Right)).checked(side == DeskbarSide::Right),
+            Entry::separator(),
+        ];
+        // Sizes wider than the main display has room for are off.
+        for (label, w) in aizome_config::DESKBAR_SIZES {
+            entries.push(Entry::action(label, size(w)).checked(width == w && !narrowed).enabled(w <= most));
+        }
+        if narrowed {
+            entries.push(Entry::separator());
+            entries.push(
+                Entry::action("As Wide as This Display Allows", Action::None)
+                    .detail(format!("{width}pt"))
+                    .checked(true)
+                    .enabled(false),
+            );
+        }
+        ShellMenu::new("Deskbar".to_owned(), entries)
     }
 
     /// Shows the width an edge drag would give the Deskbar, on a surface of
@@ -680,9 +698,12 @@ mod tests {
         assert!(!s.is_folded("foot", 2, false));
     }
 
-    #[test]
-    fn a_click_on_a_window_row_under_the_edge_focuses_it() {
-        use aizome_kit::sidestep_ui::PointerButton;
+    type Requests = std::sync::mpsc::Receiver<(Request, Option<u64>)>;
+
+    /// A Deskbar at the right, as wide as it starts, with foot's two
+    /// windows ("cargo test" and the focused "htop"), and what the shell
+    /// asks the compositor.
+    fn two_windows() -> (aizome_kit::testing::Harness<Shell>, WindowKey, Requests) {
         let mut h = aizome_kit::testing::Harness::new(Shell::new(crate::shell::Options::default()));
         let (ipc, requests) = crate::ipc::Ipc::recording();
         h.program_mut().ipc = ipc;
@@ -711,6 +732,23 @@ mod tests {
         h.send(Msg::Nothing);
         let db = h.program().deskbar.expect("the Deskbar");
         h.resize(db, crate::deskbar::size(&h.program().deskbar_model()));
+        (h, db, requests)
+    }
+
+    fn focused(requests: &Requests) -> Vec<WindowId> {
+        requests
+            .try_iter()
+            .filter_map(|(r, _)| match r {
+                Request::Focus { id } => Some(id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_click_on_a_window_row_under_the_edge_focuses_it() {
+        use aizome_kit::sidestep_ui::PointerButton;
+        let (mut h, db, requests) = two_windows();
         let row = h.find(db, "cargo test").expect("the window's row");
         // The Deskbar stands at the right: its inner edge is over the rows'
         // first 5pt, after the shadow.
@@ -725,5 +763,46 @@ mod tests {
         assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH + 40.0);
         let sent: Vec<Request> = requests.try_iter().map(|(r, _)| r).collect();
         assert!(!sent.iter().any(|r| matches!(r, Request::Focus { .. })), "{sent:?}");
+    }
+
+    #[test]
+    fn an_edge_drag_whose_release_goes_elsewhere_ends_unsaved() {
+        use aizome_kit::layout::Vec2;
+        use aizome_kit::sidestep_ui::PointerButton;
+        let (mut h, db, requests) = two_windows();
+        let row = h.find(db, "cargo test").expect("the window's row");
+        let at = Point::new(crate::deskbar::SHADOW + 2.0, row.center().y);
+        h.enter(db, at);
+        h.press(db, at, PointerButton::Left, 1);
+        h.move_to(db, at - Vec2::new(40.0, 0.0));
+        assert_eq!(h.program().deskbar_preview_width(), Some(crate::deskbar::WIDTH + 40.0));
+        // The pointer leaves with the button down: the compositor took it
+        // (a grab of its own), and the release goes elsewhere.
+        h.leave(db);
+        assert_eq!(h.program().deskbar_preview_width(), None, "the outline goes");
+        assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar width"));
+        assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH, "nothing taken");
+        // Back over the edge, no button down: no outline.
+        h.enter(db, at);
+        h.move_to(db, at - Vec2::new(20.0, 0.0));
+        assert_eq!(h.program().deskbar_preview_width(), None, "hovering drags nothing");
+        // The next click is the row's: the lost press doesn't take its
+        // release. Foot's count takes clicks only (it folds the windows), so
+        // it doesn't take the pointer, which would end a stale press anyway.
+        let foot = h.find(db, "Foot").expect("foot's row");
+        let count = Point::new(crate::deskbar::SHADOW + crate::deskbar::WIDTH - 28.0, foot.center().y);
+        h.click(db, count);
+        assert!(h.find(db, "cargo test").is_none(), "folded: {:?}", h.texts(db));
+        h.click(db, count);
+        h.click(db, row.center());
+        assert_eq!(focused(&requests), [7]);
+        assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH);
+        // And a press on the edge drags again.
+        let at = Point::new(crate::deskbar::SHADOW + 2.0, foot.center().y);
+        h.press(db, at, PointerButton::Left, 1);
+        h.move_to(db, at - Vec2::new(30.0, 0.0));
+        h.release(db, at - Vec2::new(30.0, 0.0), PointerButton::Left);
+        assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH + 30.0);
+        assert_eq!(focused(&requests), [] as [WindowId; 0]);
     }
 }

@@ -122,6 +122,10 @@ pub(crate) struct Win {
     pub snapshot: Snapshot,
     pub size: Size,
     pub hot: Option<NodeId>,
+    /// Under a hot widget that takes only drags
+    /// ([`drags_only`](crate::widget::Widget::drags_only)), what the pointer
+    /// is over beneath it: it shows its hover too.
+    pub hot_under: Option<NodeId>,
     pub active: Option<NodeId>,
     /// A left press taken by what takes only drags
     /// ([`drags_only`](crate::widget::Widget::drags_only)):
@@ -181,6 +185,7 @@ impl Win {
             snapshot: Snapshot::default(),
             size,
             hot: None,
+            hot_under: None,
             active: None,
             press_under: None,
             focused: None,
@@ -1419,7 +1424,7 @@ impl Core {
                 env: &mut env,
                 out: &mut out,
                 platform,
-                hovered: w.hot == Some(id),
+                hovered: w.hot == Some(id) || w.hot_under == Some(id),
                 pressed: w.active == Some(id),
                 focused: w.focused == Some(id),
                 any_focus: w.focused.is_some(),
@@ -1702,14 +1707,41 @@ impl Core {
             return;
         }
         let path = w.tree.path_at(p, w.modal());
-        let hot_idx = path.iter().rev().copied().find(|&i| w.tree.nodes[i].widget.hit());
+        let hot_at = path.iter().rposition(|&i| w.tree.nodes[i].widget.hit());
+        let hot_idx = hot_at.map(|k| path[k]);
         let hot = hot_idx.map(|i| w.tree.nodes[i].id);
-        let tip = path
-            .iter()
-            .rev()
-            .find_map(|&i| w.tree.nodes[i].common.tooltip.as_ref().map(|text| (w.tree.nodes[i].id, text.clone())));
+        let tip_in = |path: &[usize]| {
+            path.iter()
+                .rev()
+                .find_map(|&i| w.tree.nodes[i].common.tooltip.as_ref().map(|text| (w.tree.nodes[i].id, text.clone())))
+        };
+        // Over what takes only drags (an edge to resize by over rows), what's
+        // under it shows that the pointer's over it too: its hover, and its
+        // tooltip unless the other has one.
+        let (hot_under, tip) = match hot_at {
+            Some(k) if w.tree.nodes[path[k]].widget.drags_only() => {
+                let under = w.tree.path_under(p, w.modal());
+                let below = under.iter().rev().copied().find(|&i| w.tree.nodes[i].widget.hit());
+                (below.map(|i| w.tree.nodes[i].id), tip_in(&path[k..]).or_else(|| tip_in(&under)))
+            }
+            _ => (None, tip_in(&path)),
+        };
         let hot_changed = hot != w.hot;
+        let under_changed = hot_under != w.hot_under;
         let tip_changed = tip != w.tooltip_target;
+        if !hot_changed && !under_changed && !tip_changed {
+            return;
+        }
+        if under_changed {
+            let was = std::mem::replace(&mut w.hot_under, hot_under);
+            for id in [was, hot_under].into_iter().flatten() {
+                if let Some(i) = w.tree.get(id)
+                    && w.tree.nodes[i].widget.hover_paints()
+                {
+                    platform.invalidate(win, w.tree.nodes[i].own_rect());
+                }
+            }
+        }
         if !hot_changed && !tip_changed {
             return;
         }
@@ -1732,8 +1764,9 @@ impl Core {
         // A pending tooltip reads its text when shown, so a text-only change
         // keeps its deadline. A visible tooltip changes immediately.
         let same_source = tip.as_ref().map(|t| t.0) == w.tooltip_target.as_ref().map(|t| t.0);
-        let keep_pending = !hot_changed && same_source && w.tooltip.is_some();
-        let refresh_shown = !hot_changed && w.tooltip_shown.is_some();
+        let moved = hot_changed || under_changed;
+        let keep_pending = !moved && same_source && w.tooltip.is_some();
+        let refresh_shown = !moved && w.tooltip_shown.is_some();
         w.tooltip_target = tip.clone();
         let shown = w.tooltip_shown.take();
         let pending = if keep_pending { None } else { w.tooltip.take() };
@@ -1796,6 +1829,19 @@ impl Core {
         w.pointer = None;
         w.tooltip_target = None;
         let old = w.hot.take();
+        if let Some(i) = w.hot_under.take().and_then(|u| w.tree.get(u))
+            && w.tree.nodes[i].widget.hover_paints()
+        {
+            platform.invalidate(win, w.tree.nodes[i].own_rect());
+        }
+        // A press held by what takes only drags can't end here now: while a
+        // button is down the pointer stays the window's, so leaving it means
+        // the compositor took the pointer (a grab of its own), and the
+        // release goes elsewhere. The next press starts afresh.
+        if w.active.and_then(|a| w.tree.get(a)).is_some_and(|i| w.tree.nodes[i].widget.drags_only()) {
+            w.active = None;
+            w.press_under = None;
+        }
         if let Some((_, token)) = w.tooltip.take() {
             platform.cancel_timer(token);
         }
@@ -2189,7 +2235,7 @@ impl Core {
                 env: &mut env,
                 out: &mut out,
                 platform: &mut *platform,
-                hovered: w.hot == Some(id),
+                hovered: w.hot == Some(id) || w.hot_under == Some(id),
                 pressed: false,
                 focused: w.focused == Some(id),
                 any_focus: w.focused.is_some(),
@@ -2320,7 +2366,7 @@ impl Core {
                 env: &mut env,
                 out: &mut out,
                 platform: &mut *platform,
-                hovered: w.hot == Some(id),
+                hovered: w.hot == Some(id) || w.hot_under == Some(id),
                 pressed: false,
                 focused: true,
                 any_focus: true,
@@ -2491,6 +2537,7 @@ impl Core {
             text: &mut self.text,
             states: &w.states,
             hot: w.hot,
+            hot_under: w.hot_under,
             active: w.active,
             focused: w.focused,
             focus_visible: w.focus_visible,

@@ -292,15 +292,20 @@ width = 232.0    # points
   with the other anchor). Right-click it for **At the Left** and **At the
   Right**, and the named sizes **Icons Only** (48), **Slim** (150),
   **Standard** (232), **Wide** (300) and **Wider** (360); ticks mark the
-  current ones, and sizes wider than the display allows are off.
+  current ones, and sizes wider than the display allows are off. When the
+  display holds the Deskbar narrower than `width` asks, no size is
+  ticked and **As Wide as This Display Allows** gives the width it has.
 - **The inner edge**: a 5pt strip over the rows' inner edge, which shows
   the resize cursor and a `focus` line under the pointer. Drag it to
   change the width: an outline of the Deskbar at the new width shows on a
   surface of its own over it while the button's held. The Deskbar takes
   that width and saves it when you let go, so the windows beside it are
-  fitted once, not at every step of the drag. The strip takes drags
-  only: a click there, other buttons and the wheel reach the row under
-  it.
+  fitted once, not at every step of the drag. If the release never
+  reaches the Deskbar (the compositor took the pointer, the Deskbar or
+  its display went, or the screen locked), the drag ends there and the
+  width stays. The strip takes drags only: a click there, other buttons
+  and the wheel reach the row under it, which shows its hover and tooltip
+  there too.
 - Settings → Desktop & Deskbar has **Stands at** (Left / Right) and
   **Width** (the same named sizes; none is lit after a drag to another
   width).

@@ -1730,6 +1730,12 @@ impl Program for Shell {
 
     fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
         if self.deskbar == Some(window) {
+            // While the button's down the pointer stays the Deskbar's: gone
+            // mid-drag, the compositor took it, and the release won't come.
+            // The edge drag is over, its width not taken.
+            if !inside {
+                self.end_deskbar_resize(cx);
+            }
             self.deskbar_hover(false, inside, cx);
             self.after_update(cx);
         }
