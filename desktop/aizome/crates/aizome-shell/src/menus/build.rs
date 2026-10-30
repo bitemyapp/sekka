@@ -153,7 +153,10 @@ pub fn desktop(desks: &[DeskInfo]) -> Vec<Menu> {
             vec![
                 Entry::action("Search", Action::Palette { scope: Some(Scope::Command), query: String::new() })
                     .shortcut(sc("❖", "Space")),
-                Entry::action("Aizome Help", Action::OpenUrl { url: "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome".into() }),
+                Entry::action(
+                    "Aizome Help",
+                    Action::OpenUrl { url: "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome".into() },
+                ),
                 Entry::separator(),
                 Entry::action("Aizome Tour", Action::Spawn { argv: vec!["aizome-annai".into()] }),
             ],
@@ -256,6 +259,9 @@ pub fn toolchest(input: &ToolchestInput) -> Menu {
     ]
     .into_iter()
     .map(|(n, g, id, icon)| Entry::action(n, Action::Launch { app_id: id.into() }).glyph(icon).detail(g))
+    .chain(std::iter::once(
+        Entry::action("Application Launches…", Action::LaunchDetails { id: None }).glyph(Icon::Activity),
+    ))
     .chain(std::iter::once(
         Entry::action("Terminal", Action::Wm(Request::Action { action: "terminal".into() }))
             .glyph(Icon::SquareTerminal)

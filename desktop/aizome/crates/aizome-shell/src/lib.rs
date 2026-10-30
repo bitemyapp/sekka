@@ -38,6 +38,7 @@ pub mod sharing;
 pub mod shelf;
 pub mod shell;
 pub mod sound;
+pub mod startup;
 pub mod sys;
 pub mod systray;
 pub mod tearoff;
