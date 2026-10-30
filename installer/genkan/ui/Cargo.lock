@@ -1496,6 +1496,7 @@ name = "sidestep-engine"
 version = "0.0.1"
 dependencies = [
  "fontique",
+ "harfrust",
  "icu_properties",
  "icu_provider",
  "image",

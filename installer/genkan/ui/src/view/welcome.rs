@@ -7,8 +7,8 @@ use aizome_kit::{column, row};
 const FEATURES: [(Icon, &str, &str); 3] = [
     (
         Icon::Zap,
-        "Prepared while you review",
-        "Your system is built and cached in memory before anything is written, so the final install is short.",
+        "Checked before erasing",
+        "The installer checks its files and your configuration before erasing the disk. With limited memory, downloading and building may continue on the new disk after formatting.",
     ),
     (
         Icon::ShieldCheck,
@@ -25,7 +25,7 @@ const FEATURES: [(Icon, &str, &str); 3] = [
 pub fn page() -> Element<Msg> {
     let intro = column![
         text("Install Sekka").size(26.0).weight(700.0),
-        text("With Determinate Nix, your choice of desktops and applications, and a fast installation that is prepared before your disk is touched.")
+        text("With Determinate Nix and your choice of desktops and applications. Review the installation plan before confirming that the disk can be erased.")
             .role(Role::Text2)
             .wrap(),
     ]
