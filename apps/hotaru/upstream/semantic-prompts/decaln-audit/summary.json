@@ -1,0 +1,28 @@
+{
+  "status": "passed-after-DECALN-fix",
+  "before": {
+    "comparisons": 3090,
+    "passed": 3036,
+    "failed": 54,
+    "cause": "Nine DECALN cases across two width modes and three chunk sizes; ESC # 8 was ignored."
+  },
+  "after": {
+    "comparisons": 3090,
+    "passed": 3090,
+    "failed": 0
+  },
+  "rust_adapter_before": "00a916dc6522994d361df60e7161ee0047272a196f41017ac6d592c70cf5d23f",
+  "rust_adapter_after": "f4dfbade576c114d5fd7d522fa17a49ab09f45733116c0f384c1bb78494e227a",
+  "actual_library_c_adapter": "f78b17b7c9c9c7b06dc3c781596dda6574d83b15e7b04ca76d1b93cbf747aa4b",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "new_tests": 3,
+  "validation": [
+    "Full debug workspace tests passed, with existing ignored shell/environment tests unchanged.",
+    "Strict all-target workspace Clippy passed.",
+    "Dedicated release tests pending the accepted native timing window.",
+    "Independent source review by upstream_clipboard found no concrete semantic, ownership, bounds or budget-order defect."
+  ],
+  "test_correction": "The first post-implementation focused run exposed a test-only history offset mistake: snapshot_all.rows includes captured history. Corrected the assertion to use position.history_rows; preserved that failed run.",
+  "raw_root": "/home/callen/work/hotaru-semantic-audit-20261028",
+  "scope": "Per-cell and row semantic metadata, cursor coordinates, width and protection compare against the unchanged pinned library. Dedicated Rust expectations additionally cover SGR colors, owned links/graphemes, held snapshots, margins, origin, REP and active-screen isolation. No complete-feature or performance claim."
+}

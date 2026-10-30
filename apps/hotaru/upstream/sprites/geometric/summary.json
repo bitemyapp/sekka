@@ -1,0 +1,75 @@
+{
+  "status": "qualified isolated component; package acceptance separate",
+  "base": "2e6c0bbd8ecd0a2e823918df9496dc81a7fb49e5",
+  "patch_sha256": "cc82ae209794c6d001cce36907aa53d442d737b5d38755f3a84c1a813cbc007e",
+  "binary_fixture_sha256": "961a6e0b0115fa013d9dd98ce5f437c6538538ff765f2a070fb61e6b349c938a",
+  "source_files": {
+    "apps/hotaru/crates/hotaru-sprites/src/lib.rs": "487412d0e4280599cb1c3b9d02b5387e0483c5343fc23e73106e454e9c8779a1",
+    "apps/hotaru/crates/hotaru-sprites/src/vector.rs": "4c711fbe9e49828b1dfc200cc71852d6e5d5d612788e040f7b3e9e32a6806e0e",
+    "apps/hotaru/crates/hotaru-sprites/src/geometric.rs": "528c006a6075c3a38c3b6e42f23cb838ba2e6213a6230aa209b1bd694f1bfbf2",
+    "apps/hotaru/crates/hotaru-sprites/src/math.rs": "c18c2d76f74bf6848861df0f96187701f7dd6daf41ddcbe896a9eb8c2b2b5c3a",
+    "apps/hotaru/crates/hotaru-sprites/tests/raster.rs": "477e05d9151562254974419fcd6db36fe758acdf7ef8117665ed2e615d2987a8",
+    "apps/hotaru/crates/hotaru-sprites/tests/golden.rs": "a198de5a408d887298ba561f822576414c954f22607af6a42bdf9012cddc995e",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.rle": "961a6e0b0115fa013d9dd98ce5f437c6538538ff765f2a070fb61e6b349c938a",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.json": "c3fa2292c0af86a0b500e29cfed17f111da945b1a7484407b7767f977f1d1f08",
+    "apps/hotaru/crates/hotaru-sprites/LICENSE.zig": "5c537d6853e005298a285d508cff9ac7192cea23576c840d485b2b586a7ff177",
+    "desktop/aizome/apps/hotaru/src/font.rs": "e77c3381c830505735d8ffb50e18e6b8dabe554bf02a97b810fa944dece6ee26",
+    "desktop/aizome/apps/hotaru/tests/wayland/sprites.py": "9869decb9757a6a34261590d2855b6b10d85f9338740d8d02c1824ffd3bda64c",
+    "desktop/aizome/nix/hotaru.nix": "c030e3ccc15d0cbf6153df27f84374269c40a5024971535defe774e24c911d9a",
+    "desktop/aizome/nix/package.nix": "42d584f15accaa571c4d72dbdf4ee848c5f74d0387e76359cf7e6951d8cf45ee"
+  },
+  "tested_source_manifest_files": 236,
+  "pure_oracle": {
+    "matches": 43128,
+    "metrics": 5391,
+    "compared_bytes": 1111842592,
+    "metadata_matches": 43128,
+    "png_matches": 32,
+    "candidate_sha256": "5ef02ddef0452636df6ac36479a05b79acaeababcdaa7556d76cf7ebd2bff296",
+    "oracle_sha256": "e81f3a5f4ea58ea2fd028208817c4492107c9bf1e28e3e8e36e85682307d04eb",
+    "oracle_build_mode": "ReleaseSafe"
+  },
+  "shared_vector_regression": {
+    "matches": 57700,
+    "metrics": 2308,
+    "compared_bytes": 2454494850,
+    "metadata_matches": 57700,
+    "png_matches": 100,
+    "candidate_sha256": "5ef02ddef0452636df6ac36479a05b79acaeababcdaa7556d76cf7ebd2bff296",
+    "oracle_sha256": "e81f3a5f4ea58ea2fd028208817c4492107c9bf1e28e3e8e36e85682307d04eb"
+  },
+  "native": {
+    "binary_sha256": "86663b983036dff1ed6fd33adfc9f93136fe1089e8f4742fb642f792af7b1c32",
+    "glyph_comparisons": 1768,
+    "rgb_bytes": 5696496,
+    "scales": [
+      1.0,
+      1.25,
+      2.0,
+      1.0
+    ],
+    "oracle_sha256": "4855a67ebb19e6f4c2713553001ad875287c62337a0c765ea22df6fd1bb41891"
+  },
+  "tests": {
+    "native_ordinary": 62,
+    "native_ignored_existing": 7,
+    "pure": 13,
+    "permanent_geometric_fixture_records": 77,
+    "strict_clippy": "pure all-targets and native package passed"
+  },
+  "licensing": {
+    "new_notice": "Zig-MIT.txt",
+    "source_license_sha256": "5c537d6853e005298a285d508cff9ac7192cea23576c840d485b2b586a7ff177",
+    "math_source_sha256": "b436e704482aad2ec02ca3a9b3306c89cc5e59eaff175af8be00e429f34d750c",
+    "installed_notice_count": 9,
+    "notes": "Exact Zig0.17distribution MIT notice; safe f64 normalization translation. Existing Ghostty MIT and z2d MPL notices retained."
+  },
+  "limits": [
+    "No throughput or whole-application performance claim.",
+    "643 registered character slots and11 internal sprite rasters remain unqualified.",
+    "Aligned software Wayland captures do not establish arbitrary fractional placement or GPU presentation.",
+    "Runtime cache, ownership and metrics API unchanged; new triangles use existing padded-ink path.",
+    "Native actual oracle remains ReleaseFast due documented upstream Braille assertion defect; pure geometric and shared-vector actual oracle is ReleaseSafe.",
+    "Earlier pre-lock-hash report is preserved as unqualified; only locked final reports establish current source acceptance."
+  ]
+}

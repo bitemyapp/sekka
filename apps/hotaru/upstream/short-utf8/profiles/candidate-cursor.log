@@ -1,0 +1,11 @@
+==94283== Callgrind, a call-graph generating cache profiler
+==94283== Copyright (C) 2002-2017, and GNU GPL'd, by Josef Weidendorfer et al.
+==94283== Using Valgrind-3.27.1 and LibVEX; rerun with -h for copyright info
+==94283== Command: /home/callen/work/hotaru-short-text-candidate-20261028/target/release/hotaru-replay --data /home/callen/work/hotaru-rep-last-cell-20261028/measurements/cursor.vt --rows 12 --cols 120 --chunk 65536 --grapheme-width unicode --bench-json --iterations 1
+==94283== 
+==94283== For interactive control, run 'callgrind_control -h'.
+==94283== 
+==94283== Events    : Ir
+==94283== Collected : 305331638
+==94283== 
+==94283== I   refs:      305,331,638

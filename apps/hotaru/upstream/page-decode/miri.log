@@ -1,0 +1,23 @@
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-page-decode-isolated/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/b058b68a4f4514c5/out/hotaru_core-b058b68a4f4514c5)
+
+running 4 tests
+test history::tests::direct_decode_failures_restart_heap_budget_once ... ok
+test history::tests::direct_decode_matches_heap_capacities_links_and_exact_budgets ... ok
+test history::tests::direct_decode_maximum_cell_map_has_checked_disjoint_rows ... ignored, large native mapping boundary; small decode tests exercise same builder under Miri
+test history::tests::direct_decode_rejects_late_corruption_and_all_truncations_like_heap ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 33 filtered out; finished in 29.37s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/b058b68a4f4514c5/out/hotaru_core-b058b68a4f4514c5)
+
+running 4 tests
+test history::tests::direct_decode_failures_restart_heap_budget_once ... ok
+test history::tests::direct_decode_matches_heap_capacities_links_and_exact_budgets ... ok
+test history::tests::direct_decode_maximum_cell_map_has_checked_disjoint_rows ... ignored, large native mapping boundary; small decode tests exercise same builder under Miri
+test history::tests::direct_decode_rejects_late_corruption_and_all_truncations_like_heap ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 33 filtered out; finished in 29.37s
+

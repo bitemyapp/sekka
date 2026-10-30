@@ -1,0 +1,700 @@
+{
+  "schema": 1,
+  "scope": "Diagnose malformed UTF-8 scaling; this is not general performance acceptance.\n\nCompare state and replies to pinned Ghostty, then time exact frozen Rust builds\nserially on one CPU. Input sizes deliberately grow by four to distinguish a\nlinear decode from repeated suffix scanning. No rendering/history is measured.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "64aa29f0d3dd5fd4f01a63ac773c23911a41d7e978b33b854294eb67574c50e0",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-dense-baseline-build.json",
+      "sha256": "6b100ad161d3677057e740bf30e90067746eb27697386c2ed0c2658b4183c746",
+      "source_sha256": "9061bb83aa2dcd90c92e630a8ee5b89171588d2ffe60465faf8356934f9f4a23",
+      "binary_sha256": "7ecc4be8c9d4f994584157b69995548dfca65ea9edb2dfb1317c1bf2ff034209",
+      "revision": "combined-budget-wide-rowspan-osc7-control"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-utf8-cache-only-build.json",
+      "sha256": "896347036ee4cc67ab741b52d611a2d1f30522547da3c4f8765c3cb7a53ae0b3",
+      "source_sha256": "aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57",
+      "binary_sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+      "revision": "current-combined-std-utf8-cached-span"
+    }
+  ],
+  "results": [
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "3613fe38ee97a2e4ad813b646bcac9122f9e76704c273a50479d6726cb3d8888",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          333776,
+          324822,
+          323020,
+          372205,
+          378094,
+          368449,
+          363181,
+          369050,
+          370742,
+          371273,
+          375519,
+          375610
+        ],
+        "current-combined-std-utf8-cached-span": [
+          66662,
+          65079,
+          64818,
+          72941,
+          80011,
+          70047,
+          73191,
+          72090,
+          78569,
+          73010,
+          71368,
+          70968
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 369896.0,
+        "current-combined-std-utf8-cached-span": 71729.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "a7250f2625d4252dadcf8d45ce4a56f8b61f9bc484cb4854cbb2e3646d624443",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          4350520,
+          4362869,
+          4317541,
+          4433406,
+          4396770,
+          4379654,
+          4438604,
+          4469771,
+          4444562,
+          4410411,
+          4450111,
+          4440476
+        ],
+        "current-combined-std-utf8-cached-span": [
+          280235,
+          282108,
+          281628,
+          276219,
+          278813,
+          283260,
+          279705,
+          288948,
+          291672,
+          278172,
+          282228,
+          277371
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 4421908.5,
+        "current-combined-std-utf8-cached-span": 280931.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "e9fd102a3a29df3b5541ece2297ac0b5078267d60611afe0e4b1636b9bd091a2",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          55980977,
+          55924591,
+          55936469,
+          55809377,
+          55888477,
+          55713681,
+          55648652,
+          55770638,
+          55671257,
+          55797940,
+          55930290,
+          56047939
+        ],
+        "current-combined-std-utf8-cached-span": [
+          1003373,
+          988730,
+          1004955,
+          1002751,
+          1011345,
+          1019477,
+          977152,
+          988179,
+          1005796,
+          997163,
+          989431,
+          989832
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 55848927.0,
+        "current-combined-std-utf8-cached-span": 999957.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "6d30f96d1f913862947a9b414c496cf6294f88215ea8250a2b0ebbae452e44d7",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          194325,
+          192492,
+          190899,
+          193223,
+          192652,
+          198020,
+          196588,
+          196168,
+          202688,
+          223329,
+          220264,
+          216198
+        ],
+        "current-combined-std-utf8-cached-span": [
+          56395,
+          53861,
+          54172,
+          57367,
+          53702,
+          71789,
+          64448,
+          61133,
+          61554,
+          65380,
+          61443,
+          61643
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 196378.0,
+        "current-combined-std-utf8-cached-span": 61288.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "375c0e271af90cbe483e7b7c43a1a7ece24e1290608fb22e7f976f1734f00827",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          2339990,
+          2334722,
+          2307621,
+          2343655,
+          2318738,
+          2320951,
+          2353931,
+          2356685,
+          2352379,
+          2304886,
+          2309714,
+          2291767
+        ],
+        "current-combined-std-utf8-cached-span": [
+          245813,
+          252153,
+          243859,
+          246114,
+          250680,
+          247266,
+          251101,
+          245663,
+          245402,
+          246143,
+          244991,
+          248417
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 2327836.5,
+        "current-combined-std-utf8-cached-span": 246128.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "bc62f9612305dc9f4c7059af0d0ab990d3a6cf50c97c4932d06e73f10880918b",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          28104756,
+          28072868,
+          28058817,
+          28264088,
+          28182795,
+          28173051,
+          28118427,
+          28161452,
+          28160141,
+          28038216,
+          28410641,
+          28091667
+        ],
+        "current-combined-std-utf8-cached-span": [
+          864671,
+          878763,
+          894006,
+          885303,
+          882740,
+          887597,
+          885663,
+          891843,
+          887347,
+          879414,
+          890661,
+          885162
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 28139284.0,
+        "current-combined-std-utf8-cached-span": 885483.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4099,
+      "sha256": "97cca00e52f3e787d677bc17e5692cd97a66d8e4d9223d7a16a54c9cd9143360",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          248487,
+          248557,
+          241396,
+          250460,
+          245713,
+          249338,
+          247726,
+          252223,
+          240185,
+          256158,
+          247396,
+          241736
+        ],
+        "current-combined-std-utf8-cached-span": [
+          59531,
+          57257,
+          57087,
+          61143,
+          64177,
+          57958,
+          59590,
+          57417,
+          57207,
+          62655,
+          59610,
+          58949
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 248106.5,
+        "current-combined-std-utf8-cached-span": 59240.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16387,
+      "sha256": "a648742d416fd36eba90e2580cdc6190b2b33ed50190184d1982d8346e7cb77e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          2709380,
+          2650071,
+          2642499,
+          2702840,
+          2671483,
+          2678083,
+          2678854,
+          2650320,
+          2655128,
+          2666245,
+          2657592,
+          2634256
+        ],
+        "current-combined-std-utf8-cached-span": [
+          230109,
+          240906,
+          227926,
+          242158,
+          231582,
+          232272,
+          234626,
+          236519,
+          230680,
+          236429,
+          229649,
+          231801
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 2661918.5,
+        "current-combined-std-utf8-cached-span": 232036.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65539,
+      "sha256": "91e14be0bb1a177161bee3693f985922b73d30bf1acdc8945c518bd9b90ac6eb",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          37827327,
+          37820496,
+          37821478,
+          37810140,
+          37805513,
+          42548439,
+          42794842,
+          41131219,
+          37459048,
+          37592861,
+          37572551,
+          37582536
+        ],
+        "current-combined-std-utf8-cached-span": [
+          942560,
+          943051,
+          963431,
+          948439,
+          949401,
+          947958,
+          978645,
+          980437,
+          970433,
+          939746,
+          932825,
+          929250
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 37815318.0,
+        "current-combined-std-utf8-cached-span": 948198.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "af7d04fd0ebc7de4aeeb9dfbbd203b7f09e6f1d70eb83e36d073a6055c7f4619",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          261507,
+          265573,
+          268628,
+          258242,
+          268948,
+          257561,
+          267415,
+          266684,
+          260465,
+          257391,
+          261797,
+          259423
+        ],
+        "current-combined-std-utf8-cached-span": [
+          62835,
+          59621,
+          59010,
+          63045,
+          60131,
+          59891,
+          64678,
+          61924,
+          60963,
+          61924,
+          59220,
+          58539
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 261652.0,
+        "current-combined-std-utf8-cached-span": 60547.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "cce5d5bc8e6d47616f50215fea987e116dc40ce2fde950d367f4682d73216746",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          2961233,
+          2951397,
+          2930697,
+          2944657,
+          2943485,
+          2977237,
+          2953030,
+          2962415,
+          2940020,
+          2962925,
+          2951618,
+          2945409
+        ],
+        "current-combined-std-utf8-cached-span": [
+          236358,
+          233484,
+          232603,
+          234576,
+          232663,
+          233595,
+          240505,
+          232563,
+          232172,
+          247055,
+          236098,
+          234946
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 2951507.5,
+        "current-combined-std-utf8-cached-span": 234085.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "fea3aa4b8a551162c0efdaf74150b51f76a3e2a0d1722cccf36708ba7c9e2b83",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          43509887,
+          41813694,
+          41980086,
+          41950642,
+          41812442,
+          41782177,
+          41807345,
+          42147871,
+          42409829,
+          42054971,
+          42071455,
+          41843520
+        ],
+        "current-combined-std-utf8-cached-span": [
+          934778,
+          939224,
+          939745,
+          953736,
+          942640,
+          940687,
+          969811,
+          999126,
+          956121,
+          965134,
+          952015,
+          959656
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 41965364.0,
+        "current-combined-std-utf8-cached-span": 952875.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "combined-budget-wide-rowspan-osc7-control"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    }
+  ]
+}

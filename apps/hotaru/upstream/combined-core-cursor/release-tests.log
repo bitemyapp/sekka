@@ -1,0 +1,337 @@
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.5
+   Compiling static_assertions v1.1.0
+   Compiling unicode-width v0.2.3
+   Compiling triomphe v0.1.17
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-core-qualified-cursor-20261028/vendor/simdutf8)
+   Compiling lz4_flex v0.14.0
+   Compiling libc v0.2.191
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-core-qualified-cursor-20261028/crates/hotaru-core)
+   Compiling hotaru-io v0.1.0 (/home/callen/work/hotaru-core-qualified-cursor-20261028/crates/hotaru-io)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-core-qualified-cursor-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 10.55s
+     Running unittests src/lib.rs (target/release/deps/hotaru_core-a86d47ea62ac038c)
+
+running 27 tests
+test formatter::tests::copy_uses_captured_defaults_and_palette_with_mixed_background_omitted ... ok
+test formatter::tests::output_budget_is_aggregate_and_cancellation_is_explicit ... ok
+test formatter::tests::selection_bounds_and_empty_selection_are_explicit ... ok
+test history::tests::compressed_eviction_reads_only_owned_recycle_metadata ... ok
+test history::tests::captures_share_blocks_without_cloning_rows_and_tail_copy_is_bounded ... ok
+test history::tests::capture_and_cancel_never_decode_a_compressed_block ... ok
+test history::tests::hyperlink_dictionary_round_trip_is_shared_and_bounded ... ok
+test row::history::tests::capacities_and_allocation_budget_are_validated_before_restore ... ok
+test row::history::tests::exact_archive_round_trip_and_all_truncations ... ok
+test row::history::tests::hyperlink_runs_round_trip_and_reject_corrupt_ranges_and_indices ... ok
+test history::tests::byte_pruning_never_decodes_cold_rows ... ok
+test row::tests::inline_grapheme_overwrite_keeps_capacity_charge_and_heap_release_updates_peak ... ok
+test row::history::tests::recycled_constructor_preserves_all_default_metadata_and_capacities ... ok
+test row::history::tests::malformed_archives_are_bounded_and_never_panic ... ok
+test history::tests::corrupt_lz4_and_row_archives_are_rejected_without_panicking ... ok
+test screen::width_fastpath_test::unicode_width_fastpaths_match_pinned_properties_for_every_scalar ... ok
+test screen::width_fastpath_test::fast_width_matches_legacy_policy_with_reference_latin1 ... ok
+test formatter::tests::content_formats_match_pinned_ghostty ... ok
+test scan::tests::long_runs_and_dense_controls_match_scalar ... ok
+test history::tests::incremental_progress_survives_eviction_and_new_rows ... ok
+test row::tests::partial_reset_matches_full_clear_through_mixed_row_edits ... ok
+test history::tests::compression_preserves_snapshots_partial_reads_eviction_and_restoration ... ok
+test grapheme::tests::sparse_edits_match_ordered_map ... ok
+test history::tests::oversized_hyperlink_rows_remain_resident_without_data_loss ... ok
+test hyperlink::tests::sparse_ranges_match_dense_edits_and_survive_table_compaction ... ok
+test history::tests::maximum_width_grapheme_row_has_bounded_oversized_block ... ok
+test scan::tests::every_byte_alignment_and_tail_matches_scalar ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/configured_colors.rs (target/release/deps/configured_colors-1d191853884baff8)
+
+running 4 tests
+test reset_all_palette_entries_clears_each_override ... ok
+test equal_rgb_overrides_survive_theme_changes_and_resets_reveal_new_defaults ... ok
+test color_queries_report_the_configured_render_colors ... ok
+test ris_restores_configured_palette_and_preserves_dynamic_colors ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/content.rs (target/release/deps/content-82b52b06316ecdf2)
+
+running 2 tests
+test ranges_and_cancellation_cover_block_and_screen_boundaries ... ok
+test content_captures_survive_compression_eviction_reflow_and_owner_teardown ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/core_review.rs (target/release/deps/core_review-9e125905f1b3480a)
+
+running 9 tests
+test invalid_dcs_private_marker_and_excess_intermediates_do_not_leak_payload ... ok
+test ordinary_osc_exact_body_limit_is_accepted_and_one_more_byte_discards_all ... ok
+test osc_palette_stops_at_invalid_pair_and_ignores_empty_fields ... ok
+test oversized_csi_still_finishes_at_header_final_byte ... ok
+test osc_palette_burst_is_bounded_and_overflow_emits_no_prefix_replies ... ok
+test restored_cursor_above_origin_margin_reports_row_one_without_underflow ... ok
+test oversized_dcs_header_discards_payload_through_string_terminator ... ok
+test malformed_byte_streams_and_control_mutations_preserve_screen_invariants ... ok
+test clipboard_osc_uses_separate_eight_mebibyte_body_limit ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/cursor.rs (target/release/deps/cursor-970019881d4bb2c3)
+
+running 2 tests
+test cursor_defaults_snapshots_and_viewport_are_owned ... ok
+test cursor_state_and_queries_match_real_ghostty_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history.rs (target/release/deps/history-1cea27b0860f9f2d)
+
+running 2 tests
+test compressed_eviction_preserves_recycled_row_resize_semantics ... ok
+test compressed_history_matches_resident_terminal_through_scroll_resize_and_clear ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_audit.rs (target/release/deps/history_audit-ca83efe440083b9a)
+
+running 1 test
+test compression_matches_resident_mutations_and_retained_snapshots ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/history_budget.rs (target/release/deps/history_budget-db62cfbd4d6d2061)
+
+running 7 tests
+test held_capture_estimates_survive_pruning_and_cancelled_iteration ... ok
+test oversized_active_metadata_always_fits_but_discards_old_history ... ok
+test default_policy_and_explicit_unlimited_row_limit_are_distinct ... ok
+test interior_wide_overwrites_preserve_erased_style_allocation_and_compaction_order ... ok
+test overwrite_allocation_order_is_independent_of_ascii_and_unicode_batching ... ok
+test compression_preserves_byte_pruning_through_metadata_churn_shrink_and_recycling ... ok
+test byte_pruning_is_chunk_invariant_with_peak_allocations_and_held_cow ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/hyperlinks.rs (target/release/deps/hyperlinks-370661cba416166f)
+
+running 2 tests
+test owned_links_survive_erase_resize_and_terminal_destruction ... ok
+test osc8_cells_match_pinned_ghostty_at_read_boundaries ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/input.rs (target/release/deps/input-9d6fc7fd8311a438)
+
+running 6 tests
+test hostile_geometry_is_rejected_without_panicking ... ok
+test current_modes_drive_keyboard_and_mouse_encoding ... ok
+test kitty_stack_is_per_screen_bounded_and_zero_pop_is_distinct ... ok
+test protocol_negotiation_matches_pinned_ghostty_c_api ... ok
+test mouse_encodings_match_pinned_ghostty_c_api ... ok
+test key_encodings_match_pinned_ghostty_c_api ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/reflow.rs (target/release/deps/reflow-dd3e79def7a9460d)
+
+running 4 tests
+test copying_reflowed_wide_text_omits_layout_spacers ... ok
+test snapshots_keep_cells_styles_and_graphemes_across_reflow_and_teardown ... ok
+test narrow_reflow_keeps_history_bounded_and_wide_pairs_valid ... ok
+test resize_matches_actual_ghostty_oracle_across_input_chunks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/scan_boundary.rs (target/release/deps/scan_boundary-0d6aebc7727b42e6)
+
+running 1 test
+test printable_scanner_never_reads_the_guard_page ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/search.rs (target/release/deps/search-94114bb9a5522abb)
+
+running 4 tests
+test limits_and_cancellation_fail_without_partial_results ... ok
+test retention_keeps_newest_overlaps_and_counts_the_rest ... ok
+test owned_results_survive_compression_eviction_reflow_and_teardown ... ok
+test selections_match_real_ghostty_search ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/search_positions.rs (target/release/deps/search_positions-6dedea33cdda0b4f)
+
+running 10 tests
+test active_matches_expire_on_mutation_and_never_alias_reflow_clear_or_reset ... ok
+test alternate_replacement_does_not_destroy_primary_identity ... ok
+test generation_sensitive_prefix_tracks_newest_retention_without_hiding_stable_history ... ok
+test deferred_whitespace_matches_depend_on_the_row_that_flushes_them ... ok
+test leading_newline_coordinates_expire_after_prefix_pruning ... ok
+test immutable_history_rebases_after_append_prune_and_compression ... ok
+test newlines_expire_when_their_preceding_text_anchor_is_pruned ... ok
+test synthetic_final_newline_in_history_still_depends_on_active_continuation ... ok
+test scrolled_snapshot_capture_preserves_origin_and_multiline_wide_clipping ... ok
+test capture_epoch_ownership_prevents_identity_reuse_after_terminal_destruction ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/snapshot_threads.rs (target/release/deps/snapshot_threads-2e3e6656d2a83510)
+
+running 1 test
+test concurrent_snapshot_readers_keep_owned_rows_during_reuse_and_reflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/terminal.rs (target/release/deps/terminal-da61ad0245405c36)
+
+running 16 tests
+test alternate_screen_restores_primary_cursor_and_style ... ok
+test ascii_wrap_is_delayed_and_copy_joins_soft_lines ... ok
+test cancelled_and_oversized_csi_do_not_dispatch ... ok
+test bell_flood_keeps_latest_semantic_notifications ... ok
+test copy_snapshot_owns_rows_styles_graphemes_and_palette ... ok
+test margin_scrolling_preserves_outside_rows ... ok
+test malformed_utf8_does_not_swallow_controls_or_ascii ... ok
+test osc_clipboard_is_event_only_and_title_is_bounded ... ok
+test sgr_semicolon_and_colon_truecolor_and_reset ... ok
+test scrollback_is_bounded_and_viewport_snapshot_is_owned ... ok
+test wide_glyph_boundaries_remain_valid_after_editing ... ok
+test utf8_and_escape_sequences_ignore_read_boundaries ... ok
+test replies_apply_backpressure_without_silent_loss ... ok
+test randomized_edit_stream_never_breaks_cell_invariants ... ok
+test large_copy_after_terminal_teardown ... ok
+test style_churn_does_not_corrupt_live_cells ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/unicode_mode.rs (target/release/deps/unicode_mode-227c36f4769450e5)
+
+running 3 tests
+test maximum_clusters_survive_archive_reflow_copy_search_and_teardown ... ok
+test unicode_metadata_mutations_preserve_chunk_invariant_byte_budgets ... ok
+test unicode_terminal_matches_pinned_ghostty_at_every_byte_split ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/unicode_write.rs (target/release/deps/unicode_write-996ea406a5e046a3)
+
+running 1 test
+test unicode_runs_match_scalar_printing_through_edits_wraps_metadata_and_resize ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/utf8_scanning.rs (target/release/deps/utf8_scanning-e7167194d164424b)
+
+running 3 tests
+test malformed_utf8_cache_survives_partial_parser_and_bounded_replies ... ok
+test dense_malformed_utf8_keeps_control_and_chunk_boundaries ... ok
+test streamed_invalid_utf8_matches_bytewise_parser ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/utf8_validation.rs (target/release/deps/utf8_validation-bf00407bf401a59c)
+
+running 3 tests
+test validator_loads_stay_before_guard_page ... ok
+test simd_error_offsets_match_across_vector_boundaries ... ok
+test compat_validation_preserves_standard_error_boundaries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/vt_controls.rs (target/release/deps/vt_controls-94872fd8779d5123)
+
+running 2 tests
+test repetition_keeps_owned_link_and_history_captures ... ok
+test repeat_and_saved_modes_match_actual_pinned_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/working_directory.rs (target/release/deps/working_directory-47184b9354188f18)
+
+running 2 tests
+test osc7_is_owned_coalesced_and_parser_bounded ... ok
+test osc7_boundary_is_independent_of_title_and_clipboard_limits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/release/deps/hotaru_io-1a3fc03679d0e476)
+
+running 3 tests
+test launch::tests::local_directory_decoding_is_bounded_and_never_shell_evaluation ... ok
+test launch::tests::missing_resources_and_explicit_commands_keep_arguments ... ok
+test launch::tests::private_database_and_shell_environment_preserve_caller_values ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/clipboard.rs (target/release/deps/clipboard-1fa2ef5001f6e46c)
+
+running 13 tests
+test broken_receiver_is_a_terminal_state_without_sigpipe ... ok
+test empty_selection_signals_eof ... ok
+test empty_selection_waits_for_last_writer_then_reports_hangup ... ok
+test exactly_full_receiver_still_requires_eof ... ok
+test reader_reports_wrong_descriptor_failure_and_closes_it ... ok
+test receiver_closes_at_limit_without_unbounded_allocation ... ok
+test stalled_offer_returns_pending_and_supports_cancellation_and_timeout ... ok
+test pump_obeys_byte_budget ... ok
+test writer_closes_on_timeout_without_a_writable_event ... ok
+test writer_preserves_sigpipe_already_pending_for_caller ... ok
+test broken_receiver_survives_default_sigpipe_disposition ... ok
+test stalled_receiver_returns_without_waiting_and_can_cancel ... ok
+test multi_mebibyte_selection_survives_slow_peer_and_partial_io ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/pty.rs (target/release/deps/pty-ec87b48d01c3253b)
+
+running 7 tests
+test session_can_move_to_worker_thread ... ok
+test invalid_dimensions_and_missing_program_fail_before_returning_a_session ... ok
+test explicit_environment_overrides_defaults ... ok
+test pty_resize_and_input_reach_child ... ok
+test backpressure_on_terminal_input_is_nonblocking ... ok
+test spawned_child_has_controlling_terminal_and_requested_size ... ok
+test drop_is_nonblocking_and_reaps_hangup_ignoring_child ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/shell.rs (target/release/deps/shell-50b74c44e639adb5)
+
+running 2 tests
+test actual_shell_startup ... ignored, requires Bash, Zsh, Fish and ncurses tic; disposable-home fixture
+test shell_child ... ignored, isolated subprocess helper
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/hotaru_replay-378a11c1d665a66c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/upstream.rs (target/release/deps/upstream-3db211be90c4285b)
+
+running 1 test
+test matches_pinned_ghostty_snapshots_at_read_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+   Doc-tests hotaru_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hotaru_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

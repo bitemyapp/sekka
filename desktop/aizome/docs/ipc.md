@@ -310,7 +310,7 @@ Handled by the compositor:
 | ❖⇧[, ❖⇧] | `previous-tab`, `next-tab` (in tab order, wrapping round) |
 | ⌃⇧❖[, ⌃⇧❖] | `move-tab-left`, `move-tab-right` (the showing tab, stopping at the ends) |
 | ⌃❖F | `fullscreen` |
-| ❖Return | `terminal` (`keys.terminal`, default `foot`, in the Desk's folder) |
+| ❖Return | `terminal` (`keys.terminal`, default `aizome-hotaru`, in the Desk's folder) |
 | ❖⇧3 | `screenshot-screen` |
 | ❖⇧4, Print | `screenshot-area` (a rubber band; Space picks a window; Esc cancels) |
 | XF86Switch_VT_N | `vt-N` |

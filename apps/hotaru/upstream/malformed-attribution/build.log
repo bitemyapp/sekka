@@ -1,0 +1,19 @@
+     Removed 0 files
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling static_assertions v1.1.0
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling lz4_flex v0.14.0
+   Compiling memchr v2.8.3
+   Compiling unicode-width v0.2.3
+   Compiling triomphe v0.1.17
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-malformed-profile-20261028/vendor/simdutf8)
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-malformed-profile-20261028/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-malformed-profile-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized + debuginfo] target(s) in 4.67s
+{"metadata": "evidence/diagnostic-build.json", "source_sha256": "7e36bc3139a9d6ee0617c30b602aa95f21bd732fba389c73ae176cfe49c74d6d", "binary_sha256": "656bcff55d5135de4a416322fb84b7b161e0052070596727f158bf377271f8ac"}

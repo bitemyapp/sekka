@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "scope": "preparation only, no rebuilt binaries",
+  "host": "wx-workstation",
+  "output": "/home/callen/work/hotaru-curves-reproduce-check-20261028",
+  "checks": [
+    "pinned Git/toolchain/source validation",
+    "expanded adapter/Powerline source validation",
+    "fresh output and diagnostic candidate copied",
+    "Python syntax parsed",
+    "16 frozen product hashes unchanged"
+  ],
+  "helper_sha256": "716d5c054b0e8d2d62f32d9c1daac56d6740dc616ca355254da1b7a549a50d98"
+}

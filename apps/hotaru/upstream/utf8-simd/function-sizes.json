@@ -1,0 +1,31 @@
+[
+  {
+    "binary": "/home/callen/work/hotaru-utf8-cache-only/target/release/hotaru-replay",
+    "sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+    "symbols": [
+      "0000000000047d50 000000000000328a t hotaru_core::Terminal::feed_inner"
+    ]
+  },
+  {
+    "binary": "/home/callen/work/hotaru-simdutf8-patched/target/release/hotaru-replay",
+    "sha256": "b10cdfe24fbfb63380954ba90fcd0fc357e390f3fd76cdf56d81ce53977f3c61",
+    "symbols": [
+      "0000000000047ed0 00000000000033d8 t hotaru_core::Terminal::feed_inner"
+    ]
+  },
+  {
+    "binary": "/home/callen/work/hotaru-simdutf8-leading-byte/target/release/hotaru-replay",
+    "sha256": "4883799dc540aae9366abf2b467f48ffcfed15555c98e9c4a1c81c99868574e6",
+    "symbols": [
+      "0000000000047ed0 0000000000003177 t hotaru_core::Terminal::feed_inner"
+    ]
+  },
+  {
+    "binary": "/home/callen/work/hotaru-simdutf8-outlined/target/release/hotaru-replay",
+    "sha256": "236ef248a61e1e512eb638f372023a854812dacc6f22f088bf801ae681adbff5",
+    "symbols": [
+      "000000000003ecc0 0000000000000094 t hotaru_core::validate_utf8_run",
+      "0000000000047fb0 000000000000328a t hotaru_core::Terminal::feed_inner"
+    ]
+  }
+]

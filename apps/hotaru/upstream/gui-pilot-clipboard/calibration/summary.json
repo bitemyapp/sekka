@@ -1,0 +1,75 @@
+{
+  "scope": "Fresh calibration of Hotaru 2f2f73e0 (mgqvnfa0); the earlier pilot's unchanged Ghostty calibration retained. Calibration timings excluded.",
+  "status": "qualified_for_future_matched_measurements",
+  "apps": {
+    "hotaru": {
+      "run": "hotaru-calibration",
+      "binary": "/nix/store/mgqvnfa0a52dl9hd563jl4ga1hr1k2wc-hotaru-0.1.0/bin/hotaru",
+      "runtime_executable": "/nix/store/mgqvnfa0a52dl9hd563jl4ga1hr1k2wc-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "runtime_executable_sha256": "c21d6d96a35b63ad3c315ff4c0ad59abc0ec77c2e1f65bae9c0d1ca8074d530a",
+      "window_pixels": [
+        1349,
+        1077
+      ],
+      "grid": {
+        "event": "size",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 4184648845144639
+      },
+      "cell_pixels": [
+        11,
+        24
+      ],
+      "startup_geometry_qualified": true,
+      "config_file": "hotaru.toml",
+      "config_sha256": "b7594ff7d7979fd240dcf2d1e0da80c1286e924873de4ec15d6ca2a5d77b62f4",
+      "font_manifest_sha256": "79275aa868fe8c7216d59cd6675fd6e4879f0429b438a63d38b5d737d19082e9",
+      "malformed_config_warnings": false,
+      "functional_keyboard_and_all_streams_pass": true
+    },
+    "ghostty": {
+      "run": "ghostty-calibration-2",
+      "binary": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty",
+      "runtime_executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "runtime_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "window_pixels": [
+        1334,
+        964
+      ],
+      "grid": [
+        120,
+        40
+      ],
+      "cell_pixels": [
+        11,
+        24
+      ],
+      "startup_geometry_qualified": true,
+      "config_file": "ghostty.conf",
+      "config_sha256": "f9cba687c055f9819931d0b1fa7e5b4413bee9ea8f9ae8278f24e0d17d85acc5",
+      "font_manifest_sha256": "79275aa868fe8c7216d59cd6675fd6e4879f0429b438a63d38b5d737d19082e9",
+      "malformed_config_warnings": false,
+      "functional_keyboard_and_all_streams_pass": true
+    }
+  },
+  "reference": {
+    "revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+    "no_tracked_source_edits": true,
+    "expected_runtime_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f"
+  },
+  "hotaru_package": "/nix/store/mgqvnfa0a52dl9hd563jl4ga1hr1k2wc-hotaru-0.1.0",
+  "hotaru_prepared_source": "/nix/store/jgycq122glknsb59fi9bbmjlryy2c7zx-hotaru-source",
+  "rejected_or_partial": {
+    "hotaru-calibration-1": "harness for_window IPC command rejected; fixed by placing config-only rule in private sway.conf",
+    "hotaru-calibration-2": "final grid correct; initial startup grid125x41 unqualified; not a timing sample",
+    "ghostty-calibration-1": "actual11x25 cells failed required11x24; supported metric adjustment -1 used later"
+  },
+  "semantic_config_corrections": {
+    "font_units": "both14points at96DPI; native explicitly multiplies96/72",
+    "scrollback": "reference bytes0 setsScreen.no_scrollback; lines0 alone retains page granularity and is not a zero-history configuration",
+    "history_in_prior_gui_probes": "historical reports untouched; their unlimited bytes plus zero lines is additionally unsuitable as matched zero-history acceptance evidence"
+  },
+  "visual_inspection": "original1920x1440 captures show same ASCII content, markers and physical cell grid; expected chrome and glyph rasterization differences; not pixel-equivalence or unsupported-feature coverage",
+  "remaining": "Matched measurements recorded separately; hardware presentation and whole-app parity unqualified."
+}

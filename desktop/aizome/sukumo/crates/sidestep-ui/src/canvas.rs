@@ -562,6 +562,45 @@ impl Canvas {
 
     // Images.
 
+    /// Draw worker-rasterized grid pixels. `pixels_per_unit` is the scale used
+    /// to generate the mask. Generic state uses the normal image implementation,
+    /// while upright source-over painting blends the owned Alpha8 without tint
+    /// allocation. Returns false only for invalid geometry/scale.
+    pub fn draw_grid_mask(
+        &mut self,
+        mask: &crate::GridMask,
+        origin: Point,
+        pixels_per_unit: f64,
+        color: Color,
+    ) -> bool {
+        if !pixels_per_unit.is_finite() || pixels_per_unit <= 0.0 || !origin.x.is_finite() || !origin.y.is_finite() {
+            return false;
+        }
+        if self.clipped_out() {
+            return true;
+        }
+        let dst = Rect::new(
+            origin.x,
+            origin.y,
+            origin.x + f64::from(mask.width()) / pixels_per_unit,
+            origin.y + f64::from(mask.height()) / pixels_per_unit,
+        );
+        if !dst.is_finite() {
+            return false;
+        }
+        let plain = self.state.shadow.is_none()
+            && self.state.mask.is_none()
+            && self.state.blend == BlendMode::Normal
+            && upright(self.state.xf).is_some();
+        if plain {
+            let dst = prect(self.state.xf.transform_rect_bbox(dst));
+            self.ops.push(Op::AlphaMask { mask: mask.alpha.clone(), dst, clip: self.state.clip, color: color.raw() });
+        } else {
+            self.draw_image_with(mask.fallback(), None, dst, ImageOptions { tint: Some(color), ..Default::default() });
+        }
+        true
+    }
+
     /// Draw `image` stretched over `dst`.
     pub fn draw_image(&mut self, image: &Image, dst: Rect) {
         self.draw_image_with(image, None, dst, ImageOptions::default());
@@ -649,6 +688,26 @@ impl Canvas {
             if self.needs(reach) {
                 self.emit_text(&line.line.runs, &line.line.fills, origin.x, top);
             }
+        }
+    }
+
+    /// Draw a worker-shaped terminal row at its top left. Cell geometry and
+    /// glyph positions are already fixed; this operation never discovers fonts
+    /// or shapes text and is independent of the raster backend.
+    pub fn draw_grid_text(&mut self, layout: &crate::grid::Layout, origin: Point, color: Color) {
+        if self.clipped_out() {
+            return;
+        }
+        for run in layout.runs.iter() {
+            let placed = PlacedRun {
+                font: run.font,
+                size: run.size,
+                x: 0.0,
+                y: layout.metrics.baseline() as f32,
+                glyphs: run.glyphs.clone(),
+                color: color.raw(),
+            };
+            self.emit_text(&[placed], &[], origin.x, origin.y);
         }
     }
 
@@ -798,6 +857,41 @@ mod tests {
     fn canvas() -> Canvas {
         let damage = vec![protocol::Rect::new(0.0, 0.0, 100.0, 100.0)];
         Canvas::new(kurbo::Size::new(100.0, 100.0), 1.0, damage, Some(Color::WHITE), Appearance::LIGHT)
+    }
+
+    #[test]
+    fn grid_masks_reuse_alpha_and_preserve_generic_draw_states() {
+        let mask = crate::GridMask::new(2, 2, vec![0, 64, 128, 255]).unwrap();
+        let mut c = canvas();
+        assert!(!c.draw_grid_mask(&mask, Point::ORIGIN, 0.0, Color::BLACK));
+        assert!(!c.draw_grid_mask(&mask, Point::ORIGIN, 1e-320, Color::BLACK));
+        assert!(c.draw_grid_mask(&mask, Point::new(2.0, 3.0), 1.0, Color::BLACK));
+        assert!(c.draw_grid_mask(&mask, Point::new(4.0, 5.0), 2.0, Color::WHITE));
+        let ops = c.finish().0;
+        let (Op::AlphaMask { mask: a, .. }, Op::AlphaMask { mask: b, .. }) = (&ops[1], &ops[2]) else {
+            panic!("{ops:?}")
+        };
+        assert!(std::sync::Arc::ptr_eq(a, b));
+        for mode in 0..4 {
+            let mut c = canvas();
+            match mode {
+                0 => c.rotate(0.3),
+                1 => c.set_blend_mode(BlendMode::Multiply),
+                2 => c.set_shadow(Some(Shadow { offset: Vec2::new(1.0, 2.0), blur: 3.0, color: Color::BLACK })),
+                _ => c.clip(&kurbo::Circle::new((10.0, 10.0), 8.0)),
+            }
+            assert!(c.draw_grid_mask(&mask, Point::new(8.0, 8.0), 1.0, Color::WHITE));
+            let ops = c.finish().0;
+            let Op::Image { image, draw, tint, .. } = &ops[1] else { panic!("{ops:?}") };
+            assert_eq!(image.width, 2);
+            assert_eq!(*tint, Some(Color::WHITE.raw()));
+            match mode {
+                0 => assert_ne!(draw.xf, tiny_skia::Transform::identity()),
+                1 => assert_eq!(draw.blend, Blend::Multiply),
+                2 => assert!(draw.shadow.is_some()),
+                _ => assert!(draw.mask.is_some()),
+            }
+        }
     }
 
     #[test]

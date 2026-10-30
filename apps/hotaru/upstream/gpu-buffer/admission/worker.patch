@@ -1,0 +1,4114 @@
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3,10 +3,70 @@
+ version = 4
+ 
+ [[package]]
++name = "adler2"
++version = "2.0.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
++
++[[package]]
++name = "arrayref"
++version = "0.3.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
++
++[[package]]
++name = "arrayvec"
++version = "0.7.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
++
++[[package]]
++name = "autocfg"
++version = "1.5.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
++
++[[package]]
+ name = "bitflags"
+ version = "2.13.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
++
++[[package]]
++name = "bstr"
++version = "1.13.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
++dependencies = [
++ "memchr",
++ "serde_core",
++]
++
++[[package]]
++name = "bytemuck"
++version = "1.25.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
++dependencies = [
++ "bytemuck_derive",
++]
++
++[[package]]
++name = "bytemuck_derive"
++version = "1.12.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "byteorder-lite"
++version = "0.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+ 
+ [[package]]
+ name = "calloop"
+@@ -19,7 +79,7 @@
+  "polling",
+  "rustix 0.38.44",
+  "slab",
+- "thiserror",
++ "thiserror 1.0.69",
+ ]
+ 
+ [[package]]
+@@ -51,6 +111,12 @@
+ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
+ 
+ [[package]]
++name = "color_quant"
++version = "1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
++
++[[package]]
+ name = "concurrent-queue"
+ version = "2.5.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -60,24 +126,71 @@
+ ]
+ 
+ [[package]]
++name = "crc32fast"
++version = "1.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0ba106e844045ddc02c20768ac4b0b7cb45f2cc2ecbd833ac9f5dacb183c2055"
++dependencies = [
++ "cfg-if",
++]
++
++[[package]]
+ name = "crossbeam-utils"
+ version = "0.8.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+ 
+ [[package]]
++name = "crunchy"
++version = "0.2.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
++
++[[package]]
+ name = "cursor-icon"
+ version = "1.2.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
+ 
+ [[package]]
++name = "debug-fn"
++version = "1.0.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "24efe21bd9a78102d1225f10f0a41d9d5b43f4df7ae8235f39a9c79e4d476c1e"
++
++[[package]]
++name = "displaydoc"
++version = "0.2.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "dlib"
++version = "0.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
++dependencies = [
++ "libloading",
++]
++
++[[package]]
+ name = "downcast-rs"
+ version = "1.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+ 
+ [[package]]
++name = "equivalent"
++version = "1.0.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
++
++[[package]]
+ name = "errno"
+ version = "0.3.14"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -88,12 +201,126 @@
+ ]
+ 
+ [[package]]
++name = "euclid"
++version = "0.22.14"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
++dependencies = [
++ "num-traits",
++]
++
++[[package]]
++name = "fax"
++version = "0.2.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "caf1079563223d5d59d83c85886a56e586cfd5c1a26292e971a0fa266531ac5a"
++
++[[package]]
++name = "fdeflate"
++version = "0.3.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
++dependencies = [
++ "simd-adler32",
++]
++
++[[package]]
+ name = "find-msvc-tools"
+ version = "0.1.15"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+ 
+ [[package]]
++name = "flate2"
++version = "1.1.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
++dependencies = [
++ "crc32fast",
++ "miniz_oxide 0.9.1",
++ "zlib-rs",
++]
++
++[[package]]
++name = "foldhash"
++version = "0.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
++
++[[package]]
++name = "font-types"
++version = "0.12.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "835ae9d781464a79026cde387f9cbc650c9a4909d7cf7e658b127e3c35d2f35d"
++dependencies = [
++ "bytemuck",
++]
++
++[[package]]
++name = "fontique"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6688bc1294fe7117d788937b6c53480169b29c566954af490830d4c09da9516a"
++dependencies = [
++ "hashbrown",
++ "linebender_resource_handle",
++ "memmap2",
++ "objc2",
++ "objc2-core-foundation",
++ "objc2-core-text",
++ "objc2-foundation",
++ "parlance",
++ "read-fonts",
++ "roxmltree",
++ "smallvec",
++ "windows",
++ "windows-core",
++ "yeslogic-fontconfig-sys",
++]
++
++[[package]]
++name = "gif"
++version = "0.14.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
++dependencies = [
++ "color_quant",
++ "weezl",
++]
++
++[[package]]
++name = "half"
++version = "2.7.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
++dependencies = [
++ "cfg-if",
++ "crunchy",
++ "zerocopy",
++]
++
++[[package]]
++name = "harfrust"
++version = "0.12.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c03d949a14aa089bbb282f7dd76a498a7f684428e4257202efc119ec010376f9"
++dependencies = [
++ "bitflags",
++ "bytemuck",
++ "read-fonts",
++ "smallvec",
++]
++
++[[package]]
++name = "hashbrown"
++version = "0.17.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
++dependencies = [
++ "foldhash",
++]
++
++[[package]]
+ name = "hermit-abi"
+ version = "0.5.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -104,19 +331,242 @@
+ version = "0.1.0"
+ dependencies = [
+  "libloading",
++ "rustix 1.1.6",
+  "serde_json",
++ "sidestep-engine",
+  "smithay-client-toolkit",
++ "tiny-skia",
+  "wayland-client",
+  "wayland-protocols",
+ ]
+ 
+ [[package]]
++name = "icu_collections"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "fe090a42a0d3140fed8c63263ed1fecc02422cb2f4bfe55cd8de2de1b8e105dd"
++dependencies = [
++ "displaydoc",
++ "potential_utf",
++ "utf8_iter",
++ "yoke",
++ "zerofrom",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_locale_core"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "25d29b57c17c6528d0dc4c2141cfa2d08200465acb537a3909c8b9b8a4a984c0"
++dependencies = [
++ "displaydoc",
++ "litemap",
++ "serde",
++ "tinystr",
++ "writeable",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_locale_fallback"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "406e9ae5b95d8aa37db6293405931b766a6172d1848daee22d70eb44aa78a43c"
++dependencies = [
++ "icu_locale_core",
++ "icu_locale_fallback_data",
++ "icu_provider",
++ "potential_utf",
++ "tinystr",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_locale_fallback_data"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3632ebbd0c5c3637ba1a40bdf8288f2cb9d2268e73441a69d5fc73d7cfbaa87c"
++
++[[package]]
++name = "icu_normalizer"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "404a3b8c486f205c87fe7f23ab6894d84a4ad76d6e4671ae1981ba7def87c599"
++dependencies = [
++ "icu_collections",
++ "icu_normalizer_data",
++ "icu_properties",
++ "icu_provider",
++ "smallvec",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_normalizer_data"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "20f0088bfb7441f7a37fa0c9e20cb1e9cba1cac6b9ce8cd2a6dc44294f8e8cbc"
++
++[[package]]
++name = "icu_properties"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2ea83d991c56158f7cf898bf86436c1dfe7c07ee82fe88951f2695c9f37a379f"
++dependencies = [
++ "displaydoc",
++ "icu_collections",
++ "icu_locale_core",
++ "icu_properties_data",
++ "icu_provider",
++ "zerotrie",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_properties_data"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b98f29af82d02b163fe50161388350e743bb3107cc8e8c2f7314cb505faddfcf"
++
++[[package]]
++name = "icu_provider"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "413099315636c588ee8f011190b329b971a09a8fae9d157e01dcae8379468514"
++dependencies = [
++ "displaydoc",
++ "icu_locale_core",
++ "log",
++ "serde",
++ "stable_deref_trait",
++ "writeable",
++ "yoke",
++ "zerofrom",
++ "zerotrie",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_segmenter"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "61b195dc605f81aa181bec9b3bd14e26cc71b903e4644f6af578ca9772c7a710"
++dependencies = [
++ "icu_collections",
++ "icu_locale_fallback",
++ "icu_provider",
++ "icu_segmenter_data",
++ "potential_utf",
++ "smallvec",
++ "utf8_iter",
++ "zerotrie",
++ "zerovec",
++]
++
++[[package]]
++name = "icu_segmenter_data"
++version = "2.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "913a7d294ad056474749152107309fdee3ec17d2482d1ab70fdc61a81c64b9a3"
++
++[[package]]
++name = "image"
++version = "0.25.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
++dependencies = [
++ "bytemuck",
++ "byteorder-lite",
++ "color_quant",
++ "gif",
++ "image-webp",
++ "moxcms",
++ "num-traits",
++ "png",
++ "tiff",
++ "zune-core",
++ "zune-jpeg",
++]
++
++[[package]]
++name = "image-webp"
++version = "0.2.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
++dependencies = [
++ "byteorder-lite",
++ "quick-error",
++]
++
++[[package]]
++name = "indexmap"
++version = "2.14.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
++dependencies = [
++ "equivalent",
++ "hashbrown",
++]
++
++[[package]]
++name = "isnt"
++version = "0.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f1697e6b71679da96d5c41bb9035116141baadbf59a60625fd66cb3c9584e7b0"
++
++[[package]]
+ name = "itoa"
+ version = "1.0.18"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+ 
+ [[package]]
++name = "kbvm"
++version = "0.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "87848566101698caf999ac33fca97f46a4127150168280a384ebf2987a46a194"
++dependencies = [
++ "arrayvec",
++ "bstr",
++ "cfg-if",
++ "debug-fn",
++ "hashbrown",
++ "indexmap",
++ "isnt",
++ "kbvm-proc",
++ "linearize",
++ "pkg-config",
++ "secure-execution",
++ "smallvec",
++ "thiserror 2.0.21",
++ "unicode-width",
++]
++
++[[package]]
++name = "kbvm-proc"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "634c57aa7634150e449ddee5625e759a71077e9f71d44677bea5ad7196ca91da"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "kurbo"
++version = "0.13.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4b60dfc32f652b926df6192e55525b16d186c69d47876c3ead4da5cc9f8450e2"
++dependencies = [
++ "arrayvec",
++ "euclid",
++ "polycool",
++ "smallvec",
++]
++
++[[package]]
+ name = "libc"
+ version = "0.2.191"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -133,6 +583,34 @@
+ ]
+ 
+ [[package]]
++name = "linearize"
++version = "0.1.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7f8c5e7ca4987243a1ced6f0ecad7c7731650479bdc52997687eff4e912fef9f"
++dependencies = [
++ "cfg-if",
++ "linearize-derive",
++ "version_check",
++]
++
++[[package]]
++name = "linearize-derive"
++version = "0.2.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "401d53eac39730352d7443646e75fda6cb933bf6dff060fe20a4f0d979f1bef3"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "linebender_resource_handle"
++version = "0.1.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
++
++[[package]]
+ name = "linux-raw-sys"
+ version = "0.4.15"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -145,6 +623,12 @@
+ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+ 
+ [[package]]
++name = "litemap"
++version = "0.8.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
++
++[[package]]
+ name = "log"
+ version = "0.4.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -166,6 +650,128 @@
+ ]
+ 
+ [[package]]
++name = "miniz_oxide"
++version = "0.8.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
++dependencies = [
++ "adler2",
++ "simd-adler32",
++]
++
++[[package]]
++name = "miniz_oxide"
++version = "0.9.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
++dependencies = [
++ "adler2",
++ "simd-adler32",
++]
++
++[[package]]
++name = "moxcms"
++version = "0.8.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
++dependencies = [
++ "num-traits",
++ "pxfm",
++]
++
++[[package]]
++name = "num-traits"
++version = "0.2.19"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
++dependencies = [
++ "autocfg",
++]
++
++[[package]]
++name = "objc2"
++version = "0.6.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8"
++dependencies = [
++ "objc2-encode",
++]
++
++[[package]]
++name = "objc2-core-foundation"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
++dependencies = [
++ "bitflags",
++]
++
++[[package]]
++name = "objc2-core-text"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0cde0dfb48d25d2b4862161a4d5fcc0e3c24367869ad306b0c9ec0073bfed92d"
++dependencies = [
++ "bitflags",
++ "objc2-core-foundation",
++]
++
++[[package]]
++name = "objc2-encode"
++version = "4.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33"
++
++[[package]]
++name = "objc2-foundation"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
++dependencies = [
++ "bitflags",
++ "objc2",
++]
++
++[[package]]
++name = "once_cell"
++version = "1.21.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
++
++[[package]]
++name = "parlance"
++version = "0.1.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "73072a9470554c8e794778acece2312661218aaabb635600957d952cf01c716e"
++
++[[package]]
++name = "parley"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "22d2ff88bd3f7d68d1d9b09c7e6209f9a8e8c05088295140a2bcf2e9b17038c5"
++dependencies = [
++ "fontique",
++ "harfrust",
++ "hashbrown",
++ "icu_normalizer",
++ "icu_properties",
++ "icu_segmenter",
++ "linebender_resource_handle",
++ "parlance",
++ "parley_data",
++ "skrifa",
++]
++
++[[package]]
++name = "parley_data"
++version = "0.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1567535334d6ba2d3cde19221ba9a7bd0fabb3cbd99046ddfb10ae061cfcc889"
++dependencies = [
++ "icu_properties",
++]
++
++[[package]]
+ name = "pin-project-lite"
+ version = "0.2.17"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -176,6 +782,19 @@
+ version = "0.3.34"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
++
++[[package]]
++name = "png"
++version = "0.18.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
++dependencies = [
++ "bitflags",
++ "crc32fast",
++ "fdeflate",
++ "flate2",
++ "miniz_oxide 0.8.9",
++]
+ 
+ [[package]]
+ name = "polling"
+@@ -192,6 +811,26 @@
+ ]
+ 
+ [[package]]
++name = "polycool"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "50596ddc09eb5ad5f75cacd40209568e66df71baf86e1499a0e99c4cff12a5a6"
++dependencies = [
++ "arrayvec",
++]
++
++[[package]]
++name = "potential_utf"
++version = "0.1.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d83eb9bc6d8e5cf568e7a1101d60ee05e81ed50ea106026f3d18deeb046d7661"
++dependencies = [
++ "serde_core",
++ "writeable",
++ "zerovec",
++]
++
++[[package]]
+ name = "proc-macro2"
+ version = "1.0.107"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -201,6 +840,18 @@
+ ]
+ 
+ [[package]]
++name = "pxfm"
++version = "0.1.30"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
++
++[[package]]
++name = "quick-error"
++version = "2.0.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
++
++[[package]]
+ name = "quick-xml"
+ version = "0.41.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -216,6 +867,26 @@
+ checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
+ dependencies = [
+  "proc-macro2",
++]
++
++[[package]]
++name = "read-fonts"
++version = "0.41.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "046a7d674daf459825b32f5062056d6882db0d2f5a479fbd76ccfc870ac18709"
++dependencies = [
++ "bytemuck",
++ "font-types",
++ "once_cell",
++]
++
++[[package]]
++name = "roxmltree"
++version = "0.21.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
++dependencies = [
++ "memchr",
+ ]
+ 
+ [[package]]
+@@ -245,12 +916,22 @@
+ ]
+ 
+ [[package]]
++name = "secure-execution"
++version = "0.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23ceccce47e43305aa02a0d9182ad09364357d073447435d7ae2e219ce750e55"
++dependencies = [
++ "cfg-if",
++]
++
++[[package]]
+ name = "serde"
+ version = "1.0.229"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
+ dependencies = [
+  "serde_core",
++ "serde_derive",
+ ]
+ 
+ [[package]]
+@@ -291,6 +972,43 @@
+ version = "2.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
++
++[[package]]
++name = "sidestep-engine"
++version = "0.0.1"
++dependencies = [
++ "fontique",
++ "harfrust",
++ "icu_properties",
++ "icu_provider",
++ "image",
++ "kbvm",
++ "kurbo",
++ "libloading",
++ "parley",
++ "rustix 1.1.6",
++ "skrifa",
++ "smithay-client-toolkit",
++ "swash",
++ "tiny-skia",
++ "wayland-cursor",
++]
++
++[[package]]
++name = "simd-adler32"
++version = "0.3.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
++
++[[package]]
++name = "skrifa"
++version = "0.44.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
++dependencies = [
++ "bytemuck",
++ "read-fonts",
++]
+ 
+ [[package]]
+ name = "slab"
+@@ -318,7 +1036,7 @@
+  "log",
+  "memmap2",
+  "rustix 0.38.44",
+- "thiserror",
++ "thiserror 1.0.69",
+  "wayland-backend",
+  "wayland-client",
+  "wayland-csd-frame",
+@@ -330,6 +1048,29 @@
+ ]
+ 
+ [[package]]
++name = "stable_deref_trait"
++version = "1.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
++
++[[package]]
++name = "strict-num"
++version = "0.1.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
++
++[[package]]
++name = "swash"
++version = "0.2.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6c2499c2d826531388872b2268718aed907a39bd785ab0dcfe57fab26283f92e"
++dependencies = [
++ "skrifa",
++ "yazi",
++ "zeno",
++]
++
++[[package]]
+ name = "syn"
+ version = "2.0.119"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -352,12 +1093,32 @@
+ ]
+ 
+ [[package]]
++name = "synstructure"
++version = "0.14.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
+ name = "thiserror"
+ version = "1.0.69"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+ dependencies = [
+- "thiserror-impl",
++ "thiserror-impl 1.0.69",
++]
++
++[[package]]
++name = "thiserror"
++version = "2.0.21"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
++dependencies = [
++ "thiserror-impl 2.0.21",
+ ]
+ 
+ [[package]]
+@@ -372,10 +1133,89 @@
+ ]
+ 
+ [[package]]
++name = "thiserror-impl"
++version = "2.0.21"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "tiff"
++version = "0.11.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b63feaf3343d35b6ca4d50483f94843803b0f51634937cc2ec519fc32232bc52"
++dependencies = [
++ "fax",
++ "flate2",
++ "half",
++ "quick-error",
++ "weezl",
++ "zune-jpeg",
++]
++
++[[package]]
++name = "tiny-skia"
++version = "0.12.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "47ffee5eaaf5527f630fb0e356b90ebdec84d5d18d937c5e440350f88c5a91ea"
++dependencies = [
++ "arrayref",
++ "arrayvec",
++ "bytemuck",
++ "cfg-if",
++ "log",
++ "tiny-skia-path",
++]
++
++[[package]]
++name = "tiny-skia-path"
++version = "0.12.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "edca365c3faccca67d06593c5980fa6c57687de727a03131735bb85f01fdeeb9"
++dependencies = [
++ "arrayref",
++ "bytemuck",
++ "strict-num",
++]
++
++[[package]]
++name = "tinystr"
++version = "0.8.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "abc840c238154d58f9e86b2792261edfde565a17696e1cda1a449de27979801a"
++dependencies = [
++ "displaydoc",
++ "serde_core",
++ "zerovec",
++]
++
++[[package]]
+ name = "unicode-ident"
+ version = "1.0.27"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
++
++[[package]]
++name = "unicode-width"
++version = "0.2.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ca718471876992059f251e33aafc334346ada08042b7661dd1fe313a9bced557"
++
++[[package]]
++name = "utf8_iter"
++version = "1.0.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
++
++[[package]]
++name = "version_check"
++version = "0.9.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+ 
+ [[package]]
+ name = "wayland-backend"
+@@ -470,10 +1310,111 @@
+ ]
+ 
+ [[package]]
++name = "weezl"
++version = "0.1.12"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
++
++[[package]]
++name = "windows"
++version = "0.62.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
++dependencies = [
++ "windows-collections",
++ "windows-core",
++ "windows-future",
++ "windows-numerics",
++]
++
++[[package]]
++name = "windows-collections"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
++dependencies = [
++ "windows-core",
++]
++
++[[package]]
++name = "windows-core"
++version = "0.62.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
++dependencies = [
++ "windows-implement",
++ "windows-interface",
++ "windows-link",
++ "windows-result",
++ "windows-strings",
++]
++
++[[package]]
++name = "windows-future"
++version = "0.3.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e1d6f90251fe18a279739e78025bd6ddc52a7e22f921070ccdc67dde84c605cb"
++dependencies = [
++ "windows-core",
++ "windows-link",
++ "windows-threading",
++]
++
++[[package]]
++name = "windows-implement"
++version = "0.60.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
++[[package]]
++name = "windows-interface"
++version = "0.59.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
++[[package]]
+ name = "windows-link"
+ version = "0.2.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
++
++[[package]]
++name = "windows-numerics"
++version = "0.3.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
++dependencies = [
++ "windows-core",
++ "windows-link",
++]
++
++[[package]]
++name = "windows-result"
++version = "0.4.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
++dependencies = [
++ "windows-link",
++]
++
++[[package]]
++name = "windows-strings"
++version = "0.5.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
++dependencies = [
++ "windows-link",
++]
+ 
+ [[package]]
+ name = "windows-sys"
+@@ -510,6 +1451,15 @@
+ ]
+ 
+ [[package]]
++name = "windows-threading"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
++dependencies = [
++ "windows-link",
++]
++
++[[package]]
+ name = "windows_aarch64_gnullvm"
+ version = "0.52.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -558,6 +1508,12 @@
+ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+ 
+ [[package]]
++name = "writeable"
++version = "0.6.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
++
++[[package]]
+ name = "xcursor"
+ version = "0.3.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -570,7 +1526,150 @@
+ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
+ 
+ [[package]]
++name = "yazi"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e01738255b5a16e78bbb83e7fbba0a1e7dd506905cfc53f4622d89015a03fbb5"
++
++[[package]]
++name = "yeslogic-fontconfig-sys"
++version = "6.0.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1d8b8abf912b9a29ff112e1671c97c33636903d13a69712037190e6805af4f76"
++dependencies = [
++ "dlib",
++ "once_cell",
++ "pkg-config",
++]
++
++[[package]]
++name = "yoke"
++version = "0.8.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "417ef3fcf6c300b7dbd25c85531a746931c02ad536f3cf4786ed1e88223340b3"
++dependencies = [
++ "stable_deref_trait",
++ "yoke-derive",
++ "zerofrom",
++]
++
++[[package]]
++name = "yoke-derive"
++version = "0.8.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++ "synstructure",
++]
++
++[[package]]
++name = "zeno"
++version = "0.3.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
++
++[[package]]
++name = "zerocopy"
++version = "0.8.63"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8"
++dependencies = [
++ "zerocopy-derive",
++]
++
++[[package]]
++name = "zerocopy-derive"
++version = "0.8.63"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 2.0.119",
++]
++
++[[package]]
++name = "zerofrom"
++version = "0.1.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272"
++dependencies = [
++ "zerofrom-derive",
++]
++
++[[package]]
++name = "zerofrom-derive"
++version = "0.1.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++ "synstructure",
++]
++
++[[package]]
++name = "zerotrie"
++version = "0.2.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4ea269c3bd32f0a32c321907a2ae912ba6f4649bb0fc764a15627e99a7095a3f"
++dependencies = [
++ "displaydoc",
++ "yoke",
++ "zerofrom",
++ "zerovec",
++]
++
++[[package]]
++name = "zerovec"
++version = "0.11.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f58a2799cfe9a1670c7ea8edbd52ef8edb93cb37a7f83bf31ba9e35d9dae6a40"
++dependencies = [
++ "serde",
++ "yoke",
++ "zerofrom",
++ "zerovec-derive",
++]
++
++[[package]]
++name = "zerovec-derive"
++version = "0.11.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c3743ddbf47738d929cd1ae2e199d40d0162979dfe31aef8ae646d2bf00bf97a"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
++]
++
++[[package]]
++name = "zlib-rs"
++version = "0.6.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
++
++[[package]]
+ name = "zmij"
+ version = "1.0.23"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
++
++[[package]]
++name = "zune-core"
++version = "0.5.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
++
++[[package]]
++name = "zune-jpeg"
++version = "0.5.15"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
++dependencies = [
++ "zune-core",
++]
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -43,3 +43,21 @@
+ [[bin]]
+ name = "scene-phase-probe"
+ path = "src/phase_probe.rs"
++
++[dependencies.rustix]
++version = "1"
++default-features = false
++features = ["std", "fs"]
++
++[features]
++native = ["dep:sidestep-engine", "dep:tiny-skia"]
++
++[dependencies.sidestep-engine]
++path = "../desktop/aizome/sidestep/crates/sidestep-engine"
++optional = true
++
++[dependencies.tiny-skia]
++version = "0.12"
++default-features = false
++features = ["std", "simd"]
++optional = true
+--- /dev/null
++++ b/src/bridge.rs
+@@ -0,0 +1,713 @@
++//! Event-side selection of complete GPU or complete SHM frames. No raster, file
++//! copy, driver call or worker join occurs here. Workers retain their own leases.
++#![forbid(unsafe_code)]
++use crate::{Committed, Descriptor, Error, EventOwner, Import, WindowId, budget::Accounted};
++use std::{
++    sync::Arc,
++    time::{Duration, Instant},
++};
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct SurfaceId(u64);
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct SceneId {
++    surface: SurfaceId,
++    revision: u64,
++    sequence: u64,
++}
++/// Original full-scene identity shared by independent workers. A worker's own
++/// FrameId is not comparable with the other worker's FrameId.
++pub struct Job<F> {
++    id: SceneId,
++    source: Arc<Accounted<F>>,
++    width: u32,
++    height: u32,
++    bytes: usize,
++}
++impl<F> Job<F> {
++    pub fn id(&self) -> SceneId {
++        self.id
++    }
++    pub fn source(&self) -> &F {
++        self.source.get()
++    }
++    pub fn dimensions(&self) -> (u32, u32) {
++        (self.width, self.height)
++    }
++}
++struct Surface<F> {
++    id: SurfaceId,
++    revision: u64,
++    gpu: Option<WindowId>,
++    cpu: WindowId,
++    latest: Option<Arc<Job<F>>>,
++    presented: u64,
++    cpu_only: bool,
++    gpu_queued: u64,
++    cpu_queued: u64,
++    deadline: Option<Instant>,
++    retry_after: Option<Instant>,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Route {
++    Gpu,
++    Shm,
++}
++pub struct Pending<F> {
++    route: Route,
++    import: Import<Job<F>>,
++}
++impl<F> Pending<F> {
++    pub fn route(&self) -> Route {
++        self.route
++    }
++    pub fn descriptor(&self) -> &Descriptor {
++        self.import.descriptor()
++    }
++    pub fn scene(&self) -> SceneId {
++        self.import.source().id
++    }
++}
++pub struct Lease {
++    route: Route,
++    lease: Committed,
++}
++pub struct Bridge<F> {
++    gpu: EventOwner<Job<F>>,
++    cpu: EventOwner<Job<F>>,
++    surfaces: Vec<Surface<F>>,
++    next: u64,
++    limit: usize,
++    timeout: Duration,
++    gpu_disabled: bool,
++}
++impl<F> Bridge<F> {
++    pub fn new(
++        gpu: EventOwner<Job<F>>,
++        cpu: EventOwner<Job<F>>,
++        limit: usize,
++        timeout: Duration,
++    ) -> Self {
++        Self {
++            gpu,
++            cpu,
++            surfaces: Vec::new(),
++            next: 1,
++            limit,
++            timeout,
++            gpu_disabled: false,
++        }
++    }
++    fn next(&mut self) -> Result<u64, Error> {
++        let n = self.next;
++        self.next = n.checked_add(1).ok_or(Error::Exhausted)?;
++        Ok(n)
++    }
++    pub fn open(&mut self) -> Result<SurfaceId, Error> {
++        if self.surfaces.len() >= self.limit {
++            return Err(Error::Limit);
++        }
++        let id = SurfaceId(self.next()?);
++        let cpu = self.cpu.open()?;
++        let gpu = match self.gpu.open() {
++            Ok(w) => Some(w),
++            Err(Error::DriverFailed) => None,
++            Err(e) => {
++                self.cpu.close(cpu);
++                return Err(e);
++            }
++        };
++        self.surfaces.push(Surface {
++            id,
++            revision: id.0,
++            gpu,
++            cpu,
++            latest: None,
++            presented: 0,
++            cpu_only: gpu.is_none(),
++            gpu_queued: 0,
++            cpu_queued: 0,
++            deadline: None,
++            retry_after: None,
++        });
++        Ok(id)
++    }
++    /// The complete capture is already admitted/owned. Exactly one latest Arc is
++    /// retained per live surface, regardless of a permanently stuck GPU driver.
++    pub fn submit(
++        &mut self,
++        id: SurfaceId,
++        source: Arc<Accounted<F>>,
++        width: u32,
++        height: u32,
++        now: Instant,
++    ) -> Result<SceneId, Error> {
++        let bytes = (width as usize)
++            .checked_mul(height as usize)
++            .and_then(|n| n.checked_mul(4))
++            .filter(|&n| n > 0)
++            .ok_or(Error::Limit)?;
++        if width > 8192 || height > 8192 {
++            return Err(Error::Limit);
++        }
++        let seq = self.next()?;
++        let s = self
++            .surfaces
++            .iter_mut()
++            .find(|s| s.id == id)
++            .ok_or(Error::Closed)?;
++        let id = SceneId {
++            surface: id,
++            revision: s.revision,
++            sequence: seq,
++        };
++        s.latest = Some(Arc::new(Job {
++            id,
++            source,
++            width,
++            height,
++            bytes,
++        }));
++        if s.deadline.is_none() {
++            s.deadline = Some(now.checked_add(self.timeout).ok_or(Error::Limit)?)
++        }
++        self.dispatch(now);
++        Ok(id)
++    }
++    pub fn invalidate(&mut self, id: SurfaceId) -> Result<(), Error> {
++        let revision = self.next()?;
++        let s = self
++            .surfaces
++            .iter_mut()
++            .find(|s| s.id == id)
++            .ok_or(Error::Closed)?;
++        s.revision = revision;
++        s.latest = None;
++        s.deadline = None;
++        s.retry_after = None;
++        if let Some(w) = s.gpu {
++            self.gpu.invalidate(w)?
++        }
++        self.cpu.invalidate(s.cpu)?;
++        Ok(())
++    }
++    pub fn close(&mut self, id: SurfaceId) {
++        if let Some(i) = self.surfaces.iter().position(|s| s.id == id) {
++            let s = self.surfaces.swap_remove(i);
++            if let Some(w) = s.gpu {
++                self.gpu.close(w)
++            }
++            self.cpu.close(s.cpu);
++        }
++    }
++    fn current(&self, id: SceneId) -> bool {
++        self.surfaces
++            .iter()
++            .any(|s| s.id == id.surface && s.revision == id.revision && s.presented < id.sequence)
++    }
++    fn dispatch(&mut self, now: Instant) {
++        for s in &mut self.surfaces {
++            let Some(job) = &s.latest else { continue };
++            if s.retry_after.is_some_and(|d| now < d) {
++                continue;
++            }
++            s.retry_after = None;
++            let cpu = s.cpu_only || self.gpu_disabled;
++            let queued = if cpu {
++                &mut s.cpu_queued
++            } else {
++                &mut s.gpu_queued
++            };
++            if *queued == job.id.sequence {
++                continue;
++            }
++            let result = if cpu {
++                self.cpu
++                    .submit(s.cpu, job.clone(), job.source.bytes(), job.bytes)
++            } else {
++                self.gpu.submit(
++                    s.gpu.expect("GPU route has window"),
++                    job.clone(),
++                    job.source.bytes(),
++                    job.bytes,
++                )
++            };
++            if result.is_ok() {
++                *queued = job.id.sequence
++            }
++            // A bounded capacity refusal keeps only latest and retries on release
++            // wake/tick. No repeated allocation or new worker is created here.
++        }
++    }
++    /// Called from the coalesced worker wake and one deadline timer. Work is
++    /// bounded by surface and lease caps, never by an unbounded completion queue.
++    pub fn tick(&mut self, now: Instant) {
++        while let Some(refused) = self.gpu.poll_fallback() {
++            let id = refused.source().id;
++            if refused.is_current()
++                && self.current(id)
++                && let Some(s) = self.surfaces.iter_mut().find(|s| s.id == id.surface)
++            {
++                s.cpu_only = true;
++            }
++        }
++        while let Some(refused) = self.cpu.poll_fallback() {
++            // Capacity rejection is retried on later tick/release, retaining only
++            // latest. A permanent CPU failure is visible through cpu_failed().
++            let id = refused.source().id;
++            if let Some(s) = self
++                .surfaces
++                .iter_mut()
++                .find(|s| s.id == id.surface && s.revision == id.revision)
++                && s.cpu_queued == id.sequence
++            {
++                s.cpu_queued = 0;
++                s.retry_after = now.checked_add(Duration::from_millis(16));
++            }
++        }
++        let expired = self
++            .surfaces
++            .iter()
++            .any(|s| !s.cpu_only && s.deadline.is_some_and(|d| now >= d));
++        if !self.gpu_disabled && (self.gpu.stats().failed || expired) {
++            self.gpu_disabled = true;
++            for s in &self.surfaces {
++                if let Some(w) = s.gpu {
++                    let _ = self.gpu.invalidate(w);
++                }
++            }
++        }
++        self.dispatch(now);
++    }
++    /// Protocol import refusal also falls back as a whole frame. SHM import
++    /// refusal is terminal for this attempt; it must be reported by the adapter.
++    pub fn import_failed(&mut self, pending: Pending<F>, now: Instant) -> Result<(), Error> {
++        let id = pending.scene();
++        if !self.current(id) {
++            return Err(Error::Stale);
++        }
++        if pending.route == Route::Shm {
++            return Err(Error::InvalidDescriptor);
++        }
++        let s = self
++            .surfaces
++            .iter_mut()
++            .find(|s| s.id == id.surface)
++            .expect("validated surface");
++        s.cpu_only = true;
++        if s.latest
++            .as_ref()
++            .is_none_or(|j| j.id.sequence < id.sequence)
++        {
++            s.latest = Some(pending.import.source().clone());
++        }
++        drop(pending);
++        self.dispatch(now);
++        Ok(())
++    }
++    /// Earliest bounded timeout/retry; the event adapter arms one timer for this
++    /// instant and replaces/cancels it when state changes. No per-job timer queue.
++    pub fn next_deadline(&self) -> Option<Instant> {
++        self.surfaces
++            .iter()
++            .flat_map(|s| {
++                [
++                    s.retry_after,
++                    if self.gpu_disabled || s.cpu_only {
++                        None
++                    } else {
++                        s.deadline
++                    },
++                ]
++            })
++            .flatten()
++            .min()
++    }
++    pub fn cpu_failed(&self) -> bool {
++        self.cpu.stats().failed
++    }
++    pub fn gpu_disabled(&self) -> bool {
++        self.gpu_disabled
++    }
++    pub fn retained_latest(&self) -> usize {
++        self.surfaces.iter().filter(|s| s.latest.is_some()).count()
++    }
++    pub fn poll(&mut self) -> Option<Pending<F>> {
++        // CPU first once fallback has completed; a late GPU success for this
++        // original scene will then fail the shared sequence gate at commit.
++        while let Some(import) = self.cpu.poll_ready() {
++            if self.current(import.source().id) {
++                return Some(Pending {
++                    route: Route::Shm,
++                    import,
++                });
++            }
++        }
++        while let Some(import) = self.gpu.poll_ready() {
++            if self.current(import.source().id) {
++                return Some(Pending {
++                    route: Route::Gpu,
++                    import,
++                });
++            }
++        }
++        None
++    }
++    /// Validate immediately before the adapter's attach/commit. Params creation
++    /// and GPU/SHM completion alone never authorize a stale frame to present.
++    pub fn commit(&mut self, pending: Pending<F>, now: Instant) -> Result<Lease, Error> {
++        let id = pending.scene();
++        if !self.current(id) {
++            return Err(Error::Stale);
++        }
++        let lease = match pending.route {
++            Route::Gpu => self.gpu.commit(pending.import)?,
++            Route::Shm => self.cpu.commit(pending.import)?,
++        };
++        let s = self
++            .surfaces
++            .iter_mut()
++            .find(|s| s.id == id.surface)
++            .expect("validated surface");
++        s.presented = id.sequence;
++        if s.latest.as_ref().is_some_and(|j| j.id == id) {
++            s.latest = None;
++            s.deadline = None;
++        } else {
++            s.deadline = now.checked_add(self.timeout);
++        }
++        Ok(Lease {
++            route: pending.route,
++            lease,
++        })
++    }
++    pub fn released(&mut self, lease: Lease) {
++        match lease.route {
++            Route::Gpu => self.gpu.released(lease.lease),
++            Route::Shm => self.cpu.released(lease.lease),
++        }
++    }
++    pub fn connection_lost(&mut self) {
++        self.gpu.connection_lost();
++        self.cpu.connection_lost();
++        self.surfaces.clear();
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        Cancellation, Driver, FallbackReason, Frame, Limits, RenderError,
++        budget::Budget,
++        shm::{Cpu, Raster},
++    };
++    use std::{os::unix::net::UnixStream, sync::mpsc, thread};
++    struct Paint;
++    impl Raster<Job<u32>> for Paint {
++        fn dimensions(&self, s: &Job<u32>) -> (u32, u32) {
++            s.dimensions()
++        }
++        fn paint(
++            &mut self,
++            s: &Job<u32>,
++            px: &mut [u32],
++            _: &Cancellation,
++        ) -> Result<(), RenderError> {
++            px.fill(*s.source());
++            Ok(())
++        }
++    }
++    struct Gpu {
++        started: mpsc::Sender<SceneId>,
++        unblock: Option<mpsc::Receiver<()>>,
++        refuse: bool,
++    }
++    impl Driver<Job<u32>> for Gpu {
++        type Resource = UnixStream;
++        fn render(
++            &mut self,
++            frame: &Frame<Job<u32>>,
++            c: &Cancellation,
++        ) -> Result<(UnixStream, Descriptor), RenderError> {
++            let _ = self.started.send(frame.source.id());
++            if let Some(wait) = &self.unblock {
++                wait.recv().unwrap();
++            }
++            if c.is_cancelled() {
++                return Err(RenderError::Cancelled);
++            }
++            if self.refuse {
++                return Err(RenderError::Fallback(FallbackReason::Unsupported));
++            }
++            let (a, b) = UnixStream::pair().unwrap();
++            let (w, h) = frame.source.dimensions();
++            Ok((
++                a,
++                Descriptor {
++                    fd: b.into(),
++                    width: w,
++                    height: h,
++                    stride: w * 4,
++                    offset: 0,
++                    fourcc: u32::from_le_bytes(*b"AB24"),
++                    modifier: 0,
++                },
++            ))
++        }
++    }
++    fn fixture(
++        block: bool,
++        refuse: bool,
++    ) -> (
++        Bridge<u32>,
++        Budget,
++        mpsc::Receiver<SceneId>,
++        mpsc::Sender<()>,
++    ) {
++        let budget = Budget::new(4096);
++        let b = budget.clone();
++        let (started_tx, started) = mpsc::channel();
++        let (send, wait) = mpsc::channel();
++        let gpu = crate::spawn(Limits::default(), move || {
++            Ok(Gpu {
++                started: started_tx,
++                unblock: block.then_some(wait),
++                refuse,
++            })
++        })
++        .unwrap();
++        let cpu = crate::spawn(Limits::default(), move || Ok(Cpu::new(Paint, b))).unwrap();
++        (
++            Bridge::new(gpu, cpu, 2, Duration::from_millis(50)),
++            budget,
++            started,
++            send,
++        )
++    }
++    fn source(b: &Budget, pixel: u32) -> Arc<Accounted<u32>> {
++        Arc::new(Accounted::new(pixel, b.reserve(4).unwrap()))
++    }
++    fn until(mut f: impl FnMut() -> bool) {
++        let end = Instant::now() + Duration::from_secs(3);
++        while !f() {
++            assert!(Instant::now() < end, "progress");
++            thread::sleep(Duration::from_millis(1));
++        }
++    }
++    fn ready(b: &mut Bridge<u32>, now: Instant) -> Pending<u32> {
++        let mut p = None;
++        until(|| {
++            b.tick(now);
++            p = b.poll();
++            p.is_some()
++        });
++        p.unwrap()
++    }
++    #[test]
++    fn failed_gpu_factory_still_opens_a_cpu_only_surface() {
++        let budget = Budget::new(4096);
++        let cb = budget.clone();
++        let gpu =
++            crate::spawn::<Job<u32>, Gpu, _>(Limits::default(), || Err("unavailable GPU".into()))
++                .unwrap();
++        until(|| gpu.stats().failed);
++        let cpu = crate::spawn(Limits::default(), move || Ok(Cpu::new(Paint, cb))).unwrap();
++        let mut b = Bridge::new(gpu, cpu, 2, Duration::from_millis(50));
++        let w = b.open().unwrap();
++        let now = Instant::now();
++        b.submit(w, source(&budget, 42), 2, 2, now).unwrap();
++        let p = ready(&mut b, now);
++        assert_eq!(p.route(), Route::Shm);
++        let lease = b.commit(p, now).unwrap();
++        b.released(lease);
++        b.connection_lost();
++        until(|| budget.used() == 0);
++    }
++    #[test]
++    fn post_release_capacity_wake_retries_latest_after_slow_resource_destructor() {
++        struct Resource {
++            wait: Option<mpsc::Receiver<()>>,
++            entered: mpsc::Sender<()>,
++        }
++        impl Drop for Resource {
++            fn drop(&mut self) {
++                if let Some(wait) = self.wait.take() {
++                    self.entered.send(()).unwrap();
++                    wait.recv().unwrap();
++                }
++            }
++        }
++        struct DriverOnce {
++            wait: Option<mpsc::Receiver<()>>,
++            entered: mpsc::Sender<()>,
++        }
++        impl Driver<Job<u32>> for DriverOnce {
++            type Resource = Resource;
++            fn render(
++                &mut self,
++                _: &Frame<Job<u32>>,
++                _: &Cancellation,
++            ) -> Result<(Resource, Descriptor), RenderError> {
++                let (a, b) = UnixStream::pair().unwrap();
++                drop(a);
++                Ok((
++                    Resource {
++                        wait: self.wait.take(),
++                        entered: self.entered.clone(),
++                    },
++                    Descriptor {
++                        fd: b.into(),
++                        width: 2,
++                        height: 2,
++                        stride: 8,
++                        offset: 0,
++                        fourcc: 0,
++                        modifier: 0,
++                    },
++                ))
++            }
++        }
++        let (unblock, wait) = mpsc::channel();
++        let (entered_tx, entered) = mpsc::channel();
++        let (wake_tx, wake) = mpsc::channel();
++        let gpu = crate::spawn_with_wake(
++            Limits {
++                bytes: 20,
++                ..Limits::default()
++            },
++            move || {
++                Ok(DriverOnce {
++                    wait: Some(wait),
++                    entered: entered_tx,
++                })
++            },
++            move || {
++                let _ = wake_tx.send(());
++            },
++        )
++        .unwrap();
++        let budget = Budget::new(4096);
++        let cb = budget.clone();
++        let cpu = crate::spawn(Limits::default(), move || Ok(Cpu::new(Paint, cb))).unwrap();
++        let mut b = Bridge::new(gpu, cpu, 2, Duration::from_secs(60));
++        let w = b.open().unwrap();
++        let now = Instant::now();
++        b.submit(w, source(&budget, 1), 2, 2, now).unwrap();
++        let p = ready(&mut b, now);
++        let first = b.commit(p, now).unwrap();
++        wake.recv_timeout(Duration::from_secs(3)).unwrap();
++        while wake.try_recv().is_ok() {}
++        b.submit(w, source(&budget, 2), 2, 2, now).unwrap();
++        assert_eq!(
++            b.gpu.stats().pending,
++            0,
++            "full lease capacity rejects worker submission"
++        );
++        b.released(first);
++        entered.recv_timeout(Duration::from_secs(3)).unwrap();
++        b.tick(now);
++        assert_eq!(b.gpu.stats().pending, 0);
++        assert!(wake.try_recv().is_err());
++        unblock.send(()).unwrap();
++        wake.recv_timeout(Duration::from_secs(3))
++            .expect("no capacity wake after actual reclamation");
++        // No timer or unrelated input: this sole capacity notification must suffice.
++        b.tick(now);
++        let p = ready(&mut b, now);
++        assert_eq!(p.route(), Route::Gpu);
++        assert_eq!(*p.import.source().source(), 2);
++        let lease = b.commit(p, now).unwrap();
++        b.released(lease);
++        b.connection_lost();
++        until(|| budget.used() == 0);
++    }
++    #[test]
++    fn stalled_gpu_times_out_once_cpu_progresses_and_latest_sources_stay_bounded() {
++        let (mut b, budget, started, unblock) = fixture(true, false);
++        let w = b.open().unwrap();
++        let now = Instant::now();
++        b.submit(w, source(&budget, 1), 2, 2, now).unwrap();
++        started.recv_timeout(Duration::from_secs(3)).unwrap();
++        for value in 2..1002 {
++            b.submit(w, source(&budget, value), 2, 2, now).unwrap();
++            assert_eq!(b.retained_latest(), 1);
++        }
++        // One active source, one pending replacement, shared with latest.
++        assert_eq!(budget.used(), 8);
++        let p = ready(&mut b, now + Duration::from_millis(51));
++        assert_eq!(p.route(), Route::Shm);
++        assert!(b.gpu_disabled());
++        assert_eq!(*p.import.source().source(), 1001);
++        let lease = b.commit(p, now).unwrap();
++        assert_eq!(b.retained_latest(), 0);
++        b.close(w);
++        b.released(lease);
++        b.connection_lost();
++        unblock.send(()).unwrap();
++        until(|| budget.used() == 0);
++    }
++    #[test]
++    fn recoverable_scene_and_protocol_refusal_both_present_complete_cpu_output() {
++        for refuse in [false, true] {
++            let (mut b, budget, _, _) = fixture(false, refuse);
++            let now = Instant::now();
++            let w = b.open().unwrap();
++            let id = b.submit(w, source(&budget, 7), 2, 2, now).unwrap();
++            let p = ready(&mut b, now);
++            let p = if refuse {
++                p
++            } else {
++                assert_eq!(p.route(), Route::Gpu);
++                b.import_failed(p, now).unwrap();
++                ready(&mut b, now)
++            };
++            assert_eq!(p.route(), Route::Shm);
++            assert_eq!(p.scene(), id);
++            assert!(!b.gpu_disabled());
++            let lease = b.commit(p, now).unwrap();
++            b.released(lease);
++            b.connection_lost();
++            until(|| budget.used() == 0);
++        }
++    }
++    #[test]
++    fn late_gpu_cannot_replace_same_scene_cpu_or_newer_scene_and_close_rejects_import() {
++        let (mut b, budget, _, _) = fixture(false, false);
++        let now = Instant::now();
++        let w = b.open().unwrap();
++        b.submit(w, source(&budget, 1), 2, 2, now).unwrap();
++        let old = ready(&mut b, now);
++        // A second route may finish while async GPU import remains outstanding.
++        let s = &mut b.surfaces[0];
++        s.cpu_only = true;
++        b.dispatch(now);
++        let cpu = ready(&mut b, now);
++        assert_eq!(cpu.route(), Route::Shm);
++        let lease = b.commit(cpu, now).unwrap();
++        assert!(matches!(b.commit(old, now), Err(Error::Stale)));
++        b.released(lease);
++        b.submit(w, source(&budget, 2), 2, 2, now).unwrap();
++        let old = ready(&mut b, now);
++        b.invalidate(w).unwrap();
++        assert!(matches!(b.commit(old, now), Err(Error::Stale)));
++        b.submit(w, source(&budget, 3), 2, 2, now).unwrap();
++        let p = ready(&mut b, now);
++        b.close(w);
++        assert!(matches!(b.commit(p, now), Err(Error::Stale)));
++        b.connection_lost();
++        until(|| budget.used() == 0);
++    }
++    #[test]
++    fn bounded_surface_cardinality_and_monotonic_identity_exhaustion() {
++        let (mut b, _, _, _) = fixture(false, false);
++        let a = b.open().unwrap();
++        let _ = b.open().unwrap();
++        assert_eq!(b.open(), Err(Error::Limit));
++        b.close(a);
++        let c = b.open().unwrap();
++        assert_ne!(a, c);
++        b.next = u64::MAX;
++        b.close(c);
++        assert_eq!(b.open(), Err(Error::Exhausted));
++        b.connection_lost();
++    }
++}
+--- /dev/null
++++ b/src/budget.rs
+@@ -0,0 +1,162 @@
++//! Logical owned-storage budget shared by CPU preparation, GPU and event paths.
++//! No graphics calls or data destruction run while its accounting mutex is held.
++#![forbid(unsafe_code)]
++use std::sync::{Arc, Mutex};
++#[derive(Clone)]
++pub struct Budget(Arc<Inner>);
++struct Inner {
++    limit: usize,
++    used: Mutex<usize>,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Exhausted;
++/// Clones share one charge. The final clone releases it, independently of which
++/// worker/event path retires the resource. This models ownership, not process RSS.
++#[derive(Clone)]
++pub struct Reservation(Arc<Charge>);
++struct Charge {
++    budget: Budget,
++    bytes: usize,
++}
++/// Field order is intentional: storage is destroyed before its charge retires.
++/// Share this wrapper through Arc when several jobs reference one allocation.
++pub struct Accounted<T> {
++    value: T,
++    charge: Reservation,
++}
++impl<T> Accounted<T> {
++    pub fn new(value: T, charge: Reservation) -> Self {
++        Self { value, charge }
++    }
++    pub fn get(&self) -> &T {
++        &self.value
++    }
++    pub fn get_mut(&mut self) -> &mut T {
++        &mut self.value
++    }
++    pub fn bytes(&self) -> usize {
++        self.charge.bytes()
++    }
++}
++impl Budget {
++    pub fn new(limit: usize) -> Self {
++        Self(Arc::new(Inner {
++            limit,
++            used: Mutex::new(0),
++        }))
++    }
++    pub fn reserve(&self, bytes: usize) -> Result<Reservation, Exhausted> {
++        let mut used = self.0.used.lock().unwrap();
++        let next = used
++            .checked_add(bytes)
++            .filter(|&n| n <= self.0.limit)
++            .ok_or(Exhausted)?;
++        *used = next;
++        drop(used);
++        Ok(Reservation(Arc::new(Charge {
++            budget: self.clone(),
++            bytes,
++        })))
++    }
++    pub fn used(&self) -> usize {
++        *self.0.used.lock().unwrap()
++    }
++    pub fn limit(&self) -> usize {
++        self.0.limit
++    }
++}
++impl Reservation {
++    pub fn bytes(&self) -> usize {
++        self.0.bytes
++    }
++    /// Growing must reserve a second token before allocation. Do not release the
++    /// old token until the old allocation/committed buffer actually retires.
++    pub fn same_charge(&self, other: &Self) -> bool {
++        Arc::ptr_eq(&self.0, &other.0)
++    }
++}
++impl Drop for Charge {
++    fn drop(&mut self) {
++        let mut used = self.budget.0.used.lock().unwrap();
++        *used = used.checked_sub(self.bytes).expect("owned budget charge");
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn old_retired_and_new_buffers_all_stay_charged_until_last_owner() {
++        let b = Budget::new(128);
++        let fixed = b.reserve(32).unwrap();
++        let source = b.reserve(16).unwrap();
++        let current = b.reserve(40).unwrap();
++        let committed = current.clone();
++        drop(current);
++        let replacement = b.reserve(40).unwrap();
++        assert_eq!(b.used(), 128);
++        assert!(b.reserve(1).is_err());
++        drop(source);
++        assert_eq!(b.used(), 112);
++        drop(replacement);
++        assert_eq!(b.used(), 72);
++        drop(committed);
++        assert_eq!(b.used(), 32);
++        drop(fixed);
++        assert_eq!(b.used(), 0);
++    }
++    #[test]
++    fn clones_do_not_double_count_and_overflow_never_changes_state() {
++        let b = Budget::new(usize::MAX);
++        let token = b.reserve(usize::MAX - 1).unwrap();
++        let other = token.clone();
++        assert!(token.same_charge(&other));
++        assert!(b.reserve(2).is_err());
++        assert_eq!(b.used(), usize::MAX - 1);
++        drop(token);
++        assert_eq!(b.used(), usize::MAX - 1);
++        drop(other);
++        assert_eq!(b.used(), 0);
++    }
++    #[test]
++    fn reservations_from_workers_share_one_bound() {
++        let b = Budget::new(4096);
++        let barrier = Arc::new(std::sync::Barrier::new(9));
++        let threads = (0..8)
++            .map(|_| {
++                let b = b.clone();
++                let barrier = barrier.clone();
++                std::thread::spawn(move || {
++                    let token = b.reserve(1024);
++                    barrier.wait();
++                    barrier.wait();
++                    token
++                })
++            })
++            .collect::<Vec<_>>();
++        barrier.wait();
++        assert_eq!(b.used(), 4096);
++        barrier.wait();
++        let held = threads
++            .into_iter()
++            .filter_map(|t| t.join().unwrap().ok())
++            .collect::<Vec<_>>();
++        assert_eq!(held.len(), 4);
++        assert_eq!(b.used(), 4096);
++        drop(held);
++        assert_eq!(b.used(), 0);
++    }
++    #[test]
++    fn storage_destructor_runs_before_accounting_release() {
++        struct Storage(Budget);
++        impl Drop for Storage {
++            fn drop(&mut self) {
++                assert_eq!(self.0.used(), 32);
++            }
++        }
++        let b = Budget::new(64);
++        let charge = b.reserve(32).unwrap();
++        let storage = Accounted::new(Storage(b.clone()), charge);
++        drop(storage);
++        assert_eq!(b.used(), 0);
++    }
++}
+--- /dev/null
++++ b/src/complete.rs
+@@ -0,0 +1,483 @@
++//! Explicit complete native scenes. Admission retains original immutable ops;
++//! unsupported GPU drawing therefore still has a complete CPU source.
++#![forbid(unsafe_code)]
++use crate::{
++    Cancellation, RenderError,
++    bridge::Job,
++    budget::{Accounted, Budget, Reservation},
++    shm::Raster,
++};
++use sidestep_engine::{
++    protocol::{Draw, Op, Paint, Rect},
++    raster::{self, Glyphs, images::Pixels},
++};
++use std::{mem::size_of, sync::Arc};
++const MAX_OPS: usize = 65536;
++const MAX_SOURCE: usize = 64 << 20;
++const MAX_FRAME: usize = 32 << 20;
++const WORKER_ALLOWANCE: usize = 128 << 20;
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Admission {
++    Geometry,
++    Limit,
++    RequiresExistingBackend,
++}
++/// Construct on a preparation worker from a full-damage recording. Validation
++/// and compact path copies do not belong on a UI/Wayland callback or mutex.
++/// An incremental Paint message or scroll delta cannot satisfy this contract,
++/// even if its rect covers the window.
++pub struct CompleteScene {
++    width: u32,
++    height: u32,
++    scale: f32,
++    ops: Arc<[Op]>,
++}
++impl CompleteScene {
++    pub fn admit_full_recording(
++        width: u32,
++        height: u32,
++        scale: f32,
++        ops: Arc<[Op]>,
++        budget: &Budget,
++    ) -> Result<Arc<Accounted<Self>>, Admission> {
++        let bytes = (width as usize)
++            .checked_mul(height as usize)
++            .and_then(|n| n.checked_mul(4))
++            .ok_or(Admission::Limit)?;
++        if width == 0
++            || height == 0
++            || width > 8192
++            || height > 8192
++            || bytes > MAX_FRAME
++            || !scale.is_finite()
++            || !(0.0625..=16.).contains(&scale)
++        {
++            return Err(Admission::Geometry);
++        }
++        if ops.len() > MAX_OPS {
++            return Err(Admission::Limit);
++        }
++        let mut charge = size_of::<Self>()
++            .checked_add(
++                ops.len()
++                    .checked_mul(size_of::<Op>())
++                    .ok_or(Admission::Limit)?,
++            )
++            .ok_or(Admission::Limit)?;
++        for op in ops.iter() {
++            charge = charge
++                .checked_add(op_charge(op, scale)?)
++                .filter(|n| *n <= MAX_SOURCE)
++                .ok_or(Admission::Limit)?;
++        }
++        let reservation = budget.reserve(charge).map_err(|_| Admission::Limit)?;
++        // tiny-skia hides Path's Vec capacities. Clone compacts those buffers so
++        // admitted ownership never pins an arbitrarily oversized builder reserve.
++        let mut compact = Vec::new();
++        compact
++            .try_reserve_exact(ops.len())
++            .map_err(|_| Admission::Limit)?;
++        for op in ops.iter() {
++            let mut owned = op.clone();
++            match &mut owned {
++                Op::FillPath { path, .. } | Op::StrokePath { path, .. } => {
++                    *path = Arc::new((**path).clone())
++                }
++                _ => {}
++            }
++            compact.push(owned);
++        }
++        Ok(Arc::new(Accounted::new(
++            Self {
++                width,
++                height,
++                scale,
++                ops: compact.into(),
++            },
++            reservation,
++        )))
++    }
++
++    pub fn dimensions(&self) -> (u32, u32) {
++        (self.width, self.height)
++    }
++    pub fn scale(&self) -> f32 {
++        self.scale
++    }
++    pub fn ops(&self) -> &[Op] {
++        &self.ops
++    }
++}
++fn bounded(v: f32) -> bool {
++    v.is_finite() && v.abs() <= 1_000_000.
++}
++fn rect(r: &Rect) -> bool {
++    [r.x0, r.y0, r.x1, r.y1].into_iter().all(bounded)
++}
++fn color(c: &[f32; 4]) -> bool {
++    c.iter().all(|v| v.is_finite())
++}
++fn draw(d: &Draw) -> Result<(), Admission> {
++    if d.mask.is_some() || d.shadow.is_some() {
++        return Err(Admission::RequiresExistingBackend);
++    }
++    if !d.xf.is_finite() || !rect(&d.clip) {
++        return Err(Admission::Geometry);
++    }
++    Ok(())
++}
++fn paint(p: &Paint) -> Result<usize, Admission> {
++    match p {
++        Paint::Solid(c) if color(c) => Ok(0),
++        Paint::Gradient(g)
++            if g.stops.len() <= 256
++                && [g.start.0, g.start.1, g.end.0, g.end.1]
++                    .into_iter()
++                    .all(bounded)
++                && g.radii
++                    .is_none_or(|(a, b)| bounded(a) && bounded(b) && a >= 0. && b >= 0.)
++                && g.stops.iter().all(|(t, c)| t.is_finite() && color(c)) =>
++        {
++            Ok(size_of::<sidestep_engine::protocol::GradientSpec>()
++                + g.stops.capacity() * size_of::<(f32, [f32; 4])>())
++        }
++        _ => Err(Admission::Geometry),
++    }
++}
++fn path_charge(path: &tiny_skia::Path) -> Result<usize, Admission> {
++    let n = path.points().len();
++    if n > 8192 || path.len() > 16384 {
++        return Err(Admission::Limit);
++    }
++    // Path stores points and verb tags; overcharge each point for both containers.
++    Ok(size_of::<tiny_skia::Path>() + n * 32 + 64)
++}
++fn op_charge(op: &Op, scale: f32) -> Result<usize, Admission> {
++    match op {
++        Op::Fill { rect: r, color: c }
++        | Op::FillWith {
++            rect: r, color: c, ..
++        } if rect(r) && color(c) => Ok(0),
++        Op::AlphaMask {
++            mask,
++            dst,
++            clip,
++            color: c,
++        } if rect(dst) && rect(clip) && color(c) => Ok(mask.storage_bytes()),
++        Op::Glyphs(run)
++            if run.glyphs.len() <= 131072
++                && run.size.is_finite()
++                && run.size > 0.
++                && run.size * scale <= 256.
++                && bounded(run.x)
++                && bounded(run.y)
++                && rect(&run.clip)
++                && color(&run.color)
++                && run.glyphs.iter().all(|g| bounded(g.x) && bounded(g.y)) =>
++        {
++            Ok(run.glyphs.len() * size_of::<sidestep_engine::protocol::Glyph>() + 32)
++        }
++        Op::Image {
++            image,
++            draw: d,
++            src,
++            dst,
++            alpha,
++            tint,
++            ..
++        } => {
++            draw(d)?;
++            if !rect(src) || !rect(dst) || !alpha.is_finite() || !tint.is_none_or(|c| color(&c)) {
++                return Err(Admission::Geometry);
++            }
++            let Pixels::Rgba(data) = &image.pixels else {
++                return Err(Admission::RequiresExistingBackend);
++            };
++            let expected = (image.width as usize)
++                .checked_mul(image.height as usize)
++                .and_then(|n| n.checked_mul(4))
++                .ok_or(Admission::Limit)?;
++            if expected == 0 || expected > 1 << 20 || data.len() != expected {
++                return Err(Admission::Limit);
++            }
++            Ok(size_of::<raster::images::ImageData>() + data.len() + 32)
++        }
++        Op::FillPath {
++            path,
++            paint: p,
++            draw: d,
++            ..
++        } => {
++            draw(d)?;
++            Ok(path_charge(path)? + paint(p)?)
++        }
++        Op::StrokePath {
++            path,
++            stroke,
++            paint: p,
++            draw: d,
++        } => {
++            draw(d)?;
++            if !stroke.width.is_finite()
++                || !(0.0..=64.).contains(&stroke.width)
++                || !stroke.miter.is_finite()
++                || !(0.0..=100.).contains(&stroke.miter)
++            {
++                return Err(Admission::Geometry);
++            }
++            let dash = match &stroke.dash {
++                None => 0,
++                Some((items, phase)) => {
++                    if items.len() > 128
++                        || !phase.is_finite()
++                        || !items.iter().all(|v| v.is_finite() && *v >= 0.)
++                    {
++                        return Err(Admission::Geometry);
++                    }
++                    items.capacity() * 4
++                }
++            };
++            Ok(path_charge(path)?
++                + paint(p)?
++                + size_of::<sidestep_engine::protocol::StrokeSpec>()
++                + dash)
++        }
++        // These need recursive CA resolution or nested scratch reservation. Keep the
++        // old CPU backend authoritative until explicit complete immutable support.
++        Op::Composite(_) | Op::BeginGroup { .. } | Op::EndGroup => {
++            Err(Admission::RequiresExistingBackend)
++        }
++        _ => Err(Admission::Geometry),
++    }
++}
++/// Separate CPU-worker raster state. This conservative allowance includes its
++/// scratch/image/glyph caches; existing global font registry is process baseline.
++/// No bands pool is used: cancellation is checked between128physical-row slices.
++pub struct NativeRaster {
++    _allowance: Reservation,
++}
++impl NativeRaster {
++    pub fn new(budget: &Budget) -> Result<Self, String> {
++        let allowance = budget
++            .reserve(WORKER_ALLOWANCE)
++            .map_err(|_| "CPU worker cache allowance")?;
++        raster::images::configure_thread_cache(16 << 20);
++        Ok(Self {
++            _allowance: allowance,
++        })
++    }
++}
++impl Drop for NativeRaster {
++    fn drop(&mut self) {
++        raster::ops::clear_thread_cache();
++        raster::images::configure_thread_cache(0);
++    }
++}
++impl Raster<Job<CompleteScene>> for NativeRaster {
++    fn dimensions(&self, job: &Job<CompleteScene>) -> (u32, u32) {
++        job.source().dimensions()
++    }
++    fn paint(
++        &mut self,
++        job: &Job<CompleteScene>,
++        pixels: &mut [u32],
++        cancel: &Cancellation,
++    ) -> Result<(), RenderError> {
++        let scene = job.source();
++        let mut glyphs = Glyphs::default();
++        let mut canvas = raster::Canvas::new(pixels, scene.width, scene.height, 0., scene.scale);
++        for row in (0..scene.height).step_by(128) {
++            if cancel.is_cancelled() {
++                return Err(RenderError::Cancelled);
++            }
++            let clip = Rect::new(
++                0.,
++                row as f32 / scene.scale,
++                scene.width as f32 / scene.scale,
++                (row + 128).min(scene.height) as f32 / scene.scale,
++            );
++            raster::paint(&mut canvas, &mut glyphs, &[clip], &scene.ops);
++        }
++        Ok(())
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn retained_paths_do_not_pin_hidden_builder_capacity() {
++        let budget = Budget::new(1 << 20);
++        let mut builder = tiny_skia::PathBuilder::with_capacity(1 << 20, 1 << 20);
++        builder.move_to(0., 0.);
++        builder.line_to(4., 0.);
++        builder.line_to(4., 4.);
++        builder.close();
++        let path = Arc::new(builder.finish().unwrap());
++        let weak = Arc::downgrade(&path);
++        let draw = Draw {
++            xf: tiny_skia::Transform::identity(),
++            blend: sidestep_engine::protocol::Blend::SourceOver,
++            aa: true,
++            clip: Rect::new(0., 0., 16., 16.),
++            mask: None,
++            shadow: None,
++        };
++        let scene = CompleteScene::admit_full_recording(
++            16,
++            16,
++            1.,
++            vec![Op::FillPath {
++                path,
++                even_odd: false,
++                paint: Paint::Solid([1.; 4]),
++                draw,
++            }]
++            .into(),
++            &budget,
++        )
++        .unwrap();
++        assert!(
++            weak.upgrade().is_none(),
++            "admitted scene pins oversized original path"
++        );
++        assert!(scene.bytes() < 4096);
++        drop(scene);
++        assert_eq!(budget.used(), 0);
++    }
++    #[test]
++    fn unsupported_gpu_blend_falls_back_to_the_complete_original_native_scene() {
++        use crate::{
++            Descriptor, Driver, FallbackReason, Frame, Limits,
++            bridge::{Bridge, Job, Route},
++            shm::Cpu,
++        };
++        use std::{
++            fs::File,
++            io::{Read, Seek, SeekFrom},
++            time::{Duration, Instant},
++        };
++        struct Decline;
++        impl Driver<Job<CompleteScene>> for Decline {
++            type Resource = ();
++            fn render(
++                &mut self,
++                f: &Frame<Job<CompleteScene>>,
++                c: &Cancellation,
++            ) -> Result<((), Descriptor), RenderError> {
++                let s = f.source.source();
++                let (w, h) = s.dimensions();
++                assert!(
++                    sidestep_engine::gpu_scene::Prepare::default()
++                        .prepare_cancellable(w, h, s.scale(), s.ops(), &|| c.is_cancelled())
++                        .is_err()
++                );
++                Err(RenderError::Fallback(FallbackReason::Unsupported))
++            }
++        }
++        let budget = Budget::new(256 << 20);
++        let cb = budget.clone();
++        let ops: Arc<[Op]> = vec![
++            Op::Fill {
++                rect: Rect::new(0., 0., 32., 32.),
++                color: [0.3, 0.6, 0.9, 1.],
++            },
++            Op::FillWith {
++                rect: Rect::new(3.5, 4., 28., 29.),
++                color: [0.8, 0.2, 0.5, 0.6],
++                blend: sidestep_engine::protocol::Blend::Multiply,
++            },
++        ]
++        .into();
++        let mut expected = vec![0u32; 32 * 32];
++        raster::paint(
++            &mut raster::Canvas::new(&mut expected, 32, 32, 0., 1.),
++            &mut Glyphs::default(),
++            &[Rect::new(0., 0., 32., 32.)],
++            &ops,
++        );
++        let source = CompleteScene::admit_full_recording(32, 32, 1., ops, &budget).unwrap();
++        let gpu = crate::spawn(Limits::default(), || Ok(Decline)).unwrap();
++        let cpu = crate::spawn(Limits::default(), move || {
++            Ok(Cpu::new(NativeRaster::new(&cb)?, cb))
++        })
++        .unwrap();
++        let mut b = Bridge::new(gpu, cpu, 2, Duration::from_secs(1));
++        let w = b.open().unwrap();
++        let now = Instant::now();
++        b.submit(w, source, 32, 32, now).unwrap();
++        let end = now + Duration::from_secs(3);
++        let ready = loop {
++            b.tick(Instant::now());
++            if let Some(p) = b.poll() {
++                break p;
++            }
++            assert!(Instant::now() < end);
++            std::thread::sleep(Duration::from_millis(1));
++        };
++        assert_eq!(ready.route(), Route::Shm);
++        let mut file = File::from(ready.descriptor().fd.try_clone().unwrap());
++        file.seek(SeekFrom::Start(0)).unwrap();
++        let mut actual = Vec::new();
++        file.read_to_end(&mut actual).unwrap();
++        drop(file);
++        let expected: Vec<_> = expected
++            .iter()
++            .flat_map(|p| {
++                let [r, g, b, a] = p.to_ne_bytes();
++                [b, g, r, a]
++            })
++            .collect();
++        assert_eq!(actual, expected);
++        let lease = b.commit(ready, Instant::now()).unwrap();
++        b.released(lease);
++        b.connection_lost();
++        while budget.used() != 0 {
++            assert!(Instant::now() < end);
++            std::thread::sleep(Duration::from_millis(1));
++        }
++    }
++    #[test]
++    fn complete_admission_charges_owned_sources_and_rejects_unresolved_groups() {
++        let b = Budget::new(1 << 20);
++        let scene = CompleteScene::admit_full_recording(
++            16,
++            16,
++            1.,
++            vec![Op::Fill {
++                rect: Rect::new(0., 0., 16., 16.),
++                color: [0., 0., 0., 1.],
++            }]
++            .into(),
++            &b,
++        )
++        .unwrap();
++        assert!(b.used() >= size_of::<CompleteScene>() + size_of::<Op>());
++        drop(scene);
++        assert_eq!(b.used(), 0);
++        assert!(matches!(
++            CompleteScene::admit_full_recording(16, 16, 1., vec![Op::EndGroup].into(), &b),
++            Err(Admission::RequiresExistingBackend)
++        ));
++        assert_eq!(b.used(), 0);
++    }
++    #[test]
++    fn oversized_source_geometry_and_nonfinite_ops_are_rejected_before_publication() {
++        let b = Budget::new(1 << 20);
++        assert!(CompleteScene::admit_full_recording(8192, 8192, 1., Arc::from([]), &b).is_err());
++        assert!(
++            CompleteScene::admit_full_recording(
++                16,
++                16,
++                1.,
++                vec![Op::Fill {
++                    rect: Rect::new(f32::NAN, 0., 16., 16.),
++                    color: [0.; 4]
++                }]
++                .into(),
++                &b
++            )
++            .is_err()
++        );
++        assert_eq!(b.used(), 0);
++    }
++}
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -19,6 +19,10 @@
+ const IMPORTING: u8 = 2;
+ const COMMITTED: u8 = 3;
+ const RECLAIM: u8 = 4;
++const FALLBACK_READY: u8 = 5;
++const FALLBACK_TAKEN: u8 = 6;
++const CANCELLED_IMPORT: u8 = 7;
++const CANCELLED_FALLBACK: u8 = 8;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct WindowId(u64);
+@@ -67,7 +71,10 @@
+     }
+ }
+ 
+-/// One-plane 32-bit export. Only OwnedFd, never an EGL handle, crosses threads.
++/// One-plane32-bit export. Only OwnedFd, never an EGL handle, crosses threads.
++/// The trusted protocol adapter must not write through this FD. SHM exports are
++/// size-sealed, not WRITE-sealed (Wayland servers may mmap writable), so immutable
++/// ownership is a protocol invariant rather than a kernel-enforced write ban.
+ pub struct Descriptor {
+     pub fd: OwnedFd,
+     pub width: u32,
+@@ -95,8 +102,17 @@
+ #[derive(Debug)]
+ pub enum RenderError {
+     Cancelled,
++    /// A scene-specific refusal. The worker remains usable; no partial image is published.
++    Fallback(FallbackReason),
+     Failed(String),
+ }
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum FallbackReason {
++    Unsupported,
++    Admission,
++    Unavailable,
++}
++
+ impl From<String> for RenderError {
+     fn from(message: String) -> Self {
+         Self::Failed(message)
+@@ -131,14 +147,21 @@
+     last_committed: Option<FrameId>,
+     pending: Option<Frame<F>>,
+ }
+-struct Ready {
++struct Ready<F> {
+     control: Arc<Control>,
++    source: Arc<F>,
+     descriptor: Descriptor,
++}
++struct FallbackReady<F> {
++    control: Arc<Control>,
++    source: Arc<F>,
++    reason: FallbackReason,
+ }
+ struct State<F> {
+     windows: Vec<Window<F>>,
+     controls: Vec<Arc<Control>>,
+-    ready: VecDeque<Ready>,
++    ready: VecDeque<Ready<F>>,
++    fallback: VecDeque<FallbackReady<F>>,
+     bytes: usize,
+     next_id: u64,
+     stopping: bool,
+@@ -166,9 +189,13 @@
+     shared: Arc<Shared<F>>,
+     control: Arc<Control>,
+     descriptor: Option<Descriptor>,
++    source: Arc<F>,
+     _event_thread: PhantomData<Rc<()>>,
+ }
+ impl<F> Import<F> {
++    pub fn source(&self) -> &Arc<F> {
++        &self.source
++    }
+     pub fn frame(&self) -> FrameId {
+         self.control.frame
+     }
+@@ -181,12 +208,60 @@
+ }
+ impl<F> Drop for Import<F> {
+     fn drop(&mut self) {
++        // Close the event-owned export before publishing reclamation. Otherwise
++        // a preempted Drop could leave memfd pages pinned after its charge retires.
++        drop(self.descriptor.take());
+         let state = self.shared.state.lock().unwrap();
+-        let cancelled = self
+-            .control
+-            .phase
+-            .compare_exchange(IMPORTING, RECLAIM, Ordering::AcqRel, Ordering::Acquire)
+-            .is_ok();
++        let phase = self.control.phase.load(Ordering::Acquire);
++        let cancelled = matches!(phase, IMPORTING | CANCELLED_IMPORT)
++            && self
++                .control
++                .phase
++                .compare_exchange(phase, RECLAIM, Ordering::AcqRel, Ordering::Acquire)
++                .is_ok();
++        drop(state);
++        if cancelled {
++            self.shared.notify();
++        }
++    }
++}
++/// A bounded recoverable refusal. The exact immutable source and worker lease
++/// stay alive until the event owner hands the source to the independent CPU worker.
++/// Dropping this token releases the refused GPU lease asynchronously.
++pub struct Fallback<F> {
++    shared: Arc<Shared<F>>,
++    control: Arc<Control>,
++    source: Arc<F>,
++    reason: FallbackReason,
++    _event_thread: PhantomData<Rc<()>>,
++}
++impl<F> Fallback<F> {
++    pub fn source(&self) -> &Arc<F> {
++        &self.source
++    }
++    pub fn frame(&self) -> FrameId {
++        self.control.frame
++    }
++    pub fn window(&self) -> WindowId {
++        self.control.window
++    }
++    pub fn reason(&self) -> FallbackReason {
++        self.reason
++    }
++    pub fn is_current(&self) -> bool {
++        self.control.phase.load(Ordering::Acquire) == FALLBACK_TAKEN
++    }
++}
++impl<F> Drop for Fallback<F> {
++    fn drop(&mut self) {
++        let state = self.shared.state.lock().unwrap();
++        let phase = self.control.phase.load(Ordering::Acquire);
++        let cancelled = matches!(phase, FALLBACK_TAKEN | CANCELLED_FALLBACK)
++            && self
++                .control
++                .phase
++                .compare_exchange(phase, RECLAIM, Ordering::AcqRel, Ordering::Acquire)
++                .is_ok();
+         drop(state);
+         if cancelled {
+             self.shared.notify();
+@@ -244,6 +319,7 @@
+             windows: Vec::new(),
+             controls: Vec::new(),
+             ready: VecDeque::new(),
++            fallback: VecDeque::new(),
+             bytes: 0,
+             next_id: 1,
+             stopping: false,
+@@ -266,11 +342,11 @@
+ impl<F> EventOwner<F> {
+     pub fn open(&mut self) -> Result<WindowId, Error> {
+         let mut state = self.shared.state.lock().unwrap();
++        if state.failed {
++            return Err(Error::DriverFailed);
++        }
+         if state.stopping {
+             return Err(Error::Closed);
+-        }
+-        if state.failed {
+-            return Err(Error::DriverFailed);
+         }
+         if state.windows.len() >= self.shared.limits.windows {
+             return Err(Error::Limit);
+@@ -299,11 +375,11 @@
+             return Err(Error::Limit);
+         }
+         let mut state = self.shared.state.lock().unwrap();
++        if state.failed {
++            return Err(Error::DriverFailed);
++        }
+         if state.stopping {
+             return Err(Error::Closed);
+-        }
+-        if state.failed {
+-            return Err(Error::DriverFailed);
+         }
+         let index = state
+             .windows
+@@ -338,24 +414,43 @@
+ 
+     /// Bounded non-driver polling; calloop's coalesced wake will trigger this.
+     pub fn poll_ready(&mut self) -> Option<Import<F>> {
+-        loop {
+-            let ready = self.shared.state.lock().unwrap().ready.pop_front()?;
+-            if ready
+-                .control
+-                .phase
+-                .compare_exchange(READY, IMPORTING, Ordering::AcqRel, Ordering::Acquire)
+-                .is_ok()
+-            {
+-                return Some(Import {
+-                    shared: self.shared.clone(),
+-                    control: ready.control,
+-                    descriptor: Some(ready.descriptor),
+-                    _event_thread: PhantomData,
+-                });
+-            }
+-            // Stale FD closes outside the shared metadata mutex.
+-            drop(ready);
+-        }
++        let mut state = self.shared.state.lock().unwrap();
++        // Acquire the phase while still holding queue ownership. Stale queue
++        // entries remain worker-owned: only that worker closes their descriptor
++        // before retiring the corresponding resource/accounting charge.
++        let index = state
++            .ready
++            .iter()
++            .position(|r| r.control.phase.load(Ordering::Acquire) == READY)?;
++        let ready = state.ready.remove(index).expect("selected ready");
++        ready.control.phase.store(IMPORTING, Ordering::Release);
++        drop(state);
++        Some(Import {
++            shared: self.shared.clone(),
++            control: ready.control,
++            descriptor: Some(ready.descriptor),
++            source: ready.source,
++            _event_thread: PhantomData,
++        })
++    }
++
++    /// Recoverable whole-scene refusals, bounded by the same outstanding lease caps.
++    pub fn poll_fallback(&mut self) -> Option<Fallback<F>> {
++        let mut state = self.shared.state.lock().unwrap();
++        let index = state
++            .fallback
++            .iter()
++            .position(|r| r.control.phase.load(Ordering::Acquire) == FALLBACK_READY)?;
++        let item = state.fallback.remove(index).expect("selected fallback");
++        item.control.phase.store(FALLBACK_TAKEN, Ordering::Release);
++        drop(state);
++        Some(Fallback {
++            shared: self.shared.clone(),
++            control: item.control,
++            source: item.source,
++            reason: item.reason,
++            _event_thread: PhantomData,
++        })
+     }
+ 
+     /// Call after params.created and immediately before attach/commit. Rejects stale jobs.
+@@ -486,18 +581,26 @@
+ }
+ fn cancel_uncommitted(control: &Control) {
+     let mut phase = control.phase.load(Ordering::Acquire);
+-    while phase < COMMITTED {
+-        match control.phase.compare_exchange_weak(
+-            phase,
+-            RECLAIM,
+-            Ordering::AcqRel,
+-            Ordering::Acquire,
+-        ) {
+-            Ok(_) => break,
++    loop {
++        // An event-owned Import still owns an FD; dropping worker storage now
++        // would release its accounting while kernel pages remain pinned. Mark it
++        // stale immediately, but keep the lease until that token is returned.
++        let next = match phase {
++            COMMITTED | RECLAIM | CANCELLED_IMPORT | CANCELLED_FALLBACK => return,
++            IMPORTING => CANCELLED_IMPORT,
++            FALLBACK_TAKEN => CANCELLED_FALLBACK,
++            _ => RECLAIM,
++        };
++        match control
++            .phase
++            .compare_exchange_weak(phase, next, Ordering::AcqRel, Ordering::Acquire)
++        {
++            Ok(_) => return,
+             Err(new) => phase = new,
+         }
+     }
+ }
++
+ fn prune_windows<F>(state: &mut State<F>) {
+     state
+         .windows
+@@ -517,7 +620,7 @@
+         state.bytes -= frame.charge();
+     }
+     for control in &state.controls {
+-        if connection_gone {
++        if connection_gone && control.phase.load(Ordering::Acquire) == COMMITTED {
+             control.phase.store(RECLAIM, Ordering::Release);
+         } else {
+             cancel_uncommitted(control);
+@@ -550,7 +653,7 @@
+ struct Held<F, R> {
+     control: Arc<Control>,
+     _source: Arc<F>,
+-    _resource: R,
++    _resource: Option<R>,
+ }
+ fn worker<F, D, Make, Wake>(shared: Arc<Shared<F>>, make: Make, wake: Wake)
+ where
+@@ -567,20 +670,29 @@
+     let mut held: Vec<Held<F, D::Resource>> = Vec::new();
+     loop {
+         // Driver destructors and source destruction occur outside the metadata lock.
++        let mut reclaimed = false;
+         let mut index = 0;
+         while index < held.len() {
+             if held[index].control.phase.load(Ordering::Acquire) == RECLAIM {
+                 let dead = held.swap_remove(index);
+                 let control = dead.control.clone();
+-                let stale_ready = {
++                let (stale_ready, stale_fallback) = {
+                     let mut state = shared.state.lock().unwrap();
+-                    state
++                    let ready = state
+                         .ready
+                         .iter()
+                         .position(|r| Arc::ptr_eq(&r.control, &control))
+-                        .and_then(|i| state.ready.remove(i))
++                        .and_then(|i| state.ready.remove(i));
++                    let fallback = state
++                        .fallback
++                        .iter()
++                        .position(|r| Arc::ptr_eq(&r.control, &control))
++                        .and_then(|i| state.fallback.remove(i));
++                    (ready, fallback)
+                 };
+-                drop(stale_ready);
++                // These may own the last source; contain destruction just like driver resources.
++                failed |= !drop_guarded(stale_ready);
++                failed |= !drop_guarded(stale_fallback);
+                 let Held {
+                     control: _,
+                     _source: source,
+@@ -594,9 +706,15 @@
+                 state.controls.retain(|c| !Arc::ptr_eq(c, &control));
+                 state.bytes -= control.charge;
+                 prune_windows(&mut state);
++                reclaimed = true;
+             } else {
+                 index += 1;
+             }
++        }
++        // Capacity is observable only after destructor completion and accounting
++        // retirement. The event owner may already have retried on wl_buffer.release.
++        if reclaimed {
++            failed |= contain(catch_unwind(AssertUnwindSafe(&wake))).is_none();
+         }
+         let mut state = shared.state.lock().unwrap();
+         if failed && !state.failed {
+@@ -649,7 +767,7 @@
+                         held.push(Held {
+                             control: control.clone(),
+                             _source: frame.source.clone(),
+-                            _resource: resource,
++                            _resource: Some(resource),
+                         });
+                         let mut state = shared.state.lock().unwrap();
+                         if control
+@@ -660,6 +778,7 @@
+                             state.ready.push_back(Ready {
+                                 control: control.clone(),
+                                 descriptor,
++                                source: frame.source.clone(),
+                             });
+                         } else {
+                             drop(state);
+@@ -671,6 +790,37 @@
+                         drop(descriptor);
+                         failed = true;
+                     }
++                }
++                Some(Err(RenderError::Fallback(reason))) => {
++                    held.push(Held {
++                        control: control.clone(),
++                        _source: frame.source.clone(),
++                        _resource: None,
++                    });
++                    let mut state = shared.state.lock().unwrap();
++                    if control
++                        .phase
++                        .compare_exchange(
++                            RENDERING,
++                            FALLBACK_READY,
++                            Ordering::AcqRel,
++                            Ordering::Acquire,
++                        )
++                        .is_ok()
++                    {
++                        // Never let an unconsumed refusal monopolize every per-window slot.
++                        for older in &state.fallback {
++                            if older.control.window == frame.window {
++                                cancel_uncommitted(&older.control);
++                            }
++                        }
++                        state.fallback.push_back(FallbackReady {
++                            control: control.clone(),
++                            source: frame.source.clone(),
++                            reason,
++                        });
++                    }
++                    published = true;
+                 }
+                 Some(Err(RenderError::Cancelled))
+                     if control.phase.load(Ordering::Acquire) == RECLAIM => {}
+@@ -685,9 +835,9 @@
+                 state.bytes -= control.charge;
+             }
+             failed |= !drop_guarded(frame);
+-            if published {
+-                failed |= contain(catch_unwind(AssertUnwindSafe(&wake))).is_none();
+-            }
++            // A cancelled/failed render also returned capacity, even though no
++            // ready result was published. Wake the adapter for its retained latest.
++            failed |= contain(catch_unwind(AssertUnwindSafe(&wake))).is_none();
+             continue;
+         }
+         // Recheck release while holding the predicate mutex to avoid a lost wake.
+@@ -722,6 +872,7 @@
+         source_drop_panic: bool,
+         payload_drop_panic: bool,
+         respect_cancel: bool,
++        fallback: bool,
+     }
+     impl Drop for Source {
+         fn drop(&mut self) {
+@@ -780,6 +931,9 @@
+             }
+             if frame.source.respect_cancel && cancelled.is_cancelled() {
+                 return Err(RenderError::Cancelled);
++            }
++            if frame.source.fallback {
++                return Err(RenderError::Fallback(FallbackReason::Unsupported));
+             }
+             assert!(!frame.source.panic, "simulated driver panic");
+             let (reader, writer) = UnixStream::pair().unwrap();
+@@ -858,6 +1012,89 @@
+         })
+     }
+ 
++    #[test]
++    fn cancelled_render_notifies_capacity_even_without_ready_output() {
++        struct CancelFirst(mpsc::Sender<()>, mpsc::Receiver<()>);
++        impl Driver<u8> for CancelFirst {
++            type Resource = ();
++            fn render(
++                &mut self,
++                frame: &Frame<u8>,
++                c: &Cancellation,
++            ) -> Result<((), Descriptor), RenderError> {
++                if *frame.source == 1 {
++                    self.0.send(()).unwrap();
++                    self.1.recv().unwrap();
++                    assert!(c.is_cancelled());
++                    return Err(RenderError::Cancelled);
++                }
++                Err(RenderError::Fallback(FallbackReason::Unsupported))
++            }
++        }
++        let (start_tx, started) = mpsc::channel();
++        let (unblock, wait) = mpsc::channel();
++        let (wake_tx, wake) = mpsc::channel();
++        let mut owner = spawn_with_wake(
++            Limits {
++                bytes: 20,
++                ..Limits::default()
++            },
++            move || Ok(CancelFirst(start_tx, wait)),
++            move || {
++                let _ = wake_tx.send(());
++            },
++        )
++        .unwrap();
++        let w = owner.open().unwrap();
++        owner.submit(w, Arc::new(1), 4, 16).unwrap();
++        started.recv_timeout(Duration::from_secs(3)).unwrap();
++        owner.invalidate(w).unwrap();
++        assert_eq!(owner.submit(w, Arc::new(2), 4, 16), Err(Error::Limit));
++        unblock.send(()).unwrap();
++        wake.recv_timeout(Duration::from_secs(3))
++            .expect("cancelled render did not wake capacity retry");
++        owner.submit(w, Arc::new(2), 4, 16).unwrap();
++        let mut refusal = None;
++        until(|| {
++            refusal = owner.poll_fallback();
++            refusal.is_some()
++        });
++        drop(refusal);
++        owner.connection_lost();
++        until(|| owner.stats().bytes == 0);
++    }
++    #[test]
++    fn cancelled_event_fallback_keeps_lease_until_token_drop() {
++        let mut f = fixture(Limits {
++            leases: 1,
++            leases_per_window: 1,
++            ..Limits::default()
++        });
++        let w = f.owner.open().unwrap();
++        let src = Arc::new(Source {
++            fallback: true,
++            ..Source::default()
++        });
++        let weak = Arc::downgrade(&src);
++        f.owner.submit(w, src, 8, 16).unwrap();
++        let mut refusal = None;
++        until(|| {
++            refusal = f.owner.poll_fallback();
++            refusal.is_some()
++        });
++        let refusal = refusal.unwrap();
++        f.owner.invalidate(w).unwrap();
++        assert!(!refusal.is_current());
++        assert_eq!(f.owner.stats().leases, 1);
++        assert_eq!(f.owner.stats().bytes, 24);
++        f.owner.close(w);
++        f.owner.connection_lost();
++        assert_eq!(f.owner.stats().leases, 1);
++        assert!(weak.upgrade().is_some());
++        drop(refusal);
++        until(|| f.owner.stats().leases == 0);
++        until(|| weak.upgrade().is_none());
++    }
+     #[test]
+     fn blocked_driver_never_holds_event_lock_or_blocks_close_and_drop() {
+         let (completed_tx, completed) = mpsc::channel();
+@@ -1227,6 +1464,77 @@
+         assert_eq!(f.log.lock().unwrap().len(), 2);
+     }
+     #[test]
++    fn recoverable_refusal_keeps_exact_source_and_driver_usable() {
++        let mut f = fixture(Limits::default());
++        let w = f.owner.open().unwrap();
++        let src = Arc::new(Source {
++            id: 1,
++            fallback: true,
++            ..Source::default()
++        });
++        let weak = Arc::downgrade(&src);
++        let id = f.owner.submit(w, src, 8, 16).unwrap();
++        let mut refusal = None;
++        until(|| {
++            refusal = f.owner.poll_fallback();
++            refusal.is_some()
++        });
++        let refusal = refusal.unwrap();
++        assert_eq!(refusal.frame(), id);
++        assert_eq!(refusal.window(), w);
++        assert_eq!(refusal.reason(), FallbackReason::Unsupported);
++        assert_eq!(refusal.source().id, 1);
++        assert!(refusal.is_current());
++        assert_eq!(f.owner.stats().bytes, 24);
++        assert!(!f.owner.stats().failed);
++        f.owner.invalidate(w).unwrap();
++        assert!(!refusal.is_current());
++        drop(refusal);
++        until(|| weak.upgrade().is_none());
++        f.owner.submit(w, source(2), 8, 16).unwrap();
++        let import = ready(&mut f.owner);
++        assert_eq!(import.source().id, 2);
++        let lease = f.owner.commit(import).unwrap();
++        f.owner.released(lease);
++        f.owner.connection_lost();
++    }
++    #[test]
++    fn refused_frames_are_bounded_and_latest_pending_is_retained() {
++        let mut f = fixture(Limits {
++            leases_per_window: 2,
++            ..Limits::default()
++        });
++        let w = f.owner.open().unwrap();
++        for id in 0..100 {
++            f.owner
++                .submit(
++                    w,
++                    Arc::new(Source {
++                        id,
++                        fallback: true,
++                        ..Source::default()
++                    }),
++                    8,
++                    16,
++                )
++                .unwrap();
++            f.started.recv_timeout(Duration::from_secs(3)).unwrap();
++            assert!(f.owner.stats().leases <= 2);
++            assert!(f.owner.stats().bytes <= 72);
++        }
++        let mut refusal = None;
++        until(|| {
++            refusal = f.owner.poll_fallback();
++            refusal.as_ref().is_some_and(|r| r.source().id == 99)
++        });
++        drop(refusal);
++        f.owner.close(w);
++        until(|| f.owner.stats().bytes == 0);
++        assert!(f.owner.poll_fallback().is_none());
++        f.owner.connection_lost();
++    }
++
++    #[test]
+     fn requested_cancellation_does_not_disable_future_rendering() {
+         let mut f = fixture(Limits::default());
+         let w = f.owner.open().unwrap();
+@@ -1254,3 +1562,17 @@
+         f.owner.connection_lost();
+     }
+ }
++
++pub mod budget;
++
++pub mod shm;
++
++pub mod bridge;
++
++#[cfg(feature = "native")]
++pub mod complete;
++
++#[cfg(feature = "native")]
++pub mod present_shm;
++
++pub mod reserved;
+--- /dev/null
++++ b/src/present_shm.rs
+@@ -0,0 +1,303 @@
++//! Private-compositor diagnostic for actual worker-filled SHM. Not a production
++//! event-loop adapter: fixture marker polling and bounded teardown waits belong
++//! only to this diagnostic. CPU/GPU work still stays on their dedicated workers.
++#![forbid(unsafe_code)]
++use crate::{
++    bridge::{Bridge, Lease, Pending, Route, SurfaceId},
++    complete::CompleteScene,
++};
++use sctk::{
++    compositor::{CompositorHandler, CompositorState},
++    output::{OutputHandler, OutputState},
++    reexports::{calloop::EventLoop, calloop_wayland_source::WaylandSource},
++    registry::{ProvidesRegistryState, RegistryState},
++    shell::{
++        WaylandSurface,
++        wlr_layer::{
++            KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
++            LayerSurfaceConfigure,
++        },
++    },
++};
++use std::{
++    net::Shutdown,
++    os::{fd::AsFd, unix::net::UnixStream},
++    path::Path,
++    time::{Duration, Instant},
++};
++use wayland_client::{
++    Connection, Dispatch, Proxy, QueueHandle,
++    globals::registry_queue_init,
++    protocol::{wl_buffer, wl_output, wl_shm, wl_shm_pool, wl_surface},
++};
++struct State {
++    registry: RegistryState,
++    output: OutputState,
++    layer: LayerSurface,
++    bridge: Bridge<CompleteScene>,
++    window: SurfaceId,
++    configured: bool,
++    extent: (u32, u32),
++    frame: bool,
++    buffer: Option<wl_buffer::WlBuffer>,
++    lease: Option<Lease>,
++    released: bool,
++    detached: bool,
++    error: Option<String>,
++}
++impl ProvidesRegistryState for State {
++    fn registry(&mut self) -> &mut RegistryState {
++        &mut self.registry
++    }
++    sctk::registry_handlers![OutputState];
++}
++impl OutputHandler for State {
++    fn output_state(&mut self) -> &mut OutputState {
++        &mut self.output
++    }
++    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
++    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
++    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
++}
++impl CompositorHandler for State {
++    fn scale_factor_changed(
++        &mut self,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++        _: &wl_surface::WlSurface,
++        n: i32,
++    ) {
++        if n != 1 {
++            self.error = Some("unexpected private scale".into())
++        }
++    }
++    fn transform_changed(
++        &mut self,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++        _: &wl_surface::WlSurface,
++        t: wl_output::Transform,
++    ) {
++        if t != wl_output::Transform::Normal {
++            self.error = Some("unexpected private transform".into())
++        }
++    }
++    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
++        self.frame = true;
++    }
++    fn surface_enter(
++        &mut self,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++        _: &wl_surface::WlSurface,
++        _: &wl_output::WlOutput,
++    ) {
++    }
++    fn surface_leave(
++        &mut self,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++        _: &wl_surface::WlSurface,
++        _: &wl_output::WlOutput,
++    ) {
++    }
++}
++impl LayerShellHandler for State {
++    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
++        self.error = Some("private layer closed".into())
++    }
++    fn configure(
++        &mut self,
++        _: &Connection,
++        _: &QueueHandle<Self>,
++        _: &LayerSurface,
++        c: LayerSurfaceConfigure,
++        _: u32,
++    ) {
++        if c.new_size != self.extent {
++            self.error = Some(format!("extent mismatch {:?}", c.new_size))
++        }
++        self.configured = true;
++    }
++}
++impl Dispatch<wl_shm::WlShm, ()> for State {
++    fn event(
++        _: &mut Self,
++        _: &wl_shm::WlShm,
++        _: wl_shm::Event,
++        _: &(),
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++    }
++}
++impl Dispatch<wl_shm_pool::WlShmPool, ()> for State {
++    fn event(
++        _: &mut Self,
++        _: &wl_shm_pool::WlShmPool,
++        _: wl_shm_pool::Event,
++        _: &(),
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++    }
++}
++impl Dispatch<wl_buffer::WlBuffer, ()> for State {
++    fn event(
++        state: &mut Self,
++        buffer: &wl_buffer::WlBuffer,
++        event: wl_buffer::Event,
++        _: &(),
++        _: &Connection,
++        _: &QueueHandle<Self>,
++    ) {
++        if let wl_buffer::Event::Release = event {
++            if state.buffer.as_ref().map(Proxy::id) != Some(buffer.id()) {
++                state.error = Some("unknown release".into());
++                return;
++            }
++            if let Some(lease) = state.lease.take() {
++                state.bridge.released(lease);
++                state.released = true;
++            } else {
++                state.error = Some("duplicate release".into());
++            }
++        }
++    }
++}
++sctk::delegate_compositor!(State);
++sctk::delegate_output!(State);
++sctk::delegate_layer!(State);
++sctk::delegate_registry!(State);
++
++/// `ready` is a complete CPU result already compared byte-for-byte by the native
++/// harness. External runner captures only after `ready.json`, then writes detach.
++pub fn present(
++    bridge: Bridge<CompleteScene>,
++    window: SurfaceId,
++    ready: Pending<CompleteScene>,
++    directory: &Path,
++) -> Result<(), String> {
++    if ready.route() != Route::Shm {
++        return Err("SHM route required".into());
++    }
++    let extent = (ready.descriptor().width, ready.descriptor().height);
++    let runtime = std::env::var_os("XDG_RUNTIME_DIR").ok_or("private runtime required")?;
++    let display = std::env::var_os("WAYLAND_DISPLAY").ok_or("private display required")?;
++    let path = Path::new(&runtime).join(display);
++    let socket = UnixStream::connect(path).map_err(|e| e.to_string())?;
++    let connection = Connection::from_socket(socket.try_clone().map_err(|e| e.to_string())?)
++        .map_err(|e| e.to_string())?;
++    let (globals, queue) = registry_queue_init::<State>(&connection).map_err(|e| e.to_string())?;
++    let qh = queue.handle();
++    let compositor = CompositorState::bind(&globals, &qh).map_err(|e| e.to_string())?;
++    let layer_shell = LayerShell::bind(&globals, &qh).map_err(|e| e.to_string())?;
++    let shm = globals
++        .bind::<wl_shm::WlShm, _, _>(&qh, 1..=1, ())
++        .map_err(|e| e.to_string())?;
++    let layer = layer_shell.create_layer_surface(
++        &qh,
++        compositor.create_surface(&qh),
++        Layer::Overlay,
++        Some("hotaru-admission-private"),
++        None,
++    );
++    layer.set_size(extent.0, extent.1);
++    layer.set_keyboard_interactivity(KeyboardInteractivity::None);
++    layer.commit();
++    let mut event_loop = EventLoop::<State>::try_new().map_err(|e| e.to_string())?;
++    WaylandSource::new(connection.clone(), queue)
++        .insert(event_loop.handle())
++        .map_err(|e| e.to_string())?;
++    let mut state = State {
++        registry: RegistryState::new(&globals),
++        output: OutputState::new(&globals, &qh),
++        layer,
++        bridge,
++        window,
++        configured: false,
++        extent,
++        frame: false,
++        buffer: None,
++        lease: None,
++        released: false,
++        detached: false,
++        error: None,
++    };
++    let mut ready = Some(ready);
++    let end = Instant::now() + Duration::from_secs(15);
++    let mut announced = false;
++    let result = (|| {
++        while !state.detached || !state.released {
++            if Instant::now() > end {
++                return Err("private SHM phase deadline".into());
++            }
++            event_loop
++                .dispatch(Duration::from_millis(16), &mut state)
++                .map_err(|e| e.to_string())?;
++            if let Some(error) = state.error.take() {
++                return Err(error);
++            }
++            if state.configured
++                && let Some(import) = ready.take()
++            {
++                let d = import.descriptor();
++                let size = d
++                    .stride
++                    .checked_mul(d.height)
++                    .and_then(|n| n.checked_add(d.offset))
++                    .filter(|n| *n <= i32::MAX as u32)
++                    .ok_or("pool bounds")?;
++                if d.fourcc != u32::from_le_bytes(*b"AR24") {
++                    return Err("SHM pixel format".into());
++                }
++                let pool = shm.create_pool(d.fd.as_fd(), size as i32, &qh, ());
++                let buffer = pool.create_buffer(
++                    d.offset as i32,
++                    d.width as i32,
++                    d.height as i32,
++                    d.stride as i32,
++                    wl_shm::Format::Argb8888,
++                    &qh,
++                    (),
++                );
++                pool.destroy();
++                let lease = state
++                    .bridge
++                    .commit(import, Instant::now())
++                    .map_err(|e| format!("stale import {e:?}"))?;
++                state.layer.wl_surface().attach(Some(&buffer), 0, 0);
++                state
++                    .layer
++                    .wl_surface()
++                    .damage_buffer(0, 0, extent.0 as i32, extent.1 as i32);
++                state
++                    .layer
++                    .wl_surface()
++                    .frame(&qh, state.layer.wl_surface().clone());
++                state.buffer = Some(buffer);
++                state.lease = Some(lease);
++                state.layer.commit();
++            }
++            if state.frame && !announced {
++                std::fs::write(directory.join("ready.json"),serde_json::to_vec(&serde_json::json!({"width":extent.0,"height":extent.1,"whole_frame":true,"sealed_shm":true,"worker_raster":true})).unwrap()).map_err(|e|e.to_string())?;
++                announced = true;
++            }
++            if announced && !state.detached && directory.join("detach").exists() {
++                state.detached = true;
++                state.layer.wl_surface().attach(None, 0, 0);
++                state.layer.commit();
++                state.bridge.close(state.window);
++            }
++        }
++        Ok(())
++    })();
++    if let Some(buffer) = state.buffer.take() {
++        buffer.destroy()
++    }
++    socket.shutdown(Shutdown::Both).map_err(|e| e.to_string())?;
++    state.bridge.connection_lost();
++    result?;
++    std::fs::write(directory.join("released.json"),serde_json::to_vec(&serde_json::json!({"released":state.released,"detached":state.detached,"connection_closed":true})).unwrap()).map_err(|e|e.to_string())?;
++    Ok(())
++}
+--- /dev/null
++++ b/src/reserved.rs
+@@ -0,0 +1,140 @@
++//! GPU cache/staging and output reservations over the same CPU/source budget.
++#![forbid(unsafe_code)]
++use crate::{
++    Cancellation, Descriptor, Driver, FallbackReason, Frame, RenderError,
++    budget::{Accounted, Budget, Reservation},
++};
++/// Fixed cache/metadata/staging allowance is reserved before driver construction.
++/// The resource reservation survives until the driver's authoritative release.
++/// Graphics-driver internal allocator/OS storage remains outside this logical cap.
++pub struct Reserved<D> {
++    driver: D,
++    budget: Budget,
++    _fixed: Reservation,
++}
++impl<D> Reserved<D> {
++    pub fn new(
++        budget: Budget,
++        fixed_bytes: usize,
++        make: impl FnOnce() -> Result<D, String>,
++    ) -> Result<Self, String> {
++        let fixed = budget
++            .reserve(fixed_bytes)
++            .map_err(|_| "driver fixed storage allowance")?;
++        let driver = make()?;
++        Ok(Self {
++            driver,
++            budget,
++            _fixed: fixed,
++        })
++    }
++}
++impl<F, D: Driver<F>> Driver<F> for Reserved<D> {
++    type Resource = Accounted<D::Resource>;
++    fn render(
++        &mut self,
++        frame: &Frame<F>,
++        cancel: &Cancellation,
++    ) -> Result<(Self::Resource, Descriptor), RenderError> {
++        if cancel.is_cancelled() {
++            return Err(RenderError::Cancelled);
++        }
++        let charge = self
++            .budget
++            .reserve(frame.buffer_bytes)
++            .map_err(|_| RenderError::Fallback(FallbackReason::Admission))?;
++        let (resource, descriptor) = self.driver.render(frame, cancel)?;
++        Ok((Accounted::new(resource, charge), descriptor))
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::{
++        os::unix::net::UnixStream,
++        sync::Arc,
++        thread,
++        time::{Duration, Instant},
++    };
++    struct D(Budget);
++    impl Driver<()> for D {
++        type Resource = UnixStream;
++        fn render(
++            &mut self,
++            _: &Frame<()>,
++            _: &Cancellation,
++        ) -> Result<(UnixStream, Descriptor), RenderError> {
++            assert!(self.0.used() >= 32 + 16, "buffer admitted before driver");
++            let (a, b) = UnixStream::pair().unwrap();
++            Ok((
++                a,
++                Descriptor {
++                    fd: b.into(),
++                    width: 2,
++                    height: 2,
++                    stride: 8,
++                    offset: 0,
++                    fourcc: 0,
++                    modifier: 0,
++                },
++            ))
++        }
++    }
++    fn until(mut f: impl FnMut() -> bool) {
++        let end = Instant::now() + Duration::from_secs(3);
++        while !f() {
++            assert!(Instant::now() < end);
++            thread::sleep(Duration::from_millis(1));
++        }
++    }
++    #[test]
++    fn old_committed_output_counts_during_resize_and_fixed_storage_until_worker_exit() {
++        let budget = Budget::new(64);
++        let b = budget.clone();
++        let check = budget.clone();
++        let mut owner = crate::spawn(crate::Limits::default(), move || {
++            Reserved::new(b, 32, || {
++                assert_eq!(check.used(), 32);
++                Ok(D(check))
++            })
++        })
++        .unwrap();
++        let w = owner.open().unwrap();
++        owner.submit(w, Arc::new(()), 0, 16).unwrap();
++        let mut ready = None;
++        until(|| {
++            ready = owner.poll_ready();
++            ready.is_some()
++        });
++        let lease = owner.commit(ready.take().unwrap()).unwrap();
++        assert_eq!(budget.used(), 48);
++        owner.invalidate(w).unwrap();
++        owner.submit(w, Arc::new(()), 0, 16).unwrap();
++        until(|| {
++            ready = owner.poll_ready();
++            ready.is_some()
++        });
++        assert_eq!(budget.used(), 64);
++        drop(ready);
++        until(|| budget.used() == 48);
++        owner.close(w);
++        assert_eq!(budget.used(), 48);
++        owner.released(lease);
++        owner.connection_lost();
++        until(|| budget.used() == 0);
++    }
++    #[test]
++    fn fixed_reservation_failure_does_not_construct_driver() {
++        let budget = Budget::new(31);
++        let called = std::cell::Cell::new(false);
++        assert!(
++            Reserved::<()>::new(budget.clone(), 32, || {
++                called.set(true);
++                Ok(())
++            })
++            .is_err()
++        );
++        assert!(!called.get());
++        assert_eq!(budget.used(), 0);
++    }
++}
+--- a/src/scene.rs
++++ b/src/scene.rs
+@@ -138,7 +138,10 @@
+             {
+                 return Err("asset size".into());
+             }
+-            asset_bytes = asset_bytes.checked_add(len).ok_or("asset total overflow")?;
++            let padded = len.checked_add(3).ok_or("asset padding overflow")? & !3;
++            asset_bytes = asset_bytes
++                .checked_add(padded)
++                .ok_or("asset total overflow")?;
+             if asset_bytes > 32 << 20 {
+                 return Err("asset total limit".into());
+             }
+--- /dev/null
++++ b/src/shm.rs
+@@ -0,0 +1,306 @@
++//! Independent CPU-worker output: premultiplied pixels → size-sealed memfd, immutable by ownership.
++//! All allocation, rasterization and file writes execute inside Driver::render.
++#![forbid(unsafe_code)]
++use crate::{
++    Cancellation, Descriptor, Driver, FallbackReason, Frame, RenderError,
++    budget::{Accounted, Budget, Reservation},
++};
++use rustix::fs::{MemfdFlags, SealFlags, fcntl_add_seals, memfd_create};
++use std::{fs::File, io::Write, os::fd::OwnedFd};
++
++/// An implementation must paint the complete frame in RGBA byte-order u32s.
++/// The initialized destination is transparent. Check cancellation between bounded
++/// raster batches; never interpret this as an incremental framebuffer.
++pub trait Raster<F> {
++    fn dimensions(&self, source: &F) -> (u32, u32);
++    fn paint(
++        &mut self,
++        source: &F,
++        pixels: &mut [u32],
++        cancel: &Cancellation,
++    ) -> Result<(), RenderError>;
++}
++pub struct Cpu<R> {
++    raster: R,
++    budget: Budget,
++}
++pub struct Buffer {
++    _storage: Accounted<File>,
++}
++impl<R> Cpu<R> {
++    pub fn new(raster: R, budget: Budget) -> Self {
++        Self { raster, budget }
++    }
++}
++fn refusal() -> RenderError {
++    RenderError::Fallback(FallbackReason::Admission)
++}
++fn failed(error: impl std::fmt::Display) -> RenderError {
++    RenderError::Failed(error.to_string())
++}
++impl<F, R: Raster<F>> Driver<F> for Cpu<R> {
++    type Resource = Buffer;
++    fn render(
++        &mut self,
++        frame: &Frame<F>,
++        cancel: &Cancellation,
++    ) -> Result<(Buffer, Descriptor), RenderError> {
++        if cancel.is_cancelled() {
++            return Err(RenderError::Cancelled);
++        }
++        let (width, height) = self.raster.dimensions(&frame.source);
++        let bytes = (width as usize)
++            .checked_mul(height as usize)
++            .and_then(|n| n.checked_mul(4))
++            .ok_or_else(refusal)?;
++        if width == 0 || height == 0 || width > 8192 || height > 8192 || bytes > frame.buffer_bytes
++        {
++            return Err(refusal());
++        }
++        // Both staging and the file are admitted before either allocation; a
++        // resize cannot borrow the charge belonging to an unreleased old buffer.
++        let stage_charge = self.budget.reserve(bytes).map_err(|_| refusal())?;
++        let file_charge = self.budget.reserve(bytes).map_err(|_| refusal())?;
++        let mut pixels = Vec::new();
++        pixels.try_reserve_exact(bytes / 4).map_err(|_| refusal())?;
++        pixels.resize(bytes / 4, 0);
++        let mut pixels = Accounted::new(pixels, stage_charge);
++        self.raster.paint(&frame.source, pixels.get_mut(), cancel)?;
++        if cancel.is_cancelled() {
++            return Err(RenderError::Cancelled);
++        }
++        let (resource, fd) = write_sealed(pixels.get(), file_charge, cancel)?;
++        Ok((
++            resource,
++            Descriptor {
++                fd,
++                width,
++                height,
++                stride: width * 4,
++                offset: 0,
++                fourcc: u32::from_le_bytes(*b"AR24"),
++                modifier: 0,
++            },
++        ))
++    }
++}
++fn write_sealed(
++    pixels: &[u32],
++    charge: Reservation,
++    cancel: &Cancellation,
++) -> Result<(Buffer, OwnedFd), RenderError> {
++    let fd = memfd_create(
++        c"hotaru-whole-frame",
++        MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING,
++    )
++    .map_err(failed)?;
++    // Own the accounting alongside the file even on all partial-write failures.
++    let mut storage = Accounted::new(File::from(fd), charge);
++    let mut encoded = [0u8; 16 * 1024];
++    for chunk in pixels.chunks(encoded.len() / 4) {
++        if cancel.is_cancelled() {
++            return Err(RenderError::Cancelled);
++        }
++        for (p, out) in chunk.iter().zip(encoded.chunks_exact_mut(4)) {
++            let [r, g, b, a] = p.to_ne_bytes();
++            out.copy_from_slice(&[b, g, r, a]);
++        }
++        storage
++            .get_mut()
++            .write_all(&encoded[..chunk.len() * 4])
++            .map_err(failed)?;
++    }
++    // wl_shm servers may mmap PROT_WRITE even when only reading. WRITE/FUTURE_WRITE
++    // seals would make valid import fail. Private worker ownership forbids further
++    // writes; size seals prevent resizing/SIGBUS until authoritative release.
++    fcntl_add_seals(
++        storage.get(),
++        SealFlags::GROW | SealFlags::SHRINK | SealFlags::SEAL,
++    )
++    .map_err(failed)?;
++    let descriptor = storage.get().try_clone().map_err(failed)?.into();
++    Ok((Buffer { _storage: storage }, descriptor))
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::{
++        io::{Read, Seek, SeekFrom},
++        sync::{Arc, mpsc},
++        thread,
++        time::{Duration, Instant},
++    };
++    struct Fill;
++    impl Raster<u32> for Fill {
++        fn dimensions(&self, _: &u32) -> (u32, u32) {
++            (2, 2)
++        }
++        fn paint(
++            &mut self,
++            value: &u32,
++            pixels: &mut [u32],
++            _: &Cancellation,
++        ) -> Result<(), RenderError> {
++            pixels.fill(*value);
++            Ok(())
++        }
++    }
++    fn until(mut f: impl FnMut() -> bool) {
++        let end = Instant::now() + Duration::from_secs(3);
++        while !f() {
++            assert!(Instant::now() < end);
++            thread::sleep(Duration::from_millis(1));
++        }
++    }
++    #[test]
++    fn invalidated_event_import_keeps_memfd_charge_and_lease_until_token_drop() {
++        let budget = Budget::new(64);
++        let b = budget.clone();
++        let mut owner = crate::spawn(
++            crate::Limits {
++                leases: 2,
++                leases_per_window: 2,
++                bytes: 64,
++                ..crate::Limits::default()
++            },
++            move || Ok(Cpu::new(Fill, b)),
++        )
++        .unwrap();
++        let w = owner.open().unwrap();
++        let mut held = Vec::new();
++        for _ in 0..2 {
++            owner.submit(w, Arc::new(1), 4, 16).unwrap();
++            let mut ready = None;
++            until(|| {
++                ready = owner.poll_ready();
++                ready.is_some()
++            });
++            held.push(ready.unwrap());
++            owner.invalidate(w).unwrap();
++        }
++        assert_eq!(owner.stats().leases, 2);
++        assert_eq!(owner.stats().bytes, 40);
++        assert_eq!(budget.used(), 32);
++        owner.submit(w, Arc::new(2), 4, 16).unwrap();
++        assert_eq!(owner.stats().pending, 1);
++        assert!(owner.poll_ready().is_none());
++        let old = held.remove(0);
++        assert!(matches!(owner.commit(old), Err(crate::Error::Stale)));
++        let mut next = None;
++        until(|| {
++            next = owner.poll_ready();
++            next.is_some()
++        });
++        assert_eq!(budget.used(), 32);
++        owner.close(w);
++        owner.connection_lost();
++        assert_eq!(
++            budget.used(),
++            32,
++            "disconnect must not erase charges for still-owned fds"
++        );
++        drop(held);
++        drop(next);
++        until(|| budget.used() == 0);
++        until(|| owner.stats().leases == 0);
++    }
++    #[test]
++    fn output_is_exact_premultiplied_argb_and_sealed_until_authoritative_release() {
++        let budget = Budget::new(32);
++        let b = budget.clone();
++        let mut owner =
++            crate::spawn(crate::Limits::default(), move || Ok(Cpu::new(Fill, b))).unwrap();
++        let w = owner.open().unwrap();
++        owner
++            .submit(w, Arc::new(u32::from_ne_bytes([32, 16, 8, 64])), 4, 16)
++            .unwrap();
++        let mut ready = None;
++        until(|| {
++            ready = owner.poll_ready();
++            ready.is_some()
++        });
++        let ready = ready.unwrap();
++        assert_eq!(budget.used(), 16); // staging retired; file retained.
++        let mut file = File::from(ready.descriptor().fd.try_clone().unwrap());
++        file.seek(SeekFrom::Start(0)).unwrap();
++        let mut bytes = Vec::new();
++        file.read_to_end(&mut bytes).unwrap();
++        assert_eq!(bytes, [8, 16, 32, 64].repeat(4));
++        assert!(file.set_len(0).is_err());
++        assert!(file.set_len(32).is_err());
++        drop(file);
++        let lease = owner.commit(ready).unwrap();
++        owner.close(w);
++        assert_eq!(budget.used(), 16);
++        owner.released(lease);
++        until(|| budget.used() == 0);
++        owner.connection_lost();
++    }
++    #[test]
++    fn staging_and_file_must_both_fit_before_raster_and_refusal_is_recoverable() {
++        let budget = Budget::new(31);
++        let b = budget.clone();
++        let mut owner =
++            crate::spawn(crate::Limits::default(), move || Ok(Cpu::new(Fill, b))).unwrap();
++        let w = owner.open().unwrap();
++        owner.submit(w, Arc::new(0), 4, 16).unwrap();
++        let mut rejected = None;
++        until(|| {
++            rejected = owner.poll_fallback();
++            rejected.is_some()
++        });
++        assert_eq!(budget.used(), 0);
++        assert_eq!(rejected.unwrap().reason(), FallbackReason::Admission);
++        assert!(!owner.stats().failed);
++        owner.connection_lost();
++    }
++    #[test]
++    fn independent_cpu_completes_and_event_owner_closes_while_gpu_is_blocked() {
++        struct Block(mpsc::Sender<()>, mpsc::Receiver<()>);
++        impl Driver<u32> for Block {
++            type Resource = ();
++            fn render(
++                &mut self,
++                _: &Frame<u32>,
++                c: &Cancellation,
++            ) -> Result<((), Descriptor), RenderError> {
++                self.0.send(()).unwrap();
++                self.1.recv().unwrap();
++                assert!(c.is_cancelled());
++                Err(RenderError::Cancelled)
++            }
++        }
++        let (started_tx, started) = mpsc::channel();
++        let (unblock, wait) = mpsc::channel();
++        let mut gpu = crate::spawn(crate::Limits::default(), move || {
++            Ok(Block(started_tx, wait))
++        })
++        .unwrap();
++        let gw = gpu.open().unwrap();
++        gpu.submit(gw, Arc::new(0), 4, 16).unwrap();
++        started.recv_timeout(Duration::from_secs(3)).unwrap();
++        let budget = Budget::new(32);
++        let b = budget.clone();
++        let mut cpu =
++            crate::spawn(crate::Limits::default(), move || Ok(Cpu::new(Fill, b))).unwrap();
++        let cw = cpu.open().unwrap();
++        cpu.submit(cw, Arc::new(u32::MAX), 4, 16).unwrap();
++        let mut ready = None;
++        until(|| {
++            ready = cpu.poll_ready();
++            ready.is_some()
++        });
++        let lease = cpu.commit(ready.unwrap()).unwrap();
++        // Only the source/one pending job can be replaced during a stalled driver.
++        for _ in 0..1000 {
++            gpu.submit(gw, Arc::new(0), 4, 16).unwrap();
++            assert_eq!(gpu.stats().pending, 1);
++        }
++        gpu.close(gw);
++        drop(gpu);
++        cpu.released(lease);
++        cpu.connection_lost();
++        until(|| budget.used() == 0);
++        unblock.send(()).unwrap();
++    }
++}

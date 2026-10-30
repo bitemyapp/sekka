@@ -1,0 +1,326 @@
+--- a/desktop/aizome/apps/hotaru/tests/scene_inventory.rs
++++ b/desktop/aizome/apps/hotaru/tests/scene_inventory.rs
+@@ -6,6 +6,27 @@
+ fn inventory(frame:&RecordedFrame, prepare:&mut GpuPrepare, number:usize)->serde_json::Value {
+     let scene=frame.prepare_gpu(prepare).expect("whole representative scene supported");
+     let software=frame.software_rgba();let lowered=scene.interpret();
++    if let Ok(dir)=std::env::var("HOTARU_SCENE_EXPECTED_DIR") {
++        let expected=std::fs::read(std::path::Path::new(&dir).join(format!("{number:02}.rgba"))).unwrap();
++        assert!(software==expected,"profile scene differs from exact hardware fixture {number}");
++    }
++    let mut phase_samples=Vec::new();
++    if std::env::var_os("HOTARU_SCENE_PROFILE").is_some() {
++        let mut cpu=aizome_kit::sidestep_ui::offscreen::CpuRaster::default();
++        for iteration in 0..21 {
++            let cpu_ns;
++            if iteration % 2 == 0 {
++                let (time, pixels)=frame.profile_cpu(&mut cpu); assert!(pixels==software,"CPU scene {number}, iteration {iteration}, first differing byte {:?}",pixels.iter().zip(&software).position(|(a,b)|a!=b));cpu_ns=time;
++                let prepared=frame.prepare_gpu(prepare).unwrap();assert_eq!(prepared.interpret(),software);
++            } else {
++                let prepared=frame.prepare_gpu(prepare).unwrap();assert_eq!(prepared.interpret(),software);
++                let (time,pixels)=frame.profile_cpu(&mut cpu);assert!(pixels==software,"CPU scene {number}, iteration {iteration}, first differing byte {:?}",pixels.iter().zip(&software).position(|(a,b)|a!=b));cpu_ns=time;
++            }
++            let (lowering_ns,tile_ns)=prepare.last_times();
++            phase_samples.push(serde_json::json!({"iteration":iteration,"cpu_full_banded_ns":cpu_ns,"lowering_assets_ns":lowering_ns,"tile_ns":tile_ns}));
++        }
++    }
++
+     let diffs:Vec<_>=software.iter().zip(&lowered).enumerate().filter(|(_, (a,b))|a!=b).take(20).collect();
+     if let Some((at,_))=diffs.first(){let p=(*at/4)as u32;let (x,y)=(p%frame.width,p/frame.width);eprintln!("frame {}x{} scale{} mismatch {x},{y}",frame.width,frame.height,frame.scale);for c in &scene.commands{if c.bounds[0]<=x&&c.bounds[1]<=y&&c.bounds[2]>x&&c.bounds[3]>y{eprintln!("cover {c:?}");}}}
+     assert_eq!(software.len(),lowered.len());
+@@ -38,7 +59,7 @@
+         };
+         *counts.entry(key).or_default()+=1;
+     }
+-    serde_json::json!({"width":frame.width,"height":frame.height,"scale":frame.scale,"counts":counts,"details":details,"exact_lowering":true,"commands":scene.commands.len(),"tile_indices":scene.indices.len(),"asset_bytes":scene.assets.iter().map(|a|a.data.len()).sum::<usize>()})
++    serde_json::json!({"width":frame.width,"height":frame.height,"scale":frame.scale,"counts":counts,"details":details,"exact_lowering":true,"phase_samples":phase_samples,"commands":scene.commands.len(),"tile_indices":scene.indices.len(),"asset_bytes":scene.assets.iter().map(|a|a.data.len()).sum::<usize>()})
+ }
+ fn settled(h:&mut Harness<Hotaru>){assert!(h.settle(Duration::from_secs(5),|a|a.active_pane().is_some_and(|p|p.diagnostic_frame_current())));}
+ #[test]
+--- a/vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs
+@@ -27,6 +27,7 @@
+ 
+ #[derive(Clone, Debug, PartialEq, Eq)]
+ pub enum Fallback {
++    Cancelled,
+     Geometry,
+     Unsupported(&'static str),
+     Limit,
+@@ -74,9 +75,11 @@
+     cache: HashMap<(u8, usize), Cached>,
+     bytes: usize,
+     next_id: u64,
++    last_times: (u128, u128),
+ }
+ 
+ impl Prepare {
++    pub fn last_times(&self) -> (u128,u128) { self.last_times }
+     fn asset(
+         &mut self,
+         key: (u8, usize),
+@@ -131,6 +134,11 @@
+         self.asset(key, Source::Small, width, height, 1, || data)
+     }
+     pub fn prepare(&mut self, width: u32, height: u32, scale: f32, ops: &[Op]) -> Result<Scene, Fallback> {
++        self.prepare_cancellable(width,height,scale,ops,&||false)
++    }
++    pub fn prepare_cancellable(&mut self,width:u32,height:u32,scale:f32,ops:&[Op],cancelled:&impl Fn()->bool)->Result<Scene,Fallback> {
++        if cancelled() { return Err(Fallback::Cancelled); }
++        let start = std::time::Instant::now();
+         if width == 0
+             || height == 0
+             || width > 8192
+@@ -147,6 +155,7 @@
+         // neither path submits any GPU command or presents a partial frame.
+         let mut glyph_count = 0usize;
+         for op in ops {
++            if cancelled() { return Err(Fallback::Cancelled); }
+             preflight(op, scale)?;
+             if let Op::Glyphs(run) = op {
+                 glyph_count = glyph_count.checked_add(run.glyphs.len()).ok_or(Fallback::Limit)?;
+@@ -162,6 +171,7 @@
+         let mut assets = HashMap::new();
+         let mut asset_bytes = 0usize;
+         for op in ops {
++            if cancelled() { return Err(Fallback::Cancelled); }
+             match op {
+                 Op::Fill { rect, color }
+                 | Op::FillWith { rect, color, blend: Blend::SourceOver | Blend::Highlight } => {
+@@ -194,10 +204,12 @@
+                 }
+                 Op::Glyphs(run) => {
+                     let mut prepared = Vec::new();
+-                    text::visit_glyphs(&canvas, &mut self.glyphs, run, &run.clip.intersect(&clip), |image, x, y| {
++                    text::visit_glyphs_cancellable(&canvas, &mut self.glyphs, run, &run.clip.intersect(&clip), cancelled, |image, x, y| {
+                         prepared.push((image, x, y))
+                     });
++                    if cancelled() { return Err(Fallback::Cancelled); }
+                     for (image, x, y) in prepared {
++                        if cancelled() { return Err(Fallback::Cancelled); }
+                         let key = (0, Arc::as_ptr(&image) as usize);
+                         let color = matches!(image.pixels(), GlyphPixels::Color(_));
+                         let asset = self.asset(
+@@ -250,7 +262,7 @@
+                     if count > MAX_SMALL_PIXELS {
+                         return Err(Fallback::Limit);
+                     }
+-                    if let Some(data) = samples::filtered(&canvas, op, region)? {
++                    if let Some(data) = samples::filtered(&canvas, op, region, cancelled)? {
+                         let mut hash = std::collections::hash_map::DefaultHasher::new();
+                         (w, h, &data).hash(&mut hash);
+                         let key = (4, hash.finish() as usize);
+@@ -303,7 +315,9 @@
+                 _ => return Err(Fallback::Unsupported("operation")),
+             }
+         }
+-        scene.index_tiles()?;
++        let tile_start=std::time::Instant::now();
++        scene.index_tiles(cancelled)?;
++        self.last_times=(tile_start.duration_since(start).as_nanos(), tile_start.elapsed().as_nanos());
+         Ok(scene)
+     }
+ }
+@@ -465,29 +479,40 @@
+             origin,
+         })
+     }
+-    fn index_tiles(&mut self) -> Result<(), Fallback> {
+-        let cols = self.width.div_ceil(TILE);
+-        let rows = self.height.div_ceil(TILE);
+-        let mut lists = vec![Vec::<u32>::new(); (cols * rows) as usize];
+-        let mut total = 0usize;
+-        for (i, c) in self.commands.iter().enumerate() {
+-            let [a, b, x, y] = c.bounds;
+-            let cells = ((x - 1) / TILE - a / TILE + 1) as usize * ((y - 1) / TILE - b / TILE + 1) as usize;
+-            total = total.checked_add(cells).ok_or(Fallback::Limit)?;
+-            if total > MAX_TILE_INDICES {
+-                return Err(Fallback::Limit);
+-            }
+-            for ty in b / TILE..=(y - 1) / TILE {
+-                for tx in a / TILE..=(x - 1) / TILE {
+-                    lists[(ty * cols + tx) as usize].push(i as u32);
+-                }
+-            }
+-        }
+-        self.indices.reserve(total);
+-        self.tiles.reserve(lists.len());
+-        for list in lists {
+-            self.tiles.push([self.indices.len() as u32, list.len() as u32]);
+-            self.indices.extend(list);
++    fn index_tiles(&mut self, cancelled:&impl Fn()->bool) -> Result<(), Fallback> {
++        let cols=self.width.div_ceil(TILE);
++        let rows=self.height.div_ceil(TILE);
++        let mut counts=vec![0u32;(cols*rows)as usize];
++        let mut total=0usize;
++        for c in &self.commands {
++            if cancelled() {return Err(Fallback::Cancelled);}
++            let [a,b,x,y]=c.bounds;
++            let cells=((x-1)/TILE-a/TILE+1)as usize*((y-1)/TILE-b/TILE+1)as usize;
++            total=total.checked_add(cells).ok_or(Fallback::Limit)?;
++            if total>MAX_TILE_INDICES{return Err(Fallback::Limit);}
++            for ty in b/TILE..=(y-1)/TILE {
++                if cancelled(){return Err(Fallback::Cancelled);}
++                for tx in a/TILE..=(x-1)/TILE {counts[(ty*cols+tx)as usize]+=1;}
++            }
++        }
++        // One contiguous index allocation, instead of a Vec allocation for each
++        // intersected tile. Prefix ranges are disjoint and sum to checked total.
++        self.tiles.clear();self.indices.clear();
++        self.tiles.reserve(counts.len());self.indices.resize(total,0);
++        let mut offset=0u32;
++        for (i,n) in counts.iter_mut().enumerate() {
++            if i%256==0&&cancelled(){return Err(Fallback::Cancelled);}
++            self.tiles.push([offset,*n]);let next=offset+*n;*n=offset;offset=next;
++        }
++        for (index,c) in self.commands.iter().enumerate() {
++            let [a,b,x,y]=c.bounds;
++            for ty in b/TILE..=(y-1)/TILE {
++                if cancelled(){return Err(Fallback::Cancelled);}
++                for tx in a/TILE..=(x-1)/TILE {
++                    let cursor=&mut counts[(ty*cols+tx)as usize];
++                    self.indices[*cursor as usize]=index as u32;*cursor+=1;
++                }
++            }
+         }
+         Ok(())
+     }
+@@ -693,3 +718,52 @@
+         assert_eq!(scene.indices, [0, 0, 1]);
+     }
+ }
++
++#[cfg(test)]
++mod cancellation_tests {
++    use super::*;
++    use std::cell::Cell;
++    #[test]
++    fn cancelled_preparation_publishes_nothing_and_next_job_succeeds() {
++        let mut prepare=Prepare::default();
++        let ops=vec![Op::Fill {rect:Rect::new(0.,0.,128.,128.),color:[1.,0.,0.,1.]};64];
++        for limit in [0,8,70,140,200] {
++            let calls=Cell::new(0);
++            let cancelled=||{let n=calls.get();calls.set(n+1);n>=limit};
++            assert!(matches!(prepare.prepare_cancellable(128,128,1.,&ops,&cancelled),Err(Fallback::Cancelled)));
++            assert!(calls.get()<=limit+2);
++            let scene=prepare.prepare(128,128,1.,&ops).unwrap();
++            assert_eq!(scene.interpret(),vec![255,0,0,255].repeat(128*128));
++        }
++    }
++    #[test]
++    fn huge_tile_expansion_can_cancel_within_one_command() {
++        let calls=Cell::new(0);
++        let mut prepare=Prepare::default();
++        let op=Op::Fill {rect:Rect::new(0.,0.,8192.,8192.),color:[1.,1.,1.,1.]};
++        assert!(matches!(prepare.prepare_cancellable(8192,8192,1.,&[op],&||{let n=calls.get();calls.set(n+1);n>=20}),Err(Fallback::Cancelled)));
++        assert_eq!(calls.get(),21);
++    }
++}
++
++#[cfg(test)]
++mod index_equivalence {
++    use super::*;
++    #[test]
++    fn contiguous_index_is_identical_to_ordered_per_tile_reference() {
++        let mut random=0x74a80152u32;
++        let mut next=||{random^=random<<13;random^=random>>17;random^=random<<5;random};
++        for _ in 0..300 {
++            let w=1+next()%256;let h=1+next()%256;let cols=w.div_ceil(TILE);let rows=h.div_ceil(TILE);
++            let mut s=Scene{width:w,height:h,commands:Vec::new(),assets:Vec::new(),tiles:Vec::new(),indices:Vec::new()};
++            let mut reference=vec![Vec::new();(cols*rows)as usize];
++            for index in 0..100u32 {
++                let a=next()%w;let b=next()%h;let x=a+1+next()%(w-a);let y=b+1+next()%(h-b);
++                s.commands.push(Command{bounds:[a,b,x,y],kind:1,solid:0,alpha:255,asset:None,origin:[0,0]});
++                for ty in b/TILE..=(y-1)/TILE{for tx in a/TILE..=(x-1)/TILE{reference[(ty*cols+tx)as usize].push(index);}}
++            }
++            s.index_tiles(&||false).unwrap();
++            for (bounds,expected)in s.tiles.iter().zip(reference){assert_eq!(&s.indices[bounds[0]as usize..(bounds[0]+bounds[1])as usize],expected);}
++        }
++    }
++}
+--- a/vendor/sidestep/crates/sidestep-engine/src/gpu_scene_samples.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/gpu_scene_samples.rs
+@@ -9,7 +9,7 @@
+ };
+ use tiny_skia::{FillRule, Mask, PathBuilder, Transform};
+ 
+-pub(super) fn filtered(canvas: &Canvas, op: &Op, region: [u32; 4]) -> Result<Option<Vec<u8>>, Fallback> {
++pub(super) fn filtered(canvas: &Canvas, op: &Op, region: [u32; 4], cancelled:&impl Fn()->bool) -> Result<Option<Vec<u8>>, Fallback> {
+     let Op::Image { image, src, dst, alpha, quality, tint, draw, .. } = op else {
+         return Ok(None);
+     };
+@@ -70,6 +70,7 @@
+     let far = |t: f32| (t * t) * ((7. / 18.) * t - 6. / 18.);
+     for y in 0..height {
+         for x in 0..width {
++            if x % 256 == 0 && cancelled() { return Err(Fallback::Cancelled); }
+             let mut rgba = [0f32; 4];
+             if mask.data()[(y * width + x) as usize] != 0 {
+                 let cx = (x as f32 + 0.5) * inv.sx + inv.tx;
+--- a/vendor/sidestep/crates/sidestep-engine/src/text.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/text.rs
+@@ -41,7 +41,7 @@
+ use std::collections::HashMap;
+ use std::sync::Arc;
+ 
+-pub use raster::{Glyphs, draw_glyphs, visit_glyphs, Image as GlyphImage, Pixels as GlyphPixels};
++pub use raster::{Glyphs, draw_glyphs, visit_glyphs, visit_glyphs_cancellable, Image as GlyphImage, Pixels as GlyphPixels};
+ 
+ /// What parley carries per style: the index of the run's attributes, which
+ /// hold everything that doesn't change shaping (colors, decorations, the
+--- a/vendor/sidestep/crates/sidestep-engine/src/text/raster.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/text/raster.rs
+@@ -247,8 +247,19 @@
+     cache: &mut Glyphs,
+     run: &GlyphRun,
+     clip: &Rect,
++    visit: impl FnMut(Arc<Image>, i32, i32),
++) {
++    visit_glyphs_cancellable(canvas,cache,run,clip,&||false,visit);
++}
++pub fn visit_glyphs_cancellable(
++    canvas: &Canvas,
++    cache: &mut Glyphs,
++    run: &GlyphRun,
++    clip: &Rect,
++    cancelled: &impl Fn()->bool,
+     mut visit: impl FnMut(Arc<Image>, i32, i32),
+ ) {
++    if cancelled() { return; }
+     let scale = canvas.scale;
+     let Some((cx0, cy0, cx1, cy1)) = canvas.pixels(clip) else { return };
+     let (cx0, cy0, cx1, cy1) = (cx0 as i32, cy0 as i32, cx1 as i32, cy1 as i32);
+@@ -273,6 +284,7 @@
+     // Glyphs rarely reach further than this from their origin.
+     let reach = size * 2.0;
+     for g in run.glyphs.iter() {
++        if cancelled() { return; }
+         let x = ox + g.x * scale;
+         let y = (oy + g.y * scale).round();
+         if x + reach < cx0 as f32 || x - reach > cx1 as f32 || y + reach < cy0 as f32 || y - reach > cy1 as f32 {
+--- a/vendor/sidestep/crates/sidestep-ui/src/offscreen.rs
++++ b/vendor/sidestep/crates/sidestep-ui/src/offscreen.rs
+@@ -513,7 +513,23 @@
+ pub use sidestep_engine::protocol::Op as RecordedOp;
+ pub use sidestep_engine::gpu_scene::{Prepare as GpuPrepare, Scene as GpuScene, Fallback as GpuFallback};
+ 
++/// Profiling-only cached CPU state, matching the current full-damage banded raster path.
++#[derive(Default)]
++pub struct CpuRaster { glyphs: Glyphs, pixels:Vec<u32> }
+ impl RecordedFrame {
++    pub fn profile_cpu(&self, state:&mut CpuRaster)->(u128,Vec<u8>) {
++        state.pixels.resize(self.width as usize*self.height as usize,0);
++        let rect=protocol::Rect::new(0.,0.,self.width as f32/self.scale as f32,self.height as f32/self.scale as f32);
++        let started=std::time::Instant::now();
++        // Recorded complete scenes start on a transparent destination, including
++        // popup shadow pixels. Include clearing in the CPU work being measured.
++        state.pixels.fill(0);
++        let mut canvas=raster::Canvas::new(&mut state.pixels,self.width,self.height,0.,self.scale as f32);
++        raster::bands::paint_banded(&mut canvas,&mut state.glyphs,&[rect],&self.ops);
++        let elapsed=started.elapsed().as_nanos();
++        (elapsed,state.pixels.iter().flat_map(|v|v.to_ne_bytes()).collect())
++    }
++
+     pub fn prepare_gpu(&self, prepare:&mut GpuPrepare)->Result<GpuScene,GpuFallback> {
+         prepare.prepare(self.width,self.height,self.scale as f32,&self.ops)
+     }

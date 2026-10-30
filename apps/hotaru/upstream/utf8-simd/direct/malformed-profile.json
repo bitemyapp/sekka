@@ -1,0 +1,700 @@
+{
+  "schema": 1,
+  "scope": "Diagnose malformed UTF-8 scaling; this is not general performance acceptance.\n\nCompare state and replies to pinned Ghostty, then time exact frozen Rust builds\nserially on one CPU. Input sizes deliberately grow by four to distinguish a\nlinear decode from repeated suffix scanning. No rendering/history is measured.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "64aa29f0d3dd5fd4f01a63ac773c23911a41d7e978b33b854294eb67574c50e0",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-utf8-cache-only-build.json",
+      "sha256": "896347036ee4cc67ab741b52d611a2d1f30522547da3c4f8765c3cb7a53ae0b3",
+      "source_sha256": "aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57",
+      "binary_sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+      "revision": "current-combined-std-utf8-cached-span"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-simdutf8-patched-build.json",
+      "sha256": "10696d1bcaab365050d4328ab66cb8ccfe42e52ff86b35b95f04ca8606ba559f",
+      "source_sha256": "aa525ada4723a4ee52c94c4992f4a90f7198538fef88c42d7feace3a468971d3",
+      "binary_sha256": "b10cdfe24fbfb63380954ba90fcd0fc357e390f3fd76cdf56d81ce53977f3c61",
+      "revision": "current-combined-vendored-simdutf8-prefetch-fix"
+    }
+  ],
+  "results": [
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "3613fe38ee97a2e4ad813b646bcac9122f9e76704c273a50479d6726cb3d8888",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          64077,
+          61564,
+          61524,
+          65860,
+          70908,
+          64878,
+          63246,
+          61653,
+          61253,
+          63796,
+          61934,
+          61654
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          76285,
+          73912,
+          73161,
+          76075,
+          73562,
+          73161,
+          77557,
+          73852,
+          73512,
+          77337,
+          73181,
+          73011
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 62590.0,
+        "current-combined-vendored-simdutf8-prefetch-fix": 73707.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "a7250f2625d4252dadcf8d45ce4a56f8b61f9bc484cb4854cbb2e3646d624443",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          245593,
+          250951,
+          243780,
+          245752,
+          246364,
+          243579,
+          247166,
+          245893,
+          251592,
+          247496,
+          245552,
+          245653
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          294817,
+          313405,
+          291913,
+          303681,
+          294156,
+          294447,
+          298623,
+          301677,
+          292654,
+          305884,
+          294828,
+          293615
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 245822.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 294822.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "e9fd102a3a29df3b5541ece2297ac0b5078267d60611afe0e4b1636b9bd091a2",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          997994,
+          1009101,
+          1013938,
+          1069913,
+          1043733,
+          1053848,
+          1035911,
+          1011805,
+          1006057,
+          1019988,
+          1012857,
+          1002310
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          1248144,
+          1233521,
+          1255004,
+          1274894,
+          1248574,
+          1261754,
+          1257257,
+          1212680,
+          1218849,
+          1214472,
+          1207873,
+          1210276
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 1013397.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 1240832.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "6d30f96d1f913862947a9b414c496cf6294f88215ea8250a2b0ebbae452e44d7",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          56926,
+          54242,
+          54533,
+          56786,
+          54432,
+          54663,
+          56065,
+          53892,
+          61143,
+          57798,
+          56646,
+          55825
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          64858,
+          60923,
+          60151,
+          63666,
+          60562,
+          60312,
+          64378,
+          60572,
+          60292,
+          71348,
+          60852,
+          60402
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 55945.0,
+        "current-combined-vendored-simdutf8-prefetch-fix": 60712.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "375c0e271af90cbe483e7b7c43a1a7ece24e1290608fb22e7f976f1734f00827",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          220475,
+          213955,
+          213834,
+          213754,
+          215326,
+          215127,
+          216188,
+          213434,
+          216468,
+          212292,
+          220454,
+          216508
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          243890,
+          241446,
+          241086,
+          244400,
+          239834,
+          239563,
+          243520,
+          240595,
+          258583,
+          240785,
+          240875,
+          249068
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 215226.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 241266.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "bc62f9612305dc9f4c7059af0d0ab990d3a6cf50c97c4932d06e73f10880918b",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          861227,
+          885033,
+          898553,
+          912975,
+          918183,
+          938414,
+          901859,
+          905904,
+          897622,
+          891703,
+          891452,
+          889530
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          984724,
+          987989,
+          1005285,
+          994369,
+          1003993,
+          1017403,
+          990402,
+          992496,
+          1021690,
+          984294,
+          980578,
+          995570
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 898087.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 993432.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4099,
+      "sha256": "97cca00e52f3e787d677bc17e5692cd97a66d8e4d9223d7a16a54c9cd9143360",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          61824,
+          58279,
+          58048,
+          61623,
+          58809,
+          58508,
+          60212,
+          58088,
+          63115,
+          61704,
+          58709,
+          58308
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          70808,
+          66681,
+          66201,
+          69395,
+          66661,
+          66110,
+          69586,
+          65990,
+          65569,
+          75114,
+          66220,
+          65880
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 58759.0,
+        "current-combined-vendored-simdutf8-prefetch-fix": 66440.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16387,
+      "sha256": "a648742d416fd36eba90e2580cdc6190b2b33ed50190184d1982d8346e7cb77e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          239003,
+          233084,
+          233244,
+          235327,
+          258542,
+          232844,
+          230610,
+          242157,
+          228607,
+          236048,
+          233093,
+          233153
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          270430,
+          265783,
+          264661,
+          266424,
+          267246,
+          273275,
+          269869,
+          265863,
+          267095,
+          268037,
+          266274,
+          267136
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 233198.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 267115.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65539,
+      "sha256": "91e14be0bb1a177161bee3693f985922b73d30bf1acdc8945c518bd9b90ac6eb",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          941689,
+          951604,
+          957993,
+          946536,
+          937022,
+          956571,
+          955821,
+          963782,
+          975630,
+          941799,
+          954859,
+          931884
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          1074029,
+          1067860,
+          1077204,
+          1094190,
+          1109203,
+          1124756,
+          1157376,
+          1111506,
+          1148182,
+          1120349,
+          1114400,
+          1100971
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 953231.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 1110354.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "af7d04fd0ebc7de4aeeb9dfbbd203b7f09e6f1d70eb83e36d073a6055c7f4619",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          63837,
+          59790,
+          60182,
+          60471,
+          57978,
+          66081,
+          61663,
+          59169,
+          58839,
+          62965,
+          61273,
+          60762
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          71668,
+          68184,
+          67973,
+          70908,
+          68273,
+          67683,
+          77939,
+          67953,
+          67883,
+          71929,
+          68564,
+          67843
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 60616.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 68228.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "cce5d5bc8e6d47616f50215fea987e116dc40ce2fde950d367f4682d73216746",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          235327,
+          238832,
+          231071,
+          245362,
+          242077,
+          242037,
+          239373,
+          236099,
+          242017,
+          244511,
+          237260,
+          236118
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          293715,
+          275337,
+          275789,
+          274978,
+          273946,
+          269158,
+          275668,
+          280405,
+          276450,
+          279254,
+          283891,
+          279113
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 239102.5,
+        "current-combined-vendored-simdutf8-prefetch-fix": 276119.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "fea3aa4b8a551162c0efdaf74150b51f76a3e2a0d1722cccf36708ba7c9e2b83",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          968760,
+          953667,
+          977212,
+          965474,
+          949471,
+          948759,
+          948549,
+          935700,
+          944032,
+          943150,
+          946936,
+          961389
+        ],
+        "current-combined-vendored-simdutf8-prefetch-fix": [
+          1156966,
+          1184767,
+          1218459,
+          1167511,
+          1162193,
+          1158708,
+          1124777,
+          1146770,
+          1132778,
+          1116674,
+          1120079,
+          1109533
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 949115.0,
+        "current-combined-vendored-simdutf8-prefetch-fix": 1151868.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-vendored-simdutf8-prefetch-fix",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    }
+  ]
+}

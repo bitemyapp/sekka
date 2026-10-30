@@ -1,0 +1,389 @@
+   Compiling hotaru-sprites v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-sprites)
+   Compiling hotaru-io v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-io)
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-replay)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.15s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/hotaru_core-7d1be8bcbdb04a4b)
+
+running 31 tests
+test formatter::tests::output_budget_is_aggregate_and_cancellation_is_explicit ... ok
+test formatter::tests::selection_bounds_and_empty_selection_are_explicit ... ok
+test formatter::tests::copy_uses_captured_defaults_and_palette_with_mixed_background_omitted ... ok
+test history::tests::compressed_eviction_reads_only_owned_recycle_metadata ... ok
+test row::ascii::tests::semantic_template_matches_safe_cells_and_preserves_adjacent_flags ... ok
+test row::ascii::tests::mismatched_lengths_fail_before_any_store ... ok
+test row::history::tests::capacities_and_allocation_budget_are_validated_before_restore ... ok
+test history::tests::captures_share_blocks_without_cloning_rows_and_tail_copy_is_bounded ... ok
+test row::tests::inline_grapheme_overwrite_keeps_capacity_charge_and_heap_release_updates_peak ... ok
+test row::ascii::tests::four_byte_aligned_cells_offsets_and_tails_keep_neighbors ... ok
+test row::history::tests::exact_archive_round_trip_and_all_truncations ... ok
+test row::history::tests::hyperlink_runs_round_trip_and_reject_corrupt_ranges_and_indices ... ok
+test history::tests::capture_and_cancel_never_decode_a_compressed_block ... ok
+test row::history::tests::recycled_constructor_preserves_all_default_metadata_and_capacities ... ok
+test history::tests::hyperlink_dictionary_round_trip_is_shared_and_bounded ... ok
+test history::tests::byte_pruning_never_decodes_cold_rows ... ok
+test formatter::tests::content_formats_match_pinned_ghostty ... ok
+test screen::width_fastpath_test::unicode_width_fastpaths_match_pinned_properties_for_every_scalar ... ok
+test row::ascii::tests::whole_cell_store_matches_constructor_for_all_styles_and_bytes ... ok
+test history::tests::incremental_progress_survives_eviction_and_new_rows ... ok
+test row::history::tests::malformed_archives_are_bounded_and_never_panic ... ok
+test screen::width_fastpath_test::fast_width_matches_legacy_policy_with_reference_latin1 ... ok
+test history::tests::oversized_hyperlink_rows_remain_resident_without_data_loss ... ok
+test history::tests::compression_preserves_snapshots_partial_reads_eviction_and_restoration ... ok
+test row::tests::partial_reset_matches_full_clear_through_mixed_row_edits ... ok
+test history::tests::corrupt_lz4_and_row_archives_are_rejected_without_panicking ... ok
+test scan::tests::long_runs_and_dense_controls_match_scalar ... ok
+test grapheme::tests::sparse_edits_match_ordered_map ... ok
+test hyperlink::tests::sparse_ranges_match_dense_edits_and_survive_table_compaction ... ok
+test history::tests::maximum_width_grapheme_row_has_bounded_oversized_block ... ok
+test scan::tests::every_byte_alignment_and_tail_matches_scalar ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s
+
+     Running tests/configured_colors.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/configured_colors-a9885c20a6a6bd84)
+
+running 4 tests
+test ris_restores_configured_palette_and_preserves_dynamic_colors ... ok
+test equal_rgb_overrides_survive_theme_changes_and_resets_reveal_new_defaults ... ok
+test color_queries_report_the_configured_render_colors ... ok
+test reset_all_palette_entries_clears_each_override ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/content.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/content-2dc033930c46bb0f)
+
+running 2 tests
+test ranges_and_cancellation_cover_block_and_screen_boundaries ... ok
+test content_captures_survive_compression_eviction_reflow_and_owner_teardown ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/core_review.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/core_review-8e016de66538781e)
+
+running 9 tests
+test invalid_dcs_private_marker_and_excess_intermediates_do_not_leak_payload ... ok
+test oversized_csi_still_finishes_at_header_final_byte ... ok
+test osc_palette_stops_at_invalid_pair_and_ignores_empty_fields ... ok
+test osc_palette_burst_is_bounded_and_overflow_emits_no_prefix_replies ... ok
+test ordinary_osc_exact_body_limit_is_accepted_and_one_more_byte_discards_all ... ok
+test restored_cursor_above_origin_margin_reports_row_one_without_underflow ... ok
+test oversized_dcs_header_discards_payload_through_string_terminator ... ok
+test malformed_byte_streams_and_control_mutations_preserve_screen_invariants ... ok
+test clipboard_osc_uses_separate_eight_mebibyte_body_limit ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests/cursor.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/cursor-bad403634d671635)
+
+running 2 tests
+test cursor_defaults_snapshots_and_viewport_are_owned ... ok
+test cursor_state_and_queries_match_real_ghostty_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/decaln.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/decaln-292d3669d988f731)
+
+running 3 tests
+test alignment_is_local_to_active_screen_and_exact_escape_sequence ... ok
+test alignment_resets_origin_margins_and_pending_wrap_but_not_rep ... ok
+test alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/history-366d7ec09dc6bdbb)
+
+running 2 tests
+test compressed_eviction_preserves_recycled_row_resize_semantics ... ok
+test compressed_history_matches_resident_terminal_through_scroll_resize_and_clear ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/history_audit.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/history_audit-ffe5ac40fb5e2ff0)
+
+running 1 test
+test compression_matches_resident_mutations_and_retained_snapshots ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.46s
+
+     Running tests/history_budget.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/history_budget-f507da2016053e8c)
+
+running 7 tests
+test oversized_active_metadata_always_fits_but_discards_old_history ... ok
+test default_policy_and_explicit_unlimited_row_limit_are_distinct ... ok
+test held_capture_estimates_survive_pruning_and_cancelled_iteration ... ok
+test interior_wide_overwrites_preserve_erased_style_allocation_and_compaction_order ... ok
+test overwrite_allocation_order_is_independent_of_ascii_and_unicode_batching ... ok
+test compression_preserves_byte_pruning_through_metadata_churn_shrink_and_recycling ... ok
+test byte_pruning_is_chunk_invariant_with_peak_allocations_and_held_cow ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+
+     Running tests/hyperlinks.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/hyperlinks-2ff0f01d29c7ece0)
+
+running 2 tests
+test owned_links_survive_erase_resize_and_terminal_destruction ... ok
+test osc8_cells_match_pinned_ghostty_at_read_boundaries ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/input.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/input-17487ca4282e7f26)
+
+running 6 tests
+test hostile_geometry_is_rejected_without_panicking ... ok
+test current_modes_drive_keyboard_and_mouse_encoding ... ok
+test kitty_stack_is_per_screen_bounded_and_zero_pop_is_distinct ... ok
+test protocol_negotiation_matches_pinned_ghostty_c_api ... ok
+test mouse_encodings_match_pinned_ghostty_c_api ... ok
+test key_encodings_match_pinned_ghostty_c_api ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/reflow.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/reflow-3103929881bbeb5e)
+
+running 4 tests
+test copying_reflowed_wide_text_omits_layout_spacers ... ok
+test snapshots_keep_cells_styles_and_graphemes_across_reflow_and_teardown ... ok
+test narrow_reflow_keeps_history_bounded_and_wide_pairs_valid ... ok
+test resize_matches_actual_ghostty_oracle_across_input_chunks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/scan_boundary.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/scan_boundary-0eb7f3b247069e02)
+
+running 1 test
+test printable_scanner_never_reads_the_guard_page ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/search.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/search-cb7ccf41873bec5f)
+
+running 4 tests
+test limits_and_cancellation_fail_without_partial_results ... ok
+test retention_keeps_newest_overlaps_and_counts_the_rest ... ok
+test owned_results_survive_compression_eviction_reflow_and_teardown ... ok
+test selections_match_real_ghostty_search ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/search_positions.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/search_positions-7dbe0cc7e5384153)
+
+running 10 tests
+test alternate_replacement_does_not_destroy_primary_identity ... ok
+test active_matches_expire_on_mutation_and_never_alias_reflow_clear_or_reset ... ok
+test leading_newline_coordinates_expire_after_prefix_pruning ... ok
+test generation_sensitive_prefix_tracks_newest_retention_without_hiding_stable_history ... ok
+test deferred_whitespace_matches_depend_on_the_row_that_flushes_them ... ok
+test immutable_history_rebases_after_append_prune_and_compression ... ok
+test synthetic_final_newline_in_history_still_depends_on_active_continuation ... ok
+test newlines_expire_when_their_preceding_text_anchor_is_pruned ... ok
+test scrolled_snapshot_capture_preserves_origin_and_multiline_wide_clipping ... ok
+test capture_epoch_ownership_prevents_identity_reuse_after_terminal_destruction ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/semantic.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/semantic-8cdf2ba5b7ff3e38)
+
+running 2 tests
+test retained_semantic_rows_survive_overwrite_reflow_compression_and_drop ... ok
+test semantic_cells_rows_and_clear_behavior_match_pinned_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/semantic_fastgate.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/semantic_fastgate-167511e1c13c2bd8)
+
+running 2 tests
+test ended_input_keeps_existing_prompt_row_but_ris_clears_it ... ok
+test prompt_erasure_remains_enabled_after_soft_reset_alternate_use_and_reflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/snapshot_threads.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/snapshot_threads-ce214ca572bf7f8b)
+
+running 1 test
+test concurrent_snapshot_readers_keep_owned_rows_during_reuse_and_reflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/terminal.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/terminal-cacc68d6af2c8e6e)
+
+running 16 tests
+test ascii_wrap_is_delayed_and_copy_joins_soft_lines ... ok
+test alternate_screen_restores_primary_cursor_and_style ... ok
+test cancelled_and_oversized_csi_do_not_dispatch ... ok
+test bell_flood_keeps_latest_semantic_notifications ... ok
+test osc_clipboard_is_event_only_and_title_is_bounded ... ok
+test margin_scrolling_preserves_outside_rows ... ok
+test copy_snapshot_owns_rows_styles_graphemes_and_palette ... ok
+test malformed_utf8_does_not_swallow_controls_or_ascii ... ok
+test sgr_semicolon_and_colon_truecolor_and_reset ... ok
+test scrollback_is_bounded_and_viewport_snapshot_is_owned ... ok
+test wide_glyph_boundaries_remain_valid_after_editing ... ok
+test utf8_and_escape_sequences_ignore_read_boundaries ... ok
+test replies_apply_backpressure_without_silent_loss ... ok
+test randomized_edit_stream_never_breaks_cell_invariants ... ok
+test style_churn_does_not_corrupt_live_cells ... ok
+test large_copy_after_terminal_teardown ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/unicode_mode.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/unicode_mode-0e51ceec90a17527)
+
+running 3 tests
+test maximum_clusters_survive_archive_reflow_copy_search_and_teardown ... ok
+test unicode_metadata_mutations_preserve_chunk_invariant_byte_budgets ... ok
+test unicode_terminal_matches_pinned_ghostty_at_every_byte_split ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+     Running tests/unicode_write.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/unicode_write-9eaee5eee9b54f8a)
+
+running 1 test
+test unicode_runs_match_scalar_printing_through_edits_wraps_metadata_and_resize ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/utf8_scanning.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/utf8_scanning-ab678534cc8a1803)
+
+running 3 tests
+test malformed_utf8_cache_survives_partial_parser_and_bounded_replies ... ok
+test streamed_invalid_utf8_matches_bytewise_parser ... ok
+test dense_malformed_utf8_keeps_control_and_chunk_boundaries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+     Running tests/utf8_validation.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/utf8_validation-6e4963f8dadf17f2)
+
+running 3 tests
+test validator_loads_stay_before_guard_page ... ok
+test simd_error_offsets_match_across_vector_boundaries ... ok
+test compat_validation_preserves_standard_error_boundaries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s
+
+     Running tests/vt_controls.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/vt_controls-a36459083c4dc022)
+
+running 2 tests
+test repetition_keeps_owned_link_and_history_captures ... ok
+test repeat_and_saved_modes_match_actual_pinned_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+
+     Running tests/working_directory.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/working_directory-bb1c7e44a3d3ccfc)
+
+running 2 tests
+test osc7_is_owned_coalesced_and_parser_bounded ... ok
+test osc7_boundary_is_independent_of_title_and_clipboard_limits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/hotaru_io-9bdc4df470214f6f)
+
+running 3 tests
+test launch::tests::missing_resources_and_explicit_commands_keep_arguments ... ok
+test launch::tests::local_directory_decoding_is_bounded_and_never_shell_evaluation ... ok
+test launch::tests::private_database_and_shell_environment_preserve_caller_values ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/clipboard.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/clipboard-eeaf32d62f468ef4)
+
+running 13 tests
+test broken_receiver_is_a_terminal_state_without_sigpipe ... ok
+test empty_selection_signals_eof ... ok
+test exactly_full_receiver_still_requires_eof ... ok
+test pump_obeys_byte_budget ... ok
+test reader_reports_wrong_descriptor_failure_and_closes_it ... ok
+test receiver_closes_at_limit_without_unbounded_allocation ... ok
+test stalled_offer_returns_pending_and_supports_cancellation_and_timeout ... ok
+test empty_selection_waits_for_last_writer_then_reports_hangup ... ok
+test writer_closes_on_timeout_without_a_writable_event ... ok
+test writer_preserves_sigpipe_already_pending_for_caller ... ok
+test broken_receiver_survives_default_sigpipe_disposition ... ok
+test stalled_receiver_returns_without_waiting_and_can_cancel ... ok
+test multi_mebibyte_selection_survives_slow_peer_and_partial_io ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/pty.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/pty-f77ce4ac674556e4)
+
+running 7 tests
+test session_can_move_to_worker_thread ... ok
+test explicit_environment_overrides_defaults ... ok
+test invalid_dimensions_and_missing_program_fail_before_returning_a_session ... ok
+test pty_resize_and_input_reach_child ... ok
+test backpressure_on_terminal_input_is_nonblocking ... ok
+test spawned_child_has_controlling_terminal_and_requested_size ... ok
+test drop_is_nonblocking_and_reaps_hangup_ignoring_child ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/shell.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/shell-0ebb641f4b182adf)
+
+running 2 tests
+test actual_shell_startup ... ignored, requires Bash, Zsh, Fish and ncurses tic; disposable-home fixture
+test shell_child ... ignored, isolated subprocess helper
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/hotaru_replay-c2ecee067c8e0108)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/upstream.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/upstream-a6eeed155d552d44)
+
+running 1 test
+test matches_pinned_ghostty_snapshots_at_read_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/hotaru_sprites-8f8afe6cc703a8b9)
+
+running 3 tests
+test braille::tests::valid_metrics_do_not_repeat_upstream_remaining_pixel_assertion ... ok
+test math::tests::pinned_fused_rounding_matches_actual_zig_bit_patterns ... ok
+test braille::tests::every_accepted_dimension_keeps_disjoint_dots_inside_cell ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/golden.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/golden-c2c703c07fb4f9e8)
+
+running 4 tests
+test curves_powerline_match_upstream_pngs_and_translation_regressions ... ok
+test geometric_matches_upstream_pngs_and_numerical_boundaries ... ok
+test existing_rectilinear_sprites_match_four_committed_upstream_atlases ... ok
+test braille_matches_four_committed_upstream_atlases ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/raster.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/debug/deps/raster-68c70b863e5cc27f)
+
+running 6 tests
+test allocation_is_bounded_before_reservation ... ok
+test tiny_heavy_dash_uses_upstream_light_fallback ... ok
+test odd_quadrants_overlap_and_shades_are_alpha_not_dither ... ok
+test complete_explicit_ranges_and_exclusions ... ok
+test braille_is_a_fixed_eight_dot_union_with_inert_stroke_thickness ... ok
+test ink_bounds_reconstruct_every_nonzero_pixel ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+   Doc-tests hotaru_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hotaru_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hotaru_sprites
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

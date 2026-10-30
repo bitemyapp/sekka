@@ -1,0 +1,16 @@
+{
+  "adapter-sha256.txt": "9c9a42955b2873e3307c6e924b789eb62d9077d15aed521780e70ba22bd7fd3c",
+  "audit.log": "a67de33c2c251fe4fae7b186b4b46fd45739afdf37e4885645607cbfdea18380",
+  "audit.py": "f7797962813210380b0bb649d234e8bf6c9671068827acba153ccb1ab64219ec",
+  "final-adapter.log": "0147d1f95b31946a3c5810482bc0838614a96de187b95cc0a159bba48986532a",
+  "final-clippy.log": "de6688a6b9e7f05e23e7333d78aaa85ec406c36e0375126435ccbf85fb82f90a",
+  "final-targeted-release.log": "ebc213b4e18926dc634b84920c90b7e61ace729e5aabaf07fa5af59e5c0b95e4",
+  "qualify-final.sh": "4677b0dbdb9d70eb428e7361cf43b5823681ee8b6658dcf417c84f0ed02d42f7",
+  "qualify.sh": "0673b8e74fd0bfda6b7a85ab19444c1ec2e0c8a3bb73a9154c6808b6b60d837e",
+  "result.json": "e151c603f1c415adcb1f9a0dcacaf4645c67bfd6dfb08673e98e7357466c75f9",
+  "semantic-fastgate.patch": "7928fd00a84b343267ea55469cd62c93874cb91725a0502c6e6f5bf7a4020854",
+  "source.json": "3bc5b56e67dd627d032a1eb0474c6ad7ef7bc714c93aa31c9dd1ae82ecf2823a",
+  "summary.json": "c7350557969d76f13759c7e6da8843448f5ddc31ee50a460fcee8b61c9fcd754",
+  "targeted-debug.log": "ca74d182a243e91e6ca518f5bc399a0e7554816d93c6071626f275ce97052fdb",
+  "targeted-release.log": "9761c5d1efb015ff2885388dd1988b3ca9dbbb866c3101da3e8ffe5dcb28bf0a"
+}

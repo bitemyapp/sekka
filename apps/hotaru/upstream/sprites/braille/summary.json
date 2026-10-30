@@ -1,0 +1,53 @@
+{
+  "status": "qualified isolated component; not yet packaged",
+  "base": "qualified178-sprite candidate, patch2201b9bd9157d11f5464fb7ebfd0726f7bd81a7e3f36819d35e77a34eac0c669",
+  "patch_sha256": "bb8b5ea8cb9a21fffcec1f1c8cd973f407bef2717ffe74f26f5ac7a87fbcb889",
+  "source_files": {
+    "apps/hotaru/crates/hotaru-sprites/src/lib.rs": "4e0023f446f1669ea10ebeaa81dbc27bc81e10e155c13875dd886dc0f0b84df5",
+    "apps/hotaru/crates/hotaru-sprites/src/braille.rs": "667b84b69e664d42ba301605ad9b191234034b0454cd2c278eae59eca8c2c04b",
+    "apps/hotaru/crates/hotaru-sprites/tests/golden.rs": "c2a6c5074864aa7616bdc042c45d5c98f93d07c78823ccf8d9c6f6e6a2079793",
+    "apps/hotaru/crates/hotaru-sprites/tests/raster.rs": "82f2483b916c74c5e3a397380d9244ae8930e71ffcd137c7f8ca24d028b6d152",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/braille.json": "ac0962f732b80069044df14b28fe909146e1cde47973cce9367e772b43f4de95",
+    "apps/hotaru/crates/hotaru-sprites/tests/fixtures/braille.rle": "24e7ce64cbad7da58899dbe3e303a6fc6586b9e6cb048d4eed7f4748813c19f0",
+    "desktop/aizome/apps/hotaru/src/font.rs": "61d441d8d57db13ef3fa994d91e8fc320893c260cf5661a103ca113cb47ec52f",
+    "desktop/aizome/apps/hotaru/src/sprites.rs": "b27c8cc1502f5895a38e82346828c24fafe0e9bcb38847936ba9df40484ec000",
+    "desktop/aizome/apps/hotaru/tests/wayland/sprites.py": "ead69149639b02d5ca7555271004418f211344b8b4a6c7fbc4f95cb9f0f9ee05"
+  },
+  "tested_source_manifest_files": 231,
+  "pure_oracle": {
+    "matches": 594266,
+    "metrics": 2330,
+    "compared_bytes": 2245723934,
+    "metadata_matches": 594266,
+    "png_matches": 1024,
+    "candidate_sha256": "849fafdc653dbc872ea4a746b47942aa8cfbe647e7f09a4ff19fb898fb66bc27",
+    "oracle_sha256": "5ef2a69155f38e0d33cadecd88f29224de5430b03029238fe978ea7c27a8c5d5",
+    "oracle_build_mode": "ReleaseFast"
+  },
+  "native": {
+    "binary_sha256": "8e91902748051a876f8f7b52873ae3a8b42a0be98e0fe3cbf2bd8b868c5f743b",
+    "glyph_comparisons": 1736,
+    "rgb_bytes": 5593392,
+    "scales": [
+      1.0,
+      1.25,
+      2.0,
+      1.0
+    ]
+  },
+  "tests": {
+    "native_ordinary": 57,
+    "native_ignored_existing": 7,
+    "pure": 11,
+    "geometry_pairs": 16777216,
+    "strict_clippy": "native package and pure all-targets passed"
+  },
+  "licensing": "Braille definitions MIT under existing Ghostty notice; no new dependency,lockfile or installed notice",
+  "limits": [
+    "No throughput or whole-app performance claim.",
+    "651 registered character slots and11 internal sprite rasters remain unported/unqualified.",
+    "Ordinary-font fallback still handles unsupported families and multi-scalar clusters.",
+    "Aligned software Wayland capture does not prove arbitrary fractional placements or hardware presentation.",
+    "Actual ReleaseSafe reference aborts at14x23 on an overstrict remaining-pixel assertion; unchanged ReleaseFast is the qualified pixel oracle, with corrected Rust debug invariant explicitly documented."
+  ]
+}

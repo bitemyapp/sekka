@@ -1,0 +1,73 @@
+{
+  "recorded_utc": "2026-10-28T18:42:56.929741+00:00",
+  "package": "/nix/store/60pa6bmfrl4savx1hxm6h58lkjdlynk7-hotaru-0.1.0",
+  "prepared_source": "/nix/store/x74vqzm3psh4azc414wh5bh27r52x0xd-hotaru-source",
+  "wrapper_sha256": "c8c023950b488ff1aab750d7c51c14a079a3c591c5aef2db4ec3612814c6b7b4",
+  "elf_sha256": "1a39f6b91b2eb186046073782c1cb6d1d08412b6a9a6b5fd20cd287fb3aaa671",
+  "elf_interpreter": "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+  "font_files": {
+    "NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+    "OFL-NotoSansCJK.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+    "NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "OFL-NotoColorEmoji.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  "application_licenses": {
+    "uucode-MIT.txt": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33",
+    "Shell-integration-MIT.txt": "95946e45bd1e741f84890f66acd74436aace33336d990ef303dc10421f332769",
+    "Unicode-3.0.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "Ghostty-MIT.txt": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1"
+  },
+  "resource_files": {
+    "LICENSE-MIT": "95946e45bd1e741f84890f66acd74436aace33336d990ef303dc10421f332769",
+    "hotaru.terminfo": "a9a59a9e192ac6d345107c7712ce99c7ce84e3d43ea9b01ad6a83242129a0ad4",
+    "shell-integration/bash/rc.bash": "daad4731d9e449c17b78acee798c4f1ffdd36703289786cdafda1ef453cd7125",
+    "shell-integration/bash/hotaru.bash": "510ce58d4149aaad9264789f412d1ea412cea22fc5ea0151c45f79f97a031423",
+    "shell-integration/zsh/.zshenv": "2a2c3db12410f5570bf42e0de4252fd6d6d66f735460d0410156333a14fa4821",
+    "shell-integration/zsh/hotaru.zsh": "866f9c623673a7d26bc0decbad19c18d249bd75ad359bdf13c8ed64f527c611d",
+    "shell-integration/fish/hotaru.fish": "3c40f49f509d569d83aafa862e0451260fb70e0f7f73670ec0fcd49c1f142f89"
+  },
+  "installed_resource_source_differences": [],
+  "runtime_environment": {
+    "PATH": "/usr/bin:/bin",
+    "unset": [
+      "AIZOME_FONT_DIR",
+      "HOTARU_FONT_DIR",
+      "HOTARU_RESOURCES_DIR",
+      "HOTARU_TERMINFO_DIR",
+      "FONTCONFIG_FILE",
+      "FONTCONFIG_PATH",
+      "LD_LIBRARY_PATH",
+      "SIDESTEP_FONT",
+      "SIDESTEP_MONO_FONT"
+    ],
+    "private_compositor": "headless Sway/pixman",
+    "runtime_configuration": "package wrapper"
+  },
+  "prepared_source_comparison": {
+    "matches": 100,
+    "missing": [
+      "apps/hotaru/Cargo.lock",
+      "apps/hotaru/upstream/sidestep-clipboard.patch",
+      "apps/hotaru/upstream/sidestep-grid-font.patch",
+      "apps/hotaru/upstream/sidestep-input.patch",
+      "apps/hotaru/upstream/sidestep-mime.patch"
+    ],
+    "differences": []
+  },
+  "suites": {
+    "smoke": "passed",
+    "fonts": "passed",
+    "search": "passed",
+    "shell": "passed"
+  },
+  "local_worktree_comparison": {
+    "files": 105,
+    "differences": [],
+    "method": "source-manifest SHA256 entries verified with local sha256sum --check --quiet; exit status 0"
+  },
+  "visual_review": [
+    "fonts/scale-1-1.25.png",
+    "search/oldest-match.png",
+    "shell/split-cwd.png"
+  ]
+}

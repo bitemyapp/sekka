@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "base_revision": "cb91125928563e11700f4c3f2034a00300578ca6",
+  "changed_source_files": [
+    "crates/hotaru-core/src/row/history.rs"
+  ],
+  "source_sha256": "29c99d11c0d1a1dd140bf739c5e80466ca6d0eb73be92a9fd34a3569ad768d02",
+  "source_digest_scope": "Cargo files, crates and .cargo; excludes vendor because this isolated build used an older evidence copy of build-candidate.py. Separate vendor-provenance.json pins all 29 vendored files to cb91125 and verifies both binaries used identical archived trees.",
+  "tests_passed": 133,
+  "core_tests_passed": 109,
+  "commands": [
+    "cargo +1.95.0 test --workspace",
+    "cargo +1.95.0 clippy --workspace --all-targets -- -D warnings"
+  ],
+  "correctness": "All full normalized content and retained-row comparisons pass, including cold/resident captures and the 50,000,000-byte URI stress case retaining 8,291 history rows.",
+  "performance": "Unqualified: substantial concurrent external compiler activity recorded in per-case snapshots. Final combined quiet-host performance gate remains open.",
+  "artifacts": {
+    "construction.patch": "2d3b7534c23647bd7a15211cfbadbdccd3713e56ec56bf31adc57b59059e26cb",
+    "validation.log": "e5fb0d29a5ddca0265ebfb69b79023ae0a3c9d5039917e24769259d75c4f26a8",
+    "interference-report.json": "413d9da920ca53bc90b1404b31b00932e6daa18be65e7eaa660b06705818b887",
+    "vendor-provenance.json": "a122a7db0ae003c6f5b1f4bb0df8f42c994c98f27224886fb834a2dd7b6f7c0c",
+    "measure-construction.py": "418354feb7a816847a855aab42bf32f4f92038d383fd12a04f8947c66d73531c"
+  }
+}

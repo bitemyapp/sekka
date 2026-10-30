@@ -2,7 +2,7 @@
 resolver = "3"
 # Apps join by name once they have a manifest: an app directory without
 # Cargo.toml would break an "apps/*" glob, and every build, for everyone.
-members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/nisshi", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe", "apps/shiori", "apps/utsushi"]
+members = ["crates/*", "apps/yukimi", "apps/kura", "apps/soroban", "apps/settei", "apps/koyomi", "apps/tenki", "apps/tokei", "apps/hako", "apps/tansu", "apps/myaku", "apps/nisshi", "apps/sumi", "apps/shashin", "apps/annai", "apps/fusen", "apps/koe", "apps/shiori", "apps/utsushi", "apps/hotaru"]
 # Sukumo, the toolkit (sukumo/), is a workspace of its own: its crates are
 # path dependencies, not members.
 exclude = ["sukumo"]
@@ -93,6 +93,10 @@ lto = "thin"
 # comes from, named as hayro names it; Cargo.lock pins its commit), so that
 # the image crate's zune-jpeg uses the same zune-core 0.5.3: Nix's vendoring
 # can't hold two crates of one name and version.
+#
+# simdutf8 from Hotaru's audited copy, which includes the upstream AVX2
+# prefetch pointer repair, so transitive users resolve to it too.
 [patch.crates-io]
 moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
 zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
+simdutf8 = { path = "../../apps/hotaru/vendor/simdutf8" }

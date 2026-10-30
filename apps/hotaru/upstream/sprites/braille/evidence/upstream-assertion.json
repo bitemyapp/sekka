@@ -1,0 +1,37 @@
+{
+  "status": "confirmed upstream ReleaseSafe panic; no pixel mismatch implied",
+  "ghostty_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "source": "src/font/sprite/draw/braille.zig",
+  "source_sha256": "8093913ed854b6d46a8b627c465d7f1ac7b2deedd35c208603f06c05bf9a6a8c",
+  "case": {
+    "cp": "U+2800",
+    "width": 14,
+    "height": 23,
+    "thickness": 1
+  },
+  "completed_matches_before_panic": 225792,
+  "remaining": {
+    "x": 2,
+    "y": 2
+  },
+  "upstream_assertion": "x_px_left <= 1 or y_px_left <= 1",
+  "corrected_invariant": "x_px_left < 2 or y_px_left < 4",
+  "reason": "One added dot pixel needs2 horizontal and4 vertical pixels. Existing dots fit; leftover2+2 cannot grow dots. Only the bookkeeping assertion is corrected; positions and masks are unchanged.",
+  "positions": {
+    "x": [
+      2,
+      8
+    ],
+    "y": [
+      2,
+      7,
+      12,
+      17
+    ],
+    "dot_width": 2
+  },
+  "preserved_logs": [
+    "oracle-panic.log",
+    "upstream-releasesafe-panic-metric.json"
+  ]
+}

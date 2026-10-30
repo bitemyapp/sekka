@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-28",
+  "host": "wx-workstation",
+  "rust_toolchain": "1.95.0",
+  "workspace": "/home/callen/work/hotaru-io-tests-20261028",
+  "observed_failure": "empty_selection_signals_eof expected Complete immediately after closing its writer, but pump returned Pending during a parallel workspace test run; focused rerun passed.",
+  "original_failure_log": "/home/callen/work/hotaru-unicode-mode-20261028/validation-initial-io-flake.log",
+  "mechanism": "A pipe reader returns EAGAIN while any duplicated/inherited writer remains open. CLOEXEC only closes a child descriptor at exec, so a concurrent spawn can delay EOF beyond the parent writer close.",
+  "deterministic_regression": "Duplicate the writer with F_DUPFD_CLOEXEC, finish the empty payload, assert original writer FD is gone, reader remains Pending and poll reports no readiness; close the duplicate and require Complete under the absolute deadline.",
+  "change": "Empty/exact-full EOF tests wait for poll readiness and honor the reader deadline. Production pump implementation is unchanged; its immediate-EOF documentation is corrected.",
+  "commands": [
+    "cargo +1.95.0 test",
+    "cargo +1.95.0 clippy --all-targets -- -D warnings",
+    "100 sequential runs of the clipboard integration-test executable with --test-threads=8, each with a30-second process timeout"
+  ],
+  "results": {
+    "full_io_tests": 20,
+    "clippy": "pass",
+    "repeat_count": 100,
+    "clipboard_tests_per_repeat": 13,
+    "parallel_test_threads": 8,
+    "repeat_failures": 0,
+    "repeat_elapsed_seconds": 5.268975279759616
+  },
+  "source_sha256": {
+    "crates/hotaru-io/src/clipboard.rs": "fd8a8f6158c20cf375d18a8cd92ae791cd93b3f9d44c19e96bcdb26b41dbcc84",
+    "crates/hotaru-io/tests/clipboard.rs": "198e2585655fb5d7c4fb59a39f6d9a67d759e414212b436732782e7614685c34"
+  }
+}

@@ -1,0 +1,13 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/apps/hotaru)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.61s
+     Running unittests src/lib.rs (/home/callen/work/hotaru-shaped-row-20261028/target/release/deps/aizome_hotaru-bb974cfa9e3943af)
+
+running 5 tests
+test font::tests::benchmark_row_preparation ... ignored, serial worker preparation diagnostic; run only under shared workstation lock
+test font::tests::row_cache_context_limits_cancellation_and_metadata_are_complete ... ok
+test font::tests::row_cache_matches_uncached_seeded_snapshot_transitions ... ok
+test font::tests::row_cache_reuses_moved_rows_and_preserves_frame_and_link_ownership ... ok
+test font::tests::whole_content_search_projects_wide_and_soft_wrapped_highlights_on_worker ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 16 filtered out; finished in 0.17s
+

@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T15:44:15.813277+00:00",
+  "kind": "hotaru",
+  "binary": "/nix/store/2rb5g7cxkzvim485wxk93nggr8kkxs44-hotaru-0.1.0/bin/aizome-hotaru",
+  "binary_sha256": "3a678cc41d97e344775a9502b6f62bbbb578907fd7792f4ea648f7a8255fb1b6",
+  "probe_sha256": "bb2eff9f22760d35e3464391f83a2363a0bf2b809ee97a4cd621da118c31bf58",
+  "running_executable": "/nix/store/2rb5g7cxkzvim485wxk93nggr8kkxs44-hotaru-0.1.0/bin/.hotaru-wrapped",
+  "running_executable_sha256": "27b62cc38cdb4b8f7d79a22446fb5bea2bc9a222aea5802f77f93fce46ea1917",
+  "command": [
+    "/nix/store/2rb5g7cxkzvim485wxk93nggr8kkxs44-hotaru-0.1.0/bin/aizome-hotaru",
+    "--config-file",
+    "/tmp/hotaru-gui-probe-h0ek6y9w/hotaru.toml",
+    "--",
+    "/usr/bin/python3",
+    "/home/callen/work/hotaru-checkpoint-20261028/tools/gui-probe.py",
+    "--fixture",
+    "/tmp/hotaru-gui-probe-h0ek6y9w/control"
+  ],
+  "configuration": "font_size = 14.0\nscrollback = 0\ntheme = \"night\"\n",
+  "font_directory": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts",
+  "fontconfig": "<?xml version=\"1.0\"?><!DOCTYPE fontconfig SYSTEM \"fonts.dtd\"><fontconfig><dir>/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts</dir><cachedir>/tmp/hotaru-gui-probe-h0ek6y9w/cache/fonts</cachedir></fontconfig>",
+  "mesa_directory": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "backend": "private Sway pixman; LIBGL_ALWAYS_SOFTWARE=1, GALLIUM_DRIVER=llvmpipe",
+  "bus": "private session D-Bus without service activation",
+  "scope": "Exploratory software GUI probe; DSR is parse completion, not presentation",
+  "grid": {
+    "cols": 120,
+    "rows": 40
+  },
+  "window_pixels": [
+    1036,
+    936
+  ],
+  "launch_to_pty_ready_ms": 40.866329,
+  "launch_to_observed_window_ms": 42.236467,
+  "idle_seconds": 3.000212458,
+  "idle_cpu_seconds": 0.0,
+  "idle_process": {
+    "sample_ns": 4050530169325142,
+    "cpu_ticks": 3,
+    "memory_kib_except_threads": {
+      "VmRSS": 42376,
+      "VmHWM": 42376,
+      "RssAnon": 6064,
+      "RssFile": 12220,
+      "Threads": 12
+    }
+  },
+  "host": "callen",
+  "kernel": "6.17.0-1032-oem",
+  "cpu_affinity": [
+    8,
+    9,
+    10,
+    11
+  ],
+  "load_average": [
+    1.025390625,
+    0.66796875,
+    0.826171875
+  ],
+  "workloads": [
+    {
+      "path": "/home/callen/work/hotaru-corpora/ascii.vt",
+      "sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "write_to_dsr_ns": 23760060,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388632,
+      "process_before": {
+        "sample_ns": 4050530177817269,
+        "cpu_ticks": 3,
+        "memory_kib_except_threads": {
+          "VmRSS": 42376,
+          "VmHWM": 42376,
+          "RssAnon": 6064,
+          "RssFile": 12220,
+          "Threads": 12
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050530203973062,
+        "cpu_ticks": 4,
+        "memory_kib_except_threads": {
+          "VmRSS": 42440,
+          "VmHWM": 42440,
+          "RssAnon": 6128,
+          "RssFile": 12220,
+          "Threads": 12
+        }
+      },
+      "screenshot": "ascii.png"
+    },
+    {
+      "path": "/home/callen/work/hotaru-corpora/unicode.vt",
+      "sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "write_to_dsr_ns": 43799868,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388655,
+      "process_before": {
+        "sample_ns": 4050530573600913,
+        "cpu_ticks": 5,
+        "memory_kib_except_threads": {
+          "VmRSS": 42460,
+          "VmHWM": 42460,
+          "RssAnon": 6148,
+          "RssFile": 12220,
+          "Threads": 12
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050530618799281,
+        "cpu_ticks": 10,
+        "memory_kib_except_threads": {
+          "VmRSS": 42864,
+          "VmHWM": 42864,
+          "RssAnon": 6260,
+          "RssFile": 12512,
+          "Threads": 12
+        }
+      },
+      "screenshot": "unicode.png"
+    },
+    {
+      "path": "/home/callen/work/hotaru-corpora/styled.vt",
+      "sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "write_to_dsr_ns": 29098865,
+      "response_hex": "1b5b323b3152",
+      "bytes": 8388608,
+      "process_before": {
+        "sample_ns": 4050530987037244,
+        "cpu_ticks": 10,
+        "memory_kib_except_threads": {
+          "VmRSS": 42868,
+          "VmHWM": 42868,
+          "RssAnon": 6264,
+          "RssFile": 12512,
+          "Threads": 12
+        }
+      },
+      "process_after": {
+        "sample_ns": 4050531016958286,
+        "cpu_ticks": 13,
+        "memory_kib_except_threads": {
+          "VmRSS": 42916,
+          "VmHWM": 42916,
+          "RssAnon": 6312,
+          "RssFile": 12512,
+          "Threads": 12
+        }
+      },
+      "screenshot": "styled.png"
+    }
+  ]
+}

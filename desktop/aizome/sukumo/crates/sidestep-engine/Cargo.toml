@@ -32,6 +32,7 @@ libloading = "0.8"
 # fontique finds fonts through the system's fontconfig, loaded at run time
 # with dlopen, and swash rasterizes glyphs. See docs/architecture.md.
 parley = { version = "0.11.1", default-features = false, features = ["std", "system"] }
+harfrust = { version = "0.12", default-features = false, features = ["std"] }
 fontique = { version = "0.11.1", default-features = false, features = ["std", "system", "fontconfig-dlopen"] }
 skrifa = { version = "0.44", default-features = false, features = ["std"] }
 swash = { version = "0.2.10", default-features = false, features = ["std", "scale", "render"] }

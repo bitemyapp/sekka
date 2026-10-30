@@ -42,9 +42,10 @@ use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, delegate_dispatch};
 
-use super::{State, dnd, drag_out};
+use super::{State, dnd, drag_out, primary};
 use crate::clipboard::{
-    Contents, READ_AHEAD_LIMIT, READ_LIMIT, READ_TIMEOUT, ReadAhead, Source, owner_mime, shared, shared_for, text_mime,
+    Contents, READ_AHEAD_LIMIT, READ_TIMEOUT, ReadAhead, Source, TRANSFER_TIMEOUT, owner_mime, shared, shared_for,
+    text_mime,
 };
 use crate::protocol::FromRender;
 
@@ -52,6 +53,9 @@ use crate::protocol::FromRender;
 /// than the main thread waits: text that comes late is still kept for
 /// later reads.
 const READ_AHEAD_GIVE_UP: Duration = Duration::from_secs(5);
+const PIPE_BYTE_BUDGET: usize = 256 * 1024;
+const PIPE_SYSCALL_BUDGET: usize = 16;
+const PIPE_CANCEL_INTERVAL: Duration = Duration::from_millis(50);
 
 pub struct Selection {
     pub(super) manager: Option<DataDeviceManagerState>,
@@ -70,6 +74,8 @@ pub struct Selection {
     pub(super) dnd: dnd::Dnd,
     /// A drag out of one of our windows, under way.
     pub(super) out: Option<drag_out::Out>,
+    /// The primary selection, beside the clipboard.
+    pub(super) primary: primary::Primary,
 }
 
 impl Selection {
@@ -84,6 +90,7 @@ impl Selection {
             next_token: 1,
             dnd: dnd::Dnd::default(),
             out: None,
+            primary: primary::Primary::new(globals, qh),
         }
     }
 }
@@ -93,10 +100,12 @@ pub(super) fn add_seat(state: &mut State, seat: &WlSeat) {
         let device = manager.get_data_device(&state.qh, seat);
         state.selection.devices.push((seat.clone(), device));
     }
+    primary::add_seat(state, seat);
 }
 
 pub(super) fn remove_seat(state: &mut State, seat: &WlSeat) {
     state.selection.devices.retain(|(s, _)| s != seat);
+    primary::remove_seat(state, seat);
 }
 
 /// A window got the keyboard: contents written before there was an input
@@ -105,6 +114,7 @@ pub(super) fn focus_changed(state: &mut State) {
     if let Some(contents) = state.selection.pending.take() {
         set(state, contents);
     }
+    primary::focus_changed(state);
 }
 
 /// Offer `contents` as the selection, or clear it.
@@ -134,6 +144,11 @@ pub(super) fn set(state: &mut State, contents: Option<Arc<Contents>>) {
 /// Read the selection (or drag `drag`'s offer) as `mime` for the main
 /// thread, answering under `token`.
 pub(super) fn read(state: &mut State, mime: String, token: u64, source: Source, drag: u64) {
+    let shared = shared_for(source);
+    let Some((maximum, deadline)) = shared.read_options(token) else {
+        shared.read_arrived(token, None);
+        return;
+    };
     let pipe = match source {
         Source::Selection => state
             .selection
@@ -145,8 +160,8 @@ pub(super) fn read(state: &mut State, mime: String, token: u64, source: Source, 
         // That drag's offer, not whichever the pointer has now; none once
         // it's finished or gone.
         Source::Drag => dnd::offer_of(state, drag, &mime).and_then(|o| receive(&o, mime).ok()),
+        Source::Primary => primary::receive(state, &mime),
     };
-    let shared = shared_for(source);
     let Some(pipe) = pipe else {
         shared.read_arrived(token, None);
         return;
@@ -154,7 +169,13 @@ pub(super) fn read(state: &mut State, mime: String, token: u64, source: Source, 
     // The main thread stops waiting after READ_TIMEOUT without data; a
     // little later the read is abandoned.
     let progress = move || shared.read_progressed(token);
-    read_pipe(state, pipe, READ_LIMIT, READ_TIMEOUT * 2, progress, move |read| {
+    let policy = ReadPolicy {
+        maximum,
+        idle: READ_TIMEOUT * 2,
+        deadline,
+        active: std::rc::Rc::new(move || shared.read_options(token).is_some()),
+    };
+    read_pipe_bounded(state, pipe, policy, progress, move |read| {
         shared.read_arrived(token, if let PipeRead::Done(data) = read { Some(data) } else { None });
     });
 }
@@ -170,27 +191,64 @@ pub(super) fn provided(state: &mut State, token: u64, data: Option<Arc<[u8]>>) {
 
 /// Write `data` to a client's pipe from the event loop, as much as it
 /// takes each time it can.
-fn write_pipe(state: &State, fd: WritePipe, data: Arc<[u8]>) {
+pub(super) fn write_pipe(state: &State, fd: WritePipe, data: Arc<[u8]>) {
     // A pipe that polls writable then takes what it has room for without
     // blocking.
     if rustix::io::ioctl_fionbio(&fd, true).is_err() {
         return;
     }
     let mut written = 0;
-    let _ = state.loop_handle.insert_source(fd, move |(), file, _| {
-        loop {
-            if written >= data.len() {
-                return PostAction::Remove;
-            }
-            match (&**file).write(&data[written..]) {
-                Ok(n) => written += n,
-                Err(e) if e.kind() == ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == ErrorKind::WouldBlock => return PostAction::Continue,
-                // The reader went away.
-                Err(_) => return PostAction::Remove,
-            }
+    let deadline = Instant::now() + TRANSFER_TIMEOUT;
+    let timer: std::rc::Rc<std::cell::Cell<Option<RegistrationToken>>> = Default::default();
+    let timer_of_write = timer.clone();
+    let writing = state.loop_handle.insert_source(fd, move |(), file, state| {
+        if Instant::now() < deadline && matches!(write_available(&mut &**file, &data, &mut written), Ok(false)) {
+            return PostAction::Continue;
         }
+        if let Some(timer) = timer_of_write.take() {
+            state.loop_handle.remove(timer);
+        }
+        PostAction::Remove
     });
+    let Ok(writing) = writing else {
+        return;
+    };
+    let installed = state.loop_handle.insert_source(Timer::from_duration(TRANSFER_TIMEOUT), move |_, _, state| {
+        state.loop_handle.remove(writing);
+        TimeoutAction::Drop
+    });
+    match installed {
+        Ok(token) => timer.set(Some(token)),
+        // A stalled pipe must not survive when its cleanup timer cannot run.
+        Err(_) => {
+            state.loop_handle.remove(writing);
+        }
+    }
+}
+
+/// One readiness wake is finite even when a peer drains the pipe continuously.
+fn write_available(writer: &mut impl Write, data: &[u8], written: &mut usize) -> std::io::Result<bool> {
+    let mut budget = PIPE_BYTE_BUDGET;
+    for _ in 0..PIPE_SYSCALL_BUDGET {
+        if *written == data.len() {
+            return Ok(true);
+        }
+        let end = data.len().min(*written + budget);
+        match writer.write(&data[*written..end]) {
+            Ok(0) => return Err(std::io::Error::new(ErrorKind::WriteZero, "clipboard pipe made no progress")),
+            Ok(count) => {
+                *written += count;
+                budget -= count;
+                if budget == 0 {
+                    return Ok(*written == data.len());
+                }
+            }
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(false),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(*written == data.len())
 }
 
 /// How reading a pipe ended.
@@ -210,6 +268,34 @@ pub(super) fn read_pipe(
     pipe: ReadPipe,
     limit: usize,
     give_up: Duration,
+    progress: impl FnMut() + 'static,
+    done: impl FnOnce(PipeRead) + 'static,
+) {
+    read_pipe_bounded(
+        state,
+        pipe,
+        ReadPolicy {
+            maximum: limit,
+            idle: give_up,
+            deadline: Instant::now() + TRANSFER_TIMEOUT,
+            active: std::rc::Rc::new(|| true),
+        },
+        progress,
+        done,
+    );
+}
+
+struct ReadPolicy {
+    maximum: usize,
+    idle: Duration,
+    deadline: Instant,
+    active: std::rc::Rc<dyn Fn() -> bool>,
+}
+
+fn read_pipe_bounded(
+    state: &State,
+    pipe: ReadPipe,
+    policy: ReadPolicy,
     mut progress: impl FnMut() + 'static,
     done: impl FnOnce(PipeRead) + 'static,
 ) {
@@ -235,18 +321,13 @@ pub(super) fn read_pipe(
     let finish_read = finish.clone();
     let timer_of_read = timer.clone();
     let active_of_read = active.clone();
+    let alive = policy.active.clone();
     let reading = state.loop_handle.insert_source(pipe, move |(), file, state| {
-        let mut chunk = [0u8; 65536];
         let before = data.len();
-        let ended = loop {
-            match (&**file).read(&mut chunk) {
-                Ok(0) => break Some(PipeRead::Done(std::mem::take(&mut data))),
-                Ok(n) if data.len() + n > limit => break Some(PipeRead::TooLong),
-                Ok(n) => data.extend_from_slice(&chunk[..n]),
-                Err(e) if e.kind() == ErrorKind::Interrupted => {}
-                Err(e) if e.kind() == ErrorKind::WouldBlock => break None,
-                Err(_) => break Some(PipeRead::Failed),
-            }
+        let ended = if Instant::now() >= policy.deadline || !alive() {
+            Some(PipeRead::Failed)
+        } else {
+            read_available(&mut &**file, &mut data, policy.maximum)
         };
         let Some(read) = ended else {
             if data.len() > before {
@@ -265,16 +346,54 @@ pub(super) fn read_pipe(
         finish(PipeRead::Failed);
         return;
     };
-    let token = state.loop_handle.insert_source(Timer::from_duration(give_up), move |_, _, state| {
-        let idle_until = active.get() + give_up;
-        if Instant::now() < idle_until {
-            return TimeoutAction::ToInstant(idle_until);
+    let first = PIPE_CANCEL_INTERVAL.min(policy.idle).min(policy.deadline.saturating_duration_since(Instant::now()));
+    let token = state.loop_handle.insert_source(Timer::from_duration(first), move |_, _, state| {
+        let now = Instant::now();
+        let idle_until = (active.get() + policy.idle).min(policy.deadline);
+        if now < idle_until && (policy.active)() {
+            return TimeoutAction::ToInstant(idle_until.min(now + PIPE_CANCEL_INTERVAL));
         }
         state.loop_handle.remove(reading);
         finish(PipeRead::Failed);
         TimeoutAction::Drop
     });
-    timer.set(token.ok());
+    match token {
+        Ok(token) => timer.set(Some(token)),
+        Err(_) => {
+            state.loop_handle.remove(reading);
+            // The timer closure took its own finish clone; this one still
+            // reports failure exactly once when timer installation fails.
+            if let Some(done) = done.borrow_mut().take() {
+                done(PipeRead::Failed);
+            }
+        }
+    }
+}
+
+fn read_available(reader: &mut impl Read, data: &mut Vec<u8>, limit: usize) -> Option<PipeRead> {
+    let mut chunk = [0_u8; 65536];
+    let mut budget = PIPE_BYTE_BUDGET;
+    for _ in 0..PIPE_SYSCALL_BUDGET {
+        let count = chunk.len().min(budget).min(limit.saturating_sub(data.len()).saturating_add(1));
+        match reader.read(&mut chunk[..count]) {
+            Ok(0) => return Some(PipeRead::Done(std::mem::take(data))),
+            Ok(count) if count > limit.saturating_sub(data.len()) => return Some(PipeRead::TooLong),
+            Ok(count) => {
+                if data.try_reserve(count).is_err() {
+                    return Some(PipeRead::Failed);
+                }
+                data.extend_from_slice(&chunk[..count]);
+                budget -= count;
+                if budget == 0 {
+                    return None;
+                }
+            }
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == ErrorKind::WouldBlock => return None,
+            Err(_) => return Some(PipeRead::Failed),
+        }
+    }
+    None
 }
 
 impl DataDeviceHandler for State {
@@ -427,3 +546,76 @@ impl Dispatch<WlDataDevice, DataDeviceData> for State {
 delegate_dispatch!(State: [WlDataDeviceManager: GlobalData] => DataDeviceManagerState);
 delegate_dispatch!(State: [WlDataOffer: DataOfferData] => DataDeviceManagerState);
 delegate_dispatch!(State: [WlDataSource: DataSourceData] => DataDeviceManagerState);
+
+#[cfg(test)]
+mod pipe_tests {
+    use super::*;
+
+    #[test]
+    fn continuously_ready_writer_yields_at_byte_budget() {
+        let data = vec![17_u8; 4 * 1024 * 1024 + 31];
+        let mut sink = Vec::new();
+        let mut written = 0;
+        assert!(!write_available(&mut sink, &data, &mut written).unwrap());
+        assert_eq!(written, PIPE_BYTE_BUDGET);
+        while !write_available(&mut sink, &data, &mut written).unwrap() {}
+        assert_eq!(sink, data);
+    }
+
+    struct FailingWriter {
+        kind: ErrorKind,
+        calls: usize,
+    }
+    impl Write for FailingWriter {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            self.calls += 1;
+            if self.kind == ErrorKind::WriteZero { Ok(0) } else { Err(std::io::Error::from(self.kind)) }
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn interrupted_writer_yields_and_zero_or_broken_pipe_finishes() {
+        let mut writer = FailingWriter { kind: ErrorKind::Interrupted, calls: 0 };
+        assert!(!write_available(&mut writer, b"x", &mut 0).unwrap());
+        assert_eq!(writer.calls, PIPE_SYSCALL_BUDGET);
+        for kind in [ErrorKind::BrokenPipe, ErrorKind::WriteZero] {
+            let mut writer = FailingWriter { kind, calls: 0 };
+            assert_eq!(write_available(&mut writer, b"x", &mut 0).unwrap_err().kind(), kind);
+            assert_eq!(writer.calls, 1);
+        }
+        let mut writer = FailingWriter { kind: ErrorKind::WouldBlock, calls: 0 };
+        assert!(!write_available(&mut writer, b"x", &mut 0).unwrap());
+        assert_eq!(writer.calls, 1);
+    }
+
+    #[test]
+    fn continuously_ready_reader_yields_and_preserves_exact_bytes() {
+        let source = vec![19_u8; 4 * 1024 * 1024 + 7];
+        let mut reader = std::io::Cursor::new(&source);
+        let mut data = Vec::new();
+        assert!(read_available(&mut reader, &mut data, source.len()).is_none());
+        assert_eq!(data.len(), PIPE_BYTE_BUDGET);
+        loop {
+            match read_available(&mut reader, &mut data, source.len()) {
+                None => {}
+                Some(PipeRead::Done(bytes)) => {
+                    assert_eq!(bytes, source);
+                    break;
+                }
+                Some(_) => panic!("valid selection failed"),
+            }
+        }
+    }
+
+    #[test]
+    fn reader_limit_distinguishes_exact_size_from_one_byte_more() {
+        let mut data = Vec::new();
+        assert!(
+            matches!(read_available(&mut &b"abc"[..], &mut data, 3), Some(PipeRead::Done(bytes)) if bytes == b"abc")
+        );
+        assert!(matches!(read_available(&mut &b"abcd"[..], &mut data, 3), Some(PipeRead::TooLong)));
+    }
+}

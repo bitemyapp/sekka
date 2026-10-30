@@ -1,0 +1,25 @@
+   Compiling zmij v1.0.23
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling serde_json v1.0.154
+   Compiling libc v0.2.191
+   Compiling static_assertions v1.1.0
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.5
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-short-utf8-error-20261028/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling lz4_flex v0.14.0
+   Compiling unicode-width v0.2.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-short-utf8-error-20261028/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/e00a26febd56cfb9/out/hotaru_core-e00a26febd56cfb9)
+
+running 2 tests
+test short_utf8_tests::final_valid_lead_and_invalid_lead_have_different_error_lengths ... ok
+test short_utf8_tests::thresholds_nuls_and_all_truncated_suffix_offsets ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 5.78s
+

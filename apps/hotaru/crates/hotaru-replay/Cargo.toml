@@ -1,0 +1,12 @@
+[package]
+name = "hotaru-replay"
+description = "Deterministic stream replay and performance harness for Hotaru"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+hotaru-core = { path = "../hotaru-core" }
+serde_json = "1"

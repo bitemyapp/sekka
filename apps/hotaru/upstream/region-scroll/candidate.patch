@@ -1,0 +1,463 @@
+diff --git a/desktop/aizome/apps/hotaru/src/terminal_view.rs b/desktop/aizome/apps/hotaru/src/terminal_view.rs
+index d33a826..486d5b2 100644
+--- a/desktop/aizome/apps/hotaru/src/terminal_view.rs
++++ b/desktop/aizome/apps/hotaru/src/terminal_view.rs
+@@ -200,9 +200,17 @@ fn retained_frame(frame: Option<&Arc<crate::font::Frame>>) -> Option<Arc<crate::
+     frame.filter(|frame| frame.retention_bytes <= SCROLL_FRAME_BYTES).cloned()
+ }
+ 
+-// Position metadata proposes a translation. Owned row and shaped-run identity
+-// prove each retained row; anything unproven is rasterized after the copy.
+-fn scroll_reuse(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<(isize, Vec<bool>)> {
++// Position metadata proposes the usual viewport translation. Partial scroll
++// regions keep that position unchanged, so owned row identities can propose
++// one instead. In either case every retained destination needs both proofs;
++// anything unproven is rasterized after the copy.
++struct ScrollReuse {
++    delta: isize,
++    rows: std::ops::Range<usize>,
++    clean: Vec<bool>,
++}
++
++fn scroll_reuse(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<ScrollReuse> {
+     if std::ptr::eq(old, new) {
+         return None;
+     }
+@@ -230,21 +238,104 @@ fn scroll_reuse(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<(i
+     let after = u128::from(b.position.origin) + b.position.first_row as u128;
+     let delta = i128::try_from(before).ok()? - i128::try_from(after).ok()?;
+     let delta = isize::try_from(delta).ok()?;
+-    if delta == 0 || delta.unsigned_abs() >= b.rows {
++    if old.rows.iter().chain(&new.rows).flat_map(|r| r.iter()).any(|s| s.selected || s.matched || s.current_match) {
+         return None;
+     }
+-    if old.rows.iter().chain(&new.rows).flat_map(|r| r.iter()).any(|s| s.selected || s.matched || s.current_match) {
++    let inferred = delta == 0;
++    let delta = if inferred { region_scroll_delta(old, new)? } else { delta };
++    if delta.unsigned_abs() >= b.rows {
+         return None;
+     }
+-    let clean: Vec<_> = (0..b.rows)
++    let same = |source: usize, y: usize| {
++        hotaru_core::RowRef::ptr_eq(&a.lines[source], &b.lines[y]) && Arc::ptr_eq(&old.rows[source], &new.rows[y])
++    };
++    let mut clean: Vec<_> = (0..b.rows)
+         .map(|y| {
+             let Some(source) = y.checked_add_signed(-delta).filter(|source| *source < a.rows) else {
+                 return false;
+             };
+-            hotaru_core::RowRef::ptr_eq(&a.lines[source], &b.lines[y]) && Arc::ptr_eq(&old.rows[source], &new.rows[y])
++            same(source, y)
+         })
+         .collect();
+-    (clean.iter().filter(|clean| **clean).count() >= 2).then_some((delta, clean))
++    let moved = clean.iter().filter(|clean| **clean).count();
++    if moved < 2 {
++        return None;
++    }
++    let mut rows = 0..b.rows;
++    if inferred {
++        // Moving a small scroll region must not dirty the rest of the screen.
++        // Include both ends of every proved translation, then keep stationary
++        // pixels outside this interval in place. Multiple sparse moving islands
++        // can still span many unchanged rows: reject a raster-work regression.
++        rows = b.rows..0;
++        for (y, &reuse) in clean.iter().enumerate() {
++            if reuse && !same(y, y) {
++                let source = y.checked_add_signed(-delta)?;
++                rows.start = rows.start.min(y.min(source));
++                rows.end = rows.end.max(y.max(source) + 1);
++            }
++        }
++        for y in rows.clone() {
++            // The toolkit repaints exposed pixels. They cannot count toward
++            // the copy's benefit merely because an identical shared row exists
++            // elsewhere, outside the actual source rectangle.
++            clean[y] &= y.checked_add_signed(-delta).is_some_and(|source| rows.contains(&source));
++        }
++        if clean[rows.clone()].iter().filter(|&&reuse| reuse).count() <= rows.clone().filter(|&y| same(y, y)).count() {
++            return None;
++        }
++        for (y, reuse) in clean.iter_mut().enumerate() {
++            if !rows.contains(&y) {
++                *reuse = same(y, y);
++            }
++        }
++    }
++    Some(ScrollReuse { delta, rows, clean })
++}
++
++fn region_scroll_delta(old: &crate::font::Frame, new: &crate::font::Frame) -> Option<isize> {
++    // Bound scratch work independently of the retained-frame byte limit. Most
++    // ordinary edits change only one row and avoid allocating either table.
++    let rows = new.snapshot.rows;
++    if !(3..=4096).contains(&rows)
++        || old
++            .snapshot
++            .lines
++            .iter()
++            .zip(&new.snapshot.lines)
++            .filter(|(a, b)| !hotaru_core::RowRef::ptr_eq(a, b))
++            .take(2)
++            .count()
++            < 2
++    {
++        return None;
++    }
++    let mut sources = std::collections::HashMap::new();
++    sources.try_reserve(rows).ok()?;
++    for (y, row) in old.snapshot.lines.iter().enumerate() {
++        // Both snapshots own their rows throughout this lookup. Addresses are
++        // identity keys only, never dereferenced, and cannot be recycled here.
++        // Duplicate identities are ambiguous; omit them as translation hints.
++        sources.entry(&**row as *const hotaru_core::Row).and_modify(|source| *source = None).or_insert(Some(y));
++    }
++    let mut votes = Vec::new();
++    votes.try_reserve_exact(rows * 2 - 1).ok()?;
++    votes.resize(rows * 2 - 1, 0usize);
++    for (y, row) in new.snapshot.lines.iter().enumerate() {
++        let Some(Some(source)) = sources.get(&(&**row as *const hotaru_core::Row)) else { continue };
++        if y != *source && Arc::ptr_eq(&old.rows[*source], &new.rows[y]) {
++            votes[y + rows - 1 - source] += 1;
++        }
++    }
++    let mut best = None;
++    let mut count = 1;
++    for (index, &matches) in votes.iter().enumerate() {
++        if matches > count {
++            count = matches;
++            best = Some(index as isize - (rows - 1) as isize);
++        }
++    }
++    best
+ }
+ fn pixel_aligned(value: f64, scale: f64) -> bool {
+     let physical = value * scale;
+@@ -492,14 +583,14 @@ impl Widget for TerminalView {
+                 cx.invalidate_rect(rect);
+             }
+         }
+-        if let Some((delta, _)) = &reuse {
+-            let dy = *delta as f64 * line_height;
++        if let Some(reuse) = &reuse {
++            let dy = reuse.delta as f64 * line_height;
+             let mut fixed = Vec::with_capacity(3);
+             // Repaint the old cursor AND where its old pixels were copied.
+             // Full rows include wide tails, hollow borders and changed glyph
+             // shaping boundaries. This is safe for every previous blink phase.
+             for y in old_cursor.into_iter().map(|c| c.row).chain([cursor.row]) {
+-                if y < self.snapshot.rows {
++                if reuse.rows.contains(&y) {
+                     fixed.push(Rect::new(
+                         pad,
+                         pad + y as f64 * line_height,
+@@ -508,8 +599,10 @@ impl Widget for TerminalView {
+                     ));
+                 }
+             }
+-            if let Some(y) =
+-                old_cursor.and_then(|c| c.row.checked_add_signed(*delta)).filter(|y| *y < self.snapshot.rows)
++            if let Some(y) = old_cursor
++                .filter(|c| reuse.rows.contains(&c.row))
++                .and_then(|c| c.row.checked_add_signed(reuse.delta))
++                .filter(|y| reuse.rows.contains(y))
+             {
+                 fixed.push(Rect::new(
+                     pad,
+@@ -518,7 +611,13 @@ impl Widget for TerminalView {
+                     pad + (y + 1) as f64 * line_height,
+                 ));
+             }
+-            cx.scrolled(content, Vec2::new(0.0, dy), &fixed);
++            let region = Rect::new(
++                content.x0,
++                pad + reuse.rows.start as f64 * line_height,
++                content.x1,
++                pad + reuse.rows.end as f64 * line_height,
++            );
++            cx.scrolled(region, Vec2::new(0.0, dy), &fixed);
+         }
+         for (y, row) in self.snapshot.lines.iter().enumerate() {
+             let unchanged = reuse.as_ref().map_or_else(
+@@ -528,7 +627,7 @@ impl Widget for TerminalView {
+                         .and_then(|s| s.lines.get(y))
+                         .is_some_and(|old| hotaru_core::RowRef::ptr_eq(old, row))
+                 },
+-                |(_, clean)| clean[y],
++                |reuse| reuse.clean[y],
+             );
+             if font_changed || !unchanged {
+                 cx.invalidate_rect(Rect::new(
+@@ -1220,6 +1319,117 @@ mod scroll_retention_tests {
+             links: Vec::new(),
+         })
+     }
++    fn identified_frame(rows: usize) -> Arc<crate::font::Frame> {
++        let mut result = frame(1024);
++        let f = Arc::get_mut(&mut result).unwrap();
++        let mut terminal = hotaru_core::Terminal::new(4, rows, 0);
++        for row in 1..=rows {
++            terminal.feed(format!("\x1b[{row};1H{row}").as_bytes());
++        }
++        f.snapshot = Arc::new(terminal.snapshot());
++        f.rows = (0..rows).map(|_| Arc::from(Vec::new())).collect();
++        result
++    }
++    #[test]
++    fn region_scroll_requires_unique_owned_and_shaped_identities() {
++        let mut old = identified_frame(8);
++        let mut new = frame(1024);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.snapshot = old.snapshot.clone();
++        f.metrics = old.metrics;
++        f.rows = old.rows.clone();
++        assert!(scroll_reuse(&old, &new).is_none(), "unchanged rows do not propose a move");
++        let f = Arc::get_mut(&mut new).unwrap();
++        Arc::make_mut(&mut f.snapshot).lines[1..7].rotate_left(1);
++        f.rows[1..7].rotate_left(1);
++        let reuse = scroll_reuse(&old, &new).unwrap();
++        assert_eq!(reuse.delta, -1);
++        assert_eq!(reuse.rows, 1..7);
++        assert_eq!(reuse.clean, [true, true, true, true, true, true, false, true]);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.rows = (0..8).map(|_| Arc::from(Vec::new())).collect();
++        assert!(scroll_reuse(&old, &new).is_none(), "row identity alone cannot prove pixels");
++        let f = Arc::get_mut(&mut old).unwrap();
++        let snapshot = Arc::make_mut(&mut f.snapshot);
++        let shared = snapshot.lines[0].clone();
++        snapshot.lines.fill(shared);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.snapshot = old.snapshot.clone();
++        Arc::make_mut(&mut f.snapshot).lines[0] = hotaru_core::Terminal::new(2, 1, 0).snapshot().lines[0].clone();
++        Arc::make_mut(&mut f.snapshot).lines[7] = hotaru_core::Terminal::new(2, 1, 0).snapshot().lines[0].clone();
++        f.rows = old.rows.clone();
++        assert!(scroll_reuse(&old, &new).is_none(), "ambiguous repeated identities are not hints");
++        let f = Arc::get_mut(&mut new).unwrap();
++        Arc::make_mut(&mut f.snapshot).rows = 4097;
++        assert!(region_scroll_delta(&old, &new).is_none(), "scratch inference is bounded");
++    }
++    #[test]
++    fn region_scroll_keeps_stationary_pixels_and_rejects_sparse_copy_regressions() {
++        let old = identified_frame(20);
++        let mut new = frame(1024);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.metrics = old.metrics;
++        f.snapshot = old.snapshot.clone();
++        f.rows = old.rows.clone();
++        Arc::make_mut(&mut f.snapshot).lines[5..9].rotate_left(1);
++        f.rows[5..9].rotate_left(1);
++        let reuse = scroll_reuse(&old, &new).unwrap();
++        assert_eq!(reuse.rows, 5..9);
++        assert_eq!(reuse.clean.iter().filter(|&&clean| clean).count(), 19);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.snapshot = old.snapshot.clone();
++        f.rows = old.rows.clone();
++        for rows in [2..5, 15..18] {
++            Arc::make_mut(&mut f.snapshot).lines[rows.clone()].rotate_left(1);
++            f.rows[rows].rotate_left(1);
++        }
++        assert!(scroll_reuse(&old, &new).is_none(), "four reused rows cannot justify dirtying ten stationary rows");
++    }
++    #[test]
++    fn shared_stationary_rows_do_not_expand_the_copy_interval() {
++        let mut old = identified_frame(20);
++        let f = Arc::get_mut(&mut old).unwrap();
++        let shared_row = f.snapshot.lines[0].clone();
++        let shared_shape = f.rows[0].clone();
++        for y in (0..5).chain(9..20) {
++            Arc::make_mut(&mut f.snapshot).lines[y] = shared_row.clone();
++            f.rows[y] = shared_shape.clone();
++        }
++        let mut new = frame(1024);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.metrics = old.metrics;
++        f.snapshot = old.snapshot.clone();
++        f.rows = old.rows.clone();
++        Arc::make_mut(&mut f.snapshot).lines[5..9].rotate_left(1);
++        f.rows[5..9].rotate_left(1);
++        let reuse = scroll_reuse(&old, &new).unwrap();
++        assert_eq!(reuse.rows, 5..9);
++        assert_eq!(reuse.clean.iter().filter(|&&clean| clean).count(), 19);
++    }
++    #[test]
++    fn exposed_rows_do_not_count_as_retained_pixels_in_the_work_gate() {
++        let mut old = identified_frame(100);
++        let f = Arc::get_mut(&mut old).unwrap();
++        let shared_row = f.snapshot.lines[2].clone();
++        let shared_shape = f.rows[2].clone();
++        for y in (0..30).chain(32..100) {
++            Arc::make_mut(&mut f.snapshot).lines[y] = shared_row.clone();
++            f.rows[y] = shared_shape.clone();
++        }
++        let mut new = frame(1024);
++        let f = Arc::get_mut(&mut new).unwrap();
++        f.metrics = old.metrics;
++        f.snapshot = old.snapshot.clone();
++        f.rows = old.rows.clone();
++        for (source, destination) in [(30, 0), (31, 1)] {
++            Arc::make_mut(&mut f.snapshot).lines[destination] = old.snapshot.lines[source].clone();
++            f.rows[destination] = old.rows[source].clone();
++            Arc::make_mut(&mut f.snapshot).lines[source] = shared_row.clone();
++            f.rows[source] = shared_shape.clone();
++        }
++        assert_eq!(region_scroll_delta(&old, &new), Some(-30));
++        assert!(scroll_reuse(&old, &new).is_none(), "exposed shared rows cannot justify copying a large interval");
++    }
+     #[test]
+     fn prior_frame_admission_is_bounded_and_preserves_snapshot_identity() {
+         let normal = frame(SCROLL_FRAME_BYTES);
+diff --git a/desktop/aizome/apps/hotaru/tests/pixel_scroll.rs b/desktop/aizome/apps/hotaru/tests/pixel_scroll.rs
+index a9c831a..50bdb82 100644
+--- a/desktop/aizome/apps/hotaru/tests/pixel_scroll.rs
++++ b/desktop/aizome/apps/hotaru/tests/pixel_scroll.rs
+@@ -78,6 +78,94 @@ fn exact(h: &mut Harness<Hotaru>, scale: f64) -> ExactFrameCheck {
+     result
+ }
+ 
++#[test]
++fn partial_regions_and_line_edits_preserve_every_pixel() {
++    let mut h = Harness::new(Hotaru::preview());
++    let w = h.window();
++    h.advance(Duration::ZERO);
++    let id = h.program().active_pane().unwrap().id;
++    h.focus_window(w, true);
++    h.send(Msg::FocusPane(id));
++    for scale in [1., 1.25, 2.] {
++        h.output_scale(w, scale);
++        h.advance(Duration::ZERO);
++        assert!(h.settle(Duration::from_secs(5), |app| {
++            app.active_pane().unwrap().font_metrics().is_some_and(|m| m.scale == scale)
++        }));
++        let mut term = Terminal::new(70, 20, 0);
++        if scale == 2. {
++            term.feed(b"\x1b[?1049h");
++        }
++        term.feed(b"\x1b[2 q");
++        for row in 1..=20 {
++            term.feed(
++                format!("\x1b[{row};1H{row:03} 日本語 😀 e\u{301} ─┼│ \x1b[3{};4mcolor\x1b[0m", row % 8).as_bytes(),
++            );
++        }
++        term.feed(b"\x1b[2;19r\x1b[19;1H");
++        show(&mut h, term.snapshot());
++        exact(&mut h, scale);
++        // A four-row region must leave the other sixteen rows in place, even
++        // with a stationary cursor outside it. Copying the entire viewport
++        // would be correct but would turn four dirty rows into almost twenty.
++        term.feed(b"\x1b[5;8r\x1b[1;1H");
++        show(&mut h, term.snapshot());
++        exact(&mut h, scale);
++        term.feed(b"\x1b[S");
++        show(&mut h, term.snapshot());
++        let narrow = exact(&mut h, scale);
++        eprintln!("narrow region scale={scale}: {narrow:?}");
++        if scale != 1.25 {
++            assert!(narrow.moves > 0);
++            assert!(narrow.copied_pixels < narrow.total_pixels / 4);
++            assert!(narrow.rasterized_pixels < narrow.total_pixels / 4);
++        }
++        term.feed(b"\x1b[2;19r\x1b[19;1H");
++        show(&mut h, term.snapshot());
++        exact(&mut h, scale);
++        let position = term.snapshot().position;
++        for action in [
++            b"\n".as_slice(),
++            b"\x1b[2S",
++            b"\x1b[2;1H\x1bM",
++            b"\x1b[2T",
++            b"\x1b[6;1H\x1b[2L",
++            b"\x1b[6;1H\x1b[2M",
++            // Two disjoint regions move in opposite directions in one frame.
++            b"\x1b[2;9r\x1b[S\x1b[11;19r\x1b[T",
++        ] {
++            term.feed(action);
++            assert_eq!(term.snapshot().position, position, "partial scroll keeps viewport origin");
++            show(&mut h, term.snapshot());
++            let result = exact(&mut h, scale);
++            eprintln!("region scale={scale} action={action:?}: {result:?}");
++            if scale == 1.25 {
++                assert_eq!(result.moves, 0, "half-pixel terminal padding requires ordinary rasterization");
++            } else {
++                assert!(result.moves > 0, "unchanged row identities should enable a region move");
++            }
++            assert!(result.rasterized_pixels < result.total_pixels);
++        }
++        // Coalesced copies must remain correct without an intervening paint.
++        for action in [b"\x1b[2;19r\x1b[S".as_slice(), b"\x1b[2T", b"\x1b[4;1H\x1b[L"] {
++            term.feed(action);
++            show(&mut h, term.snapshot());
++        }
++        exact(&mut h, scale);
++        for action in [b"\x1b[4 q\x1b[S".as_slice(), b"\x1b[6 q\x1b[T", b"\x1b[?25l\x1b[S"] {
++            term.feed(action);
++            show(&mut h, term.snapshot());
++            assert_eq!(exact(&mut h, scale).moves > 0, scale != 1.25);
++        }
++        h.focus_window(w, false);
++        term.feed(b"\x1b[?25h\x1b[2 q\x1b[T");
++        show(&mut h, term.snapshot());
++        exact(&mut h, scale);
++        h.focus_window(w, true);
++        exact(&mut h, scale);
++    }
++}
++
+ #[test]
+ fn row_scroll_preserves_exact_pixels_and_reduces_raster_work() {
+     let mut h = Harness::new(Hotaru::preview());
+diff --git a/desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py b/desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py
+index 9b009af..b7d1afa 100644
+--- a/desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py
++++ b/desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py
+@@ -25,13 +25,28 @@ while True:
+     try:stage=int((root/'stage').read_text())
+     except (FileNotFoundError,ValueError):time.sleep(.005);continue
+     if stage!=previous:
+-        if stage:
++        if 0 < stage < 28:
+             for _ in range(1+stage%5):row()
+         if stage==8:os.write(1,b'\x1b]4;1;#ff8844\x07')
+         if stage==12:os.write(1,b'\x1b[4 q')
+         if stage==16:os.write(1,b'\x1b[6 q')
+         if stage==20:os.write(1,b'\x1b[?25l')
+         if stage==24:os.write(1,b'\x1b[?25h\x1b[2 q')
++        if stage==28:
++            rows=os.get_terminal_size().lines
++            os.write(1,b'\x1b[r\x1b[2J\x1b[H')
++            for y in range(1,rows+1):
++                os.write(1,f'\x1b[{y};1Hregion {y:03} 日本語 😀 e\u0301 ─┼│ \x1b[3{y%8};4mcolor\x1b[0m'.encode())
++            os.write(1,f'\x1b[2;{rows-1}r\x1b[{rows-1};1H'.encode())
++        actions={29:b'\n',30:b'\x1b[2S',31:b'\x1b[2;1H\x1bM',32:b'\x1b[2T',
++                 33:b'\x1b[6;1H\x1b[2L',34:b'\x1b[6;1H\x1b[2M',
++                 36:b'\x1b[8;1Hchanged retained row\x1b[S',37:b'\x1b[6 q\x1b[T',
++                 38:b'\x1b[4 q\x1b[S',39:b'\x1b[?25l\x1b[T',
++                 40:b'\x1b[?25h\x1b[2 q\x1b[S',41:b'\x1b[r\x1b[2T'}
++        if stage==35:
++            mid=rows//2
++            os.write(1,f'\x1b[2;{mid}r\x1b[S\x1b[{mid+2};{rows-1}r\x1b[T'.encode())
++        if stage in actions:os.write(1,actions[stage])
+         os.write(1,f'\x1b]2;scroll-stage-{stage}\x07'.encode())
+         previous=stage
+     time.sleep(.005)
+@@ -64,7 +79,7 @@ while True:
+                 try:return json.loads(next(inspect.glob(f'org.aizome.Hotaru.{app.pid}.*.json')).read_text())['title']
+                 except (StopIteration,FileNotFoundError,json.JSONDecodeError):return None
+             wait('native window',title)
+-            for stage in range(28):
++            for stage in range(42):
+                 (runtime/'stage').write_text(str(stage))
+                 wait('stage title',lambda:title()==f'scroll-stage-{stage} — Hotaru')
+                 # Require repeated unchanged actual compositor frames. The title
+@@ -92,10 +107,10 @@ while True:
+     differing=[n for n,(a,b) in enumerate(zip(screenshots['copy'],screenshots['redraw'])) if a!=b]
+     report={'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
+             'scope':'private headless Sway/pixman actual screenshots; exact RGBA, no timing claim',
+-            'frames_per_mode':28,'screenshots_sha256':screenshots,'differing_frames':differing,
++            'frames_per_mode':42,'screenshots_sha256':screenshots,'differing_frames':differing,
+             'status':'passed' if not differing else 'failed'}
+     (evidence/'result.json').write_text(json.dumps(report,indent=2)+'\n')
+-    print(json.dumps({'status':report['status'],'differing_frames':differing,'frames_per_mode':28}))
++    print(json.dumps({'status':report['status'],'differing_frames':differing,'frames_per_mode':42}))
+     assert not differing, differing
+ 
+ 

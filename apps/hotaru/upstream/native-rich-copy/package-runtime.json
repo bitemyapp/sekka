@@ -1,0 +1,41 @@
+{
+  "package": "/nix/store/mqvwv93ax0x85ddi44279wwhalfadvkd-hotaru-0.1.0",
+  "derivation": "/nix/store/5dzg45p3ss5b838wq63z7yfjlhlc7jmb-hotaru-0.1.0.drv",
+  "prepared_source": "/nix/store/67hxqxhxlm1dvaq479fiwlkbp7miy6ln-hotaru-source",
+  "wrapper_sha256": "c4e90fcf616cdf454beaac97bdbd0a387e7e6f80d8ffb1c012ca3ca9cce649e7",
+  "elf_sha256": "263a1e3ae6e9184e2340ac189f953c8280e525c72b9a828cc78888e35c220fef",
+  "cleared_environment": [
+    "AIZOME_FONT_DIR",
+    "FONTCONFIG_FILE",
+    "FONTCONFIG_PATH",
+    "LD_LIBRARY_PATH",
+    "SIDESTEP_FONT",
+    "SIDESTEP_MONO_FONT"
+  ],
+  "test_path": "/usr/bin:/bin",
+  "matched_source_count": 67,
+  "source_differences": [],
+  "outside_prepared_source": [
+    "apps/hotaru/Cargo.lock",
+    "apps/hotaru/upstream/sidestep-clipboard.patch",
+    "apps/hotaru/upstream/sidestep-input.patch",
+    "apps/hotaru/upstream/sidestep-mime.patch"
+  ],
+  "elf_interpreter": "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+  "elf_loader_exit": 0,
+  "elf_loader_libraries": "\tlinux-vdso.so.1 (0x0000788122a73000)\n\tlibc.so.6 => /nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6 (0x0000788121c00000)\n\t/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2 (0x0000788122a75000)\n\tlibgcc_s.so.1 => /nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib/libgcc_s.so.1 (0x0000788122a3d000)\n\tlibm.so.6 => /nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6 (0x0000788121edf000)\n",
+  "elf_loader_errors": "",
+  "qualification_scope": "Private headless Wayland component smoke; not Aizome VM/ISO qualification or a performance comparison. UI response duration includes 150 ms keyboard fixture initialization.",
+  "local_checkout_manifest_verified": true,
+  "packaged_font_installations": [
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed Archivo from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed Archivo from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf",
+    "[2026-10-28T16:16:36Z DEBUG aizome_kit::fonts] installed Noto Sans Symbols 2 from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf"
+  ],
+  "private_process_cleanup_verified": true
+}

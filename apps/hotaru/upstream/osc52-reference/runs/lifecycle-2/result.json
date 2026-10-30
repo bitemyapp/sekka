@@ -1,0 +1,279 @@
+{
+  "suite": "lifecycle",
+  "status": "observed",
+  "scope": "unchanged GTK app, private software Sway; behavioral observations, no performance claim",
+  "sources": {
+    "/home/callen/work/hotaru-osc52-reference-20261028/tools/gtk_probe.py": "cde0208e5e4ffb1425ffe60794f18a7e7432eebc0a48aacfcf67a6f686009cd7",
+    "/home/callen/work/hotaru-region-frames-20261028/tools/frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+    "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+    "/home/callen/work/hotaru-frame-harness-20261028/build/frame-observer": "3bf2a4ba967c7526e4266b9fb48c730df205253afede449627f5bcdb83a8f1c3"
+  },
+  "cases": [
+    {
+      "name": "stopped-source-pending",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250333547
+      }
+    },
+    {
+      "name": "stopped-source-dsr",
+      "input": {
+        "length": 4,
+        "sha256": "d907695b104f1c48f93ac2a6f8f6826688a7b359b4b101b26af46022778dbf72",
+        "hex": "1b5b366e"
+      },
+      "reply": {
+        "length": 6,
+        "sha256": "3eb1de54b17b959c79d410fccc9940cc1e6602bca3a21550e1d9bff3d40564c1",
+        "hex": "1b5b313b3152"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250283070
+      }
+    },
+    {
+      "name": "resumed-source-completion",
+      "input": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "7c7e783f7bb11dbc3f03515bd78f7b085e4ada6ec387da1ad009e6d9e10ef3f8",
+        "hex": "1b5d35323b633b5345564d5243314657465246556b354254433153525546451b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 600637334
+      }
+    },
+    {
+      "name": "large-write-before-stalled-reader",
+      "input": {
+        "length": 2796213,
+        "sha256": "b161f1d5d66ec09d66c7d34339b4f8b0e73f41eb028a2781c057d95c3aac8cd2"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 507317096
+      },
+      "standard": {
+        "length": 2097152,
+        "sha256": "d1d096b674885e6e1f6e021c1323a6c0742d83d1464f64ac85206581d4ea7b63"
+      },
+      "primary": {
+        "length": 12,
+        "sha256": "906ce45d4c6ba1aa5c98da858030c77991e58cc4b30ffc270d81205e21d4c891",
+        "hex": "5052494d4152592d53454544"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "stalled-reader-resize",
+      "before": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250301951
+      },
+      "after": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250296613
+      },
+      "resize_return": 0,
+      "resize_stdout": "[\n  {\n    \"success\": true\n  },\n  {\n    \"success\": true\n  }\n]\n",
+      "reader_alive": true
+    },
+    {
+      "name": "after-reader-pipe-close",
+      "input": {
+        "length": 4,
+        "sha256": "d907695b104f1c48f93ac2a6f8f6826688a7b359b4b101b26af46022778dbf72",
+        "hex": "1b5b366e"
+      },
+      "reply": {
+        "length": 6,
+        "sha256": "3eb1de54b17b959c79d410fccc9940cc1e6602bca3a21550e1d9bff3d40564c1",
+        "hex": "1b5b313b3152"
+      },
+      "transport": {
+        "size": [
+          79,
+          23
+        ],
+        "elapsed_ns": 250287418
+      },
+      "standard": {
+        "length": 2097152,
+        "sha256": "d1d096b674885e6e1f6e021c1323a6c0742d83d1464f64ac85206581d4ea7b63"
+      },
+      "primary": {
+        "length": 12,
+        "sha256": "906ce45d4c6ba1aa5c98da858030c77991e58cc4b30ffc270d81205e21d4c891",
+        "hex": "5052494d4152592d53454544"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "close-window-source-pending",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          79,
+          23
+        ],
+        "elapsed_ns": 250302081
+      }
+    },
+    {
+      "name": "closed-window-with-read-pending",
+      "app_return": 0
+    }
+  ],
+  "private_environment": {
+    "WAYLAND_DISPLAY": "wayland-1",
+    "XDG_RUNTIME_DIR": "/tmp/osc52-yirkvg6z",
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman"
+  },
+  "keyboard_ready": "{\"event\":\"ready\",\"time_ns\":4085426227348512}\n",
+  "fixture": {
+    "ready": true,
+    "pid": 2253417
+  },
+  "focused_window": {
+    "id": 5,
+    "type": "con",
+    "orientation": "none",
+    "percent": 1.0,
+    "urgent": false,
+    "marks": [],
+    "focused": true,
+    "layout": "none",
+    "border": "none",
+    "current_border_width": 2,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "deco_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "window_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 600
+    },
+    "name": "/usr/bin/python3",
+    "window": null,
+    "nodes": [],
+    "floating_nodes": [],
+    "focus": [],
+    "fullscreen_mode": 0,
+    "sticky": false,
+    "pid": 2253323,
+    "app_id": "com.mitchellh.ghostty",
+    "visible": true,
+    "max_render_time": 0,
+    "shell": "xdg_shell",
+    "inhibit_idle": false,
+    "idle_inhibitors": {
+      "user": "none",
+      "application": "none"
+    }
+  },
+  "primary_selection_available": true,
+  "keyboard_probe": {
+    "length": 1,
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "hex": "61"
+  },
+  "initial_external_read": {
+    "length": 29,
+    "sha256": "b20de5d5ff35ea38013613d35d53c9488d9b850cd704b9dff8a3d49e465707f5",
+    "hex": "1b5d35323b633b55315242546b5242556b51745530564652413d3d1b5c"
+  },
+  "app_alive": false,
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "process_returns": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    -15,
+    0,
+    0,
+    -15
+  ]
+}

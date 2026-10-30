@@ -1,0 +1,183 @@
+{
+  "scope": "isolated recorded native-scene software/Intel GPU exactness and private headless Wayland transport; no production GPU backend or accepted performance comparison",
+  "base_revision": "3d10197261512c92ccc5816dfdd60c88566c4150",
+  "prepared_scene_count": 18,
+  "hardware_renders": 36,
+  "rgba_bytes_compared": 139361152,
+  "all_pixel_differences_zero": true,
+  "all_warm_asset_uploads_zero": true,
+  "regenerated_fixture_hashes_match_hardware_input": {
+    "00.rgba": true,
+    "00.scene": true,
+    "01.rgba": true,
+    "01.scene": true,
+    "02.rgba": true,
+    "02.scene": true,
+    "03.rgba": true,
+    "03.scene": true,
+    "04.rgba": true,
+    "04.scene": true,
+    "05.rgba": true,
+    "05.scene": true,
+    "06.rgba": true,
+    "06.scene": true,
+    "07.rgba": true,
+    "07.scene": true,
+    "08.rgba": true,
+    "08.scene": true,
+    "09.rgba": true,
+    "09.scene": true,
+    "10.rgba": true,
+    "10.scene": true,
+    "11.rgba": true,
+    "11.scene": true,
+    "12.rgba": true,
+    "12.scene": true,
+    "13.rgba": true,
+    "13.scene": true,
+    "14.rgba": true,
+    "14.scene": true,
+    "15.rgba": true,
+    "15.scene": true,
+    "16.rgba": true,
+    "16.scene": true,
+    "17.rgba": true,
+    "17.scene": true
+  },
+  "remote_tests": {
+    "lifecycle": 15,
+    "scene_reader_unique": 3,
+    "feedback": 2,
+    "test_executions": 23,
+    "safe_scene_preparation": 5,
+    "representative_scene_test": 1,
+    "representative_scenes": 18,
+    "strict_compute_clippy": "passed after patch in remote-validation/post-hardware-lint.patch"
+  },
+  "hardware_source": {
+    "Cargo.lock": "ee77f03d061fa1e8dddcbd455f86ab4f437afb3e221e6de12440e247631f146a",
+    "Cargo.toml": "61eb88488c8598be4a37512a0f3a3202432d47ca8b5923ce6ff730dbbec50e6a",
+    "src/compose.comp": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215",
+    "src/compose.rs": "c01b631c1832ce820a42d181853d88cc9af3584a1b1fafbe3e31718cc5891ed6",
+    "src/egl.rs": "a3cd15b68d5b3016290f6a007cab554b2bb4fff3abafb364f262d222fed99b5e",
+    "src/egl_probe.rs": "a67c80409ee7b8850652c0257d10c820cc17fb7c5a0ed1207ac9cbfca17318d6",
+    "src/lib.rs": "4a6a0a22b7c6d427f10fbab97afed374d139c342513112b363cafb4fd6df9680",
+    "src/scene.rs": "c49c8bc781b5fa7ff51b5dcc4cddc09b943a086d8edeef1754f042656800b755",
+    "src/scene_probe.rs": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c",
+    "src/scene_wayland_probe.rs": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c",
+    "src/wayland_probe.rs": "8826ae320ce16c1a6011d04ddbc25a339791cfa37d749abca7d49f6c10cd5048"
+  },
+  "remote_source_after_lint": {
+    "Cargo.lock": "ee77f03d061fa1e8dddcbd455f86ab4f437afb3e221e6de12440e247631f146a",
+    "Cargo.toml": "61eb88488c8598be4a37512a0f3a3202432d47ca8b5923ce6ff730dbbec50e6a",
+    "src/compose.comp": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215",
+    "src/compose.rs": "003b1d3c9518e6b11a7a0c9d451219a58fd95d177afdb012495ea97d460cdd0b",
+    "src/egl.rs": "0aa9a8446d0c41a84b4b2423588021101492edc8bf125d59581b84e289ed5e3c",
+    "src/egl_probe.rs": "a67c80409ee7b8850652c0257d10c820cc17fb7c5a0ed1207ac9cbfca17318d6",
+    "src/lib.rs": "4a6a0a22b7c6d427f10fbab97afed374d139c342513112b363cafb4fd6df9680",
+    "src/scene.rs": "c49c8bc781b5fa7ff51b5dcc4cddc09b943a086d8edeef1754f042656800b755",
+    "src/scene_probe.rs": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c",
+    "src/scene_wayland_probe.rs": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c",
+    "src/wayland_probe.rs": "8826ae320ce16c1a6011d04ddbc25a339791cfa37d749abca7d49f6c10cd5048"
+  },
+  "wayland_runs": [
+    {
+      "run": 1,
+      "status": "passed",
+      "wayland_exit": 0,
+      "capture": {
+        "sha256": "c10d6575ebb046d3698bc89a882cd1d72c9b4a1aa1836b29ccad0bcafd6dc6b2",
+        "format": "P6 RGB8",
+        "width": 1280,
+        "height": 960,
+        "region": [
+          40,
+          65,
+          1200,
+          830
+        ],
+        "checked_rgb_bytes": 2988000,
+        "exact": true,
+        "source_rgba_sha256": "c589f0c505272e14dcc83c7eb9661e9831655c746a8612f13399443ca2c44b84"
+      },
+      "hardware_verified": true,
+      "all_owned_processes_exited": true,
+      "forced_descendant_cleanup": []
+    },
+    {
+      "run": 2,
+      "status": "passed",
+      "wayland_exit": 0,
+      "capture": {
+        "sha256": "c10d6575ebb046d3698bc89a882cd1d72c9b4a1aa1836b29ccad0bcafd6dc6b2",
+        "format": "P6 RGB8",
+        "width": 1280,
+        "height": 960,
+        "region": [
+          40,
+          65,
+          1200,
+          830
+        ],
+        "checked_rgb_bytes": 2988000,
+        "exact": true,
+        "source_rgba_sha256": "c589f0c505272e14dcc83c7eb9661e9831655c746a8612f13399443ca2c44b84"
+      },
+      "hardware_verified": true,
+      "all_owned_processes_exited": true,
+      "forced_descendant_cleanup": []
+    },
+    {
+      "run": 3,
+      "status": "passed",
+      "wayland_exit": 0,
+      "capture": {
+        "sha256": "c10d6575ebb046d3698bc89a882cd1d72c9b4a1aa1836b29ccad0bcafd6dc6b2",
+        "format": "P6 RGB8",
+        "width": 1280,
+        "height": 960,
+        "region": [
+          40,
+          65,
+          1200,
+          830
+        ],
+        "checked_rgb_bytes": 2988000,
+        "exact": true,
+        "source_rgba_sha256": "c589f0c505272e14dcc83c7eb9661e9831655c746a8612f13399443ca2c44b84"
+      },
+      "hardware_verified": true,
+      "all_owned_processes_exited": true,
+      "forced_descendant_cleanup": []
+    }
+  ],
+  "historical_failure": "failed-loader-teardown/wayland-result.json",
+  "diagnostic_costs_not_benchmarks": {
+    "warm_dispatch_export_fence_us": [
+      8070,
+      17520,
+      2460,
+      20432,
+      6197,
+      939,
+      10264,
+      4232,
+      828,
+      2037,
+      1777,
+      1156,
+      2990,
+      54273,
+      579,
+      10446,
+      5411,
+      683
+    ],
+    "maximum_warm_us": 54273,
+    "scope": "dispatch, EGL image creation/export and CPU fence wait; texture allocation is in prepare_upload_us; no load-controlled CPU/Ghostty pair"
+  },
+  "all_further_builds_tests_benchmarks": "ssh wx-workstation only by latest user instruction",
+  "raw_artifacts": "/home/callen/work/hotaru-local-gui-20261028/gpu-scene",
+  "raw_preparation": "/home/callen/work/hotaru-gpu-scene-isolated",
+  "raw_remote_compute": "wx-workstation:/home/callen/work/hotaru-gpu-compose-isolated"
+}

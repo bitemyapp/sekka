@@ -1,0 +1,70 @@
+{
+  "baseline-build.json": {
+    "sha256": "e9c064adbd98f7e14e8357131a864efcf9245049fc49dce37ef46dcdbefa86af",
+    "bytes": 11891
+  },
+  "build-candidate.py": {
+    "sha256": "73931ce11957f348d0200edbb063cc6d88e1ca1cfe619d7843b5b73304a3d339",
+    "bytes": 5492
+  },
+  "corpus.py": {
+    "sha256": "a95a3f1d77f55a9a304ac86a23838aa0ed41b2f8756e902aa3365a96eeab2455",
+    "bytes": 1622
+  },
+  "differential.py": {
+    "sha256": "0c141bd2951158dbba6d63902103ad7a4df3d46d6391daa3e64581ee0d38dc5a",
+    "bytes": 28035
+  },
+  "first-attempt-build.json": {
+    "sha256": "c99c1ab284ce36c2fe87a399842e28e2bafb85286e8822aa8aa8dc703a289d2b",
+    "bytes": 15086
+  },
+  "first-attempt-build.log": {
+    "sha256": "fc6e7fb45c5e458b8fd1263cb453274ee8a1e55069d99429e2ea5d62c049a61e",
+    "bytes": 1104
+  },
+  "first-attempt-mpstat.log.xz": {
+    "sha256": "06a32137e4771ee5bf1865d97de53e2e466dcdf4e31201f548718f7de42fdb4c",
+    "bytes": 5344
+  },
+  "first-attempt-run.log": {
+    "sha256": "f156a8a981d06d36aeacaa1973e16729670d62cfc4647386ae04e6eacebc64a4",
+    "bytes": 556
+  },
+  "first-attempt-runner.py": {
+    "sha256": "fe9ab05c4599f6060983d03333b8f18900e95d70f64a805886244c03c0d64c4c",
+    "bytes": 15320
+  },
+  "first-attempt-summary.json.xz": {
+    "sha256": "6e8bbcba06b889221ce68273a7c31a45f47ce6a4546bdacb418f646ac364f4df",
+    "bytes": 201176
+  },
+  "mpstat.log.xz": {
+    "sha256": "8bbb9cab2d423ce546e7b95c5d16f23fe4079719632acdd1e93dd4c6b909c811",
+    "bytes": 52616
+  },
+  "native-build.json": {
+    "sha256": "a5bab378fdb82a03bf013b84dd4e9f21f27f71524a01ff4a9b740cc140d97c7f",
+    "bytes": 15249
+  },
+  "native-build.log": {
+    "sha256": "3d6041216c35d83a78ea04f9822deb2a142b866b7291e78efcc6ac16d9ba02bd",
+    "bytes": 1108
+  },
+  "native-summary.json.xz": {
+    "sha256": "702633302dfe462ac15eb7fe5c7ac461969d562e043edb8d63f30daed7bf1320",
+    "bytes": 647536
+  },
+  "run.log": {
+    "sha256": "200855db32ee018c6f32e98c16fc893ab0f14be8f87c2bc95a12f903088a3d83",
+    "bytes": 136
+  },
+  "runner.py": {
+    "sha256": "12e07a573abdfdc082116dbf807a0dd4e4c21cb41dbe74ef33d5a6baa36b1df2",
+    "bytes": 17460
+  },
+  "summary.json": {
+    "sha256": "a7031f2fbd7bda8ff17daac22560120ceffa42202e75adcb4e2c919d6c8a46a1",
+    "bytes": 68297
+  }
+}

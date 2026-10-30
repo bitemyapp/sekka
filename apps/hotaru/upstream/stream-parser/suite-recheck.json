@@ -1,0 +1,90 @@
+{
+  "scope": "Recheck the final screens of the Ghostty suite's generated inputs.\n\nRegenerates each 64 MiB input of ../ghostty-suite/run.py with the same\nghostty-gen arguments and compares the final screen between the pinned\nlibghostty-vt and hotaru-replay (zero history, 120x80), without timing.\nThe random UTF-8 and styled inputs are seeded and reproduce the recorded\nfiles; the ASCII and OSC generators take time-based seeds. Paths are wx's.\n\nUsage: suite-recheck.py REPLAY REPORT\n",
+  "ghostty_gen_sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "replay_sha256": "66ac43ad36fa86b847de7c8824b319f0d1f45c25bf3c86798e2784927cc24870",
+  "rows": 80,
+  "cols": 120,
+  "input_bytes": 67108864,
+  "inputs": {
+    "ascii": {
+      "generator": [
+        "+ascii"
+      ],
+      "sha256": "4ea1a105be54088b2109082117b761b7441f3f43d3b186d9b133c9369f92c6fc",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "styled-plain": {
+      "generator": [
+        "+styled",
+        "--seed=42"
+      ],
+      "sha256": "e4f29faaf568e9a787d0f9331f823e979a15a9181fd6bc81ba779e11cefd749e",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "styled-heavy": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--style-rate=0.8"
+      ],
+      "sha256": "84e6bc2bb07bf5e1b019fa8aca1933b6dde22c5d67b096f1fdfc652ede945753",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "styled-unicode": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--weight-two=1",
+        "--weight-three=1",
+        "--weight-four=0.5",
+        "--grapheme-rate=0.1"
+      ],
+      "sha256": "4affe6eea4d1b1ab432fa56932a99127524933de6941d98428fd7382260a1e14",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "styled-mixed": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--style-rate=0.3",
+        "--weight-two=0.5",
+        "--weight-three=0.25",
+        "--weight-four=0.1",
+        "--grapheme-rate=0.05",
+        "--osc8-rate=0.1"
+      ],
+      "sha256": "7b9f5611ecc21cbf14275a90a4482eaf4045a8ea9cdef73fadf058924c4adffe",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "utf8": {
+      "generator": [
+        "+utf8",
+        "--seed=42"
+      ],
+      "sha256": "58db6da6222608e9d77d7d6e01d821f80c9bcbc28e238bafd63a635f74db564e",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    },
+    "osc": {
+      "generator": [
+        "+osc"
+      ],
+      "sha256": "8a018fc5b68a3e743886268f0968c1dae36532fc6bd08b985bfadc1d3d999bb9",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": []
+    }
+  }
+}

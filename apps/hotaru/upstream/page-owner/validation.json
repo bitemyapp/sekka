@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "production_integrated": false,
+  "recommendation": "Reject current integration: lower RSS but history ingestion and cold reads regress.",
+  "source_sha256": "2f8ad97e7e82766b99655fdc591658ad45a8ba40c59fb879bf9934a75a30f774",
+  "binary_sha256": "7a08e8c182ed46704edace87d25a241b734eaa15bed9175982338ffff4eaa254",
+  "tests_passed": 111,
+  "commands": [
+    "cargo +1.95.0 test -p hotaru-core --tests",
+    "cargo +1.95.0 clippy -p hotaru-core --all-targets -- -D warnings"
+  ],
+  "miri": {
+    "toolchain": "nightly-2026-08-28",
+    "commands": [
+      "MIRIFLAGS=\"-Zmiri-strict-provenance\" cargo +nightly-2026-08-28 miri test -p hotaru-core --lib cells::tests",
+      "MIRIFLAGS=\"-Zmiri-tree-borrows -Zmiri-strict-provenance\" cargo +nightly-2026-08-28 miri test -p hotaru-core --lib cells::tests"
+    ],
+    "passed_each": 5,
+    "ignored_each": 1,
+    "limitation": "Same raw owner/slices/COW/drop, but immutable heap-backed pages replace Linux mmap under cfg(miri). Large OS boundary test ignored under Miri and passes natively."
+  },
+  "independent_review": {
+    "agent": "upstream_clipboard",
+    "result": "No concrete pointer, aliasing, double-drop, COW, or Send/Sync defect found. Source review only; no independent Miri run."
+  },
+  "reconstruction": "All source hashes match frozen baseline plus owner-hoisted.patch; diagnostics are a separate additive patch.",
+  "artifacts": {
+    "owner-hoisted.patch": "38e6104c51f1606bec74163d3d65632496a3a20c5a3aa95fd01055b70b191dac",
+    "validation-owner-final.log": "cfe0e1becb8bab51b0bf6589865c279476490ab6558a9e0a599e815f1de5d69a",
+    "miri-owner-final.log": "b74f178a04acb8f225d285ad8f2f810efd4e3f88397ce0028b0d9218671d0962",
+    "hoisted-report.json": "50da0e3d1e052ed3ad79b570d6715dd48798fe651442165b64f7ed5c0883599f",
+    "initial-report.json": "5b2d778f7ea92e08035162f44714b37ea7eb0f14c41e7628668b699cfbdd16f9",
+    "diagnostic-hooks.patch": "dee632dac3b8f0b92d71ee0e6bbe14a2731f28826b3ba39a1ab44a8b97777b91",
+    "diagnostic-build.json": "75172c39bff98548cd6159730215f77bcd7268987c784ae680e7e7df547484cf",
+    "profile-report.json": "596e70f8ca3dbed334354f8ab9607978a3a2dea26e495170b6846d436fadff65",
+    "profile-pages.py": "bea1baafd58ebe9d202eba4cc3d19dfae9af01ad76edb852971c2ee0d86bd9dc",
+    "build-candidate.py": "c0f589eb0efab62b5ecb73660972c0cdc23871da4c6f8a918469c2d1f4cd9d2c"
+  }
+}

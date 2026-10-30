@@ -1,0 +1,55 @@
+info: ghostty version=1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix
+info: ghostty build optimize=fast
+info: runtime=.gtk
+info: font_backend=.fontconfig_freetype
+info: dependency harfbuzz=14.5.1
+info: dependency fontconfig=21803
+info: renderer=renderer.generic.Renderer(renderer.OpenGL)
+info: libxev default backend=io_uring
+info(os_locale): setlocale from env result=en_US.UTF-8
+info(gtk): GTK version build=4.22.4 runtime=4.22.4
+info(gtk): libadwaita version build=1.9.3 runtime=1.9.3
+info(config): creating template config file: path=/tmp/hotaru-frames-4bmafgmh/config/ghostty/config.ghostty
+info(config): config-default-files unset, discarding configuration from default files
+info: reading configuration file path=/tmp/hotaru-frames-4bmafgmh/ghostty.conf
+info(config): default shell source=env value=/bin/zsh
+warning(gtk_ghostty_application): setting GDK_DEBUG=
+warning(gtk_ghostty_application): setting GDK_DISABLE=vulkan
+warning(glib): WARNING: Gtk: Unable to acquire the address of the accessibility bus: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files. If you are attempting to run GTK without a11y support, GTK_A11Y should be set to 'none'.
+info(gtk_ghostty_surface): surface content scale: x=1 y=1 dpi=96x96 font_size=14
+info(font_shared_grid_set): font regular: IBM Plex Mono
+info(font_shared_grid_set): font bold: IBM Plex Mono Bold
+info(font_shared_grid_set): font italic: IBM Plex Mono Italic
+info(font_shared_grid_set): font bold_italic: IBM Plex Mono Italic
+info(opengl): EGL vendor=Mesa Project
+info(opengl): EGL extensions=EGL_ANDROID_blob_cache EGL_EXT_buffer_age EGL_EXT_config_select_group EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_EXT_present_opaque EGL_EXT_query_reset_notification_strategy EGL_EXT_surface_compression EGL_EXT_swap_buffers_with_damage EGL_KHR_cl_event2 EGL_KHR_config_attribs EGL_KHR_context_flush_control EGL_KHR_create_context EGL_KHR_create_context_no_error EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image_base EGL_KHR_no_config_context EGL_KHR_reusable_sync EGL_KHR_surfaceless_context EGL_KHR_swap_buffers_with_damage EGL_EXT_pixel_format_float EGL_KHR_wait_sync EGL_MESA_configless_context EGL_MESA_gl_interop EGL_MESA_query_driver EGL_MESA_x11_native_visual_id 
+info(io_exec): found Ghostty resources dir: /nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/share/ghostty
+info(io_exec): shell integration disabled by configuration
+info(io_exec): started subcommand path=/usr/bin/python3 pid=4112026
+info(opengl): loaded OpenGL 4.6
+warning(glib): WARNING: Gtk: Allocating size to AdwToolbarView 0x5f659fff4100 without calling gtk_widget_measure(). How does the code know the size to allocate?
+warning(gtk_ghostty_application): unimplemented action=.color_change
+warning(gtk_ghostty_application): unimplemented action=.color_change
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(gtk_ghostty_application): unimplemented action=.color_change
+warning(gtk_ghostty_application): unimplemented action=.color_change
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation
+warning(opengl): failed to export DMABUF, falling back to CPU presentation

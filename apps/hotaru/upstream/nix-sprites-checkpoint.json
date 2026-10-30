@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T22:09:53.103050+00:00",
+  "host": "callen",
+  "status": "passed",
+  "scope": "Combined native ASCII stores, pixel scrolling and 153 box/block sprites; package build only, runtime suites recorded separately",
+  "derivation": "/nix/store/gb018ra4si35dg0qa1d5y0rl3qlrx1wk-hotaru-0.1.0.drv",
+  "output": "/nix/store/k8hj5hzc316icb0g64fbglrh6gpjfwh6-hotaru-0.1.0",
+  "source": "/nix/store/jgycq122glknsb59fi9bbmjlryy2c7zx-hotaru-source",
+  "source_nar_hash": "sha256-CAG7FqGT8Kpl/yJu9QKAKVAVHhg0XUK8AxEjfcrbNOc=",
+  "binary_sha256": "64e7975b8d52e7c825544751640589eb7e44ed48165e88bce47c91865d241e86",
+  "wrapper_sha256": "3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774",
+  "build_log_sha256": "eeee5d159414719c1604a132ab8fda0733faa3ea410ede99c87fd1603af38cc1",
+  "test_summaries": [
+    "test result: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+    "test result: ok. 22 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "build_type": "release",
+  "cargo_test_flags": "-p aizome-hotaru",
+  "help": "Hotaru \u86cd \u2014 Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG\u2026]]\n",
+  "installed_files": [
+    "bin/.hotaru-wrapped",
+    "bin/aizome-hotaru",
+    "bin/hotaru",
+    "share/applications/org.aizome.Hotaru.desktop",
+    "share/hotaru/LICENSE-MIT",
+    "share/hotaru/hotaru.terminfo",
+    "share/hotaru/shell-integration/bash/hotaru.bash",
+    "share/hotaru/shell-integration/bash/rc.bash",
+    "share/hotaru/shell-integration/fish/hotaru.fish",
+    "share/hotaru/shell-integration/zsh/.zshenv",
+    "share/hotaru/shell-integration/zsh/hotaru.zsh",
+    "share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg",
+    "share/licenses/hotaru/Ghostty-MIT.txt",
+    "share/licenses/hotaru/Shell-integration-MIT.txt",
+    "share/licenses/hotaru/Unicode-3.0.txt",
+    "share/licenses/hotaru/simdutf8-Apache.txt",
+    "share/licenses/hotaru/simdutf8-MIT.txt",
+    "share/licenses/hotaru/uucode-MIT.txt",
+    "share/terminfo/h/hotaru",
+    "share/terminfo/x/xterm-hotaru"
+  ],
+  "licenses": {
+    "Ghostty-MIT.txt": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1",
+    "Shell-integration-MIT.txt": "95946e45bd1e741f84890f66acd74436aace33336d990ef303dc10421f332769",
+    "Unicode-3.0.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "simdutf8-Apache.txt": "0cec06e0e55fbc3dc5cee4fca9b607f66cb8f4e4dbcf3b3c013594dd156732e9",
+    "simdutf8-MIT.txt": "1847e0e0698142ed4347c1441a9fa81c8fbddd44b1d8bbcd5e3647f991759d7f",
+    "uucode-MIT.txt": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33"
+  },
+  "limitations": [
+    "No Aizome VM or physical desktop qualification",
+    "Full Ghostty feature and performance parity remain incomplete",
+    "GUI runtime qualification is recorded separately against this exact package"
+  ]
+}

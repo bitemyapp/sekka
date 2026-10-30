@@ -1,0 +1,512 @@
+[
+  {
+    "asset_bytes": 25226,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 237,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 66,
+      "Glyphs": 56,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 15x36": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2935,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.779928": 3,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 2.0, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 664,
+    "scale": 1.0,
+    "tile_indices": 9037,
+    "width": 960
+  },
+  {
+    "asset_bytes": 28272,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 15x36": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.779928": 3,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 643.0, y0: 5.0, x1: 657.0, y1: 19.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 7.0, y0: 5.0, x1: 21.0, y1: 19.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 2.0, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 664,
+    "scale": 1.0,
+    "tile_indices": 9851,
+    "width": 960
+  },
+  {
+    "asset_bytes": 5140,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 12x12 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 12.0, y1: 12.0 } dst=Rect { x0: 157.0, y0: 236.0, x1: 169.0, y1: 248.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 12x12 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 12.0, y1: 12.0 } dst=Rect { x0: 157.0, y0: 260.0, x1: 169.0, y1: 272.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 286,
+    "scale": 1.0,
+    "tile_indices": 616,
+    "width": 183
+  },
+  {
+    "asset_bytes": 49563,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 237,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 66,
+      "Glyphs": 56,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 20x44": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2935,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 17.094208": 3,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.4, y0: 5.0, x1: 20.4, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.6, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 830,
+    "scale": 1.25,
+    "tile_indices": 14238,
+    "width": 1200
+  },
+  {
+    "asset_bytes": 64351,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 20x44": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 17.094208": 3,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.4, y0: 5.0, x1: 20.4, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.8, y0: 4.8, x1: 20.8, y1: 18.8 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 642.8, y0: 4.8, x1: 656.8, y1: 18.8 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.6, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 830,
+    "scale": 1.25,
+    "tile_indices": 14476,
+    "width": 1200
+  },
+  {
+    "asset_bytes": 7790,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 15x15 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 15.0, y1: 15.0 } dst=Rect { x0: 156.8, y0: 236.0, x1: 168.8, y1: 248.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 15x15 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 15.0, y1: 15.0 } dst=Rect { x0: 156.8, y0: 260.0, x1: 168.8, y1: 272.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 358,
+    "scale": 1.25,
+    "tile_indices": 866,
+    "width": 229
+  },
+  {
+    "asset_bytes": 99614,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 236,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 65,
+      "Glyphs": 55,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 32x73": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2815,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.78557": 3,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.5, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 1328,
+    "scale": 2.0,
+    "tile_indices": 33360,
+    "width": 1920
+  },
+  {
+    "asset_bytes": 110393,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 32x73": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.78557": 3,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.18039216, 0.20392157, 0.32156864, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 643.0, y0: 5.0, x1: 657.0, y1: 19.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 7.0, y0: 5.0, x1: 21.0, y1: 19.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.5, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 1328,
+    "scale": 2.0,
+    "tile_indices": 33089,
+    "width": 1920
+  },
+  {
+    "asset_bytes": 16909,
+    "case": "Appearance { theme: Day, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 24x24 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 24.0, y1: 24.0 } dst=Rect { x0: 157.0, y0: 236.0, x1: 169.0, y1: 248.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 24x24 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 24.0, y1: 24.0 } dst=Rect { x0: 157.0, y0: 260.0, x1: 169.0, y1: 272.0 } alpha=1 tint=Some([0.3137255, 0.34117648, 0.47843137, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 572,
+    "scale": 2.0,
+    "tile_indices": 1549,
+    "width": 366
+  },
+  {
+    "asset_bytes": 25226,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 237,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 66,
+      "Glyphs": 56,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 15x36": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2935,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.779928": 3,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 2.0, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 664,
+    "scale": 1.0,
+    "tile_indices": 9037,
+    "width": 960
+  },
+  {
+    "asset_bytes": 28272,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 15x36": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.779928": 3,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 643.0, y0: 5.0, x1: 657.0, y1: 19.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 14x14 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 14.0, y1: 14.0 } dst=Rect { x0: 7.0, y0: 5.0, x1: 21.0, y1: 19.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 2.0, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 664,
+    "scale": 1.0,
+    "tile_indices": 9851,
+    "width": 960
+  },
+  {
+    "asset_bytes": 5140,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 12x12 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 12.0, y1: 12.0 } dst=Rect { x0: 157.0, y0: 236.0, x1: 169.0, y1: 248.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 12x12 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 12.0, y1: 12.0 } dst=Rect { x0: 157.0, y0: 260.0, x1: 169.0, y1: 272.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 286,
+    "scale": 1.0,
+    "tile_indices": 616,
+    "width": 183
+  },
+  {
+    "asset_bytes": 49563,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 237,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 66,
+      "Glyphs": 56,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 20x44": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2935,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 17.094208": 3,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.4, y0: 5.0, x1: 20.4, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.6, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 830,
+    "scale": 1.25,
+    "tile_indices": 14238,
+    "width": 1200
+  },
+  {
+    "asset_bytes": 64351,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 20x44": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 17.094208": 3,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.4, y0: 5.0, x1: 20.4, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 6.8, y0: 4.8, x1: 20.8, y1: 18.8 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 18x18 blend=SourceOver mask=false shadow=false quality=High tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 18.0, y1: 18.0 } dst=Rect { x0: 642.8, y0: 4.8, x1: 656.8, y1: 18.8 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.6, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 830,
+    "scale": 1.25,
+    "tile_indices": 14476,
+    "width": 1200
+  },
+  {
+    "asset_bytes": 7790,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 15x15 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 15.0, y1: 15.0 } dst=Rect { x0: 156.8, y0: 236.0, x1: 168.8, y1: 248.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 15x15 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 15.0, y1: 15.0 } dst=Rect { x0: 156.8, y0: 260.0, x1: 168.8, y1: 272.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 358,
+    "scale": 1.25,
+    "tile_indices": 866,
+    "width": 229
+  },
+  {
+    "asset_bytes": 99614,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-selected",
+    "commands": 236,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 65,
+      "Glyphs": 55,
+      "Image": 2,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 32x73": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 22,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 3 size 11": 15,
+      "Glyphs font 3 size 18.666668": 2815,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.78557": 3,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.5, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 1328,
+    "scale": 2.0,
+    "tile_indices": 33360,
+    "width": 1920
+  },
+  {
+    "asset_bytes": 110393,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-find",
+    "commands": 289,
+    "counts": {
+      "AlphaMask": 51,
+      "Fill": 90,
+      "Glyphs": 61,
+      "Image": 4,
+      "StrokePath": 1
+    },
+    "details": {
+      "AlphaMask 32x73": 51,
+      "Glyphs font 0 size 13": 6,
+      "Glyphs font 1 size 13": 28,
+      "Glyphs font 2 size 12": 5,
+      "Glyphs font 2 size 13": 16,
+      "Glyphs font 3 size 11": 21,
+      "Glyphs font 3 size 18.666668": 2695,
+      "Glyphs font 4 size 18.666668": 4,
+      "Glyphs font 5 size 16.78557": 3,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 896.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 6.0, y0: 5.0, x1: 20.0, y1: 19.0 } alpha=1 tint=Some([0.6627451, 0.69411767, 0.8392157, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 926.0, ty: 27.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 643.0, y0: 5.0, x1: 657.0, y1: 19.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "Image 28x28 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 28.0, y1: 28.0 } dst=Rect { x0: 7.0, y0: 5.0, x1: 21.0, y1: 19.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 10.0, ty: 60.0 }": 1,
+      "StrokePath Solid([1.0, 0.0, 0.0, 1.0]) blend=SourceOver mask=false shadow=false stroke=StrokeSpec { width: 1.5, cap: 0, join: 0, miter: 10.0, dash: None }": 1
+    },
+    "exact_lowering": true,
+    "height": 1328,
+    "scale": 2.0,
+    "tile_indices": 33089,
+    "width": 1920
+  },
+  {
+    "asset_bytes": 16909,
+    "case": "Appearance { theme: Night, focus: Amber, effects: Lean, size: Medium, reduced_motion: false, follow_sunset: false, place: None }-view-menu",
+    "commands": 140,
+    "counts": {
+      "Fill": 10,
+      "Glyphs": 29,
+      "Image": 2
+    },
+    "details": {
+      "Glyphs font 1 size 13": 116,
+      "Glyphs font 3 size 11.5": 9,
+      "Glyphs font 6 size 11.5": 13,
+      "Image 24x24 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 24.0, y1: 24.0 } dst=Rect { x0: 157.0, y0: 236.0, x1: 169.0, y1: 248.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1,
+      "Image 24x24 blend=SourceOver mask=false shadow=false quality=Medium tiled=false src=Rect { x0: 0.0, y0: 0.0, x1: 24.0, y1: 24.0 } dst=Rect { x0: 157.0, y0: 260.0, x1: 169.0, y1: 272.0 } alpha=1 tint=Some([0.5764706, 0.6039216, 0.7294118, 1.0]) xf=Transform { sx: 1.0, kx: 0.0, ky: 0.0, sy: 1.0, tx: 0.0, ty: 0.0 }": 1
+    },
+    "exact_lowering": true,
+    "height": 572,
+    "scale": 2.0,
+    "tile_indices": 1549,
+    "width": 366
+  }
+]

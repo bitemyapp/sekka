@@ -1,0 +1,615 @@
+{
+  "status": "passed",
+  "scope": "private headless hardware-GLES compositor import and captured pixels, no physical scanout or performance claim",
+  "host": "ganymede",
+  "original_probe_sha256": "9ae5753f7a6d316607009c127e0e991f6c0919772328e912c523c2c2abcf4102",
+  "protocols": {
+    "linux-dmabuf": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-0.32.13/protocols/stable/linux-dmabuf/linux-dmabuf-v1.xml",
+      "sha256": "2735bb4589cbb364dfcb6a821dd3abbf0c0257956b716b9691718ddfd453df4c"
+    },
+    "layer-shell": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-wlr-0.3.12/wlr-protocols/unstable/wlr-layer-shell-unstable-v1.xml",
+      "sha256": "87e0b9c837aecd6977f76f3c47d73088b7159871f5d979dc1840f6cadb5e2ed8"
+    },
+    "screencopy": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-wlr-0.3.12/wlr-protocols/unstable/wlr-screencopy-unstable-v1.xml",
+      "sha256": "131b8f9b4aad0c8a9cf705e90d2a1511a5ca0c477637fd3400cf1cc4fa963fb8"
+    },
+    "presentation": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-0.32.13/protocols/stable/presentation-time/presentation-time.xml",
+      "sha256": "dffac93bcb2bb1d8c385e72b8a8c2c0d4d79a336866322f3ba886dce2b27b1e2"
+    },
+    "xdg-shell": {
+      "path": "/home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wayland-protocols-0.32.13/protocols/stable/xdg-shell/xdg-shell.xml",
+      "sha256": "7ba7f9c8473deee674cb1f154a18abd0bb0cc072604fc055b0c15e459fc4c7df"
+    }
+  },
+  "sources": {
+    "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+    "wayland-transport.c": "16228d2a6e3dd4e878760992220ed964ebf349929e0eb58a8a9ced881c8f820c",
+    "run.py": "b43bb99774bba0cb1a2987709c9834a831beaafcf9a58e47d502f33c3670ca1f"
+  },
+  "cleanup_helper_sha256": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+  "mesa": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "loader": "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0",
+  "build_command": [
+    "cc",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I/nix/store/risg12y850mmilsg2ikrx417mg1dj6dm-libglvnd-1.7.0-dev/include",
+    "-I/home/callen/work/hotaru-local-gui-20261028/gpu-transport",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/producer.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/wayland-transport.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/linux-dmabuf-protocol.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/layer-shell-protocol.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/screencopy-protocol.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/presentation-protocol.c",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/xdg-shell-protocol.c",
+    "-I/nix/store/0ff1zsym64lpr3cvm9n28cm4qdid3c2h-wayland-1.26.0-dev/include",
+    "-L/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib",
+    "-lwayland-client",
+    "-lm",
+    "-L/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib",
+    "-Wl,-rpath,/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib",
+    "-lEGL",
+    "-o",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/gpu-wayland-probe"
+  ],
+  "build_returncode": 0,
+  "binary_sha256": "3c0dd8ccdff6b23e3d8452a468f95ef3e82489795b9f470b9c448e93bd8a1b45",
+  "environment": {
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "gles2",
+    "WLR_RENDER_DRM_DEVICE": "/dev/dri/renderD128",
+    "GBM_BACKENDS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/gbm",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+    "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+    "MESA_SHADER_CACHE_DISABLE": "true"
+  },
+  "sway_pid": 2311635,
+  "sway_mapped_files": [
+    "/dev/dri/renderD128",
+    "/nix/store/0bxbw62y5cy740408migjh1ssa3dyqif-lcms2-2.19.1/lib/liblcms2.so.2.0.19",
+    "/nix/store/0lalp8bqwbvxkrqmvsawagzx2w18w4h5-lm-sensors-3.6.2/lib/libsensors.so.5.0.0",
+    "/nix/store/0yvm79dfl53xg4vi2mg01cljfpnxkcnc-libdrm-2.4.134/lib/libdrm.so.2.134.0",
+    "/nix/store/10lragk5bg1m9551wd1f11w1apvzd020-mtdev-1.1.7/lib/libmtdev.so.1.0.0",
+    "/nix/store/14l36b0z69hgd8b6migz9w5m49gjak6d-libthai-0.1.30/lib/libthai.so.0.3.2",
+    "/nix/store/1jnz6709p77dvkqa846y43iz66q4w9v6-seatd-0.9.3/lib/libseat.so.1",
+    "/nix/store/2ppmsk65csi9d1d05c43jhl2r2z5lrjf-dejavu-fonts-minimal-2.37/share/fonts/truetype/DejaVuSans.ttf",
+    "/nix/store/328fx8r0jb6l2ai4cli7fhp8g26fbfnh-util-linux-minimal-2.42.3-lib/lib/libblkid.so.1.1.0",
+    "/nix/store/328fx8r0jb6l2ai4cli7fhp8g26fbfnh-util-linux-minimal-2.42.3-lib/lib/libmount.so.1.1.0",
+    "/nix/store/3dkchpfn8r3ipsccl1001xhcl5smfjdx-glib-2.88.3/lib/libgio-2.0.so.0.8800.3",
+    "/nix/store/3dkchpfn8r3ipsccl1001xhcl5smfjdx-glib-2.88.3/lib/libglib-2.0.so.0.8800.3",
+    "/nix/store/3dkchpfn8r3ipsccl1001xhcl5smfjdx-glib-2.88.3/lib/libgmodule-2.0.so.0.8800.3",
+    "/nix/store/3dkchpfn8r3ipsccl1001xhcl5smfjdx-glib-2.88.3/lib/libgobject-2.0.so.0.8800.3",
+    "/nix/store/3xaspbv6nwvihmc3ybmlv0wjjksvpamq-xz-5.8.4/lib/liblzma.so.5.8.4",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/gbm/dri_gbm.so",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libEGL_mesa.so.0.0.0",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libgallium-26.2.5.so",
+    "/nix/store/5qss1l21hbc277a9kblriy9jg87iwa7j-wlroots-0.20.2/lib/libwlroots-0.20.so",
+    "/nix/store/7a0472vfn9z4d7llkb0nw06jji98yn7d-libevdev-1.13.6/lib/libevdev.so.2.3.0",
+    "/nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib/libstdc++.so.6.0.36",
+    "/nix/store/7b1npb926ga8pdwsi5n5cbyi1xyhb7dc-libgudev-238/lib/libgudev-1.0.so.0.3.0",
+    "/nix/store/7fjvn38n3dnv092jbmb4m87ik5qvmj7g-brotli-1.2.0-lib/lib/libbrotlicommon.so.1.2.0",
+    "/nix/store/7fjvn38n3dnv092jbmb4m87ik5qvmj7g-brotli-1.2.0-lib/lib/libbrotlidec.so.1.2.0",
+    "/nix/store/7v8b5idfzwfl06hx6n0cvd5ikd5p0sbg-pcre2-10.48/lib/libpcre2-8.so.0.16.0",
+    "/nix/store/81xfxjiw58spk795jgcc7z1diwmy3xmi-freetype-2.14.3/lib/libfreetype.so.6.20.6",
+    "/nix/store/ab9nqb5hwpkc3qj4nihbkry55z42m282-libliftoff-0.5.0/lib/libliftoff.so.0.5.0",
+    "/nix/store/acswsi8qfnrf8zxaab1cy9676h3fd0vk-lua-5.4.7/lib/liblua.so.5.4.7",
+    "/nix/store/bvfkqam1y3zmsb3k41iml0zwx13sknjl-elfutils-0.195/lib/libelf-0.195.so",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-composite.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-dri3.so.0.1.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-present.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-render.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-res.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-shm.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-xfixes.so.0.0.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb-xinput.so.0.1.0",
+    "/nix/store/cvr8yyrrqnjxgd7bs6lwgra4qma7kwl9-libxcb-1.17.0/lib/libxcb.so.1.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-randr.so.0.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-sync.so.1.0.0",
+    "/nix/store/dlqv8810489a9fikzm21h34s4b0kkb3b-libinput-1.31.3/lib/libinput.so.10.13.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_amdgpu.so.1.134.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_intel.so.1.134.0",
+    "/nix/store/f5r77q40xh7rj30dfkajv8y6jwbf4xh2-zstd-1.5.7/lib/libzstd.so.1.5.7",
+    "/nix/store/f6z2258liq5vbiah6jrkvy4iymdq2c5a-libxrender-0.9.12/lib/libXrender.so.1.3.0",
+    "/nix/store/f81djisp1higraa3q1i0rcv4fma9aqnr-libdatrie-2019-12-20-lib/lib/libdatrie.so.1.3.5",
+    "/nix/store/ffl0cic7f8zjkwrjvd8ikzbkbiij690a-libselinux-3.10/lib/libselinux.so.1",
+    "/nix/store/firki6qp8l2y6jgpwvix2wd95bi572mi-libxext-1.3.7/lib/libXext.so.6.4.0",
+    "/nix/store/g5p3gslpl160yagi4bzai5yhpcg0di5l-fontconfig-2.18.3-lib/lib/libfontconfig.so.1.16.1",
+    "/nix/store/gvhdvn542cwd3wr2978nh4ydzp89msq7-systemd-minimal-libs-261.3/lib/libsystemd.so.0.44.0",
+    "/nix/store/gvhdvn542cwd3wr2978nh4ydzp89msq7-systemd-minimal-libs-261.3/lib/libudev.so.1.7.14",
+    "/nix/store/h0z0bi5cm93j4j89vpkvs8xysl995ci0-libxcb-wm-0.4.2/lib/libxcb-ewmh.so.2.0.0",
+    "/nix/store/h0z0bi5cm93j4j89vpkvs8xysl995ci0-libxcb-wm-0.4.2/lib/libxcb-icccm.so.4.0.0",
+    "/nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25/lib/ld-linux-x86-64.so.2",
+    "/nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25/lib/libc.so.6",
+    "/nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25/lib/libdl.so.2",
+    "/nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25/lib/libm.so.6",
+    "/nix/store/h4wfwic161kxrr74jlzla5lsm28hgary-glibc-2.44-25/lib/libpthread.so.0",
+    "/nix/store/hg9c6gc22vahpamh4z4npvak8wnl9mlk-libxcb-errors-1.0.1/lib/libxcb-errors.so.0.0.0",
+    "/nix/store/hlk27kiwy9zqwlk4pghb8gshs8s6akdy-cairo-1.18.4/lib/libcairo.so.2.11804.4",
+    "/nix/store/hzqwc6pv8sb9qrwivc4h42cr811gs1mk-ncurses-6.6/lib/libncursesw.so.6.6",
+    "/nix/store/j5kxykql9j4qb72yqj55hw71yhpklrzj-fribidi-1.0.16/lib/libfribidi.so.0.4.0",
+    "/nix/store/jxvb2w9s84m7g7iy5zcf6a9nq73bxqc3-pango-1.57.1/lib/libpango-1.0.so.0.5701.0",
+    "/nix/store/jxvb2w9s84m7g7iy5zcf6a9nq73bxqc3-pango-1.57.1/lib/libpangocairo-1.0.so.0.5701.0",
+    "/nix/store/jxvb2w9s84m7g7iy5zcf6a9nq73bxqc3-pango-1.57.1/lib/libpangoft2-1.0.so.0.5701.0",
+    "/nix/store/knm96d081dl0mhbbdbmi2gwqj2sn0jbh-mesa-libgbm-26.1.3/lib/libgbm.so.1.0.0",
+    "/nix/store/lfsm41mwy4d234xrccp4i0hfgl4z871k-sway-unwrapped-1.12/bin/sway",
+    "/nix/store/li1008zymvj7sz8jkdk9brkslfq9jy8w-wayland-1.26.0/lib/libwayland-client.so.0.26.0",
+    "/nix/store/li1008zymvj7sz8jkdk9brkslfq9jy8w-wayland-1.26.0/lib/libwayland-server.so.0.26.0",
+    "/nix/store/lplcjshr1g7qxz2zqdc4rwks9zvcaa9a-graphite2-1.3.15/lib/libgraphite2.so.3.3.1",
+    "/nix/store/m5s1ak7s1swmhmy64yqvya342g0603s7-libxml2-2.15.4/lib/libxml2.so.16.1.4",
+    "/nix/store/mc33sic07k7an0knwd73sq5xygg2rigg-libdisplay-info-0.4.0/lib/libdisplay-info.so.0.4.0",
+    "/nix/store/mj9klbkhzal0vc1aazsajrydkimhc0h2-libglvnd-1.7.0/lib/libEGL.so.1.1.0",
+    "/nix/store/mj9klbkhzal0vc1aazsajrydkimhc0h2-libglvnd-1.7.0/lib/libGLESv2.so.2.1.0",
+    "/nix/store/mj9klbkhzal0vc1aazsajrydkimhc0h2-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0",
+    "/nix/store/mpqgjnlmzy3c5hslbgyc3s7zfz3m32lg-bzip2-1.0.8/lib/libbz2.so.1.0.8",
+    "/nix/store/mr6cbi3rdy6w5y4cd6875gf4y0pqn0jf-llvm-21.1.8-lib/lib/libLLVM.so.21.1",
+    "/nix/store/n1i9ph766v9kbjs961j2aiw4qaagc1wj-json-c-0.18/lib/libjson-c.so.5.4.0",
+    "/nix/store/nd7p11rm3m868l89km38ncfr9i4bwlpc-libwacom-2.20.0/lib/libwacom.so.9.0.0",
+    "/nix/store/nvrv5w6rhc39h8snrsw03nqs679cf7rh-libxkbcommon-1.13.2/lib/libxkbcommon.so.0.13.2",
+    "/nix/store/pi2b23y3gv6zgcziwbgnihf8gam1cmlp-libffi-3.8.0/lib/libffi.so.8.5.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1",
+    "/nix/store/q2mkz6ca1alqfqf750dygvakmq8kjrwz-gcc-16.2.0-libgcc/lib/libgcc_s.so.1",
+    "/nix/store/qc7wwg64ggan8nzgrlal5dy16gyx6c1l-libpng-apng-1.6.58/lib/libpng16.so.16.58.0",
+    "/nix/store/qwybnlp70s17h7zvmb8kz45fz91011my-libxdmcp-1.1.5/lib/libXdmcp.so.6.0.0",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11-xcb.so.1.0.0",
+    "/nix/store/rjvbq8gg4gxw2dyxvfyl8i0186va48w1-libxcb-render-util-0.3.10/lib/libxcb-render-util.so.0.0.0",
+    "/nix/store/v4j317f11g4px2cc4ad7cldqkn0wdbqz-libxshmfence-1.3.3/lib/libxshmfence.so.1.0.0",
+    "/nix/store/vjdqsn0bz2llabfqa746zfgk4kmswba5-vulkan-loader-1.4.357.0/lib/libvulkan.so.1.4.357",
+    "/nix/store/wgw25d181h0qks7qsfp1bh7c5nd3f0s7-zlib-1.3.2/lib/libz.so.1.3.2",
+    "/nix/store/xjynyjk0vin5nvqw24050yfyb3czgrdm-libxau-1.0.12/lib/libXau.so.6.0.0",
+    "/nix/store/xnam05aa3vc7aqbbdixpwcdb8dpv71xn-readline-8.3p3/lib/libreadline.so.8.3",
+    "/nix/store/ykj1kjkdb4ahqrb29w5n3ljxia1id5qm-libpciaccess-0.19/lib/libpciaccess.so.0.11.1",
+    "/nix/store/z0ifv8wqq931phdxq7nl0r0xssprnh97-harfbuzz-13.2.1/lib/libharfbuzz.so.0.61321.0",
+    "/nix/store/z84rpj9zlzjfn84374g8ss54w5vfiar6-pixman-0.46.4/lib/libpixman-1.so.0.46.4",
+    "/nix/store/znrm90algr0fvnnnp130am1qfg59nl1f-libx11-1.8.13/lib/libX11.so.6.4.0",
+    "/nix/store/zrkqwk0989k5wa1gn3cjb76jfga3d8i3-expat-2.8.5/lib/libexpat.so.1.12.5",
+    "/tmp/hotaru-gpu-wayland-jt25p2mb/cache/fontconfig/1ed31ac7239731d58d444b311911ef08-x86_64.cache-12"
+  ],
+  "returncode": 0,
+  "events": [
+    {
+      "event": "device",
+      "index": 0,
+      "enumerated": 2,
+      "name": "Mesa Intel(R) Graphics (PTL)",
+      "drm_render_node": "/dev/dri/renderD128"
+    },
+    {
+      "event": "context",
+      "vendor": "Intel",
+      "renderer": "Mesa Intel(R) Graphics (PTL)",
+      "version": "OpenGL ES 3.2 Mesa 26.2.5"
+    },
+    {
+      "event": "producer_readback",
+      "matched_rgba_bytes": 4096
+    },
+    {
+      "event": "export_query",
+      "fourcc": 875708993,
+      "planes": 1,
+      "modifier": "0x0000000000000000"
+    },
+    {
+      "event": "export",
+      "fd": 8,
+      "stride": 256,
+      "offset": 0
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_fixes",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_shm",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_linux_dmabuf_v1",
+      "version": 5
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_linux_drm_syncobj_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_compositor",
+      "version": 6
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_subcompositor",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_data_device_manager",
+      "version": 3
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_gamma_control_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_output_manager_v1",
+      "version": 3
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_idle_notifier_v1",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_idle_inhibit_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_layer_shell_v1",
+      "version": 5
+    },
+    {
+      "event": "wayland_global",
+      "name": "xdg_wm_base",
+      "version": 5
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_tablet_manager_v2",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "org_kde_kwin_server_decoration_manager",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_decoration_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_relative_pointer_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_pointer_constraints_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_presentation",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_alpha_modifier_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_output_manager_v1",
+      "version": 4
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_output_power_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_input_method_manager_v2",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_text_input_manager_v3",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_foreign_toplevel_list_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_foreign_toplevel_manager_v1",
+      "version": 3
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_session_lock_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_workspace_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_export_dmabuf_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_screencopy_manager_v1",
+      "version": 3
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_image_copy_capture_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_output_image_capture_source_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_data_control_manager_v1",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_data_control_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_security_context_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_viewporter",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_single_pixel_buffer_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_content_type_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_fractional_scale_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_foreign_toplevel_image_capture_source_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_tearing_control_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_exporter_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_importer_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_exporter_v2",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zxdg_importer_v2",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "xdg_activation_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "xdg_toplevel_tag_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_cursor_shape_manager_v1",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "wp_color_representation_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_virtual_keyboard_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwlr_virtual_pointer_manager_v1",
+      "version": 2
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_keyboard_shortcuts_inhibit_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_pointer_gestures_v1",
+      "version": 3
+    },
+    {
+      "event": "wayland_global",
+      "name": "ext_transient_seat_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_seat",
+      "version": 9
+    },
+    {
+      "event": "wayland_global",
+      "name": "zwp_primary_selection_device_manager_v1",
+      "version": 1
+    },
+    {
+      "event": "wayland_global",
+      "name": "wl_output",
+      "version": 4
+    },
+    {
+      "event": "format_modifier_check",
+      "advertised_pairs": 287,
+      "exact_match": true,
+      "fourcc": 875708993,
+      "modifier": "0x0000000000000000"
+    },
+    {
+      "event": "params_created"
+    },
+    {
+      "event": "transport_fd_closed_after_created",
+      "y_invert": false,
+      "orientation": "producer_readback_row0_to_surface_top"
+    },
+    {
+      "event": "layer_configure",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "event": "layer_configure",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "event": "surface_frame",
+      "callback_ms_unspecified_epoch": 109806268,
+      "received_monotonic_ns": 109806268646228
+    },
+    {
+      "event": "presentation_feedback",
+      "clock_id": 1,
+      "seconds_hi": 0,
+      "seconds_lo": 109806,
+      "nanoseconds": 268580065,
+      "refresh_ns": 0,
+      "sequence_hi": 0,
+      "sequence_lo": 0,
+      "flags": 0,
+      "physical_scanout": false
+    },
+    {
+      "event": "capture_verified",
+      "checked_rgb_bytes": 3072,
+      "alpha_defined": false,
+      "format": 875709016,
+      "width": 128,
+      "height": 128,
+      "stride": 512,
+      "flags": 0,
+      "x": 48,
+      "y": 48,
+      "compositor_sec_hi": 0,
+      "compositor_sec_lo": 109806,
+      "compositor_nsec": 284946731,
+      "received_monotonic_ns": 109806288306700
+    },
+    {
+      "event": "buffer_release",
+      "after_detach": true,
+      "received_monotonic_ns": 109806288453662
+    },
+    {
+      "event": "wayland_transport_passed",
+      "after_detach_release": true,
+      "presentation_protocol": true
+    },
+    {
+      "event": "passed",
+      "matched_rgba_bytes": 4096,
+      "contexts_shared": false,
+      "synchronization": "bounded CPU fence wait",
+      "presentation": false
+    }
+  ],
+  "probe_mapped_files": [
+    "/dev/dri/renderD128",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-transport/gpu-wayland-probe",
+    "/nix/store/0lalp8bqwbvxkrqmvsawagzx2w18w4h5-lm-sensors-3.6.2/lib/libsensors.so.5.0.0",
+    "/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1",
+    "/nix/store/3xaspbv6nwvihmc3ybmlv0wjjksvpamq-xz-5.8.4/lib/liblzma.so.5.8.4",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libEGL_mesa.so.0.0.0",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libgallium-26.2.5.so",
+    "/nix/store/5sw8x6gdi0gwri8pj1vm7ikyyqzh02fi-mesa-libgbm-26.1.3/lib/libgbm.so.1.0.0",
+    "/nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib/libstdc++.so.6.0.36",
+    "/nix/store/7rx5im6jbgyfhrl0lc0kyxd9yf14rdxc-expat-2.9.0/lib/libexpat.so.1.13.0",
+    "/nix/store/anh1ib7l6ksrwr45kiwgz906vfi0vr5x-libxau-1.0.12/lib/libXau.so.6.0.0",
+    "/nix/store/bvfkqam1y3zmsb3k41iml0zwx13sknjl-elfutils-0.195/lib/libelf-0.195.so",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-dri3.so.0.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-present.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-randr.so.0.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-shm.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-sync.so.1.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-xfixes.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb.so.1.1.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm.so.2.134.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_amdgpu.so.1.134.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_intel.so.1.134.0",
+    "/nix/store/f5r77q40xh7rj30dfkajv8y6jwbf4xh2-zstd-1.5.7/lib/libzstd.so.1.5.7",
+    "/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib/libwayland-client.so.0.26.0",
+    "/nix/store/ji36842higmp6b06hbbpmzbd59g1c07c-zlib-1.3.2/lib/libz.so.1.3.2",
+    "/nix/store/m5s1ak7s1swmhmy64yqvya342g0603s7-libxml2-2.15.4/lib/libxml2.so.16.1.4",
+    "/nix/store/mr6cbi3rdy6w5y4cd6875gf4y0pqn0jf-llvm-21.1.8-lib/lib/libLLVM.so.21.1",
+    "/nix/store/pfds9zw10xksh0zr7qplqg1lj9avs2gz-libffi-3.8.0/lib/libffi.so.8.5.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libdl.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libpthread.so.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11-xcb.so.1.0.0",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11.so.6.4.0",
+    "/nix/store/v4j317f11g4px2cc4ad7cldqkn0wdbqz-libxshmfence-1.3.3/lib/libxshmfence.so.1.0.0",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1.1.0",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0",
+    "/nix/store/ykj1kjkdb4ahqrb29w5n3ljxia1id5qm-libpciaccess-0.19/lib/libpciaccess.so.0.11.1",
+    "/nix/store/zfls1iw1bpglz5w2lqg3b8mjay1hg7dr-libxdmcp-1.1.5/lib/libXdmcp.so.6.0.0",
+    "/nix/store/zx4ag3v11v9rl0iqvg6vzbpflzlg0dk2-bzip2-1.0.8/lib/libbz2.so.1.0.8"
+  ],
+  "compositor_hardware_renderer_verified": true,
+  "capture_sha256": "7e84b1174a7a2e983345dc26a6a070546cd538f07d7b748464ef40ec69c49d64",
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "owned_descendant_check": "process-local subreaper and pidfd ownership recheck"
+}

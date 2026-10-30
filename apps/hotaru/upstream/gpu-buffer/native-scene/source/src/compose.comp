@@ -1,0 +1,44 @@
+#version 310 es
+#extension GL_EXT_gpu_shader5 : require
+precision highp float;
+precision highp int;
+layout(local_size_x=16,local_size_y=8)in;
+struct Command {uvec4 bounds;uvec4 meta;uvec4 source;};
+layout(std430,binding=0)readonly buffer Commands{Command commands[];};
+layout(std430,binding=1)readonly buffer Tiles{uvec2 tiles[];};
+layout(std430,binding=2)readonly buffer Indices{uint indices[];};
+layout(std430,binding=3)readonly buffer Assets{uint assets[];};
+layout(rgba8,binding=0)writeonly uniform highp image2D target;
+uniform uvec2 extent;
+uvec4 rgba(uint p){return uvec4(p,p>>8,p>>16,p>>24)&255u;}
+uint byte_at(uint i){return(assets[i/4u]>>((i%4u)*8u))&255u;}
+void main(){
+    uvec2 p=gl_GlobalInvocationID.xy;if(any(greaterThanEqual(p,extent)))return;
+    uint columns=(extent.x+15u)/16u;
+    uvec2 tile=tiles[(p.y/16u)*columns+p.x/16u];uvec4 pixel=uvec4(0u);
+    for(uint i=0u;i<tile.y;i++){
+        Command c=commands[indices[tile.x+i]];
+        if(any(lessThan(p,c.bounds.xy))||any(greaterThanEqual(p,c.bounds.zw)))continue;
+        uint kind=c.meta.x;uvec4 color=rgba(c.meta.y);uint alpha=c.meta.z;
+        if(kind>=2u){
+            ivec2 at=ivec2(p)-ivec2(c.source.yz);uint index=uint(at.y)*c.source.x+uint(at.x);
+            if(kind==5u){
+                uint base=c.meta.w/4u+index*4u;
+                precise vec4 s=uintBitsToFloat(uvec4(assets[base],assets[base+1u],assets[base+2u],assets[base+3u]));
+                precise vec4 d=vec4(pixel)*(1.0/255.0);
+                precise float inv=1.0-s.a;
+                precise vec4 product=d*inv;
+                precise vec4 sum=product+s;
+                precise vec4 quantized=clamp(sum,0.0,1.0)*255.0;
+                pixel=uvec4(roundEven(quantized));continue;
+            }
+            if(kind==2u||kind==4u){uint coverage=byte_at(c.meta.w+index);alpha=alpha==255u?coverage:(coverage*alpha*257u+32896u)>>16;}
+            else{color=rgba(assets[c.meta.w/4u+index]);if(alpha!=255u)color=(color*alpha+127u)/255u;}
+        }
+        if(kind==0u||kind==2u)pixel=(pixel*(255u-alpha)+color*alpha+127u)/255u;
+        else if(kind==1u)pixel=color;
+        else if(kind==3u)pixel=min(color+(pixel*(255u-color.a)+127u)/255u,uvec4(255u));
+        else if(kind==4u)pixel=(pixel*(255u-alpha)+color*alpha+255u)>>8;
+    }
+    imageStore(target,ivec2(p),vec4(pixel)/255.0);
+}

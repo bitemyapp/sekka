@@ -1,0 +1,127 @@
+--------------------------------------------------------------------------------
+Profile data file 'v3-mixed.callgrind' (creator: callgrind-3.27.1)
+--------------------------------------------------------------------------------
+I1 cache: 
+D1 cache: 
+LL cache: 
+Timerange: Basic block 0 - 63933242
+Trigger: Program termination
+Profiled target:  /home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay --data /home/callen/work/hotaru-rep-last-cell-20261028/measurements/unicode.vt --rows 12 --cols 120 --chunk 65536 --grapheme-width unicode --bench-json --iterations 1 (PID 3220699, part 1)
+Events recorded:  Ir
+Events shown:     Ir
+Event sort order: Ir
+Thresholds:       95
+Include dirs:     
+User annotated:   
+Auto-annotation:  off
+
+--------------------------------------------------------------------------------
+Ir                   
+--------------------------------------------------------------------------------
+307,252,265 (100.0%)  PROGRAM TOTALS
+
+--------------------------------------------------------------------------------
+Ir                   file:function
+--------------------------------------------------------------------------------
+48,692,145 (15.85%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::State::print_utf8 [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+20,100,410 ( 6.54%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/str/validations.rs:core::str::converts::from_utf8
+13,193,898 ( 4.29%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::prepare_write_with_left [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+12,963,782 ( 4.22%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/str/validations.rs:hotaru_core::screen::State::print_utf8
+11,440,480 ( 3.72%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+10,142,941 ( 3.30%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::put [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 9,875,667 ( 3.21%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::unicode_batch_boundary [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 9,608,760 ( 3.13%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/compact_str-0.10.0/src/repr/mod.rs:compact_str::repr::Repr::push_str [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 9,304,076 ( 3.03%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/unicode.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+ 9,227,218 ( 3.00%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/uint_macros.rs:hotaru_core::row::Row::refresh_memory_charge
+ 7,549,578 ( 2.46%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/memory.rs:hotaru_core::row::Row::refresh_memory_charge
+ 6,634,167 ( 2.16%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/unicode.rs:hotaru_core::screen::State::print_utf8
+ 5,872,614 ( 1.91%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::style_id [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 5,338,740 ( 1.74%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/style.rs:<hotaru_core::style::Style as core::cmp::PartialEq>::eq [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 5,338,212 ( 1.74%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::combine [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 3,927,390 ( 1.28%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/iter/macros.rs:hotaru_core::row::Row::combine
+ 3,702,604 ( 1.21%)  ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 3,546,152 ( 1.15%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/unicode.rs:hotaru_core::screen::unicode_batch_boundary
+ 3,393,570 ( 1.10%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/char/methods.rs:hotaru_core::row::Row::combine
+ 3,355,352 ( 1.09%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::refresh_memory_charge
+ 3,126,925 ( 1.02%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:hotaru_core::screen::State::print_utf8
+ 2,821,620 ( 0.92%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/grapheme.rs:hotaru_core::row::Row::combine
+ 2,592,925 ( 0.84%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+ 2,367,197 ( 0.77%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/lib.rs:hotaru_core::Terminal::feed_inner [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 2,290,150 ( 0.75%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/parser.rs:hotaru_core::Terminal::feed_inner
+ 2,136,087 ( 0.70%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/scan.rs:hotaru_core::Terminal::feed_inner
+ 2,059,465 ( 0.67%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::State::scalar_metadata_writes [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 2,020,879 ( 0.66%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::execute [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,983,059 ( 0.65%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::Screen::row [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,906,554 ( 0.62%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:hotaru_core::row::Row::prepare_write_with_left
+ 1,906,500 ( 0.62%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:hotaru_core::row::Row::combine
+ 1,868,559 ( 0.61%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:hotaru_core::row::Row::style_id
+ 1,677,704 ( 0.55%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/adapters/peekable.rs:hotaru_core::screen::State::print_utf8
+ 1,677,676 ( 0.55%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs:hotaru_core::row::Row::refresh_memory_charge
+ 1,677,676 ( 0.55%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:hotaru_core::row::Row::refresh_memory_charge
+ 1,677,236 ( 0.55%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::Screen::scroll_up [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,639,999 ( 0.53%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/iter/macros.rs:hotaru_core::screen::State::print_utf8
+ 1,639,538 ( 0.53%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:hotaru_core::screen::unicode_batch_boundary
+ 1,639,117 ( 0.53%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:alloc::collections::vec_deque::VecDeque<T,A>::insert_mut [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,601,460 ( 0.52%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/mod.rs:hotaru_core::row::Row::combine
+ 1,601,460 ( 0.52%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/str/validations.rs:core::str::validations::next_code_point
+ 1,525,162 ( 0.50%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:hotaru_core::screen::State::print_utf8
+ 1,486,641 ( 0.48%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/iter/macros.rs:hotaru_core::row::Row::reset
+ 1,296,902 ( 0.42%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/memory.rs:hotaru_core::screen::Screen::enforce_budget
+ 1,296,574 ( 0.42%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:hotaru_core::screen::State::print_utf8
+ 1,257,927 ( 0.41%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:alloc::collections::vec_deque::VecDeque<T,A>::remove [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,220,204 ( 0.40%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:hotaru_core::row::Row::put
+ 1,220,057 ( 0.40%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/../../stdarch/crates/core_arch/src/x86/sse2.rs:hotaru_core::Terminal::feed_inner
+ 1,143,906 ( 0.37%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/char/convert.rs:hotaru_core::screen::unicode_batch_boundary
+ 1,143,900 ( 0.37%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/compact_str-0.10.0/src/repr/inline.rs:compact_str::repr::Repr::push_str
+ 1,143,900 ( 0.37%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:hotaru_core::row::Row::combine
+ 1,105,804 ( 0.36%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:hotaru_core::screen::State::print_utf8
+ 1,105,770 ( 0.36%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/non_null.rs:hotaru_core::screen::State::print_utf8
+ 1,067,801 ( 0.35%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/triomphe-0.1.17/src/arc.rs:hotaru_core::screen::Screen::row
+ 1,067,748 ( 0.35%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:hotaru_core::row::Row::prepare_write_with_left
+ 1,067,640 ( 0.35%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/str/iter.rs:<core::str::iter::Chars as core::iter::traits::iterator::Iterator>::advance_by [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+ 1,029,500 ( 0.34%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:hotaru_core::screen::unicode_batch_boundary
+   953,250 ( 0.31%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/compact_str-0.10.0/src/lib.rs:hotaru_core::row::Row::combine
+   915,250 ( 0.30%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   915,186 ( 0.30%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/char/convert.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   914,856 ( 0.30%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::row::Row::reset [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   839,018 ( 0.27%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/triomphe-0.1.17/src/arc.rs:hotaru_core::screen::State::print_utf8
+   838,908 ( 0.27%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/index.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   838,860 ( 0.27%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   838,838 ( 0.27%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:hotaru_core::row::Row::refresh_memory_charge [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   838,838 ( 0.27%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/grapheme.rs:hotaru_core::row::Row::refresh_memory_charge
+   762,755 ( 0.25%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:hotaru_core::screen::State::scalar_metadata_writes
+   762,715 ( 0.25%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:hotaru_core::screen::Screen::row
+   762,655 ( 0.25%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/vec_deque/mod.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   762,624 ( 0.25%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:hotaru_core::row::Row::combine
+   724,452 ( 0.24%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:hotaru_core::screen::State::print_utf8
+   696,064 ( 0.23%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/num/uint_macros.rs:core::str::converts::from_utf8
+   686,340 ( 0.22%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:compact_str::repr::Repr::push_str
+   686,340 ( 0.22%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/iter/macros.rs:core::str::validations::next_code_point [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   648,605 ( 0.21%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/screen.rs:hotaru_core::screen::Screen::enforce_budget
+   648,559 ( 0.21%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/uint_macros.rs:hotaru_core::Terminal::feed_inner
+   648,451 ( 0.21%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/sync/atomic.rs:hotaru_core::screen::Screen::enforce_budget
+   648,395 ( 0.21%)  /home/callen/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/triomphe-0.1.17/src/arc.rs:hotaru_core::screen::Screen::enforce_budget [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   648,210 ( 0.21%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/str/validations.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   610,126 ( 0.20%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   572,106 ( 0.19%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:hotaru_core::screen::State::scalar_metadata_writes
+   571,950 ( 0.19%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/iter/adapters/filter.rs:hotaru_core::row::Row::combine
+   571,785 ( 0.19%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:hotaru_core::row::Row::reset
+   535,206 ( 0.17%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/str/converts.rs:core::str::converts::from_utf8 [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   533,842 ( 0.17%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/convert/num.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   533,820 ( 0.17%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   533,820 ( 0.17%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/str/iter.rs:<hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+   533,666 ( 0.17%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/range.rs:hotaru_core::screen::Screen::scroll_up
+   495,804 ( 0.16%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:hotaru_core::screen::State::scalar_metadata_writes
+   495,547 ( 0.16%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/specialize.rs:hotaru_core::row::Row::reset
+   458,100 ( 0.15%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/lib.rs:hotaru_core::validate_utf8_run [/home/callen/work/hotaru-core-profile-20261028/target/release/hotaru-replay]
+   457,706 ( 0.15%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::screen::State::scalar_metadata_writes
+   457,629 ( 0.15%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:hotaru_core::screen::Screen::row
+   457,575 ( 0.15%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/raw_vec/mod.rs:hotaru_core::row::Row::put
+   457,575 ( 0.15%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:hotaru_core::row::Row::put
+   457,560 ( 0.15%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:compact_str::repr::Repr::push_str
+   457,560 ( 0.15%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/grapheme.rs:hotaru_core::row::Row::prepare_write_with_left
+   457,560 ( 0.15%)  /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/str/validations.rs:hotaru_core::row::Row::combine
+   457,558 ( 0.15%)  /home/callen/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:hotaru_core::screen::unicode_batch_boundary
+   457,550 ( 0.15%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/row.rs:hotaru_core::screen::unicode_batch_boundary
+   419,661 ( 0.14%)  /home/callen/work/hotaru-core-profile-20261028/crates/hotaru-core/src/style.rs:hotaru_core::screen::State::scalar_metadata_writes
+

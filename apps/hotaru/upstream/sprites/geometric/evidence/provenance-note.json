@@ -1,0 +1,6 @@
+{
+  "unqualified_report": "hypot-geometric.json",
+  "reason": "Candidate hash was read before acquiring the shared lock while its build was pending; runtime comparison ran after lock release but reported the preceding binary hash. Preserve raw report; do not use for source acceptance.",
+  "replacement": "hypot-geometric-verified.json",
+  "fix": "Library loading and binary hashes now occur inside the acquired lock before comparison. Verified rerun passed all18464 masks with final binary identity."
+}

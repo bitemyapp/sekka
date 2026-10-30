@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "status": "protocol audited; no cross-window causal attribution",
+  "unchanged": [
+    "reference adapter SHA-256 dc687741377b3058f7b06bcdf287df9990c183eadd571a1fbe835fb3869625cd",
+    "library SHA-256 70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+    "Rust replay timing source SHA-256 1c85a7f722d19ee87cd48499da392f7306bbdb1ef7ae8dd829b6c49ef302d308",
+    "Rust 1.95 native release optimization flags",
+    "CPU 8; 80x120; 64 KiB chunks; zero history; three warmups",
+    "exact corpus bytes and hash per workload",
+    "fresh terminal setup and width defaults before feed clock; teardown after feed clock"
+  ],
+  "different": [
+    "candidate compiled core source and binary",
+    "new host observation window; old Uta builds were active",
+    "60 samples per engine in six rounds, versus old20 in four rounds"
+  ],
+  "cases": [
+    {
+      "case": "legacy-ascii",
+      "old_report": "../../grapheme-charge/reference-final/legacy-ascii.json",
+      "old_report_sha256": "384b0055b8dc209233f26d06a7e20d1b10ff9e6db16a72a8ecac65a836e08caf",
+      "new_report": "legacy-ascii.json",
+      "new_report_sha256": "99f5b0ec58cf30a312c05c92357956478426632832526b2ed966db46816b6cd9",
+      "data_sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "data_bytes": 8388632,
+      "old_ratio": 1.198893499627742,
+      "new_ratio": 0.8561293884714367
+    },
+    {
+      "case": "legacy-unicode",
+      "old_report": "../../grapheme-charge/reference-final/legacy-unicode.json",
+      "old_report_sha256": "4565f8322546b4544de675946b7a40998fdb2f19cba49ebfaefda24ef46b6c89",
+      "new_report": "legacy-unicode.json",
+      "new_report_sha256": "bfa484bc75a6f121e694ec07a5c3465551eab4b23fb9e052af576429a4a949ed",
+      "data_sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "data_bytes": 8388655,
+      "old_ratio": 1.0639110644826861,
+      "new_ratio": 1.085934059103769
+    },
+    {
+      "case": "legacy-styled",
+      "old_report": "../../grapheme-charge/reference-final/legacy-styled.json",
+      "old_report_sha256": "b20f972f2b23ce3566a6f76b0ea7a6a10432813fee312de969ee06087191d32a",
+      "new_report": "legacy-styled.json",
+      "new_report_sha256": "f8f3156ff1e71b92494c1c7cb8abcfb73ff07231e0cd9a43e39bc1ef33b81252",
+      "data_sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "data_bytes": 8388608,
+      "old_ratio": 0.848057587374288,
+      "new_ratio": 0.8437040489956865
+    },
+    {
+      "case": "legacy-cursor",
+      "old_report": "../../grapheme-charge/reference-final/legacy-cursor.json",
+      "old_report_sha256": "78bbe9203b301f4fd2214bbd056a6318142842b5243c41c8111051736ff590a0",
+      "new_report": "legacy-cursor.json",
+      "new_report_sha256": "5ef36a366a33532d2c4d2bc14aeafe6765056410be9e908287a644fa5bcf9d11",
+      "data_sha256": "29f1b479c32f187c63d7e044aab7d8a2b61169c15022e03c4cafc720c237b954",
+      "data_bytes": 8388633,
+      "old_ratio": 0.11844134429030291,
+      "new_ratio": 0.12192592792245519
+    },
+    {
+      "case": "unicode-ascii",
+      "old_report": "../../grapheme-charge/reference-final/unicode-ascii.json",
+      "old_report_sha256": "1ed0181a74a2261da94fdce51e56d92b9e703d043bb03c9c12a97b33d4f71cd5",
+      "new_report": "unicode-ascii.json",
+      "new_report_sha256": "7bc9a1c7bc598bdb605d6c73a1292c43a4a13a33f9f6d05f635abb44bd93cb7e",
+      "data_sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "data_bytes": 8388632,
+      "old_ratio": 1.2149195598014757,
+      "new_ratio": 0.8487937312371859
+    },
+    {
+      "case": "unicode-unicode",
+      "old_report": "../../grapheme-charge/reference-final/unicode-unicode.json",
+      "old_report_sha256": "14e922ee9d21c84b4b2b30955b5210559ec43c3267d3ecb91a3e2f600777dbc7",
+      "new_report": "unicode-unicode.json",
+      "new_report_sha256": "4d6d718396a07afbe5c63dd4d6849619571b3a036ba9bf80d08e1b440cd25549",
+      "data_sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "data_bytes": 8388655,
+      "old_ratio": 1.0654560632732892,
+      "new_ratio": 1.0708687131341386
+    },
+    {
+      "case": "unicode-styled",
+      "old_report": "../../grapheme-charge/reference-final/unicode-styled.json",
+      "old_report_sha256": "bd5f288dc7c197655cfb945b4e3aee30bddcc822d2ed6ca6ca081ebe7a000838",
+      "new_report": "unicode-styled.json",
+      "new_report_sha256": "235c8071f1f07a9d47e169e9002937fa8fcdd2fda1cae2e6368d385050b8794a",
+      "data_sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "data_bytes": 8388608,
+      "old_ratio": 0.8322458599358652,
+      "new_ratio": 0.8302546160503504
+    },
+    {
+      "case": "unicode-cursor",
+      "old_report": "../../grapheme-charge/reference-final/unicode-cursor.json",
+      "old_report_sha256": "1226b51aa48c5c0fcbabdb996bf34171771158634f1e908d5cd63d06eaf36569",
+      "new_report": "unicode-cursor.json",
+      "new_report_sha256": "3bee447f8dba17e90f3b3ac01cc08c9026f760b93ef1d11cce85eb945e60c014",
+      "data_sha256": "29f1b479c32f187c63d7e044aab7d8a2b61169c15022e03c4cafc720c237b954",
+      "data_bytes": 8388633,
+      "old_ratio": 0.12291492339542623,
+      "new_ratio": 0.12219855008723214
+    }
+  ]
+}

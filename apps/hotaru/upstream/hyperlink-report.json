@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T16:08:57.086441+00:00",
+  "upstream_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "fixture_sha256": "c1fe1e06789104fc3f5fa412e84bb6b05cba94d4fd679e384a0c50e036795c5b",
+  "generator_sha256": "123ada7cd6a88950362d60fe3d394b1b84b60c7e0afe9181820dbd730638f866",
+  "core_rust_sources": {
+    "crates/hotaru-core/examples/content_capture.rs": "63b542608f93f2ef8e8993490c5f2cda98f0296298f304d6d58de91677987e81",
+    "crates/hotaru-core/src/content.rs": "b179aad37fb422ac1d7750e125c9c086f60f980ed4edc46359545282915503d2",
+    "crates/hotaru-core/src/formatter.rs": "0a189cfa5ad96f27a88b2a0b2717ea81772f880a1dc802ba1719fdaefa2fadc0",
+    "crates/hotaru-core/src/grapheme.rs": "e652cb661c7eba627c78596cfe75161f7be9a98423081333bddf71a7c16f537f",
+    "crates/hotaru-core/src/history.rs": "7dd45b9f5aa661cf78f0d294f994dd0d9cb87c071a7dde20f7a9b736242e00ee",
+    "crates/hotaru-core/src/hyperlink.rs": "2f4d0a8acae17e52b6e9cf0d26082a120fac89ded6e3a848057e9e66187e26aa",
+    "crates/hotaru-core/src/input.rs": "e81f3ccb24f3bc5177b6416b53b173b4679d711f76734f5becc645ac7efe0013",
+    "crates/hotaru-core/src/lib.rs": "82cd28116e6f9882ff097ce10a9566b073a8ba0579c4fc87dac75ec472982e75",
+    "crates/hotaru-core/src/parser.rs": "d7b10db12b380221dc5454e844558fc1a400ddc2cd17d242b14402128f2881c0",
+    "crates/hotaru-core/src/row/history.rs": "7a66104b75749d8ed2230466a81340d19fec51c55579af6cd2c9615b314e45dc",
+    "crates/hotaru-core/src/row.rs": "19dc4d7b4691edbeef1e83291b0c7160ed9fc4155191c2b5cc07b98d772c8f53",
+    "crates/hotaru-core/src/scan.rs": "3a431c7dc32f3b4b9956432f6329c5a6fbcb4664cc3349f91c6da2dbb647be1d",
+    "crates/hotaru-core/src/screen.rs": "e8a2c9743322abf31b588f245d82e38d578cde43f6cb03fb925a872a8da754ba",
+    "crates/hotaru-core/src/style.rs": "ec000c1148437208a6d52b4d9be4be8bb80114f1e16b49a6e800371b9a364791",
+    "crates/hotaru-core/tests/configured_colors.rs": "d1a5a1ba4d6985e03dfc52c87157c46b5e8f99c8ccad3ac218fa6d22e91cc38c",
+    "crates/hotaru-core/tests/content.rs": "7e3b4fb7070a500755cc551119a15fad31692592c0a82ed54e33a3b02a5a1868",
+    "crates/hotaru-core/tests/core_review.rs": "570080a37f6bff8e07e57ddd0421f7ac05e3b3379016659ac77cad3d1a384c03",
+    "crates/hotaru-core/tests/history.rs": "62e84bb1a2d1a83ef1235afbf06ca6221abaa8f7cfc6cd862c2edb69cabdca2d",
+    "crates/hotaru-core/tests/history_audit.rs": "0e7a738c3562ec133b8fcbede13794ac412c6c88b0873fac4e2171af144f178f",
+    "crates/hotaru-core/tests/hyperlinks.rs": "372eb74888c46df96ea27ab9085cf0758d2f4c9707cd41780f0cb33c67be2360",
+    "crates/hotaru-core/tests/input.rs": "2691519a177f8b6670eeaf5936b00035059a5ff88fb58848f8a421420f2aa73a",
+    "crates/hotaru-core/tests/reflow.rs": "406571acefe95dc401f398f6eab1d8e44eceffd7a656e06a1f80345050d2d25e",
+    "crates/hotaru-core/tests/scan_boundary.rs": "84fa865081d505174861a8a5c49f0838d39688fcbea718d3f187be4d598aeac7",
+    "crates/hotaru-core/tests/snapshot_threads.rs": "c8853c2f441dd786076eeb4c8ee404c05834b6115e8c24e0d3384ba1feac6e69",
+    "crates/hotaru-core/tests/terminal.rs": "752f7245ff468c0b5458c44ae8a3eca7eb6f85b85e9bcf996cb5a042f6499abc"
+  },
+  "core_rust_sources_sha256": "42217fa66cf52e4def36dd58ac4456fe2288da093be7f3226a3ad641cf7a739b",
+  "cases": 134,
+  "uri_chunk_comparisons": 402,
+  "format_comparisons": 402,
+  "raw_byte_equal_formats": 391,
+  "html_repairs": [
+    "style-link-transitions-selection(0, 1)-(0, 4)-rectFalse",
+    "style-link-transitions-selection(0, 2)-(1, 3)-rectFalse",
+    "style-link-transitions-selection(0, 2)-(1, 3)-rectTrue",
+    "style-link-transitions-selection(0, 3)-(1, 2)-rectTrue",
+    "style-link-crossed",
+    "link-style-crossed"
+  ],
+  "html_repair_validation": "Explicit six-name allowlist; raw bytes retained; independent Python parser verifies per-character CSS/link projection equality and balanced expected nesting. Rust compares exact repaired bytes only for these names.",
+  "other_tests": [
+    "20000 sparse/dense hyperlink mutations with table compaction and dictionary restoration",
+    "Captured default colors and palette survive mutation and teardown",
+    "Aggregate MIME budget and explicit cancellation",
+    "Invalid and empty selection bounds",
+    "Compressed dictionary/content lifetime/range/cancellation tests owned by history implementation"
+  ],
+  "validation": [
+    "Full69 core tests and strict all-target Clippy passed after malformed-option, UTF8 href and rectangle fixes",
+    "Final targeted formatter/hyperlink tests and strict all-target Clippy passed after adding URI Unicode-control preservation"
+  ],
+  "commands": [
+    "cargo test -p hotaru-core",
+    "cargo test -p hotaru-core formatter::tests",
+    "cargo test -p hotaru-core hyperlink::tests",
+    "cargo clippy -p hotaru-core --all-targets -- -D warnings"
+  ],
+  "limitations": [
+    "Selection gestures, configurable copy codepoint maps and scrollback search not implemented by this slice",
+    "Content-only external C API fixtures omit whole-terminal palette/mode/state serialization",
+    "Application color headers additionally port pinned upstream source expectations",
+    "Single outer HTML wrapper differs from upstream internal page wrappers",
+    "No whole-application or universal performance parity claim"
+  ],
+  "html_uri_repairs": [
+    "raw-uri",
+    "unicode-uri",
+    "unicode-uri-percent",
+    "unicode-uri-control",
+    "invalid-uri-truncated"
+  ],
+  "html_uri_repair_validation": "Explicit five-name allowlist; raw bytes retained; independent Python surrogateescape projection verifies HTML-unescaped destination preserves valid Unicode, existing percent escapes, undecodable bytes and UTF8 control bytes. Rust compares exact corrected bytes only for these names.",
+  "independent_uri_audit": {
+    "report": "upstream/formatter-uri-audit.json",
+    "cases": 529,
+    "status": "pass"
+  },
+  "performance_diagnostic": {
+    "report": "upstream/hyperlink-performance-verified.json",
+    "scope": "Four exact ASCII/dense-wide-Unicode no-link/persistent2031-byte-link streams; not full performance acceptance"
+  }
+}

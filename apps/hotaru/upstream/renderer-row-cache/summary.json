@@ -1,0 +1,303 @@
+{
+  "schema": 1,
+  "scope": "worker preparation; excludes raster, Wayland presentation and whole-application comparison",
+  "source_manifest": "source-manifest.json",
+  "source_manifest_sha256": "981815b5e7cf771c52be316449b9ffee03ec1ed6dcf268151e8214a4ddce6eb8",
+  "unchanged_original_baseline_font_sha256": "677df2b032bab2e30766b600fbb6783d7a4247fe70799b1757f1325bbb758e99",
+  "baseline_implementation": "cfg(test) shape_uncached copied from exact original; original Vec<Vec<Span>> retained during timed calls; output converted only for differential checks",
+  "checks": {
+    "seeded_differential_frames": 600,
+    "workload_differential_frames": 1920,
+    "native_ordinary_tests_passed": 41,
+    "native_ignored_tests": 7,
+    "strict_package_clippy": "passed --all-targets --all-features --no-deps -D warnings",
+    "broader_clippy": "blocked by 5 pre-existing aizome-kit style warnings; preserved in clippy.log",
+    "fmt_check": true,
+    "independent_source_review": "aizome_architecture found no concrete correctness defect",
+    "prototype_shared_product_integrated": false
+  },
+  "cache": {
+    "completed_generation_limit_bytes": 8388608,
+    "at_most_two_generations_during_replacement": true,
+    "charge_kind": "conservative logical admission estimate, not actual RSS or exclusive allocation; displayed/queued frames and toolkit font caches are separate",
+    "future_mapped_rows": "storage accessor must account for whole retained page ownership before integration with mmap history"
+  },
+  "results": [
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "unchanged",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 273.28321093750003,
+        "median_rust_allocation_calls": 10005.0,
+        "median_rust_requested_bytes": 695136.0,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 3.56228125,
+        "median_rust_allocation_calls": 10.0,
+        "median_rust_requested_bytes": 15820.0,
+        "prepared_rows": 0.0,
+        "reused_rows": 40.0,
+        "max_cache_admission_charge_two_generations": 402400
+      },
+      "time_ratio": 0.01303512659185893
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "cell",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 286.56220703124995,
+        "median_rust_allocation_calls": 10157.015625,
+        "median_rust_requested_bytes": 710627.25,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 18.94915234375,
+        "median_rust_allocation_calls": 414.015625,
+        "median_rust_requested_bytes": 48743.25,
+        "prepared_rows": 1.0,
+        "reused_rows": 39.0,
+        "max_cache_admission_charge_two_generations": 402400
+      },
+      "time_ratio": 0.066125790068624
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "cursor",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 286.53267968750004,
+        "median_rust_allocation_calls": 10136.421875,
+        "median_rust_requested_bytes": 712207.9375,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 26.4836953125,
+        "median_rust_allocation_calls": 645.421875,
+        "median_rust_requested_bytes": 67755.9375,
+        "prepared_rows": 2.0,
+        "reused_rows": 38.0,
+        "max_cache_admission_charge_two_generations": 402688
+      },
+      "time_ratio": 0.09242818425243433
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "scroll",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 292.34401953125,
+        "median_rust_allocation_calls": 10157.015625,
+        "median_rust_requested_bytes": 710627.25,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 18.77103125,
+        "median_rust_allocation_calls": 414.015625,
+        "median_rust_requested_bytes": 48743.25,
+        "prepared_rows": 1.0,
+        "reused_rows": 39.0,
+        "max_cache_admission_charge_two_generations": 402400
+      },
+      "time_ratio": 0.06420870616781499
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "fallback",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 310.09776953125004,
+        "median_rust_allocation_calls": 9005.6328125,
+        "median_rust_requested_bytes": 748153.21875,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 68.25284765625,
+        "median_rust_allocation_calls": 765.7265625,
+        "median_rust_requested_bytes": 123623.84375,
+        "prepared_rows": 1.0078125,
+        "reused_rows": 38.9921875,
+        "max_cache_admission_charge_two_generations": 519928
+      },
+      "time_ratio": 0.2201010596091109
+    },
+    {
+      "cols": 120,
+      "rows": 40,
+      "workload": "replace",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 285.59851953125,
+        "median_rust_allocation_calls": 10005.0,
+        "median_rust_requested_bytes": 695136.0,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 287.90359375,
+        "median_rust_allocation_calls": 10090.0,
+        "median_rust_requested_bytes": 713100.0,
+        "prepared_rows": 40.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 402400
+      },
+      "time_ratio": 1.0080710299988014
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "unchanged",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1196.33721875,
+        "median_rust_allocation_calls": 39285.0,
+        "median_rust_requested_bytes": 2775776.0,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 7.229875,
+        "median_rust_allocation_calls": 11.0,
+        "median_rust_requested_bytes": 31964.0,
+        "prepared_rows": 0.0,
+        "reused_rows": 80.0,
+        "max_cache_admission_charge_two_generations": 1419200
+      },
+      "time_ratio": 0.006043342033238904
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "cell",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1147.46294921875,
+        "median_rust_allocation_calls": 39559.015625,
+        "median_rust_requested_bytes": 2803227.25,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 35.1079140625,
+        "median_rust_allocation_calls": 778.015625,
+        "median_rust_requested_bytes": 94167.25,
+        "prepared_rows": 1.0,
+        "reused_rows": 79.0,
+        "max_cache_admission_charge_two_generations": 1419200
+      },
+      "time_ratio": 0.030596119976164127
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "cursor",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1163.6512304687499,
+        "median_rust_allocation_calls": 39600.3828125,
+        "median_rust_requested_bytes": 2815508.6875,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 53.4228984375,
+        "median_rust_allocation_calls": 1312.3828125,
+        "median_rust_requested_bytes": 141200.6875,
+        "prepared_rows": 2.0,
+        "reused_rows": 78.0,
+        "max_cache_admission_charge_two_generations": 1419488
+      },
+      "time_ratio": 0.04590971679373366
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "scroll",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1159.03944921875,
+        "median_rust_allocation_calls": 39559.015625,
+        "median_rust_requested_bytes": 2803227.25,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 35.50684765625,
+        "median_rust_allocation_calls": 778.015625,
+        "median_rust_requested_bytes": 94167.25,
+        "prepared_rows": 1.0,
+        "reused_rows": 79.0,
+        "max_cache_admission_charge_two_generations": 1419200
+      },
+      "time_ratio": 0.03063471884428384
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "fallback",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1200.8987421875,
+        "median_rust_allocation_calls": 34714.171875,
+        "median_rust_requested_bytes": 2802420.09375,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 133.108296875,
+        "median_rust_allocation_calls": 1406.5390625,
+        "median_rust_requested_bytes": 229261.328125,
+        "prepared_rows": 1.0078125,
+        "reused_rows": 78.9921875,
+        "max_cache_admission_charge_two_generations": 1844424
+      },
+      "time_ratio": 0.11084056648484474
+    },
+    {
+      "cols": 240,
+      "rows": 80,
+      "workload": "replace",
+      "snapshots_compared": 160,
+      "uncached": {
+        "median_microseconds": 1195.441171875,
+        "median_rust_allocation_calls": 39285.0,
+        "median_rust_requested_bytes": 2775776.0,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 0
+      },
+      "cached": {
+        "median_microseconds": 1174.1999140625,
+        "median_rust_allocation_calls": 39451.0,
+        "median_rust_requested_bytes": 2812124.0,
+        "prepared_rows": 80.0,
+        "reused_rows": 0.0,
+        "max_cache_admission_charge_two_generations": 1419200
+      },
+      "time_ratio": 0.9822314486800016
+    }
+  ]
+}

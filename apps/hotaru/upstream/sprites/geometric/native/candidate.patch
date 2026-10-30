@@ -1,0 +1,1383 @@
+diff --git a/apps/hotaru/crates/hotaru-sprites/src/lib.rs b/apps/hotaru/crates/hotaru-sprites/src/lib.rs
+--- a/apps/hotaru/crates/hotaru-sprites/src/lib.rs
++++ b/apps/hotaru/crates/hotaru-sprites/src/lib.rs
+@@ -3,7 +3,9 @@
+ //! The pure raster has no font, graphics API, or terminal-state dependencies.
+ mod braille;
+ mod curves;
++mod geometric;
+ mod lines;
++mod math;
+ mod powerline;
+ mod vector;
+ 
+@@ -48,7 +50,7 @@
+ pub const MAX_MASK_BYTES: usize = 4 * 1024 * 1024;
+ 
+ pub const fn supports(cp: u32) -> bool {
+-    matches!(cp, 0x2500..=0x259f | 0x2800..=0x28ff | 0xe0b0..=0xe0bf | 0xe0d2 | 0xe0d4)
++    matches!(cp, 0x2500..=0x259f | 0x25e2..=0x25e5 | 0x25f8..=0x25fa | 0x25ff | 0x2800..=0x28ff | 0xe0b0..=0xe0bf | 0xe0d2 | 0xe0d4)
+ }
+ 
+ /// Check metrics without allocating. Native integrations may select ordinary
+@@ -102,6 +104,8 @@
+         powerline::draw(&mut result, m, cp)?;
+     } else if (0x2800..=0x28ff).contains(&cp) {
+         braille::draw(&mut result, m, cp);
++    } else if matches!(cp, 0x25e2..=0x25e5 | 0x25f8..=0x25fa | 0x25ff) {
++        geometric::draw(&mut result, m, cp)?;
+     } else if cp >= 0x2580 {
+         blocks(&mut result, m, cp);
+     } else if (0x256d..=0x2573).contains(&cp) {
+diff --git a/apps/hotaru/crates/hotaru-sprites/src/vector.rs b/apps/hotaru/crates/hotaru-sprites/src/vector.rs
+--- a/apps/hotaru/crates/hotaru-sprites/src/vector.rs
++++ b/apps/hotaru/crates/hotaru-sprites/src/vector.rs
+@@ -5,7 +5,8 @@
+ // Spline, Face, Slope, Pen, stroke_plotter, Polygon and multisample.
+ // Cairo-derived portions retain the upstream notices in LICENSE.z2d.
+ // This bounded subset supports identity-transform, butt-cap open strokes and
+-// nonzero polygon fills. No runtime Zig, foreign code, or unsafe Rust.
++// closed inner-stroked corner triangles and nonzero polygon fills.
++// No runtime Zig, foreign code, or unsafe Rust.
+ use crate::{Error, Raster};
+ const LIMIT: usize = 32768;
+ const TOLERANCE: f64 = 0.1;
+@@ -33,7 +34,7 @@
+         } else if self.y == 0. {
+             Self::new(if self.x > 0. { 1. } else { -1. }, 0.)
+         } else {
+-            let mag = self.x.hypot(self.y);
++            let mag = crate::math::hypot(self.x, self.y);
+             Self::new(self.x / mag, self.y / mag)
+         }
+     }
+@@ -383,7 +384,7 @@
+         } else {
+             let i = a.slope.normal();
+             let o = b.slope.normal();
+-            if 2. <= 100. * (1. + i.x * o.x + i.y * o.y) {
++            if 2. <= 100. * (1. + (i.x * o.x + i.y * o.y)) {
+                 push(outside, a.intersect(b, cw))?
+             } else {
+                 push(outside, ao)?;
+@@ -429,26 +430,31 @@
+     dir: i32,
+ }
+ pub(crate) fn fill_device(r: &mut Raster, points: &[Point]) -> Result<(), Error> {
++    fill_contours(r, &[points])
++}
++fn fill_contours(r: &mut Raster, contours: &[&[Point]]) -> Result<(), Error> {
+     let mut edges = Vec::new();
+-    for i in 0..points.len() {
+-        let a = points[i];
+-        let b = points[(i + 1) % points.len()];
+-        let a = Point::new(a.x * 4., a.y * 4.);
+-        let b = Point::new(b.x * 4., b.y * 4.);
+-        if a.y == b.y {
+-            continue;
+-        }
+-        let (top, bottom, dir) = if a.y < b.y { (a, b, -1) } else { (b, a, 1) };
+-        push(
+-            &mut edges,
+-            Edge {
+-                top: top.y,
+-                bottom: bottom.y,
+-                x: top.x,
+-                inc: (bottom.x - top.x) / (bottom.y - top.y),
+-                dir,
+-            },
+-        )?;
++    for points in contours {
++        for i in 0..points.len() {
++            let a = points[i];
++            let b = points[(i + 1) % points.len()];
++            let a = Point::new(a.x * 4., a.y * 4.);
++            let b = Point::new(b.x * 4., b.y * 4.);
++            if a.y == b.y {
++                continue;
++            }
++            let (top, bottom, dir) = if a.y < b.y { (a, b, -1) } else { (b, a, 1) };
++            push(
++                &mut edges,
++                Edge {
++                    top: top.y,
++                    bottom: bottom.y,
++                    x: top.x,
++                    inc: (bottom.x - top.x) / (bottom.y - top.y),
++                    dir,
++                },
++            )?;
++        }
+     }
+     if edges.is_empty() {
+         return Ok(());
+@@ -605,3 +611,108 @@
+     push(&mut output, (shifted(last.p1, last.slope), false))?;
+     stroke_points(raster, output, thickness)
+ }
++
++// Closed offset and miter stroke from z2d InputSet::alignSegments,
++// offset::runClosed and stroke_plotter::plotClosedJoined. Only the fixed,
++// nondegenerate cell-corner triangles call this entry point. Their first
++// vertex is already the first leftmost point, so alignment preserves order.
++pub(crate) fn inner_stroke_triangle(
++    raster: &mut Raster,
++    vertices: [Point; 3],
++    thickness: f64,
++) -> Result<(), Error> {
++    let points = vertices.map(|p| {
++        Point::new(
++            p.x - f64::from(raster.origin_x),
++            p.y - f64::from(raster.origin_y),
++        )
++    });
++    let slopes = [
++        points[1].sub(points[0]).normal(),
++        points[2].sub(points[1]).normal(),
++        points[0].sub(points[2]).normal(),
++    ];
++    let clockwise = slopes[2].compare(slopes[0]) < 0;
++    let offset = -thickness / 2.;
++    let shifted = |p: Point, slope: Point| {
++        let adjust = Point::new(-slope.y * offset, slope.x * offset);
++        if clockwise {
++            p.sub(adjust)
++        } else {
++            p.add(adjust)
++        }
++    };
++    let mut inset = Vec::new();
++    for out in 0..3 {
++        let incoming = (out + 2) % 3;
++        let a = slopes[incoming];
++        let b = slopes[out];
++        let p = shifted(points[out], a);
++        let q = shifted(points[out], b);
++        let divisor = a.x * b.y - a.y * b.x;
++        if divisor == 0. {
++            return Err(Error::Unsupported);
++        }
++        let t = ((q.x - p.x) * b.y - (q.y - p.y) * b.x) / divisor;
++        push(
++            &mut inset,
++            (Point::new(p.x + t * a.x, p.y + t * a.y), false),
++        )?;
++    }
++    inset.dedup_by(|a, b| a.0 == b.0);
++    if inset.len() < 3 {
++        return stroke_points(raster, inset, thickness);
++    }
++    // z2d's close-path special case joins the penultimate point back through
++    // the initial point when the final line already returned there. Retain
++    // both joins even if floating rounding leaves only two distinct points.
++    if inset.last().unwrap().0 == inset[0].0 {
++        inset.pop();
++    }
++    let mut outer = Vec::new();
++    let mut inner = Vec::new();
++    let mut direction = None;
++    // Normal line processing starts at the second vertex; closing supplies
++    // the final and initial joins. Inner plotting reverses contour order.
++    for i in 1..=inset.len() {
++        let p0 = inset[(i - 1) % inset.len()].0;
++        let p1 = inset[i % inset.len()].0;
++        let p2 = inset[(i + 1) % inset.len()].0;
++        if p0 == p1 || p1 == p2 {
++            direction.get_or_insert(false);
++            continue;
++        }
++        let a = Face::new(p0, p1, thickness);
++        let b = Face::new(p1, p2, thickness);
++        let compare = a.slope.compare(b.slope);
++        let clockwise = compare < 0;
++        let polygon_clockwise = *direction.get_or_insert(clockwise);
++        let (outside, inside) = if clockwise == polygon_clockwise {
++            (&mut outer, &mut inner)
++        } else {
++            (&mut inner, &mut outer)
++        };
++        let ai = if clockwise { a.p1_cw } else { a.p1_ccw };
++        let ao = if clockwise { a.p1_ccw } else { a.p1_cw };
++        let bi = if clockwise { b.p0_cw } else { b.p0_ccw };
++        let bo = if clockwise { b.p0_ccw } else { b.p0_cw };
++        if compare == 0 {
++            push(outside, ao)?;
++            push(inside, ai)?;
++            continue;
++        }
++        let incoming = a.slope.normal();
++        let outgoing = b.slope.normal();
++        if 2. <= 100. * (1. + (incoming.x * outgoing.x + incoming.y * outgoing.y)) {
++            push(outside, a.intersect(b, clockwise))?;
++        } else {
++            push(outside, ao)?;
++            push(outside, bo)?;
++        }
++        push(inside, ai)?;
++        push(inside, p1)?;
++        push(inside, bi)?;
++    }
++    inner.reverse();
++    fill_contours(raster, &[&outer, &inner])
++}
+diff --git a/apps/hotaru/crates/hotaru-sprites/src/geometric.rs b/apps/hotaru/crates/hotaru-sprites/src/geometric.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/hotaru/crates/hotaru-sprites/src/geometric.rs
+@@ -0,0 +1,30 @@
++//! Eight corner triangles from Ghostty's MIT-licensed geometric_shapes.zig,
++//! commit 6ba144158577d033ccb6ed4b574e4013957c9161. See LICENSE.ghostty.
++use crate::{
++    Error, Metrics, Raster,
++    vector::{self, Node, Point},
++};
++
++pub(super) fn draw(raster: &mut Raster, metrics: Metrics, cp: u32) -> Result<(), Error> {
++    let w = f64::from(metrics.cell_width);
++    let h = f64::from(metrics.cell_height);
++    let vertices = match cp {
++        0x25e4 | 0x25f8 => [Point::new(0., 0.), Point::new(0., h), Point::new(w, 0.)],
++        0x25e5 | 0x25f9 => [Point::new(0., 0.), Point::new(w, h), Point::new(w, 0.)],
++        0x25e3 | 0x25fa => [Point::new(0., 0.), Point::new(0., h), Point::new(w, h)],
++        0x25e2 | 0x25ff => [Point::new(0., h), Point::new(w, h), Point::new(w, 0.)],
++        _ => return Err(Error::Unsupported),
++    };
++    if cp <= 0x25e5 {
++        vector::fill_path(
++            raster,
++            &[
++                Node::Move(vertices[0]),
++                Node::Line(vertices[1]),
++                Node::Line(vertices[2]),
++            ],
++        )
++    } else {
++        vector::inner_stroke_triangle(raster, vertices, f64::from(metrics.box_thickness))
++    }
++}
+diff --git a/apps/hotaru/crates/hotaru-sprites/src/math.rs b/apps/hotaru/crates/hotaru-sprites/src/math.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/hotaru/crates/hotaru-sprites/src/math.rs
+@@ -0,0 +1,204 @@
++// SPDX-License-Identifier: MIT
++// Copyright (c) Zig contributors
++// Adapted from Zig 0.17.0 lib/std/math/hypot.zig. See LICENSE.zig.
++// The explicit fused correction preserves the pinned reference's rounding;
++// platform libm hypot may differ by one ULP at an antialias sample boundary.
++pub(crate) fn hypot(x: f64, y: f64) -> f64 {
++    if x.is_infinite() || y.is_infinite() {
++        return f64::INFINITY;
++    }
++    if x.is_nan() || y.is_nan() {
++        return f64::NAN;
++    }
++    let mut major = x.abs();
++    let mut minor = y.abs();
++    if minor > major {
++        std::mem::swap(&mut major, &mut minor);
++    }
++    if minor == 0. || major - minor == major {
++        return major;
++    }
++    let lower = f64::MIN_POSITIVE.sqrt();
++    let upper = (f64::MAX / 2.).sqrt();
++    let scale = f64::from_bits(1) * upper;
++    if major > upper {
++        fused(major * scale, minor * scale) / scale
++    } else if minor < lower {
++        fused(major / scale, minor / scale) * scale
++    } else {
++        fused(major, minor)
++    }
++}
++fn fused(x: f64, y: f64) -> f64 {
++    let r = x.mul_add(x, y * y).sqrt();
++    let rr = r * r;
++    let xx = x * x;
++    let z = (-y).mul_add(y, rr - xx) + r.mul_add(r, -rr) - x.mul_add(x, -xx);
++    r - z / (2. * r)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::hypot;
++    #[test]
++    fn pinned_fused_rounding_matches_actual_zig_bit_patterns() {
++        // Actual pinned-library observations where platform libm differs.
++        for (x, y, expected) in [
++            (
++                0x402e000000000000_u64,
++                0x405c400000000000_u64,
++                0x405c7f704671ab73_u64,
++            ),
++            (
++                0x4031000000000000_u64,
++                0x403b000000000000_u64,
++                0x403fe7f6f939a553_u64,
++            ),
++            (
++                0x4032000000000000_u64,
++                0x4065e00000000000_u64,
++                0x4065fd8b7fd72888_u64,
++            ),
++            (
++                0x403b000000000000_u64,
++                0x4031000000000000_u64,
++                0x403fe7f6f939a553_u64,
++            ),
++            (
++                0x403c000000000000_u64,
++                0x4047800000000000_u64,
++                0x404b5aaa259099ad_u64,
++            ),
++            (
++                0x403e000000000000_u64,
++                0x406c400000000000_u64,
++                0x406c7f704671ab73_u64,
++            ),
++            (
++                0x4041000000000000_u64,
++                0x404b000000000000_u64,
++                0x404fe7f6f939a553_u64,
++            ),
++            (
++                0x4041800000000000_u64,
++                0x405fc00000000000_u64,
++                0x40607781b15b4757_u64,
++            ),
++            (
++                0x4043800000000000_u64,
++                0x4069200000000000_u64,
++                0x406997f4bf497b77_u64,
++            ),
++            (
++                0x4044800000000000_u64,
++                0x4067200000000000_u64,
++                0x4067afa4226d9be9_u64,
++            ),
++            (
++                0x4044800000000000_u64,
++                0x406c800000000000_u64,
++                0x406cf506c059d479_u64,
++            ),
++            (
++                0x4045000000000000_u64,
++                0x406a600000000000_u64,
++                0x406ae476b2f70c2e_u64,
++            ),
++            (
++                0x4045000000000000_u64,
++                0x406d200000000000_u64,
++                0x406d982a2bacf839_u64,
++            ),
++            (
++                0x4045800000000000_u64,
++                0x4046800000000000_u64,
++                0x404f1ee85590e272_u64,
++            ),
++            (
++                0x4045800000000000_u64,
++                0x4058800000000000_u64,
++                0x405ac132375bf490_u64,
++            ),
++            (
++                0x4045800000000000_u64,
++                0x406de00000000000_u64,
++                0x406e5acbeed3b55e_u64,
++            ),
++            (
++                0x4046800000000000_u64,
++                0x4045800000000000_u64,
++                0x404f1ee85590e272_u64,
++            ),
++            (
++                0x4047800000000000_u64,
++                0x403c000000000000_u64,
++                0x404b5aaa259099ad_u64,
++            ),
++            (
++                0x4048800000000000_u64,
++                0x4063800000000000_u64,
++                0x40647076fddd2faa_u64,
++            ),
++            (
++                0x4049800000000000_u64,
++                0x4061e00000000000_u64,
++                0x4062fa4ffda7b819_u64,
++            ),
++            (
++                0x404a800000000000_u64,
++                0x4055400000000000_u64,
++                0x40590adeeaa19789_u64,
++            ),
++            (
++                0x404b000000000000_u64,
++                0x4041000000000000_u64,
++                0x404fe7f6f939a553_u64,
++            ),
++            (
++                0x404b000000000000_u64,
++                0x4055400000000000_u64,
++                0x40592cf649cb3471_u64,
++            ),
++            (
++                0x404b000000000000_u64,
++                0x4057400000000000_u64,
++                0x405ae29aaa1e7b64_u64,
++            ),
++            (
++                0x404b000000000000_u64,
++                0x4065e00000000000_u64,
++                0x4066e48b7072e8cd_u64,
++            ),
++            (
++                0x404b800000000000_u64,
++                0x4065a00000000000_u64,
++                0x4066b10924f79752_u64,
++            ),
++            (
++                0x404b800000000000_u64,
++                0x4065c00000000000_u64,
++                0x4066cf8a2a4bd01c_u64,
++            ),
++            (
++                0x404b800000000000_u64,
++                0x406b400000000000_u64,
++                0x406c1a97f14cd199_u64,
++            ),
++            (
++                0x404c000000000000_u64,
++                0x4057800000000000_u64,
++                0x405b5aaa259099ad_u64,
++            ),
++            (
++                0x404c800000000000_u64,
++                0x4052000000000000_u64,
++                0x4056f5351ebb1826_u64,
++            ),
++        ] {
++            assert_eq!(
++                hypot(f64::from_bits(x), f64::from_bits(y)).to_bits(),
++                expected
++            );
++        }
++    }
++}
+diff --git a/apps/hotaru/crates/hotaru-sprites/tests/raster.rs b/apps/hotaru/crates/hotaru-sprites/tests/raster.rs
+--- a/apps/hotaru/crates/hotaru-sprites/tests/raster.rs
++++ b/apps/hotaru/crates/hotaru-sprites/tests/raster.rs
+@@ -8,12 +8,17 @@
+ }
+ #[test]
+ fn complete_explicit_ranges_and_exclusions() {
+-    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 434);
++    assert_eq!((0..=0x10ffff).filter(|cp| supports(*cp)).count(), 442);
+ 
+     for cp in [
+         0,
+         0x24ff,
+         0x25a0,
++        0x25e1,
++        0x25e6,
++        0x25f7,
++        0x25fb,
++        0x2600,
+         0x27ff,
+         0x2900,
+         0xe0c0,
+diff --git a/apps/hotaru/crates/hotaru-sprites/tests/golden.rs b/apps/hotaru/crates/hotaru-sprites/tests/golden.rs
+--- a/apps/hotaru/crates/hotaru-sprites/tests/golden.rs
++++ b/apps/hotaru/crates/hotaru-sprites/tests/golden.rs
+@@ -12,6 +12,10 @@
+ #[test]
+ fn braille_matches_four_committed_upstream_atlases() {
+     check(include_bytes!("fixtures/braille.rle"), 1024);
++}
++#[test]
++fn geometric_matches_upstream_pngs_and_numerical_boundaries() {
++    check(include_bytes!("fixtures/geometric.rle"), 77);
+ }
+ fn check(bytes: &[u8], expected_count: usize) {
+     assert_eq!(&bytes[..4], b"HSP1");
+diff --git a/apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.json b/apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.json
+new file mode 100644
+--- /dev/null
++++ b/apps/hotaru/crates/hotaru-sprites/tests/fixtures/geometric.json
+@@ -0,0 +1,777 @@
++{
++  "ghostty_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
++  "oracle_sha256": "e81f3a5f4ea58ea2fd028208817c4492107c9bf1e28e3e8e36e85682307d04eb",
++  "records": [
++    {
++      "cp": "U+25E2",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "f362b75e0560fd0c8965fefe3e2d9601749b3302d5f6f7a1084312add454b55d"
++    },
++    {
++      "cp": "U+25E3",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "00e7b8693f5234beb18e63c0a2b286cb0076fa1019dc5e72ac2a5232f527a2d1"
++    },
++    {
++      "cp": "U+25E4",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "7c72afc7126567974d8887a326c7906ba71deadb6e380e925696378f59f4eeef"
++    },
++    {
++      "cp": "U+25E5",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "ed8cb63ca35972495244deecaa87f5ad092d406841c176f40660a4404e7acc96"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "eba6141c21a6380ee27de01560f1a0bfe52b235a450239d86bd42e0f0f2c1787"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "4ba08ced767deb9badebc2db6251cdfe0d16833efa8dda5e0d0b5dd1b7e3b390"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "798ab6f2ad2c3932146902bc84ad591fef61193bec2feee2aaf8977913bb8560"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        9,
++        17,
++        1
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
++      "raw_sha256": "92376966b8c1a8d826f200f260eb12d4491d5d99a26b8c44a5444cb66603b78e"
++    },
++    {
++      "cp": "U+25E2",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "8a9f4075cefd3a7baa30b22807fdf10efd0177e58ef3931b8846d1b4a99b781a"
++    },
++    {
++      "cp": "U+25E3",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "0015c6145ee16fa312e72bcaed3eff62c2ffc10f4f433aed5cbaa05f4c2fd4ff"
++    },
++    {
++      "cp": "U+25E4",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "1fcc6a1e5cdd608ea64ef650866039bbe73ede6aab8b9ffb21ef047a1f30d512"
++    },
++    {
++      "cp": "U+25E5",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "8f3f5a7e22a275fb0d9c4482097ad89e485a5d30dd2393182af1d1df2355f623"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "c25b7a034c7e52d74ec4d52ec9e4014119a342127af1cbad0ea1afafbf012de9"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "00b5f9ed70a96a28208bf18fb1a900540e5951bd8805b76b62772b6c5cd1ba91"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "9d0a8e749886dd9e7af6b95afbe74ebc56ac4f72348735ee7618786a1bf460d6"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        11,
++        21,
++        2
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
++      "raw_sha256": "770b2b2cdecfa519c6560f2c9165c7044d59d683992ae5bdd9b26e23d718da30"
++    },
++    {
++      "cp": "U+25E2",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "a430d4c5ccd1163bae2c3695216dbee26d86346865e614bbc2d29e866fedccf7"
++    },
++    {
++      "cp": "U+25E3",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "7a1ed043d55b9051e8f5687ee26ce15863b855b64f13aa069767576aa65e21ae"
++    },
++    {
++      "cp": "U+25E4",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "6d53db77533f4fa4dc58a72fd42760d0afddbeb3c28b81ba898025d3c03be8f2"
++    },
++    {
++      "cp": "U+25E5",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "06a3078e6b8e14af7c6093da807b293259b806d874b7a1efd1b5565d31dc9ccc"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "5600344aeb887adf529136bb09bb2c781a481807c8587750b4f11ca0bda3fd15"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "b5f15ac778f13aa2747390c5a3dd6ae22fb434e2a88d8494e48466370974a1f7"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "373e4027d5c1df557058b323dc5763013e697e13b670ffe3300c2d92d9ddd4cf"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        12,
++        24,
++        3
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
++      "raw_sha256": "9982e73eed44cdfcba5f20fb05e8a6b3f29e3a1a3f3c8af4ea3f207fcffb1777"
++    },
++    {
++      "cp": "U+25E2",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "609dfd812cb3184a86b532c01143f7e83f30e7190a5e06c6afe8a8d51ff7a50f"
++    },
++    {
++      "cp": "U+25E3",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "6246b6dd82c54b9ababbe86ee21b45d6c5d06d04309bd1583822f43277f88686"
++    },
++    {
++      "cp": "U+25E4",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "0a3f35b572b04c4a419adfadc64bd599dbfcb2c566e0871e9e21d8e2e58a5b68"
++    },
++    {
++      "cp": "U+25E5",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "e70d78b3144ae2f88e774dd4f398810b8fe8f21c0307742875b0c9ec5a2e71d7"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "62e0f8445aa16a129f8612fe86c9f32bb1ceea3e57bef04e9d226a770d9847fe"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "d47bc463eae72a0b5ee5228899a51a5652fc6741aacc0fbeb08b379ee6300cbd"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "e526036098a9c2666fc555b31e8051a42c6e367f8924beb04c3d133f04e0f348"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        18,
++        36,
++        4
++      ],
++      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
++      "raw_sha256": "c149a12f0a09f6fec213efafecdd210a1b67c60a7a7733e239bb52cb14ff52f4"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        2,
++        10,
++        1
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "1085d50b3230512041f3b40a28e4d5829259af4a9872f8045166c7cc1ae9a94d"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        5,
++        11,
++        1
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "0a99e74b45dad4411899f0e7a316cf5ec50c41415f2fb000fc6a944d6a5343fb"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        7,
++        3,
++        1
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "289acfd514e36c4d293a95190d50af661aff3a2a9e23f23d4925d9cf8d52f595"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        7,
++        3,
++        1
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "f2c9c4ca976a7a8ce56434410d40b9b4fff1796d30887687f07b97160a17ec2c"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        7,
++        17,
++        2
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "8859e17f2103ff918ca0859865e66794c8a22e17a23791ca790906bc2360021b"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        10,
++        2,
++        1
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "d4f7d96cc8d7b56cf037d0d3733fed893a2ca33e27e519bf22fe1a3d8871ee24"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        14,
++        6,
++        2
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "74bed0f4d52a3350868c1c7b04d13df080ea512398180b9242a29fd38e5350dc"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        15,
++        3,
++        2
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "221f400d3d34c6b134269d3f0b2f6457255d22a8496cb68d02f971a36a61ec89"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        257,
++        255,
++        127
++      ],
++      "source": "actual-library hypot rounding regression",
++      "raw_sha256": "813abf2ed9da3a244f63673759020b31f38af7e34db4751140335e6efb6759d3"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        3,
++        4,
++        2
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        3,
++        4,
++        2
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        3,
++        4,
++        2
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        3,
++        4,
++        2
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "60daa3a5f7dbfa200f8c82840ecf5b42640b70f3b7218a4c6bbd67db542e75a4"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        6,
++        8,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        6,
++        8,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        6,
++        8,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        6,
++        8,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        5,
++        12,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        5,
++        12,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        5,
++        12,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        5,
++        12,
++        4
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "ebc47d1683f1e8b6d506bf43f07f93e64fcb54ea8310a90211336139a80e706a"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        8,
++        15,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "913c6e2c32d99e4baff62cf421a494730cb043924f2c6bf46406573b59c641bd"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        8,
++        15,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "f200363be039de3ad2c519e8a23f2d6854a8e3c1656fa9682bae27c96afd8c92"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        8,
++        15,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "9468566bb617b99c711d76fb6e0c02a964b9bd3cea12e470675b90bdd7d919b8"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        8,
++        15,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "4c9764a1df0b995cbf23bc4134c2a2cacf0bb9ed4244fe23e2208a29e932c68e"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        7,
++        24,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        7,
++        24,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        7,
++        24,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        7,
++        24,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "7119f314d3837dac54bf984118de657f6f1e6dfd2a2b2a20510454f762dddf11"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        9,
++        12,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "0479688f99e8cbc70291ce272876ff8e0db71a0889daf2752884b0996056b4a0"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        9,
++        12,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "5a1c2ec4b49445abf4b2c3609891d1869a1c0090a8c8a50230f989c5bce26711"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        9,
++        12,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "7b46fc5382d50c2f357bb0032e24b6daeb760f676a682aaacb84d2c7333fbd5b"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        9,
++        12,
++        6
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "0479688f99e8cbc70291ce272876ff8e0db71a0889daf2752884b0996056b4a0"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        1,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        1,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        1,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        1,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        1,
++        4096,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        1,
++        4096,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        1,
++        4096,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        1,
++        4096,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
++    },
++    {
++      "cp": "U+25F8",
++      "metrics": [
++        4096,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
++    },
++    {
++      "cp": "U+25F9",
++      "metrics": [
++        4096,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
++    },
++    {
++      "cp": "U+25FA",
++      "metrics": [
++        4096,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "3c795224821091645cee1ac21fa07604983db47697ae3e4131f21e9bfe9f838e"
++    },
++    {
++      "cp": "U+25FF",
++      "metrics": [
++        4096,
++        1,
++        1
++      ],
++      "source": "actual-library collapsed/thin inset boundary",
++      "raw_sha256": "6221c993468c4655c95c2b389cb9c115b32172b05900413b8f95043e8a133926"
++    }
++  ],
++  "sha256": "961a6e0b0115fa013d9dd98ce5f437c6538538ff765f2a070fb61e6b349c938a"
++}
+diff --git a/apps/hotaru/crates/hotaru-sprites/LICENSE.zig b/apps/hotaru/crates/hotaru-sprites/LICENSE.zig
+new file mode 100644
+--- /dev/null
++++ b/apps/hotaru/crates/hotaru-sprites/LICENSE.zig
+@@ -0,0 +1,21 @@
++The MIT License (Expat)
++
++Copyright (c) Zig contributors
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++THE SOFTWARE.
+diff --git a/desktop/aizome/apps/hotaru/src/font.rs b/desktop/aizome/apps/hotaru/src/font.rs
+--- a/desktop/aizome/apps/hotaru/src/font.rs
++++ b/desktop/aizome/apps/hotaru/src/font.rs
+@@ -903,7 +903,7 @@
+         install_fonts();
+         let mut terminal = hotaru_core::Terminal::new(32, 16, 0);
+         terminal.feed(b"\x1b[?25l\x1b]8;id=box;https://example.test/box\x1b\\");
+-        let text: String = (0x2500..=0x259f)
++        let text: String = (0x2500..=0x25ff)
+             .chain(0x2800..=0x28ff)
+             .chain(0xe0b0..=0xe0bf)
+             .chain([0xe0d2, 0xe0d4])
+@@ -927,7 +927,7 @@
+             };
+             let frame = shape(&job, &mut fonts, &AtomicBool::new(false), &mut cache).unwrap();
+             let count: usize = frame.rows.iter().flat_map(|r| r.iter()).map(|s| s.sprites.len()).sum();
+-            assert_eq!(count, 436);
++            assert_eq!(count, 444);
+             assert!(Arc::ptr_eq(&frame.snapshot, &job.snapshot));
+             assert!(!frame.links.is_empty());
+             let masks = frame
+diff --git a/desktop/aizome/apps/hotaru/tests/wayland/sprites.py b/desktop/aizome/apps/hotaru/tests/wayland/sprites.py
+--- a/desktop/aizome/apps/hotaru/tests/wayland/sprites.py
++++ b/desktop/aizome/apps/hotaru/tests/wayland/sprites.py
+@@ -20,7 +20,7 @@
+ from PIL import Image
+ from smoke import wait
+ 
+-CPS = [*range(0x2500, 0x25a0), *range(0x2800, 0x2900), *range(0xe0b0, 0xe0c0), 0xe0d2, 0xe0d4]
++CPS = [*range(0x2500, 0x25a0), *range(0x25e2, 0x25e6), *range(0x25f8, 0x25fb), 0x25ff, *range(0x2800, 0x2900), *range(0xe0b0, 0xe0c0), 0xe0d2, 0xe0d4]
+ 
+ 
+ def sha(path):
+@@ -80,7 +80,7 @@
+     rows,cols,_,_=struct.unpack('HHHH',fcntl.ioctl(0,termios.TIOCGWINSZ,bytes(8)))
+     if rows>=34 and cols>=80:break
+     time.sleep(.02)
+-cp=[*range(0x2500,0x25a0),*range(0x2800,0x2900),*range(0xe0b0,0xe0c0),0xe0d2,0xe0d4]
++cp=[*range(0x2500,0x25a0),*range(0x25e2,0x25e6),*range(0x25f8,0x25fb),0x25ff,*range(0x2800,0x2900),*range(0xe0b0,0xe0c0),0xe0d2,0xe0d4]
+ payload='\\x1b[?25l\\x1b]11;#000000\\x07\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255m█'
+ payload+='\\x1b[38;2;255;255;255m\\x1b]8;id=sprite-fixture;https://example.test/sprites\\x1b\\\\'
+ for i,c in enumerate(cp):
+@@ -97,7 +97,7 @@
+     result = {'schema': 1, 'binary': str(binary), 'binary_sha256': sha(binary),
+               'oracle_library': str(library), 'oracle_sha256': sha(library), 'oracle_build_mode': 'ReleaseFast',
+               'upstream_pin': '6ba144158577d033ccb6ed4b574e4013957c9161',
+-              'scope': 'exact actual private Wayland software capture of 434 qualified sprites; no GPU or timing claim',
++              'scope': 'exact actual private Wayland software capture of 442 qualified sprites; no GPU or timing claim',
+               'fixture_sha256': sha(fixture), 'compositor_config': config.read_text(), 'scales': []}
+     try:
+         log = open(evidence / 'sway.log', 'wb'); files.append(log)
+diff --git a/desktop/aizome/nix/hotaru.nix b/desktop/aizome/nix/hotaru.nix
+--- a/desktop/aizome/nix/hotaru.nix
++++ b/desktop/aizome/nix/hotaru.nix
+@@ -115,6 +115,7 @@
+     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+     install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.MPL-2.0 $out/share/licenses/hotaru/z2d-MPL-2.0.txt
+     install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.z2d $out/share/licenses/hotaru/z2d-NOTICES.txt
++    install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.zig $out/share/licenses/hotaru/Zig-MIT.txt
+     install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-MIT $out/share/licenses/hotaru/simdutf8-MIT.txt
+     install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-Apache $out/share/licenses/hotaru/simdutf8-Apache.txt
+     mkdir -p $out/share/hotaru $out/share/terminfo
+diff --git a/desktop/aizome/nix/package.nix b/desktop/aizome/nix/package.nix
+--- a/desktop/aizome/nix/package.nix
++++ b/desktop/aizome/nix/package.nix
+@@ -284,6 +284,7 @@
+     install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+     install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.MPL-2.0 $out/share/licenses/hotaru/z2d-MPL-2.0.txt
+     install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.z2d $out/share/licenses/hotaru/z2d-NOTICES.txt
++    install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.zig $out/share/licenses/hotaru/Zig-MIT.txt
+     install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-MIT $out/share/licenses/hotaru/simdutf8-MIT.txt
+     install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-Apache $out/share/licenses/hotaru/simdutf8-Apache.txt
+     mkdir -p $out/share/hotaru $out/share/terminfo

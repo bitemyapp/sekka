@@ -1,0 +1,21 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running unittests src/lib.rs (.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-cbe7f3a4e2b3235d)
+
+running 1 test
+
+thread 'terminal_view::sprite_paint_tests::block_cursor_keeps_and_tints_decorations_in_both_paint_paths' (847358) panicked at apps/hotaru/src/terminal_view.rs:1368:25:
+assertion `left == right` failed: Single,wide=false,overhang=false,y=11
+  left: [255, 0, 0, 255]
+ right: [0, 0, 0, 255]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test terminal_view::sprite_paint_tests::block_cursor_keeps_and_tints_decorations_in_both_paint_paths ... FAILED
+
+failures:
+
+failures:
+    terminal_view::sprite_paint_tests::block_cursor_keeps_and_tints_decorations_in_both_paint_paths
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p aizome-hotaru --lib`

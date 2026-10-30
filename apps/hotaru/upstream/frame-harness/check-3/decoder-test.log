@@ -1,0 +1,10 @@
+checksum=ab863a6e
+{"event":"geometry","time_ns":4068037766690412,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037766815292,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037766940883,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037767070560,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037767203702,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037767348482,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037767501395,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+{"event":"geometry","time_ns":4068037767656340,"x":13,"y":7,"cell_width":9,"cell_height":17,"rows":24,"bottom_y":398}
+passed 656 synthetic marker checks

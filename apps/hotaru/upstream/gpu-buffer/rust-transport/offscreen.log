@@ -1,0 +1,7 @@
+{"event":"rust_context","render_node":"/dev/dri/renderD128","renderer":"Mesa Intel(R) Graphics (PTL)","thread":"ThreadId(2)","version":"OpenGL ES 3.2 Mesa 26.2.5"}
+{"event":"fence_destroyed","ok":true}
+{"event":"rust_producer_verified","readback_after_fence":true,"rgba_bytes":4096}
+{"event":"rust_export_ready","event_thread":"ThreadId(1)","fourcc":875708993,"height":32,"modifier":0,"offset":0,"stride":256,"width":32}
+{"event":"resource_destroyed","ok":true}
+{"event":"context_destroyed","ok":true,"thread":"ThreadId(2)"}
+{"event":"rust_probe_complete"}

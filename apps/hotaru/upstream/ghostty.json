@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "observed_on": "2026-10-28",
+  "repository": "https://github.com/ghostty-org/ghostty.git",
+  "revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "version": "1.4.1-dev",
+  "release_tag": "v1.4.0",
+  "release_revision": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+  "clipboard_fork": {
+    "repository": "https://github.com/bitemyapp/ghostty.git",
+    "branch": "bitemyapp/fix-clipboard-hangs",
+    "revision": "108af5ed0a19800671e74421ec47699b6a35875e",
+    "merge_base": "51897c0cd51fee61fff824d616fb2901ac41e817"
+  },
+  "license": "MIT",
+  "license_file": "LICENSE.ghostty",
+  "zig": {
+    "version": "0.17.0",
+    "target": "x86_64-linux",
+    "url": "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz",
+    "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026"
+  }
+}

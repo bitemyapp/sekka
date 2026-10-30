@@ -1,0 +1,31 @@
+{
+  "scope": "isolated full native CPU-worker SHM fallback; simulated GPU unavailability; private headless Sway pixman",
+  "binary": "/home/callen/.cache/hotaru-admission-native-target/debug/deps/scene_inventory-1ce38e1c3238d658",
+  "binary_sha256": "44fb5e7c385ed9bf3f5800a6446b8c4bb7ea00abc4ea237d6522806d17e9b520",
+  "runner_sha256": "eab8daa5e99a3a1b23aec4ee71ba2732d3caea09f7803897ff7987694bd0e3b6",
+  "exact_rgb_bytes": 2988000,
+  "extent": [
+    1200,
+    830
+  ],
+  "origin": [
+    40,
+    65
+  ],
+  "expected_rgba_sha256": "c589f0c505272e14dcc83c7eb9661e9831655c746a8612f13399443ca2c44b84",
+  "capture_sha256": "b82ed27a8a4d3da1df79b3a7bdb909ea6b3a310225a79d6430c888f00c042879",
+  "release": {
+    "connection_closed": true,
+    "detached": true,
+    "released": true
+  },
+  "native_scenes": 18,
+  "status": "passed",
+  "forced_kill": [],
+  "all_owned_leaders_reaped": true,
+  "all_owned_process_groups_gone": true,
+  "tools": {
+    "sway": "sway version 1.9",
+    "grim": ""
+  }
+}

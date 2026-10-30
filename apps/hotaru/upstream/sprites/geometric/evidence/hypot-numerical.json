@@ -1,0 +1,223 @@
+{
+  "status": "passed",
+  "cases": 131216,
+  "comparison": "exactbits exceptNaN class",
+  "mismatches": [],
+  "platform_libm_differences": 341,
+  "first_libm_differences": [
+    {
+      "x_bits": "402e000000000000",
+      "y_bits": "405c400000000000",
+      "reference_bits": "405c7f704671ab73",
+      "rust_bits": "405c7f704671ab73",
+      "libm_bits": "405c7f704671ab72"
+    },
+    {
+      "x_bits": "4031000000000000",
+      "y_bits": "403b000000000000",
+      "reference_bits": "403fe7f6f939a553",
+      "rust_bits": "403fe7f6f939a553",
+      "libm_bits": "403fe7f6f939a554"
+    },
+    {
+      "x_bits": "4032000000000000",
+      "y_bits": "4065e00000000000",
+      "reference_bits": "4065fd8b7fd72888",
+      "rust_bits": "4065fd8b7fd72888",
+      "libm_bits": "4065fd8b7fd72889"
+    },
+    {
+      "x_bits": "403b000000000000",
+      "y_bits": "4031000000000000",
+      "reference_bits": "403fe7f6f939a553",
+      "rust_bits": "403fe7f6f939a553",
+      "libm_bits": "403fe7f6f939a554"
+    },
+    {
+      "x_bits": "403c000000000000",
+      "y_bits": "4047800000000000",
+      "reference_bits": "404b5aaa259099ad",
+      "rust_bits": "404b5aaa259099ad",
+      "libm_bits": "404b5aaa259099ac"
+    },
+    {
+      "x_bits": "403e000000000000",
+      "y_bits": "406c400000000000",
+      "reference_bits": "406c7f704671ab73",
+      "rust_bits": "406c7f704671ab73",
+      "libm_bits": "406c7f704671ab72"
+    },
+    {
+      "x_bits": "4041000000000000",
+      "y_bits": "404b000000000000",
+      "reference_bits": "404fe7f6f939a553",
+      "rust_bits": "404fe7f6f939a553",
+      "libm_bits": "404fe7f6f939a554"
+    },
+    {
+      "x_bits": "4041800000000000",
+      "y_bits": "405fc00000000000",
+      "reference_bits": "40607781b15b4757",
+      "rust_bits": "40607781b15b4757",
+      "libm_bits": "40607781b15b4756"
+    },
+    {
+      "x_bits": "4043800000000000",
+      "y_bits": "4069200000000000",
+      "reference_bits": "406997f4bf497b77",
+      "rust_bits": "406997f4bf497b77",
+      "libm_bits": "406997f4bf497b78"
+    },
+    {
+      "x_bits": "4044800000000000",
+      "y_bits": "4067200000000000",
+      "reference_bits": "4067afa4226d9be9",
+      "rust_bits": "4067afa4226d9be9",
+      "libm_bits": "4067afa4226d9be8"
+    },
+    {
+      "x_bits": "4044800000000000",
+      "y_bits": "406c800000000000",
+      "reference_bits": "406cf506c059d479",
+      "rust_bits": "406cf506c059d479",
+      "libm_bits": "406cf506c059d47a"
+    },
+    {
+      "x_bits": "4045000000000000",
+      "y_bits": "406a600000000000",
+      "reference_bits": "406ae476b2f70c2e",
+      "rust_bits": "406ae476b2f70c2e",
+      "libm_bits": "406ae476b2f70c2f"
+    },
+    {
+      "x_bits": "4045000000000000",
+      "y_bits": "406d200000000000",
+      "reference_bits": "406d982a2bacf839",
+      "rust_bits": "406d982a2bacf839",
+      "libm_bits": "406d982a2bacf83a"
+    },
+    {
+      "x_bits": "4045800000000000",
+      "y_bits": "4046800000000000",
+      "reference_bits": "404f1ee85590e272",
+      "rust_bits": "404f1ee85590e272",
+      "libm_bits": "404f1ee85590e273"
+    },
+    {
+      "x_bits": "4045800000000000",
+      "y_bits": "4058800000000000",
+      "reference_bits": "405ac132375bf490",
+      "rust_bits": "405ac132375bf490",
+      "libm_bits": "405ac132375bf491"
+    },
+    {
+      "x_bits": "4045800000000000",
+      "y_bits": "406de00000000000",
+      "reference_bits": "406e5acbeed3b55e",
+      "rust_bits": "406e5acbeed3b55e",
+      "libm_bits": "406e5acbeed3b55d"
+    },
+    {
+      "x_bits": "4046800000000000",
+      "y_bits": "4045800000000000",
+      "reference_bits": "404f1ee85590e272",
+      "rust_bits": "404f1ee85590e272",
+      "libm_bits": "404f1ee85590e273"
+    },
+    {
+      "x_bits": "4047800000000000",
+      "y_bits": "403c000000000000",
+      "reference_bits": "404b5aaa259099ad",
+      "rust_bits": "404b5aaa259099ad",
+      "libm_bits": "404b5aaa259099ac"
+    },
+    {
+      "x_bits": "4048800000000000",
+      "y_bits": "4063800000000000",
+      "reference_bits": "40647076fddd2faa",
+      "rust_bits": "40647076fddd2faa",
+      "libm_bits": "40647076fddd2fab"
+    },
+    {
+      "x_bits": "4049800000000000",
+      "y_bits": "4061e00000000000",
+      "reference_bits": "4062fa4ffda7b819",
+      "rust_bits": "4062fa4ffda7b819",
+      "libm_bits": "4062fa4ffda7b81a"
+    },
+    {
+      "x_bits": "404a800000000000",
+      "y_bits": "4055400000000000",
+      "reference_bits": "40590adeeaa19789",
+      "rust_bits": "40590adeeaa19789",
+      "libm_bits": "40590adeeaa1978a"
+    },
+    {
+      "x_bits": "404b000000000000",
+      "y_bits": "4041000000000000",
+      "reference_bits": "404fe7f6f939a553",
+      "rust_bits": "404fe7f6f939a553",
+      "libm_bits": "404fe7f6f939a554"
+    },
+    {
+      "x_bits": "404b000000000000",
+      "y_bits": "4055400000000000",
+      "reference_bits": "40592cf649cb3471",
+      "rust_bits": "40592cf649cb3471",
+      "libm_bits": "40592cf649cb3472"
+    },
+    {
+      "x_bits": "404b000000000000",
+      "y_bits": "4057400000000000",
+      "reference_bits": "405ae29aaa1e7b64",
+      "rust_bits": "405ae29aaa1e7b64",
+      "libm_bits": "405ae29aaa1e7b65"
+    },
+    {
+      "x_bits": "404b000000000000",
+      "y_bits": "4065e00000000000",
+      "reference_bits": "4066e48b7072e8cd",
+      "rust_bits": "4066e48b7072e8cd",
+      "libm_bits": "4066e48b7072e8cc"
+    },
+    {
+      "x_bits": "404b800000000000",
+      "y_bits": "4065a00000000000",
+      "reference_bits": "4066b10924f79752",
+      "rust_bits": "4066b10924f79752",
+      "libm_bits": "4066b10924f79751"
+    },
+    {
+      "x_bits": "404b800000000000",
+      "y_bits": "4065c00000000000",
+      "reference_bits": "4066cf8a2a4bd01c",
+      "rust_bits": "4066cf8a2a4bd01c",
+      "libm_bits": "4066cf8a2a4bd01b"
+    },
+    {
+      "x_bits": "404b800000000000",
+      "y_bits": "406b400000000000",
+      "reference_bits": "406c1a97f14cd199",
+      "rust_bits": "406c1a97f14cd199",
+      "libm_bits": "406c1a97f14cd198"
+    },
+    {
+      "x_bits": "404c000000000000",
+      "y_bits": "4057800000000000",
+      "reference_bits": "405b5aaa259099ad",
+      "rust_bits": "405b5aaa259099ad",
+      "libm_bits": "405b5aaa259099ac"
+    },
+    {
+      "x_bits": "404c800000000000",
+      "y_bits": "4052000000000000",
+      "reference_bits": "4056f5351ebb1826",
+      "rust_bits": "4056f5351ebb1826",
+      "libm_bits": "4056f5351ebb1827"
+    }
+  ],
+  "library_sha256": "a14f7a0d6851d32aaf555a339fa5b31956e5c4786e4e28b198c0c51f58d80579",
+  "candidate_sha256": "05184ff4b44460cb81a5fa20bfd1669b25d79c0194ed1c4612ae79c8c60726ff",
+  "translation_sha256": "578e356aa0d022cd9c579b911d1b8607f69d4751e3c34a7838b613966d745a51",
+  "adapter_sha256": "dce7123247c5ccb3c21622719acb1d923318f56c321239f9fbde3d962b9a569e"
+}

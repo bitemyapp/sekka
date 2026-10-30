@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-28T20:23:12.028454+00:00",
+  "baseline": "cb91125",
+  "scope": "Isolated typed native cursor and bounded widget timers; combined package qualification recorded separately",
+  "source_sha256": {
+    "apps/hotaru/crates/hotaru-core/src/lib.rs": "967d0e9fdbaea42ba0234fa86f02e54ff81ef403a4b92128c25fdd339689aa61",
+    "apps/hotaru/crates/hotaru-core/src/screen.rs": "e9c8c3a1215e2747bd6fb1f56188dc366c24c7d72db6ef0d13e4f9e26aefb81e",
+    "apps/hotaru/crates/hotaru-core/tests/cursor.rs": "f6581a8dc3d2dab78a1143d81b40c29eabd67160c34dcfcadd384bcadbbf1bcf",
+    "apps/hotaru/tools/cursor-oracle.py": "d26da364925f837373244381f3fe7ebff29bd8f26e635d4dcc14199f69c9b9e4",
+    "apps/hotaru/upstream/cursor-fixtures.json": "c2a97cc43872869680e412d051a337b0c1bc48331c33053f0b03615aea23be1c",
+    "desktop/aizome/apps/hotaru/src/app.rs": "9183a8c4704f5991c0d71611a828637b5889078ffa3c9a94bf1f3ad14c1b2d91",
+    "desktop/aizome/apps/hotaru/src/session.rs": "ef7d084ca2bbe3c0861721c60b188cd6e2bf73e478a7662f6964781a491bad3b",
+    "desktop/aizome/apps/hotaru/src/terminal_view.rs": "6a0c65056e47adcf78c6d75422afd9e62ba8be0b873eaa20e6179ea16492bbcb",
+    "desktop/aizome/apps/hotaru/tests/cursor.rs": "17301c05cbe97293eaa29820254557b0be16dcc8c5161c76be10cbf4f46fd565",
+    "desktop/aizome/apps/hotaru/tests/wayland/cursor.py": "02edc92dee50d991860edc00f5a1afa8eadaf19d66098d870ab2643ead7264ab",
+    "desktop/aizome/crates/aizome-kit/src/engine.rs": "ecb2a231a1cd2ff9edfe7f04dc452841e92615be63fc8737948a018996f8d8f1",
+    "desktop/aizome/crates/aizome-kit/src/widget.rs": "73db498b7de6c769584620bfcc91f9fc38a7740c2678f3bea409e64440f7a7e7",
+    "desktop/aizome/crates/aizome-kit/src/tree.rs": "5ad539181caa159ae876face4eaf7dd2aecabcf585211313d68cedd13a937614",
+    "desktop/aizome/crates/aizome-kit/src/testing.rs": "18e5d60e8ad0501a8cea749e3d31af1a022a0fae29211d24d69ac98a25001232",
+    "desktop/aizome/crates/aizome-kit/tests/widget_timers.rs": "606c5b749246c186c29b1b5a9e74e045db2b3328deb0444e7ad2384c37ece0f7",
+    "apps/hotaru/docs/cursor.md": "6cd799f23e31d95da26ce81eba8ffbff3ceb1e3d36535f67ddf259de41506b5f"
+  },
+  "ghostty_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "ghostty_library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "checks": {
+    "actual_library_fixtures": 756,
+    "chunk_sizes": [
+      1,
+      7,
+      65536
+    ],
+    "oracle_comparisons": 2268,
+    "core_workspace_tests_and_strict_clippy": "passed",
+    "hotaru_kit_hako_suites": "passed",
+    "hotaru_all_target_strict_clippy": "passed",
+    "direct_kit_consumers_all_targets": 21,
+    "consumer_check": "passed",
+    "keyed_and_unkeyed_type_cycles": "reproduced before fix; passed after fix",
+    "same_type_identity_stability_rebuilds": 100,
+    "timer_reset_bounded_iterations": 1000
+  },
+  "wayland": {
+    "binary": "/home/callen/.cache/hotaru-aizome-target/debug/aizome-hotaru",
+    "binary_sha256": "41d33bdc5f1dad519c22693268c38d6ae96c7a011d7cdd5d7c1f60bdb3a880ae",
+    "backend": "private headless Sway/pixman",
+    "checks": {
+      "steady_distinct_and_stable": {
+        "2": "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+        "4": "ca1fdf3231d2b62b2057e102ab2cf0f62d2859e522ee2754e455997c56e6fc3c",
+        "6": "4a027439dba916b87fb3f3ba2645c9db45df66d16bcfc396011de749867df4d5"
+      },
+      "blink-1": [
+        "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+        "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+      ],
+      "blink-3": [
+        "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da",
+        "ca1fdf3231d2b62b2057e102ab2cf0f62d2859e522ee2754e455997c56e6fc3c"
+      ],
+      "blink-5": [
+        "4a027439dba916b87fb3f3ba2645c9db45df66d16bcfc396011de749867df4d5",
+        "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+      ],
+      "blink-0": [
+        "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+        "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+      ],
+      "inactive_hollow_and_refocus": true
+    },
+    "status": "passed"
+  },
+  "reviews": {
+    "linux_io": "Core semantics, timer lifecycle and final typed identities; no unresolved finding",
+    "upstream_clipboard": "Native paint, blink eligibility, focus/input/preedit/wide-cell invalidation; no concrete defect"
+  },
+  "limits": [
+    "Private headless Sway/pixman, not hardware or Aizome VM qualification",
+    "No custom cursor colors, opacity, password sprite, or animated movement settings",
+    "No claim of exact sprite pixel or full application performance parity"
+  ]
+}

@@ -1,0 +1,373 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "unicode",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "aca410acce1038a2f1acb66a63b1c91d04c9dd976fca156bb136e0ba6d3058a9",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-combined-vt-20261028/final-build.json",
+      "sha256": "73d5d9735dc42028849e8f6020bbaa9352a5de207997a73eca8e642475140a89",
+      "source_sha256": "a3e74ef33281a79744da2fa15e63d019699950490bbcc94eef783997391ca128",
+      "binary_sha256": "37081f680a4632d6bfdee8f0fcec8e07623b3ac4ef860928c73085687155533b",
+      "revision": "9d95e9e plus frozen VT control and repaired SIMD integration"
+    },
+    {
+      "metadata": "candidate-build.json",
+      "sha256": "c028b470b5951d1f679395394573f63e31278a1327090b1988ec6068cf5fdc40",
+      "source_sha256": "ca680c3c130f260ace0858693d773cc725a9e116dcb58412f6957340248e0342",
+      "binary_sha256": "87258a504a066e170390cb6060e448f53d670ef0dd816df86b8aae805066fd33",
+      "revision": "cb91125 isolated allocation-change charge refresh"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          3703648,
+          3706152,
+          3707724,
+          3736328,
+          3725261,
+          3877913,
+          3838723,
+          3842148,
+          3841076,
+          3709637,
+          3727014,
+          3797411,
+          3859765,
+          3727514,
+          3751431,
+          3739152,
+          3825804,
+          3815077,
+          3788547,
+          3879335
+        ],
+        "cb91125 isolated allocation-change charge refresh": [
+          3569424,
+          3596817,
+          3641284,
+          3607903,
+          3663657,
+          3576014,
+          3621233,
+          3674955,
+          3750169,
+          3732782,
+          3603466,
+          3586680,
+          3584647,
+          3759853,
+          3719973,
+          3637047,
+          3561552,
+          3648194,
+          3693483,
+          3750590
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 3769989.0,
+        "cb91125 isolated allocation-change charge refresh": 3639165.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          24045085,
+          24107779,
+          24660738,
+          24432131,
+          24560276,
+          23566147,
+          23636895,
+          22000032,
+          19165121,
+          21256063,
+          13215337,
+          13244190,
+          13088254,
+          13162225,
+          13115374,
+          24338750,
+          24638104,
+          25310554,
+          25224564,
+          25555075
+        ],
+        "cb91125 isolated allocation-change charge refresh": [
+          25216732,
+          24676572,
+          24617172,
+          24318138,
+          23251831,
+          22815259,
+          23820494,
+          24143113,
+          23644566,
+          24234782,
+          15732144,
+          17388517,
+          17282135,
+          15275451,
+          15026714,
+          15328602,
+          24119357,
+          21387252,
+          24694710,
+          24472502
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 23840990.0,
+        "cb91125 isolated allocation-change charge refresh": 23732530.0
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          6623888,
+          6600933,
+          6576255,
+          6570878,
+          6493360,
+          6581964,
+          6647103,
+          6621324,
+          6612781,
+          6517426,
+          6532389,
+          6536205,
+          6666643,
+          6530937,
+          6629937,
+          6579640,
+          6116468,
+          6375381,
+          6486559,
+          6373048
+        ],
+        "cb91125 isolated allocation-change charge refresh": [
+          5980472,
+          5970938,
+          5986211,
+          5991919,
+          5976205,
+          6144420,
+          6121326,
+          6128776,
+          5967943,
+          6115086,
+          6034945,
+          5990598,
+          5234049,
+          5904326,
+          6018109,
+          5964558,
+          5453211,
+          6208448,
+          6151191,
+          5885408
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 6573566.5,
+        "cb91125 isolated allocation-change charge refresh": 5988404.5
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "styled",
+      "input_bytes": 2097152,
+      "sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          15295081,
+          15326669,
+          15269893,
+          15138203,
+          15409275,
+          15454002,
+          15250263,
+          15398268,
+          14973734,
+          14941395,
+          14978541,
+          12792996,
+          7852101,
+          14635801,
+          15227028,
+          15252867,
+          15048598,
+          14945401,
+          16657068,
+          15438869
+        ],
+        "cb91125 isolated allocation-change charge refresh": [
+          15766987,
+          15499632,
+          15715329,
+          15663120,
+          15757553,
+          15139745,
+          15258195,
+          15754308,
+          15741568,
+          15721098,
+          15467703,
+          15673976,
+          9026713,
+          8582589,
+          16354369,
+          15987682,
+          15548076,
+          15830784,
+          15616649,
+          15571961
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 15238645.5,
+        "cb91125 isolated allocation-change charge refresh": 15668548.0
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    },
+    {
+      "name": "cursor",
+      "input_bytes": 2097120,
+      "sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": [
+          26338793,
+          26386606,
+          26417973,
+          26425205,
+          26416552,
+          26124629,
+          26390612,
+          26588462,
+          24155712,
+          23969359,
+          26837861,
+          26967687,
+          26544916,
+          26616314,
+          26770448,
+          26496463,
+          26243789,
+          26218220,
+          26360296,
+          26330161
+        ],
+        "cb91125 isolated allocation-change charge refresh": [
+          26191080,
+          25871034,
+          26129186,
+          26248036,
+          26192452,
+          26307686,
+          26215637,
+          26224610,
+          26405916,
+          26283680,
+          26509723,
+          26291241,
+          26237360,
+          25237032,
+          26295769,
+          26137768,
+          26170659,
+          26260465,
+          26225592,
+          26181264
+        ]
+      },
+      "median_feed_ns": {
+        "9d95e9e plus frozen VT control and repaired SIMD integration": 26403582.0,
+        "cb91125 isolated allocation-change charge refresh": 26225101.0
+      },
+      "process_order": [
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "9d95e9e plus frozen VT control and repaired SIMD integration",
+        "cb91125 isolated allocation-change charge refresh",
+        "cb91125 isolated allocation-change charge refresh",
+        "9d95e9e plus frozen VT control and repaired SIMD integration"
+      ]
+    }
+  ]
+}

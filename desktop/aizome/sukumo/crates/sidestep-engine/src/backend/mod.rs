@@ -43,6 +43,7 @@ mod lock;
 mod menubar;
 pub mod null;
 mod outputs;
+mod primary;
 mod seat;
 mod selection;
 mod sheet;
@@ -147,6 +148,9 @@ impl MainSender {
         MainSender { tx: Some(tx), wake }
     }
 
+    // The error is mpsc's, handing the unsent message back; a key's native
+    // metadata makes that message large, and boxing it would only move it.
+    #[allow(clippy::result_large_err)]
     pub fn send(&self, msg: FromRender) -> Result<(), mpsc::SendError<FromRender>> {
         self.tx.as_ref().expect("the sender is only taken when dropped").send(msg)?;
         (self.wake)();
@@ -1127,6 +1131,7 @@ impl State {
             ToRender::ShowVideo { window, video, frame } => video::show(self, window, video, *frame),
             ToRender::ClearVideo { window, video } => video::clear(self, window, video),
             ToRender::SetSelection { contents } => selection::set(self, contents),
+            ToRender::SetPrimarySelection { contents } => primary::set(self, contents),
             ToRender::ReadSelection { mime, token, source, drag } => selection::read(self, mime, token, source, drag),
             ToRender::SelectionData { token, data } => selection::provided(self, token, data),
             ToRender::DndStatus { drag, mime, actions, preferred, periodic } => {

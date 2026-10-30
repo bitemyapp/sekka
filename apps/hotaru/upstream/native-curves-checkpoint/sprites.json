@@ -1,0 +1,478 @@
+{
+  "schema": 1,
+  "binary": "/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "02031eb14d2bb5b23afba15764c37d6dbc989861a5f3c867f2ae69c1788594fe",
+  "oracle_library": "/home/callen/work/hotaru-sprites-curves-20261028/oracle-expanded/libsprites.so",
+  "oracle_sha256": "b4446973820f50cbea0ca1be181e4add0a1180f4410542c5e03dc2240f580bdd",
+  "upstream_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "scope": "exact actual private Wayland software capture of 178 qualified sprites; no GPU or timing claim",
+  "fixture_sha256": "cf8f529b2f5e0ea9cea6b14584a318206e75105a703988607f8db63634164e01",
+  "compositor_config": "output HEADLESS-1 mode 1920x1900\ndefault_border none\nseat seat0 fallback true\n",
+  "scales": [
+    {
+      "scale": 1.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 11,
+      "cell_height_px": 24,
+      "box_thickness_px": 2,
+      "thickness_estimated": false,
+      "rows": 75,
+      "cols": 172,
+      "pty_width_px": 1892,
+      "pty_height_px": 1800,
+      "client_geometry": [
+        {
+          "app_id": "org.aizome.Hotaru",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "border": "none",
+          "current_border_width": 2
+        }
+      ],
+      "outputs": [
+        {
+          "id": 3,
+          "type": "output",
+          "orientation": "none",
+          "percent": 1.0,
+          "urgent": false,
+          "marks": [],
+          "layout": "output",
+          "border": "none",
+          "current_border_width": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "name": "HEADLESS-1",
+          "window": null,
+          "nodes": [],
+          "floating_nodes": [],
+          "focus": [
+            4
+          ],
+          "fullscreen_mode": 0,
+          "sticky": false,
+          "primary": false,
+          "make": "Unknown",
+          "model": "Unknown",
+          "serial": "Unknown",
+          "modes": [],
+          "non_desktop": false,
+          "active": true,
+          "dpms": true,
+          "power": true,
+          "scale": 1.0,
+          "scale_filter": "nearest",
+          "transform": "normal",
+          "adaptive_sync_status": "disabled",
+          "current_workspace": "1",
+          "current_mode": {
+            "width": 1920,
+            "height": 1900,
+            "refresh": 0
+          },
+          "max_render_time": 0,
+          "focused": true,
+          "subpixel_hinting": "unknown"
+        }
+      ],
+      "glyphs": 178,
+      "compared_rgb_bytes": 288360,
+      "origin_px": [
+        10,
+        64
+      ],
+      "capture_sha256": "e938f975b0fdfca8c7bf27ac3937aaaeb708952410f1ebc203cd551a01c175ce",
+      "size_px": [
+        1920,
+        1900
+      ]
+    },
+    {
+      "scale": 1.25,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 14,
+      "cell_height_px": 30,
+      "box_thickness_px": 2,
+      "thickness_estimated": false,
+      "rows": 59,
+      "cols": 135,
+      "pty_width_px": 1890,
+      "pty_height_px": 1770,
+      "client_geometry": [
+        {
+          "app_id": "org.aizome.Hotaru",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1536,
+            "height": 1520
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1536,
+            "height": 1520
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "border": "none",
+          "current_border_width": 2
+        }
+      ],
+      "outputs": [
+        {
+          "id": 3,
+          "type": "output",
+          "orientation": "none",
+          "percent": 1.0,
+          "urgent": false,
+          "marks": [],
+          "layout": "output",
+          "border": "none",
+          "current_border_width": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1536,
+            "height": 1520
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "name": "HEADLESS-1",
+          "window": null,
+          "nodes": [],
+          "floating_nodes": [],
+          "focus": [
+            4
+          ],
+          "fullscreen_mode": 0,
+          "sticky": false,
+          "primary": false,
+          "make": "Unknown",
+          "model": "Unknown",
+          "serial": "Unknown",
+          "modes": [],
+          "non_desktop": false,
+          "active": true,
+          "dpms": true,
+          "power": true,
+          "scale": 1.25,
+          "scale_filter": "linear",
+          "transform": "normal",
+          "adaptive_sync_status": "disabled",
+          "current_workspace": "1",
+          "current_mode": {
+            "width": 1920,
+            "height": 1900,
+            "refresh": 0
+          },
+          "max_render_time": 0,
+          "focused": true,
+          "subpixel_hinting": "unknown"
+        }
+      ],
+      "glyphs": 178,
+      "compared_rgb_bytes": 469920,
+      "origin_px": [
+        13,
+        80
+      ],
+      "capture_sha256": "6b37f6af4bee86b7b3b862d184da8cde81b31d17c08bba4463856641b8bfdf1a",
+      "size_px": [
+        1920,
+        1900
+      ]
+    },
+    {
+      "scale": 2.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 22,
+      "cell_height_px": 49,
+      "box_thickness_px": 3,
+      "thickness_estimated": false,
+      "rows": 34,
+      "cols": 85,
+      "pty_width_px": 1870,
+      "pty_height_px": 1666,
+      "client_geometry": [
+        {
+          "app_id": "org.aizome.Hotaru",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 960,
+            "height": 950
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 960,
+            "height": 950
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "border": "none",
+          "current_border_width": 2
+        }
+      ],
+      "outputs": [
+        {
+          "id": 3,
+          "type": "output",
+          "orientation": "none",
+          "percent": 1.0,
+          "urgent": false,
+          "marks": [],
+          "layout": "output",
+          "border": "none",
+          "current_border_width": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 960,
+            "height": 950
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "name": "HEADLESS-1",
+          "window": null,
+          "nodes": [],
+          "floating_nodes": [],
+          "focus": [
+            4
+          ],
+          "fullscreen_mode": 0,
+          "sticky": false,
+          "primary": false,
+          "make": "Unknown",
+          "model": "Unknown",
+          "serial": "Unknown",
+          "modes": [],
+          "non_desktop": false,
+          "active": true,
+          "dpms": true,
+          "power": true,
+          "scale": 2.0,
+          "scale_filter": "nearest",
+          "transform": "normal",
+          "adaptive_sync_status": "disabled",
+          "current_workspace": "1",
+          "current_mode": {
+            "width": 1920,
+            "height": 1900,
+            "refresh": 0
+          },
+          "max_render_time": 0,
+          "focused": true,
+          "subpixel_hinting": "unknown"
+        }
+      ],
+      "glyphs": 178,
+      "compared_rgb_bytes": 1247424,
+      "origin_px": [
+        20,
+        128
+      ],
+      "capture_sha256": "52b6dc5d1aa4fe4ab7e8a3948fcb8f86723553d44eebac195c08eb2ec8fa11d3",
+      "size_px": [
+        1920,
+        1900
+      ]
+    },
+    {
+      "scale": 1.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 11,
+      "cell_height_px": 24,
+      "box_thickness_px": 2,
+      "thickness_estimated": false,
+      "rows": 75,
+      "cols": 172,
+      "pty_width_px": 1892,
+      "pty_height_px": 1800,
+      "client_geometry": [
+        {
+          "app_id": "org.aizome.Hotaru",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "border": "none",
+          "current_border_width": 2
+        }
+      ],
+      "outputs": [
+        {
+          "id": 3,
+          "type": "output",
+          "orientation": "none",
+          "percent": 1.0,
+          "urgent": false,
+          "marks": [],
+          "layout": "output",
+          "border": "none",
+          "current_border_width": 0,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1900
+          },
+          "deco_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "window_rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0
+          },
+          "name": "HEADLESS-1",
+          "window": null,
+          "nodes": [],
+          "floating_nodes": [],
+          "focus": [
+            4
+          ],
+          "fullscreen_mode": 0,
+          "sticky": false,
+          "primary": false,
+          "make": "Unknown",
+          "model": "Unknown",
+          "serial": "Unknown",
+          "modes": [],
+          "non_desktop": false,
+          "active": true,
+          "dpms": true,
+          "power": true,
+          "scale": 1.0,
+          "scale_filter": "nearest",
+          "transform": "normal",
+          "adaptive_sync_status": "disabled",
+          "current_workspace": "1",
+          "current_mode": {
+            "width": 1920,
+            "height": 1900,
+            "refresh": 0
+          },
+          "max_render_time": 0,
+          "focused": true,
+          "subpixel_hinting": "unknown"
+        }
+      ],
+      "glyphs": 178,
+      "compared_rgb_bytes": 288360,
+      "origin_px": [
+        10,
+        64
+      ],
+      "capture_sha256": "e938f975b0fdfca8c7bf27ac3937aaaeb708952410f1ebc203cd551a01c175ce",
+      "size_px": [
+        1920,
+        1900
+      ]
+    }
+  ],
+  "status": "passed"
+}

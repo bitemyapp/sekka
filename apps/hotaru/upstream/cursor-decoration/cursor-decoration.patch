@@ -1,0 +1,213 @@
+--- a/desktop/aizome/apps/hotaru/src/terminal_view.rs
++++ b/desktop/aizome/apps/hotaru/src/terminal_view.rs
+@@ -643,6 +643,17 @@
+                     let cursor_row = block_cursor.filter(|cursor| cursor.y0 == r.y0);
+                     let cursor_color = self.snapshot.default_background;
+                     let cursor_color = Color::rgb8(cursor_color.0, cursor_color.1, cursor_color.2);
++                    let underline_color = if style.underline_color == TerminalColor::Default {
++                        fg
++                    } else {
++                        color(style.underline_color, true)
++                    };
++                    let decoration_colors = DecorationColors {
++                        foreground: fg,
++                        underline: underline_color,
++                        cursor: cursor_row.map(|r| (r, cursor_color)),
++                    };
++                    decorations(cx.canvas, r, style, span.layout.metrics, decoration_colors, false);
+                     if let Some(cursor) = cursor_row {
+                         // Tint during the foreground pass; painting a late
+                         // cursor background would erase neighboring overhang.
+@@ -670,21 +681,7 @@
+                     } else {
+                         draw_sprites(cx.canvas, span, Point::new(pad, r.y0), fg, sprite_cursor);
+                     }
+-                    if style.attrs & attrs::STRIKE != 0 {
+-                        let m = span.layout.metrics;
+-                        let y = r.y0 + f64::from(m.strike_y_px) / m.scale;
+-                        cx.canvas
+-                            .fill_rect(Rect::new(r.x0, y, r.x1, y + f64::from(m.strike_thickness_px) / m.scale), fg);
+-                    }
+-                    if style.attrs & attrs::OVERLINE != 0 {
+-                        cx.canvas.fill_rect(Rect::new(r.x0, r.y0 + 1.0, r.x1, r.y0 + 2.0), fg);
+-                    }
+-                    let underline_color = if style.underline_color == TerminalColor::Default {
+-                        fg
+-                    } else {
+-                        color(style.underline_color, true)
+-                    };
+-                    underline(cx.canvas, r, style.underline(), underline_color, span.layout.metrics);
++                    decorations(cx.canvas, r, style, span.layout.metrics, decoration_colors, true);
+                     cx.canvas.restore();
+                 }
+             }
+@@ -736,6 +733,22 @@
+                                 continue;
+                             }
+                             let value = self.snapshot.default_background;
++                            let cursor_foreground = Color::rgb8(value.0, value.1, value.2);
++                            let decoration_colors = DecorationColors {
++                                foreground: cursor_foreground,
++                                underline: cursor_foreground,
++                                cursor: None,
++                            };
++                            let span_rect =
++                                Rect::new(pad + span.start as f64 * cw, r.y0, pad + span.end as f64 * cw, r.y1);
++                            decorations(
++                                cx.canvas,
++                                span_rect,
++                                span.style,
++                                span.layout.metrics,
++                                decoration_colors,
++                                false,
++                            );
+                             cx.canvas.draw_grid_text(
+                                 &span.layout,
+                                 Point::new(pad, r.y0),
+@@ -750,6 +763,7 @@
+                                     None,
+                                 );
+                             }
++                            decorations(cx.canvas, span_rect, span.style, span.layout.metrics, decoration_colors, true);
+                         }
+                         cx.canvas.restore();
+                     }
+@@ -1032,6 +1046,56 @@
+     }
+ }
+ 
++#[derive(Clone, Copy)]
++struct DecorationColors {
++    foreground: Color,
++    underline: Color,
++    cursor: Option<(Rect, Color)>,
++}
++// Ghostty's text vertex shader applies cursor text color to all non-cursor
++// source-cell quads, including decorations. Preserve the original span geometry
++// while clipping color segments so dotted/dashed/curly phases do not restart.
++fn decorations(
++    canvas: &mut aizome_kit::sidestep_ui::Canvas,
++    r: Rect,
++    style: hotaru_core::Style,
++    m: aizome_kit::sidestep_ui::grid::Metrics,
++    colors: DecorationColors,
++    above: bool,
++) {
++    if (above && style.attrs & attrs::STRIKE == 0)
++        || (!above && style.attrs & attrs::OVERLINE == 0 && style.underline() == hotaru_core::Underline::None)
++    {
++        return;
++    }
++    let segments = if let Some((cursor, color)) = colors.cursor {
++        [
++            (Rect::new(r.x0, r.y0, cursor.x0.min(r.x1), r.y1), colors.foreground, colors.underline),
++            (r.intersect(cursor), color, color),
++            (Rect::new(cursor.x1.max(r.x0), r.y0, r.x1, r.y1), colors.foreground, colors.underline),
++        ]
++    } else {
++        [(r, colors.foreground, colors.underline); 3]
++    };
++    for (clip, fg, ul) in segments.into_iter().take(if colors.cursor.is_some() { 3 } else { 1 }) {
++        if clip.x1 <= clip.x0 {
++            continue;
++        }
++        canvas.save();
++        canvas.clip_rect(clip);
++        if above {
++            let y = r.y0 + f64::from(m.strike_y_px) / m.scale;
++            canvas.fill_rect(Rect::new(r.x0, y, r.x1, y + f64::from(m.strike_thickness_px) / m.scale), fg);
++        } else {
++            underline(canvas, r, style.underline(), ul, m);
++            if style.attrs & attrs::OVERLINE != 0 {
++                canvas.fill_rect(Rect::new(r.x0, r.y0 + 1., r.x1, r.y0 + 2.), fg);
++            }
++        }
++        canvas.restore();
++    }
++}
++
+ fn underline(
+     canvas: &mut aizome_kit::sidestep_ui::Canvas,
+     rect: Rect,
+@@ -1315,6 +1379,81 @@
+         })
+     }
+     #[test]
++    fn block_cursor_keeps_and_tints_decorations_in_both_paint_paths() {
++        for kind in [
++            hotaru_core::Underline::Single,
++            hotaru_core::Underline::Double,
++            hotaru_core::Underline::Dotted,
++            hotaru_core::Underline::Dashed,
++            hotaru_core::Underline::Curly,
++        ] {
++            for wide in [false, true] {
++                let mut images = Vec::new();
++                for overhang in [false, true] {
++                    let mut owned = frame(false);
++                    let f = Arc::get_mut(&mut owned).unwrap();
++                    f.sprite_overhang = overhang;
++                    let mut term = hotaru_core::Terminal::new(4, 4, 0);
++                    if wide {
++                        term.feed("\x1b[1;2H界\x1b[1;2H".as_bytes());
++                    } else {
++                        term.feed(b"\x1b[1;2H");
++                    }
++                    f.snapshot = Arc::new(term.snapshot());
++                    let snap = Arc::get_mut(&mut f.snapshot).unwrap();
++                    snap.default_foreground = Rgb(255, 0, 0);
++                    snap.default_background = Rgb(0, 0, 0);
++                    snap.cursor.blinking = false;
++                    for spans in &mut f.rows {
++                        for span in Arc::make_mut(spans) {
++                            span.style.attrs = attrs::STRIKE | attrs::OVERLINE;
++                            span.style.set_underline(kind);
++                            span.style.underline_color = TerminalColor::Rgb(Rgb(0, 255, 0));
++                            let layout = Arc::make_mut(&mut span.layout);
++                            layout.metrics.underline_y_px = 8.0;
++                            layout.metrics.underline_thickness_px = 1.0;
++                            layout.metrics.strike_y_px = 5.0;
++                            layout.metrics.strike_thickness_px = 1.0;
++                        }
++                    }
++                    let mut sprite_cache = crate::sprites::Cache::default();
++                    let glyph = sprite_cache.get(0x2588, f.metrics).unwrap();
++                    Arc::make_mut(&mut f.rows[0])[0].sprites =
++                        Arc::from(vec![crate::sprites::Instance { column: 2, width: 1, glyph }]);
++                    let mut h = Harness::new(Fixture { frame: owned });
++                    let w = h.window();
++                    h.advance(Duration::ZERO);
++                    h.focus_window(w, true);
++                    h.click(w, Point::new(18., 18.));
++                    h.advance(Duration::ZERO);
++                    let image = h.render_rgba(w, 1.);
++                    let at = |x: u32, y: u32| ((y * image.0 + x) * 4) as usize;
++                    for y in [11, 15] {
++                        assert_eq!(
++                            &image.2[at(20, y)..at(20, y) + 4],
++                            &[0, 0, 0, 255],
++                            "{kind:?},wide={wide},overhang={overhang},y={y}"
++                        );
++                    }
++                    if kind == hotaru_core::Underline::Single {
++                        assert_eq!(&image.2[at(20, 18)..at(20, 18) + 4], &[0, 0, 0, 255]);
++                        assert_eq!(&image.2[at(12, 18)..at(12, 18) + 4], &[0, 255, 0, 255]);
++                        let expected = if wide { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
++                        assert_eq!(
++                            &image.2[at(28, 18)..at(28, 18) + 4],
++                            &expected,
++                            "underline must be below sprite ink"
++                        );
++                    }
++                    assert_eq!(h.check_frame_exact(w, 1.).differing_pixels, 0);
++                    images.push(image);
++                }
++                assert_eq!(images[0], images[1], "decoration paint paths differ for {kind:?},wide={wide}");
++            }
++        }
++    }
++
++    #[test]
+     fn block_background_precedes_neighbor_ink_and_tints_only_cursor_source_cell() {
+         for cursor_row in [1, 2] {
+             let mut owned = frame(true);

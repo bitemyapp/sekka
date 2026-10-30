@@ -3,7 +3,7 @@
 //! **What runs**: the entry's (or the chosen action's) `Exec`, expanded
 //! with the targets (see [`Exec`]); several processes when it takes one
 //! file or URL (`%f`/`%u`) and several were given. `Terminal=true` puts
-//! [`LaunchOptions::terminal`] in front (default `foot --`; an index's
+//! [`LaunchOptions::terminal`] in front (default `aizome-hotaru --`; an index's
 //! [`terminal_command`](super::AppIndex::terminal_command) gives the
 //! person's choice). The working directory is the override, else the
 //! entry's `Path=`, else `$HOME`. The program must exist (in `PATH`, or as
@@ -110,7 +110,7 @@ impl Default for LaunchOptions {
             action: None,
             activation_token: None,
             working_dir: None,
-            terminal: vec!["foot".to_owned(), "--".to_owned()],
+            terminal: vec!["aizome-hotaru".to_owned(), "--".to_owned()],
             use_systemd: true,
             use_dbus_activation: true,
         }
@@ -754,7 +754,7 @@ mod tests {
         let mut options = LaunchOptions { targets: vec!["/a".into(), "/b".into()], ..LaunchOptions::default() };
         assert_eq!(
             command_lines(&app, &options).unwrap(),
-            [vec!["foot", "--", "test-app", "--icon", "test-icon", "Test App", "/a", "/b"]]
+            [vec!["aizome-hotaru", "--", "test-app", "--icon", "test-icon", "Test App", "/a", "/b"]]
         );
         options.action = Some("one".into());
         options.terminal = vec!["kitty".into(), "-e".into()];

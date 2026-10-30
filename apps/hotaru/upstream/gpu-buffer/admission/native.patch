@@ -1,0 +1,166 @@
+--- a/desktop/aizome/Cargo.lock
++++ b/desktop/aizome/Cargo.lock
+@@ -194,6 +194,7 @@
+  "aizome-kit",
+  "env_logger",
+  "hotaru-core",
++ "hotaru-gpu-transport-prototype",
+  "hotaru-io",
+  "hotaru-sprites",
+  "libc",
+@@ -1943,6 +1944,20 @@
+  "simdutf8",
+  "triomphe",
+  "unicode-width",
++]
++
++[[package]]
++name = "hotaru-gpu-transport-prototype"
++version = "0.1.0"
++dependencies = [
++ "libloading",
++ "rustix 1.1.5",
++ "serde_json",
++ "sidestep-engine",
++ "smithay-client-toolkit",
++ "tiny-skia 0.12.0",
++ "wayland-client",
++ "wayland-protocols",
+ ]
+ 
+ [[package]]
+--- a/desktop/aizome/apps/hotaru/Cargo.toml
++++ b/desktop/aizome/apps/hotaru/Cargo.toml
+@@ -26,3 +26,6 @@
+ [features]
+ # Isolated diagnostic: test-thread allocation counts; no production allocator change.
+ shape-allocation-probe = []
++
++[dev-dependencies]
++hotaru-gpu-transport-prototype = { path = "../../../../worker", features = ["native"] }
+--- /dev/null
++++ b/desktop/aizome/apps/hotaru/tests/admission_support.rs
+@@ -0,0 +1,42 @@
++use aizome_kit::sidestep_ui::offscreen::{RecordedFrame,GpuPrepare,GpuFallback};
++use hotaru_gpu_transport_prototype::{self as worker,budget::{Budget,Reservation},bridge::{Bridge,Job,Route},complete::{CompleteScene,NativeRaster},shm::Cpu,Cancellation,Descriptor,Driver,FallbackReason,Frame,Limits,RenderError};
++use std::{fs::File,io::{Read,Seek,SeekFrom},time::{Duration,Instant}};
++struct RefusedGpu {prepare:GpuPrepare,_allowance:Reservation}
++impl Driver<Job<CompleteScene>> for RefusedGpu {
++    type Resource=();
++    fn render(&mut self,frame:&Frame<Job<CompleteScene>>,cancel:&Cancellation)->Result<((),Descriptor),RenderError>{
++        let scene=frame.source.source();let(w,h)=scene.dimensions();
++        match self.prepare.prepare_cancellable(w,h,scene.scale(),scene.ops(),&||cancel.is_cancelled()) {
++            Ok(_)=>Err(RenderError::Fallback(FallbackReason::Unavailable)),
++            Err(GpuFallback::Cancelled)=>Err(RenderError::Cancelled),
++            Err(_)=>Err(RenderError::Fallback(FallbackReason::Unsupported)),
++        }
++    }
++}
++/// Full actual native ops travel through the bounded fallback worker. The GPU
++/// refusal is deliberately simulated; this is not hardware presentation evidence.
++pub fn check(frame:&RecordedFrame,expected:&[u8],number:usize) {
++    let budget=Budget::new(512<<20);let gb=budget.clone();let cb=budget.clone();
++    let gpu=worker::spawn(Limits::default(),move||Ok(RefusedGpu{prepare:GpuPrepare::default(),_allowance:gb.reserve(64<<20).map_err(|_|"gpu cache allowance")?})).unwrap();
++    let cpu=worker::spawn(Limits::default(),move||Ok(Cpu::new(NativeRaster::new(&cb)?,cb))).unwrap();
++    let mut bridge=Bridge::new(gpu,cpu,4,Duration::from_secs(2));let w=bridge.open().unwrap();
++    let scene=CompleteScene::admit_full_recording(frame.width,frame.height,frame.scale as f32,frame.ops.clone(),&budget).unwrap();
++    let now=Instant::now();bridge.submit(w,scene,frame.width,frame.height,now).unwrap();
++    let end=now+Duration::from_secs(10);let ready=loop {
++        bridge.tick(Instant::now());if let Some(ready)=bridge.poll(){break ready}
++        assert!(Instant::now()<end,"native fallback did not progress");std::thread::sleep(Duration::from_millis(1));
++    };
++    assert_eq!(ready.route(),Route::Shm);let mut file=File::from(ready.descriptor().fd.try_clone().unwrap());
++    file.seek(SeekFrom::Start(0)).unwrap();let mut actual=Vec::new();file.read_to_end(&mut actual).unwrap();drop(file);
++    for pixel in actual.chunks_exact_mut(4){pixel.swap(0,2)}
++    assert_eq!(actual.len(),expected.len());assert!(actual==expected,"complete fallback differs scene {number}, byte {:?}",actual.iter().zip(expected).position(|(a,b)|a!=b));
++    if number==4 && std::env::var_os("HOTARU_ADMISSION_WAYLAND").is_some() {
++        let dir=std::path::PathBuf::from(std::env::var_os("HOTARU_ADMISSION_WAYLAND").unwrap());
++        std::fs::write(dir.join("expected.rgba"),expected).unwrap();
++        worker::present_shm::present(bridge,w,ready,&dir).unwrap();
++    } else {
++        let lease=bridge.commit(ready,Instant::now()).unwrap();bridge.close(w);bridge.released(lease);bridge.connection_lost();
++    }
++    let end=Instant::now()+Duration::from_secs(3);
++    while budget.used()!=0 {assert!(Instant::now()<end,"native cache/buffer reservation leaked: {}",budget.used());std::thread::sleep(Duration::from_millis(1));}
++}
+--- a/desktop/aizome/apps/hotaru/tests/scene_inventory.rs
++++ b/desktop/aizome/apps/hotaru/tests/scene_inventory.rs
+@@ -1,3 +1,4 @@
++mod admission_support;
+ use std::{collections::BTreeMap, sync::Arc, time::Duration};
+ use aizome_hotaru::app::{Hotaru,Msg};
+ use aizome_kit::{testing::Harness,theme::{Appearance,ThemeChoice},sidestep_ui::offscreen::{RecordedFrame,RecordedOp,GpuPrepare}};
+@@ -27,6 +28,7 @@
+         }
+     }
+ 
++    admission_support::check(frame,&software,number);
+     let diffs:Vec<_>=software.iter().zip(&lowered).enumerate().filter(|(_, (a,b))|a!=b).take(20).collect();
+     if let Some((at,_))=diffs.first(){let p=(*at/4)as u32;let (x,y)=(p%frame.width,p/frame.width);eprintln!("frame {}x{} scale{} mismatch {x},{y}",frame.width,frame.height,frame.scale);for c in &scene.commands{if c.bounds[0]<=x&&c.bounds[1]<=y&&c.bounds[2]>x&&c.bounds[3]>y{eprintln!("cover {c:?}");}}}
+     assert_eq!(software.len(),lowered.len());
+--- a/vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs
+@@ -20,6 +20,7 @@
+ const MAX_COMMANDS: usize = 131_072;
+ const MAX_ASSET: usize = 1 << 20;
+ const MAX_FRAME_ASSETS: usize = 32 << 20;
++const MAX_FRAME_ASSET_COUNT: usize = 8192;
+ const MAX_CACHE: usize = 16 << 20;
+ const MAX_SMALL_PIXELS: usize = 65_536;
+ const MAX_TILE_INDICES: usize = 4 << 20;
+@@ -456,8 +457,9 @@
+         let id = if let Some(i) = ids.get(&asset.id) {
+             *i
+         } else {
+-            *bytes = bytes.checked_add(asset.data.len()).ok_or(Fallback::Limit)?;
+-            if *bytes > MAX_FRAME_ASSETS {
++            let padded = asset.data.len().checked_add(3).ok_or(Fallback::Limit)? & !3;
++            *bytes = bytes.checked_add(padded).ok_or(Fallback::Limit)?;
++            if *bytes > MAX_FRAME_ASSETS || self.assets.len() >= MAX_FRAME_ASSET_COUNT {
+                 return Err(Fallback::Limit);
+             }
+             let i = self.assets.len();
+@@ -592,6 +594,22 @@
+         let scene = Prepare::default().prepare(w, h, scale, ops).unwrap();
+         let lowered = scene.interpret();
+         assert_eq!(original.iter().zip(&lowered).position(|(a, b)| a != b), None, "scale{scale}");
++    }
++    #[test]
++    fn complete_admission_counts_padded_asset_bytes_and_asset_cardinality() {
++        fn scene()->Scene { Scene{width:1,height:1,commands:Vec::new(),assets:Vec::new(),tiles:Vec::new(),indices:Vec::new()} }
++        let data:Arc<[u8]>=vec![0;17*241].into();
++        let mut s=scene();let mut ids=HashMap::new();let mut bytes=0;
++        for id in 0..8184 {
++            s.place(Arc::new(Asset{id,width:17,height:241,format:0,data:data.clone()}),[0,0],Some([0,0,1,1]),0,255,&mut ids,&mut bytes).unwrap();
++        }
++        assert_eq!(bytes,8184*4100);
++        assert!(matches!(s.place(Arc::new(Asset{id:8184,width:17,height:241,format:0,data:data.clone()}),[0,0],Some([0,0,1,1]),0,255,&mut ids,&mut bytes),Err(Fallback::Limit)));
++        assert_eq!(s.assets.len(),8184,"no rejected asset published");
++        let mut s=scene();let mut ids=HashMap::new();let mut bytes=0;let data:Arc<[u8]>=vec![0].into();
++        for id in 0..8192 {s.place(Arc::new(Asset{id,width:1,height:1,format:0,data:data.clone()}),[0,0],Some([0,0,1,1]),0,255,&mut ids,&mut bytes).unwrap();}
++        assert!(matches!(s.place(Arc::new(Asset{id:8192,width:1,height:1,format:0,data}),[0,0],Some([0,0,1,1]),0,255,&mut ids,&mut bytes),Err(Fallback::Limit)));
++        assert_eq!(s.assets.len(),8192);
+     }
+     #[test]
+     fn ordered_mask_fill_replacement_negative_clip_matches_original() {
+--- a/vendor/sidestep/crates/sidestep-engine/src/raster/images.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/raster/images.rs
+@@ -1020,3 +1020,9 @@
+         assert!(cache.bytes <= cache.budget);
+     }
+ }
++
++/// Isolated complete-frame worker: replace only this thread's image cache with
++/// an explicitly budgeted cache. Default renderer configuration is unchanged.
++pub fn configure_thread_cache(budget:usize) {
++    CACHE.with(|cache|*cache.borrow_mut()=Cache{budget,..Cache::default()});
++}
+--- a/vendor/sidestep/crates/sidestep-engine/src/raster/ops.rs
++++ b/vendor/sidestep/crates/sidestep-engine/src/raster/ops.rs
+@@ -1482,3 +1482,6 @@
+         assert_eq!(channels(px[15 * 20 + 15]), [0; 4]);
+     }
+ }
++
++/// Isolated complete-frame worker teardown, before its cache reservation retires.
++pub fn clear_thread_cache() { STATE.with(|state|*state.borrow_mut()=State::default()); }

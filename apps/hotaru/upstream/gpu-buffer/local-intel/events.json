@@ -1,0 +1,38 @@
+[
+  {
+    "event": "device",
+    "index": 0,
+    "enumerated": 2,
+    "name": "Mesa Intel(R) Graphics (PTL)",
+    "drm_render_node": "/dev/dri/renderD128"
+  },
+  {
+    "event": "context",
+    "vendor": "Intel",
+    "renderer": "Mesa Intel(R) Graphics (PTL)",
+    "version": "OpenGL ES 3.2 Mesa 26.2.5"
+  },
+  {
+    "event": "producer_readback",
+    "matched_rgba_bytes": 4096
+  },
+  {
+    "event": "export_query",
+    "fourcc": 875708993,
+    "planes": 1,
+    "modifier": "0x0000000000000000"
+  },
+  {
+    "event": "export",
+    "fd": 8,
+    "stride": 256,
+    "offset": 0
+  },
+  {
+    "event": "passed",
+    "matched_rgba_bytes": 4096,
+    "contexts_shared": false,
+    "synchronization": "bounded CPU fence wait",
+    "presentation": false
+  }
+]

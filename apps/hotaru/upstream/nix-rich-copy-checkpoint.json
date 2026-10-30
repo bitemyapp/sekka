@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T16:17:49.190199+00:00",
+  "host": "callen",
+  "status": "passed",
+  "scope": "Audited rich-copy checkpoint: immutable history snapshots, OSC8, all four copy formats, corrected HTML URI/nesting and rectangular-selection validation",
+  "derivation": "/nix/store/5dzg45p3ss5b838wq63z7yfjlhlc7jmb-hotaru-0.1.0.drv",
+  "output": "/nix/store/mqvwv93ax0x85ddi44279wwhalfadvkd-hotaru-0.1.0",
+  "source": "/nix/store/67hxqxhxlm1dvaq479fiwlkbp7miy6ln-hotaru-source",
+  "source_nar_hash": "sha256-m04H3VFnxvp338xNbDMqLKSf7C/rdz04hIwYNBMGlSE=",
+  "binary_sha256": "263a1e3ae6e9184e2340ac189f953c8280e525c72b9a828cc78888e35c220fef",
+  "wrapper_sha256": "c4e90fcf616cdf454beaac97bdbd0a387e7e6f80d8ffb1c012ca3ca9cce649e7",
+  "build_log_sha256": "1bd8ea2f3049cda3b0139dd86b75a77953b5e8dc0847cab0e158430d40bf8ade",
+  "test_summaries": [
+    "test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 12 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "build_type": "release",
+  "cargo_test_flags": "-p aizome-hotaru",
+  "help": "Hotaru \u86cd \u2014 Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG\u2026]]",
+  "installed_files": [
+    "bin/.hotaru-wrapped",
+    "bin/aizome-hotaru",
+    "bin/hotaru",
+    "share/applications/org.aizome.Hotaru.desktop",
+    "share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg"
+  ],
+  "limitations": [
+    "No Aizome VM or physical desktop qualification",
+    "Full Ghostty feature and performance parity remain incomplete"
+  ]
+}

@@ -1,0 +1,4963 @@
+{
+  "base": "3d10197261512c92ccc5816dfdd60c88566c4150",
+  "historical_native_fixture_tree": true,
+  "product_integrated": false,
+  "host": "callen",
+  "kernel": "6.17.0-1032-oem",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "target": "/home/callen/.cache/hotaru-admission-native-target",
+  "files": [
+    {
+      "path": "apps/hotaru/crates/hotaru-core/Cargo.toml",
+      "bytes": 624,
+      "sha256": "38ab349dd57f69f265220628b8f6e650da146fed4a269cc82543b91525e34e1b"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/examples/content_capture.rs",
+      "bytes": 2865,
+      "sha256": "618050be2e4b66469f39b7e8a46283fd3e7a3679255ce3e0ff8a8852a15e4350"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/examples/search.rs",
+      "bytes": 2259,
+      "sha256": "57ee2636c08273ffc3790f8455532f399957f972135130ccb96783184a79f0ec"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/content.rs",
+      "bytes": 5475,
+      "sha256": "c2aaa4b24b0905855967c5944fbafbec8b6e672770e2981b61efeb9cd1a28dcc"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/formatter.rs",
+      "bytes": 29339,
+      "sha256": "0a189cfa5ad96f27a88b2a0b2717ea81772f880a1dc802ba1719fdaefa2fadc0"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/grapheme.rs",
+      "bytes": 7362,
+      "sha256": "0a97e4dd7153f9e66e89815bb5a13708d11eb89910bef3dfb1e847a17505127f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/history.rs",
+      "bytes": 38005,
+      "sha256": "88d05071db2a765c87ea8241d80f3ce2d3aa9854b45b7cdea3101584fcee9d53"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/hyperlink.rs",
+      "bytes": 11584,
+      "sha256": "a068f4d49ee0a99cd8296ae2a5c38ee0edd4f62615fdee0709c1b39ad4658872"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/input.rs",
+      "bytes": 27469,
+      "sha256": "e81f3ccb24f3bc5177b6416b53b173b4679d711f76734f5becc645ac7efe0013"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/lib.rs",
+      "bytes": 10731,
+      "sha256": "967d0e9fdbaea42ba0234fa86f02e54ff81ef403a4b92128c25fdd339689aa61"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/memory.rs",
+      "bytes": 3904,
+      "sha256": "52188205f67257959d4d7c6a03fb574d9e5bdd53f80277f82b4c53195058c1d8"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/parser.rs",
+      "bytes": 13158,
+      "sha256": "32a42545651d9ee707fb2a4af7b75b401849fd75b251c4079bc7bfdae209e87f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/position.rs",
+      "bytes": 1394,
+      "sha256": "659b1c337ded105673b9edd23115a801b4db02b1db28982f5be2bcca2fd530e0"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/row.rs",
+      "bytes": 25001,
+      "sha256": "cfed790536e74724bf4efec2f3d000a00055af301f5576b951adc0ecf841cbdd"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/row/ascii.rs",
+      "bytes": 5203,
+      "sha256": "e5e79c523510d30f1b06ce364daa4b3ff727baf0028713dd95d46234978f716e"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/row/history.rs",
+      "bytes": 20954,
+      "sha256": "53bb7f688fe2bbdb4de8a436d3c1f184668100d7b42ccb0ebe68f02087dae1ca"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/scan.rs",
+      "bytes": 4665,
+      "sha256": "7a4c988f2d378c6106cb3d66003f5a8583bc2a9d3b2ab45583d791d6bb620b25"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/screen.rs",
+      "bytes": 90490,
+      "sha256": "0c625d1ef2c50a4954dc97897fbf76a49c064f335ed733da82d43ea605589305"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/search.rs",
+      "bytes": 16018,
+      "sha256": "9ec2ae3f36eb594d0f0684bfdf58e3bd91bed112daa8ccbba75324315579ee76"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/style.rs",
+      "bytes": 4379,
+      "sha256": "ec000c1148437208a6d52b4d9be4be8bb80114f1e16b49a6e800371b9a364791"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/unicode.rs",
+      "bytes": 5454,
+      "sha256": "693091d603aa4bf0757df0e47dbd46023f5554d3db193a597c46e9b0d0a9884b"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/src/unicode_tables.rs",
+      "bytes": 133936,
+      "sha256": "4551adea15824f60163af841858b94d57ca66325d3f9c431b0595959b148766c"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/configured_colors.rs",
+      "bytes": 3504,
+      "sha256": "d1a5a1ba4d6985e03dfc52c87157c46b5e8f99c8ccad3ac218fa6d22e91cc38c"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/content.rs",
+      "bytes": 4664,
+      "sha256": "7e3b4fb7070a500755cc551119a15fad31692592c0a82ed54e33a3b02a5a1868"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/core_review.rs",
+      "bytes": 8026,
+      "sha256": "570080a37f6bff8e07e57ddd0421f7ac05e3b3379016659ac77cad3d1a384c03"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/cursor.rs",
+      "bytes": 4651,
+      "sha256": "f6581a8dc3d2dab78a1143d81b40c29eabd67160c34dcfcadd384bcadbbf1bcf"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/history.rs",
+      "bytes": 3284,
+      "sha256": "62e84bb1a2d1a83ef1235afbf06ca6221abaa8f7cfc6cd862c2edb69cabdca2d"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/history_audit.rs",
+      "bytes": 4966,
+      "sha256": "0e7a738c3562ec133b8fcbede13794ac412c6c88b0873fac4e2171af144f178f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/history_budget.rs",
+      "bytes": 12414,
+      "sha256": "574cdcfa251b3efc5ba6482a0b311c1cb06860a4977238c515c008a05d5ddac3"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/hyperlinks.rs",
+      "bytes": 2376,
+      "sha256": "372eb74888c46df96ea27ab9085cf0758d2f4c9707cd41780f0cb33c67be2360"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/input.rs",
+      "bytes": 12731,
+      "sha256": "2691519a177f8b6670eeaf5936b00035059a5ff88fb58848f8a421420f2aa73a"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/reflow.rs",
+      "bytes": 5708,
+      "sha256": "406571acefe95dc401f398f6eab1d8e44eceffd7a656e06a1f80345050d2d25e"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/scan_boundary.rs",
+      "bytes": 2176,
+      "sha256": "84fa865081d505174861a8a5c49f0838d39688fcbea718d3f187be4d598aeac7"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/search.rs",
+      "bytes": 5684,
+      "sha256": "b3657e7ac1ebb2490a9af0108fbe152e6c3feb05cccaeb1f74c8abb401ebcbaf"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/search_positions.rs",
+      "bytes": 9186,
+      "sha256": "d5123b4a0ca52ee36badc0309ef0b57b9c6e94980d448510d3d0a8e43e6d44c9"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/snapshot_threads.rs",
+      "bytes": 2422,
+      "sha256": "c8853c2f441dd786076eeb4c8ee404c05834b6115e8c24e0d3384ba1feac6e69"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/terminal.rs",
+      "bytes": 9351,
+      "sha256": "752f7245ff468c0b5458c44ae8a3eca7eb6f85b85e9bcf996cb5a042f6499abc"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/unicode_mode.rs",
+      "bytes": 11233,
+      "sha256": "6199beae616c446f4e637075f6775747795e434516feb263c0786fb434d2ba0b"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/unicode_write.rs",
+      "bytes": 4868,
+      "sha256": "b8df773c6e4ed44f4099f126ea97331fc3d93d8d7dcc38ff2c6f3cb63f2a1b2f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/utf8_scanning.rs",
+      "bytes": 6449,
+      "sha256": "4cbf5e2d8e199ddbb2f6c4575b22e29d7be7aaa682e481cea25cf45168ff758a"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/utf8_validation.rs",
+      "bytes": 4847,
+      "sha256": "1c568d82848b991b378bc14d58c02776a2b9c2d29c25b2e3fe7a742517a80b32"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/vt_controls.rs",
+      "bytes": 3803,
+      "sha256": "18478d526e8f4e92001079203d2e2e9950035a609fc25321091a867844973d2b"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-core/tests/working_directory.rs",
+      "bytes": 1769,
+      "sha256": "5f13836d6eda73c95a32bf945e13e3c0d7d485354f138a8ed92ccc2dbcf432dd"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/Cargo.toml",
+      "bytes": 298,
+      "sha256": "8a50c5c970ec409b2ff8db1350f82a1fc5cbdc3660bc6bd79feb45673e27df03"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/src/clipboard.rs",
+      "bytes": 10538,
+      "sha256": "fd8a8f6158c20cf375d18a8cd92ae791cd93b3f9d44c19e96bcdb26b41dbcc84"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/src/fd.rs",
+      "bytes": 3489,
+      "sha256": "3aa31981343954ee159f8a7abb6004eb0e5281f419e4496277e61bb8c3549e82"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/src/launch.rs",
+      "bytes": 13422,
+      "sha256": "ac60f0cb424d3a1e3e12131cdd606b90df7786573c2a5253067c2efe11f7f22e"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/src/lib.rs",
+      "bytes": 661,
+      "sha256": "1fe9bd40dcf6ae26444b2f4948889e830a34ea4742917082c4295fc294e51aa4"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/src/pty.rs",
+      "bytes": 13247,
+      "sha256": "fc18ac82990f21f7584cb61f2aebde27c706e887adfabdd58e33e2dd6278e5c1"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/tests/clipboard.rs",
+      "bytes": 12735,
+      "sha256": "198e2585655fb5d7c4fb59a39f6d9a67d759e414212b436732782e7614685c34"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/tests/pty.rs",
+      "bytes": 5344,
+      "sha256": "7226233befff1bf0032d6e60e02ddb0d43642ee77f5e53470960216180e11687"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-io/tests/shell.rs",
+      "bytes": 10104,
+      "sha256": "88af9cc7862f2bb1bc17642d43431bf1cda43a5092dbcb7670d06e78d5539116"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-replay/Cargo.toml",
+      "bytes": 320,
+      "sha256": "4fabeac9e5a8eeffcd9b16761c6b3647ea03665d52ad42ae9d81e822e911b802"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-replay/examples/history.rs",
+      "bytes": 2442,
+      "sha256": "c8bbb3d80edf66e95e0cc70a91a29b35053df30afe2f43695d55b98a8e5aa02d"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-replay/examples/reflow.rs",
+      "bytes": 2431,
+      "sha256": "ad29b9a93d5326dd70bd425d2c51bc98d7594fdf5f49fe6d6cd1514c474c7558"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-replay/src/main.rs",
+      "bytes": 7809,
+      "sha256": "1c85a7f722d19ee87cd48499da392f7306bbdb1ef7ae8dd829b6c49ef302d308"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-replay/tests/upstream.rs",
+      "bytes": 2438,
+      "sha256": "07d87b9615dac641d160b4bbbb03520043dfc210e4a8745989f08a589f7eb775"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/Cargo.toml",
+      "bytes": 204,
+      "sha256": "593e95f34a0d1109502d3189c887e43067da2ffe97dc7b6558f3a1ddb1ea8da1"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lib.rs",
+      "bytes": 7825,
+      "sha256": "16003518afed6d6726a9bce9f1b4815a0711aa5b051afa5de71aff4151837695"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lines.rs",
+      "bytes": 4338,
+      "sha256": "a59abe67313e6ec36444552f1bdc53b69693b9049ca8d5cec1252592ea493b8f"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/src/lines_map.rs",
+      "bytes": 5453,
+      "sha256": "91083cb7244e87b79213d9740664cd39d4e45de87e9dbf5b405c9ca63cc3eba5"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/golden.rs",
+      "bytes": 1648,
+      "sha256": "4a92baa8d9fea50cc29fb31889873cb100ba13fc850ece9818d97f9856011fe4"
+    },
+    {
+      "path": "apps/hotaru/crates/hotaru-sprites/tests/raster.rs",
+      "bytes": 3253,
+      "sha256": "8fd4c6d80491498ce2166ff77f563dacef86c7c0240b4d08124248e535c52181"
+    },
+    {
+      "path": "desktop/aizome/Cargo.lock",
+      "bytes": 145982,
+      "sha256": "2a4d1bf3fcdfc18d2eeadc1c1ab61097266bf2002983abd7377ec9e3c97d153b"
+    },
+    {
+      "path": "desktop/aizome/Cargo.toml",
+      "bytes": 3592,
+      "sha256": "496f6cdf36e73373ed882ae2e332fe82de054f64f97d590bb910a7f75459d0e8"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/Cargo.toml",
+      "bytes": 897,
+      "sha256": "9940868b06cfcdb63e0793cd7decf36486f6e2e9a271ce1408267e5d54b68472"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/data/org.aizome.Hotaru.svg",
+      "bytes": 847,
+      "sha256": "07cebf2145dee9b81652d347fffd993ddb5b6776cce4ce81e824919547531284"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/app.rs",
+      "bytes": 58114,
+      "sha256": "cbc389dc06739730bbcc19941cccf9a5617ddb6eeeda5c32f0da703dc0c1aa3a"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/clipboard.rs",
+      "bytes": 7508,
+      "sha256": "046478e7090b84edeb685349ac0e0afe69efd5dc062d9d4bbd8e71b733e07f7e"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/font.rs",
+      "bytes": 39466,
+      "sha256": "b190971fb29d13036586fd811c3730691f27d3c70b14b158cf55ceb42b3536f0"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/font_benchmark.rs",
+      "bytes": 7828,
+      "sha256": "f3fef189ced63783cc3c20aa4247bdcf28f9fc725f36037a8e9a238ecaa8b7d7"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/input.rs",
+      "bytes": 12827,
+      "sha256": "e7484659dca7e04d4edc4c493321e3a758f5152a8fbfa7a7489fbf31ae4fb535"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/instance.rs",
+      "bytes": 5925,
+      "sha256": "9d8d7b173ebca6acf5be620724e7aa69b34f3866e4da6afd566559872f31820d"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/lib.rs",
+      "bytes": 254,
+      "sha256": "fc1d2d6b232d0d47995791a289e38606c35f496abe530a2f2eea704d92ff7d32"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/links.rs",
+      "bytes": 4291,
+      "sha256": "6ff1289b3d53f4af220bb3df6401cd2653a3f0a1dab2919e0579a36888afc9ab"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/main.rs",
+      "bytes": 3000,
+      "sha256": "e28b0178e6535930e1f1e2d1304ad1b1afe8d6d94503b28e9a288ea0ff353510"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/panes.rs",
+      "bytes": 3020,
+      "sha256": "90c381f9201ffc1abe31cd1b177e6672c585c977651f650e0012dc0c5b679f45"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/search.rs",
+      "bytes": 11504,
+      "sha256": "5a2e042fa338e4448a9d1cf9ef8bb2cb8bd94cb16eb76592c3f7887613a8b173"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/session.rs",
+      "bytes": 29721,
+      "sha256": "ef7d084ca2bbe3c0861721c60b188cd6e2bf73e478a7662f6964781a491bad3b"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/settings.rs",
+      "bytes": 16454,
+      "sha256": "118812a6caef63885a698dde6deab8cfe9f87df8656d6e4f951bcee56af12824"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/sprites.rs",
+      "bytes": 5082,
+      "sha256": "c5e277e2be0f112bb6b5ba209153dbd4cbbf0cc3b1d2594bf4a5c134066e1835"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/src/terminal_view.rs",
+      "bytes": 59977,
+      "sha256": "005e153a8ef92944d010c443cae7de0d28e3bdbd022aa6c9135eded1ebd2c93e"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/admission_support.rs",
+      "bytes": 3344,
+      "sha256": "0b82b14949eff216dcbde97591f087097e8bdc07738cb348b53364e19b3be1c1"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/cursor.rs",
+      "bytes": 5075,
+      "sha256": "17301c05cbe97293eaa29820254557b0be16dcc8c5161c76be10cbf4f46fd565"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/native.rs",
+      "bytes": 38924,
+      "sha256": "736e97a53875af9993b082d164b4d831b9c64d88095dcf010376cac39e985cbb"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/pixel_scroll.rs",
+      "bytes": 10755,
+      "sha256": "61d8c77f10941aa1a6e7a1f51a2eca37756bf49f5b1f4c36b3887c21c140aad1"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/scene_inventory.rs",
+      "bytes": 8767,
+      "sha256": "d24b189adac63682789abdcfa761b87106b566afdb42d211e946de46bcb3564e"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/wayland/key.c",
+      "bytes": 3858,
+      "sha256": "0168902a32db445b91f6f3430c4462b1a75e03b5a602136f381975c0c86a2171"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/wayland/link-pointer.c",
+      "bytes": 4293,
+      "sha256": "aea897897653db72c708c48b423e0897f21d4ecbfd93a820f6c0499f39f2e5f9"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/wayland/pointer.c",
+      "bytes": 2509,
+      "sha256": "b580d965540a0b641cb96c95ae4ac618b31f624997d157a52a1c11ea30f2cd6e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/Cargo.toml",
+      "bytes": 650,
+      "sha256": "2580e25a2766d24cae88bba362f3a2c906d4c505c5afecf30c751dba6c7add62"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/build.rs",
+      "bytes": 3354,
+      "sha256": "73af25b0cccc664343a99197203f7d18143071b42dd30d5ff4530bb61fb1704d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/examples/gallery/main.rs",
+      "bytes": 381,
+      "sha256": "9be089d542ff61df9df221376b578471a79b194ca170528b5c1ccd6b5e5532f0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/examples/gallery/views.rs",
+      "bytes": 25962,
+      "sha256": "f4a601bee82555492ea7b0894db9e3dddf80c9dde89e8a3da501ab2deb5d7246"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/accessibility.svg",
+      "bytes": 398,
+      "sha256": "114a9b6983ee20c43d76556bbb5633085a0e082b19464dfa36f1e27768c8f3ea"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/activity.svg",
+      "bytes": 346,
+      "sha256": "050fbcda05e13c2051cf857683645e19c6b180861ef4d0cc28a6f09ba1ea1666"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/alarm-clock.svg",
+      "bytes": 384,
+      "sha256": "28b99c01c718b004fbeb35afd06a7deb5d854ae81d4dc31fe043c8074353d45d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/app-window.svg",
+      "bytes": 329,
+      "sha256": "78635d0da597104f526ea01dede8ab4d04ccabc7a2229c4baf17f921b15985de"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/archive.svg",
+      "bytes": 340,
+      "sha256": "78c732e34e232db63af06a2330b4448045cfdf49b48b59f2d31922df54c7bb17"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-down.svg",
+      "bytes": 262,
+      "sha256": "2b641c7a59d39450edfed72067fcc9940a1a316a737346af23b4b9103c0689f2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-left-right.svg",
+      "bytes": 313,
+      "sha256": "2d64da427cbb3f14e522658459903829575b09ec15162c1a69ea6ad341a4359a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-left.svg",
+      "bytes": 262,
+      "sha256": "c5f4b88076108eb1a0d95336e1aa7e7bb1419a3a92af96f6247d88cd3456f933"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-right.svg",
+      "bytes": 261,
+      "sha256": "288397fdb73bb4f783cf9eabb726ff47357df1d4e3f1201dd748090579f108b9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-up-down.svg",
+      "bytes": 313,
+      "sha256": "d15411438095bac7cab0cf91f18cadfbde2ca752284c06b4b3642c4695b1774e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-up-right.svg",
+      "bytes": 260,
+      "sha256": "50b2503b9d11881142255466b7e3461d022b919735841c321d72003ac9959fe1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/arrow-up.svg",
+      "bytes": 261,
+      "sha256": "8c22c25874c80bb062bef985d207d8f1d4a4d7847237d0a8cf720a3235968518"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/at-sign.svg",
+      "bytes": 299,
+      "sha256": "a71ec1918c3787172b16949262ca4c4a7c427c045367bb58f2c2cdbd87297c5e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery-charging.svg",
+      "bytes": 392,
+      "sha256": "6a95bf102235d7070121bb8eb21a4836fa7ea9f0dbe8327eadbdf94253acdcbd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery-full.svg",
+      "bytes": 357,
+      "sha256": "9ef66bd46e676bbcf1e8befca8e904b93be9214abccea4f8a4d20432a0c5ccf8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery-low.svg",
+      "bytes": 310,
+      "sha256": "a158265a07d3ea60134de7ca88c023ebbe35d9af9c724c410ed251f248987a52"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery-medium.svg",
+      "bytes": 335,
+      "sha256": "f8a79b837f96c801ffc394d1d154c5a792823e3bb506bb98a4379b0647067e0a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery-warning.svg",
+      "bytes": 393,
+      "sha256": "d59e1af8b6247b59df0535197456fc25df978ae14a9e786c636815ab04c95904"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/battery.svg",
+      "bytes": 292,
+      "sha256": "bd0e96da226beca6d150ee25f04bc5ca8466c1ed91e806c2179723e173af2282"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bell-off.svg",
+      "bytes": 438,
+      "sha256": "14ad2775c3a594f09a79c195531778ae51302f847a9c558f720340d1e450bd6a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bell.svg",
+      "bytes": 393,
+      "sha256": "394889e9631fe3a9a63be9a479a95b451b708e432d895978d21d9130b5ee5dbe"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/binary.svg",
+      "bytes": 409,
+      "sha256": "ddcdd24c5c588ef8f0330622f3dc32b06830452bdaad67ef0e4754fdaa82bec4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bluetooth-connected.svg",
+      "bytes": 333,
+      "sha256": "d39c628c736b13b022f154e9aaa8aad178ef1d090a9bc14f1f4740c24767d828"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bluetooth-off.svg",
+      "bytes": 307,
+      "sha256": "61d26b013859d73ddf585d7b6e460ab2a6f02ca3ec2faf4b646cf9054224c22c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bluetooth-searching.svg",
+      "bytes": 320,
+      "sha256": "91845376ad7c5fd2a7d7c6daaf5ceed0065416fabf5c4c81629ef0c20d488a73"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bluetooth.svg",
+      "bytes": 249,
+      "sha256": "f2bf3d88cf608834dc389f01b1ee41fdb7bf3656dabef69632c60d5498f3bf29"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bold.svg",
+      "bytes": 293,
+      "sha256": "79217276da6c19176d70060a93c792b2b30aae18a95fb0690c263a71851aed96"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/book-open.svg",
+      "bytes": 387,
+      "sha256": "9b9bed0ff057283d5c5c5a1c71f8d3e927db26a56639603a92fdf7b25961510e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/book.svg",
+      "bytes": 310,
+      "sha256": "1a94c0af6224104124e873af2f6ba73d5a17dc536360a03cdb826eab858826a5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bookmark-plus.svg",
+      "bytes": 389,
+      "sha256": "3c6b08ce8d32ea6c16606f2ce44d9f51d292b179947350a2ae91494a7905281b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bookmark.svg",
+      "bytes": 342,
+      "sha256": "1d5023760db81f21c3b5a63f012ef540acc01932731c733e4645012a876d39f4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/box.svg",
+      "bytes": 401,
+      "sha256": "511862693d914d2bf1947c9ccc513595f2a256541f5dd4f6f9ac8383cd41ac4f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/braces.svg",
+      "bytes": 380,
+      "sha256": "4180c1c93504e1220e60a53411f7d7d2cdda5361f68f5210202a0380eb011431"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/bug.svg",
+      "bytes": 615,
+      "sha256": "c4fddf0d43b4c4f0b8fc52eb8810173c8d8bd25618034a70f162d85e8189d69d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/calculator.svg",
+      "bytes": 523,
+      "sha256": "a6b191250b1ffabdf9fc9536662309f1b0f65336aa681d75bae9f1708baaefd0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/calendar-days.svg",
+      "bytes": 483,
+      "sha256": "9330eb8d7c4989e97b6361314abbf02953243c602874725c9e58ceca00da3bd7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/calendar.svg",
+      "bytes": 329,
+      "sha256": "312ac8e715ac2b71bcc942dec2e8de9c1929085474f08885af35b563f6aa7a0b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/camera.svg",
+      "bytes": 437,
+      "sha256": "ebbb3178dd80dfd942770a2237fe7bfc3515c55c7daa9d3666933a656d2790e3"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chart-area.svg",
+      "bytes": 412,
+      "sha256": "c397340bbf25612acdccf7d35687bccd329aad324991ef9920695412d0b3a897"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chart-bar.svg",
+      "bytes": 317,
+      "sha256": "9035a34f1713a781e02af86b5b0d086c44ccb10f985c51a8fa2796211e88597b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chart-line.svg",
+      "bytes": 281,
+      "sha256": "8736da84214736c4fd579b52b8a41f454cddf0dba9578618eee5ae8e22f40645"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chart-pie.svg",
+      "bytes": 371,
+      "sha256": "1ae765b638fe588b392f7da6e2c274fb438b257d936f9f4c7d548c73d5f9d8a1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/check.svg",
+      "bytes": 239,
+      "sha256": "7f33acc9a77a61659531044525fc008edebe215bf4dcf1c789c8674ad3277db0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevron-down.svg",
+      "bytes": 236,
+      "sha256": "66ea878e72ed3488bb3b464c39dfdccee8d1f78e560dccea40e5e12da0e87e87"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevron-left.svg",
+      "bytes": 238,
+      "sha256": "83b0681aa38bf55e9d52a1e4b4cced624abe1fe7678ecafda133a574f1161d93"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevron-right.svg",
+      "bytes": 237,
+      "sha256": "2758143d7b2434e4aa7307dfd34405c87909ff4052f21b5f3f40d45224b4f19b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevron-up.svg",
+      "bytes": 238,
+      "sha256": "d09f13fcbef3c493ead7e4663b5ee91804fec38d5edb5e7cc3acfbd547641cf4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevrons-left.svg",
+      "bytes": 268,
+      "sha256": "ec966bce841337a305fc7fbc0dab04c650dc9fb7f313d78645ea33378bef06e7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevrons-right.svg",
+      "bytes": 267,
+      "sha256": "3491f9fe180bf75a058d480f32a0d26ff6a97c6c9a70315c77df7c6b75329d91"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/chevrons-up-down.svg",
+      "bytes": 265,
+      "sha256": "edc561e007cfab9b6b45301a8cb02711fd7c901e53e30ee29c5491b74dbe6bcc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-alert.svg",
+      "bytes": 332,
+      "sha256": "ce3e98b7a03b78c0071131df42466e4e1ff5187fccad30e739ec9ce951cf685a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-check.svg",
+      "bytes": 278,
+      "sha256": "9711e045a5999f8a3b0782eb88e09b04e0559bc7b379dcc0a4ae645223e10345"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-dot.svg",
+      "bytes": 279,
+      "sha256": "c263f6a08a089c06ad40f408ad5da9100359ab52d379e6c571cd7c5bd74eaa87"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-minus.svg",
+      "bytes": 267,
+      "sha256": "d1a47f5249d6aaedc89bb6caf0a4f172084171a369e5656b88ad8f32d8d8386e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-plus.svg",
+      "bytes": 290,
+      "sha256": "6fa978530075df975ad05e2742896a1950b74c2b133a0d208891b038a4a41c17"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-question-mark.svg",
+      "bytes": 322,
+      "sha256": "975db087da041530dbf59ba1e61a7b99c3519fad43dae6375e42ccc74ba63924"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle-x.svg",
+      "bytes": 293,
+      "sha256": "bcd8788901e6f29e1b231a81ba5e707d083d06cb4848a28f29407fab4f8e0b64"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/circle.svg",
+      "bytes": 244,
+      "sha256": "3a991bd47beaf9874fba6fdf87bbba442970a89b5e6aa391558bc8b0a00a0513"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/clipboard-copy.svg",
+      "bytes": 433,
+      "sha256": "dcf4cb2f3d3e418e51b0f94cd20b01ed69151a584010cd8e28b924e51787fadc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/clipboard-paste.svg",
+      "bytes": 435,
+      "sha256": "d2e4e6df0b2fecf97a95ef244f9031fb7c1deae0c9401df2a11d93379e8d361f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/clipboard.svg",
+      "bytes": 354,
+      "sha256": "d9b433e6a571d96a035ddb83d2ff52c4f85925ffcba9e584cf371d0dfa90875d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/clock.svg",
+      "bytes": 271,
+      "sha256": "e9d3e3acf4d1c280fcf8092293439dc0a4756a908ceb859de144b12451cd1cb9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-drizzle.svg",
+      "bytes": 422,
+      "sha256": "1d19c1c62d82734241a9d8d5b3585a2c93ff70cb9d8cf47127cb1a18aa6c54b4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-fog.svg",
+      "bytes": 328,
+      "sha256": "68a247163f7501be38045284660b2c19b957e197d510e8169313075309da879a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-hail.svg",
+      "bytes": 428,
+      "sha256": "be333c2573ef172e969ee7c86e44adb7be2e4e72de60a9d756f41ec7afd977d9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-lightning.svg",
+      "bytes": 312,
+      "sha256": "9966e87d16d255878fd34efa1174cf1756fb5755c1f63e7ff1df4db5d2fefc36"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-moon-rain.svg",
+      "bytes": 467,
+      "sha256": "15984ae6239e699275383fccf1ce20bb8ea6e9d448680d0ebcd8b2b3b1e1ba4c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-moon.svg",
+      "bytes": 418,
+      "sha256": "8233994cbdc0b3dfb5d234be026d4d038c731a020da4b5a65851fde0e956ee6c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-off.svg",
+      "bytes": 385,
+      "sha256": "f1fa323fe513c96400971a5dac55823d88e41cc2c8cc9219c3ca4c62d46ebe62"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-rain.svg",
+      "bytes": 351,
+      "sha256": "4230ba9d28d0a02c088ec0b21079b63aed9f2b7ee8493588adf34ee144bc307b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-snow.svg",
+      "bytes": 434,
+      "sha256": "cdbb307c38c6f6781dd8169bc92c28cae16b4fb77d6c5d88898dd92698ad2dbc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-sun-rain.svg",
+      "bytes": 483,
+      "sha256": "4d1369d93accf9ef88022084bc9a78c74ad950ffe51471b4806187e614a29474"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud-sun.svg",
+      "bytes": 437,
+      "sha256": "d3d0b5519e3e9e6073bc6d875fcb2b8d0a0c0d0062602490d444ef6a08bb2ab0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloud.svg",
+      "bytes": 275,
+      "sha256": "28a34022ed00177eb1f218eea5d2b7af30d09b529187fe32219e4dd8ea2b9740"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cloudy.svg",
+      "bytes": 341,
+      "sha256": "abd7873286db59916b8364500bfa692de04184bb80c8ba8dca06be3fed0c5f29"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/code-xml.svg",
+      "bytes": 294,
+      "sha256": "a6d2110227be375be21da7324d3c09262c1bf019d06bdeab356d515342ab7cce"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/code.svg",
+      "bytes": 266,
+      "sha256": "83235d4a0352d74234f949c9fc23f89c65ff165f1b6d54a90e5f0ea5bfc2c3d7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/coffee.svg",
+      "bytes": 379,
+      "sha256": "970595bdafac0df42c00b847d53fd00c2283ecc3b83881274de2aa7dbce2bbc8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/columns-2.svg",
+      "bytes": 285,
+      "sha256": "bddf3348a9c82d111a060d118299c90755b1ae8411bd16ea1d5ddb83c5f98a27"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/columns-3.svg",
+      "bytes": 308,
+      "sha256": "c297e5d7d9b4f7e685b9beceaeb8819fa5eed97101b38090a036385e37a9a85e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/command.svg",
+      "bytes": 295,
+      "sha256": "403972f508e49217baa1371f52d856a25c67eca1d324557c0455b1a657d109fc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/compass.svg",
+      "bytes": 351,
+      "sha256": "c5a4d147bf48424f48b514712dd61c1b07cb689612a7baef87c88870092c1659"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/contrast.svg",
+      "bytes": 285,
+      "sha256": "a9f1a6166c479cd3e546625b09686a7e97322c850a9b146f270f912e886c395c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/copy.svg",
+      "bytes": 339,
+      "sha256": "ea80e566c7a12628a447cb53179b19aea4f60b9143e2becd0d0f20bf260e5718"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/corner-down-left.svg",
+      "bytes": 276,
+      "sha256": "1e6eef07c5f63c794acbacd48067681e2ef81fc74a84cec619d6c567dd799679"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/cpu.svg",
+      "bytes": 590,
+      "sha256": "ec83bb69ec029d367d749afc445b39c8e95891ebf99b0400652677c2b149b99c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/database.svg",
+      "bytes": 329,
+      "sha256": "471eb14bc8d144896a82dfc4aa9daf350f769f0896f4bef33e50aabdbb51130d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/delete.svg",
+      "bytes": 391,
+      "sha256": "a83d9f3d624827c94d41dceff4df530728e502989fceb415d72203bf934aa0df"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/disc-3.svg",
+      "bytes": 363,
+      "sha256": "93b3102c857a46d590ffc268a8d9ea740abf9bfb30f76de42b9899e34bbba438"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/disc.svg",
+      "bytes": 279,
+      "sha256": "b3ea13d44ab830f45fa83a701ef187e28f4b9606c86a54606c4bd753158185c4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/dot.svg",
+      "bytes": 243,
+      "sha256": "7c98b944e15871f137e75ad9898975d4722bc632a30f65ac19d5ca39f3b5e2b4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/download.svg",
+      "bytes": 318,
+      "sha256": "3daeee13ded5a3afa2198b1bb4e2262d163922f97d96ac6ff9953e8ed4fe039d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/droplet.svg",
+      "bytes": 325,
+      "sha256": "abca4df60f91c605d945c6fe5ee0e6c919b53116d81e268f4581f8841bf24751"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/droplets.svg",
+      "bytes": 472,
+      "sha256": "7cc0e91aa44f42f9c39e566f87dd0affd621cf4c103ad5fdbc69a475170917ae"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/eighth-notes.svg",
+      "bytes": 350,
+      "sha256": "528230f1df292eff5cdd6d20f80e80123676ca1efcc043e51b11e25222f7a4e9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/eject.svg",
+      "bytes": 361,
+      "sha256": "8405db720c5f76b56ce62ed6ebea3619a25186b59687a643021029184fd4ed6a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/ellipsis-vertical.svg",
+      "bytes": 312,
+      "sha256": "655ee2104d9540cc9377c83f3b9fea628d78d9f4e1cdca7c1b36e952599944d7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/ellipsis.svg",
+      "bytes": 312,
+      "sha256": "4f495cc72013ffdfec677f03b33a150f7b4dd741979283fd6853a09024bca112"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/ethernet-port.svg",
+      "bytes": 471,
+      "sha256": "a6f87926dcd34c10eba5a60507038666bbea99ec344c88b992b39444425d6625"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/external-link.svg",
+      "bytes": 332,
+      "sha256": "3891241b8c3bfc3a8a930078f26ffc5a7e9763da6d0162ace2050b28d4c1d1fe"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/eye-off.svg",
+      "bytes": 504,
+      "sha256": "774bcd975c5de781a4ee778c76e5591bcdeb409955f7054847e7e6003da0a520"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/eye.svg",
+      "bytes": 360,
+      "sha256": "5bf90197dd7629cad64a2e48d1186a71559deb6121207d10e3dc5b19ebaffdcf"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/fast-forward.svg",
+      "bytes": 380,
+      "sha256": "c98610ef43162ca32661429bbee8c263049a8277cefbceed932be46e986f682c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-archive.svg",
+      "bytes": 474,
+      "sha256": "203682f219d2f51c1a9e43c9b74c045ceae1b4f72c016a11e3670edee6725999"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-code.svg",
+      "bytes": 444,
+      "sha256": "8ac619671f53653a483c2d5e2e6afe6d009c3198918cf76632e2cb4abf0d6721"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-image.svg",
+      "bytes": 471,
+      "sha256": "82a9140926814aa4287fb6f4b479da6f99e752ebde557e19ffb066a239eab2f9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-music.svg",
+      "bytes": 436,
+      "sha256": "3590a42fac78e9d87e28062cf5572ddb963ba501b197c983033745cad0793954"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-play.svg",
+      "bytes": 493,
+      "sha256": "574edd438b755c55cb4cd05abac462ccdd51876686ad2b2f01572364dd95cd38"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-plus.svg",
+      "bytes": 421,
+      "sha256": "bbcf862a2a4425baa8a5bda39c7f16ec1d283816a3db77baf84f2e8766dd223e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-search.svg",
+      "bytes": 446,
+      "sha256": "6cfea3242132f7f0ae32d66110f9f3ba93a22c16f53a776d77accc6b5a3a31e7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-spreadsheet.svg",
+      "bytes": 467,
+      "sha256": "69960bb43dec3b66f0d1c2dd26c2f637a10540b8bea4ffb90f8764a8404016a0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-symlink.svg",
+      "bytes": 423,
+      "sha256": "1007703833a81a62e586aa990efd8610f2096af2df3bb7316a5494e990b0eb18"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-terminal.svg",
+      "bytes": 426,
+      "sha256": "455ce900b11eb3814216a0fbb8e407f9ab2124639fd67e099f384e4985cd7eb4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-text.svg",
+      "bytes": 444,
+      "sha256": "52ca55846c202335fb870c8aa23e9345630ec10489303756d62e750f7109605c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file-type.svg",
+      "bytes": 484,
+      "sha256": "207578c8e5a323cd84020b0c071ded28253494ce0da43a6592dabd89743e932d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/file.svg",
+      "bytes": 373,
+      "sha256": "499039795d7412d67664ff79d2eb6b7412e746b24c18c8fd8aba383c24ddada0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/files.svg",
+      "bytes": 444,
+      "sha256": "97adf06fc0511e7a40be93ecda04466ed196718ab4a5e3a62b1148cc49697775"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/film.svg",
+      "bytes": 432,
+      "sha256": "85cfa80821b34f512bd401a1249957c9f2f612497602ecc31dff39517823ee52"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/fingerprint-pattern.svg",
+      "bytes": 608,
+      "sha256": "26a4e5756ca8fb809c7cf488a1b6b44f6921d4a34a37ca9be8facf53d362ad9b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/flame.svg",
+      "bytes": 314,
+      "sha256": "cede1462a46a7a3b3daf9d101f0b59484b1d882a4c42a75670810a6d4f8d42fb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-git.svg",
+      "bytes": 424,
+      "sha256": "252d175a3a7537063f1307b5271703caacbf0305a5c642789653e6ab33c51ae5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-open.svg",
+      "bytes": 401,
+      "sha256": "ee57452b40e71df310214091dd9da1941a397c83197b8ff8d7ae66dd4242578b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-plus.svg",
+      "bytes": 389,
+      "sha256": "76d62eb7796ce6c7e303c437464923de2d1ae19a5c8d010f8b36dfc1d6180890"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-search.svg",
+      "bytes": 396,
+      "sha256": "ddcdf0c312320d13a9e327793e73c3a056309e91da1ca630fe1531db81aed247"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-symlink.svg",
+      "bytes": 391,
+      "sha256": "27ad4cd394ec48540b479d1e6df61c1796f9e1a77cb5ec7a4012aad8c6a08fba"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-tree.svg",
+      "bytes": 549,
+      "sha256": "5ae312d0220f67ddfba08d34920574199ad6193e9aaabe277d7c4ba373d7a2ab"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder-up.svg",
+      "bytes": 395,
+      "sha256": "059eecddec0b50f445b905c21cc917c5b74ae90a3fb3804e6d6bbbe64c1e2a82"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/folder.svg",
+      "bytes": 342,
+      "sha256": "f0d92b94b797a8ab7d4c4ae33c3236c47f64068351b4e14bdb5014ee42898a39"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/fullscreen.svg",
+      "bytes": 418,
+      "sha256": "fa367860357acdf79fefd85914ad6796fcaaf7e54589153049fe3b9ef5209f85"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/funnel.svg",
+      "bytes": 370,
+      "sha256": "288f869330602e29a640099ffc5d6ac01caadad2ef6f8aac1138b8bf91ccd752"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/gamepad-2.svg",
+      "bytes": 680,
+      "sha256": "b0671de7afbebdafc4d655d867d9851947170b906fb187e749410039df867509"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/gauge.svg",
+      "bytes": 278,
+      "sha256": "d7710543a5085c5a61d0bbac1da8b89ef28e541b38ed739357991dff33d475b5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/git-branch.svg",
+      "bytes": 313,
+      "sha256": "041f04acc8f92657b849540f0440e2e85d0df0b8da2365611e81b9bebfafc4eb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/git-commit-horizontal.svg",
+      "bytes": 327,
+      "sha256": "ca299006eb3a4f6f0d1852212370a8125ba8194429e15c5b571c7f4edabcd49c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/globe.svg",
+      "bytes": 331,
+      "sha256": "82c6b8fa0b8e8d775ec9becd86f74a4e50bff7bee4c81f7362de45348504f14d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/grid-2x2.svg",
+      "bytes": 309,
+      "sha256": "dc1896d3b22e88e0ba45a77bc8e947b7a01d0c9fb5ff77d07d24a5589816bb84"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/grid-3x3.svg",
+      "bytes": 355,
+      "sha256": "6c24155397cf0e751c05931bae68e67e4fe0fd58baeb7b29e9f80c90ed1d5194"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/grip-horizontal.svg",
+      "bytes": 413,
+      "sha256": "4a895999aa62eb54f8a4d67b976521d826e6d70633df34bdd6322a1839a11894"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/grip-vertical.svg",
+      "bytes": 413,
+      "sha256": "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/hammer.svg",
+      "bytes": 483,
+      "sha256": "db75caf31bd080726be0c2dab09372498b999cbdcf10c756f44636831f9529f5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/hard-drive-download.svg",
+      "bytes": 364,
+      "sha256": "4bbb0e0da04dee454a87dd037abce74d9380abb250f509487a85bd5b2a318be1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/hard-drive.svg",
+      "bytes": 459,
+      "sha256": "324363c40f54e4ca843de0ad1d023b063b70a26a83bb2e0a9e9f4aad9af37378"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/hash.svg",
+      "bytes": 373,
+      "sha256": "cd94af917b739ef26146d724613f6830ba3d702317fa4e60d92efea6133a1019"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/heading.svg",
+      "bytes": 279,
+      "sha256": "496295f2ac974c816a61701b5abb5f15b35657e6b573ae1755ebb27541f1e97c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/headphones.svg",
+      "bytes": 347,
+      "sha256": "7719585dafa921805aefc21fc3262bbcc621507610a653b84e1632236650b35a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/headset.svg",
+      "bytes": 398,
+      "sha256": "685de90f65108f523577a3fc9202f4e7f812ea7d4609a981aac3b36d3b33fc01"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/heart.svg",
+      "bytes": 373,
+      "sha256": "70af5f30be9fcb500b852556b38dcdf8c04a4ba81fd262534fb0336bd39b3b52"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/hourglass.svg",
+      "bytes": 432,
+      "sha256": "76475d4ca3299fa243ef83de602b78621487daad45ca54fea2e3718bfba5ef2c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/house.svg",
+      "bytes": 383,
+      "sha256": "28216c479005731ef5e382e7d8627eda2b129b019eb1f3d9de9f5915576d448e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/image.svg",
+      "bytes": 358,
+      "sha256": "619c9db58c879dce6250376ba67d9c9102ca6dbb3b1efb9294c9f180e22273a5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/inbox.svg",
+      "bytes": 388,
+      "sha256": "1838482c53d0846badef9be96fdcf7a167064241bd4891efa995c77ebec5f187"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/info.svg",
+      "bytes": 294,
+      "sha256": "bc977a64eb96f3e9c1041ffd09a3fceb70e3e65c02b571f76064062ed31f3cb9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/italic.svg",
+      "bytes": 332,
+      "sha256": "dcce4f9719febb8b04b030133c1d4ad82f68d13932ac806fbee620422000ac83"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/key-round.svg",
+      "bytes": 453,
+      "sha256": "f8cdea843754ed360e36b04bf6aa2c2b3610935dd39ffc685a36c4d0a05be248"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/keyboard.svg",
+      "bytes": 461,
+      "sha256": "f509925ca81964ed06251ad4702e989bb81a566ffc74d15c2226b4f07ded67be"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/languages.svg",
+      "bytes": 362,
+      "sha256": "ae9048feb2c7b19855da9a8f5414f68125573039777a89b9c253cceed5dc5075"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/laptop.svg",
+      "bytes": 405,
+      "sha256": "b8389056d3b7125670b60a4bd03e6d4ecc440e228f4140e7b66c4e97dcb0dc70"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/layers.svg",
+      "bytes": 510,
+      "sha256": "ce16d0a955e3581cda17f6b2fd5c5bc2034b405f9cecc31c8ebb8495b4afc1bb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/layout-dashboard.svg",
+      "bytes": 416,
+      "sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/layout-grid.svg",
+      "bytes": 416,
+      "sha256": "b8903f61d09b1d75e55c71158277d26570962f69c2099446a251871e0a2d6678"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/layout-list.svg",
+      "bytes": 405,
+      "sha256": "062ced0bfe4c3fb61b42471ab3d16b3fc26e6b764cb043890caf31e64df58534"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/layout-template.svg",
+      "bytes": 365,
+      "sha256": "342fd6f32f72244e2986bbb09ef19efd8bc4a9e52f030a7a294fe619da55b723"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/leaf.svg",
+      "bytes": 404,
+      "sha256": "ac2b65d8d35b5038c9388cd1f161e74570fce6ef6a4c3d99a6b0c2bd68e0cb28"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/library.svg",
+      "bytes": 304,
+      "sha256": "892ba1bd1ee2e5bba320eea1c30c83ed83055ded5a0a0c0e7e4ee5fb06c307a5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/link.svg",
+      "bytes": 359,
+      "sha256": "4f3237183dcaabfac92f4e94c776a9a9e45c3c5e77a921061a6b34b61eb5413f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/list-checks.svg",
+      "bytes": 336,
+      "sha256": "08d26ab05aaf724222c4c0cd5a19d5eae753b2a5fff0eb2d81759dde11bac6b6"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/list-filter.svg",
+      "bytes": 278,
+      "sha256": "36b94082bd7f161244c06a27cdeea647cb99ee5b805183cbeaf7ac3155a7103b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/list-ordered.svg",
+      "bytes": 400,
+      "sha256": "df549e10677b86c9a9f07c0c696b40a4937019212e73bc982a4e8dae7c557d8f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/list-tree.svg",
+      "bytes": 355,
+      "sha256": "e4c994b829b8b4d0ddc66c1ce14f9f56d0347e37b1b1fb124111831a61ec3890"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/list.svg",
+      "bytes": 353,
+      "sha256": "ff97a7379eb962ddc3863bb59f0f45875ac8da91aac8a38a67361e7118d2d627"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/locate-fixed.svg",
+      "bytes": 446,
+      "sha256": "3a10953374c6e811d8da564f87943cf52f47e284c6173ff211ffedc083b90430"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/lock-open.svg",
+      "bytes": 308,
+      "sha256": "f167153e8fec4008d6946f28035607636ed0b04dcfecdf58d7204db0b3d030f2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/lock.svg",
+      "bytes": 309,
+      "sha256": "d2cfe60cac8deaef36442b5c8218c1e61abe18222784b2a370ea090d13fca840"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/log-out.svg",
+      "bytes": 317,
+      "sha256": "f24b5b45c05a3acc346af8095408f6ba197ff58ea1641a4f2cb25a9702d2c0ac"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/mail.svg",
+      "bytes": 316,
+      "sha256": "3236a51d5b8ce9b0528cf2e6ad07e527bd636dded6f5a9d656072052b99caea8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/map-pin.svg",
+      "bytes": 359,
+      "sha256": "16f1042a62f1bda20ebab8bfc1cb79c0be285c980dea6c2c733a17902631405b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/maximize-2.svg",
+      "bytes": 309,
+      "sha256": "9b8413ad44a3d4f5a80049713743daddcdc3c5465a71c218cac156a99f582b5b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/maximize.svg",
+      "bytes": 366,
+      "sha256": "1f790856b0de805ab62e871609f1990b89d227d472022e57a11fde015aad4826"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/memory-stick.svg",
+      "bytes": 510,
+      "sha256": "9214439ac142c10156434542908436087fb174c71c46e30cfb46971c56ba33d2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/menu.svg",
+      "bytes": 279,
+      "sha256": "af6491988ac1ba30dc5414f485bc48713e957e1edb0fbef4a0dd8691c3c21598"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/message-square.svg",
+      "bytes": 339,
+      "sha256": "5812a3be783fdcd73efd2b6026e03131e4b8c6649e7d52aa2dc7bf2e2023a59d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/mic-off.svg",
+      "bytes": 439,
+      "sha256": "bcb5a033b4ecd182ec8d0d0945810ccc5147219b1a21c017b47fd4d5ae3a8320"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/mic.svg",
+      "bytes": 326,
+      "sha256": "9b940cd735d1ffa270ba670c4e677d9a09400f3fa81d6b3f405b12a3b67a59a8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/microchip.svg",
+      "bytes": 471,
+      "sha256": "d7406a4a2872a2691807d0fa09a9d3c892d9892833db68ee2d5438bebce2a3e5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/minimize-2.svg",
+      "bytes": 311,
+      "sha256": "1150437d5a870321c59b7ebca2e1bc3f6227f0fa03dd10484ab384dfe5110739"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/minimize.svg",
+      "bytes": 366,
+      "sha256": "7daa304bc3dccac1f100304e66a41139662cc6c0ba3eba67480d97466a9ce02b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/minus.svg",
+      "bytes": 232,
+      "sha256": "a0c743ab6dbf545d8a6e19ef3874f48ede686ce68d25e231bd81f540d97b1f19"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/monitor.svg",
+      "bytes": 346,
+      "sha256": "d1a443233345724859de8e4fb48968ba91e885e12ddbd710701548bd91b39428"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/moon.svg",
+      "bytes": 334,
+      "sha256": "205b959e940d5841f0ce1d09c933153da9d9c94130a54d5cc0c68c2af1d403da"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/mouse-pointer.svg",
+      "bytes": 400,
+      "sha256": "9541b5c7cbf62f65801a1e6206db1290f077556ea9a9abb87a1ae497980eaf8e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/mouse.svg",
+      "bytes": 284,
+      "sha256": "e4238ad7b69d3c3d713fdc2284c8fb20c04781afe0be445539ce4f904c0a0e47"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/move.svg",
+      "bytes": 371,
+      "sha256": "915074a1292f72d59165339b8b93f8d440c8d55b7116b52fca240b9ded5af74d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/navigation.svg",
+      "bytes": 258,
+      "sha256": "3c1adf655f06c733013ddf00848c3efe905ed70d7b3eba7a6be5e60e65880503"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/network.svg",
+      "bytes": 445,
+      "sha256": "626be730feea1e5ea7539fbf78b4a3fcb927ce5d7dc43364f2216908672ac792"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/newspaper.svg",
+      "bytes": 416,
+      "sha256": "f5147e2a92a0ca16edea01782b09afeea7f9ebcda029d3f38ae93a3058ed1b78"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/notebook-pen.svg",
+      "bytes": 519,
+      "sha256": "56705c35e839977bd6f133d7ca4e9c93a6eea563c89e4be125efd0a32e1fa041"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/notebook.svg",
+      "bytes": 376,
+      "sha256": "03c9f3fa8ead15c1f64c7dd4269d4c0376d1e88f7c534acbbb716f2995942821"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/notepad-text.svg",
+      "bytes": 398,
+      "sha256": "046e0a770756ff1578bdfb43477a2f9b3710bf33aabb28c758c7951772199a45"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/option.svg",
+      "bytes": 310,
+      "sha256": "e847571add37a4bf913e6ebd77569c2760c0fff10b4c101300dc36191d576922"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/package-plus.svg",
+      "bytes": 489,
+      "sha256": "c8e0795e5f1cfdf0707ebd232745bd941618c1156e763074bc8b43ba74ec70f5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/package.svg",
+      "bytes": 446,
+      "sha256": "69d6bc7650d26c4d24dd55eb22791607b982ce7637073944c256f1f61575509d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/paintbrush.svg",
+      "bytes": 623,
+      "sha256": "b0a958ba9889f89c40df6e1c168b8a7aa20f6309780e795c5bce00a4bc11bff6"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/palette.svg",
+      "bytes": 571,
+      "sha256": "8e7d3fde990cffd10469ba351f27c50202b057a9bb9af5626322e53fd3abc78c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/panel-left-close.svg",
+      "bytes": 314,
+      "sha256": "8f5b1fc9255e60f212379e8e315087a2f0a595a639ad2fb25c255dc3295c4e7d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/panel-left.svg",
+      "bytes": 284,
+      "sha256": "029f67b9e3eeb7ddf7c7c499b174c50388725e8ea50d4ea59ed7dbaf8d61cb82"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/panel-right.svg",
+      "bytes": 285,
+      "sha256": "327d197328f9feb1f88c36c9db04e9b00fe717d877459f92fcd892f5e4c349fa"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/pause.svg",
+      "bytes": 313,
+      "sha256": "f122ec4ea7f5693a0b1baafa9c708b53980dc87b4aacb297c6e6f71c1a4c115c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/pencil.svg",
+      "bytes": 377,
+      "sha256": "7e1ca7a6f5c1eb949671df762f2baadd32f5bd841d43153c3a15279af7d78d0c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/phone.svg",
+      "bytes": 437,
+      "sha256": "bd59dd10667cbe410a69e2fbbf4d9645d08abe862c8d89082bd4f533957859a8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/pin-off.svg",
+      "bytes": 408,
+      "sha256": "149a4fb01201562c05dd7eb53573090cd3a0ba5b111686c45e2df8c6cd04a3be"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/pin.svg",
+      "bytes": 450,
+      "sha256": "55e8e5e04bcb671179fc1dd589abf09cf6a1e71301ff14eb739419cfab6011e7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/plane.svg",
+      "bytes": 421,
+      "sha256": "4c775a62a524be78fe20aed8544933d4bd3802c5eca17cd6923509f87671d6d6"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/play.svg",
+      "bytes": 306,
+      "sha256": "d7c34786135922a92b6896f6c2384ceeb0346afbf6041dc79982011411409833"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/plug-zap.svg",
+      "bytes": 413,
+      "sha256": "5f1ba0585c27d8c8ba573d134a1566cd41a044b282769ccb8dd8486d04eda8ef"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/plug.svg",
+      "bytes": 363,
+      "sha256": "11ba780e4b6f15d37906a8a73537144b59720333d7a9fc8048a437d0389422f8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/plus.svg",
+      "bytes": 256,
+      "sha256": "7f6af73bf1ff6c4bca3f18351c8d1bdec6749c0c2530c4de5da85d520c21df17"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/power.svg",
+      "bytes": 276,
+      "sha256": "1e6b84a659aa43f826cdd8df0a63d349720004e2ccb10c33e415a990a311aa05"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/printer-check.svg",
+      "bytes": 443,
+      "sha256": "699b83424fe6e0d66a496edf9290c3c609163e858b4b7b2fc0e32e05eb4bc894"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/printer.svg",
+      "bytes": 406,
+      "sha256": "fa9a6381687bc519a62eb9eac2492d5d51e8e659182822296b6e14bf2f00ecfb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/qr-code.svg",
+      "bytes": 620,
+      "sha256": "920cb79ab4b2fd23c36a16de3ca533c4896cb989adb823eb7dec97fd840d30f5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/radio-tower.svg",
+      "bytes": 485,
+      "sha256": "d5d2728425fe115bed9f309c03b9dd1e2b7483a9242df87966c37e36ee3381cf"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/redo-2.svg",
+      "bytes": 308,
+      "sha256": "4cbd2cdebc70b6b7979c681ed3f313d9cbb102465dcf7d0d2d6a72c937b344bc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/redo.svg",
+      "bytes": 291,
+      "sha256": "7695ea60aaaaf7011531228a90f521e90a8d15bd915f4a5cf4267e5a5afdfcce"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/refresh-cw.svg",
+      "bytes": 392,
+      "sha256": "2e10dd403c85a24f163d59fc6151aa21147fe9402e1305dfc8979208caee8944"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/repeat.svg",
+      "bytes": 347,
+      "sha256": "6b67b8707e6a3107a1ccad48716bd93fc5e95e8d91f2bff5eec64f62cc7dfc4b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/replace-all.svg",
+      "bytes": 572,
+      "sha256": "a01dc148abdd2248206dff9ce56665b0269c71a2d98b63c6e6a73c4b5067722b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/replace.svg",
+      "bytes": 468,
+      "sha256": "abaaab3d3f74242f09968e4bbbf6450281c0dea23989d9e13cfc0aba22b6fca7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/rewind.svg",
+      "bytes": 382,
+      "sha256": "ef1ccc6c71ffb5d32db1ec49f04e0aa332770212a6b4d05638ef319b7eaa22d8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/rotate-ccw.svg",
+      "bytes": 297,
+      "sha256": "622685386ab4017eabfde01cd74550a20b1924df233b353f73b6b155371f2afd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/rotate-cw.svg",
+      "bytes": 299,
+      "sha256": "ddcfe6d87240475946935e77411cd4d15a06f3d28a9b921bafed224ebe953668"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/router.svg",
+      "bytes": 428,
+      "sha256": "6266881cf691541259ea5e07e5e40ffeba1f61b95c76707d967ebe7827414428"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/rows-2.svg",
+      "bytes": 285,
+      "sha256": "92f8d9962230c2d2a93ff1d9f40cde8d969b3e4f9890fabf741593a8c83835f4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/save.svg",
+      "bytes": 417,
+      "sha256": "ee9d56a7fec4b20dd6689546d41f68219ea8cbd67f99bd17a1bdaff5be6edb53"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/scan.svg",
+      "bytes": 366,
+      "sha256": "c77f0e634b2451a14a262a59b61d75bbcea3994b16eeba1f5753e86b33282a4d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/scissors.svg",
+      "bytes": 371,
+      "sha256": "4c831fc2c903825f68565c28ffab945c34b2c60b6c564e2ae54250e1099fa550"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/screen-share.svg",
+      "bytes": 379,
+      "sha256": "f2d0bf052add73292a97301fe5bb78e2a5cc9091716a8849f58fdd746960d49e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/search.svg",
+      "bytes": 275,
+      "sha256": "283d371c2e433817bb9c0c8310caa6c77fa4177c0f4f1168d9c83b97af7389dc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/send.svg",
+      "bytes": 393,
+      "sha256": "a489257f447b808ab6b258ae888fa49686885bbc30a7a2774d97a01f11f9cd5e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/server.svg",
+      "bytes": 413,
+      "sha256": "f7bea54b609dc488f3b848995014041846b2443fd2a880653e9e583d7a034f61"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/settings-2.svg",
+      "bytes": 324,
+      "sha256": "06d06c191bd7eb28afaf9d40acb5c49ef69448fdeda91801d9823d7c440a4e10"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/settings.svg",
+      "bytes": 586,
+      "sha256": "0ae27fd0f81999229e3127ac96c5b32edfea448e291d509e76212b917551d66b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/share-2.svg",
+      "bytes": 418,
+      "sha256": "de283acf45610a564ade56bc55bb94e7cf4040bc942efe9163fd98cdfe07672c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/share.svg",
+      "bytes": 318,
+      "sha256": "be8870646f636f4db03fd2d1d5db4912a1ab03ce2cfcc5daacc15fa8e105dbc2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/shield-check.svg",
+      "bytes": 415,
+      "sha256": "8d4fcdbde5bba4abb1a2f6fe53e37ceb6343a1d5449a9d88f6f97c1971d26c4e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/shield.svg",
+      "bytes": 386,
+      "sha256": "be32f6a86df7cbe43a83c439dd8849e5bcf5145e484d23420c20d8b98a78e82b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/shuffle.svg",
+      "bytes": 444,
+      "sha256": "7051f9ba993df6e7fefd9e3ffccb5d812e0f83c89e1287a850111295202edee0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/skip-back.svg",
+      "bytes": 335,
+      "sha256": "901579624a7d28036a39b3b8bd9e6da0e8cf771a79c67836d8a52b3e2287c031"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/skip-forward.svg",
+      "bytes": 333,
+      "sha256": "f6bdc4b8d453332bafcf1366a48d5ece4bd4f15eced97c85c3676bd22c5cadf9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sliders-horizontal.svg",
+      "bytes": 422,
+      "sha256": "e43a00e5eb684e6cbb61083bed2528d7a3fa5f265693eb2b5f314cd432aa65f4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sliders-vertical.svg",
+      "bytes": 422,
+      "sha256": "18b998ba7147e7b92288a599ce204efd1e829b2d0b4abeb74218d62d98051940"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/smartphone.svg",
+      "bytes": 294,
+      "sha256": "f9fdb700b50feb5fc6436f53eb9813e9eb56a9071ac4cdcba69c7f7c1c13877d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/snowflake.svg",
+      "bytes": 596,
+      "sha256": "9b77c3f6fbd49a7669cc530f8e9d6216ff652457c16e27b2c4eb4d81ac7c4bdd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/speaker.svg",
+      "bytes": 347,
+      "sha256": "89b12199bd24d0a1eac77bfcefc300625262016060ecdfc0092324cbf7eda7ce"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/square-check.svg",
+      "bytes": 295,
+      "sha256": "7e7683faad24baa43520945a95f6d44028fb862791911b13505c422ccba6e339"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/square-pen.svg",
+      "bytes": 417,
+      "sha256": "09bdac7fdb94058246a5d3132eea0976e690d01694179ab6f474faa2c21de59a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/square-terminal.svg",
+      "bytes": 321,
+      "sha256": "1fd2b783881ed8b0675995910fe98625789119e390420931eca6ddbc91c17932"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/square.svg",
+      "bytes": 261,
+      "sha256": "bd979354f0ab184b95cecf03eedefe40c2dc65830ac6d7e60017b2b25a354acb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/star.svg",
+      "bytes": 588,
+      "sha256": "c59da86b889569387db28e69ad00a89f96af22863ad9eea9aa12c4876a14338c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sticky-note.svg",
+      "bytes": 376,
+      "sha256": "a1370d25eb7dc9c42ca4a69adb82818fec950f1d441f88fd3ea84cd6ac10f875"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/strikethrough.svg",
+      "bytes": 328,
+      "sha256": "1f52d0951beb1f5ddd888cf0e432694ed18ed3020d356f5d0b7ceb16bc371728"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sun-dim.svg",
+      "bytes": 477,
+      "sha256": "7217d7a23ed76894013adc36651a65b4c809ca8fa0f3b965e36a3d2314cb91ae"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sun-moon.svg",
+      "bytes": 452,
+      "sha256": "d1b183b301763d4674e784fab326cf26c3e6dea7192a0b1e1af3709c8cae73db"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sun.svg",
+      "bytes": 485,
+      "sha256": "a3955c8b0425fcc5c9ba12d2bdd77fe53b2cd5dd05e7742a56f342e996fb2ef8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sunrise.svg",
+      "bytes": 441,
+      "sha256": "0ca8d5d0b0eda9f79c87c07b04cfcdbd968fda13d942668b4ddfba36817ed8e1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/sunset.svg",
+      "bytes": 443,
+      "sha256": "c15d0c8fdf886a57c33b06e326375e556c54d26280d777bb674439147d8c7698"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/table-2.svg",
+      "bytes": 307,
+      "sha256": "7b1808e170670d644af828bed77022fc8baba27a654e0805f3fb98e0bec62077"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/table.svg",
+      "bytes": 332,
+      "sha256": "806e2810a1dc693e5dcc22298c6bab50ca5ba16f090d5c61e8ca4b22fdeaa4e3"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/tablet.svg",
+      "bytes": 314,
+      "sha256": "cf58f791bd83c5340362fc0694d3f766aa82b9abfe291ef72e15a3ac3da54125"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/tag.svg",
+      "bytes": 430,
+      "sha256": "85e11c07b29f5b67410e0f14c84799d9406320cd4575b7c8322f31910e0582cc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/tags.svg",
+      "bytes": 506,
+      "sha256": "61ffd6d11beb2073bfed08a318d2804492545e11356995c7fc9bc6d20ca1873a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/terminal.svg",
+      "bytes": 261,
+      "sha256": "4f9b6488b237757d5cb615ccd07502fa99774826839e2a99017784bdb2596f1a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-align-center.svg",
+      "bytes": 279,
+      "sha256": "1f8cda59c9d0ffd1cbb2053ee87a4c8705254c035183b06e0adf10e98f1a8577"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-align-end.svg",
+      "bytes": 279,
+      "sha256": "75e6322b0f1bace2ead324566d612e2e1afbe5d84c567561202b57f536c56310"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-align-start.svg",
+      "bytes": 279,
+      "sha256": "db38ff88c40d3dfeb36c3112e24e1fab830f8c6cec47775ae928ca683897f0ff"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-cursor-input.svg",
+      "bytes": 450,
+      "sha256": "2fb7eae5bb95caed3b961e14d27a2a14ba47ae4c387bd2f9346eed3f5d08de6b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-cursor.svg",
+      "bytes": 338,
+      "sha256": "1224fd2e9488b38a4cdc743ea2ada7db7fe0a31e53d44758e5a5ac45f7971177"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-quote.svg",
+      "bytes": 302,
+      "sha256": "e04f75b32aa9dff45d9dcfadc2651caa214a09b464b7c9fff567bce71ab291ec"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/text-wrap.svg",
+      "bytes": 327,
+      "sha256": "af6b495be2eae5386e635c98756896f20750013ea09678f130cd14175b5a7fe5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/thermometer.svg",
+      "bytes": 266,
+      "sha256": "a56c95062445d52d95c51a77c4959d5a022539a0194205cc2ce2e9ce8f35847b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/timer.svg",
+      "bytes": 327,
+      "sha256": "6771297be65225d462c930865b6f9ee1617aa453885be4c8116a7512a77ac2b6"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/toggle-left.svg",
+      "bytes": 295,
+      "sha256": "71d513263d5a4fb3404b5eae50f015c723039a74cae3a20979d606fd0e72a60e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/toggle-right.svg",
+      "bytes": 296,
+      "sha256": "5646102cff917abbf07b4b9710654265eea55c2fa9da3a1efdce231263f58044"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/touchpad.svg",
+      "bytes": 310,
+      "sha256": "9d743d5ae640f51599fb006450e07469123aca45c228021610e7bfa78e494547"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/trash.svg",
+      "bytes": 389,
+      "sha256": "27299f69ad7c6272be64b1b8e2d48cbd6dcf0ef0d4f92827a1affa945c91700e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/triangle-alert.svg",
+      "bytes": 345,
+      "sha256": "4866f38b8560d410f21e3226413e0b77997b6dfbb6931fadfe0a0d5aef9ffeb4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/tv.svg",
+      "bytes": 290,
+      "sha256": "0ef7db17794919d11c241d7f12e23c4cfd3f9e536c0d59fc282657666ed0b39f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/type.svg",
+      "bytes": 310,
+      "sha256": "82c514732330f9c36c0f1f7fd1034634fa6ad21ba2016ffa76cf5d9608c3d6b1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/umbrella.svg",
+      "bytes": 360,
+      "sha256": "c1c21ec8b289676b8b984ffa4cd76ef1a011aedb2f2082460656a8fb1d2eb8a9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/underline.svg",
+      "bytes": 289,
+      "sha256": "f83a0a4cc2f4e3a8616dd27b8a4c5a9e60e577a9791c08353eaa2fdc8370f6cb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/undo-2.svg",
+      "bytes": 309,
+      "sha256": "efad2edbbd2be6038cc23fd64df2d012fad5cc6460dfbf227cfa3d990e9e897f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/undo.svg",
+      "bytes": 289,
+      "sha256": "1c341ed27e5f5a94e15080e696af57027fc85bca7972411c850d2da44a290b77"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/upload.svg",
+      "bytes": 318,
+      "sha256": "42816ee1fa0e9d3b82272a97615c1e562b0e9de64780ebf21963bc1db0ceffd1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/usb.svg",
+      "bytes": 440,
+      "sha256": "6d3feae2abc694973d7dc8000a7016688306b82530426288c163257ac90d3e21"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/user-plus.svg",
+      "bytes": 383,
+      "sha256": "4838b7bc545a9fd67e7c587803b09186aa44fc4c76c444fd4a44008ff926291f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/user-round.svg",
+      "bytes": 279,
+      "sha256": "84870f26f3faf8da45da84174517519e81b9e8f00319c78954fcbb74f50038a1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/user.svg",
+      "bytes": 299,
+      "sha256": "eae3b3b2400031ddd5ec869327d127a96014e5f63aa6e06658dd5d4e90661aa8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/users.svg",
+      "bytes": 383,
+      "sha256": "eeed488a1ec95ba730dd69996536fb65061d6ea273afb2429ae47e65eebf401c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/video.svg",
+      "bytes": 350,
+      "sha256": "d4fb6587f282c1152b953fe9494cd8ccafdf1e9f44957fbb7fe8dc7af0457597"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/volume-1.svg",
+      "bytes": 427,
+      "sha256": "e8520e1c57f8bf84579ecacf5463cd3ac55ab1597e62b2844ecd95d753233bf2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/volume-2.svg",
+      "bytes": 476,
+      "sha256": "fb404f9c128a0579de67b399177631e5edb3502fdc247ceb30e8b15754b46071"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/volume-off.svg",
+      "bytes": 534,
+      "sha256": "7b5fc9f2181e9f0cc13a989bf979d725830e8c23aedeaacb672d33eed3aae17c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/volume-x.svg",
+      "bytes": 443,
+      "sha256": "f382e421b7aae01172989f2b749ee87e44c0c82c16970b13a9ad5a323b613be0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/volume.svg",
+      "bytes": 392,
+      "sha256": "d2062d9512891894f25ad9f7be9ec8546ab45125814aebacdc6122f6f56ae65c"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/watch.svg",
+      "bytes": 440,
+      "sha256": "2a5b263eb6a1d45e5f2b99e07a31950fcbf16c6003c9c3f831db9fc4703afc7a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/webcam.svg",
+      "bytes": 327,
+      "sha256": "343e4ec5b26ae60eaef54f3d7be7316335840357b0ed8b66cad3d24e0c0747d6"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/whole-word.svg",
+      "bytes": 381,
+      "sha256": "765a70faebbdb145e029040ec777d58e8ce7536fc2db395d91822421ce55ebe4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wifi-high.svg",
+      "bytes": 317,
+      "sha256": "1890bf0a7b7abe57550e817639dd530f2cbc82eb261331e72e3947c589ee2e75"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wifi-low.svg",
+      "bytes": 275,
+      "sha256": "08629f9524f555100325f1f782105f6f84391e6ace1b41b53e99da2af5dcc733"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wifi-off.svg",
+      "bytes": 494,
+      "sha256": "318b290106e55c3505933f434d3663524206c7a44165a89508774fba4fdbaadd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wifi-zero.svg",
+      "bytes": 234,
+      "sha256": "39456e4aa313a296e689b5fe6715cbe4e33a6420728988c40896bd446eb46950"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wifi.svg",
+      "bytes": 357,
+      "sha256": "5c4c795d014fa95d1e1038362df44a0f0f32ded9cb08c833ae72419ebadc9a91"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wind.svg",
+      "bytes": 336,
+      "sha256": "eb35f6f00125b779a993c21ee761432faf8fc3210272c94448f63e2196d419b7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/wrench.svg",
+      "bytes": 417,
+      "sha256": "b5f3bf792743edb9e81b543dd1b13ccc26d3afe1d33500a1cd8dee2e052d6197"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/x.svg",
+      "bytes": 260,
+      "sha256": "4a9cdab38fbb96162e7dace28e33f4ca0e49d8963a6162abc3d4691b7d675117"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/zap.svg",
+      "bytes": 390,
+      "sha256": "4c395891eab4d1e5627c5d414a16db037317cb2f12453de0f3a1130964c6d444"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/zoom-in.svg",
+      "bytes": 376,
+      "sha256": "91206ae20013e2c84f2f5d09db5a7200f11698a84fc4e857b06fab2ce7c933f1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/icons/lucide/zoom-out.svg",
+      "bytes": 334,
+      "sha256": "28e7849b55bb9b34cb24be83b4e8ef58f2ae164fc451fbd60e026bfb507d2921"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/a11y.rs",
+      "bytes": 2380,
+      "sha256": "8598a162ac91b1848bb2f7cde55ea223fb38df6dc2e9195c6bfe9327a364e772"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/ahead.rs",
+      "bytes": 5072,
+      "sha256": "447a2ff0c3aeec2e41b481cb4f827e13a17c3b316ba56051bcd0535fe16bb3cf"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/app.rs",
+      "bytes": 35880,
+      "sha256": "029ce6fac4e4102dd688f830618663d0419ecd9a10fac98a76bd6d26d2155bf1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/cx.rs",
+      "bytes": 21224,
+      "sha256": "5406ab0f8321ba43b3ee274e5db072be8eb8f8c789b8bf845ec1b16db5693fc8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/dialogs.rs",
+      "bytes": 22252,
+      "sha256": "5bc28efa1de3407a003075079d77838fecc191077402695d870ab8bf81d0ee04"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/draw.rs",
+      "bytes": 6794,
+      "sha256": "9577020e16ac39b782cc8ff7f65c7df8d527c7955d4e2348de03e41e10aaac59"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/editing.rs",
+      "bytes": 2924,
+      "sha256": "d9533893627cac4a1419803f96ddabc72473b15a881adb66fecbf7d03a309fe3"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/editor.rs",
+      "bytes": 19821,
+      "sha256": "064e79762ee4943c621f600d0f11128743d03ce1bc757e3c7aed39d8cfb95ed0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/element.rs",
+      "bytes": 7516,
+      "sha256": "3b65fb70dc42efa00b43082183075a238576744bd4e775794f6247645ea2177a"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/engine.rs",
+      "bytes": 105787,
+      "sha256": "ecb2a231a1cd2ff9edfe7f04dc452841e92615be63fc8737948a018996f8d8f1"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/fonts.rs",
+      "bytes": 4096,
+      "sha256": "f3603aa25d06596503bc7344f8f11973b3be9551e836f222bd0d88c1ec01f1b3"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/hash.rs",
+      "bytes": 2801,
+      "sha256": "a0ee1b11897daf6912ccb2b1480a774c1c006e0d3c15871d4e533da798268701"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/icons.rs",
+      "bytes": 9717,
+      "sha256": "9972d5c08bc2515e47eba0d7563636dba84078b5ce95b6cca71a6b03ad9d23ce"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/inspect.rs",
+      "bytes": 5332,
+      "sha256": "1a883ac02e5f29d1845fb72e7f45ade51f30e248f52966ff56da5f22d6769cfe"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/layout.rs",
+      "bytes": 6913,
+      "sha256": "2ca27aad1466d89f12de048c9c689359a0961eb10ace1a81360be2a099c43ffc"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/lib.rs",
+      "bytes": 4725,
+      "sha256": "0969b06c51931f6f73141c6619d5c22417eb50037cbd271474314a44a495d845"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/menu.rs",
+      "bytes": 25821,
+      "sha256": "6cb74a95609372653ac00ca1fd6294de4b0c95ec2fcf4b1262cc8b04f48e8301"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/platform.rs",
+      "bytes": 6389,
+      "sha256": "fec445a8a6c8d9d277660245474b2cc1e4b679c4d1d25928b2d1f3d3457b94a8"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/program.rs",
+      "bytes": 12418,
+      "sha256": "7a10d47bdf0dfed29d735705dc633500b039db773c20ad5f5dc828b4f20d0dc2"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/shell.rs",
+      "bytes": 15209,
+      "sha256": "19a546ebe5069ad3ff83ed46dfc8e71bd4bac15bc9173d922e6879346caf34fb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/stats.rs",
+      "bytes": 2713,
+      "sha256": "00f0741bf3c7e06af22c4b7b3105640092a242d7440a657a5172a77d11e978fe"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/testing.rs",
+      "bytes": 56129,
+      "sha256": "78dd1af1faeb18a075dccfb572c1b72aec851277975732ccb9f611546067a969"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/text.rs",
+      "bytes": 24605,
+      "sha256": "aeff42e837c2d4a81f52ea0c2354c4bfa41e17aa05786cc57437500c6a47c0dd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/theme.rs",
+      "bytes": 19567,
+      "sha256": "141502be5edc5dc6757844b619fa441b41f1db0e934b051bdea555847a197703"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/tree.rs",
+      "bytes": 24800,
+      "sha256": "5ad539181caa159ae876face4eaf7dd2aecabcf585211313d68cedd13a937614"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/urls.rs",
+      "bytes": 13611,
+      "sha256": "0cc4bcc0cc7896150b3f5aa32d9152a15fee91afb42fd702909f8b1d2de1ae62"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widget.rs",
+      "bytes": 27252,
+      "sha256": "73db498b7de6c769584620bfcc91f9fc38a7740c2678f3bea409e64440f7a7e7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/chrome.rs",
+      "bytes": 5622,
+      "sha256": "3dba127370ae8eef337da5bf71c67418a8b7bffbc971a90efabe9d3a10f7d1a0"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/controls.rs",
+      "bytes": 72237,
+      "sha256": "54a2562d6d116f7d28f4d74d6c7f31b3ef242d9288e57cd9458edb834325e6f5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/interact.rs",
+      "bytes": 19398,
+      "sha256": "806da64a27ed51f53da6a7e29bff4680a7c3c4b37e20e2be77b0a87317472609"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/layout.rs",
+      "bytes": 21986,
+      "sha256": "50c2d4fa5fd7ef83ce9154eafdbd60928bcb657c2b6237dad86652118fef5e34"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/menus.rs",
+      "bytes": 49450,
+      "sha256": "ad296d0fc6a8876b04768439ff9b8ffca0c3248d0a784f13fa93fb63ecfdfc04"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/mod.rs",
+      "bytes": 195,
+      "sha256": "7e03255b97725a23fff015a30e8a8d3f0c8278af6a9edefadfa467642458b337"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/panes.rs",
+      "bytes": 25357,
+      "sha256": "3ccb3eab7719bf59001775464c5ff9594b048174541f309b31db5b9e38ac5b85"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/scroll.rs",
+      "bytes": 38505,
+      "sha256": "b19f4c3c5c2e77f89cdbf385c751b44648dba74a2ef21010ee72bfab78289f47"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/table.rs",
+      "bytes": 42552,
+      "sha256": "de88233d223b421af56dc55cc7169471f9d2ce2c50774ed8964600fbd2c0d8dd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/text_editor.rs",
+      "bytes": 56221,
+      "sha256": "30a7821d1fe68793fbaa533f3b7963aceab4c7f8805fee824624a95996dd4814"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/src/widgets/text_field.rs",
+      "bytes": 31338,
+      "sha256": "83cd903e5dfef259db1550586f39966b6e09d2844f99f1bf292358673f4c0643"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/alert_layout.rs",
+      "bytes": 5154,
+      "sha256": "9b01428d7c0cd83d1a294f4a6b0d6fbb381ce321367fb11f8a6bab71d8fd6b3f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/canvas.rs",
+      "bytes": 2346,
+      "sha256": "7ef0903b9fa2e001a92f89ccf91040b4ced386024da4d10219ea928553e15fbd"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/collections.rs",
+      "bytes": 7379,
+      "sha256": "ca26d3f311a782bdc07382aa4d31ec3c7550a08ec0f20e04dbf558ac39ee8873"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/core.rs",
+      "bytes": 12953,
+      "sha256": "da669d2f45aa04ba46f335a346887af747761bc529a29e2a8230c6259fa0d9a5"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/dialogs.rs",
+      "bytes": 11857,
+      "sha256": "a6ebb0dbca289c90fbdfe8d9544883d0a05f95b34927cda863b8c76da1e7d86f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/drag_out.rs",
+      "bytes": 6880,
+      "sha256": "601f7a8e5127cc4133f2792005db1be02a529a4a07be95882831c9b108da6ad9"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/editor.rs",
+      "bytes": 12681,
+      "sha256": "68b933e4e87209a6e160b003a1f455228f0f7b5ca3eb2b8173dda463ab54ac25"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/field_blur.rs",
+      "bytes": 1503,
+      "sha256": "1355a0507919306d21b21c17ab1138cff437f9d9a26babcf9cb89cee12f4186f"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/goldens.rs",
+      "bytes": 4563,
+      "sha256": "8730f0e61be1dcb2830d84e15fe482a09a675e7d66674dd2173d8a781c519a93"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/hidden.rs",
+      "bytes": 4065,
+      "sha256": "86f5a3d0486c04c7b97a8e5935e89ec03433f0af7333a43ad74e642be6f858df"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/inspect.rs",
+      "bytes": 4555,
+      "sha256": "179df713d23e17ab09395f7c356cacf47ffe5276df68d77297c5dd872a66c5ec"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/lists.rs",
+      "bytes": 8924,
+      "sha256": "41a2f1e058ab6ad15a0906c65c6d0c8912032530b70290ac6e2f9135338c1d86"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/menu_hooks.rs",
+      "bytes": 10798,
+      "sha256": "5b0ad0b53396110caa108f40db37d144fa740b450f26a09a2a2879a215185c47"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/modal_commands.rs",
+      "bytes": 8932,
+      "sha256": "aac48056ee21617185ebbf002f9058aedde8b4e0c193ab93f2647f8f64549676"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/nested_modals.rs",
+      "bytes": 5695,
+      "sha256": "54da4d129f7213d2a5e06b7ea6300a0c55a715eac6c667b9ef13b06181f34678"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/panes.rs",
+      "bytes": 9496,
+      "sha256": "7efe9cdfc348cd13f328ff7fdbc9b4fdbfd7edb340de27e61983747cac18481b"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/perf.rs",
+      "bytes": 11158,
+      "sha256": "758b78e8a6f4564fbe0048cd6f08799d0eb12523dcbd074c6c00b89d7748711d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/popups.rs",
+      "bytes": 1320,
+      "sha256": "05d6ef64a0b0f99622b384225617bde1879107e59a03a06aa7de184f2c275138"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/program_popups.rs",
+      "bytes": 2345,
+      "sha256": "b208361873d1dac8c31a85bb243f94522270a6bb94811757d6314f700393e070"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/scroll_growth.rs",
+      "bytes": 1473,
+      "sha256": "e2379bb226b4e2196da189be962c052f8d516c8c28f50136417b162e576365d4"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/scrolling.rs",
+      "bytes": 8140,
+      "sha256": "5692fb1c1e2ab224e912bed9bebb1e2cd1237bc9af5aea5344ba879f7bc1bb68"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/shell_api.rs",
+      "bytes": 9480,
+      "sha256": "3ef693f9d22a96657aeecb439d8d1c5869d81c76dbce32e91a2432b7c4bf440d"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/shell_link.rs",
+      "bytes": 8717,
+      "sha256": "104b741bfbe1cd6b157143a6aeca3a47d47891ce4b4c76f9150b91314f1f1656"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/smoke.rs",
+      "bytes": 2261,
+      "sha256": "decbfc8825dd3b9f75cde00b747124f976f560c905f26bf1a599b2b89eef52eb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/text_drag.rs",
+      "bytes": 5448,
+      "sha256": "24f2d61e8ac83845135be619df4fccc54b279efbc03e78036194481cf273042e"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/text_field.rs",
+      "bytes": 7309,
+      "sha256": "bd72163e8f026eb58ccc32a1fc04a6235a7c2cf2bde85eb4e4ebc38d224cfddb"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/tooltip_refresh.rs",
+      "bytes": 7612,
+      "sha256": "9aa79e5402e65d701e4ce77829e3e3f97018c1e52f93f92424e9191ede12c117"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/widget_timers.rs",
+      "bytes": 6575,
+      "sha256": "606c5b749246c186c29b1b5a9e74e045db2b3328deb0444e7ad2384c37ece0f7"
+    },
+    {
+      "path": "desktop/aizome/crates/aizome-kit/tests/window_state.rs",
+      "bytes": 2082,
+      "sha256": "1a75f0aa8a8dc51dc544ea67c9ea9b6ebd8d0a716badf2dc918eb8afbb541856"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/Cargo.toml",
+      "bytes": 11010,
+      "sha256": "edc1d3077e9dd8dbc9d78d0cdaccacd2615a3f1d1f176da2838081da0db068f1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/accessibility.rs",
+      "bytes": 15883,
+      "sha256": "6ca0a453bed9e91d452be9b230c58d362abf4f658d7e8192c0a802b49b9f490d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/alert.rs",
+      "bytes": 25048,
+      "sha256": "32f095819c1d9ef80a8defe52c5b643fa5640ae4af97fe937baed033346ef545"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/animation.rs",
+      "bytes": 14102,
+      "sha256": "ae47d7382df4dc8d4880ab085780cd12ef53b38f8c23a76699702769cfb04690"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/app.rs",
+      "bytes": 53680,
+      "sha256": "525ec6291d0fa3bda23c11a4b3e99dbeb3ec97055341476df76740d5131c1585"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/appearance.rs",
+      "bytes": 15783,
+      "sha256": "60113cf050542288e70e292d12506cab31193b5e0f6afa59e85ffc58024b88ec"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/attachment.rs",
+      "bytes": 47971,
+      "sha256": "30851459e460b4e69691d9c4c1cb2967cd89cdd63ebeeb8ff395b569d96cc7df"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/anchor.rs",
+      "bytes": 14889,
+      "sha256": "525ed7e2c3af49591c2157261292b96905fe00b04e7ee3c053fc5702b02e6db8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/constraint.rs",
+      "bytes": 11550,
+      "sha256": "bc885c2cabfdf2dbe668a3840b04fd94eed55afbe9909604fcdb36522b333e9a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/engine.rs",
+      "bytes": 33014,
+      "sha256": "41a45f7064da7819c657ef1f1a97592c134e32924b3669c9c2022cbe12ed079a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/guide.rs",
+      "bytes": 6436,
+      "sha256": "1bae3451fe1b8c10465e7eb676df96275a3b6371eff45234c191e7dc1ad34c76"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/mod.rs",
+      "bytes": 45440,
+      "sha256": "a14b2c54e7fe0f618b81370ef1280dd272ccf468783a3e54c072d5e7da6817c1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/autolayout/stack.rs",
+      "bytes": 31185,
+      "sha256": "643e707c372bf9a67c1b273f67a10db47ed9cc2739348a54fe39dea463ab3102"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/bitmap.rs",
+      "bytes": 69067,
+      "sha256": "37f16211e2a18059e3cfe0c7b621925935ac223e35630349d17695ce1fdd3c2d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/category.rs",
+      "bytes": 12544,
+      "sha256": "a61534f4eb9069ca91e5e88ceaba4db4b7872fd609a21eefd594d6bfb0960f6b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/color.rs",
+      "bytes": 67815,
+      "sha256": "1242f23d6c15634b7b7a18cf7912b5e882ccbd7c83a07647eaaaead540d93f5b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/constants.rs",
+      "bytes": 41898,
+      "sha256": "f70c3c2dce9a8ff0a38b3ed37a826c706c588b9f1d6ca9039931337ff7e45274"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/container_controllers.rs",
+      "bytes": 15054,
+      "sha256": "a4e5df55a402c173770329b6f312f3b35124566cb7d9b79a30d317d42474353f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/context.rs",
+      "bytes": 44315,
+      "sha256": "97c4f784482c8ed505c11a4af3f7680ecf282dc659fca44a6d4668e88dcada9a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controllers.rs",
+      "bytes": 21764,
+      "sha256": "0dc80b51deb1c2894eafad68c3af38243a45cd34e5545ae9fa32cca22b4c3e9c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/a11y.rs",
+      "bytes": 23702,
+      "sha256": "e668863cd278085effd99068b0651fdabafb4344a108347049b1b9154d264694"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/bench.rs",
+      "bytes": 3837,
+      "sha256": "da464e62b29f72d2d0ad157acb3de5231178a2301a348403dc35bd9f8c6c0a7c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/box_view.rs",
+      "bytes": 19172,
+      "sha256": "c2f7517fc302d89482f0978c1b15d13910a162f74b1c026f232758bbc5116da1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/button.rs",
+      "bytes": 79739,
+      "sha256": "1d55807f552d5bb9a9f2fc520c89aee39588c9d1588fc29a2a16c7e784d9a372"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/button_layout.rs",
+      "bytes": 29647,
+      "sha256": "74d05a3d64ec4ca4ad9121fef385be3d7670f2895a6a3374f23d4707660144ae"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/cell.rs",
+      "bytes": 67532,
+      "sha256": "535a24ccb5defbde3b9e6f25c1bd4ed52547c16599463a999202c62e717c4498"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/control.rs",
+      "bytes": 31716,
+      "sha256": "985013a2f05fe76c7ffe6f43b995235178d85256f772195198a99a4a098c6ed0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/focus.rs",
+      "bytes": 15816,
+      "sha256": "d63029a4bf740586494f5b81ab2a2415d7515864c7fb276f8af2c4fbe6d07e20"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/image_animation.rs",
+      "bytes": 4867,
+      "sha256": "c6bc00bfe338b5cd5306fe7d6228b2546c939f469ac0b9e279b8cdbb14da86a0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/image_view.rs",
+      "bytes": 44025,
+      "sha256": "18bc13bf124c0bb41aec03193ef06c14530038b925ba3e5761327fa2dbb9aba3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/mod.rs",
+      "bytes": 8735,
+      "sha256": "5934630e91d1316e93ef9d52f6deee367a87a4d4e16fbce438485a941a950490"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/progress.rs",
+      "bytes": 15021,
+      "sha256": "6febb5b639410744d8e49737ed4748d233b31c602940655dac6264478122f013"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/search_field.rs",
+      "bytes": 19788,
+      "sha256": "a26a39439bb447407ae3273620f78e1c5b41abf3339ccdddcf75ded0bdb68e81"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/segmented.rs",
+      "bytes": 43141,
+      "sha256": "b31465ea60c7363465304a5589211dcbc7c6587421bf53f1fd1be0936120c4d5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/slider.rs",
+      "bytes": 35808,
+      "sha256": "72b917ee34a1ef7ba3d95d38b4cb2ba9dd10a8f4ffa14ee4f2854839d7afe179"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/stepper.rs",
+      "bytes": 15752,
+      "sha256": "4755ee356176fe1afb1ddc933e5fb3b3907429ea6a943c4e010ff7371f7a50d2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/switch.rs",
+      "bytes": 9011,
+      "sha256": "99d336192b35d8fe086d740fc5f2197769135297832a3b57591eba3e2f38271d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/text_field.rs",
+      "bytes": 54994,
+      "sha256": "3783a6d6395396a53842236fbbd1ea1d0b39904b46bed8f316c1f01a091802cd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/track.rs",
+      "bytes": 11740,
+      "sha256": "d8015a5a932cbf0bd25cd240752449049a09d207d2f6a9928701dac14176d743"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/controls/value.rs",
+      "bytes": 11181,
+      "sha256": "16e6ad1b7aaa5f7e53fd2f929afe8787649818c1a3306a396df06e2145f494fc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/bitmap.rs",
+      "bytes": 14817,
+      "sha256": "6bd0a5f09593deb306254fce5a3f5710d1ff016170621758bc39b07be9dadadc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/color.rs",
+      "bytes": 53031,
+      "sha256": "d99e7ab10360f4c6891b65ce377b54e726bfee83c658627278386694e361a893"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/context.rs",
+      "bytes": 63319,
+      "sha256": "db594713a7299b34e5158811f944f559d81d941efa8dd37d2ff7754f3e01ca7d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/data.rs",
+      "bytes": 17142,
+      "sha256": "c487acad4778a9ba51fe78845a9cb3a06c2ac6c75979b25b9311fb0c44d6c4ce"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/event.rs",
+      "bytes": 12413,
+      "sha256": "7b83e999329acbe011f343776c3fccd286a873af78d37ffb2571f2387e6b1655"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/font.rs",
+      "bytes": 12021,
+      "sha256": "b1e28a08299a0f937fd4dd69c21c1c0cbe97c726e06e5461720a091288a48100"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/geometry.rs",
+      "bytes": 20061,
+      "sha256": "63360dd3e07c882b4332d7ba734e78ef7c493c6f73fc243327e19abdbd8e5086"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/gradient.rs",
+      "bytes": 16153,
+      "sha256": "c4a568f75ffde9fa9fee705f5f68d4b834022742becb9b68feb16060eb727df7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/image.rs",
+      "bytes": 53237,
+      "sha256": "0d3c1ba2ebdfd30241126581e6494800165c996e71a1b2be45bb0622f9fd82d8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/mod.rs",
+      "bytes": 6770,
+      "sha256": "a33a71335b099dfc6b447da40d483876126e0cc854ff49c4b8d2686e71500541"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coregraphics/path.rs",
+      "bytes": 32606,
+      "sha256": "39321d2c2aa53622b6105948861780bef6e903c01696b20815d4c8d4d61b237d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/attrs.rs",
+      "bytes": 10299,
+      "sha256": "8e355e113611b1e12f4fed1092ad900f1d3a3562b43c414394a438359acb9368"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/collection.rs",
+      "bytes": 12982,
+      "sha256": "1891b0fa687f79124d69a7bcd6c26cce458cb95cb07d74e76717f8671080c510"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/descriptor.rs",
+      "bytes": 13001,
+      "sha256": "f32b232048afc648df4d6588dc5a59ec3fd0ea4532598d49b13dc8ad460aab2a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/draw.rs",
+      "bytes": 12527,
+      "sha256": "ca595842595dc70de6065501f7236dac1b7685e68ebf72252c178555364e91b3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/font.rs",
+      "bytes": 48146,
+      "sha256": "eeb7e6c0b26fa3f43b042706c121bbf604e50fd483311f14ac8e30181f7dbbcd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/line.rs",
+      "bytes": 54135,
+      "sha256": "a7a375b16be57d38e8bcccd1e73b3113c6e474cc52971e571fce9ef5c12124cf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/manager.rs",
+      "bytes": 18732,
+      "sha256": "7f485bf893c5fe4a055d700027d5b899762d9afa163ca6134f022268011b40d9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/mod.rs",
+      "bytes": 6178,
+      "sha256": "732f0ad652767bcaf1d8a7e451feb7fd46c286f8fca51634aff7e7dc7cfb2f62"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/paragraph.rs",
+      "bytes": 24932,
+      "sha256": "926e5cb88b9adb5555d5cf2a4a93ce556b5d94f85d32d239563fecb31875d2e0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/strings.rs",
+      "bytes": 13433,
+      "sha256": "2a9cb49f3f4f9de140442a6ecc7784589938e55ce718d0945d1c0e2fae13c412"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/tests.rs",
+      "bytes": 11799,
+      "sha256": "755dc30dd210171bd39fa03a113bf19756a924beb85af3442a7706dcf18ca7a4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/coretext/typesetter.rs",
+      "bytes": 19973,
+      "sha256": "5cceb4f155eb32e3f77ddf25f0cba80ec9285cf7141281ac5706fe36bde614f9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/cursor.rs",
+      "bytes": 7844,
+      "sha256": "0d3846fc94b0cf4fd50bb5d5956f902eed4455f0d4d26b15e3e7a088282422c2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/default_apps.rs",
+      "bytes": 9918,
+      "sha256": "aaf9b789cdeae5d49a56e0ec320d982df93494745c32b466ca2854ae13d1fbaf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/drag.rs",
+      "bytes": 40020,
+      "sha256": "52a8efc14ada51a6df046d06c220469adf5f860d63d4f76fa55f69aada521c5b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/effect_view.rs",
+      "bytes": 6233,
+      "sha256": "9a48881f33a48860f022ac0745f5d9844821d6f58a18443abc54f4b0df5c5a0c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/event.rs",
+      "bytes": 28198,
+      "sha256": "76f246b8951af6fd3c1e02085f0a0063212edc87aded9d809cf074a2e1b1a9f2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/event_loop.rs",
+      "bytes": 24494,
+      "sha256": "da664218cd1c10b88ba8a8aea148f53bf204b44282f3bbc4dbca658426b2cb02"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/font.rs",
+      "bytes": 48567,
+      "sha256": "fcf6399ed3a8db889a8c9f43c6add59c295aad3a30528ee59504ca59668c1526"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/font_manager.rs",
+      "bytes": 13751,
+      "sha256": "33e6a2b3b3cac5460c7453617cb02ded4e8fab8b730b341a75ee793366431487"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/functions.rs",
+      "bytes": 17827,
+      "sha256": "ea91373243d4cb86468044e4599baa78d57f5848385b74e0caf4aabfbbf43212"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/funnel.rs",
+      "bytes": 2814,
+      "sha256": "48d769b600aeda4ededcb85aaec1808babfe749b785537b75774d1d82656a336"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/gesture.rs",
+      "bytes": 8961,
+      "sha256": "9ec3577a8f896d8479d82bb283873e50bb132e54c29c3075717f09df839437ae"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/glass.rs",
+      "bytes": 4904,
+      "sha256": "01b03fbe6172d140323032044132fb85620f8bf265388696268a241e9309c8cc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/gradient.rs",
+      "bytes": 17183,
+      "sha256": "57b08d42bc58ea559a315166917dfaaea12cd8d4a5e8fe634da2d5a701edc0da"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/graphics.rs",
+      "bytes": 4097,
+      "sha256": "7044dc55bd965a5e24a06c92811402db50bea3c4d1ce876dff64cdd16672f620"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/haptics.rs",
+      "bytes": 1914,
+      "sha256": "51fec3dd295a4b206a3b53bb5f662829136820fc5093a5e4ac5e59c45fbe9919"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/image.rs",
+      "bytes": 38441,
+      "sha256": "e562762cca8c6eddd5491cac15241a1d943e1e6a311e7aa784375aa6d4b0dd5d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/image_rep.rs",
+      "bytes": 27645,
+      "sha256": "1d98e83f91758ce39a967db8dd5c09f381207cebcd41c27133f76e414a2eee1a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/constants.rs",
+      "bytes": 47560,
+      "sha256": "abc16b5c03921e87e42c267939b5a005b15a36b05efc32718320cecde993c7af"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/destination.rs",
+      "bytes": 16366,
+      "sha256": "1e739b9222ccead3704b63b0416a859c7209faf9a14262898d19552b4639c199"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/exif.rs",
+      "bytes": 14788,
+      "sha256": "267aed774a76b44879771a346434850bd31bb18273854546298799892319542e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/format.rs",
+      "bytes": 6547,
+      "sha256": "cffb0eda7938603006a389ac0c4f2b27a07cf191f00a740b147070fb10e1a3f7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/inspect.rs",
+      "bytes": 39024,
+      "sha256": "1054fd667a2ee98800164fa28e931e5096690c9847518b27ed1bf392f9d45f05"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/mod.rs",
+      "bytes": 1535,
+      "sha256": "6773f88b8cf52d9674529f0d688b069d6f4a67be9b35b3a8f8495c1b24054102"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/plist.rs",
+      "bytes": 5073,
+      "sha256": "56eae8937ed0fb5224a46f80325c09b432931e9e71160d629842b1113b3a41e3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/imageio/source.rs",
+      "bytes": 25966,
+      "sha256": "5751ebd356c11c2ab137b91988e90ad2dd63d85b2898b0af1a6855765ddccd41"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/inputcontext.rs",
+      "bytes": 12020,
+      "sha256": "8f199d5784dd23920c311bad4cd70388dd791b9b9dba0f601602cf7c43462856"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/keybindings.rs",
+      "bytes": 22458,
+      "sha256": "0091fd9bc93bbcc8aaeb24f46b64f45846ff79cfef5f5111a50d4c8505e6ba38"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/keycode_table.rs",
+      "bytes": 7178,
+      "sha256": "05e556eb8e2626bf60f16d28d92cb12e9b1dbcb7db56119d5dca4b14fb37dc4d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/keycodes.rs",
+      "bytes": 4545,
+      "sha256": "319cc46f541395dd75b089bf4776aeff43083acdfd9ee6442547fe93e623caa1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/keyequiv.rs",
+      "bytes": 13665,
+      "sha256": "082d09d9309529469b98d6b584d6a74d2736610e732a5a77755ff7b1eb6b103c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/keyloop.rs",
+      "bytes": 10024,
+      "sha256": "0649606ade063e96f0c5b9ba8278984549dcc8ddceafadf9c072b4063ffe8fea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/layers.rs",
+      "bytes": 52014,
+      "sha256": "41f3cbd1d29ee1ece873447fa01a4eb199a39750eb2f76e685b039eacecec05a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/lib.rs",
+      "bytes": 18663,
+      "sha256": "4c495e192a6f065de111d53f92462f41f35759e276f8719a7d57b7c1d05e77b5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/menu.rs",
+      "bytes": 69710,
+      "sha256": "562ea8e60b1c86d94279f7d8ca12b0bdf3569e809417eadf94a666532b036f2b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/menu_tracking.rs",
+      "bytes": 38014,
+      "sha256": "534297f13b955d1bae4e41b2b93598f726be6267ba1ee5610dc00c1d50a558b4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/menu_view.rs",
+      "bytes": 19329,
+      "sha256": "de91699625e510f67761985b427a9decc03bfb6de451a7d54e14cbc62a50c082"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/menubar.rs",
+      "bytes": 14410,
+      "sha256": "d0060fd4477258d64c6e2b91a9051c1c5f11e4b5c63ef5ece47dcfb4c852fa08"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/modal.rs",
+      "bytes": 12247,
+      "sha256": "5c96cad5a848b18487602d4be94f60dda1d5660d8aee5781d49a2633f2320117"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/momentum.rs",
+      "bytes": 4022,
+      "sha256": "00ee3f86f9dd126f2628348efd27f4211817d779046305ac5f22cfaa22d00fa3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/notifications.rs",
+      "bytes": 11355,
+      "sha256": "aab57c359f1c4e7df8b4a32bdf51832d9d6e5399a8dcb0ce06689c23ef5fc15e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/panel.rs",
+      "bytes": 6362,
+      "sha256": "e28cec1017240ce988cbfecf03d44b4ba40414093d1b4cff71a090b973da7127"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/panels.rs",
+      "bytes": 33076,
+      "sha256": "19204c90f7ad55e6ddef0de5e4cd6275bcdaf31d7e940b3ea912b30c4d5bc26d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/paragraph.rs",
+      "bytes": 31775,
+      "sha256": "63af35ed74f5633f47a27ac06ba7dcde2de4491d3ce497c4ec5bab18ed765138"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/pasteboard.rs",
+      "bytes": 42086,
+      "sha256": "10af8a890741d77dfdede8051317db96708d7325136888e7aff32db61c45d53e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/pasteboard_item.rs",
+      "bytes": 19639,
+      "sha256": "19dfd69da402d2c69f6eddc4137d26de83c427b811660feb28994ff911b4ab6f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/pasteboard_types.rs",
+      "bytes": 18634,
+      "sha256": "b780a8d8c46fcd604d4bfe93f7a9f9e7488117423d11b5d77538f6ed18c8c4f3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/path.rs",
+      "bytes": 41498,
+      "sha256": "a625485d7313e6c042ea4518f7b367509e9a7da036d45ab6eca3abe5596e29c1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/popup_button.rs",
+      "bytes": 48430,
+      "sha256": "18694c5259ceac2395f084d22f0326323096abcd9b65076116dffa2ed329dc23"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/portal.rs",
+      "bytes": 31963,
+      "sha256": "60f20656c2e3aae5af8f472d637d2eb9f9f6b8c3579054a43e338757dd3333be"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/printing.rs",
+      "bytes": 18270,
+      "sha256": "a7b0f9415916f3355e8581057370831617a70a1775844c42c5fad0ca1192dc24"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/animation.rs",
+      "bytes": 46088,
+      "sha256": "9d8acf531ded924790a540c1419b81706115e18b27ea255daba9ac62804e3ab6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/backing.rs",
+      "bytes": 35084,
+      "sha256": "35b5eb999771057d981812e17012f7d8b121921d350d2528916a21db223102bf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/display_link.rs",
+      "bytes": 13459,
+      "sha256": "33464672bf2cd8f195f60842aa3d6f29e79e14fc21d213162a615bd9f195f919"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/function.rs",
+      "bytes": 6579,
+      "sha256": "dcfbb229cc1cc25a90a33b2830f716c1677fa09fe9aede5d23cce1a4018091b2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/kvc.rs",
+      "bytes": 14282,
+      "sha256": "3e7266b5a7f8a3094724254b477e4bd066ecde60a707ee9cd9958c7aa280b83f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/layer.rs",
+      "bytes": 94972,
+      "sha256": "900a396cbb722db9dfcee269f422702ba96b60e9778f0e22152ea584a08bc898"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/mod.rs",
+      "bytes": 7140,
+      "sha256": "56605fb39826425532754590d7459824de19df68dbcc383d73115fb299fa1968"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/objects.rs",
+      "bytes": 8666,
+      "sha256": "4c0157df65fa92da40f1aae123794265b92f0a6b6c1d86150294d14763ebc9d2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/render.rs",
+      "bytes": 8719,
+      "sha256": "0d052a9a3b2572a963192c2698168b432804e62a0b0aab1f4c7bf98614f66246"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/shape.rs",
+      "bytes": 15937,
+      "sha256": "9836d37ed32d0e3d0902d325a5eed6558c9ea1d356cb62acc5d71ae3fd13b9e6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/text.rs",
+      "bytes": 7680,
+      "sha256": "8042b70d1194c7c016ec0d94b249ee13e279ae73f9cff70763ea3754d45835f1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/transaction.rs",
+      "bytes": 31440,
+      "sha256": "066c528a107b08a6ebc3c5e8074f245f796669b76ffe44478f026389007751bf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/transform.rs",
+      "bytes": 6933,
+      "sha256": "0a502f8b938210f6d332c72e759a921aca36d8c3f8dfc539d36cf0c3a84f825d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/quartzcore/tree.rs",
+      "bytes": 3054,
+      "sha256": "6580bdbf08e31a7256a79fd06ca47baf74050ed0c0474ae7a803ead84b05f4b5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/responder.rs",
+      "bytes": 13069,
+      "sha256": "3470e619614c156e191c41167f2ed6ccbbc0a822627af8aa22219c73a5bb75d3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/convert.rs",
+      "bytes": 32544,
+      "sha256": "8c3a38c791983368f7e71c3ecc7e2f121b2ab495076f54c385d9afb15af98405"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/css.rs",
+      "bytes": 16372,
+      "sha256": "dd721e4d528c29adef1eec5febcb4acb40f2c67f713bd08a8c77f43de9ce6c63"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/html_lex.rs",
+      "bytes": 10396,
+      "sha256": "66b52321ccacca7680ef5022862f70fd4fca7f0d80ef43706b3c3c0b66b707dd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/html_read.rs",
+      "bytes": 62175,
+      "sha256": "f3b7273f8ee39c872ea409e06b3a29ed19de74a4d19403022ffc9f1b5293a56c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/html_write.rs",
+      "bytes": 20832,
+      "sha256": "ea90c77024749fe82588891bd1fe142fc9e5027487fc924bc201e97a4aff90d1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/mod.rs",
+      "bytes": 57368,
+      "sha256": "705697703ea62f11063517c0495bf6e3ae2b55222473daf1e3c56e283b7cdf5a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/model.rs",
+      "bytes": 14688,
+      "sha256": "4d9c2f87bf2069750329d21e32ff072a9dc05b4b7c9897f9309161c8753ef0cc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/rtf_read.rs",
+      "bytes": 59603,
+      "sha256": "96571fb605bb6014fb9b2fcef7d912c6c28fb10d68ddabbb7d7cd7c63d0e9418"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/rtf_write.rs",
+      "bytes": 40512,
+      "sha256": "fcfec38894d885e0139dbdd62058844f1ad40c4e25978e3525e5e0cf65abb211"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/rtfd.rs",
+      "bytes": 6836,
+      "sha256": "59c78885bc982ba18afc32977919980f58a17ace9b9b713ec372de85dc67437c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/rich/tables.rs",
+      "bytes": 26430,
+      "sha256": "ae319a50f73bc7db5cf2e1cd0b05623c29061fcdfc34f98e911eb4f1006d9d43"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/screen.rs",
+      "bytes": 20485,
+      "sha256": "04989fe919f6dd4523f416107c206dd9f173e262900a86341baa6326fc4b4d98"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/scroll.rs",
+      "bytes": 68765,
+      "sha256": "4707dc5e01035685936d511f85ebf6a19920cda03eaa834c1aae62a1a76505af"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/scroller.rs",
+      "bytes": 33580,
+      "sha256": "76e6d8ada0423c42213f667fc9b08ad7b90b2dd0e3eefa38e45171282b0fa5e8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/settings.rs",
+      "bytes": 3120,
+      "sha256": "49041875f9e35fb92c6f281c7e7e632e8b47dd6b54afa1e0e5bb027bc5d56b23"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/shadow.rs",
+      "bytes": 4713,
+      "sha256": "a94e65dcf30d4170907716cf7d973493d9bd593c592ebc267fe3e780a888afc0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/sharing.rs",
+      "bytes": 10628,
+      "sha256": "03f69ad00c48a7a9c6957882d52c526b4a5d6090b2d82489bed84d18061d622d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/split.rs",
+      "bytes": 33179,
+      "sha256": "5ee219cb5823e8d74708f57d41fc81d609a0853b33fa41ab667a092c026bf99c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/string_drawing.rs",
+      "bytes": 60672,
+      "sha256": "7e4d642c30e11e08708971e15308176dadf7a63209df96157770b0471c5471ab"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/symbols.rs",
+      "bytes": 35511,
+      "sha256": "7959ce7948a369797df690eeb95356809f40b703b1034ffd4965f1dd9f760bbc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/tab.rs",
+      "bytes": 36935,
+      "sha256": "7b511d2e74b695add854e1dbeee8dc07c93444503c82b7dfdcd500caf90e23de"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/table/column.rs",
+      "bytes": 10561,
+      "sha256": "fd18ead9d08f0039ca58ff61922124c07067c4c91c26b77f5a9614d00314563e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/table/heights.rs",
+      "bytes": 7336,
+      "sha256": "c18ab43c44086bf05e6a190d2b9b84d0f0d61ff3e4a132c18cc76cc4cba114cd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/table/mod.rs",
+      "bytes": 82032,
+      "sha256": "91d682b98e0ca7a59c1dc9b2f0ffd39fccdbf762a94aa0476b70ccd4489c32d2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/table/row.rs",
+      "bytes": 20415,
+      "sha256": "c9d2e23089c7ab3268d0fb0d4d7ca90176ea33bb0687c9e48ea1c8d586bba605"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/test_objects.rs",
+      "bytes": 1430,
+      "sha256": "8ad0bb92da601de2de15f24c7593c6e57e03ba8370d17814a8d74de87807bf9e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/testing.rs",
+      "bytes": 16528,
+      "sha256": "4b2552b7eb1b4d61cbabd99984dcc1149f1e4d50edb3f938d02dfc903709f3dd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/text_bench.rs",
+      "bytes": 14463,
+      "sha256": "c8291d220213215d2c2fea7750694c8cc881e80c4a8b41aaf475a45eea7f8a97"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/attrs.rs",
+      "bytes": 9193,
+      "sha256": "dcb2f0d5287e02482174f0cb82d3a615ad0c0ef440c8774e5801ba47a7f1e522"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/blocks.rs",
+      "bytes": 51009,
+      "sha256": "113f4eab1f1140b9bd838078b71408516e40c61fff3d84052a2c2d0f6a733b74"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/commands.rs",
+      "bytes": 46012,
+      "sha256": "76413651f389174a4295214feba53d0add87814fafa23a13dc154f8cfd2e9813"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/container.rs",
+      "bytes": 13008,
+      "sha256": "4aafc3dd3cf0822ab857aeef00e3ee1619503bf95cafb9ef2c78d8bb9e3cd0ea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/drop.rs",
+      "bytes": 6652,
+      "sha256": "d14158f269d579cb345f82ad7e8985e2f1cd66f60eb43c3e31a5394e41f72a3c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/edit.rs",
+      "bytes": 13510,
+      "sha256": "d040e3f881150970a9748642caa8a476de18d83e7e605c3d996eee16a99db048"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/field_editor.rs",
+      "bytes": 23776,
+      "sha256": "611e5f98f23c86ce65d3e45e73299c73537cb34e00b1b5c65eebd91b59aac031"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/input_client.rs",
+      "bytes": 14276,
+      "sha256": "53c7eac6922c807e66801a4b4a78f135e7b2c78a09acca73b98e5e6461c8c066"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/layout_cache.rs",
+      "bytes": 27736,
+      "sha256": "eeef0d5db197a05ec0192db4bafcdec4497066540f5a56baf8722fe0762b0df5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/layout_manager.rs",
+      "bytes": 110765,
+      "sha256": "62b3d6e0d1e4e4e8528257baed02a930d307bc6e80dbf7dfc67352a67f7407d7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/mod.rs",
+      "bytes": 2263,
+      "sha256": "a38957d66d94ea2d66f20b5b530c59e4914a8d550b5a4aa6d1391af62d668b8a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/notify.rs",
+      "bytes": 4695,
+      "sha256": "27e1d8b00996e0ae695746837cad284a1e8e4ed21b8eecad76b41014b12f80fa"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/selection.rs",
+      "bytes": 9324,
+      "sha256": "9c928846261abf23e7b6d4bcf20f45cf3e1526a8a34fa7d4119e2266799cdbed"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/storage.rs",
+      "bytes": 81029,
+      "sha256": "1d37408af3078117bfc300d286f46359b09db1b4f9e99687480814c3978b2c1a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/string_proxy.rs",
+      "bytes": 13401,
+      "sha256": "043710ec7ae01f24425c7ba030ada0399cc18d324ab2a2cbb20331b790306892"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/temporary.rs",
+      "bytes": 5748,
+      "sha256": "6dc0b74dc20ff57ea8195ce1687a5acee7e5afb9db01c8214fea2f96f52c2b8e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/text_storage.rs",
+      "bytes": 56751,
+      "sha256": "d780ca4ee2286a96960f0891d8ddf13ae300290f7b1b5066b515e2988547cf1a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/text_view.rs",
+      "bytes": 134982,
+      "sha256": "b89bdf5650ae9d2f8475e40c9dc0256637095db0ee2c2cc831f5c02037d2d643"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit/undo_text.rs",
+      "bytes": 4702,
+      "sha256": "5bc555872c4b9c2d3db9f331221b4aaecef44a890659e2d50c8da8dbd1f363b8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/content.rs",
+      "bytes": 39659,
+      "sha256": "b64891ff35757ce44c4c36ce6c403ad830708b3b0e371e30294bdf2e90ef4332"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/draw.rs",
+      "bytes": 2064,
+      "sha256": "63d6d39d3579b6f95eb643547c5ffd98b15732312d10540a2657bd8df1f78066"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/element.rs",
+      "bytes": 14578,
+      "sha256": "a7d97943530020e5749af58e677f10fd3641c084c17dc8b9a8cefb197698b1df"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/fragment.rs",
+      "bytes": 27137,
+      "sha256": "55ac818bf0c92c2856cf31f9ce2ecb686ecac3915665b94c1a33c46c67079a67"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/layout.rs",
+      "bytes": 10014,
+      "sha256": "a4c9fe223c50c6dea331cca465f874738689d38858644b056ddac0bcbf7251c8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/layout_manager.rs",
+      "bytes": 100472,
+      "sha256": "9ad1f4662d9fba3444ed54199550c0e1bbec236b125813c281f407e42e72d119"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/location.rs",
+      "bytes": 13422,
+      "sha256": "8967fd3bece6c78449b982379472e54a264f66a237610b2f0833a4da7ac731e6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/mod.rs",
+      "bytes": 2368,
+      "sha256": "347a2b7709475168128a237f1830bdd17cf0ef746cb2e044e21338566e036986"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/selection.rs",
+      "bytes": 26198,
+      "sha256": "551e097a6131873860926831e8042db458b6aec9359210c2e8502f90cc40db56"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/seq.rs",
+      "bytes": 14836,
+      "sha256": "f3401c47f5243b02e32fb78f73d2e06af25179f595f2991835e23c48448d5e2d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/view.rs",
+      "bytes": 8093,
+      "sha256": "cccb3fda837a9b345145b10090b545804c2d2234e9cb38cf97cc0e736b56f858"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/textkit2/viewport.rs",
+      "bytes": 11204,
+      "sha256": "4e8bb76f085d264e9b93d41c9ea082f2a52b64e42d54b21054992f80530f36e4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/golden.rs",
+      "bytes": 8396,
+      "sha256": "cb2accb0151dd4f458e1793e56d9f12f0876735e5361eede439330a2be6d120f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/metrics.rs",
+      "bytes": 5606,
+      "sha256": "844ed0252e83c75bd91038b741b2739c24a666ef0f8dce38cab0d8c9f0cccee8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/mod.rs",
+      "bytes": 3207,
+      "sha256": "4dcadbdb7ff3841eb6ce28a16d15368c73badb72e30cb3668e04b93d1bc578a1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/paint.rs",
+      "bytes": 20186,
+      "sha256": "101765979e86616b146ea387ec0c8997267fbd27ec4e558022d8e1de3a1de487"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/palette.rs",
+      "bytes": 4581,
+      "sha256": "da871e391711f8d25d8ffd5a376796b2b15ab8172ae5190fe87376dd964d0b8b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/theme/parts.rs",
+      "bytes": 22640,
+      "sha256": "6707e408ef4f0658047c2be8d489e6f57dbd29463eaa969af45d4b8902413cd6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/toolbar.rs",
+      "bytes": 17329,
+      "sha256": "f72cab095da759525ed472f63fcf688c4c6e1c085ff5b2cd90caf91bc3e90d3a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/tooltip.rs",
+      "bytes": 22162,
+      "sha256": "54cac048d63b94918dc2d8af83bbb824476830a3cffe7666a2a9e96758d72855"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/tracking.rs",
+      "bytes": 23380,
+      "sha256": "7b86506a9291de8be6ca39da321c3cc3da378f34f9cdba331f12a0efdcf2bbde"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/view_layout.rs",
+      "bytes": 46597,
+      "sha256": "78c38f197d360e7c30376a4d47c23663d09b419bc9da76abbdee7ccc595b4bea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/views.rs",
+      "bytes": 58637,
+      "sha256": "59023e263b0f41aed4dd8f802ad8e63f09607aa95658332217319212f5b7a803"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/window.rs",
+      "bytes": 117606,
+      "sha256": "e66edf6e9e9f8d049cff844c21fccee3d7e4ab56f79b5bc252ad4fc3f4d3fe05"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/window_events.rs",
+      "bytes": 20462,
+      "sha256": "8d742205c1245803612f224b3bc62617fdf6d1c45311cf0521c25e2d3a2a0a10"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/src/workspace.rs",
+      "bytes": 33907,
+      "sha256": "6f600ee9090adc004d58c46fc01646756cd1271e78c91c6490b8eaefd684bd7a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/control_editing.rs",
+      "bytes": 7470,
+      "sha256": "165378cdb926c1e63b40df4489d0c4cf36795257919c54c16ec44924f4653419"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/dnd_state.rs",
+      "bytes": 31461,
+      "sha256": "c53d94dffe3d3e7245a06fdd969409e6e2ade4c91d0e2aa71c8cfb105e874b8c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/field_editor.rs",
+      "bytes": 7041,
+      "sha256": "09104ecef43d34d6c70728ff92b73e1a0ad417a4ead7ce316e1ebcd42fb6badf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/framework_types.rs",
+      "bytes": 3034,
+      "sha256": "1f76e1f9022e28e5ad1aa3957ad91c196d655b5232758237b9aa97ef12821019"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/image_views.rs",
+      "bytes": 11283,
+      "sha256": "c3591621fed08e0576d95dbfd2d6f3147aadc9d9dda05d5069887a75c01d9334"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_appearance.rs",
+      "bytes": 15353,
+      "sha256": "d593ee42c951c7a8a67562e6e954ea16f157d3e16d8efa206269288cab4f4c0d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_events.rs",
+      "bytes": 44744,
+      "sha256": "e8a5810d82a3f56c051ccfb79af73f5ab7c968485ee3c2129787f725b3094396"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_exit.rs",
+      "bytes": 1833,
+      "sha256": "5da7d2a906f1c85c51fd7b80b6251c2deeb462187734616c0d0422415e6d0454"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_layers.rs",
+      "bytes": 39334,
+      "sha256": "8e35284878ac410ce43402bcb67ef51c2778e614c2cf0f9071cae0294eacb6c5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_scroll.rs",
+      "bytes": 47378,
+      "sha256": "03b5e18fc84dc9192e13ea826717255290d281a4726a27ecc693044949ef11e1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_sweep.rs",
+      "bytes": 26740,
+      "sha256": "8d64cc6ef881a747c439d9aae918c340db27ee7c3e59ea6d8ca81dc4989f5e1e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/linux_table_rows.rs",
+      "bytes": 10382,
+      "sha256": "e3cd3cc31240b49ced6d185cebc60dc5f85e7271cd07fb4452bf7c56dcba2e13"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/menus.rs",
+      "bytes": 42301,
+      "sha256": "2d582caab7ebd84daf072d1c9e2d06cbc5478f598fda32d67bc07a1fa230aa81"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/panels.rs",
+      "bytes": 13512,
+      "sha256": "0c611e50b0721769f107cd5f755711fd4d6f5eddc8916e24e639f9c1904301ab"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/textkit2_viewport.rs",
+      "bytes": 8379,
+      "sha256": "d7b2a6831240022331363b4de3c4a8a0b33a6e4194f0ddf9948d683904996ceb"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-appkit/tests/wayland_system.rs",
+      "bytes": 44490,
+      "sha256": "ee3547a25258758365efc2b7cf5ccbe85e514c75f4763523afefa8bc0c6141b6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-core-services/Cargo.toml",
+      "bytes": 1053,
+      "sha256": "ed6e79414ba9dda8e65b10bf761c9c1470cf7a2909cbae2d194607a9d54ef903"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-core-services/src/events.rs",
+      "bytes": 20693,
+      "sha256": "c7420de8b59ef3bb2777f8b51976ffaf39b56c05986ac59ec497e5a4d9f6d683"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-core-services/src/lib.rs",
+      "bytes": 201,
+      "sha256": "c3ed464d8270f7ceaa97029c127b84ae15d9e1847177577b544318b0562da635"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-core-services/src/metadata.rs",
+      "bytes": 9578,
+      "sha256": "845cf542fb450ddb29af79ce916753e80bc86091cd294c3c7b34b64a5e8eb73f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-core-services/tests/metadata.rs",
+      "bytes": 1901,
+      "sha256": "9d3832162c41487916ad5d42b12ca13ace1b660cc522bac469945e5b796c5f46"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/Cargo.toml",
+      "bytes": 2675,
+      "sha256": "bb8d87eb4011fa22f8d193ca6a5ec2a237c636419c6156753471c35cadf387be"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/decor.rs",
+      "bytes": 42813,
+      "sha256": "7d8136737a3e177716984cfa66719e526c94cd1548537ccc1cab4bb07c4a465d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/dnd.rs",
+      "bytes": 15494,
+      "sha256": "5666c730ff1e9833feb54cbad2ad252a5209b899d7c4cdb25e6e516b2dc4055f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/drag_out.rs",
+      "bytes": 6630,
+      "sha256": "674cbef04047f0fa0a81ee1db9258319acb7a379a2e258ee267ee8933776530a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/foreign.rs",
+      "bytes": 2343,
+      "sha256": "d750249e0eb8abe97d43531dd56cd8a7a197546f64ed7b245c78ed8de57fa1b5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/keyboard.rs",
+      "bytes": 22253,
+      "sha256": "a3a5c5ecf026a9be68f3815cb25b09ade8c278b22b0bce60963ab68eda2fd61a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/layer.rs",
+      "bytes": 5544,
+      "sha256": "6de7b8d9c0c7d719149afe1318aee98219b6e213d2d9572fb3889a158970be43"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/lock.rs",
+      "bytes": 3261,
+      "sha256": "d018b1e33f52925fb310c7013107a7587e5bff460a9892eae548916d74e80fbd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/menubar.rs",
+      "bytes": 4800,
+      "sha256": "377bc1c17e9e8c2fead9c6eb35caedf3145b6bcf06b8e4cf478ec2e92a03b55b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/mod.rs",
+      "bytes": 102884,
+      "sha256": "c8bfc49d4ab66b3b30150bd23a56c221219b0d094f1ea220aea06235c28681f0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/null.rs",
+      "bytes": 23254,
+      "sha256": "3ec45e4ca515d769636485c83061b95ceb22bc8aa1fad25f1dbd0f38666e82d9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/outputs.rs",
+      "bytes": 10246,
+      "sha256": "d566a279d84c752b2e691e02427a3e6634f007c6b22da3de5dc6f3b9e33bb154"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/seat.rs",
+      "bytes": 43923,
+      "sha256": "969812b291d70da6a63890d7766f7bd13502e50a6ad190ebf6299a306fe0fd96"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/selection.rs",
+      "bytes": 24029,
+      "sha256": "e71638577231a1699b91509b0c7461fa5a461620ca42d71b1182e7acb7af084c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/sheet.rs",
+      "bytes": 4281,
+      "sha256": "9473d8276401ab35b26f21e07cd7269e102e326306cd27cc3a5e3053c67ff093"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/textinput.rs",
+      "bytes": 8137,
+      "sha256": "bf3a29d1ac1a36e333be99e452bb35a2b73b3066e83542f1bb03725bb90311b2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/backend/tiles.rs",
+      "bytes": 53927,
+      "sha256": "f98fab2791dc071d431e123a4fbdd246257b32fd9cbf19cb749462b22b2c7e88"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/keyframe.rs",
+      "bytes": 9812,
+      "sha256": "b0280085d13f2bc8d865c338d5ed94bd79df908ae559728e4b7d33cbb948ca73"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/math.rs",
+      "bytes": 30786,
+      "sha256": "b1d06caea948d7e2437efce1a3b39c1e90d4519a022ddbd5778346628a0c18ae"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/mod.rs",
+      "bytes": 491,
+      "sha256": "f70bf0620a809f05fe92718e69f23e5a0ad2bd6fb3276fc05e4a1a978a641e82"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/props.rs",
+      "bytes": 38808,
+      "sha256": "c809066bafb895f4ed44b2472577cfc496ef4af2df7983ea8a1d0d78dbe14f42"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/render.rs",
+      "bytes": 27073,
+      "sha256": "af1f271fe6e5e1e52cf526e245f4cd2468c3022d4723b7cd02c4ed978c4f7e80"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/spec.rs",
+      "bytes": 19174,
+      "sha256": "9747bd3995c811863036b5b8930c43a7a917a733bce5923d4949e9c5bbbc7b81"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/ca/tree.rs",
+      "bytes": 34205,
+      "sha256": "8291147a321a5e0d812ae6387748076687c1c1cf119021faa9a02747f1da6f4d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/clipboard.rs",
+      "bytes": 39057,
+      "sha256": "1000a09b8cda30309c7d007a7ac841567e8e8393fe1d519fe040907fdb502db2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/codec.rs",
+      "bytes": 19463,
+      "sha256": "a4ec37b59fec9e9945287699a47f60817ebfb300508255d93fc93f6e478c7c2b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/color.rs",
+      "bytes": 881,
+      "sha256": "02be46e07ae93e1ec153ca7593cc6f6851112045f2cdf824e129d9be48c630e0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/desktop.rs",
+      "bytes": 21484,
+      "sha256": "19a4060aeb65354fd73c95311c2c30700d5b8af729931dfafd5334cc0ae7e243"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs",
+      "bytes": 34373,
+      "sha256": "958d6ac5d22e9bbc3307517aca3a0f2743d915b531b3f53c6a094c7e0b63f681"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/gpu_scene_samples.rs",
+      "bytes": 5107,
+      "sha256": "2d11920f749108b291eddb6f8229fa59c4df07f0e2ce37c037f0a2a08334e7c4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/keys.rs",
+      "bytes": 2824,
+      "sha256": "3e137becbd63ac3693a3d53087a6700998a8efb4b8c70bd98f5fdc157f313117"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/lib.rs",
+      "bytes": 1638,
+      "sha256": "eb28457f4bb3564fa46d8cb65a80f24fce2a54bff793fc3c8bd64d11430b02e6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/momentum.rs",
+      "bytes": 4478,
+      "sha256": "36914d1f047db26367fa6b74c64506bb20242f3b5b4946c619528d1ce2094bdc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/outputs.rs",
+      "bytes": 4631,
+      "sha256": "62ab211b2c46fc94ee6a0c63a04472178e18090312b637160da273c38da33c94"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/palette.rs",
+      "bytes": 20200,
+      "sha256": "38d5b22f630a7cee083f97370e370ca86c7390ac90ccedeb8804da0bbee070a3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/path.rs",
+      "bytes": 17936,
+      "sha256": "f5813325eb43b96ba7580dc37ac2a0dc31b51d194e86f1bfa5501bcc3487704e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/protocol.rs",
+      "bytes": 39784,
+      "sha256": "86d7778cd61db1417b14305136febd71dbcb2bc6aef19b6fbd9e387ad1b71e15"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster.rs",
+      "bytes": 14051,
+      "sha256": "b9888ffb0c0fe7ba73c0569297eb8ed964dc183d19d0a59ab85e515de29d4ea0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/bands.rs",
+      "bytes": 16941,
+      "sha256": "4a7358e665d9dee5f5064260e496529a1d1352a2cc457a0c26a687d155521aaa"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/effects.rs",
+      "bytes": 12497,
+      "sha256": "7563da9677397a8995ae6a353d92b97c6b77ee3ea534a75ef425c5b1e019e24b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/images.rs",
+      "bytes": 43697,
+      "sha256": "d324186c0cf860d4a2a3519e7c9337a2343202b44c02433c78ec1bbe90a55856"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/masks.rs",
+      "bytes": 10247,
+      "sha256": "a2a813d75436075dc946b683b9dd2bc9f53a03222c194866be21894b2b2bf647"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/ops.rs",
+      "bytes": 65732,
+      "sha256": "d22e178159353c3b30910e621ea0684c3207646af6a04c8ea95a5eae0500aae2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/pixels.rs",
+      "bytes": 13612,
+      "sha256": "c19c92a47f9030be6640032b58783401c3812606bf36d92f5ef355ee2e57ecd7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/settings.rs",
+      "bytes": 10637,
+      "sha256": "932f6228bcf49f5a300bd48439429405a8c86539e678c3884cd9b804a91192a2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/stats.rs",
+      "bytes": 9914,
+      "sha256": "d4516711958a6806b54fea749f134738144ea4b958f5b5004f01eb9125f65378"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/system.rs",
+      "bytes": 11186,
+      "sha256": "bec59f8cd407dee814f6709605d41042290295f4097834fee2b3a9983b3703af"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text.rs",
+      "bytes": 3138,
+      "sha256": "9f9391712bda1ff97dfc1d042c058ed0f0cbb9e5f6fd00910a4628aca0c2c3d0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/fonts.rs",
+      "bytes": 45322,
+      "sha256": "14c3ba4a5c4ce1d0fd1570ec4a6346f868011ab90ad17323551cf0795b75dbf8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/glyphs.rs",
+      "bytes": 19196,
+      "sha256": "e4879549e8a59d4d5dd5c9fede2bd47381f7364fe5e2707626ee4070d0823733"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/grid.rs",
+      "bytes": 38682,
+      "sha256": "c1cc38b82814db16c78e2c0045eccd0fc3f74c4a2d1a95f2595b4db26a0c2826"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/layout.rs",
+      "bytes": 93734,
+      "sha256": "2af45edef49a0c9c3a7d2d4fe0159bd29b61ec25f2386c5cbb1719a65a348a4c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/lines.rs",
+      "bytes": 60019,
+      "sha256": "2816d0b8653331db0a3a04940f115e38ab42d512be21152dd21b8f73da7b3455"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/lines/tests.rs",
+      "bytes": 38979,
+      "sha256": "c89385fe54ef161637ddbbc3953763867a7bcbc59b55677218dd7992d7913b97"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/outline.rs",
+      "bytes": 2750,
+      "sha256": "56715ee952b4b5b0faedd3476c00e389a73b9902f16c60900a7547b879cdeb32"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/pool.rs",
+      "bytes": 4644,
+      "sha256": "7b26200763c39865de28f946bac9cbebf11ed668064768b8ac150fac36c54d04"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/raster.rs",
+      "bytes": 29520,
+      "sha256": "d4052bba2b3beb9211bb18ee290b93a1ecde3cee8fc7b9c3e0ae1ea34ad115de"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/text/tests.rs",
+      "bytes": 33900,
+      "sha256": "64888f2418a00479828f4bf31e5c4e7d913776f256779443f0409de195cf1f92"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/trace.rs",
+      "bytes": 1092,
+      "sha256": "39d2c933f3e0f1b438ec69c8590b0d3071a4c8f764e6dc4c63fc8293cffb941b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/Cargo.toml",
+      "bytes": 2674,
+      "sha256": "416aec39880a75a3d7799d3cfe7bf48855c1fcc00bc77129560ea84a5cb37ce4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/build.rs",
+      "bytes": 764,
+      "sha256": "8d38218a9d4ffe78d7b238b9fe8f74ca2ed3c8b8130943ff621f36c3d52ae283"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/affine.rs",
+      "bytes": 7206,
+      "sha256": "46a8222ba3f3b8f83c2279d331507e96d8a3d6e42c9683b42bf496ce9bc9b8a3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/apple_script.rs",
+      "bytes": 2309,
+      "sha256": "9ca8bdb92cb4e81d759eab98bf32db295983f936eef87e5bce851a6d6ecb817c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/array.rs",
+      "bytes": 70970,
+      "sha256": "f3ab8ad46abf729572c5f61185cddcd0a1d4e6fcd05e971a1b401cd6c5031e9c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/attributed/backing.rs",
+      "bytes": 5433,
+      "sha256": "57a72e5361414cda262cf72631ac6ec1b8dd9c1318bb6f7469d423cfe478b8c0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/attributed/dicts.rs",
+      "bytes": 4806,
+      "sha256": "d881e3d43d6d58036d455272d7cf5177fb1c81f76b1baf40a039c0c13cec09dd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/attributed/generic.rs",
+      "bytes": 13067,
+      "sha256": "7f46e6d6d00d2e8cd90be6d12d21475c822d5ba18cca435db20f47e00b12b707"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/attributed/mod.rs",
+      "bytes": 26278,
+      "sha256": "e8e4af55e788ab9d3edb72ae18fb0639aca432bb07e99c22e3f547d73198051f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/attributed/runs.rs",
+      "bytes": 10413,
+      "sha256": "c9a04dac4ec0b0bd2e0d83aba171284aad1a51c84ef821974419f5d53da43fcc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/base64.rs",
+      "bytes": 3765,
+      "sha256": "01f40911d59eef72bf3339c6094de6fbea8c85057782ab0b32d9e3776c886a4c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/bidi.rs",
+      "bytes": 18908,
+      "sha256": "21140c896f1a8a6878e9b1c06a2554465cb29ca6585bd8ef581807a03e2a70f9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/bundle.rs",
+      "bytes": 35976,
+      "sha256": "50858d204be55142058bb69fbabd23b279a8cc7338f04726fb3360fedb2060a8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cache.rs",
+      "bytes": 15733,
+      "sha256": "5906027c684b1d9b308d5b80ac7dd84ec55e594f6f0eeb0831b1d98e2b29e5af"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/attributed.rs",
+      "bytes": 14870,
+      "sha256": "5902461a5858fcda99f569f7f12cc6eab437e6e1fa7c70ff9e6a48841ce64296"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/base.rs",
+      "bytes": 2269,
+      "sha256": "1483d76e69394cae76f743929ec90be533e3fc4f56cb5e486541a392032a7f8c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/bundle.rs",
+      "bytes": 31258,
+      "sha256": "98a5892cbae2755abc784a866f4ee43f72afb535d4aeef982a4673fe1ad651c4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/calendar.rs",
+      "bytes": 36905,
+      "sha256": "d60779e27f7967b8b3562f21dbb359c364aa4244438b8e40cd094d98b8ce6483"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/charset.rs",
+      "bytes": 8253,
+      "sha256": "882a06dd7015c11a3c9deec3d7550faf52cf4cbf26b0d8fddf4ae02baa7da72f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/collections.rs",
+      "bytes": 35297,
+      "sha256": "a448f5c23543afc7de25a76734d7276dc9810f64c40f3fccbdb8491825d75401"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/data.rs",
+      "bytes": 13178,
+      "sha256": "5da54e5964699d93859aa24716d1cf171235fd8d865785b3548b66c88b1059dd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/locale.rs",
+      "bytes": 29681,
+      "sha256": "2a1f4449c88b6c0628ccc5308cae1f94fe8b78efd256fec8cd3ae56aa42a15db"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/locale_data.rs",
+      "bytes": 99045,
+      "sha256": "5315a81c513acabdd3d44835a3ed06e2f33ee2468d9f3e65cec865ed128b0527"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/locale_exemplars.rs",
+      "bytes": 85662,
+      "sha256": "e32441ad2dc3f9e350776a744951cedd3020737f857858a89399110d687517dc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/mod.rs",
+      "bytes": 1043,
+      "sha256": "cbdf5f5fd9bacab2efe9f2a691ad737a4566669cf3c9911e0cf17f22dc4d0746"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/ports.rs",
+      "bytes": 6546,
+      "sha256": "009c23ceb182c1eb053c7b0b4d1cb505aba44da201810e731b6a9b3eecb6f411"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/preferences.rs",
+      "bytes": 5211,
+      "sha256": "7ab02f0d9563aba581c36704855588fdc6a89b02fe1b53c5ffe5522e640f8e6d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/runloop.rs",
+      "bytes": 15663,
+      "sha256": "455357bf04edffb02d92b27be8f01c2b037c5473f48283fb078ff6335aca85b9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/set.rs",
+      "bytes": 10630,
+      "sha256": "3795116f73a5737539c75254dbb8e2b40efeca6783c800ec4ddff8e6c36788fd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/stream.rs",
+      "bytes": 39202,
+      "sha256": "0e625a594ac38ea9981af3302d3bca24dc3484c8ae0b68ed882da3cffa86962f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/string.rs",
+      "bytes": 28600,
+      "sha256": "a9ea172013de11539dc915165a277a6999e7a37b3464642fcc295105a965cd36"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/string_edit.rs",
+      "bytes": 28199,
+      "sha256": "25c974341efa86bb29d7db3cb6c604db5081839fb9ef040060b0316c15aac0cf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/string_encoding.rs",
+      "bytes": 16286,
+      "sha256": "a582199bfee2110bd9793107a5532f8ac1f09dad5a81c396e4c0d50766a42950"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/string_transform.rs",
+      "bytes": 12333,
+      "sha256": "016a9a6834b50d8189965e2b759d4431c86899c37442d1b86a378a447055db1a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/types.rs",
+      "bytes": 18087,
+      "sha256": "5e63fd042b46129dd66ffb640569ab0aae14a7985212772e97ae6d1e3756b913"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/url.rs",
+      "bytes": 9576,
+      "sha256": "b661b7e461b59241ff75ee83fa01d949ba103b053ef09b06246acd2b6f1f97ea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/url_parts.rs",
+      "bytes": 27820,
+      "sha256": "8804a4808dad5c4c383e5cc3883c6ca03a83089498a1384870739088bc9eb35d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/url_resources.rs",
+      "bytes": 30236,
+      "sha256": "4303c18903805f7b2d4d13c9bcccffc51ba28637abf0bee10cdd4ebc607060f6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/cf/value_array.rs",
+      "bytes": 18560,
+      "sha256": "2052bf3096847b39f1451ff88e0a3435050a83632f17468c899eeb4535b38cb0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/charset.rs",
+      "bytes": 34870,
+      "sha256": "aefff299833d7eafe1d005c2d72dca307d4c7e38f47bc5ae136f95fce0f5b7fd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/const_string.rs",
+      "bytes": 5654,
+      "sha256": "2ea14036ae73ef9400ba277b61c5030b5a5932c93c851c9f73349f767b4af822"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/constants.rs",
+      "bytes": 18398,
+      "sha256": "907eeba110634bb933f7842fe69758d26876ccc11cc5ffc2b944ae0d3008c23a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/counted_set.rs",
+      "bytes": 15913,
+      "sha256": "3e84185c374bd02dbff27eb6e1e9b27255f8fd80e42f600b026c9d2dd5dfcfc2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/data.rs",
+      "bytes": 37068,
+      "sha256": "46ee3f33ad3e5c6264c76d2c8a0c473f59aafe81082c6f80fc2ed1e039313e7b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/date.rs",
+      "bytes": 10899,
+      "sha256": "777ac090a6c3fed99309770d11573975e474945e760ce915544dff89c4b952a3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/date_format.rs",
+      "bytes": 38064,
+      "sha256": "04c4ead6374e356e4fd172f7ad429db96216e27db43ca6e66157ec35fc8d39bf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/date_formatter.rs",
+      "bytes": 19580,
+      "sha256": "4540c3f7711e463d3b52153be86b3b123d39483d8703b5244eb038b2a8085d79"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/deque.rs",
+      "bytes": 16569,
+      "sha256": "9247014a14b68df84eda0cbca1549e0254086dc199a92c6f5e51a1b11fd45137"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/describe.rs",
+      "bytes": 8542,
+      "sha256": "78e5f021229b4d4b684a20046ec1f1deae2d62ade58101401e9f914dff764428"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dictionary.rs",
+      "bytes": 41901,
+      "sha256": "461e24583da1631e3bc0d86d9f0d309a627c7244f610d6ba764ae0e69a894b11"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/directory_enumerator.rs",
+      "bytes": 5466,
+      "sha256": "cf1544aaa85b9949f69dd42f710a6ead44fd4d331ecefc5b321a1142685b0a87"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/after.rs",
+      "bytes": 3899,
+      "sha256": "f452321a0a0ee1b4159d780c4f4e908e9aa11567441bad50fe1d18249041ae4c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/block.rs",
+      "bytes": 5339,
+      "sha256": "52c495274e5d729844726b59c1e3311c31a7aa7dfa271916c7f9fbca0632f413"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/group.rs",
+      "bytes": 4960,
+      "sha256": "a9e89642559224023a0986d7e346917e0656c3c6dc4270bd283b957a887c5956"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/mod.rs",
+      "bytes": 7289,
+      "sha256": "f2b50739daa040dda7f6e98b4275d6c7039e07a15bd0b8654bc53b78a32a3719"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/object.rs",
+      "bytes": 5087,
+      "sha256": "890e2b9a97355f1767f3049475e2b57b87da5b8f355d205be791bc5e1d81edc6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/pool.rs",
+      "bytes": 4924,
+      "sha256": "35a14930f54e26c22965dad70f5ba9f6d0051b6a5eadd41b74dbb4efc9539019"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/queue.rs",
+      "bytes": 35772,
+      "sha256": "701a8f36f96fc98521c161ebd8c581b806e478fa2bb87bd2ad00e7bbbdd11db2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/semaphore.rs",
+      "bytes": 2401,
+      "sha256": "4d49200d1e2274f08bf7b6928171d25e33c73d660661399e29644524bc83f30e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/source.rs",
+      "bytes": 19713,
+      "sha256": "c1cd516004f5b0e90a1394c3f0885da79b3f3201fd0b1d614d417d8020c35603"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/dispatch/time.rs",
+      "bytes": 2767,
+      "sha256": "e68ac655a5668bbb60a6fd790370c72308bf25ade1e362560dc93d715c775b25"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/distributed_notifications.rs",
+      "bytes": 13211,
+      "sha256": "a254ca7109306362ff6707e99fab270c5c8c3ef3aef8fa8a9d6f84f7787922a3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/enumerator.rs",
+      "bytes": 17668,
+      "sha256": "649a7654903ee6a0fd858e69a91b5e844f879c128e60ef3f09941556fc660c38"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/error.rs",
+      "bytes": 31124,
+      "sha256": "737a8e470a165fdb5d6eafadb156f4d7a7e6f54ee0f7cc9fff4e9d987b1214c6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/file_handle.rs",
+      "bytes": 7404,
+      "sha256": "73d8ebb7b4cbdb265d9fe3ae072291f89650391e588b420aff2c5a8db086fac7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/file_manager.rs",
+      "bytes": 50908,
+      "sha256": "2c759da841ec4129beba16c57434557d865a44ed951f404dfdf039d978d358ae"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/file_wrapper.rs",
+      "bytes": 21994,
+      "sha256": "34d45720b534439e9daff9c91cbe4d9d7700c07d3ffd9a7fb90c33445d3ac3b5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/formatters.rs",
+      "bytes": 15870,
+      "sha256": "736ac0398fd80760fa7b79948a44cb2ff2f8a9df6f32d71db54c9580635ed097"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/functions.rs",
+      "bytes": 6571,
+      "sha256": "f6c30b7ca48eac5f44107913a613fbd37c6b401d9dc8dff5e6cdc528a2799fd4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/geometry.rs",
+      "bytes": 12609,
+      "sha256": "af50bfe132e97777f5891ae6850ff86c0e1cd869ba1d09938d6d7d72c9898f3d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/guarded.rs",
+      "bytes": 8904,
+      "sha256": "3c22baa13c3c5528d9cce25e945bb6b677acb38886ed928094bca6d2fc17795c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/hash_index.rs",
+      "bytes": 14323,
+      "sha256": "3624d9ad07b3a2fe69542417de9ce260beca49357974ad4739a3790872b25f89"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/index_set.rs",
+      "bytes": 34602,
+      "sha256": "aa3d0ae3cbfa437de8313acf8e2eb3e04663080cd3b544e9b65fbece0ca4a6fc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/invocation.rs",
+      "bytes": 30673,
+      "sha256": "266eb7cf9e59706b23f742e5b8a45f1d6a33ce66ac5955cd1bd4b9d44c83da3f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/json.rs",
+      "bytes": 26445,
+      "sha256": "eaa07c6d5c4ee5648441e9014dd4e0b42b2a8f8ae48d33614d70499135b48c88"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/lib.rs",
+      "bytes": 6387,
+      "sha256": "962bfec3fb7e106887a9f09795aad8464d5abf6cd8e8cd725f6af31c3468f697"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/locale.rs",
+      "bytes": 12204,
+      "sha256": "764fbc7dc05d3e83c9b008c74e28d146affb53d1608f70d866d031cbfa55b88e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/lock.rs",
+      "bytes": 17532,
+      "sha256": "e3846652f7b03130d7e74c5e75e4084d69a6ebd3789f9c8972ada9845456d017"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/notification.rs",
+      "bytes": 5419,
+      "sha256": "43bb4d336bd9d03133c40eeb162745e4ebb5aabd851f24bdd75446344ecdf172"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/notification_center.rs",
+      "bytes": 21418,
+      "sha256": "77d923379b219fc83df3ddfec8470cd0afdf5d7a776356094c7e3fa8e69c1ac0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/null.rs",
+      "bytes": 1813,
+      "sha256": "fbc1f3b2697cf7c48a5c02a2c028ca7d340cceeb7233bf4312aff1ae6212b227"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/number.rs",
+      "bytes": 31334,
+      "sha256": "d630a8e3ec3294c10a85798923e1c74666a1a106800b77af8b9fd659af8e828f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/objc_runtime.rs",
+      "bytes": 1902,
+      "sha256": "34e894656e91ed6d94518c7258c6ef0ff94385669dd6b0819d2d8d6d11959da0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/observing.rs",
+      "bytes": 6967,
+      "sha256": "7e091a064143d56f57ca9bdc82475296b98a48312a6b8be44787e26a493841ef"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/operation.rs",
+      "bytes": 27534,
+      "sha256": "e2f97b1f0f6dbc2f4cd0c635c54ee074cd6a2d8bc6a2fb9ee1630c019bdf6e14"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/ordered_set.rs",
+      "bytes": 79788,
+      "sha256": "6c717f907cb0ab24ac389f3d94b4b85eb021c39333b9fa65099b72af5d20a9fb"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/path.rs",
+      "bytes": 3943,
+      "sha256": "ef77531961d3871d5286277ef9b07ae6b97d32607085316496e76ce03a9c2d35"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/perform.rs",
+      "bytes": 11996,
+      "sha256": "503c04bb1c99c43e78042792a33795ac0b4e8fdc29daaec8236bf2ea94ed3e2a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/plist.rs",
+      "bytes": 18748,
+      "sha256": "b97b7dfb3d7e8c70394723bcce1d22c7f90514c79ee31bacf1ded3dc54bedfc4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/pointer_array.rs",
+      "bytes": 14010,
+      "sha256": "56e822fa84a1d05e45672380e08191ee36dfd23cc7dceb8ebdee82f06b63f7e4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/pointer_table.rs",
+      "bytes": 55136,
+      "sha256": "ba7a065dceb92d80674372be664cd20e3ad01e9f61679835c8935d43f65dcb24"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/process_info.rs",
+      "bytes": 11625,
+      "sha256": "ef341e6047e5335e5c3ca39376fd3ffc8cbdffbaeacf7a964efcfa040ee07573"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/regex/mod.rs",
+      "bytes": 30277,
+      "sha256": "6579c55d13be54d4a6badbbf0006d32c8d164426b3fbc8956f74da4f00a77586"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/regex/translate.rs",
+      "bytes": 25298,
+      "sha256": "a2d646075b148efc4ead3c4a5f3a99b6225a54635c56be5f7a0ea65a5e2e94a6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/resource_values.rs",
+      "bytes": 25382,
+      "sha256": "8a806a18c6e96fb014deac3330bbd9ff95c99416c9ce2fd3ff30592d6187ea84"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/core.rs",
+      "bytes": 31036,
+      "sha256": "89c8c7ad0227eee048f981d823df816fc6bba1d2ef809d338edef4b12e55e00a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/mod.rs",
+      "bytes": 9485,
+      "sha256": "92a89609213d48a53112ae82da7069da7fd269fa17fe372a2366d43df7ecd09e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/modes.rs",
+      "bytes": 7878,
+      "sha256": "558f0abf14dbfc76f0844d997bb2922e898e7a6127da2201b5f80843d40912b6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/nsrunloop.rs",
+      "bytes": 10391,
+      "sha256": "9a97e30734514376237fd0a0b9b90458937bc94585769afc7e22e505de225ea0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/observers.rs",
+      "bytes": 10765,
+      "sha256": "3405cac8711a2052589885460eae445bfb50bd729580186f73ba1df7d5428891"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/tests.rs",
+      "bytes": 7488,
+      "sha256": "fd7586e38929b0b052333f93ad184d7e02fa8fa019219844022cfd44cd1e9fa9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/timers.rs",
+      "bytes": 7981,
+      "sha256": "ff09c6b24b7587063f4a005f55a5150d95d36e08b94789252fb21dcd9a541347"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/runloop/wake.rs",
+      "bytes": 2402,
+      "sha256": "ce9b78784d7f8bc4e5f24ae4fbf6399d67132d313e7a65bcf17cad06adc347b6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/scanner.rs",
+      "bytes": 19893,
+      "sha256": "3f9cae41a4e389cde90c1172555d7bad3fee67e34b45f943ea8eecfb25e6bf60"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/set.rs",
+      "bytes": 31955,
+      "sha256": "f3545d40f6a76fabfc0647cba3d29ffca357eb8ca7c3e9241c4f006e26ca8579"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/sort_descriptor.rs",
+      "bytes": 24217,
+      "sha256": "978af07d967547a20787130b236e336d7c7af593b87ea4ef285dac58d106ce6a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/case.rs",
+      "bytes": 6659,
+      "sha256": "d708ef7aaae9c32878f154b05ff80eb0457822300573030535a6cd6e41f70dfb"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/compare.rs",
+      "bytes": 18897,
+      "sha256": "611e2c452a2774f2b38eae56496fe5a31311df103746dc6131bd5eba7d18d5fd"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/components.rs",
+      "bytes": 7250,
+      "sha256": "8dc96170eab278ff44cf74fb07f293f4d9558c0df82289cde74684e003324c1d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/create.rs",
+      "bytes": 1988,
+      "sha256": "717ff36732e7372dfd37b59da003964d877032d3a71f07716135d1406a3d0fb5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/encoding.rs",
+      "bytes": 19053,
+      "sha256": "4e5041a8735e5e3144d70f494be76f8398f5c8b2d7102dfb0648dfdbadb50a0c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/files.rs",
+      "bytes": 12407,
+      "sha256": "dccf773afdfadc763e0cec018a4ef3ee0e8e59e9846376315a91d6871997f385"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/fold.rs",
+      "bytes": 23622,
+      "sha256": "85218d9cea3cdd3ad11b92c7c9898243db33c07311c2ba7e106a70fd38395cd9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/index.rs",
+      "bytes": 16463,
+      "sha256": "7f8c11e81d31adec81455c73ee5d630597b9e71bc965f270ec705e3f0e1724b6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/inline.rs",
+      "bytes": 11329,
+      "sha256": "7d4a3ba105b0988478e5db87fa7954a9da903efe2cabadfd1dd9e23e269cd07f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/install.rs",
+      "bytes": 3265,
+      "sha256": "59faf0e8c9b0b4ab7d4c60cd29543110e7d319cbe0d822e0773bb95d74ca8c7d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/lines.rs",
+      "bytes": 13408,
+      "sha256": "987c8cd1d9dc557f8f5ad03a427ac8186022f7ed6be7c6492781510d0d10090a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/mod.rs",
+      "bytes": 21910,
+      "sha256": "e3fdce6a7ea2eb85e293cb720ea185a951d212a75f6aa6ef810da33ee579fc18"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/mutable.rs",
+      "bytes": 19326,
+      "sha256": "17996940636dde68872159157680ef13ee67e5779d6cca9d5a2e3d8a20a362b8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/numeric.rs",
+      "bytes": 5666,
+      "sha256": "67039d3735b1b3a5d4476bdde23dd7d86ad7ece2b200bd8e8e665563660029f3"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/paths.rs",
+      "bytes": 13895,
+      "sha256": "db5dd21fc0087bc8b7c89ef22806a0ea8358dce0f3c7add3d2d7fcddfda49d9d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/placeholder.rs",
+      "bytes": 11940,
+      "sha256": "71f63b8a71aa6781c5ed68734b72833e4453e6e140095d4e936159d93143b69f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/search.rs",
+      "bytes": 44180,
+      "sha256": "e9dbc300ec674eb533be3fe01358161090c6cf3e4a7fbb14bfc7b2913c238a0a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/view.rs",
+      "bytes": 3499,
+      "sha256": "2c7f3cf479498ceeeda3920fe7857ca464e071bf97a6bc151b2937e7c2160152"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/string/wtf8.rs",
+      "bytes": 13469,
+      "sha256": "c172aaf792815e3f9a8eb074845f6d8ee710b572248bf788cc412876925bbb6c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/table.rs",
+      "bytes": 14862,
+      "sha256": "682e61687046ef43c6d00334866effc1e44fb44c69e20f828fea83d397c93f30"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/thread.rs",
+      "bytes": 24131,
+      "sha256": "1f3f5a61030637b8367d5ec3d2c2d1e11f0962f1903a0fc034471fd07a8f042d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/time_zone.rs",
+      "bytes": 26858,
+      "sha256": "3b6a3e3f5b3ff76e38323810e9d668c80d5709b8c935f55d7f8af6c597b09bfc"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/timer.rs",
+      "bytes": 18420,
+      "sha256": "9a183af1654e7e001cd24b74e884df0440703c672d3cd1b6af43134f089700a7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/undo.rs",
+      "bytes": 30432,
+      "sha256": "51d15aa45edef841f22dbbb6970eccc7e6a4eb46ea36673d045083c57d3d2d93"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/url/components.rs",
+      "bytes": 22626,
+      "sha256": "207dda92e21be4572cf720bfbb332e686008fd161a88599903e9d21464d271d7"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/url/mod.rs",
+      "bytes": 33568,
+      "sha256": "934090142c7656f8cdd9a803df850b4c424117e8402892680b9c769c63e2bff6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/url/parse.rs",
+      "bytes": 13571,
+      "sha256": "ef4a8d164aeb3e8ba9169902487a0c5cd8ad52504cc0902cae4bd2fdbc98e4c2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/url_loading.rs",
+      "bytes": 32276,
+      "sha256": "61fe8742630f08cf80535ebe74db370b112bd00a3bb827f838b1e02505a80a0b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/user_defaults.rs",
+      "bytes": 33123,
+      "sha256": "c9b009c801de01befc2e2a756ffa4d42b0cde09a7f1af453738327dff0d5f90c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/util.rs",
+      "bytes": 7547,
+      "sha256": "fdb1b83331ce5c0efd5c81f447d6735db76b2e159c7a04a26f078bc0d398bcc9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/uuid.rs",
+      "bytes": 5988,
+      "sha256": "bdc52c964f77848ed57359f6144f4526bd5c33461eac7f1bc5bcb316115de24d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/value.rs",
+      "bytes": 20201,
+      "sha256": "358e57ef30737e8c2f43a1b4109db28d99e2f2698948f7967dc7baadb1f80233"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-foundation/src/xdg.rs",
+      "bytes": 15739,
+      "sha256": "ab16bca7a7d2d90ad07c2fedfee1580cdc7753992a0348a637c35e7342a4e70a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/Cargo.toml",
+      "bytes": 594,
+      "sha256": "121eab65489604842fc1ae9c1419d972b3e7e90ed47b4acd61e2ba02c88514a9"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/build.rs",
+      "bytes": 790,
+      "sha256": "0f0f15ed764263efe63e684337d034d460a695c238814e6ac91193bdbe959d1b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/arc.rs",
+      "bytes": 28732,
+      "sha256": "7b9b0869cd3706d358c2c414d5bad0ec90b1f880583943e8b09235d9c5e538d2"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/associated.rs",
+      "bytes": 5303,
+      "sha256": "2f7f28a240673e13d32787b425b9a7ec5ad7825fa0ab53b25807eee0559b7aa5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/block_imp.rs",
+      "bytes": 18165,
+      "sha256": "d7f2e98174f4d50ab5ef94b33cce66be15460b5342c8f847f81b6a6819ad53bf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/blocks.rs",
+      "bytes": 15407,
+      "sha256": "3324b737f8607b720309ad555fe31a1600032dcf351b433d7a8ba36154f8be5a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/cache.rs",
+      "bytes": 12369,
+      "sha256": "67a00d81d0ae8c15006d0e89ce92aeaefe9014a24775b16bd548448e6ee4cb8f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/call.rs",
+      "bytes": 49362,
+      "sha256": "afa39ecf6e69a00134f1fc34e1cdd35228d8df8d9b545c19c1a3d498961407b4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/category.rs",
+      "bytes": 15403,
+      "sha256": "aaaf086ba10a0d532d163424862cfa9f0e5f2028cf2a79a6dc28a28704ad87cb"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/class.rs",
+      "bytes": 35971,
+      "sha256": "daf3fb7de257fe9509e8e91486088e7da4dd8b4a3c57d9cfe6807629f9188d0a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/dyld.rs",
+      "bytes": 3151,
+      "sha256": "20d83057574e4fef929ea290b66969e889f04d54847615c798aa643c527a396c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/encoding.rs",
+      "bytes": 3354,
+      "sha256": "3d6ba7658e8fed023a7b8e63b0f38682af6cea2ec2e276075a4cee50ef87ccf4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/exception.rs",
+      "bytes": 2535,
+      "sha256": "362cc2b39e425bb6356f6a7ff2366365fe1e40ea8106a1124732478493be8f36"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/forward.rs",
+      "bytes": 10500,
+      "sha256": "20ba674898ba203ef3395db1a74821e85c79e6d543e7759469a362df0a629802"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/ivar.rs",
+      "bytes": 5966,
+      "sha256": "ed370d10a4af77266e07a04e0d01bca0ccfb5349ccbb54538f54652ace5e3ced"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/lib.rs",
+      "bytes": 4856,
+      "sha256": "a40639eb4a8b2c39d3d3d9b549b43a83badaecc6894eb2b07cf672ad220b81cf"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/message.rs",
+      "bytes": 8051,
+      "sha256": "21fa5d5752f251fabf65832c4ea1c167d5fe4b5e1c8a83976b87e4e8f133afba"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/method.rs",
+      "bytes": 13890,
+      "sha256": "dfc68c7536d091caac9165b4e4576a0c1790cc9c2c6b762a4d8ab9f235409e4a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/msgsend.rs",
+      "bytes": 13569,
+      "sha256": "1254964df28d39760b1beecd4dd01ea655089bdaaa5b57016d10a101568bf74b"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/nsobject.rs",
+      "bytes": 18026,
+      "sha256": "3049ceb2a5592d93f3bf1c59f45f3c6af0534e52665d8a5d0eb97d3c74947319"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/nsproxy.rs",
+      "bytes": 8179,
+      "sha256": "dc2db0e238f6c165ae45ae2fdc74d00d3a4692a1580698569c14ca9caba91af6"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/object.rs",
+      "bytes": 11345,
+      "sha256": "50db6519a202bc87e94fc42358e65db9ba7ab5f6959df108dc19d4ddda859587"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/object_functions.rs",
+      "bytes": 3915,
+      "sha256": "c4323fdc2cb7c8b64ec1fa5029ec6f7007fb472325432d0350009a749d65b67e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/property.rs",
+      "bytes": 10264,
+      "sha256": "76102dffabda4f0105ebcbcd6fe77312424972cc346dc99c8afb8da83353f037"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/protocol.rs",
+      "bytes": 13596,
+      "sha256": "4f0675eda4b7bb3e1d51da795c859434b8d7c17fec8b4beac58795910e049285"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/selector.rs",
+      "bytes": 7950,
+      "sha256": "06e9128314d12f68e592ef136d4d25ceec822cccd1e0ea7f3cc253f5a5123597"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/sync.rs",
+      "bytes": 2578,
+      "sha256": "5bbdc0c908c19013f0e08a5d3c9afe35ca108e10e9d586f3c7620321ca984056"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/trampoline.rs",
+      "bytes": 6302,
+      "sha256": "92aa98ec0275ab6a5554d5902d244af27a7c0ef62d02f20cabe71c695030dc37"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/util.rs",
+      "bytes": 8850,
+      "sha256": "ebc9c66f3c3d484530c8db6f42a423b3c0b1c902376c08af61d78daaf58e7929"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-runtime/src/weak_locations.rs",
+      "bytes": 14608,
+      "sha256": "5b888657ff1ab4827381c3c9b419dfcace842a56a6b350f838b8c1f7cc691369"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/Cargo.toml",
+      "bytes": 1973,
+      "sha256": "14fe9f88c6f606836f7a136cddc9cea5b9a68d43d3e7558c03dfe8b1916ac639"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/app.rs",
+      "bytes": 75287,
+      "sha256": "7cbf77c964627dc1fd6d6aa6e5654163cbbfeb32a55e9d7e457247aaa95a8b1e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/canvas.rs",
+      "bytes": 37057,
+      "sha256": "b44a306741fc0df8fef5d32f85b32cc7b02e75b94082d71fb31b6c4600a075aa"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/color.rs",
+      "bytes": 8441,
+      "sha256": "1cbc407599d021391732285cb32c5308865673e9d5d4d8524bc5043e939127c1"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/event.rs",
+      "bytes": 18020,
+      "sha256": "08421edde02210c5dd0cdac4ab3a978535e1feddbfe867f1dcb651951d4a1aa8"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/image.rs",
+      "bytes": 9869,
+      "sha256": "b43841b7a5cbfb5df91bea15c11f0544100f1f468db691dcb87e30e18fc740b0"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/layer_shell.rs",
+      "bytes": 8176,
+      "sha256": "8bff7171fffdf66ba96e96ae6eab730428d49b5c336a559bed1e30472d45406e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/lib.rs",
+      "bytes": 4951,
+      "sha256": "b38bc63bf6e7c365e2dad611ffaccfa6affc944d6e5cad8653b35d3f7a1ef358"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/offscreen.rs",
+      "bytes": 25625,
+      "sha256": "e27a480d34c53253679598477ee86e8385bdac12b548c4657e05f63a4cd11dfb"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/testing.rs",
+      "bytes": 11535,
+      "sha256": "2d848577b23dc8398f4b1c7ae1390e358612eecd964828062e79741957cff894"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/text.rs",
+      "bytes": 30999,
+      "sha256": "2e5c06ae968783f7d92cfd6e4675f4e45955004532e25315503b3043f6ce5364"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/src/window.rs",
+      "bytes": 38839,
+      "sha256": "540e0ab4f5d7a79a06d3ad0eba5739bd03333d4ca2360cc374f5fe3471113fea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/desktop.rs",
+      "bytes": 19532,
+      "sha256": "532fd25ee0ba0388855d85c542d29567ba80ef1303f266c3e5a7e5cb935acebe"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/drag_out.rs",
+      "bytes": 5351,
+      "sha256": "4f3802dcf7234303009fd7765a07e79a74fb787ccb8164d36d9a323f2c62831a"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/frame_budget.rs",
+      "bytes": 6856,
+      "sha256": "03125801b12662c6d264f34c375d37b93d31bdc82251fb5f812980c4ede8c345"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/headless.rs",
+      "bytes": 26910,
+      "sha256": "16bd8a6008e748650226653a295b6d43720afe99e5c043ed1e81d1987efa633e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/image_budget.rs",
+      "bytes": 6027,
+      "sha256": "49e4b2d084988ad68fc08eb6731bd7cd8f6d8ff8fcedbcddf57d9fda69c414b5"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/offscreen.rs",
+      "bytes": 3680,
+      "sha256": "73420c513a7b9dfb8f777607cca4eb2c4f8bcba57251b9ff6580a755d2cee03d"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/scrolling.rs",
+      "bytes": 7800,
+      "sha256": "9bd64cc7cf0855e9383f415d8fa7ac7e0932581f106ab0327d732efa38b298ea"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/support/pointer.rs",
+      "bytes": 4280,
+      "sha256": "f217bab483b1db605db0c6ca5d3d6e938ad17a421ca8caad15d665e02d590772"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/wayland_desktop.rs",
+      "bytes": 57782,
+      "sha256": "3f2e04ac3c58ada1b875c65bc5efa50fad82d5ab03fc50439f993f5c81ce9609"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-ui/tests/wayland_system.rs",
+      "bytes": 15263,
+      "sha256": "a523b026391da271f59bca3f399c8b6706d01586dbc69e22c6733b28ff6d0753"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-uniform-type-identifiers/Cargo.toml",
+      "bytes": 575,
+      "sha256": "0e87cd0145df5f62372e9d2b2e0d31ca24d31541d3a633a152c7e6b7eb7da30f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-uniform-type-identifiers/src/lib.rs",
+      "bytes": 17733,
+      "sha256": "519a7ba78f24a16c70c0cedffeab45e690679d97d9c321b799d6d98a66311936"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep/Cargo.toml",
+      "bytes": 1503,
+      "sha256": "e1d1659d1266079764d0b335749a2f416b1c0fc3d59ac9e2bf2b3bd53e463d48"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep/src/lib.rs",
+      "bytes": 650,
+      "sha256": "643a577f03d5d6147224420b7b488eee40b9a84c9f23211df14257d168996db4"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep/tests/link_closure.rs",
+      "bytes": 158543,
+      "sha256": "016e02e915b5462807f5e384bf77b64202600d03ff7f4992d098e659376d064c"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep/tests/link_closure_coregraphics.rs",
+      "bytes": 22490,
+      "sha256": "65e42bacb702067cf7402b8cd7649ec493bee051826dd4c5ef95bca8f986bd1f"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep/tests/link_closure_imageio.rs",
+      "bytes": 47327,
+      "sha256": "abb1595f52c0f69efe2ae9f5cb6bdba21c01f5c842225e7fc798b4e022b1fd80"
+    },
+    {
+      "path": "wayland-admission.py",
+      "bytes": 5424,
+      "sha256": "eab8daa5e99a3a1b23aec4ee71ba2732d3caea09f7803897ff7987694bd0e3b6"
+    },
+    {
+      "path": "worker/Cargo.lock",
+      "bytes": 42564,
+      "sha256": "62272af614108713d55584f060ad3fa63199db6c81f9d3e335b9e52ccd6adecc"
+    },
+    {
+      "path": "worker/Cargo.toml",
+      "bytes": 1124,
+      "sha256": "bcf5ef3083fade38cac5a1c1021f3ce1b0b0b5585a6c9d4bb69a355a8d97c018"
+    },
+    {
+      "path": "worker/src/bridge.rs",
+      "bytes": 23537,
+      "sha256": "db3cfca6b9ea746ce8fe5ef539904e543633226c905cfa96c7ed7127d116b9a8"
+    },
+    {
+      "path": "worker/src/budget.rs",
+      "bytes": 4998,
+      "sha256": "cc7383477611b4135b9974ce6ed1c4b2893b11b91d22113b78915dbf14393d59"
+    },
+    {
+      "path": "worker/src/complete.rs",
+      "bytes": 16266,
+      "sha256": "e2170e8c36dba79adb11171f3a1cdf4dd22809076b6b192e1ab2ff83514e7f97"
+    },
+    {
+      "path": "worker/src/compose.comp",
+      "bytes": 2330,
+      "sha256": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215"
+    },
+    {
+      "path": "worker/src/compose.rs",
+      "bytes": 22029,
+      "sha256": "67d38791d28c16061659117d8ef8f2c7eedc9e6f525cd325501703b5b2379b40"
+    },
+    {
+      "path": "worker/src/egl.rs",
+      "bytes": 20792,
+      "sha256": "031e1556b128a4164043732935ceaa932083c5cb5df1925372a070383baa3a85"
+    },
+    {
+      "path": "worker/src/egl_probe.rs",
+      "bytes": 1965,
+      "sha256": "3da069403ca88112251a114c0ad00302a76b9a73c280e2679585ef3df07b3c08"
+    },
+    {
+      "path": "worker/src/lib.rs",
+      "bytes": 52975,
+      "sha256": "dc0d0b8b4e1915989c56530918d242f27ecf6a0eb6ef937743161e9c028039c1"
+    },
+    {
+      "path": "worker/src/phase_probe.rs",
+      "bytes": 2184,
+      "sha256": "02ae300a7f9c03017683e071fee0428aa1afba99ffd76737d23199e69c95a28d"
+    },
+    {
+      "path": "worker/src/present_shm.rs",
+      "bytes": 10453,
+      "sha256": "e0385221e56de4de2faec080e13d7495635c16d7edd1c0112526eb3a359f16b0"
+    },
+    {
+      "path": "worker/src/reserved.rs",
+      "bytes": 4414,
+      "sha256": "5307d87115e7510356e28fd84cfbc73bb669e33df390edc0bc3608116d0cd0e4"
+    },
+    {
+      "path": "worker/src/scene.rs",
+      "bytes": 11392,
+      "sha256": "6646766bea42413767936f19eafec59df70e814cc9e1e7fb6dd8a798441d0ee5"
+    },
+    {
+      "path": "worker/src/scene_probe.rs",
+      "bytes": 2499,
+      "sha256": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c"
+    },
+    {
+      "path": "worker/src/scene_wayland_probe.rs",
+      "bytes": 19757,
+      "sha256": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c"
+    },
+    {
+      "path": "worker/src/shm.rs",
+      "bytes": 10848,
+      "sha256": "112f79eb7606f74a62936bbe7ecec1ee2250976cf2df9026cf3a2087f565b365"
+    },
+    {
+      "path": "worker/src/wayland_probe.rs",
+      "bytes": 19222,
+      "sha256": "58d6a3c8a2d0f8386960cbf111dc9f6b239fa039a50b73c1e94df72777dd5e89"
+    }
+  ],
+  "fonts": [
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf",
+      "bytes": 179756,
+      "sha256": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf",
+      "bytes": 741368,
+      "sha256": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf",
+      "bytes": 173052,
+      "sha256": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/OFL-Archivo.txt",
+      "bytes": 4388,
+      "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf",
+      "bytes": 174008,
+      "sha256": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf",
+      "bytes": 175096,
+      "sha256": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf",
+      "bytes": 174608,
+      "sha256": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf",
+      "bytes": 658596,
+      "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+    },
+    {
+      "path": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf",
+      "bytes": 404576,
+      "sha256": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0"
+    },
+    {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc",
+      "bytes": 19484784,
+      "sha256": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+    },
+    {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/OFL-NotoSansCJK.txt",
+      "bytes": 4301,
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+    },
+    {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf",
+      "bytes": 10673296,
+      "sha256": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d"
+    },
+    {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/OFL-NotoColorEmoji.txt",
+      "bytes": 4301,
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+    }
+  ],
+  "native_binary": {
+    "path": "/home/callen/.cache/hotaru-admission-native-target/debug/deps/scene_inventory-1ce38e1c3238d658",
+    "sha256": "44fb5e7c385ed9bf3f5800a6446b8c4bb7ea00abc4ea237d6522806d17e9b520"
+  },
+  "runner_sha256": "eab8daa5e99a3a1b23aec4ee71ba2732d3caea09f7803897ff7987694bd0e3b6"
+}

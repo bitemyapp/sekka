@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "case": {
+    "codepoint": "U+25F9",
+    "cell": [
+      9,
+      12
+    ],
+    "thickness": 6
+  },
+  "reference_inset_points": [
+    [
+      8.0,
+      6.0
+    ],
+    [
+      7.999999999999999,
+      5.999999999999997
+    ],
+    [
+      8.0,
+      6.0
+    ],
+    [
+      8.0,
+      6.0
+    ]
+  ],
+  "cause": "The final inset vertex is exactly the first, while the middle differs by ULPs. z2d plotClosedJoined takes its repeated-initial-point branch and emits two opposite joins in total. The original Rust cyclic loop skipped the closing join as a zero-length segment, producing an empty mask.",
+  "fix": "Remove only the repeated closing vertex after the short/open fallback, retaining both closed joins on the two remaining points. No epsilon collapse or oracle tolerance change.",
+  "red_test_log": "degenerate-red-tests.log",
+  "green_test_log": "final-tests.log",
+  "reference_adapter_sha256": "eb52a6465392159b5da49593754a44618a288be50fc991ef6fc27409cc32646c",
+  "independent_source_review": "linux_io confirmed exact pinned branch before correction."
+}

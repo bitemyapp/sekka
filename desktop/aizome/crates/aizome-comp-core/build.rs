@@ -121,7 +121,9 @@ fn main() {
     path_packages.sort();
     for name in &path_packages {
         let Some(dir) = package_dir(&workspace, name) else {
-            panic!("aizome-comp-core: can't find the path package {name} (looked in crates/, sukumo/crates/ and apps/)");
+            panic!(
+                "aizome-comp-core: can't find the path package {name} (looked in [patch.crates-io], crates/, sukumo/crates/ and apps/)"
+            );
         };
         sources.update(name.as_bytes());
         let mut files = Vec::new();
@@ -226,6 +228,14 @@ fn closure(packages: &[toml::Table], root: &str) -> Vec<usize> {
 
 /// Where a path package lives: the workspace's crates, Sukumo's or an app's.
 fn package_dir(workspace: &Path, name: &str) -> Option<PathBuf> {
+    // A crates.io package patched to a path, such as Hotaru's vendored simdutf8.
+    let patched = std::fs::read_to_string(workspace.join("Cargo.toml"))
+        .ok()
+        .and_then(|t| t.parse::<toml::Table>().ok())
+        .and_then(|t| Some(workspace.join(t.get("patch")?.get("crates-io")?.get(name)?.get("path")?.as_str()?)));
+    if let Some(dir) = patched.filter(|dir| declares(dir, name)) {
+        return Some(dir);
+    }
     for base in [workspace.join("crates"), workspace.join("sukumo/crates"), workspace.join("apps")] {
         let dir = base.join(name);
         if declares(&dir, name) {

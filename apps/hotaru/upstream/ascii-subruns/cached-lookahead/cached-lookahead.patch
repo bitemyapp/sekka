@@ -1,0 +1,392 @@
+--- a/crates/hotaru-core/src/screen.rs
++++ b/crates/hotaru-core/src/screen.rs
+@@ -7,6 +7,9 @@
+ use std::collections::VecDeque;
+ use triomphe::Arc;
+ use unicode_width::UnicodeWidthChar;
++
++mod text_chars;
++use text_chars::{PeekChar, TextChars};
+ 
+ /// The shape requested by DECSCUSR, independent of focus and blink phase.
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+@@ -959,8 +962,22 @@
+             }
+             return;
+         }
+-        let mut chars = text.chars().peekable();
+-        while chars.peek().is_some() {
++        let mut chars = TextChars::new(text);
++        let mut ascii_ready = 0;
++        while chars.peek_char().is_some() {
++            if ascii_ready == 0 {
++                ascii_ready = long_ascii_prefix(chars.as_str());
++            }
++            if ascii_ready != 0 {
++                // The previous UTF-8 span has published its row, cursor and
++                // REP state. Reuse the complete ASCII path, including its
++                // scalar metadata ordering and pending-wrap behavior.
++                let remaining = chars.as_str();
++                self.print_ascii(&remaining.as_bytes()[..ascii_ready]);
++                chars = TextChars::new(&remaining[ascii_ready..]);
++                ascii_ready = 0;
++                continue;
++            }
+             if self.scalar_metadata_writes(usize::MAX) {
+                 self.print_metadata_span(&mut chars);
+                 if let Some(ch) = chars.next() {
+@@ -985,7 +1002,7 @@
+             // Group positive-width writes until a combining mark or row
+             // boundary. Intern style and clear overwritten metadata once per
+             // run; combining and wrapping retain the existing scalar behavior.
+-            while let Some(&first) = chars.peek() {
++            while let Some(first) = chars.peek_char() {
+                 let mut ch = first;
+                 let mut width = if unicode {
+                     unicode_char_width(ch)
+@@ -1019,9 +1036,15 @@
+                         pending = true;
+                         break;
+                     }
+-                    let Some(&next) = chars.peek() else {
++                    let Some(next) = chars.peek_char() else {
+                         break;
+                     };
++                    if !ch.is_ascii() && next.is_ascii() {
++                        ascii_ready = long_ascii_prefix(chars.as_str());
++                        if ascii_ready != 0 {
++                            break;
++                        }
++                    }
+                     if unicode && !unicode_scalar_boundary(ch, next) {
+                         break;
+                     }
+@@ -1042,6 +1065,9 @@
+                     style,
+                     link.as_ref(),
+                 );
++                if ascii_ready != 0 {
++                    break;
++                }
+             }
+             s.cursor.col = col;
+             s.wrap_pending = pending;
+@@ -1052,6 +1078,9 @@
+             if let Some(previous) = previous {
+                 self.previous_char = Some(previous);
+             }
++            if ascii_ready != 0 {
++                continue;
++            }
+             // The scalar at a row boundary goes through the normal wrapping
+             // path, including one-column screens and disabled autowrap.
+             if let Some(ch) = chars.next() {
+@@ -1062,10 +1091,7 @@
+     /// Preserve scalar allocation/link-table order while amortizing row COW
+     /// checks over standalone positive-width scalars. Clusters and wrapping
+     /// continue through the complete scalar state machine.
+-    fn print_metadata_span<I: Iterator<Item = char>>(
+-        &mut self,
+-        chars: &mut std::iter::Peekable<I>,
+-    ) -> usize {
++    fn print_metadata_span<I: PeekChar>(&mut self, chars: &mut I) -> usize {
+         let style = self.style;
+         let protected = self.protected;
+         let unicode = self.modes.grapheme_cluster;
+@@ -1080,7 +1106,7 @@
+         let mut previous = None;
+         let mut clear_previous_spacer = false;
+         let row = Arc::make_mut(&mut screen.lines[screen.cursor.row]);
+-        while let Some(&ch) = chars.peek() {
++        while let Some(ch) = chars.peek_char() {
+             let width = if unicode {
+                 unicode_char_width(ch)
+             } else {
+@@ -2273,6 +2299,19 @@
+         crate::unicode::properties(ch).width()
+     }
+ }
++// Short ASCII fragments stay in the existing UTF-8 loop; a longer prefix
++// amortizes the ASCII path's row bookkeeping and uses its packed cell stores.
++// This scans only at ASCII entry, never the whole non-ASCII input repeatedly.
++fn long_ascii_prefix(text: &str) -> usize {
++    const MIN: usize = 16;
++    let bytes = text.as_bytes();
++    if bytes.len() < MIN || !bytes[0].is_ascii() {
++        return 0;
++    }
++    let count = crate::scan::printable_ascii(bytes);
++    if count >= MIN { count } else { 0 }
++}
++
+ #[inline]
+ fn unicode_scalar_boundary(previous: char, next: char) -> bool {
+     next as u32 <= 255
+--- /dev/null
++++ b/crates/hotaru-core/src/screen/text_chars.rs
+@@ -0,0 +1,138 @@
++//! Single-decode lookahead with access to the unconsumed original UTF-8 bytes.
++
++pub(super) trait PeekChar: Iterator<Item = char> {
++    fn peek_char(&mut self) -> Option<char>;
++}
++
++impl<I: Iterator<Item = char>> PeekChar for std::iter::Peekable<I> {
++    fn peek_char(&mut self) -> Option<char> {
++        self.peek().copied()
++    }
++}
++
++pub(super) struct TextChars<'a> {
++    original: &'a str,
++    chars: std::str::Chars<'a>,
++    lookahead: Option<char>,
++}
++
++impl<'a> TextChars<'a> {
++    pub(super) fn new(text: &'a str) -> Self {
++        let mut chars = text.chars();
++        let lookahead = chars.next();
++        Self {
++            original: text,
++            chars,
++            lookahead,
++        }
++    }
++
++    pub(super) fn as_str(&self) -> &'a str {
++        // `chars` is the original suffix after the cached scalar. Adding that
++        // scalar's exact UTF-8 length reconstructs the still-unconsumed suffix,
++        // including its boundary. Ordinary slicing checks the bound; no raw
++        // pointers or unchecked string construction are needed.
++        let remaining = self.chars.as_str().len() + self.lookahead.map_or(0, char::len_utf8);
++        &self.original[self.original.len() - remaining..]
++    }
++}
++
++impl PeekChar for TextChars<'_> {
++    fn peek_char(&mut self) -> Option<char> {
++        self.lookahead
++    }
++}
++
++impl Iterator for TextChars<'_> {
++    type Item = char;
++
++    fn next(&mut self) -> Option<char> {
++        let result = self.lookahead?;
++        // Decode the following scalar only once, retaining it across any
++        // repeated peeks. No byte-offset work occurs in this per-scalar path.
++        self.lookahead = self.chars.next();
++        Some(result)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn every_scalar_preserves_original_suffix_and_fused_eof() {
++        let mut encoded = [0; 4];
++        for value in 0..=0x10ffff {
++            let Some(ch) = char::from_u32(value) else {
++                continue;
++            };
++            let text = ch.encode_utf8(&mut encoded);
++            let mut cursor = TextChars::new(text);
++            assert_eq!(cursor.peek_char(), Some(ch));
++            assert_eq!(cursor.peek_char(), Some(ch));
++            assert_eq!(cursor.as_str(), text);
++            assert_eq!(cursor.as_str().as_ptr(), text.as_ptr());
++            assert_eq!(cursor.next(), Some(ch));
++            for _ in 0..3 {
++                assert_eq!(cursor.peek_char(), None);
++                assert_eq!(cursor.next(), None);
++                assert_eq!(cursor.as_str(), "");
++            }
++        }
++    }
++
++    #[test]
++    fn mixed_peeks_consumption_and_handoffs_match_standard_iterator() {
++        const VALUES: &[char] = &[
++            '\0',
++            'a',
++            'Z',
++            '\u{7f}',
++            '\u{80}',
++            '\u{7ff}',
++            '\u{800}',
++            '\u{d7ff}',
++            '\u{e000}',
++            '雪',
++            '\u{ffff}',
++            '\u{10000}',
++            '😀',
++            '\u{10ffff}',
++            '\u{301}',
++            '\u{200d}',
++        ];
++        let mut seed = 0xa938_17c2_u64;
++        for _ in 0..1024 {
++            let mut text = String::new();
++            for _ in 0..128 {
++                seed ^= seed << 13;
++                seed ^= seed >> 7;
++                seed ^= seed << 17;
++                text.push(VALUES[seed as usize % VALUES.len()]);
++            }
++            let mut cursor = TextChars::new(&text);
++            let mut expected = text.chars();
++            let mut consumed = 0;
++            while let Some(ch) = expected.next() {
++                assert_eq!(cursor.as_str(), &text[consumed..]);
++                for _ in 0..4 {
++                    assert_eq!(cursor.peek_char(), Some(ch));
++                }
++                // Rebuilding at a known boundary is what an ASCII handoff
++                // does. Cached lookahead must remain in the returned suffix.
++                if consumed % 7 == 0 {
++                    cursor = TextChars::new(cursor.as_str());
++                }
++                assert_eq!(cursor.next(), Some(ch));
++                consumed += ch.len_utf8();
++                assert_eq!(cursor.as_str(), expected.as_str());
++            }
++            assert_eq!(cursor.as_str(), "");
++            assert_eq!(cursor.peek_char(), None);
++            assert_eq!(cursor.next(), None);
++        }
++        let mut empty = TextChars::new("");
++        assert_eq!(empty.next(), None);
++        assert_eq!(empty.as_str(), "");
++    }
++}
+--- /dev/null
++++ b/crates/hotaru-core/tests/utf8_ascii_runs.rs
+@@ -0,0 +1,124 @@
++use hotaru_core::{GraphemeWidthMethod, HistoryLimits, Terminal};
++
++fn same(a: &mut Terminal, b: &mut Terminal) {
++    let x = a.snapshot_all();
++    let y = b.snapshot_all();
++    assert_eq!((x.cols, x.rows, x.cursor), (y.cols, y.rows, y.cursor));
++    assert_eq!(x.modes, y.modes);
++    assert_eq!(x.palette, y.palette);
++    assert_eq!(a.scrollback_len(), b.scrollback_len());
++    assert_eq!(
++        a.history_memory().active_bytes,
++        b.history_memory().active_bytes
++    );
++    assert_eq!(
++        a.history_memory().logical_bytes,
++        b.history_memory().logical_bytes
++    );
++    assert_eq!(x.lines.len(), y.lines.len());
++    for (x, y) in x.lines.iter().zip(&y.lines) {
++        assert_eq!(x.wrapped(), y.wrapped());
++        assert_eq!(x.cells(), y.cells());
++        for col in 0..x.cells().len() {
++            assert_eq!(x.style(x.cells()[col]), y.style(y.cells()[col]));
++            assert_eq!(x.grapheme(col), y.grapheme(col));
++            assert_eq!(x.hyperlink(col), y.hyperlink(col));
++        }
++    }
++    assert_eq!(a.take_responses(), b.take_responses());
++    assert_eq!(a.take_events(), b.take_events());
++}
++
++#[test]
++fn interior_ascii_preserves_unicode_wrap_charset_and_rep_across_chunks() {
++    let bodies = [
++        "雪{ascii}\u{301}\x1b[3b",
++        "\u{600}{ascii}\x1b[2b",
++        "雪{ascii}1\u{fe0f}\u{20e3}\x1b[2b",
++        "雪{ascii}\u{fe0f}日",
++        "雪{ascii}\u{80}\x1b[2b",
++        "雪{ascii}👩🏽‍💻end",
++        "\x1b(0雪{ascii}x\x1b(B",
++        "\x1b(A雪{ascii}#\x1b(B",
++        "\x1b*0\x1bN雪{ascii}x",
++        "\x1b[4h雪{ascii}\x1b[4l",
++        "\x1b[1\"q雪{ascii}\x1b[0\"q",
++    ];
++    for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
++        for cols in [1, 2, 7, 16, 80] {
++            for nowrap in [false, true] {
++                for count in [15, 16, 17, 48] {
++                    for body in bodies {
++                        let mut data = if nowrap { b"\x1b[?7l".to_vec() } else { vec![] };
++                        data.extend(body.replace("{ascii}", &"a".repeat(count)).as_bytes());
++                        data.extend(b"\x1b[6n");
++                        for chunk in [1, 7, 16, 31] {
++                            let mut whole = Terminal::new(cols, 3, 32);
++                            let mut split = Terminal::new(cols, 3, 32);
++                            for t in [&mut whole, &mut split] {
++                                t.set_default_grapheme_width(mode);
++                                t.feed("old 雪雪\r\nline\r".as_bytes());
++                            }
++                            whole.feed(&data);
++                            for part in data.chunks(chunk) {
++                                split.feed(part);
++                            }
++                            same(&mut whole, &mut split);
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn interior_ascii_preserves_metadata_peaks_cow_and_compressed_history() {
++    for limit in [Some(12_000), None] {
++        for chunk in [1, 7, 16, 65_536] {
++            for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
++                let limits = HistoryLimits {
++                    rows: 1000,
++                    bytes: limit,
++                };
++                let mut whole = Terminal::with_history_limits(80, 4, limits);
++                let mut split = Terminal::with_history_limits(80, 4, limits);
++                for t in [&mut whole, &mut split] {
++                    t.set_default_grapheme_width(mode);
++                    for _ in 0..180 {
++                        t.feed(b"historical text\r\n");
++                    }
++                    while t.compress_history_step() {}
++                }
++                let held = (whole.content_snapshot(), split.content_snapshot());
++                for i in 0..96 {
++                    let setup = format!(
++                        "\r\x1b]8;id={i};https://example.test/{i}\x1b\\\x1b[38;5;{};44m雪雪e{}\x1b]8;;\x1b\\\r",
++                        i % 16,
++                        "\u{301}".repeat(i % 31)
++                    );
++                    let write = format!("\x1b[31;44m雪{}\u{301}\x1b[2b\r\n", "a".repeat(48));
++                    for data in [setup.as_bytes(), write.as_bytes()] {
++                        let render = (whole.snapshot(), split.snapshot());
++                        whole.feed(data);
++                        for part in data.chunks(chunk) {
++                            split.feed(part);
++                        }
++                        same(&mut whole, &mut split);
++                        assert_eq!(render.0.plain_text(), render.1.plain_text());
++                    }
++                    if i % 17 == 0 {
++                        for t in [&mut whole, &mut split] {
++                            while t.compress_history_step() {}
++                        }
++                        same(&mut whole, &mut split);
++                    }
++                }
++                assert_eq!(held.0.rows, held.1.rows);
++                for (a, b) in held.0.rows().zip(held.1.rows()) {
++                    assert_eq!(a.cells(), b.cells());
++                }
++            }
++        }
++    }
++}

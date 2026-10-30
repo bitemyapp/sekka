@@ -166,7 +166,7 @@ impl Shell {
                 .apps
                 .as_deref()
                 .and_then(|i| i.terminal_command())
-                .unwrap_or_else(|| vec!["foot".into(), "--".into()]),
+                .unwrap_or_else(|| vec!["aizome-hotaru".into(), "--".into()]),
             ..Default::default()
         };
         let tx = cx.stream();

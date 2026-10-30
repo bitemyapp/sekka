@@ -246,3 +246,41 @@ mod tests {
         assert!(Image::decode(png).expect("decoded").premultiplied_pixels().is_none(), "a file's aren't lent");
     }
 }
+
+/// Immutable Alpha8 grid artwork. Normal painting retains only the original mask.
+/// A bounded RGBA template is created once if generic transforms/blending require
+/// the image path. Its tints are covered by the renderer's existing image budget.
+#[derive(Debug)]
+pub struct GridMask {
+    pub(crate) alpha: Arc<sidestep_engine::protocol::AlphaMask>,
+    fallback: std::sync::OnceLock<Image>,
+}
+impl GridMask {
+    pub fn new(width: u32, height: u32, alpha: Vec<u8>) -> Option<Self> {
+        Some(Self {
+            alpha: Arc::new(sidestep_engine::protocol::AlphaMask::new(width, height, alpha)?),
+            fallback: std::sync::OnceLock::new(),
+        })
+    }
+    pub fn width(&self) -> u32 {
+        self.alpha.width()
+    }
+    pub fn height(&self) -> u32 {
+        self.alpha.height()
+    }
+    pub fn alpha_bytes(&self) -> &[u8] {
+        self.alpha.alpha()
+    }
+    /// Conservative admission charge including the possible shared RGBA fallback.
+    pub fn retention_bytes(&self) -> usize {
+        std::mem::size_of::<Self>() + 64 + self.alpha.storage_bytes() + self.alpha.alpha().len() * 4
+    }
+    pub(crate) fn fallback(&self) -> &Image {
+        self.fallback.get_or_init(|| {
+            // AlphaMask validates at most4MiB; fallback is at most16MiB and is
+            // independent of tint. No recolor allocation occurs on the grid path.
+            let pixels: Vec<u8> = self.alpha.alpha().iter().flat_map(|a| [*a, *a, *a, *a]).collect();
+            Image::of(self.width(), self.height(), Pixels::Rgba(Arc::from(pixels)), 1.0)
+        })
+    }
+}

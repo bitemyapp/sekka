@@ -1,0 +1,49 @@
+{
+  "recorded_utc": "2026-10-28T17:53:51.400854+00:00",
+  "package": "/nix/store/9dxlk1kk1dma59z5d5a9lxq37vv4dfdd-hotaru-0.1.0",
+  "prepared_source": "/nix/store/kghiimia92rlfpy79l9f6jvaikby3jhn-hotaru-source",
+  "wrapper_sha256": "54f2b3aef74c0516a6d7b12f9d2ec917abe08e8016280ff43f71ec7721c02840",
+  "elf_sha256": "a2d9b3380266f30d0174c20f248cd21753bff705eb1ae855c519c744616078aa",
+  "elf_interpreter": "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+  "font_files": {
+    "NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+    "OFL-NotoSansCJK.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+    "NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "OFL-NotoColorEmoji.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  },
+  "application_licenses": {
+    "uucode-MIT.txt": "312e901e142be2477b4ca859e9311f9e3f80d33372991759b7921c1893605f33",
+    "Unicode-3.0.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "Ghostty-MIT.txt": "386211873e5b7a02f663ae4d7adf96285999f91608f8f9f31fecfd0f4095e6f1"
+  },
+  "runtime_environment": {
+    "PATH": "/usr/bin:/bin",
+    "unset": [
+      "AIZOME_FONT_DIR",
+      "HOTARU_FONT_DIR",
+      "FONTCONFIG_FILE",
+      "FONTCONFIG_PATH",
+      "LD_LIBRARY_PATH",
+      "SIDESTEP_FONT",
+      "SIDESTEP_MONO_FONT"
+    ],
+    "private_compositor": "headless Sway/pixman",
+    "runtime_font_and_library_configuration": "package wrapper"
+  },
+  "prepared_source_comparison": {
+    "matches": 88,
+    "missing": [
+      "apps/hotaru/Cargo.lock",
+      "apps/hotaru/upstream/sidestep-clipboard.patch",
+      "apps/hotaru/upstream/sidestep-grid-font.patch",
+      "apps/hotaru/upstream/sidestep-input.patch",
+      "apps/hotaru/upstream/sidestep-mime.patch"
+    ],
+    "differences": []
+  },
+  "suites": {
+    "smoke": "passed",
+    "fonts": "passed",
+    "search": "passed"
+  }
+}

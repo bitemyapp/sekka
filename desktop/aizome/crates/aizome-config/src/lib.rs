@@ -493,7 +493,8 @@ pub struct Keys {
     pub command_key_for_all_apps: bool,
     /// App IDs that get Ctrl+Shift instead of Ctrl.
     pub terminals: Vec<String>,
-    /// What ❖Return runs, in the Desk's folder.
+    /// What ❖Return runs, in the Desk's folder: Hotaru, Aizome's terminal,
+    /// unless the person chose another.
     pub terminal: Vec<String>,
     /// Overrides: a chord (`"Ctrl+Super+Up"`) to an action name
     /// (`"overview"`, `"spawn foot"`, `"none"` to unbind). See the
@@ -508,7 +509,7 @@ impl Default for Keys {
         Keys {
             command_key_for_all_apps: true,
             terminals: default_terminals(),
-            terminal: vec!["foot".into()],
+            terminal: vec!["aizome-hotaru".into()],
             bindings: BTreeMap::new(),
             extra: toml::Table::new(),
         }

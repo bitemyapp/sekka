@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "platform_reviewed": "x86_64 Linux",
+  "new_core_unsafe_blocks": 0,
+  "crates": {
+    "memmap2-0.9.12": {
+      "crate_sha256": "6b0ca1155a9ecc25aa12e8313a119f32edf0255fea2f44839c4ac0a12b2ac157",
+      "reviewed_files": {
+        "src/lib.rs": "f64a847a02c70c2d0818dcb9ad2a84f6fa74a88d1f6165bb83c283717cf393aa",
+        "src/unix.rs": "7cc89518012aa6e741802a110e4d5d4607ed0e739a72aee98bd873b3728540ec"
+      }
+    },
+    "bytemuck-1.25.2": {
+      "crate_sha256": "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797",
+      "reviewed_files": {
+        "src/lib.rs": "d4256f4efdfaf8ef19dbcef82777e740dcb9f3b78d44c3836fec611b26294cce",
+        "src/internal.rs": "93198f6ba0e5e430c5a33ebe17a738d24a3874a40761614434d976aeef402dc9",
+        "src/pod.rs": "7d6f8cb584e351d1f5f36496e2e43f7fd07fcfd792a8824424ead479acf49f56",
+        "src/zeroable.rs": "49db4e7edec70d863db37d1502945e012c1a08058adef803e13d4e7ec344017c"
+      }
+    },
+    "bytemuck_derive-1.12.1": {
+      "crate_sha256": "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c",
+      "reviewed_files": {
+        "src/traits.rs": "3264d561aff32cadfbdb09ac1a309d59017e1e3dadcc56d82a3f8caecd266a51",
+        "src/lib.rs": "66258605388044e196af5161c0c08b31efa7daa8a4dab1747956e4b4bd05b8c7"
+      }
+    }
+  },
+  "findings": [
+    "Anonymous map_anon uses MAP_PRIVATE|MAP_ANON and READ|WRITE, fd=-1,offset0; requested byte length is independently bounded to4MiB before syscall.",
+    "All Cell fields are integers; repr(C),8byte size and4byte alignment. Pod derive rejects padding and non-Pod fields at compile time; no manual unsafe trait implementation.",
+    "bytemuck mutable cast checks alignment and length division, with NoUninit+AnyBitPattern on both types; immutable cast checks the same bounds.",
+    "Builder borrows the map exclusively while copying; make_read_only consumes its only mutable owner and applies PROT_READ before publication. Failure drops unpublished mapping.",
+    "Published CellPage is behind Arc with no mutable-access API. Row ranges are checked before storage and cannot change; returned slices borrow owner lifetime.",
+    "Mapped cell mutation first allocates owned Vec with remembered capacity and copies; it never writes mapped memory or changes another capture.",
+    "MmapInner Drop munmaps only after final Arc owner is gone. No madvise,decommit or remap is called.",
+    "Existing active Row struct remains112bytes on measured target; original capacities,charge fields and encoded metadata are preserved.",
+    "No Miri result claimed for anonymous mmap. Existing concurrent snapshot,archive,12k audit,chunk-budget and explicit storage tests passed."
+  ]
+}

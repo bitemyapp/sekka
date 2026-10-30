@@ -1,0 +1,7 @@
+{
+  "desktop/aizome/apps/hotaru/src/font.rs": "23c1baffaefd1e0e305705b6066f44db6325b42b5b9cfe9ab8a5815f3456d873",
+  "desktop/aizome/apps/hotaru/src/terminal_view.rs": "4a966804b898507d43f9785ba53490cc0542def29f979be904e41a686603fdf7",
+  "desktop/aizome/crates/aizome-kit/src/testing.rs": "e9516199b8628505516d3d58f2e8d05e73741811e1526b60f74f77f55af53332",
+  "desktop/aizome/apps/hotaru/tests/pixel_scroll.rs": "61d8c77f10941aa1a6e7a1f51a2eca37756bf49f5b1f4c36b3887c21c140aad1",
+  "desktop/aizome/apps/hotaru/tests/wayland/pixel_scroll.py": "78181d571bdad7dc909c1d47d8c074df52476ad63f316aa28c1bfde9afac0d5a"
+}

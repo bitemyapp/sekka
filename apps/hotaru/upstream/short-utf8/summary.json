@@ -1,0 +1,490 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T20:44:47.333808+00:00",
+  "status": "not accepted for integration: measured truncated-input regressions outweigh unconditional use; isolated source preserved",
+  "base_commit": "e2b1ff7",
+  "baseline_source_sha256": "b9fcaa0ced20a2212e21685002a6da7b1fda89d3443394fe9afe82507c66ec3b",
+  "candidate_source_sha256": "b3aa53e1d3e724130ebec6b977c13aea1de727021d20a11cb3654a49c553b467",
+  "native_binary_sha256": "ae8278cb47d00b1ac87ffbf9e4788f8b6cb925d6de098e77e7b6e0788b641c88",
+  "diagnostic_binary_sha256": "a59f59861631a246ee5943c3442b875e0bce6b8671836cca6ac02912bcff106d",
+  "production_delta": [
+    "32..63-byte plausible non-ASCII-leading runs copied into an initialized 64-byte stack block and validated with existing SIMD compat API",
+    "Success converts only original validated prefix; any failure calls original compat validator, preserving error offset/length"
+  ],
+  "changed_source_files": [
+    "crates/hotaru-core/src/lib.rs",
+    "crates/hotaru-core/src/short_utf8_tests.rs"
+  ],
+  "vendor_unchanged": true,
+  "qualification": {
+    "debug": {
+      "passed": 140,
+      "failed": 0,
+      "ignored": 2
+    },
+    "release": {
+      "passed": 140,
+      "failed": 0,
+      "ignored": 2
+    },
+    "strict_workspace_all_target_clippy": "passed",
+    "miri": {
+      "toolchain": "nightly-2026-08-28",
+      "flags": "-Zmiri-strict-provenance",
+      "passed": 1,
+      "scope": "wrapper threshold/NUL/truncated suffix/pointer-lifetime cases; Miri scalar dependency fallback, not AVX2 execution"
+    },
+    "intentional_ignores": [
+      "hotaru-io::shell::actual_shell_startup requires external shells/tic and disposable home",
+      "hotaru-io::shell::shell_child isolated subprocess helper"
+    ],
+    "actual_library": {
+      "revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+      "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+      "direct_native_previous_comparisons": 444,
+      "direct_native_vt_comparisons": 3462,
+      "fresh_cursor_objects_equal_bundled": 756,
+      "cursor_comparisons_per_debug_release": 2268
+    },
+    "wrapper_tests": [
+      "31/32/63/64 threshold neighborhoods and NULs",
+      "all truncated suffix offsets from representative1..4byte scalars, with genuine non-ASCII-leading padding cases",
+      "786432 exhaustive two-byte placements at short-run edges",
+      "65536 seeded unaligned inputs and mutations",
+      "0..128-byte input slices immediately before PROT_NONE guard page"
+    ]
+  },
+  "instruction_diagnostic": {
+    "scope": "Callgrind Ir diagnostic, x86-64-v3/debug2; no elapsed-time claim",
+    "results": {
+      "ascii": {
+        "baseline": 50085622,
+        "candidate": 50083392,
+        "fraction": -4.452375573971157e-05
+      },
+      "unicode": {
+        "baseline": 291316118,
+        "candidate": 274769299,
+        "fraction": -0.05680021796802881
+      },
+      "styled": {
+        "baseline": 180413681,
+        "candidate": 180411433,
+        "fraction": -1.2460252390766868e-05
+      },
+      "cursor": {
+        "baseline": 305333886,
+        "candidate": 305331638,
+        "fraction": -7.36243208854237e-06
+      },
+      "short-invalid-leads": {
+        "baseline": 149395550,
+        "candidate": 151075821,
+        "fraction": 0.01124712884687673
+      },
+      "short-invalid-suffix": {
+        "baseline": 22015567,
+        "candidate": 23809027,
+        "fraction": 0.08146326642416257
+      }
+    },
+    "limitations": [
+      "x86-64-v3 debug2 Callgrind binaries differ from native acceptance binary",
+      "Includes initialization and teardown; tiny unchanged-workload count differences are not speedups",
+      "No elapsed-time, hardware-counter, Ghostty-performance-parity or non-x86 claim",
+      "Malformed leading-byte corpus adds 1.12% instructions; truncated suffix corpus adds 8.15% due to precise-error fallback"
+    ]
+  },
+  "independent_review": "upstream_clipboard read-only source review found no concrete safety or error-path defect; root reviewed NUL-padding proof",
+  "reproduce": {
+    "diagnostic_builder": "tools/build-diagnostic.py",
+    "profile_runner": "tools/profile-short-text.py",
+    "native_builder": "tools/build-candidate.py",
+    "remote_workspace": "/home/callen/work/hotaru-short-text-candidate-20261028"
+  },
+  "evidence": {
+    "baseline/diagnostic-build.json": "3fea4fc0e1359dbc3f51338b6de9697460f20808eb379aeacec56ec2cc63b7b0",
+    "baseline/mixed-annotated.txt": "7a6128e68c7df17e07772bdb417f993247a172527e30cc8b0c9ec891743817f2",
+    "diagnostic-build.json": "7ef56a306896de133dd55ced7faa2fc02d4938e65cc9ac43c8b5387ccfbaf772",
+    "miri-strict-final.log": "6e0634ba4c9dd3cdfef56ba56418553d46aaba1dcf812355067ea284b4ba13e8",
+    "native/per-core-mpstat.log.gz": "39c197ab90e000396d8b47b26f84e42606e5bb0d094b464abe15ec3c485da8b5",
+    "native/runner.log": "7a1c900b1358d173726f3ac1de5ebdccb83cc8fa919ebab21b80bebee332ab80",
+    "native/summary.json.gz": "23d1191c8f7f5b2dced1b46b0ceae887b539dfc6a5544bb534f16d94f85b9d03",
+    "native-build.json": "d3032341ae1c9dd3474a0c9763bfd1a866bc962d6a6a6320b5dbe56ae2356ddf",
+    "profiles/baseline-ascii.callgrind.gz": "8daca89fffebb812f55bb485d62813c119e5e382e7cecd984e00390ecc5a7a25",
+    "profiles/baseline-ascii.json": "a47cc3def9e065bdd066564b1cdc68c60445bfb749f36f19d8d8f9f85df612dd",
+    "profiles/baseline-ascii.log": "0fd18cea645b2edcbcdc47bd0cbb3ae3e7e5e59d5db749951762e3cb297fbebb",
+    "profiles/baseline-cursor.callgrind.gz": "d96cbef7a318c8477453ac66890ddb27ebfe5eb574152e924e8144269588288e",
+    "profiles/baseline-cursor.json": "604257d6fb22834ad4736c8aefd3eaf9bee42b418aea0468306bc9c0cfebb5ee",
+    "profiles/baseline-cursor.log": "a9d3abd2f17fe35c78eaa44cdd69f24192106cbbed5b096c8fd4907b9449fa1d",
+    "profiles/baseline-short-invalid-leads.callgrind.gz": "99e5c89e7e65b894bf02e9a745fe577bd07600a8b1048c9c41deb3eb3134496e",
+    "profiles/baseline-short-invalid-leads.json": "f8b98b78150c95813d130319c96470928ff0a55c9f81e27232fd51a3cddffe10",
+    "profiles/baseline-short-invalid-leads.log": "78fc5c0ff079a53b0bb1cdf6ffdc1ca895d05a90096f4b0d0725c5fb688bf5a1",
+    "profiles/baseline-short-invalid-suffix.callgrind.gz": "47bbb940898439a4626e4c01ffc8dab4ccde7be392d645de393955c2703dc4bd",
+    "profiles/baseline-short-invalid-suffix.json": "13f974a47071ba6166e0389228b47fc2acd4321e91ff45451dbf89f8bda6bbca",
+    "profiles/baseline-short-invalid-suffix.log": "4b566552351e3fba6f844b956f61c02b8b7bb21a09f6bd4be2b424dcc1b5d2d1",
+    "profiles/baseline-styled.callgrind.gz": "ed4e5b98b9559b831cd685feb55cb6608fb860755343a8d9a0d37b67c5ccd853",
+    "profiles/baseline-styled.json": "a222b84132b53d2150278ec4e3bf6a4d0ed1bfdb6ffc8bba0eb293b92c9affa4",
+    "profiles/baseline-styled.log": "4b775c13acb74b3b78c97d215a7a0ec2afe58a01a38dcfdce2e1f9df3a598458",
+    "profiles/baseline-unicode.callgrind.gz": "1ae4afc57d51d7c50842ae458f82b25d6af30a3d765cb19884cc4dc716a4bb32",
+    "profiles/baseline-unicode.json": "579b9c2635537d2769f59910c661375edb72c12ed9ad58d526fa96c4e34d6091",
+    "profiles/baseline-unicode.log": "462e843037145741545c0275d453725577fe325e0cc48cd71eae29ae432bab38",
+    "profiles/candidate-ascii.callgrind.gz": "b21767830723dcb647ab7092649ddf54342324a7a5181c296531212efa136d01",
+    "profiles/candidate-ascii.json": "eb896808262851f9af4337013d760da0f9952208feba922bc05d3f04d155db42",
+    "profiles/candidate-ascii.log": "8ac83b607f55a9e00e459a578cd8fb381b3672445918e3f70536716ee20fe695",
+    "profiles/candidate-cursor.callgrind.gz": "9a94e04838ab1d88172ee4c19510c1b093aea0a52163e2933873c5722c85684d",
+    "profiles/candidate-cursor.json": "d568277efc78bcc41bebbfe7320fa07a3b1093d1d2ae07d2cbeef1ada79e554e",
+    "profiles/candidate-cursor.log": "67b588c9f8f379857fdd9a31e4a4d30775641dd5302fb0660ca50046c7ea676a",
+    "profiles/candidate-short-invalid-leads.callgrind.gz": "f192a992eadf507dd107b47e5b636df08855a49427bbe00ce8443bb5c0ef424c",
+    "profiles/candidate-short-invalid-leads.json": "456990bfab2f99f9110c8f3c616bd1362e2b6c03c8a0ed3689046d914d5f07aa",
+    "profiles/candidate-short-invalid-leads.log": "5661b88dd339ff95b2ea4f04fa3a1dea705c6a357aac0a053fe8a9cdfbe58f17",
+    "profiles/candidate-short-invalid-suffix.callgrind.gz": "1c16270def5e7ec463a6ffc1f9f29c6e10785b14f1b1974b19358e3160abd4f4",
+    "profiles/candidate-short-invalid-suffix.json": "6f690e960af723492819c12d8aff1f273e0bd78397d2679b35f78ab26124a0bd",
+    "profiles/candidate-short-invalid-suffix.log": "aac70e4264143d5f4a520975ae26ce9b94aa93f28e968d2b78d5e187f04f3d24",
+    "profiles/candidate-styled.callgrind.gz": "7b0dabe1c754ac8c789dc00be739e84c30b744c10c544b0e9883ab620d554ee9",
+    "profiles/candidate-styled.json": "41a85cbe15ba5b6d6ad1fb7af28e098530fae6bbf2d342aa24989077703235fb",
+    "profiles/candidate-styled.log": "4e63f9c27070bcf38a595c487d70dc5cba72ca57945501ba70802627b2b9a966",
+    "profiles/candidate-unicode.callgrind.gz": "d366e109152c31739ce5ece3b1282a505ea428123b9bfd68d214873f8f20746a",
+    "profiles/candidate-unicode.json": "2063878dbcc56f024ad9531953ad2bc8e067173fd5a01b5fcbec171bc06f5b88",
+    "profiles/candidate-unicode.log": "822fd6b185c8bb7c40692dca48458aa1dc3c05e3750b8134c90eb9d035948417",
+    "profiles/short-invalid-leads.vt.gz": "5a083b7342884d12ba3c368af5a5d0acc6742955fb9c8856a0daecccbe206032",
+    "profiles/short-invalid-suffix.vt.gz": "7766448babfc10fd260ed05cf29b625940b9000abfe43313319fe9ba8d732367",
+    "profiles/summary.json": "632369f5dee57af706a58553abd9760a71ee63e95ad03fd955397b57af7503bc",
+    "qualification-final.log": "ff72560f1c1acbffd40ffc8b8b4181fcad4e3331901a3b7c7e3d3f41abf94101",
+    "reference-cursor.json.gz": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991",
+    "reference-differential.json.gz": "c232d5199ae6c5b7ab668a6a610a38dd03cefd5fc353d1c7713338910a91ffd4",
+    "reference-vt-controls.json.gz": "bdfcc2c92f32d46e2d90e132df50d71d43ea3bd1303ea2034df02613bcadde5e",
+    "reference.log": "f5b8bfbac6448649846bcc87823d82dd394eae80b637f3a5fe201fcafaba19f8",
+    "short-utf8.patch": "c0cee73b66a2d07079ae71b86baf7706a65a5bca7c99ec4fc19c894106d83d84",
+    "tools/build-candidate.py": "73931ce11957f348d0200edbb063cc6d88e1ca1cfe619d7843b5b73304a3d339",
+    "tools/build-diagnostic.py": "1be899d47ec13284fce92a1c2026b06d91b16be758053ab74bfe67a15ba2e131",
+    "tools/native-paired.py": "bebcd2e8fb043b2074cee0866386c94cb29480a4cfeea25b2677fbb90e32fce7",
+    "tools/profile-short-text.py": "7e42cad3728e711528bfa7c2955a77d1ba22273afca0d8d8eaaec9c59fcbdf28"
+  },
+  "qualification_commands": [
+    "rustup run 1.95.0 cargo test --workspace",
+    "rustup run 1.95.0 cargo test --workspace --release",
+    "rustup run 1.95.0 cargo clippy --workspace --all-targets -- -D warnings",
+    "env CARGO_TARGET_DIR=/home/callen/.cache/hotaru-short-text-miri-target MIRIFLAGS=-Zmiri-strict-provenance rustup run nightly-2026-08-28 cargo miri test -p hotaru-core --lib short_utf8_tests",
+    "python3 tools/differential.py --library /home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so --replay target/release/hotaru-replay --report reference-differential.json",
+    "python3 tools/vt-controls-oracle.py --library /home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so --replay target/release/hotaru-replay --report reference-vt-controls.json",
+    "python3 tools/cursor-oracle.py --root /home/callen/work/ghostty-reference-20261028 --output reference-cursor.json"
+  ],
+  "full_isolated_evidence": "/home/callen/work/hotaru-short-text-candidate-20261028/evidence",
+  "storage_note": "Large diagnostic profiles, native raw samples/host observations and actual-library reports are gzip-compressed. Candidate is not integrated.",
+  "rejected_first_variant": {
+    "source_sha256": "d6bdd255ce864f6fa990505195ba03ded3b874fddfddc5e1470db6ecd947b04f",
+    "evidence_path": "/home/callen/work/hotaru-short-text-candidate-20261028/evidence/first-padding-variant",
+    "reason": "Lacked leading-byte check; malformed-leading-byte diagnostic cost grew13.4%."
+  },
+  "native_paired": {
+    "status": "completed",
+    "cpu": 8,
+    "observed_siblings": [
+      8,
+      72
+    ],
+    "preflight_active_percent": {
+      "cpu8": 2.912621359223301,
+      "cpu72": 0.0
+    },
+    "samples_per_engine_case": 60,
+    "rounds": 6,
+    "iterations_per_round": 10,
+    "order": "alternating baseline/candidate and candidate/baseline",
+    "state_gates": "All 12 full baseline/candidate JSON and pinned-reference common-state comparisons matched",
+    "compiler_observations": "None in preflight or 144 between-batch process snapshots",
+    "raw_report": "native/summary.json.gz",
+    "per_core_utilization": "native/per-core-mpstat.log.gz",
+    "results": [
+      {
+        "mode": "legacy",
+        "input": "ascii",
+        "input_bytes": 2097144,
+        "input_sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 1906292.5,
+            "p95_feed_ns": 1930860,
+            "max_feed_ns": 1942919
+          },
+          "candidate": {
+            "median_feed_ns": 1917570.0,
+            "p95_feed_ns": 1943470,
+            "max_feed_ns": 1945382
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.0059159336775443,
+          "p95_feed_ns": 1.0065307686730265,
+          "max_feed_ns": 1.001267680227534
+        }
+      },
+      {
+        "mode": "legacy",
+        "input": "unicode",
+        "input_bytes": 2097150,
+        "input_sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 8312824.5,
+            "p95_feed_ns": 8397083,
+            "max_feed_ns": 8920897
+          },
+          "candidate": {
+            "median_feed_ns": 7440791.0,
+            "p95_feed_ns": 8016425,
+            "max_feed_ns": 8041182
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 0.8950978094148385,
+          "p95_feed_ns": 0.9546678292926246,
+          "max_feed_ns": 0.9013871587128514
+        }
+      },
+      {
+        "mode": "legacy",
+        "input": "styled",
+        "input_bytes": 2097152,
+        "input_sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 6962550.5,
+            "p95_feed_ns": 7035046,
+            "max_feed_ns": 7048086
+          },
+          "candidate": {
+            "median_feed_ns": 6854556.5,
+            "p95_feed_ns": 7038180,
+            "max_feed_ns": 7044490
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 0.9844893046018123,
+          "p95_feed_ns": 1.0004454839385557,
+          "max_feed_ns": 0.9994897905615794
+        }
+      },
+      {
+        "mode": "legacy",
+        "input": "cursor",
+        "input_bytes": 2097120,
+        "input_sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 10717994.0,
+            "p95_feed_ns": 10883515,
+            "max_feed_ns": 10959401
+          },
+          "candidate": {
+            "median_feed_ns": 10807279.5,
+            "p95_feed_ns": 11030439,
+            "max_feed_ns": 11081666
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.008330430115934,
+          "p95_feed_ns": 1.0134996827771174,
+          "max_feed_ns": 1.0111561754150615
+        }
+      },
+      {
+        "mode": "legacy",
+        "input": "short-invalid-leads",
+        "input_bytes": 262185,
+        "input_sha256": "4bd31dfe72484d46e03822d93d2d550823504340df6eb9e058b337afe91a826d",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 4844737.0,
+            "p95_feed_ns": 5055371,
+            "max_feed_ns": 5057895
+          },
+          "candidate": {
+            "median_feed_ns": 4818622.5,
+            "p95_feed_ns": 4892774,
+            "max_feed_ns": 4939105
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 0.9946097177204872,
+          "p95_feed_ns": 0.9678367819097747,
+          "max_feed_ns": 0.9765139450304919
+        }
+      },
+      {
+        "mode": "legacy",
+        "input": "short-invalid-suffix",
+        "input_bytes": 262185,
+        "input_sha256": "88554ec8a5ccdf765a26328bb87454f75bb45993929193eba2e43bd613512277",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 766488.0,
+            "p95_feed_ns": 796909,
+            "max_feed_ns": 815828
+          },
+          "candidate": {
+            "median_feed_ns": 816829.5,
+            "p95_feed_ns": 877943,
+            "max_feed_ns": 905104
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.0656781319472712,
+          "p95_feed_ns": 1.1016853869136878,
+          "max_feed_ns": 1.1094299288575533
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "ascii",
+        "input_bytes": 2097144,
+        "input_sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 1903123.0,
+            "p95_feed_ns": 1918491,
+            "max_feed_ns": 1935637
+          },
+          "candidate": {
+            "median_feed_ns": 1922477.0,
+            "p95_feed_ns": 1957120,
+            "max_feed_ns": 2066937
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.0101696001782334,
+          "p95_feed_ns": 1.0201350957601574,
+          "max_feed_ns": 1.0678329666151247
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "unicode",
+        "input_bytes": 2097150,
+        "input_sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 11048501.0,
+            "p95_feed_ns": 11340509,
+            "max_feed_ns": 11354881
+          },
+          "candidate": {
+            "median_feed_ns": 10501405.5,
+            "p95_feed_ns": 11300078,
+            "max_feed_ns": 11332567
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 0.95048237765467,
+          "p95_feed_ns": 0.996434816109224,
+          "max_feed_ns": 0.9980348539099617
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "styled",
+        "input_bytes": 2097152,
+        "input_sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 7032221.0,
+            "p95_feed_ns": 7485650,
+            "max_feed_ns": 7493852
+          },
+          "candidate": {
+            "median_feed_ns": 6777279.5,
+            "p95_feed_ns": 7262291,
+            "max_feed_ns": 7268580
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 0.9637466598390466,
+          "p95_feed_ns": 0.9701617094039929,
+          "max_feed_ns": 0.9699390914045274
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "cursor",
+        "input_bytes": 2097120,
+        "input_sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 10806458.5,
+            "p95_feed_ns": 11298045,
+            "max_feed_ns": 11333909
+          },
+          "candidate": {
+            "median_feed_ns": 11001319.0,
+            "p95_feed_ns": 11635847,
+            "max_feed_ns": 11674366
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.0180318556722352,
+          "p95_feed_ns": 1.0298991551193148,
+          "max_feed_ns": 1.0300387977351857
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "short-invalid-leads",
+        "input_bytes": 262185,
+        "input_sha256": "4bd31dfe72484d46e03822d93d2d550823504340df6eb9e058b337afe91a826d",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 5666293.0,
+            "p95_feed_ns": 6362555,
+            "max_feed_ns": 6378820
+          },
+          "candidate": {
+            "median_feed_ns": 5774212.0,
+            "p95_feed_ns": 5935327,
+            "max_feed_ns": 5995007
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.019045785313255,
+          "p95_feed_ns": 0.9328527611942058,
+          "max_feed_ns": 0.9398300939672227
+        }
+      },
+      {
+        "mode": "unicode",
+        "input": "short-invalid-suffix",
+        "input_bytes": 262185,
+        "input_sha256": "88554ec8a5ccdf765a26328bb87454f75bb45993929193eba2e43bd613512277",
+        "statistics": {
+          "baseline": {
+            "median_feed_ns": 800384.5,
+            "p95_feed_ns": 897452,
+            "max_feed_ns": 916571
+          },
+          "candidate": {
+            "median_feed_ns": 941794.0,
+            "p95_feed_ns": 996923,
+            "max_feed_ns": 1009492
+          }
+        },
+        "candidate_over_baseline_statistics": {
+          "median_feed_ns": 1.1766769596362747,
+          "p95_feed_ns": 1.1108371255510043,
+          "max_feed_ns": 1.1013789439116008
+        }
+      }
+    ],
+    "limitations": [
+      "Single paired window, CPU8 frequency observations4.695\u20135.046GHz; no general parity claim",
+      "Malformed suffix median regressions6.57% legacy and17.67% Unicode; p95 and maxima also regress",
+      "Native ASCII medians regress0.59% legacy and1.02% Unicode; cursor medians regress0.83%/1.80%",
+      "Mixed Unicode median improves10.49% legacy and4.95% Unicode, while Unicode-mode p95 improvement is only0.36%",
+      "Do not interpret instruction counts or one paired run as universal throughput acceptance"
+    ]
+  },
+  "decision": {
+    "integrated": false,
+    "reason": "Unicode-width truncated-input median regresses17.67%; legacy regresses6.57%; p95 and maxima regress in both modes, and mixed-text tail improvement is unproven",
+    "follow_up": "Any revised candidate requires separate correctness and native qualification; this exact source remains out"
+  }
+}

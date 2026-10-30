@@ -1,0 +1,38 @@
+{
+  "copy": {
+    "29": {
+      "attaches": 60,
+      "buffers": [
+        "35",
+        "37",
+        "39"
+      ],
+      "buffer_changes": 59
+    },
+    "25": {
+      "attaches": 1,
+      "buffers": [
+        "36"
+      ],
+      "buffer_changes": 0
+    }
+  },
+  "redraw": {
+    "29": {
+      "attaches": 60,
+      "buffers": [
+        "35",
+        "37",
+        "39"
+      ],
+      "buffer_changes": 59
+    },
+    "25": {
+      "attaches": 1,
+      "buffers": [
+        "36"
+      ],
+      "buffer_changes": 0
+    }
+  }
+}

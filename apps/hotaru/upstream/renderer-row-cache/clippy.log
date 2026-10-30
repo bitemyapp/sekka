@@ -1,0 +1,224 @@
+    Checking cfg-if v1.0.5
+    Checking bitflags v2.13.2
+    Checking smallvec v1.16.3
+    Checking log v0.4.34
+    Checking stable_deref_trait v1.2.1
+    Checking linux-raw-sys v0.12.1
+    Checking writeable v0.6.4
+    Checking litemap v0.8.3
+    Checking downcast-rs v1.2.1
+    Checking simd-adler32 v0.3.10
+    Checking once_cell v1.21.4
+    Checking utf8_iter v1.0.4
+    Checking adler2 v2.0.1
+    Checking memchr v2.8.3
+    Checking foldhash v0.2.0
+    Checking linux-raw-sys v0.4.15
+    Checking arrayvec v0.7.8
+    Checking quick-error v2.0.1
+    Checking zune-core v0.5.3
+    Checking weezl v0.1.12
+    Checking itoa v1.0.18
+    Checking slab v0.4.12
+    Checking pxfm v0.1.30
+    Checking unicode-width v0.2.2
+    Checking arrayref v0.3.9
+    Checking fax v0.2.7
+    Checking equivalent v1.0.3
+    Checking color_quant v1.1.0
+    Checking strict-num v0.1.1
+    Checking cursor-icon v1.2.0
+    Checking parlance v0.1.1
+    Checking byteorder-lite v0.1.0
+    Checking xcursor v0.3.11
+    Checking linebender_resource_handle v0.1.1
+    Checking yazi v0.2.1
+    Checking isnt v0.2.0
+    Checking xkeysym v0.2.1
+    Checking zeno v0.3.3
+    Checking winnow v1.0.4
+    Checking debug-fn v1.0.0
+    Checking winnow v0.7.15
+    Checking toml_writer v1.1.3+spec-1.1.0
+    Checking utf8parse v0.2.2
+   Compiling aizome-kit v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-kit)
+    Checking anstyle v1.0.14
+    Checking anstyle-query v1.1.5
+    Checking jiff-core v0.1.1
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking static_assertions v1.1.0
+    Checking str_indices v0.4.4
+    Checking unicode-segmentation v1.13.3
+    Checking lz4_flex v0.14.0
+    Checking triomphe v0.1.17
+    Checking simdutf8 v0.1.5 (/home/callen/work/hotaru-shaped-row-20261028/apps/hotaru/vendor/simdutf8)
+    Checking miniz_oxide v0.9.1
+    Checking libloading v0.8.9
+    Checking hashbrown v0.17.1
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+    Checking zune-jpeg v0.5.15
+    Checking polycool v0.4.0
+    Checking secure-execution v0.1.0
+    Checking env_filter v2.0.0
+    Checking wayland-sys v0.31.11
+    Checking libc v0.2.191
+    Checking serde_core v1.0.229
+    Checking crc32fast v1.5.2
+    Checking icu_locale_fallback_data v2.3.0
+    Checking icu_properties_data v2.3.0
+    Checking zmij v1.0.23
+    Checking icu_segmenter_data v2.3.0
+    Checking icu_normalizer_data v2.3.0
+    Checking anstyle-parse v1.0.0
+    Checking rustix v0.38.44
+    Checking num-traits v0.2.19
+    Checking castaway v0.2.4
+    Checking bytemuck v1.25.2
+    Checking zerocopy v0.8.63
+    Checking thiserror v1.0.69
+    Checking linearize v0.1.8
+    Checking thiserror v2.0.21
+    Checking image-webp v0.2.4
+    Checking gif v0.14.2
+    Checking ropey v1.6.1
+    Checking zerofrom v0.1.8
+    Checking dlib v0.5.3
+    Checking yeslogic-fontconfig-sys v6.0.1
+    Checking anstream v1.0.0
+    Checking kurbo v0.13.1
+    Checking bstr v1.13.1
+    Checking yoke v0.8.3
+    Checking toml_parser v1.1.5+spec-1.1.0
+    Checking compact_str v0.10.0
+    Checking font-types v0.12.7
+    Checking tiny-skia-path v0.12.0
+    Checking zerovec v0.11.8
+    Checking zerotrie v0.2.5
+    Checking flate2 v1.1.10
+    Checking indexmap v2.14.2
+    Checking read-fonts v0.41.0
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/apps/hotaru/crates/hotaru-core)
+    Checking png v0.18.1
+    Checking jiff v0.2.38
+    Checking tiny-skia v0.12.0
+    Checking rustix v1.1.5
+    Checking memmap2 v0.9.11
+    Checking hotaru-io v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/apps/hotaru/crates/hotaru-io)
+    Checking kbvm v0.2.0
+    Checking tinystr v0.8.4
+    Checking potential_utf v0.1.6
+    Checking icu_collections v2.3.0
+    Checking icu_locale_core v2.3.0
+    Checking serde v1.0.229
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking serde_spanned v1.1.2
+    Checking serde_json v1.0.154
+    Checking toml v0.9.12+spec-1.1.0
+    Checking aizome-theme v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-theme)
+    Checking moxcms v0.8.1
+    Checking icu_provider v2.3.1
+    Checking aizome-shell-proto v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-shell-proto)
+    Checking icu_properties v2.3.0
+    Checking icu_locale_fallback v2.3.0
+    Checking icu_normalizer v2.3.0
+    Checking aizome-config v0.1.0 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/crates/aizome-config)
+    Checking icu_segmenter v2.3.0
+    Checking env_logger v0.11.11
+    Checking half v2.7.1
+    Checking parley_data v0.11.1
+    Checking tiff v0.11.3
+    Checking wayland-backend v0.3.17
+    Checking polling v3.11.0
+    Checking calloop v0.13.0
+    Checking image v0.25.10
+    Checking wayland-client v0.31.15
+    Checking wayland-csd-frame v0.3.0
+    Checking wayland-protocols v0.32.13
+    Checking wayland-cursor v0.31.14
+    Checking calloop-wayland-source v0.3.0
+    Checking skrifa v0.44.0
+    Checking harfrust v0.12.0
+    Checking fontique v0.11.1
+    Checking swash v0.2.10
+    Checking parley v0.11.1
+    Checking wayland-protocols-wlr v0.3.12
+    Checking smithay-client-toolkit v0.19.2
+    Checking sidestep-engine v0.0.1 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/sidestep/crates/sidestep-engine)
+    Checking sidestep-ui v0.0.1 (/home/callen/work/hotaru-shaped-row-20261028/desktop/aizome/sidestep/crates/sidestep-ui)
+error: this boolean expression can be simplified
+    --> crates/aizome-kit/src/engine.rs:2096:34
+     |
+2096 |             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+     |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+     = note: `-D clippy::nonminimal-bool` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::nonminimal_bool)]`
+help: try
+     |
+2096 -             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+2096 +             Key::Character(s) if !(s != " " || !m.is_empty() && m != Modifiers::SHIFT) => {
+     |
+2096 -             Key::Character(s) if s == " " && m.is_empty() || s == " " && m == Modifiers::SHIFT => {
+2096 +             Key::Character(s) if (m == Modifiers::SHIFT || m.is_empty()) && s == " " => {
+     |
+
+error: this boolean expression can be simplified
+   --> crates/aizome-kit/src/tree.rs:441:20
+    |
+441 |                 if !self.by_id.get(id).is_some_and(|&i| !self.nodes[i].dead) {
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `self.by_id.get(id).is_none_or(|&i| self.nodes[i].dead)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+
+error: this `if` can be collapsed into the outer `match`
+   --> crates/aizome-kit/src/widgets/menus.rs:470:17
+    |
+470 | /                 if cx.state::<MenuState>().open_sub.as_ref() != Some(&r.path) {
+471 | |                     self.open_sub(cx, i);
+472 | |                 }
+    | |_________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_match
+    = note: `-D clippy::collapsible-match` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_match)]`
+help: collapse nested if block
+    |
+469 ~             Some((i, r)) if r.kind == RowKind::Submenu && r.enabled
+470 ~                 && cx.state::<MenuState>().open_sub.as_ref() != Some(&r.path) => {
+471 |                     self.open_sub(cx, i);
+472 ~                 }
+    |
+
+error: this boolean expression can be simplified
+    --> crates/aizome-kit/src/widgets/text_editor.rs:1152:12
+     |
+1152 |         if !cx.state::<EditorState>().is_some_and(|s| s.bar_until.is_some_and(|t| now < t)) {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `cx.state::<EditorState>().is_none_or(|s| s.bar_until.is_none_or(|t| now >= t))`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#nonminimal_bool
+
+error: this `if` can be collapsed into the outer `match`
+   --> crates/aizome-kit/src/widgets/text_field.rs:777:17
+    |
+777 | /                 if self.editable() && self.copy(cx) {
+778 | |                     self.replace(cx, "", EditKind::Other);
+779 | |                     true
+780 | |                 } else {
+781 | |                     false
+782 | |                 }
+    | |_________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_match
+help: collapse nested if block
+    |
+776 ~             EditCommand::Cut
+777 ~                 if self.editable() && self.copy(cx) => {
+778 |                     self.replace(cx, "", EditKind::Other);
+779 |                     true
+780 ~                 }
+    |
+
+error: could not compile `aizome-kit` (lib) due to 5 previous errors

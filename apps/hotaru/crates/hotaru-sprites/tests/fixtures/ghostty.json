@@ -1,0 +1,13 @@
+{
+  "format": "HSP1 then cp:u32,width:u16,height:u16,thickness:u16,encoded_len:u32 then runs(length:u16,alpha:u8);alllittleendian",
+  "source": "committed Ghostty PNG crops, not Rust output",
+  "ghostty_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "records": 612,
+  "sha256": "eede9f49bb4dc905fdb1208dde92331bef163d1b8dd4fc60bc64b7a3ed90403a",
+  "png_sources": {
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png": "c52a982f7eca5280f2f9a5319d1513137e8d330ee4078eed36f8bce947025b06",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png": "ab44bfd98b656185f540260079c1896c28ab13fa428d2fb43947d7e836774b59",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png": "18ad45f8c64cf03ce7c866d359d20c4c2a869f041f4c96040cd5d3928b81c8fb",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png": "db4bf9d4cdc505c564073ff670a97810357c7c00cd3f4eef615ca5a264b1820e"
+  }
+}

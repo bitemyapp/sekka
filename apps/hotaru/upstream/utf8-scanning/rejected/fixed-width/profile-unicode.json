@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "unicode",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "ddfcc8c8eea75bce3d12254bd1f4a3f746ffb9c7936c07d3c100954fd748f8d7",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-dense-baseline-build.json",
+      "sha256": "6b100ad161d3677057e740bf30e90067746eb27697386c2ed0c2658b4183c746",
+      "source_sha256": "9061bb83aa2dcd90c92e630a8ee5b89171588d2ffe60465faf8356934f9f4a23",
+      "binary_sha256": "7ecc4be8c9d4f994584157b69995548dfca65ea9edb2dfb1317c1bf2ff034209",
+      "revision": "combined-budget-wide-rowspan-osc7-control"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-dense-width-run-build.json",
+      "sha256": "6832f27c660c63c6505507531e1f69325c4bffa8480e9c0e0939332b617e17a0",
+      "source_sha256": "92e688868d4e6b3e81a6e3e249dac4969f68be1a211cb202b28971a26929bcde",
+      "binary_sha256": "c61d9550686f68cfaae80228152c4d03ea0d3fefc0422db64d9fecd777e45130",
+      "revision": "combined-fixed-width-inner-run"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          1804706,
+          1771405,
+          1782552,
+          1819398,
+          1789493,
+          1784005,
+          1774640,
+          1776823,
+          1796593,
+          1788311,
+          1798857,
+          1791696,
+          1777886,
+          1812738,
+          1789323,
+          1806108,
+          1779617,
+          1773599,
+          1793579,
+          1785267
+        ],
+        "combined-fixed-width-inner-run": [
+          1783383,
+          1768621,
+          1776944,
+          1789953,
+          1782643,
+          1785978,
+          1777354,
+          1782623,
+          1801761,
+          1791195,
+          1787930,
+          1774079,
+          1775912,
+          1809192,
+          1789502,
+          1794460,
+          1785496,
+          1784505,
+          1817254,
+          1800850
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 1788817.0,
+        "combined-fixed-width-inner-run": 1785737.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          10739851,
+          10820213,
+          10785410,
+          10793552,
+          10862396,
+          10921967,
+          10881386,
+          10903008,
+          10883818,
+          10875025,
+          10810698,
+          10854034,
+          10850458,
+          10837018,
+          10841755,
+          10836937,
+          10858320,
+          10841074,
+          10785770,
+          10810668
+        ],
+        "combined-fixed-width-inner-run": [
+          11987662,
+          11916084,
+          11900911,
+          11850635,
+          11874450,
+          11963986,
+          12040402,
+          12038399,
+          12037738,
+          12051489,
+          12064699,
+          12032671,
+          12008314,
+          12013662,
+          12005659,
+          11951717,
+          12007763,
+          12037537,
+          12083237,
+          12053852
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 10841414.5,
+        "combined-fixed-width-inner-run": 12010988.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          3554559,
+          3618725,
+          3612466,
+          3616592,
+          3613858,
+          3437601,
+          3480126,
+          3469129,
+          3469369,
+          3479164,
+          3501969,
+          3524523,
+          3514778,
+          3526075,
+          3534418,
+          3545035,
+          3543602,
+          3546295,
+          3541999,
+          3772428
+        ],
+        "combined-fixed-width-inner-run": [
+          3441708,
+          3457862,
+          3439834,
+          3447256,
+          3443470,
+          3477522,
+          3449439,
+          3430360,
+          3442589,
+          3424151,
+          3475850,
+          3507647,
+          3496039,
+          3516931,
+          3499264,
+          3602441,
+          3585155,
+          3600618,
+          3583862,
+          3591334
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 3538208.5,
+        "combined-fixed-width-inner-run": 3476686.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-fixed-width-inner-run",
+        "combined-fixed-width-inner-run",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    }
+  ]
+}

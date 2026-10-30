@@ -484,10 +484,15 @@ in
       ];
       configPackages = [ cfg.package ];
     };
-    # Terminal applications open in foot in Aizome sessions.
+    # Terminal applications open in Hotaru, Aizome's terminal, in Aizome
+    # sessions. foot stays installed, as a choice in Settei's Default Apps
+    # and the fallback; a person's own xdg-terminals.list comes first.
     xdg.terminal-exec = {
       enable = true;
-      settings.Aizome = [ "foot.desktop" ];
+      settings.Aizome = [
+        "org.aizome.Hotaru.desktop"
+        "foot.desktop"
+      ];
     };
 
     # The lock screen authenticates through PAM as this service.

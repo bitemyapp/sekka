@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T17:01:12.652337+00:00",
+  "scope": "Static owned capture search only; native Find/live reconciliation not integrated",
+  "status": "passed",
+  "isolated_core_base": "1d3c9cf",
+  "upstream_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "cases": 249,
+  "input_chunk_sizes": [
+    1,
+    7,
+    65536
+  ],
+  "selection_comparisons": 747,
+  "named_coordinate_corrections": [
+    "spaces-soft-'  '",
+    "cursor-blanks-'   '",
+    "blank-wrap-'    '"
+  ],
+  "source_files": {
+    "crates/hotaru-core/src/search.rs": "3de8971b43bc1c8856b8a8e85a03225cd4ca86b9f81304f184cad3fa23e9e4a4",
+    "crates/hotaru-core/tests/search.rs": "b3657e7ac1ebb2490a9af0108fbe152e6c3feb05cccaeb1f74c8abb401ebcbaf",
+    "tools/search-oracle.py": "7e9729b2fbef0ebc88e1b786cd7855a79193b37c738180466ac5b843c81e364c",
+    "upstream/search-fixtures.json": "d80df1abcee801a43198bd683f6050ce9c13239bd458f568310b159b96a21614"
+  },
+  "validation": [
+    "cargo +1.95.0 test --locked --workspace",
+    "cargo +1.95.0 clippy --locked -p hotaru-core --all-targets -- -D warnings",
+    "Regenerated oracle fixtures after explicitly setting application-equivalent reference history cap; 249 cases at3chunk sizes pass"
+  ],
+  "limitations": [
+    "No search performance-parity claim",
+    "Subsequent history-budget and font changes require integrated validation",
+    "Native search and live result reconciliation remain pending"
+  ],
+  "reference_history_limit_bytes": 50000000,
+  "exact_coordinate_comparisons": 738,
+  "large_history_fixture_rows": 3000
+}

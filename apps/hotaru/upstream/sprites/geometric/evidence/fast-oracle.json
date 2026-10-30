@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/home/callen/.cache/hotaru-reference/zig-x86_64-linux-0.17.0/zig",
+    "build-lib",
+    "-dynamic",
+    "-lc",
+    "-O",
+    "ReleaseFast",
+    "--dep",
+    "z2d",
+    "-Mroot=oracle.zig",
+    "--dep",
+    "z2d_options",
+    "-Mz2d=/home/callen/work/ghostty-reference-20261028/zig-pkg/z2d-0.13.0-j5P_HgsRFABzZDH54gI35P0OSrg7HFyJwS2bXX5uBdU4/src/z2d.zig",
+    "-Mz2d_options=z2d-options.zig",
+    "-femit-bin=libsprites-fast.so"
+  ],
+  "library": "/home/callen/work/hotaru-sprites-geometric-20261028/oracle-expanded/libsprites-fast.so",
+  "sha256": "4855a67ebb19e6f4c2713553001ad875287c62337a0c765ea22df6fd1bb41891",
+  "adapter_sha256": "7ae0c1d3d7c8c07c219985ef62f3853726bc3c8e88c8e04090685905f3e84841",
+  "source_note": "Same unchanged pinned Ghostty/z2d sources as ReleaseSafe oracle; ReleaseFast is required for the documented upstream Braille residual assertion defect."
+}

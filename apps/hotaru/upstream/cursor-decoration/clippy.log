@@ -1,0 +1,9 @@
+    Checking simdutf8 v0.1.5 (/home/callen/work/hotaru-cursor-decoration-20261028/apps/hotaru/vendor/simdutf8)
+    Checking hotaru-sprites v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/apps/hotaru/crates/hotaru-sprites)
+    Checking hotaru-io v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/apps/hotaru/crates/hotaru-io)
+    Checking sidestep-engine v0.0.1 (/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/sidestep/crates/sidestep-engine)
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/apps/hotaru/crates/hotaru-core)
+    Checking sidestep-ui v0.0.1 (/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/sidestep/crates/sidestep-ui)
+    Checking aizome-kit v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/crates/aizome-kit)
+    Checking aizome-hotaru v0.1.0 (/home/callen/work/hotaru-cursor-decoration-20261028/desktop/aizome/apps/hotaru)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.98s

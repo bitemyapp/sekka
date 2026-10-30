@@ -1,0 +1,35 @@
+--- a/crates/hotaru-core/src/screen.rs
++++ b/crates/hotaru-core/src/screen.rs
+@@ -884,7 +884,7 @@
+             // run; combining and wrapping retain the existing scalar behavior.
+             while let Some(&first) = chars.peek() {
+                 let mut ch = first;
+-                let mut width = if unicode {
++                let width = if unicode {
+                     unicode_char_width(ch)
+                 } else {
+                     char_width(ch)
+@@ -921,15 +921,15 @@
+                     if unicode && !unicode_scalar_boundary(ch, next) {
+                         break;
+                     }
++                    let next_width = if unicode {
++                        unicode_char_width(next)
++                    } else {
++                        char_width(next)
++                    };
++                    if next_width != width || col + width > s.cols {
++                        break;
++                    }
+                     ch = next;
+-                    width = if unicode {
+-                        unicode_char_width(ch)
+-                    } else {
+-                        char_width(ch)
+-                    };
+-                    if width == 0 || col + width > s.cols {
+-                        break;
+-                    }
+                 }
+                 row.finish_print_run(
+                     start,

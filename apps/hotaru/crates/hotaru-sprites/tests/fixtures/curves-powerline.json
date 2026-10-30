@@ -1,0 +1,1238 @@
+{
+  "ghostty_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "oracle_sha256": "b4446973820f50cbea0ca1be181e4add0a1180f4410542c5e03dc2240f580bdd",
+  "format": "same HSP1 lossless RLE as ghostty.rle",
+  "records": [
+    {
+      "cp": "U+256D",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "0413a11422a2e29853e1a8c36bbaae3bd97cf5ca3aacbe0632e1e0a138b03954"
+    },
+    {
+      "cp": "U+256E",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "9236e45804a2afa93e0b4077998b05e9272b9189ea8ef31b680bc19e2b649f4c"
+    },
+    {
+      "cp": "U+256F",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "fadbd8a1917c529a7b4a4ad0d756ce7d442e6645bc8616c710772d8c1d02b1a3"
+    },
+    {
+      "cp": "U+2570",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "30acc2839c8beb962be92b5679f7ad5a295aecba288b5b506c84dd14800c400e"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "2f549e8fda219daec51acd90b229be7d7823b79e9c2abb32cfb2789a9d43365f"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "1b395b3c5591b05bd07d102b5f67ed9b9f87bcc4842b05c9ec3e4bb3e3c0ea0c"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png",
+      "raw_sha256": "b632a77a04da67ffffebb2610993d89638fc0a0e9026ecf5afb9076c18004800"
+    },
+    {
+      "cp": "U+256D",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "3c38da88708911ecb3f5524808d1d5071c22f3de7aa02dc92b91f369c445bd83"
+    },
+    {
+      "cp": "U+256E",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "e8929e484aa7feda678af5fe846e7909461f2b9f29cc1f0fa2e1fec117bbd36e"
+    },
+    {
+      "cp": "U+256F",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "f329873a93a4fac7e03e2fc5fe5f346d072ec20803b78cecef1ac4ef51476971"
+    },
+    {
+      "cp": "U+2570",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "928167a199892820a4c86ec4a9202ccbcab9af3aaeea321ae7fcf553a222f1e2"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "261fb8e09506eebb87ddb1a58f09243e7c8f3b62e17e8c5d5e70176cf75e1682"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "d443e39b03f934fea6e610c1f01e18d826ad77822cb19e6b6a80d679f86ebc4a"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png",
+      "raw_sha256": "35588f51d5da6c994f04f8f16796d1d7930be8d02c17aa2911811661bf42ec2e"
+    },
+    {
+      "cp": "U+256D",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "1d4456c94d0cd4cb38fd98eaee60bce9c0d739c6aaa23f229c5628570a128c3f"
+    },
+    {
+      "cp": "U+256E",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "6e36ed88555ccc22f34ed746ad2ffaa0232521b88683c94c3e218d3c638c2679"
+    },
+    {
+      "cp": "U+256F",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "e17429dcdb6fcc2527fddc7a0733a7be3e940105649336adf7fbe97c96f26b4a"
+    },
+    {
+      "cp": "U+2570",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "51b69818e6a3450b26ec0aa060eb794a8ff816f33dca9a178aa206efbc5c196e"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "4eaf26ebdc67e9e3dd9c1255ec5c9830c475088bee91d933c672dca73a22f520"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "2a9444a118dadd2b3f58e76827ead91b2d1c3567410072f1296f4114f0d1b46e"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png",
+      "raw_sha256": "13d87619cf4e22632976f853827b18fa75ca2da7753c5346fd60d2bf53c5ecc5"
+    },
+    {
+      "cp": "U+256D",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "a46a72c346a973230134590dbccef567d6d802b4e9652af3af1c876eb81bfc70"
+    },
+    {
+      "cp": "U+256E",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "9c63f301fd9797fcfb6baf7271df7d1b4bf4e76c58ea498e97217ce59290a5ef"
+    },
+    {
+      "cp": "U+256F",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "8ece8682f50ee305f298dd71e8581c9535741acace9aa9f574b60db402936c34"
+    },
+    {
+      "cp": "U+2570",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "f63ab497504ea7318eba4d61f1b2452656662d403470fd7d898f0b182a23e7e6"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "4337791decb6c2de034bd0cf79127f49a4e8e6c596aff033cb7ed751188dc5bd"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "5b4601006c21c3412328c00954870f95a96d32ff5b763719919f12e19b7c6bf3"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png",
+      "raw_sha256": "bdebed9face09fae6fd75681710facdd73366d21d961bfef707b51d63c5a38b6"
+    },
+    {
+      "cp": "U+E0B0",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "7e08d7f4f60add64a8d2f33a7b26f0cd1d956f3fdd66250af7c5ced7e173ba73"
+    },
+    {
+      "cp": "U+E0B1",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "740f5d8f378bf406fef9f93747c747db059db3a878c534d557f6b1255064eb79"
+    },
+    {
+      "cp": "U+E0B2",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "bec290c64f714f8ba5066c2c5e40b02b8a57c9a03033a85bc288461a03635311"
+    },
+    {
+      "cp": "U+E0B3",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "088dcb1d6c5f0b153ac1b2e09753e9a6d34a21f5c3f52adf57298c6033dc74a7"
+    },
+    {
+      "cp": "U+E0B4",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "52c31e64f0f2e1cb2f79ac78906e6b546e85fddc618b68c4aa706df9d3188d91"
+    },
+    {
+      "cp": "U+E0B5",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "ebedd21c1944bd54fd03ea340ea216974f28696b27d81e5e8f24bb02a52ff37b"
+    },
+    {
+      "cp": "U+E0B6",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "2429fd5de519ccb22eb2c9d9319bc048b6c6b17ca53f0e2a39370f6fa25f0d8e"
+    },
+    {
+      "cp": "U+E0B7",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "271bfba1f4b0a00af1cd47021cb51c7a7e62743dfe8e18e7f2fea5c5890c532c"
+    },
+    {
+      "cp": "U+E0B8",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "00e7b8693f5234beb18e63c0a2b286cb0076fa1019dc5e72ac2a5232f527a2d1"
+    },
+    {
+      "cp": "U+E0B9",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "1b395b3c5591b05bd07d102b5f67ed9b9f87bcc4842b05c9ec3e4bb3e3c0ea0c"
+    },
+    {
+      "cp": "U+E0BA",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "f362b75e0560fd0c8965fefe3e2d9601749b3302d5f6f7a1084312add454b55d"
+    },
+    {
+      "cp": "U+E0BB",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "2f549e8fda219daec51acd90b229be7d7823b79e9c2abb32cfb2789a9d43365f"
+    },
+    {
+      "cp": "U+E0BC",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "7c72afc7126567974d8887a326c7906ba71deadb6e380e925696378f59f4eeef"
+    },
+    {
+      "cp": "U+E0BD",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "2f549e8fda219daec51acd90b229be7d7823b79e9c2abb32cfb2789a9d43365f"
+    },
+    {
+      "cp": "U+E0BE",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "ed8cb63ca35972495244deecaa87f5ad092d406841c176f40660a4404e7acc96"
+    },
+    {
+      "cp": "U+E0BF",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "1b395b3c5591b05bd07d102b5f67ed9b9f87bcc4842b05c9ec3e4bb3e3c0ea0c"
+    },
+    {
+      "cp": "U+E0D2",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "c1f0d880e7dd4d0b26013d0ee81ab1887014b45dfca2067feb9b237fee74ff78"
+    },
+    {
+      "cp": "U+E0D4",
+      "metrics": [
+        9,
+        17,
+        1
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-9x17+1.png",
+      "raw_sha256": "0f82a770d14b2c823e1da09b408b8975852c7d49dcb267c3d0c8b8974d531b4b"
+    },
+    {
+      "cp": "U+E0B0",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "df08586a7a0700905ada7ea561b29d3fa18e0852f86c92c1c75f31bb18b30391"
+    },
+    {
+      "cp": "U+E0B1",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "1181f2080a1c9a13054c99301eb6dbf1f6f29a4f9094013a6a47ba31be5dd93c"
+    },
+    {
+      "cp": "U+E0B2",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "122ecb8c97d2394e441d095dd3f596fe2cdec19a089f55aaba6877b32a9d8f09"
+    },
+    {
+      "cp": "U+E0B3",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "353d481baa341b4dc3127411af65316d1a0d57fe819c77452db5722c61ad260c"
+    },
+    {
+      "cp": "U+E0B4",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "9cc72b3621b8303d5eac84bb2336699d3c6b88deeb6ce1b22b30f5f229fe9820"
+    },
+    {
+      "cp": "U+E0B5",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "c4ac2c529416e28eb9718738440008e30b496c11fb7c04ea1b2938b1b1ffb575"
+    },
+    {
+      "cp": "U+E0B6",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "d8f31c21bcb32aba85860190261d6ad8570d92271adeecd32db0570ab29d4331"
+    },
+    {
+      "cp": "U+E0B7",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "89f68a00b959c03bcca01c77279edcb3274a0cac0e1bcf821bb50ab23164d579"
+    },
+    {
+      "cp": "U+E0B8",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "0015c6145ee16fa312e72bcaed3eff62c2ffc10f4f433aed5cbaa05f4c2fd4ff"
+    },
+    {
+      "cp": "U+E0B9",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "d443e39b03f934fea6e610c1f01e18d826ad77822cb19e6b6a80d679f86ebc4a"
+    },
+    {
+      "cp": "U+E0BA",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "8a9f4075cefd3a7baa30b22807fdf10efd0177e58ef3931b8846d1b4a99b781a"
+    },
+    {
+      "cp": "U+E0BB",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "261fb8e09506eebb87ddb1a58f09243e7c8f3b62e17e8c5d5e70176cf75e1682"
+    },
+    {
+      "cp": "U+E0BC",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "1fcc6a1e5cdd608ea64ef650866039bbe73ede6aab8b9ffb21ef047a1f30d512"
+    },
+    {
+      "cp": "U+E0BD",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "261fb8e09506eebb87ddb1a58f09243e7c8f3b62e17e8c5d5e70176cf75e1682"
+    },
+    {
+      "cp": "U+E0BE",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "8f3f5a7e22a275fb0d9c4482097ad89e485a5d30dd2393182af1d1df2355f623"
+    },
+    {
+      "cp": "U+E0BF",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "d443e39b03f934fea6e610c1f01e18d826ad77822cb19e6b6a80d679f86ebc4a"
+    },
+    {
+      "cp": "U+E0D2",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "4985731b9b387244a1c64dceb641bb20a6f8e1a7d7ef49e3445126b4e2430946"
+    },
+    {
+      "cp": "U+E0D4",
+      "metrics": [
+        11,
+        21,
+        2
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-11x21+2.png",
+      "raw_sha256": "3c6e272f77f10a4384be3952c144c5e3d7b8529d6a8e3665afebbd9113626169"
+    },
+    {
+      "cp": "U+E0B0",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "6316c5923147dc32cb4f0a77681bdb360a69a0c1cd531c06039a617f3a965d30"
+    },
+    {
+      "cp": "U+E0B1",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "f32352cb5985b13c9713cdfeda69c43517888a04d60b84c331d2dd582fb050a4"
+    },
+    {
+      "cp": "U+E0B2",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "70279f13a22f87c2b1c55afb0ddda3d32cb046189ba3333f497e078d5a043ed3"
+    },
+    {
+      "cp": "U+E0B3",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "59d6fec9c1a21593f7f5d216c675e7263bdd6681b9b3ca15efc8908a5ea3a801"
+    },
+    {
+      "cp": "U+E0B4",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "59424fcbc283c2f28db511a82335a9cc31f416479c6063ceecadc972f6680e7f"
+    },
+    {
+      "cp": "U+E0B5",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "2e327422ea448a00ae3c56f90fae10c30a3a1fde76750c03bf80ed2aa3adcaef"
+    },
+    {
+      "cp": "U+E0B6",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "5a7a82296cc3fec7d8d6bcad5f477fffd6a0c7ff5f738076abaf1a0d93622d5e"
+    },
+    {
+      "cp": "U+E0B7",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "6c67c4f375e5491e892435261374c4456d8a9baf2f3f4727c7878a9fede59373"
+    },
+    {
+      "cp": "U+E0B8",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "7a1ed043d55b9051e8f5687ee26ce15863b855b64f13aa069767576aa65e21ae"
+    },
+    {
+      "cp": "U+E0B9",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "2a9444a118dadd2b3f58e76827ead91b2d1c3567410072f1296f4114f0d1b46e"
+    },
+    {
+      "cp": "U+E0BA",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "a430d4c5ccd1163bae2c3695216dbee26d86346865e614bbc2d29e866fedccf7"
+    },
+    {
+      "cp": "U+E0BB",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "4eaf26ebdc67e9e3dd9c1255ec5c9830c475088bee91d933c672dca73a22f520"
+    },
+    {
+      "cp": "U+E0BC",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "6d53db77533f4fa4dc58a72fd42760d0afddbeb3c28b81ba898025d3c03be8f2"
+    },
+    {
+      "cp": "U+E0BD",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "4eaf26ebdc67e9e3dd9c1255ec5c9830c475088bee91d933c672dca73a22f520"
+    },
+    {
+      "cp": "U+E0BE",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "06a3078e6b8e14af7c6093da807b293259b806d874b7a1efd1b5565d31dc9ccc"
+    },
+    {
+      "cp": "U+E0BF",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "2a9444a118dadd2b3f58e76827ead91b2d1c3567410072f1296f4114f0d1b46e"
+    },
+    {
+      "cp": "U+E0D2",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "c27d766cadb989f2c6fb3a2db34f1cfb9fd8cbf00df72a761bc5886956b561df"
+    },
+    {
+      "cp": "U+E0D4",
+      "metrics": [
+        12,
+        24,
+        3
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-12x24+3.png",
+      "raw_sha256": "47ce1c8aa3c6be175535ab88b11df8e71afa98f133c2cf83a26eaad144e1ea69"
+    },
+    {
+      "cp": "U+E0B0",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "5afd676f4b66347138cd628c663012bf800e18b9df25d181dd225daf7b29121f"
+    },
+    {
+      "cp": "U+E0B1",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "e754f008269017e8f986f328412f409a8fb43302d42ec0d24cc9203252d6e26d"
+    },
+    {
+      "cp": "U+E0B2",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "ff976fd3126cb98b6aa57c3acf05c85ffaf8d0f6646acf8a0798cee1b6656317"
+    },
+    {
+      "cp": "U+E0B3",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "a512a69145c003f805eaba3ea51f64952b4a25cd2302d67aa15f2b9a5fffc630"
+    },
+    {
+      "cp": "U+E0B4",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "0a8c98352ba1b5bfff7fb992afaea5ba7987db1d5722be3cdc51e4e627a3d569"
+    },
+    {
+      "cp": "U+E0B5",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "b41882b26a0f7b4adca247d81e187235dcfda898f188b7309a88c8a6567c38c4"
+    },
+    {
+      "cp": "U+E0B6",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "2550e9cc85ea97195b67a4a706a61ca1b9750578c0ecda74f135e54eef4d6d6c"
+    },
+    {
+      "cp": "U+E0B7",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "bdb33353f5ce1afd2ca810bd4971d3bc7bf2ca32dc71a2d67e33e2cdc7247957"
+    },
+    {
+      "cp": "U+E0B8",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "6246b6dd82c54b9ababbe86ee21b45d6c5d06d04309bd1583822f43277f88686"
+    },
+    {
+      "cp": "U+E0B9",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "5b4601006c21c3412328c00954870f95a96d32ff5b763719919f12e19b7c6bf3"
+    },
+    {
+      "cp": "U+E0BA",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "609dfd812cb3184a86b532c01143f7e83f30e7190a5e06c6afe8a8d51ff7a50f"
+    },
+    {
+      "cp": "U+E0BB",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "4337791decb6c2de034bd0cf79127f49a4e8e6c596aff033cb7ed751188dc5bd"
+    },
+    {
+      "cp": "U+E0BC",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "0a3f35b572b04c4a419adfadc64bd599dbfcb2c566e0871e9e21d8e2e58a5b68"
+    },
+    {
+      "cp": "U+E0BD",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "4337791decb6c2de034bd0cf79127f49a4e8e6c596aff033cb7ed751188dc5bd"
+    },
+    {
+      "cp": "U+E0BE",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "e70d78b3144ae2f88e774dd4f398810b8fe8f21c0307742875b0c9ec5a2e71d7"
+    },
+    {
+      "cp": "U+E0BF",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "5b4601006c21c3412328c00954870f95a96d32ff5b763719919f12e19b7c6bf3"
+    },
+    {
+      "cp": "U+E0D2",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "4a7951e473490778d3a0b8056bf7a4c693892e2cf7b4b17d64f75c16a7a38fb0"
+    },
+    {
+      "cp": "U+E0D4",
+      "metrics": [
+        18,
+        36,
+        4
+      ],
+      "source": "src/font/sprite/testdata/U+E000...U+E0FF-18x36+4.png",
+      "raw_sha256": "d5201a9634adea43509bfa813e674b3934342c3724516264353aa2a21e1d5c2d"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "8f12daa027a5955438343761dd5270a8640f90b8181920939f789cc661a29cbc"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        3,
+        4,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "ddd79decd3dacd938e3ca2f8edae82e9d88b1485abfc8d7ceb3a01cf064b201e"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        4,
+        3,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "04de235fea84e3edaae0c36b75b130f6949d47e7835a8a835948bb9ed9853f08"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        4,
+        3,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "7330efc56410839a7d81f2c1ec76523280bc926f1173a52d80bb8ac938b7b157"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        5,
+        5,
+        1
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "a96368fb805c532a094355fb82c709dc327625abd5a01aac749a99d299b86695"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        5,
+        5,
+        1
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "8aed9af5d9802f72de846e248a429d3a76d041474675dd6a22d3bdce8785825f"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        5,
+        5,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "6b9b61dcd4c42e168f322884a903bc32eaa0d8a6b48da8b8055a26a0a33e4e98"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        5,
+        5,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "fe37e9bd3bbc515c2193aeada17405f7e0aa028f0daf786b80c3c93d70447129"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        6,
+        6,
+        1
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "9f1b01e0b41543fefa85b8f8f33193efb01d1b5448ab9689f558b43c34838b1c"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        6,
+        6,
+        1
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "d0c46dcd58184e85c9353060feadbb8dd4f9da429199ed6fbdfa33d4fe14a22a"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        6,
+        6,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "f2eb4a92e339dd15570fe5cb8f42b2bd34a7117a12c36c8019d5b5cb8ee995de"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        6,
+        6,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "0668cac9b58cf47902852bb8ca286ab63d940ade17fdf94ad694a61541e0b5d2"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        6,
+        24,
+        3
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "b06a3d9d3304304b665c12a7f2cab77858c33ac29437a71514ce915272feca9a"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        6,
+        24,
+        3
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "0edb3cb607de8dab794d037e4fe716e3f50e0d3ba39765399defffa4afb5ff3f"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        7,
+        28,
+        3
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "c26e7358b34931f784d9a89bec86a9006350d41325c7c310b9a41d48e18349cf"
+    },
+    {
+      "cp": "U+2572",
+      "metrics": [
+        7,
+        28,
+        3
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "71007f1cb8db1a9f7579bfdbeb18f86df36677652ea8127aa1a535427e078918"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        7,
+        28,
+        3
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "721b94212e60e829c3af2d353e1ac2cacbb6aec26e5dbd5c256555ecdcea2499"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        8,
+        8,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "f655f18ad10b221492b18cfd0321513d455f1f6b7cd5517b932d23ff63b5315f"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        8,
+        8,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "d08345016a3e1a6ce77fdff87447d29dd1a176279303d1e20cd984964a4fee49"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        10,
+        10,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "c313cd244d00ef05cf606f07147d529779f348538fefa1d66bd71aae305b5634"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        10,
+        10,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "bb4e7560974e334db2612dc1003556ec9ca82c6cfb264e58d84cb8beba807cb9"
+    },
+    {
+      "cp": "U+2571",
+      "metrics": [
+        11,
+        11,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "8c33b9e7a2cf68aded124c1b698159dd6e1d543f11f06afd112948ce6414444a"
+    },
+    {
+      "cp": "U+2573",
+      "metrics": [
+        11,
+        11,
+        2
+      ],
+      "source": "real reference translation-order regression",
+      "raw_sha256": "8cb62bc8b9abd0e3fd6a7a4c38694fcbff39ed021004dcc611b8d9d045b970bb"
+    }
+  ],
+  "sha256": "2e4a3d5003e9c3de6f8cbc98c602e2fba93459a6c296cba9545d695614e66350"
+}

@@ -1,0 +1,1009 @@
+{
+  "status": "passed",
+  "scope": "actual complete native scene GPU composition and DMA-BUF export, offscreen only; diagnostic costs are not application benchmark results",
+  "loader": [
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+    "--library-path",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib:/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib"
+  ],
+  "egl": "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1",
+  "mesa": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "binary_sha256": "7fd47f073778a489799a61ed01664ab958884deb9ea4dbdeb9e4e73191388081",
+  "source": {
+    "Cargo.lock": "ee77f03d061fa1e8dddcbd455f86ab4f437afb3e221e6de12440e247631f146a",
+    "Cargo.toml": "61eb88488c8598be4a37512a0f3a3202432d47ca8b5923ce6ff730dbbec50e6a",
+    "src/compose.comp": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215",
+    "src/compose.rs": "c01b631c1832ce820a42d181853d88cc9af3584a1b1fafbe3e31718cc5891ed6",
+    "src/egl.rs": "a3cd15b68d5b3016290f6a007cab554b2bb4fff3abafb364f262d222fed99b5e",
+    "src/egl_probe.rs": "a67c80409ee7b8850652c0257d10c820cc17fb7c5a0ed1207ac9cbfca17318d6",
+    "src/lib.rs": "4a6a0a22b7c6d427f10fbab97afed374d139c342513112b363cafb4fd6df9680",
+    "src/scene.rs": "c49c8bc781b5fa7ff51b5dcc4cddc09b943a086d8edeef1754f042656800b755",
+    "src/scene_probe.rs": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c",
+    "src/scene_wayland_probe.rs": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c",
+    "src/wayland_probe.rs": "8826ae320ce16c1a6011d04ddbc25a339791cfa37d749abca7d49f6c10cd5048"
+  },
+  "fixtures": {
+    "00.rgba": "65ec1d8fd093fca9182d5e477b8866f1c387b3353d50ee76950ba8ffdfbced0f",
+    "00.scene": "cb803073ee7ee6cf4df56dda126aad96ec98caf921e18805ae476ccacbb559aa",
+    "01.rgba": "6fd132a6eb799381ffbac958fcd2e12e87a9a5cfaaff4bc93b3a4d2ab4642cfe",
+    "01.scene": "3809103db99e37d54ee18d708174573ddb8c57b2d4127f9ec02eee8988ac4014",
+    "02.rgba": "f92f40e2018501dba7e2c7d08349e5b5422f521bcf632bd4244dfa5f817031a2",
+    "02.scene": "d97a1f1b0c6ac04e7ca09f515aaaeb3fe5f86ebb438deaaca3b65d1dc79c2fe0",
+    "03.rgba": "909d460ad6769979573eee78894c5441da0cfcd083d488fa96d2da4e24bb42ed",
+    "03.scene": "7d66dd909e574c80d3e0cfaa2e3082afbc8195d47df16869daab771fb34ae7e0",
+    "04.rgba": "c589f0c505272e14dcc83c7eb9661e9831655c746a8612f13399443ca2c44b84",
+    "04.scene": "1deba0e3054e442210863e0c6748e41d7207e3e400e9db8fa8a566bc0c4657be",
+    "05.rgba": "24b79cc01679df2c667c42f970e9cbebb36de6ea5bd37a8f214130fc587cdcd3",
+    "05.scene": "9647e035eee7558de085313f020c6dffb5b450ff57ed23dae33ded8bf696c891",
+    "06.rgba": "aa44ab7bc662ab3aa33891bf6909139fd4db982e136de8bad8d0ef1ff18318e4",
+    "06.scene": "db3a078dc206d4c19649fd3b987c69e789ce7d9411cb5179477e46fe11d2f392",
+    "07.rgba": "1c48a60d0f7c4b9cdde809a9f0b73741e7163d5ade2e7c52978094676c9004b1",
+    "07.scene": "dba700d78237da60afb22712e4858f0d8c78bcb0c2edea8e3bd5c03bbd01933a",
+    "08.rgba": "678c6483924338acb9f75a258354af458ec16395882bcf5b5fdeeafba061e75d",
+    "08.scene": "2117bc261e1a87d3bbe1f4fba044b1a7b07510b4f8afac7ed0612ef8a96fab56",
+    "09.rgba": "a0752051552dee90d0e19ec62098750213f939c51aeebd4845a82e76942ea502",
+    "09.scene": "201b3b53be7860bcb3cd53b1cc79f923e4c7b1a75c6e781b4327ee87ef059f3a",
+    "10.rgba": "a23970122606aa867436a77ce8e91b9173dd65f34c16c8b1ace5c6fec52df4a8",
+    "10.scene": "642af918cc1447242964cafaa42dab4cbc87fd7cf933c12f02d229dae09a997b",
+    "11.rgba": "1c2cbca89f1343380bf1b6908f2781617488fdae12fdca373e2b051be5fa0e02",
+    "11.scene": "48aaaa8846d6b99e5721ed054b570d05fc2f8ead320afb303075aafe9af96173",
+    "12.rgba": "10bb65cf928179a954cb23cc9868ea5fe896139f2d7b31e1cc53e228f695162f",
+    "12.scene": "2e9ae422edfa1c10151e50ddc398f3936f1faf6eedbf7fedc7191f31b2738d7f",
+    "13.rgba": "ad9aef34ad1bf6f1c38a38132050c707e6dda2962c465e44653ad148be2602eb",
+    "13.scene": "28a38076d5962fadcb75e6b821214af7aaf0485daf167dbe5e3a0ac26d051fab",
+    "14.rgba": "6bb4bc54890d1b081f7a06580f198f784d732e72f3984db12f433d1c1a6ab26e",
+    "14.scene": "41575f5c23dfd5b1c0e9b81a8719fee134410cd7dedf8ee26c6f9df19ec8b934",
+    "15.rgba": "0d79495fd69c4270b85be68ded286188fb9b1db283fd415537942fc44bee5fa3",
+    "15.scene": "6ae28ffe941e8b5063faa712683ebdfdf2621a236b269849c42af907d2e09cb1",
+    "16.rgba": "d6c298496bb90ae22f601810b5cb234dc602c2e44f7a2d335ad5c596e947e81f",
+    "16.scene": "9308d03f91734ffe203c4ff471f0df64398165c20d2a4e052b2870c4dec4d64f",
+    "17.rgba": "90c12d0e74fcb6e3f943b8e5067416118a615810476817252ac130318f6f2582",
+    "17.scene": "8ef6ef1d3295167d85830652e4252fd5ebaeadacdb15362a6b72fa9b7bc6d80b"
+  },
+  "cleanup_helper_sha256": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+  "elf_dependencies": "\tlinux-vdso.so.1 (0x00007826a8034000)\n\tlibgcc_s.so.1 => /nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1 (0x00007826a7f66000)\n\tlibc.so.6 => /nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6 (0x00007826a7c00000)\n\t/lib64/ld-linux-x86-64.so.2 => /nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2 (0x00007826a8036000)\n",
+  "exit": 0,
+  "mapped_file_sha256": {
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-scene/scene-worker-probe": "7fd47f073778a489799a61ed01664ab958884deb9ea4dbdeb9e4e73191388081",
+    "/nix/store/0lalp8bqwbvxkrqmvsawagzx2w18w4h5-lm-sensors-3.6.2/lib/libsensors.so.5.0.0": "d683edcfdc8b405e9bce0270772a555f8876144b4a96e233482fc3ccb95555b7",
+    "/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1": "e80a9d87e1a0b8249700f459767b257b01969c79bee3c8fb15e35e1e9c4da055",
+    "/nix/store/3xaspbv6nwvihmc3ybmlv0wjjksvpamq-xz-5.8.4/lib/liblzma.so.5.8.4": "f3f6386095920a4f9fb15c5da28a55a084c32c2e14f3a07c543588eea186e543",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libEGL_mesa.so.0.0.0": "1278ee86a6eab55a155eca9ffe4c2eb888bc03ae92dc77f548b59cf68f85a026",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libgallium-26.2.5.so": "f24a258d4b972b55b092d41c68d2329cfbc3469e297127638dc5aedb6c887f04",
+    "/nix/store/5sw8x6gdi0gwri8pj1vm7ikyyqzh02fi-mesa-libgbm-26.1.3/lib/libgbm.so.1.0.0": "36a2e7f7cc2af449e58a788e0b4dd834610d2bab1c906b293edee03e7f15b359",
+    "/nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib/libstdc++.so.6.0.36": "eb21fd9ecfa584d60166f3f9c53765ed8d6b42d6d7827ede04a8ee414423937a",
+    "/nix/store/7rx5im6jbgyfhrl0lc0kyxd9yf14rdxc-expat-2.9.0/lib/libexpat.so.1.13.0": "5d47cc2292b79781a38e0236b81811321d5411e5c8c8ccc2099e4a8b91277d61",
+    "/nix/store/anh1ib7l6ksrwr45kiwgz906vfi0vr5x-libxau-1.0.12/lib/libXau.so.6.0.0": "36faff20265fbb02de5102be35630d57adb1f7bf743a36b8d57fce9fa4dabd3d",
+    "/nix/store/bvfkqam1y3zmsb3k41iml0zwx13sknjl-elfutils-0.195/lib/libelf-0.195.so": "5d11a8e93eb8b976711a10735f31b6867b06f02562233810a1ae0492b99e1209",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-dri3.so.0.1.0": "e9581479838933182f88a5cbbaed016c104ada917b986b404843d04c7644a9ea",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-present.so.0.0.0": "e1a7a2eac2e8f5873c0475da1f972d9802a17eb58eb9d4cd70add315a0d7a6f5",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-randr.so.0.1.0": "aa1736118eea6b4a125654871cbc594e8c69ef55bc18c639664fd565401ea394",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-shm.so.0.0.0": "b8fb70b8b61d3abbd396b148648385e7a3031bbb5392ab2f026be6f5dafef634",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-sync.so.1.0.0": "b69930b57f1a4c918acd091953a3e64493e7d65237b741325e372bf139bdd26d",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-xfixes.so.0.0.0": "37b8e22e586a87eb75549efbccf78f25a15f6482cfde0a76bd75f6b75c0f46b3",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb.so.1.1.0": "31912679200228e6df0c4a34e8d9cb5bf73c6a60a605ff7e4ff4ec1cc1d4b848",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm.so.2.134.0": "04d1c7df837f9ab0c3794fbcd36186497008638f719200174f7ba1f4609c8d91",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_amdgpu.so.1.134.0": "a247c9340b8fec1e517c5c0ab332b02108ef9b441e2473a5d0be6e5e067e3217",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_intel.so.1.134.0": "a06b802172e8859cf747fc12b7c7f577b61407544b0d26e99df6e92ed799b2b9",
+    "/nix/store/f5r77q40xh7rj30dfkajv8y6jwbf4xh2-zstd-1.5.7/lib/libzstd.so.1.5.7": "d0d7676cbfc62343431ac72829bb13313ca2f50358375588f074b30f566731c4",
+    "/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib/libwayland-client.so.0.26.0": "0dc68f9f253d1545a177dbe37b9b45b15ecd6e5398b4c913fda03c3335a6e8f0",
+    "/nix/store/ji36842higmp6b06hbbpmzbd59g1c07c-zlib-1.3.2/lib/libz.so.1.3.2": "bc0d08f199b8d0e6158a5d41e7fb2559be0fe41fb3b50d9c032290ba9b88adf4",
+    "/nix/store/m5s1ak7s1swmhmy64yqvya342g0603s7-libxml2-2.15.4/lib/libxml2.so.16.1.4": "a28437f0fb1a7ae80a0b7ba5fdf6d300c1c5893084a79e301ac57ff2f7acc50b",
+    "/nix/store/mr6cbi3rdy6w5y4cd6875gf4y0pqn0jf-llvm-21.1.8-lib/lib/libLLVM.so.21.1": "3643e8f551a84fc5c69d1e909f4ad5c8eafd6f274fbfc24b2ba3f26130a31ace",
+    "/nix/store/pfds9zw10xksh0zr7qplqg1lj9avs2gz-libffi-3.8.0/lib/libffi.so.8.5.0": "328f81b73157b3776d281ce8b0214a236b7b662c50d36a4a3f09709c769a7e5d",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2": "d2fbe26249c12dd8ac1cfb618c705fe37d625d5a4dd4035b27869766480c1244",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6": "caaa4691f54660960a577c5397dc38a7fef9c5c617bb4e248f00bd3c9acd3726",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libdl.so.2": "e0447a849c6f53e87b190ef66e8d850e44a675d88cc73203bfcfabec8ed5aa6a",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6": "1dcff2bf21bcc45bc903ba1cfe8743503b0008d7afa79ddb1df90788d62bfff3",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libpthread.so.0": "115bd7b1b35e7eaedecdc66ae848ff8572befe21ca035c0c5b5a79c865e94678",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1": "f20583e09b52c4a475171462e954299530cc7d29942987d9ae68b53cbf99932f",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11-xcb.so.1.0.0": "75292883d2dcc112f62dc41b18d9d59caaedef898284486d47ad3269d51a3f33",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11.so.6.4.0": "5553e234be366bb9fb96e4d0be929488db7b140058ba6113e60f02bb18a676da",
+    "/nix/store/v4j317f11g4px2cc4ad7cldqkn0wdbqz-libxshmfence-1.3.3/lib/libxshmfence.so.1.0.0": "9d6fe6de6585ec2c5bac9de387d3fd4a8389be974e1a1a8ef56e09610a3fcc91",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1.1.0": "bd0f6f8516e1031da6a0a9f88b951a212b0236b2c10bc7cf5b4fe99ecf128d04",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0": "f9ab290635bbc00e93862f899d60a78828fddd0594226c2e5fab60dde8d450c9",
+    "/nix/store/ykj1kjkdb4ahqrb29w5n3ljxia1id5qm-libpciaccess-0.19/lib/libpciaccess.so.0.11.1": "dba4087bd5f15d3c81e1f104c5f736b80f84582cd3eadc9d95bfe3a2603232ad",
+    "/nix/store/zfls1iw1bpglz5w2lqg3b8mjay1hg7dr-libxdmcp-1.1.5/lib/libXdmcp.so.6.0.0": "39fa2eeecb7c435997912a480cfbd0d0150f47aebde560abb3dcf159ecff4968",
+    "/nix/store/zx4ag3v11v9rl0iqvg6vzbpflzlg0dk2-bzip2-1.0.8/lib/libbz2.so.1.0.8": "de8e358f46ceac9c4b4da28975b4cfb6abc0b41ecb3be837a799546ee5ebd0ff"
+  },
+  "events": [
+    {
+      "event": "rust_context",
+      "render_node": "/dev/dri/renderD128",
+      "renderer": "Mesa Intel(R) Graphics (PTL)",
+      "thread": "ThreadId(2)",
+      "version": "OpenGL ES 3.2 Mesa 26.2.5"
+    },
+    {
+      "atlas_bytes": 33554432,
+      "event": "scene_compute_ready",
+      "filtered_samples_precise": true,
+      "integer_blend": true,
+      "local_size": [
+        16,
+        8
+      ],
+      "max_ssbo": 2147483392
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 25300,
+      "atlas_used": 25300,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 23705,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 12613,
+      "readback_after_fence": true,
+      "readback_verify_us": 14573,
+      "rgba_bytes": 2549760,
+      "scene": "00",
+      "tile_indices": 9037,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 25300,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 8070,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 76,
+      "readback_after_fence": true,
+      "readback_verify_us": 6146,
+      "rgba_bytes": 2549760,
+      "scene": "00",
+      "tile_indices": 9037,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 3064,
+      "atlas_used": 28364,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 72086,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 172,
+      "readback_after_fence": true,
+      "readback_verify_us": 1994,
+      "rgba_bytes": 2549760,
+      "scene": "01",
+      "tile_indices": 9851,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 28364,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 17520,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 71,
+      "readback_after_fence": true,
+      "readback_verify_us": 1479,
+      "rgba_bytes": 2549760,
+      "scene": "01",
+      "tile_indices": 9851,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 4712,
+      "atlas_used": 33076,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 3893,
+      "event": "scene_verified",
+      "height": 286,
+      "prepare_upload_us": 683,
+      "readback_after_fence": true,
+      "readback_verify_us": 2185,
+      "rgba_bytes": 209352,
+      "scene": "02",
+      "tile_indices": 616,
+      "width": 183
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 33076,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 2460,
+      "event": "scene_verified",
+      "height": 286,
+      "prepare_upload_us": 40,
+      "readback_after_fence": true,
+      "readback_verify_us": 870,
+      "rgba_bytes": 209352,
+      "scene": "02",
+      "tile_indices": 616,
+      "width": 183
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 49616,
+      "atlas_used": 82692,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 1740,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 136,
+      "readback_after_fence": true,
+      "readback_verify_us": 8947,
+      "rgba_bytes": 3984000,
+      "scene": "03",
+      "tile_indices": 14238,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 82692,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 20432,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 336,
+      "readback_after_fence": true,
+      "readback_verify_us": 3100,
+      "rgba_bytes": 3984000,
+      "scene": "03",
+      "tile_indices": 14238,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 14812,
+      "atlas_used": 97504,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 1700,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 98,
+      "readback_after_fence": true,
+      "readback_verify_us": 2270,
+      "rgba_bytes": 3984000,
+      "scene": "04",
+      "tile_indices": 14476,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 97504,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 6197,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 84,
+      "readback_after_fence": true,
+      "readback_verify_us": 2313,
+      "rgba_bytes": 3984000,
+      "scene": "04",
+      "tile_indices": 14476,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 7272,
+      "atlas_used": 104776,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 642,
+      "event": "scene_verified",
+      "height": 358,
+      "prepare_upload_us": 101,
+      "readback_after_fence": true,
+      "readback_verify_us": 418,
+      "rgba_bytes": 327928,
+      "scene": "05",
+      "tile_indices": 866,
+      "width": 229
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 104776,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 939,
+      "event": "scene_verified",
+      "height": 358,
+      "prepare_upload_us": 35,
+      "readback_after_fence": true,
+      "readback_verify_us": 340,
+      "rgba_bytes": 327928,
+      "scene": "05",
+      "tile_indices": 866,
+      "width": 229
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 99684,
+      "atlas_used": 204460,
+      "commands": 236,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 14678,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 11404,
+      "readback_after_fence": true,
+      "readback_verify_us": 26007,
+      "rgba_bytes": 10199040,
+      "scene": "06",
+      "tile_indices": 33360,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 204460,
+      "commands": 236,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 10264,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 107,
+      "readback_after_fence": true,
+      "readback_verify_us": 7646,
+      "rgba_bytes": 10199040,
+      "scene": "06",
+      "tile_indices": 33360,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 10792,
+      "atlas_used": 215252,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 5801,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 141,
+      "readback_after_fence": true,
+      "readback_verify_us": 7228,
+      "rgba_bytes": 10199040,
+      "scene": "07",
+      "tile_indices": 33089,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 215252,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 4232,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 119,
+      "readback_after_fence": true,
+      "readback_verify_us": 7614,
+      "rgba_bytes": 10199040,
+      "scene": "07",
+      "tile_indices": 33089,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 15540,
+      "atlas_used": 230792,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 2350,
+      "event": "scene_verified",
+      "height": 572,
+      "prepare_upload_us": 120,
+      "readback_after_fence": true,
+      "readback_verify_us": 2686,
+      "rgba_bytes": 837408,
+      "scene": "08",
+      "tile_indices": 1549,
+      "width": 366
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 230792,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 828,
+      "event": "scene_verified",
+      "height": 572,
+      "prepare_upload_us": 57,
+      "readback_after_fence": true,
+      "readback_verify_us": 2372,
+      "rgba_bytes": 837408,
+      "scene": "08",
+      "tile_indices": 1549,
+      "width": 366
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 11768,
+      "atlas_used": 242560,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 8812,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 111,
+      "readback_after_fence": true,
+      "readback_verify_us": 2142,
+      "rgba_bytes": 2549760,
+      "scene": "09",
+      "tile_indices": 9037,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 242560,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 2037,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 61,
+      "readback_after_fence": true,
+      "readback_verify_us": 1348,
+      "rgba_bytes": 2549760,
+      "scene": "09",
+      "tile_indices": 9037,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 2048,
+      "atlas_used": 244608,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 4247,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 73,
+      "readback_after_fence": true,
+      "readback_verify_us": 1416,
+      "rgba_bytes": 2549760,
+      "scene": "10",
+      "tile_indices": 9851,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 244608,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 1777,
+      "event": "scene_verified",
+      "height": 664,
+      "prepare_upload_us": 70,
+      "readback_after_fence": true,
+      "readback_verify_us": 1368,
+      "rgba_bytes": 2549760,
+      "scene": "10",
+      "tile_indices": 9851,
+      "width": 960
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 784,
+      "atlas_used": 245392,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 628,
+      "event": "scene_verified",
+      "height": 286,
+      "prepare_upload_us": 68,
+      "readback_after_fence": true,
+      "readback_verify_us": 252,
+      "rgba_bytes": 209352,
+      "scene": "11",
+      "tile_indices": 616,
+      "width": 183
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 245392,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 1156,
+      "event": "scene_verified",
+      "height": 286,
+      "prepare_upload_us": 20,
+      "readback_after_fence": true,
+      "readback_verify_us": 282,
+      "rgba_bytes": 209352,
+      "scene": "11",
+      "tile_indices": 616,
+      "width": 183
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 28640,
+      "atlas_used": 274032,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 2888,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 86,
+      "readback_after_fence": true,
+      "readback_verify_us": 2115,
+      "rgba_bytes": 3984000,
+      "scene": "12",
+      "tile_indices": 14238,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 274032,
+      "commands": 237,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 2990,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 61,
+      "readback_after_fence": true,
+      "readback_verify_us": 2111,
+      "rgba_bytes": 3984000,
+      "scene": "12",
+      "tile_indices": 14238,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 12800,
+      "atlas_used": 286832,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 11910,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 86,
+      "readback_after_fence": true,
+      "readback_verify_us": 2206,
+      "rgba_bytes": 3984000,
+      "scene": "13",
+      "tile_indices": 14476,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 286832,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 54273,
+      "event": "scene_verified",
+      "height": 830,
+      "prepare_upload_us": 93,
+      "readback_after_fence": true,
+      "readback_verify_us": 3392,
+      "rgba_bytes": 3984000,
+      "scene": "13",
+      "tile_indices": 14476,
+      "width": 1200
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 1156,
+      "atlas_used": 287988,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 666,
+      "event": "scene_verified",
+      "height": 358,
+      "prepare_upload_us": 76,
+      "readback_after_fence": true,
+      "readback_verify_us": 344,
+      "rgba_bytes": 327928,
+      "scene": "14",
+      "tile_indices": 866,
+      "width": 229
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 287988,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 579,
+      "event": "scene_verified",
+      "height": 358,
+      "prepare_upload_us": 32,
+      "readback_after_fence": true,
+      "readback_verify_us": 324,
+      "rgba_bytes": 327928,
+      "scene": "14",
+      "tile_indices": 866,
+      "width": 229
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 49248,
+      "atlas_used": 337236,
+      "commands": 236,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 8623,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 125,
+      "readback_after_fence": true,
+      "readback_verify_us": 7631,
+      "rgba_bytes": 10199040,
+      "scene": "15",
+      "tile_indices": 33360,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 337236,
+      "commands": 236,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 10446,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 85,
+      "readback_after_fence": true,
+      "readback_verify_us": 5033,
+      "rgba_bytes": 10199040,
+      "scene": "15",
+      "tile_indices": 33360,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 7200,
+      "atlas_used": 344436,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 3917,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 105,
+      "readback_after_fence": true,
+      "readback_verify_us": 4803,
+      "rgba_bytes": 10199040,
+      "scene": "16",
+      "tile_indices": 33089,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 344436,
+      "commands": 289,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 5411,
+      "event": "scene_verified",
+      "height": 1328,
+      "prepare_upload_us": 79,
+      "readback_after_fence": true,
+      "readback_verify_us": 4801,
+      "rgba_bytes": 10199040,
+      "scene": "16",
+      "tile_indices": 33089,
+      "width": 1920
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 2704,
+      "atlas_used": 347140,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 927,
+      "event": "scene_verified",
+      "height": 572,
+      "prepare_upload_us": 68,
+      "readback_after_fence": true,
+      "readback_verify_us": 4367,
+      "rgba_bytes": 837408,
+      "scene": "17",
+      "tile_indices": 1549,
+      "width": 366
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "fence_destroyed",
+      "ok": true
+    },
+    {
+      "asset_upload_bytes": 0,
+      "atlas_used": 347140,
+      "commands": 140,
+      "different_bytes": 0,
+      "dispatch_export_fence_us": 683,
+      "event": "scene_verified",
+      "height": 572,
+      "prepare_upload_us": 48,
+      "readback_after_fence": true,
+      "readback_verify_us": 3593,
+      "rgba_bytes": 837408,
+      "scene": "17",
+      "tile_indices": 1549,
+      "width": 366
+    },
+    {
+      "event": "resource_destroyed",
+      "ok": true
+    },
+    {
+      "event": "scene_gpu_cache_destroyed",
+      "ok": true
+    },
+    {
+      "event": "context_destroyed",
+      "ok": true,
+      "thread": "ThreadId(2)"
+    },
+    {
+      "event": "scene_probe_complete",
+      "exact_pixel_gate": true
+    }
+  ],
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "runner_sha256": "3dbe0e8fc402ea3bcba2472de4f6c48739b131ff469346e505b8464a522fe110"
+}

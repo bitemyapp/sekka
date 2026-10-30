@@ -1,0 +1,51 @@
+--- a/src/compose.rs
++++ b/src/compose.rs
+@@ -5,13 +5,14 @@
+ use std::{collections::HashMap, sync::Arc};
+ const SSBO: u32 = 0x90d2;
+ const ATLAS: usize = 32 << 20;
++type CachedAsset = (usize, Arc<[u8]>, u32, u32, u32);
+ pub struct SceneDriver {
+     context: Rc<Context>,
+     program: u32,
+     buffers: [u32; 4],
+     extent: i32,
+     used: usize,
+-    cache: HashMap<u64, (usize, Arc<[u8]>, u32, u32, u32)>,
++    cache: HashMap<u64, CachedAsset>,
+ }
+ impl Drop for SceneDriver {
+     fn drop(&mut self) {
+@@ -129,7 +130,7 @@
+     fn asset(&mut self, a: &Asset) -> Result<(u32, usize), String> {
+         if let Some((offset, bytes, w, h, format)) = self.cache.get(&a.id) {
+             require(
+-                *w == a.width && *h == a.height && *format == a.format && &**bytes == &*a.data,
++                *w == a.width && *h == a.height && *format == a.format && **bytes == *a.data,
+                 "asset identity collision",
+             )?;
+             return Ok((*offset as u32, 0));
+@@ -224,7 +225,7 @@
+             // SAFETY: complete scene validates dimensions, all asset ranges,
+             // metadata lengths and tile coverage before admission. Every pointer
+             // refers to a live exact-length array during this synchronous upload.
+-            for (i, words) in [&commands[..], &tiles[..], &scene.indices()[..]]
++            for (i, words) in [&commands[..], &tiles[..], scene.indices()]
+                 .into_iter()
+                 .enumerate()
+             {
+--- a/src/egl.rs
++++ b/src/egl.rs
+@@ -40,8 +40,10 @@
+         #[allow(non_snake_case)]
+         impl Api {
+             fn load(path: &str) -> Result<Self, String> {
+-                // SAFETY: caller selects an EGL ABI library. The library stays
+-                // owned beside all copied function pointers until all objects die.
++                // SAFETY: caller selects an EGL ABI library. OnceLock pins its
++                // mapping for process lifetime, including late driver callbacks.
++                // The first load result is cached even on failure; a different
++                // library path cannot be selected later in this process.
+                 let library = library(path)?;
+                 // EGL 1.4 specifies this exact ABI; it is exported by libEGL.
+                 let get: GetProc = unsafe { *library.get::<GetProc>(b"eglGetProcAddress\0").map_err(|e| e.to_string())? };

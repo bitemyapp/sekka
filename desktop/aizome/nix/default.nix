@@ -70,6 +70,18 @@ let
       ../../../apps/yukimi/crates
     ];
   };
+  hotaruSrc = lib.fileset.toSource {
+    root = ../../../apps/hotaru;
+    fileset = lib.fileset.unions [
+      ../../../apps/hotaru/Cargo.toml
+      ../../../apps/hotaru/crates
+      ../../../apps/hotaru/resources
+      ../../../apps/hotaru/vendor/simdutf8
+    ];
+  };
+  ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
+  uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
+  unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -80,9 +92,27 @@ let
         inherit
           src
           yukimiSrc
+          hotaruSrc
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
           version
           rev
           fonts
+          hotaruFonts
+          ;
+      };
+      hotaru = pkgs.callPackage ./hotaru.nix {
+        inherit
+          src
+          yukimiSrc
+          hotaruSrc
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
+          fonts
+          hotaruFonts
+          version
           ;
       };
       archivo = pkgs.callPackage ./fonts.nix { };
@@ -90,6 +120,7 @@ let
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
       # (docs/kit.md).
       fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
+      hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
       default = aizome;
     });
 
@@ -170,6 +201,14 @@ let
         WHISPER_DONT_GENERATE_BINDINGS = "1";
         AIZOME_DEV_SHELL = "1";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
+        HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
+        HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
+        HOTARU_TERMINFO_DIR = "${
+          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+            mkdir -p $out
+            tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
+          ''
+        }";
         RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # The compositor's core is a Rust dylib that needs -C prefer-dynamic
         # (docs/reload.md); the wrapper adds it for that crate alone.

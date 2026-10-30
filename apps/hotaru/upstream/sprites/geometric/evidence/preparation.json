@@ -1,0 +1,26 @@
+{
+  "prepared": "/home/callen/work/hotaru-sprites-geometric-20261028/oracle-expanded",
+  "build_command": [
+    "/home/callen/.cache/hotaru-reference/zig-x86_64-linux-0.17.0/zig",
+    "build-lib",
+    "-dynamic",
+    "-lc",
+    "-O",
+    "ReleaseSafe",
+    "--dep",
+    "z2d",
+    "-Mroot=oracle.zig",
+    "--dep",
+    "z2d_options",
+    "-Mz2d=/home/callen/work/ghostty-reference-20261028/zig-pkg/z2d-0.13.0-j5P_HgsRFABzZDH54gI35P0OSrg7HFyJwS2bXX5uBdU4/src/z2d.zig",
+    "-Mz2d_options=z2d-options.zig",
+    "-femit-bin=libsprites.so"
+  ],
+  "note": "execute from prepared directory under the workstation lock",
+  "additional_sources": {
+    "geometric_shapes.zig": "e81950c543d683d394a499b1fe47e7071f1fb97db723f7b45394f207f7617d0c",
+    "powerline.zig": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+    "braille.zig": "8093913ed854b6d46a8b627c465d7f1ac7b2deedd35c208603f06c05bf9a6a8c"
+  },
+  "adapter_sha256": "7ae0c1d3d7c8c07c219985ef62f3853726bc3c8e88c8e04090685905f3e84841"
+}

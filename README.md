@@ -63,7 +63,7 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
   and its inner edge to make it wider, slimmer or icons only. Right-click
   the strip for its named sizes.
 - **Super** is the command key in every app (**Super + C**, **Super + V**),
-  and foot opens in fish.
+  and the terminal opens in fish.
 - Each keyboard keeps its own modifier keys, Caps Lock and Compose key. When
   you plug in or pair a keyboard, Aizome offers to set it up: press the key
   beside its space bar and Settings suggests where Super should go, so it
@@ -87,6 +87,20 @@ Nisshi reads the system's journal and /var/log, suggests filters from what
 wrote each message, and asks for an administrator's password only to read
 what you can't. Aizome is new, and so far it has run only in virtual machines.
 See [its README](desktop/aizome/README.md) for what is done and what isn't.
+
+**Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
+need a terminal open in it too. Hotaru is new, and it draws with the processor
+rather than the graphics card. Some full-screen programs may flicker or draw
+less than they would in Ghostty, because it doesn't yet support:
+
+- synchronized output (DEC mode 2026), so redraws can flicker;
+- in-band resize (2048);
+- the Kitty graphics protocol, so images don't show;
+- DEC modes 1039 and 1045;
+- DECSASD.
+
+foot is still installed. To go back to it, choose it in Settei, under
+General → Default Apps → Terminal.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

@@ -1,0 +1,16 @@
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/hotaru-gpu-preparation-profile/desktop/aizome/sidestep/crates/sidestep-engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.58s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/sidestep_engine-427eee78f9e55b70)
+
+running 8 tests
+test gpu_scene::cancellation_tests::huge_tile_expansion_can_cancel_within_one_command ... ok
+test gpu_scene::tests::retained_asset_identity_survives_cache_clear_and_exhaustion_is_explicit ... ok
+test gpu_scene::tests::whole_scene_rejects_unsupported_or_nonfinite_before_allocating_assets ... ok
+test gpu_scene::tests::ordered_mask_fill_replacement_negative_clip_matches_original ... ok
+test gpu_scene::tests::filtered_icons_keep_unquantized_samples_until_composition ... ok
+test gpu_scene::tests::tile_indices_are_bounded_and_preserve_order ... ok
+test gpu_scene::index_equivalence::contiguous_index_is_identical_to_ordered_per_tile_reference ... ok
+test gpu_scene::cancellation_tests::cancelled_preparation_publishes_nothing_and_next_job_succeeds ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s
+

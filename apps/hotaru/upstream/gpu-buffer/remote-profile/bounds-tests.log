@@ -1,0 +1,33 @@
+   Compiling hotaru-gpu-transport-prototype v0.1.0 (/home/callen/work/hotaru-gpu-profile-isolated)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-gpu-transport-target/debug/deps/hotaru_gpu_transport_prototype-c38247776c3c7d8b)
+
+running 15 tests
+test tests::monotonic_ids_fail_explicitly_at_exhaustion ... ok
+test tests::blocked_driver_never_holds_event_lock_or_blocks_close_and_drop ... ok
+test tests::connection_loss_releases_committed_resources_off_event_thread ... ok
+test tests::descriptor_bounds_and_charge_overflow_reject_without_leaking_budget ... ok
+test tests::requested_cancellation_does_not_disable_future_rendering ... ok
+test tests::continuous_updates_do_not_cancel_completed_progress ... ok
+test tests::driver_panic_does_not_destroy_context_or_committed_resources_early ... ok
+test tests::invalid_descriptor_drop_panic_preserves_committed_lease ... ok
+test tests::newer_frame_rejects_import_and_keeps_exact_source_identity ... ok
+test tests::out_of_order_import_completion_cannot_present_older_frame ... ok
+test tests::committed_lease_survives_close_and_counts_against_global_budget ... ok
+test tests::panic_payload_destructor_cannot_unwind_committed_leases ... ok
+test tests::destructor_panics_do_not_unwind_other_committed_leases ... ok
+test tests::discarded_ready_descriptors_do_not_accumulate_without_event_polling ... ok
+test tests::import_drop_cancellation_wakes_an_idle_worker ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running unittests src/phase_probe.rs (/home/callen/.cache/hotaru-gpu-transport-target/debug/deps/scene_phase_probe-b9a16200b2882bb0)
+
+running 4 tests
+test egl::compose::atlas_tests::tiny_assets_cannot_accumulate_unbounded_metadata ... ok
+test scene::tests::dimensions_and_tile_ranges_are_checked_before_reference_read ... ok
+test scene::tests::actual_stream_read_is_bounded_and_trailing_bytes_are_rejected ... ok
+test scene::tests::reference_must_have_exact_read_length ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

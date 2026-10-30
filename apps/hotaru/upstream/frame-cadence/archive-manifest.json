@@ -1,0 +1,9 @@
+{
+  "raw_root": "/home/callen/work/hotaru-frame-cadence-20261028",
+  "files": {
+    "summary.json": "d021b41891d0817e3b9187415fd1b4c8a1ffb39b1ad47fa3d17803f0a08e0d2e",
+    "analyze_trace.py": "2aedc578f39b7a98d5354d7528e90f9328550499a2f476fff3bf6a17ddaf7cef",
+    "raw-traces.tar.gz": "0a7e70efbaef02019529dfe4be72dccedd6442c824a4d623e85b02174a817bbc"
+  },
+  "excluded": "Generated observer executables/build artifacts and Python bytecode; no benchmark corpora included."
+}
