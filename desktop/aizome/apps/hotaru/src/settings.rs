@@ -1,6 +1,7 @@
 //! Hotaru settings follow Aizome's per-application TOML convention.
 
 use std::collections::BTreeMap;
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
@@ -12,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::app::Msg;
 
 const LIMIT: u64 = 64 * 1024;
-/// Typographic points (17⅓ px at 1×), as Ghostty starts: a little under the 14 it was.
-pub const DEFAULT_FONT_SIZE: f64 = 13.0;
+/// Typographic points (14⅔ px at 1×).
+pub const DEFAULT_FONT_SIZE: f64 = 11.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -237,6 +238,10 @@ pub struct Settings {
     pub cursor_blink: bool,
     pub scrollback: usize,
     pub copy_format: CopyFormat,
+    /// The shell new panes start, given no arguments. Unset, it's fish where
+    /// it's installed (the shell Sekka's terminals open in), else `$SHELL`.
+    /// A command named at launch (`-- COMMAND`) runs instead.
+    pub shell: Option<String>,
     /// Applies only to future default-shell panes; explicit commands bypass it.
     pub shell_integration: bool,
     /// Programs reading the clipboard (OSC 52 and 5522); asked by default.
@@ -269,6 +274,7 @@ impl Default for Settings {
             cursor_blink: true,
             scrollback: 10_000,
             copy_format: CopyFormat::Mixed,
+            shell: None,
             shell_integration: true,
             clipboard_read: Access::Ask,
             clipboard_write: Access::Allow,
@@ -299,7 +305,31 @@ pub fn default_path() -> Option<PathBuf> {
         .map(|directory| directory.join("aizome/hotaru.toml"))
 }
 
+/// The shell a pane starts: `configured`, else fish on `path`, else `shell`
+/// (`$SHELL`), else `/bin/sh`. Fish is the shell Sekka's terminals open in.
+/// Started directly it loads Hotaru's fish integration, which a bash handing
+/// itself over to fish skips, and it can't be lost to a bash that keeps
+/// itself because the `SHLVL` it inherited isn't 1.
+fn resolve_shell(configured: Option<&str>, path: Option<&OsStr>, shell: Option<OsString>) -> OsString {
+    if let Some(configured) = configured {
+        return configured.into();
+    }
+    let fish = path.into_iter().flat_map(std::env::split_paths).map(|directory| directory.join("fish")).find(|fish| {
+        use std::os::unix::fs::PermissionsExt;
+        fish.is_absolute()
+            && std::fs::metadata(fish).is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+    });
+    fish.map(PathBuf::into_os_string)
+        .or_else(|| shell.filter(|shell| !shell.is_empty()))
+        .unwrap_or_else(|| "/bin/sh".into())
+}
+
 impl Settings {
+    /// The program a new default-shell pane runs.
+    pub fn shell_program(&self) -> OsString {
+        resolve_shell(self.shell.as_deref(), std::env::var_os("PATH").as_deref(), std::env::var_os("SHELL"))
+    }
+
     /// The family the terminal asks for first.
     pub fn primary_family(&self) -> &str {
         self.font_families.first().map_or("IBM Plex Mono", String::as_str)
@@ -375,6 +405,9 @@ impl Settings {
         }
         if self.scrollback > 1_000_000 {
             return Err("scrollback cannot exceed 1,000,000 rows.".into());
+        }
+        if self.shell.as_deref().is_some_and(|shell| shell.trim().is_empty() || shell.chars().any(char::is_control)) {
+            return Err("shell must name a program.".into());
         }
         if self.keybindings.len() > 128 {
             return Err("At most 128 custom keybindings are supported.".into());
@@ -793,6 +826,28 @@ mod tests {
         assert_eq!((settings.clipboard_read, settings.clipboard_write), (Access::Deny, Access::Ask));
         assert!(!settings.copy_on_select && !settings.desktop_notifications && settings.wait_after_command);
         assert_eq!(Settings::parse(&toml::to_string(&settings).unwrap()).unwrap(), settings);
+    }
+    #[test]
+    fn panes_start_fish_where_its_installed_unless_a_shell_is_set() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("hotaru-shell-{}", std::process::id()));
+        let (bin, other) = (root.join("bin"), root.join("other"));
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        // Not executable: not a shell to start.
+        std::fs::write(other.join("fish"), "").unwrap();
+        let path = std::env::join_paths([&other, &bin]).unwrap();
+        let bash = || Some(OsString::from("/run/current-system/sw/bin/bash"));
+        assert_eq!(resolve_shell(None, Some(&path), bash()), "/run/current-system/sw/bin/bash");
+        std::fs::write(bin.join("fish"), "").unwrap();
+        std::fs::set_permissions(bin.join("fish"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(resolve_shell(None, Some(&path), bash()), bin.join("fish").into_os_string());
+        assert_eq!(resolve_shell(Some("zsh"), Some(&path), bash()), "zsh");
+        assert_eq!(resolve_shell(None, None, Some(OsString::new())), "/bin/sh");
+        assert_eq!(Settings::parse("shell = 'zsh'").unwrap().shell.as_deref(), Some("zsh"));
+        assert!(Settings::parse("shell = ' '").is_err());
+        assert_eq!(Settings::default().shell, None);
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn configured_binding_replaces_a_default_without_stealing_control_c() {

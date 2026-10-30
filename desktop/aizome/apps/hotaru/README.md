@@ -161,7 +161,7 @@ symbolic link (a system configuration's) is read, never replaced: Settings says
 changes last until Hotaru quits.
 
 ```toml
-font_size = 13.0 # Typographic points, before output scale; Ghostty's default.
+font_size = 11.0 # Typographic points, before output scale.
 font_weight = 400
 font_families = ["IBM Plex Mono"]
 font_fallback = ["Noto Sans Mono CJK JP", "Noto Sans Symbols 2"]
@@ -172,8 +172,9 @@ cursor_style = "block" # block, bar, underline; programs may choose another.
 cursor_blink = true
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
+# shell = "zsh" # Unset: fish where it's installed, else $SHELL.
 shell_integration = true # Future default-shell panes only.
-clipboard_read = "ask" # allow, ask, deny: programs reading it (OSC 52).
+clipboard_read = "ask" # allow, ask, deny: programs reading it (OSC 52, 5522).
 clipboard_write = "allow" # allow, ask, deny: programs writing it.
 copy_on_select = true # Selections become the primary selection.
 desktop_notifications = true # OSC 9 and OSC 777 notify.

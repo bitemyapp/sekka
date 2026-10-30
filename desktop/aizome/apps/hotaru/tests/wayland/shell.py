@@ -52,6 +52,10 @@ builtin printf '%s\\0%s\\0%s\\0%s\\0' "$PWD" "$TERM" "$HOTARU_RESOURCES_DIR" "$H
                XDG_CACHE_HOME=str(runtime / "cache"), XDG_DATA_HOME=str(runtime / "data"), WLR_BACKENDS="headless",
                WLR_RENDERER="pixman", WLR_LIBINPUT_NO_DEVICES="1", XDG_CURRENT_DESKTOP="sway", XDG_SESSION_TYPE="wayland",
                AIZOME_KIT_INSPECT=str(inspect), HOTARU_TEST_STARTUP_RECORD=str(record))
+    # This suite checks bash's integration. Named, so a host with fish, which
+    # Hotaru otherwise starts first, doesn't change what it checks.
+    (runtime / "config" / "aizome").mkdir(parents=True, exist_ok=True)
+    (runtime / "config" / "aizome" / "hotaru.toml").write_text('shell = "/usr/bin/bash"\n')
     config = runtime / "sway.conf"
     config.write_text("output HEADLESS-1 mode 1280x800\nseat seat0 fallback true\n")
     processes, files = [], []

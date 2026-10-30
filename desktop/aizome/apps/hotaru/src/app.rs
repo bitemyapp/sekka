@@ -344,6 +344,10 @@ impl Hotaru {
             terminal.feed(b"\x1b[1;36mHotaru\x1b[0m  \xe8\x9b\x8d\r\n\r\nA little light for your work.\r\n\r\n\x1b[32mcallen\x1b[0m \x1b[34m~/work/sekka\x1b[0m\r\n\xe2\x9d\xaf cargo test\r\n\x1b[32m   Compiling\x1b[0m hotaru-core\r\n\x1b[32m    Finished\x1b[0m test profile\r\n\r\n\x1b[1mtest result:\x1b[0m ok\r\n\r\n\xe2\x9d\xaf ");
         }
         let mut command = self.command.clone();
+        // The default shell, not a command someone named: the setting's.
+        if command.integrate_shell {
+            command.program = self.settings.shell_program();
+        }
         if inherit_cwd
             && command.integrate_shell
             && let Some(directory) = self.active_pane().and_then(|pane| pane.working_directory.clone())
