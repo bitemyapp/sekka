@@ -1169,24 +1169,28 @@ runtime.
 
 Genkan's entries with a `source` (the AI assistants, oh-my-pi, Superluminal,
 Tracy and Kakehashi) are decided by their `platforms` lists alone, which
-Genkan's tests require. Reading their packages would fetch and evaluate
-those flakes and two more Nixpkgs revisions on every system, whatever was
-picked. From a fresh store, a reference installation's evaluation (Aizome
-and Firefox) then downloaded ten more flake sources, 0.8 GB that the live
-session keeps in memory, and took 7 s longer. Without reading them it
-fetches exactly the sources it does without resolving the catalogs, and its
-peak memory (2.4 GB) and allocations stay within 1% of that.
+Genkan's tests require. All but Kakehashi, Sekka's own, are packaged by other
+flakes, and reading their packages would fetch and evaluate those flakes and
+two more Nixpkgs revisions on every system, whatever was picked. From a fresh
+store, a reference installation's evaluation (Aizome and Firefox) then
+downloaded ten more flake sources, 0.8 GB that the live session keeps in
+memory, and took 7 s longer. Without reading them it fetches exactly the
+sources it does without resolving the catalogs, and its peak memory (2.4 GB)
+and allocations stay within 1% of that.
 
 `checks.x86_64-linux.application-platforms` keeps the lists and flags honest.
-It resolves both catalogs for x86 and ARM Linux as systems do, with the other
-flakes' packages set to abort the evaluation if read, and again with every
-package read and instantiated (`programs.yukimi.instantiateCatalogs`, an
-internal option). It fails when a system would offer something that doesn't
-instantiate, or when an application needs unfree packages that a system
-refusing them would not be warned about. Its Sekka packages come from
-`catalog.packagesFor` in `nix/components.nix`, as systems' do. Nothing is
-built. This is component evaluation coverage, not an ISO or hardware
-qualification.
+It resolves both catalogs for x86 and ARM Linux as systems do, with the
+packages of entries with a `source` set to abort the evaluation if read, and
+again with every package read and instantiated
+(`programs.yukimi.instantiateCatalogs`, an internal option). It fails when a
+system would offer something that doesn't instantiate, or when an application
+needs unfree packages that a system refusing them would not be warned about.
+It also checks that each catalog follows the Nixpkgs its packages come from:
+Yukimi's own the system's, and Genkan's `applicationPkgs`, which installed
+systems configure apart from `nixpkgs.config`. Its Sekka packages come from
+`catalog.packagesFor` in `nix/components.nix`, the definition that also gives
+systems theirs (x86_64-linux's today). Nothing is built. This is component
+evaluation coverage, not an ISO or hardware qualification.
 
 The [October 2026 resource comparison](docs/test-results/yukimi-unified-2026-10-27.json)
 records three trials of each frontend in a private GPU-backed Tatami compositor

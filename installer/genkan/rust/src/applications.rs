@@ -117,7 +117,7 @@ mod tests {
             // another flake for an application nobody picked.
             assert!(
                 app.source.is_none() || !app.platforms.is_empty(),
-                "{} comes from another flake, so it must list its platforms",
+                "{} has a source, so it must list its platforms",
                 app.id
             );
         }

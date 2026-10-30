@@ -30,9 +30,10 @@ let
     inherit lib;
     inherit (applicationPkgs) config;
     inherit (pkgs.stdenv) hostPlatform;
-    # Only Nixpkgs' packages are read. Those of other flakes would fetch and
-    # evaluate those flakes, and their own Nixpkgs, on every system, so their
-    # entries list the systems they install on.
+    # Only Nixpkgs' packages are read. Entries with a `source` list the
+    # systems they install on instead: most come from other flakes, which
+    # reading their packages would fetch and evaluate, with their own Nixpkgs,
+    # on every system.
     listed = app: (app.source or "nixpkgs") != "nixpkgs";
     instantiate = config.programs.yukimi.instantiateCatalogs or false;
     packagesFor =

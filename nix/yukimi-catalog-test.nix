@@ -1,9 +1,9 @@
 # Evaluate both architectures on any Linux builder; no applications are built.
-# Systems read catalog availability from Nixpkgs' metadata alone, and entries
-# from other flakes from their `platforms` lists; the instantiated variants
-# read every package and are the truth that systems (with catalog `platforms`
-# and `unfree` flags) must not contradict by offering something that cannot
-# install.
+# Systems read catalog availability from Nixpkgs' metadata alone, and that of
+# entries with a `source` (mostly other flakes' packages) from their
+# `platforms` lists; the instantiated variants read every package and are the
+# truth that systems (with catalog `platforms` and `unfree` flags) must not
+# contradict by offering something that cannot install.
 { pkgs, inputs }:
 let
   inherit (pkgs) lib;
@@ -28,11 +28,18 @@ let
       instantiate = true;
       free = true;
     }
-    # A system whose Nixpkgs installs unsupported packages is offered them,
-    # except where the catalog's own lists say otherwise.
+    # Where the Nixpkgs a catalog's packages come from installs unsupported
+    # packages, the catalog offers them, except where its own lists say
+    # otherwise. Yukimi's own catalog follows the system's Nixpkgs; Genkan's
+    # follows applicationPkgs, which installed systems configure apart from
+    # nixpkgs.config. Each variant allows them in only one of the two.
     {
       system = "aarch64-linux";
-      unsupported = true;
+      unsupported = "system";
+    }
+    {
+      system = "aarch64-linux";
+      unsupported = "applications";
     }
   ];
   catalogs = map (
@@ -41,14 +48,17 @@ let
       alternate ? false,
       instantiate ? false,
       free ? false,
-      unsupported ? false,
+      unsupported ? null,
     }:
     let
-      # The packages Sekka's catalog takes from this flake, as systems get them.
+      # Sekka's catalog packages for this system, from the per-system
+      # definition that also gives systems theirs (x86_64-linux's today,
+      # whatever the system).
       sekkaPackages = inputs.catalog.packagesFor system;
-      # A system that doesn't instantiate the catalogs must not read any other
-      # flake's packages, or it would fetch them all whatever was picked. An
-      # abort, unlike a throw, escapes the resolver's tryEval and fails here.
+      # A system that doesn't instantiate the catalogs must not read the
+      # packages of entries with a `source`: those of other flakes would be
+      # fetched whatever was picked. An abort, unlike a throw, escapes the
+      # resolver's tryEval and fails here.
       unread =
         source: value:
         if instantiate then value else abort "A system evaluation read the catalog's ${source} packages.";
@@ -62,7 +72,7 @@ let
                   inherit system;
                   config = {
                     allowUnfree = true;
-                    allowUnsupportedSystem = unsupported;
+                    allowUnsupportedSystem = unsupported == "applications";
                   };
                 };
               in
@@ -86,7 +96,7 @@ let
               };
               nixpkgs.config = {
                 allowUnfree = !free;
-                allowUnsupportedSystem = unsupported;
+                allowUnsupportedSystem = unsupported == "system";
               };
               system.stateVersion = "26.11";
             })
@@ -258,8 +268,8 @@ pkgs.runCommand "yukimi-catalog-platforms" { nativeBuildInputs = [ pkgs.python3 
   problems = []
   # Nothing offered may fail to instantiate.
   for system in ("x86_64-linux", "aarch64-linux"):
-      offered = resolved[(system, False, False, False, False)]
-      checked = resolved[(system, False, True, False, False)]
+      offered = resolved[(system, False, False, False, None)]
+      checked = resolved[(system, False, True, False, None)]
       for source, apps in offered.items():
           for id, app in apps.items():
               truth = checked[source][id]["unavailable"]
@@ -268,8 +278,8 @@ pkgs.runCommand "yukimi-catalog-platforms" { nativeBuildInputs = [ pkgs.python3 
                                   'List the systems it supports as its "platforms".')
   # Yukimi refuses unfree applications on a free system by their flag, before
   # Nix is asked; an application that needs an unfree package must say so.
-  free = resolved[("x86_64-linux", False, True, True, False)]["own"]
-  allowed = resolved[("x86_64-linux", False, True, False, False)]["own"]
+  free = resolved[("x86_64-linux", False, True, True, None)]["own"]
+  allowed = resolved[("x86_64-linux", False, True, False, None)]["own"]
   for id, app in free.items():
       if not app.get("unfree") and allowed[id]["unavailable"] is None and app["unavailable"] is not None:
           problems.append(f'own catalog, {id}: needs an unfree package without being marked "unfree".')
@@ -286,16 +296,20 @@ pkgs.runCommand "yukimi-catalog-platforms" { nativeBuildInputs = [ pkgs.python3 
           assert (apps["discord"]["unavailable"] is None) == (system == "x86_64-linux"), where
           assert (apps["steam"]["unavailable"] is None) == (system == "x86_64-linux"), where
           if source == "installer":
-              # Entries from other flakes, offered by their lists without
-              # their packages being read, including one with no package list.
+              # Entries with a `source`, offered by their lists without their
+              # packages being read, including one with no package list.
               assert apps["codex"]["unavailable"] is None, where
               assert apps["oh-my-pi"]["unavailable"] is None, where
               assert (apps["superluminal"]["unavailable"] is None) == (system == "x86_64-linux"), where
-  # Where its Nixpkgs installs unsupported packages, an ARM system is offered
-  # Discord, though not Steam, whose own list says its runtime is x86 only.
-  for source, apps in resolved[("aarch64-linux", False, False, False, True)].items():
-      assert apps["discord"]["unavailable"] is None, source
-      assert apps["steam"]["unavailable"] is not None, source
+  # Where the Nixpkgs a catalog's packages come from installs unsupported
+  # packages, an ARM system is offered Discord from that catalog alone, though
+  # not Steam, whose own list says its runtime is x86 only.
+  follows = {"own": "system", "installer": "applications"}
+  for allowing in ("system", "applications"):
+      for source, apps in resolved[("aarch64-linux", False, False, False, allowing)].items():
+          where = (allowing, source)
+          assert (apps["discord"]["unavailable"] is None) == (follows[source] == allowing), where
+          assert apps["steam"]["unavailable"] is not None, where
   PY
   touch $out
 ''
