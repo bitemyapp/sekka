@@ -13,7 +13,7 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "sekka-mpv-software";
-  globalTimeout = 300;
+  globalTimeout = 600;
   node.pkgsReadOnly = false;
   nodes.machine = { ... }: {
     imports = [
@@ -57,15 +57,22 @@ pkgs.testers.runNixOSTest {
 
     machine.start()
     machine.wait_for_unit("multi-user.target")
-    machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
-    machine.wait_until_succeeds("find /run/user/1000 -maxdepth 1 -type s -name 'wayland-[0-9]*' | grep -q .", timeout=60)
+    machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=180)
+    # Root can't look into the session's FUSE mounts (the document portal's
+    # doc, gvfs). find says so and fails, which under the test driver's
+    # pipefail failed every try once a slow start mounted them first.
+    machine.wait_until_succeeds(
+        "test -n \"$(find /run/user/1000 -maxdepth 1 -type s -name 'wayland-[0-9]*' 2>/dev/null)\"", timeout=180
+    )
 
     with subtest("the shipped defaults play moving video through software OpenGL"):
         # Use the actual installed mpv and /etc config, with neither rendering
         # option supplied by the test. Finite playback must finish, not merely
-        # open a window or decode one frame and stall.
+        # open a window or decode one frame and stall. Three seconds of video
+        # takes about four here, and a stall never finishes: the limit leaves
+        # room for a busy host.
         machine.succeed(alice(
-            "timeout 20s mpv --length=3 --log-file=/tmp/mpv-playback.log ${video}"
+            "timeout 60s mpv --length=3 --log-file=/tmp/mpv-playback.log ${video}"
         ))
         playback_log = machine.succeed("cat /tmp/mpv-playback.log")
         assert "GL_RENDERER='llvmpipe" in playback_log, playback_log
