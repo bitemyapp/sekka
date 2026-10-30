@@ -19,6 +19,7 @@ use smithay::backend::allocator::dumb::DumbAllocator;
 use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::allocator::{Format as DrmFormat, Modifier};
+use smithay::backend::drm::VrrSupport;
 use smithay::backend::drm::compositor::FrameFlags;
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements};
@@ -28,6 +29,7 @@ use smithay::backend::egl::{EGLDevice, EGLDisplay};
 use smithay::backend::input::InputEvent;
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::RenderElementStates;
+use smithay::backend::renderer::element::utils::select_dmabuf_feedback;
 use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
@@ -36,7 +38,7 @@ use smithay::backend::renderer::{ImportDma, ImportMemWl};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu};
-use smithay::desktop::utils::OutputPresentationFeedback;
+use smithay::desktop::utils::{OutputPresentationFeedback, surface_primary_scanout_output};
 use smithay::input::keyboard::LedState;
 use smithay::output::{Mode as WlMode, Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::{EventLoop, RegistrationToken};
@@ -46,7 +48,7 @@ use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::DeviceFd;
-use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::presentation::Refresh;
 use tracing::{error, info, warn};
 
@@ -105,11 +107,71 @@ struct Surface {
     drm: SurfaceOutput,
     /// What changed under blurs since the last frame ([`crate::blur`]).
     blur_probe: crate::blur::Probe,
+    dmabuf_feedback: Option<(DmabufFeedback, DmabufFeedback)>,
+    vrr_failures: crate::gaming::VrrFailures,
     redraw: Redraw,
     modes: Vec<smithay::reexports::drm::control::Mode>,
 }
 
 impl Surface {
+    /// VRR switches with fullscreen windows, overlays and animations, so
+    /// only where that is seamless. Smithay reports HDMI as needing a
+    /// modeset because switching there flickers (amd#2200).
+    fn vrr_supported(&mut self) -> bool {
+        match &mut self.drm {
+            SurfaceOutput::Gles(o) => {
+                o.with_compositor(|c| c.vrr_supported(self.connector)).is_ok_and(|r| r == VrrSupport::Supported)
+            }
+            SurfaceOutput::Pixman(_) => false,
+        }
+    }
+
+    fn update_vrr(&mut self, az: &mut Aizome) {
+        let Some(status) = az.out.get(&self.output) else { return };
+        let fullscreen = crate::gaming::fullscreen_on(az, &self.output).is_some();
+        let wanted = status.vrr_supported
+            && !self.vrr_failures.holding_off()
+            && crate::gaming::vrr_wanted(
+                status.vrr,
+                fullscreen,
+                az.lock.is_locked() || az.recovery.is_open() || az.view.grabs_keyboard || az.view.animating,
+                az.mirrors.iter().any(|(a, b)| a == &self.output || b == &self.output),
+            );
+        let enabled = match &self.drm {
+            SurfaceOutput::Gles(o) => o.with_compositor(|c| c.vrr_enabled()),
+            SurfaceOutput::Pixman(_) => false,
+        };
+        if let Some(status) = az.out.get_mut(&self.output) {
+            status.vrr_enabled = enabled;
+        }
+        if wanted == enabled {
+            return;
+        }
+        let result = match &mut self.drm {
+            SurfaceOutput::Gles(o) => o.with_compositor(|c| c.use_vrr(wanted)).map_err(|e| format!("{e:?}")),
+            SurfaceOutput::Pixman(_) => return,
+        };
+        if result.is_ok()
+            && let SurfaceOutput::Gles(o) = &mut self.drm
+        {
+            o.reset_buffers();
+        }
+        let give_up = result.is_err() && self.vrr_failures.refused();
+        if let Some(status) = az.out.get_mut(&self.output) {
+            match result {
+                Ok(()) => {
+                    status.vrr_enabled = wanted;
+                    tracing::debug!(output = self.output.name(), wanted, "adaptive sync");
+                }
+                Err(error) => {
+                    // Do not retry every frame on a driver that rejects it.
+                    warn!(output = self.output.name(), %error, give_up, "cannot switch adaptive sync");
+                    status.vrr_supported &= !give_up;
+                }
+            }
+        }
+    }
+
     /// Disables the CRTC (DPMS off); the next frame queued turns it on.
     fn power_off(&mut self) {
         let res = match &mut self.drm {
@@ -294,6 +356,13 @@ impl Udev {
         }
         let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
         let primary = u.primary_gpu;
+        if matches!(u.renderers, Renderers::Gles(_)) {
+            let device =
+                u.devices.values().find(|d| d.render_node == Some(primary)).or_else(|| u.devices.get(&primary));
+            if let Some(Device { manager: Manager::Gles(manager), .. }) = device {
+                crate::explicit_sync::init(&mut state.az, manager.device().device_fd().clone());
+            }
+        }
         match &mut u.renderers {
             Renderers::Gles(gpus) => {
                 if let Ok(r) = gpus.single_renderer(&primary) {
@@ -437,6 +506,7 @@ impl Udev {
         if let Some(o) = az.out.get_mut(output) {
             o.redraw_queued = false;
         }
+        surface.update_vrr(az);
         let result = match (&mut self.renderers, &mut surface.drm) {
             (Renderers::Gles(gpus), SurfaceOutput::Gles(drm)) => {
                 let renderer = if render_node == primary {
@@ -480,15 +550,42 @@ impl Udev {
             }
             _ => Err("renderer and output disagree".into()),
         };
+        let vrr = az.out.get(output).is_some_and(|o| o.vrr_enabled);
         match result {
             Ok((queued, states)) => {
                 if queued {
                     surface.redraw = Redraw::WaitingForVBlank;
+                    if surface.vrr_failures.presented(vrr) {
+                        warn!(output = output.name(), "adaptive sync unavailable: frames fail only with it on");
+                        if let Some(o) = az.out.get_mut(output) {
+                            o.vrr_supported = false;
+                        }
+                    }
                 }
                 let frame = Frame { damaged: queued, states, cpu: started.elapsed(), gpu: None };
                 post_frame(az, output, &frame, false);
+                if let Some((render, scanout)) = &surface.dmabuf_feedback {
+                    for window in az.windows.values() {
+                        window.window.send_dmabuf_feedback(output, surface_primary_scanout_output, |s, _| {
+                            select_dmabuf_feedback(s, &frame.states, render, scanout)
+                        });
+                    }
+                    for layer in smithay::desktop::layer_map_for_output(output).layers() {
+                        layer.send_dmabuf_feedback(output, surface_primary_scanout_output, |s, _| {
+                            select_dmabuf_feedback(s, &frame.states, render, scanout)
+                        });
+                    }
+                }
             }
-            Err(e) => warn!("rendering {}: {e}", output.name()),
+            Err(e) => {
+                warn!("rendering {}: {e}", output.name());
+                // A driver may pass TEST_ONLY and reject the real commit.
+                // Try a fresh, fixed-refresh frame before leaving it idle.
+                if surface.vrr_failures.failed(vrr) {
+                    surface.update_vrr(az);
+                    az.queue_redraw(output);
+                }
+            }
         }
     }
 
@@ -677,6 +774,11 @@ impl Udev {
                 _ => Err("renderer and output disagree".into()),
             };
             res?;
+            let supported = s.vrr_supported();
+            s.vrr_failures = Default::default();
+            if let Some(o) = az.out.get_mut(&output) {
+                o.vrr_supported = supported;
+            }
             let wl = WlMode::from(mode);
             output.change_current_state(Some(wl), None, None, None);
             if let Some(o) = az.out.get_mut(&output) {
@@ -1028,6 +1130,24 @@ fn connector_connected_as(
             return;
         }
     };
+    // Only offer scanout formats the primary renderer can also import:
+    // composition must still work when an overlay or another window appears.
+    let dmabuf_feedback = match (&mut u.renderers, &drm_output) {
+        (Renderers::Gles(gpus), SurfaceOutput::Gles(o)) => {
+            gpus.single_renderer(&primary).ok().and_then(|r| {
+                let formats = r.dmabuf_formats();
+                let scanout: FormatSet = o.with_compositor(|c| c.surface().plane_info().formats.clone())
+                    .intersection(&formats).copied().collect();
+                let builder = DmabufFeedbackBuilder::new(primary.dev_id(), formats);
+                let render = builder.clone().build().ok()?;
+                let scanout = builder.add_preference_tranche(node.dev_id(),
+                    Some(smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1::TrancheFlags::Scanout),
+                    scanout).build().ok()?;
+                Some((render, scanout))
+            })
+        }
+        _ => None,
+    };
     device.surfaces.insert(
         crtc,
         Surface {
@@ -1035,6 +1155,8 @@ fn connector_connected_as(
             connector: info.handle(),
             drm: drm_output,
             blur_probe: Default::default(),
+            dmabuf_feedback,
+            vrr_failures: Default::default(),
             redraw: Redraw::Idle,
             modes,
         },
@@ -1044,6 +1166,11 @@ fn connector_connected_as(
     let pos = position.or(cfg.as_ref().and_then(|c| c.position).map(|p| (p[0], p[1]))).unwrap_or((x, 0));
     info!(name, make, model, ?pos, scale, "output connected");
     crate::outputs::add_output(&mut state.az, &output, wl_mode, scale, pos, &serial);
+    let supported = device.surfaces.get_mut(&crtc).is_some_and(Surface::vrr_supported);
+    if let Some(out) = state.az.out.get_mut(&output) {
+        out.vrr_supported = supported;
+        out.vrr = cfg.as_ref().map(|c| c.vrr).unwrap_or_default();
+    }
     if let Some(t) = cfg.and_then(|c| c.transform) {
         output.change_current_state(None, Some(crate::outputs::transform_from_config(t)), None, None);
     }
@@ -1099,7 +1226,16 @@ fn vblank(state: &mut State, node: DrmNode, crtc: crtc::Handle, metadata: &mut O
         o.presented = Some(Duration::from(time));
     }
     match submitted {
-        Ok(Some(Some(mut feedback))) => feedback.presented(time, Refresh::fixed(refresh), seq, flags),
+        Ok(Some(Some(mut feedback))) => feedback.presented(
+            time,
+            if state.az.out.get(&output).is_some_and(|o| o.vrr_enabled) {
+                Refresh::variable(refresh)
+            } else {
+                Refresh::fixed(refresh)
+            },
+            seq,
+            flags,
+        ),
         Ok(_) => {}
         Err(e) => warn!("frame submission on {}: {e}", output.name()),
     }
@@ -1166,7 +1302,13 @@ fn apply_device_settings(d: &mut libinput::Device, input: &aizome_config::Input)
 /// Direct scanout (a full-screen client's buffer straight to a plane) is
 /// off while the recovery overlay shows, so it shows above everything.
 fn frame_flags(az: &Aizome) -> FrameFlags {
-    if az.recovery.is_open() { FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT } else { FrameFlags::DEFAULT }
+    if az.recovery.is_open() {
+        FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT
+    } else {
+        // An 8-bit game can scan out while the compositor uses 10-bit SDR.
+        // Smithay still tests the plane configuration and falls back to GLES.
+        FrameFlags::DEFAULT | FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY
+    }
 }
 
 #[cfg(test)]

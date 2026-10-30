@@ -62,6 +62,23 @@ fn two(second: &'static str) -> Options<'static> {
 }
 
 #[test]
+fn adaptive_sync_reports_and_rejects_unsupported_outputs() {
+    let c = Compositor::start(two("1280x800@1"));
+    let request = |name: &str, mode: &str| Request::OutputVrr { name: name.into(), mode: mode.into() };
+    let Response::Outputs { outputs } = c.request(Request::Outputs) else { panic!("outputs") };
+    // Off until a display entry asks for it.
+    assert!(outputs.iter().all(|o| !o.vrr_supported && !o.vrr_enabled && o.vrr == "off"));
+    for (name, mode) in [("HEADLESS-1", "always"), ("HEADLESS-1", "invalid"), ("missing", "off")] {
+        assert!(matches!(c.request(request(name, mode)), Response::Error { .. }));
+    }
+    c.ok(request("HEADLESS-1", "off"));
+    let Response::Outputs { outputs } = c.request(Request::Outputs) else { panic!("outputs") };
+    assert_eq!(outputs[0].vrr, "off");
+    c.ok(config("HEADLESS-1", false));
+    assert!(matches!(c.request(request("HEADLESS-1", "off")), Response::Error { .. }));
+}
+
+#[test]
 fn switching_desks_changes_only_the_display_with_the_focus() {
     let c = Compositor::start(two("1280x800@1"));
     // The main display (the first) shows Desk 1, the other Desk 2.

@@ -173,6 +173,8 @@
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
+        gamescope = import ./nix/gamescope.nix { inherit (pkgs) gamescope; };
+        xwayland-satellite = pkgs.callPackage ./desktop/aizome/nix/xwayland-satellite.nix { };
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
@@ -253,6 +255,54 @@
                 path = applications.systems.plasma.config.system.build.toplevel;
               }
             ]
+          );
+        # What calamares.gaming (installer/genkan/rust/system/gaming.nix) adds
+        # to a Steam installation that cache.nixos.org lacks: the patched
+        # Gamescope, its wrappers, sekka-game and the 32-bit Gamescope WSI
+        # layer. Steam is unfree, so this free reference installed system has
+        # the gaming module without it. push-cache publishes the closure, so
+        # installing or updating Steam downloads Gamescope instead of
+        # compiling it.
+        gaming =
+          let
+            reference = import ./nix/reference-systems.nix {
+              inherit inputs applicationCatalog;
+              desktops = [ "aizome" ];
+              free = true;
+            };
+            c =
+              (reference.systems.aizome.extendModules {
+                modules = [
+                  {
+                    calamares.gaming.enable = true;
+                    # As programs.steam sets it.
+                    hardware.graphics.enable32Bit = true;
+                  }
+                ];
+              }).config;
+            # programs.gamescope's own wrapper, and the launcher with the
+            # Gamescope wrapper it runs.
+            wrappers = builtins.filter (
+              p:
+              builtins.elem (p.name or "") [
+                "gamescope"
+                "sekka-game"
+              ]
+            ) c.environment.systemPackages;
+            paths = [
+              c.programs.gamescope.package
+            ]
+            ++ wrappers
+            ++ c.hardware.graphics.extraPackages
+            ++ c.hardware.graphics.extraPackages32;
+          in
+          assert pkgs.lib.assertMsg (builtins.length wrappers == 2)
+            "packages.gaming: programs.gamescope's wrapper or sekka-game is no longer in environment.systemPackages";
+          pkgs.linkFarm "sekka-gaming" (
+            pkgs.lib.imap0 (i: path: {
+              name = "${toString i}-${path.name}";
+              inherit path;
+            }) paths
           );
         application-cache = applicationCatalog.cache;
         # sekka.computer, ready to upload; nothing publishes it.
@@ -542,6 +592,16 @@
         tuning = import ./nix/tuning-test.nix {
           inherit pkgs;
           aizomeSource = inputs.aizome.outPath;
+        };
+        gaming = import ./nix/gaming-test.nix { inherit nixpkgs system; };
+        xwayland-fullscreen = import ./nix/xwayland-fullscreen-test.nix {
+          inherit pkgs;
+          aizome = self.packages.${system}.aizome;
+          satellite = self.packages.${system}.xwayland-satellite;
+        };
+        # The patched bridge's unit tests; the shipped package skips its tests.
+        xwayland-satellite-unit = pkgs.callPackage ./desktop/aizome/nix/xwayland-satellite.nix {
+          unitTests = true;
         };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };

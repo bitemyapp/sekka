@@ -22,7 +22,9 @@ pub mod compositor;
 pub mod greeter;
 pub mod location;
 pub mod shell;
-pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleClick, sun_times, temperature_rgb};
+pub use compositor::{
+    ExplicitSyncChoice, NightLight, NightSchedule, RendererChoice, Sun, TabDoubleClick, sun_times, temperature_rgb,
+};
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
 pub use shell::{
@@ -350,8 +352,41 @@ pub struct OutputConfig {
     pub position: Option<[i32; 2]>,
     pub transform: Option<Transform>,
     pub enabled: Option<bool>,
+    /// Adaptive sync on capable outputs; off by default.
+    pub vrr: VrrMode,
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+/// When an output may vary its refresh interval.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VrrMode {
+    /// The default until VRR switching has been validated on more panels
+    /// than one NVIDIA desktop's (desktop/aizome/docs/rendering.md).
+    #[default]
+    Off,
+    Fullscreen,
+    Always,
+}
+
+impl VrrMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Fullscreen => "fullscreen",
+            Self::Always => "always",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "fullscreen" => Some(Self::Fullscreen),
+            "always" => Some(Self::Always),
+            _ => None,
+        }
+    }
 }
 
 impl OutputConfig {

@@ -119,7 +119,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <ul class="facts">
     <li><strong>Installation erases a whole disk.</strong> There is no dual-boot setup, manual partitioning, or option to keep an existing operating system. Keep backups elsewhere.</li>
     <li><strong>RAID, LVM setup and offline installation are not implemented.</strong> An internet connection is required.</li>
-    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
+    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. An RTX 5090 desktop also runs Aizome and is used for GPU component tests. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
     <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
     <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
   </ul>
@@ -142,7 +142,7 @@ pub fn home(site: &Site) -> Result<Page> {
     <ul class="facts gaps">
       <li><strong>No manual partitioning or dual boot.</strong></li>
       <li><strong>No offline installation.</strong></li>
-      <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
+      <li><strong>Limited hardware coverage.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. An RTX 5090 desktop also runs Aizome and is used for GPU component tests. These tests do not establish compatibility with other machines.</li>
       <li><strong>No Secure Boot path and no ARM image.</strong></li>
       <li><strong>No release.</strong> Only experimental <a href="/download/">nightly builds</a>, published after testing the exact ISO in virtual machines.</li>
     </ul>
@@ -820,7 +820,7 @@ pub fn status(site: &Site) -> Result<Page> {
       <tr><th scope="row">Displays and lid</th><td>The display helper runs against a fake Hyprland and a fake lid. Real Hyprland runs in a virtual machine with simulated screens and a simulated lid switch.</td><td>Physical docks, cables, panels, lid sensors and GPUs.</td></tr>
       <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence. It never suspends the host.</td><td>Power loss, firmware and thermal shutdowns.</td></tr>
       <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td><td>Waking your machine: check it with Keep Awake off.</td></tr>
-      <tr><th scope="row">Hardware</th><td>Daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME.</td><td>Other machines, and any given nightly.</td></tr>
+      <tr><th scope="row">Hardware</th><td>Daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. An RTX 5090 desktop runs Aizome and GPU component tests.</td><td>Other machines, physical HDR/VRR/tearing validation, and any given nightly.</td></tr>
       <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td><td>Hardware hot-plug.</td></tr>
     </tbody>
   </table></div>
@@ -841,7 +841,7 @@ pub fn status(site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Hardware</h2>
-    <p>Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. Neither they nor virtual machines can show whether your Wi-Fi, graphics, sleep or external displays work. The NVIDIA driver Sekka configures targets Turing and newer GPUs. Genkan offers ext4, Btrfs or XFS, with UEFI or legacy BIOS boot.</p>
+    <p>Sekka is in daily use on a ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. An RTX 5090 desktop also runs Aizome and is used for GPU component tests. Neither these machines nor virtual machines can show whether your Wi-Fi, graphics, sleep or external displays work. The NVIDIA driver Sekka configures targets Turing and newer GPUs. Genkan offers ext4, Btrfs or XFS, with UEFI or legacy BIOS boot.</p>
     <p>Proprietary software is allowed by default, with an opt-out; redistributable firmware may still be proprietary.</p>
   </article>
 </section>

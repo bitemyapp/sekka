@@ -100,6 +100,15 @@ impl SampleOutputs {
             }
             return Ok(());
         }
+        if let Request::OutputVrr { name, mode } = req {
+            let o = self.on.iter_mut().find(|o| o.name == *name).ok_or_else(|| format!("no output {name}"))?;
+            let vrr = aizome_config::VrrMode::parse(mode).ok_or("invalid VRR policy")?;
+            if !o.vrr_supported && vrr != aizome_config::VrrMode::Off {
+                return Err("adaptive sync unavailable".into());
+            }
+            o.vrr = mode.clone();
+            return Ok(());
+        }
         let Request::OutputConfig { name, mode, scale, position, transform, enabled } = req else {
             return Err("the sample compositor takes only output-config and mirror-output".into());
         };

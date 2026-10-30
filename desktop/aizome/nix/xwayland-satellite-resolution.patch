@@ -1,0 +1,419 @@
+diff --git a/src/server/dispatch.rs b/src/server/dispatch.rs
+index 3815022..ef67cad 100644
+--- a/src/server/dispatch.rs
++++ b/src/server/dispatch.rs
+@@ -916,17 +916,16 @@ impl<S: X11Selection> Dispatch<LockedPointerServer, Entity> for InnerServerState
+                 surface_x,
+                 surface_y,
+             } => {
+-                let (client, scale) = state
+-                    .world
+-                    .query_one_mut::<(&LockedPointerClient, &SurfaceScaleFactor)>(*entity)
+-                    .unwrap();
++                let surface = state.world.get::<&InputSurface>(*entity).unwrap().0;
++                let (input_x, input_y) = emulation::input_scale(&state.world, surface);
++                let client = state.world.get::<&LockedPointerClient>(*entity).unwrap();
+ 
+                 // Xwayland believes that the surface is actually <surface scale factor> times bigger
+                 // than it currently is, and therefore that the cursor position is also scaled up by the same
+                 // amount. So we need to divide the cursor position from Xwayland by the surface scale
+                 // to get where the cursor should actually be positioned.
+ 
+-                client.set_cursor_position_hint(surface_x / scale.0, surface_y / scale.0);
++                client.set_cursor_position_hint(surface_x / input_x, surface_y / input_y);
+             }
+             lp::Request::Destroy => {
+                 {
+@@ -1019,16 +1018,9 @@ impl<S: X11Selection>
+                     )
+                 };
+                 let server = data_init.init(id, entity);
+-                let surface_scale = state
+-                    .world
+-                    .get::<&SurfaceScaleFactor>(surf_key)
+-                    .as_deref()
+-                    .copied()
+-                    .unwrap();
+-
+                 state
+                     .world
+-                    .spawn_at(entity, (client, server, surface_scale));
++                    .spawn_at(entity, (client, server, InputSurface(surf_key)));
+             }
+             Request::Destroy => {
+                 client.destroy();
+diff --git a/src/server/emulation.rs b/src/server/emulation.rs
+new file mode 100644
+index 0000000..2a58818
+--- /dev/null
++++ b/src/server/emulation.rs
+@@ -0,0 +1,133 @@
++//! Xwayland's per-client RandR mode is distinct from the physical output mode.
++//! Keep the X drawable at the requested resolution and scale its viewport to
++//! the fullscreen configure. Satellite owns the viewport, so Xwayland cannot
++//! perform this scaling itself (it runs with -force-xrandr-emulation).
++use super::*;
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct EmulatedMode {
++    x: i32,
++    y: i32,
++    width: u16,
++    height: u16,
++}
++
++impl EmulatedMode {
++    pub(crate) fn parse(values: &[u32]) -> Vec<Self> {
++        if !values.chunks_exact(4).remainder().is_empty() {
++            return Vec::new();
++        }
++        values
++            .chunks_exact(4)
++            .filter_map(|v| {
++                let width = u16::try_from(v[2]).ok().filter(|v| *v > 0)?;
++                let height = u16::try_from(v[3]).ok().filter(|v| *v > 0)?;
++                Some(Self {
++                    x: v[0] as i32,
++                    y: v[1] as i32,
++                    width,
++                    height,
++                })
++            })
++            .collect()
++    }
++}
++
++pub(super) fn mode(win: &WindowData, role: &SurfaceRole) -> Option<(u16, u16)> {
++    let SurfaceRole::Toplevel(Some(t)) = role else {
++        return None;
++    };
++    if !t.fullscreen || t.fullscreen_size.is_none() {
++        return None;
++    }
++    win.attrs
++        .emulated_modes
++        .iter()
++        .find(|m| m.x == win.output_offset.x && m.y == win.output_offset.y)
++        .map(|m| (m.width, m.height))
++}
++
++/// The emulated mode while the X window still has exactly that size, as in
++/// Xwayland's own emulation. A game may resize away from its mode, and an
++/// output change can precede the next configure; scale those normally.
++pub(super) fn active(win: &WindowData, role: &SurfaceRole) -> Option<(u16, u16)> {
++    mode(win, role).filter(|&(w, h)| win.attrs.dims.width == w && win.attrs.dims.height == h)
++}
++
++// Track the surface rather than copying its scale into input devices. A mode
++// can change while the pointer remains inside the window or stays locked.
++#[derive(Clone, Copy)]
++pub(super) struct InputSurface(pub Entity);
++
++pub(super) fn input_scale(world: &hecs::World, entity: Entity) -> (f64, f64) {
++    let factor = world
++        .get::<&SurfaceScaleFactor>(entity)
++        .map(|s| s.0)
++        .unwrap_or(1.0);
++    if let Ok(mut q) = world.query_one::<(&WindowData, &SurfaceRole)>(entity) {
++        if let Some((win, role)) = q.get() {
++            if let (Some((w, h)), SurfaceRole::Toplevel(Some(t))) = (active(win, role), role) {
++                let (width, height) = t.fullscreen_size.unwrap();
++                return (w as f64 / width as f64, h as f64 / height as f64);
++            }
++        }
++    }
++    (factor, factor)
++}
++
++impl<S: X11Selection + 'static> InnerServerState<S> {
++    pub(crate) fn set_emulated_modes(&mut self, window: x::Window, modes: Vec<EmulatedMode>) {
++        let Some(&entity) = self.windows.get(&window) else {
++            return;
++        };
++        let data = self.world.entity(entity).unwrap();
++        let mut win = data.get::<&mut WindowData>().unwrap();
++        if win.attrs.emulated_modes == modes {
++            return;
++        }
++        win.attrs.emulated_modes = modes;
++        let Some(role) = data.get::<&SurfaceRole>() else {
++            return;
++        };
++        let SurfaceRole::Toplevel(Some(t)) = &*role else {
++            return;
++        };
++        let Some((width, height)) = t.fullscreen_size.filter(|_| t.fullscreen) else {
++            return;
++        };
++        let factor = data.get::<&SurfaceScaleFactor>().unwrap().0;
++        let (width, height) = mode(&win, &role).unwrap_or((
++            (width as f64 * factor) as u16,
++            (height as f64 * factor) as u16,
++        ));
++        win.attrs.dims.width = width;
++        win.attrs.dims.height = height;
++        let pending = PendingSurfaceState {
++            x: win.output_offset.x,
++            y: win.output_offset.y,
++            width: width as _,
++            height: height as _,
++        };
++        drop(win);
++        drop(role);
++        self.world.insert_one(entity, pending).unwrap();
++        update_surface_viewport(&self.world, self.world.query_one(entity).unwrap());
++        self.world
++            .get::<&client::wl_surface::WlSurface>(entity)
++            .unwrap()
++            .commit();
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn malformed_modes_are_not_used_as_drawable_sizes() {
++        assert!(EmulatedMode::parse(&[0, 0, 1920]).is_empty());
++        assert!(EmulatedMode::parse(&[0, 0, 0, 1080, 0, 0, 65536, 1080]).is_empty());
++        let modes = EmulatedMode::parse(&[(-1920i32) as u32, 0, 1920, 1080, 0, 0, 800, 600]);
++        assert_eq!(modes.len(), 2);
++        assert_eq!(modes[0].x, -1920);
++    }
++}
+diff --git a/src/server/event.rs b/src/server/event.rs
+index 167a5c4..594fe91 100644
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -323,6 +323,7 @@ impl SurfaceEvents {
+             } else {
+                 window_data.attrs.dims.height
+             };
++            let (width, height) = emulation::mode(window_data, role).unwrap_or((width, height));
+             debug!(
+                 "configuring {} ({window:?}): {x}x{y}, {width}x{height}",
+                 data.get::<&WlSurface>().unwrap().id(),
+@@ -390,6 +391,11 @@ impl SurfaceEvents {
+                     let prev_fs = toplevel.fullscreen;
+                     toplevel.fullscreen =
+                         states.contains(&(u32::from(xdg_toplevel::State::Fullscreen) as u8));
++                    if !toplevel.fullscreen {
++                        toplevel.fullscreen_size = None;
++                    } else if width > 0 && height > 0 {
++                        toplevel.fullscreen_size = Some((width, height));
++                    }
+                     data.get::<&mut WindowData>()
+                         .unwrap()
+                         .attrs
+@@ -490,6 +496,14 @@ pub(super) fn update_surface_viewport(
+ 
+     let width = (dims.width as f64 / scale_factor.0).ceil() as i32;
+     let height = (dims.height as f64 / scale_factor.0).ceil() as i32;
++    let (width, height) = match role.as_deref() {
++        Some(role @ SurfaceRole::Toplevel(Some(t)))
++            if emulation::active(window_data, role).is_some() =>
++        {
++            t.fullscreen_size.unwrap()
++        }
++        _ => (width, height),
++    };
+     if width > 0 && height > 0 {
+         viewport.set_destination(width, height);
+     }
+@@ -654,12 +668,14 @@ impl Event for client::wl_pointer::Event {
+                 };
+ 
+                 let server = state.world.get::<&WlPointer>(target).unwrap();
+-                cmd.insert(target, (*scale,));
++                let input_surface = surface_entity.unwrap();
++                cmd.insert(target, (InputSurface(input_surface),));
++                let (input_x, input_y) = emulation::input_scale(&state.world, input_surface);
+ 
+                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
+                 let mut do_enter = || {
+                     debug!("pointer entering {} ({serial} {})", surface.id(), scale.0);
+-                    server.enter(serial, surface, surface_x * scale.0, surface_y * scale.0);
++                    server.enter(serial, surface, surface_x * input_x, surface_y * input_y);
+                     connection.raise_to_top(*window);
+                     if !surface_is_popup {
+                         state.last_hovered = Some(*window);
+@@ -739,17 +755,16 @@ impl Event for client::wl_pointer::Event {
+                         return;
+                     }
+                 }
+-                let (server, scale) = state
+-                    .world
+-                    .query_one_mut::<(&WlPointer, &SurfaceScaleFactor)>(target)
+-                    .unwrap();
++                let surface = state.world.get::<&InputSurface>(target).unwrap().0;
++                let (input_x, input_y) = emulation::input_scale(&state.world, surface);
++                let server = state.world.get::<&WlPointer>(target).unwrap();
+                 trace!(
+                     target: "pointer_position",
+                     "pointer motion {} {}",
+-                    surface_x * scale.0,
+-                    surface_y * scale.0
++                    surface_x * input_x,
++                    surface_y * input_y
+                 );
+-                server.motion(time, surface_x * scale.0, surface_y * scale.0);
++                server.motion(time, surface_x * input_x, surface_y * input_y);
+             }
+             Self::Button {
+                 serial,
+@@ -960,13 +975,15 @@ impl Event for client::wl_touch::Event {
+                             .query_one::<(&WlSurface, &SurfaceScaleFactor, &x::Window)>(key)
+                             .ok()
+                     });
+-                    if let Some((s_surface, s_factor, window)) =
++                    if let Some((s_surface, _s_factor, window)) =
+                         s_query.as_mut().and_then(|q| q.get())
+                     {
+-                        cmd.insert_one(target, *s_factor);
++                        let input_surface = s_entity.unwrap();
++                        cmd.insert_one(target, InputSurface(input_surface));
++                        let (input_x, input_y) = emulation::input_scale(world, input_surface);
+                         connection.raise_to_top(*window);
+                         let touch = world.get::<&WlTouch>(target).unwrap();
+-                        touch.down(serial, time, s_surface, id, x * s_factor.0, y * s_factor.0);
++                        touch.down(serial, time, s_surface, id, x * input_x, y * input_y);
+                     } else if let Some(&DecorationMarker { parent }) = surface.data() {
+                         drop(s_query);
+                         let seat = {
+@@ -981,13 +998,12 @@ impl Event for client::wl_touch::Event {
+                 cmd.run_on(&mut state.world);
+             }
+             Self::Motion { time, id, x, y } => {
+-                let Ok((touch, scale)) = state
+-                    .world
+-                    .query_one_mut::<(&WlTouch, &SurfaceScaleFactor)>(target)
+-                else {
++                let Ok(surface) = state.world.get::<&InputSurface>(target) else {
+                     return;
+                 };
+-                touch.motion(time, id, x * scale.0, y * scale.0);
++                let (input_x, input_y) = emulation::input_scale(&state.world, surface.0);
++                let touch = state.world.get::<&WlTouch>(target).unwrap();
++                touch.motion(time, id, x * input_x, y * input_y);
+             }
+             _ => {
+                 let touch = state.world.get::<&WlTouch>(target).unwrap();
+@@ -1616,8 +1632,8 @@ impl Event for zwp_tablet_tool_v2::Event {
+                         warn!("tablet tool proximity_in failed: stale surface");
+                         return;
+                     };
+-                    let (surface, scale, window) = query.get().unwrap();
+-                    cmd.insert(target, (*scale,));
++                    let (surface, _scale, window) = query.get().unwrap();
++                    cmd.insert(target, (InputSurface(*surface.data::<Entity>().unwrap()),));
+ 
+                     let Some(s_tablet) =
+                         tablet
+@@ -1640,12 +1656,13 @@ impl Event for zwp_tablet_tool_v2::Event {
+                 cmd.run_on(&mut state.world);
+             }
+             Self::Motion { x, y } => {
+-                let (tool, scale) = state
++                let (input_x, input_y) = state
+                     .world
+-                    .query_one_mut::<(&TabletToolServer, Option<&SurfaceScaleFactor>)>(target)
+-                    .unwrap();
+-                let scale = scale.map(|s| s.0).unwrap_or(1.0);
+-                tool.motion(x * scale, y * scale);
++                    .get::<&InputSurface>(target)
++                    .map(|s| emulation::input_scale(&state.world, s.0))
++                    .unwrap_or((1.0, 1.0));
++                let tool = state.world.get::<&TabletToolServer>(target).unwrap();
++                tool.motion(x * input_x, y * input_y);
+             }
+             _ => {
+                 let tool = state.world.get::<&TabletToolServer>(target).unwrap();
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index 6c05427..16f8299 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -1,7 +1,10 @@
+ mod clientside;
+ mod decoration;
+ mod dispatch;
++mod emulation;
+ mod event;
++pub(crate) use emulation::EmulatedMode;
++use emulation::InputSurface;
+ pub(crate) mod selection;
+ #[cfg(test)]
+ mod tests;
+@@ -115,6 +118,7 @@ struct WindowAttributes {
+     // None permits the legacy size heuristic. Explicit EWMH state, including
+     // an empty initial property, always wins and survives role creation.
+     requested_fullscreen: Option<bool>,
++    emulated_modes: Vec<EmulatedMode>,
+ }
+ 
+ impl WindowAttributes {
+@@ -243,6 +247,7 @@ struct ToplevelData {
+     toplevel: XdgToplevel,
+     xdg: XdgSurfaceData,
+     fullscreen: bool,
++    fullscreen_size: Option<(i32, i32)>,
+     decoration: decoration::DecorationsData,
+ }
+ 
+@@ -1631,6 +1636,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+             },
+             toplevel,
+             fullscreen: false,
++            fullscreen_size: None,
+             decoration: DecorationsData {
+                 wl: wl_decoration,
+                 satellite: sat_decoration,
+diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
+index be57e70..3b27dfd 100644
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -668,6 +668,8 @@ impl XState {
+             server_state.set_win_class(window, class);
+         }
+ 
++        server_state.set_emulated_modes(window, self.get_emulated_modes(window)?);
++
+         let size_hints = self.get_wm_size_hints(window)?;
+         if let Some(hints) = size_hints {
+             server_state.set_size_hints(window, hints);
+@@ -742,6 +744,16 @@ impl XState {
+             .resolve(|reply| reply.value::<x::Atom>().contains(&self.atoms.wm_fullscreen))
+     }
+ 
++    fn get_emulated_modes(&self, window: x::Window) -> XResult<Vec<crate::server::EmulatedMode>> {
++        let cookie =
++            self.get_property_cookie(window, self.atoms.randr_emu_rects, x::ATOM_CARDINAL, 256);
++        let reply = self.connection.wait_for_reply(cookie)?;
++        if reply.r#type() != x::ATOM_CARDINAL || reply.format() != 32 || reply.bytes_after() != 0 {
++            return Ok(Vec::new());
++        }
++        Ok(crate::server::EmulatedMode::parse(reply.value::<u32>()))
++    }
++
+     fn get_wm_class(&self, window: x::Window) -> XResult<Option<String>> {
+         let cookie = self.get_property_cookie(window, x::ATOM_WM_CLASS, x::ATOM_STRING, 256);
+         let resolver = move |reply: x::GetPropertyReply| {
+@@ -878,6 +890,11 @@ impl XState {
+         if self.handle_selection_property_change(&event) {
+             return;
+         }
++        if event.atom() == self.atoms.randr_emu_rects {
++            let modes = unwrap_or_skip_bad_window_ret!(self.get_emulated_modes(event.window()));
++            server_state.set_emulated_modes(event.window(), modes);
++            return;
++        }
+         if event.state() == x::Property::Delete {
+             debug!(
+                 "ignoring delete for property {:?}",
+@@ -944,6 +961,7 @@ xcb::atoms_struct! {
+         net_wm_cm_s0 => b"_NET_WM_CM_S0" only_if_exists = false,
+         wm_check => b"_NET_SUPPORTING_WM_CHECK" only_if_exists = false,
+         net_wm_name => b"_NET_WM_NAME" only_if_exists = false,
++        randr_emu_rects => b"_XWAYLAND_RANDR_EMU_MONITOR_RECTS" only_if_exists = false,
+         wm_pid => b"_NET_WM_PID" only_if_exists = false,
+         net_wm_state => b"_NET_WM_STATE" only_if_exists = false,
+         wm_fullscreen => b"_NET_WM_STATE_FULLSCREEN" only_if_exists = false,

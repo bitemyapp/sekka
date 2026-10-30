@@ -207,6 +207,9 @@ impl Actions for State {
 
     /// Fill (the zoom box) on, off or toggled.
     fn set_fill(&mut self, id: WinId, on: Option<bool>) {
+        if !self.lg.r().wm.get(id).is_some_and(|w| w.fill()) && group_has_fixed_size(self, id) {
+            return;
+        }
         let (usable, insets) = self.usable_for(id);
         let l = self.lg.m();
         let old = l.wm.get(id).map(|w| w.rect);
@@ -216,6 +219,12 @@ impl Actions for State {
     }
 
     fn set_split(&mut self, id: WinId, side: Side) {
+        let restoring = self.lg.r().wm.get(id).is_some_and(|w| {
+            matches!((w.placement, side), (Placement::SplitLeft, Side::Left) | (Placement::SplitRight, Side::Right))
+        });
+        if !restoring && group_has_fixed_size(self, id) {
+            return;
+        }
         let (usable, insets) = self.usable_for(id);
         let l = self.lg.m();
         let old = l.wm.get(id).map(|w| w.rect);
@@ -586,6 +595,17 @@ fn after_visibility_change(st: &mut State, id: WinId) {
     st.redraw_window(id);
 }
 
+/// Fixed-size games and dialogs cannot redraw at a zoomed or tiled size.
+/// Check every tab because the group shares one content rectangle.
+fn group_has_fixed_size(st: &State, id: WinId) -> bool {
+    st.lg
+        .r()
+        .wm
+        .group_members(id)
+        .iter()
+        .any(|id| st.az.windows.get(id).is_some_and(|w| crate::memory::SizeConstraints::of(w.toplevel()).fixed()))
+}
+
 fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect) {
     if st.lg.r().wm.get(id).is_some_and(|w| w.placement == Placement::Free) {
         // A saved free rectangle can outlive an output or Deskbar change.
@@ -854,6 +874,7 @@ pub fn place_new_window(st: &mut State, id: WinId, size: (i32, i32), parent: Opt
     let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
         .then(|| l.remembered.get(&app_id))
         .flatten()
+        .filter(|r| l.wins.get(&id).is_some_and(|d| d.size_constraints.remembers(*r)))
         .and_then(|r| {
             if frame.intersects(r) {
                 return Some(r);
@@ -911,9 +932,11 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
         None => desk_output(st, st.lg.r().wm.current_desk()),
     };
     let usable = out.as_ref().map(|o| window_area(&st.az, o));
+    let constraints = crate::memory::SizeConstraints::of(toplevel);
     let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
         .then(|| st.lg.r().remembered.get(&app_id))
-        .flatten();
+        .flatten()
+        .filter(|r| constraints.remembers(*r));
     toplevel.with_pending_state(|s| {
         let i = crate::decor::insets(s.decoration_mode != Some(DecorationMode::ClientSide));
         if let Some(u) = usable {
@@ -935,15 +958,22 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
         w.ssd = info.ssd;
     }
     l.wins.insert(id, Default::default());
+    if let Some(m) = st.az.windows.get(&id) {
+        l.data(id).size_constraints = crate::memory::SizeConstraints::of(m.toplevel());
+    }
     place_new_window(st, id, info.size, info.parent);
 
-    // A new window of the focused app joins its group, when asked for.
+    // A new window of the focused app joins its group, when asked for. Tabs
+    // share one size, which fixed-size windows (Steam's helpers, games) can't
+    // take, whether new or already in that group.
     let l = st.lg.r();
     let focused = l.wm.focused();
     let same_app = focused.filter(|f| l.wm.get(*f).is_some_and(|w| w.app_id == info.app_id && w.id != id));
     if st.az.settings.windows.stack_new_windows_of_same_app
         && info.parent.is_none()
         && let Some(f) = same_app
+        && !group_has_fixed_size(st, id)
+        && !group_has_fixed_size(st, f)
     {
         st.stack(f, id);
     }
@@ -973,6 +1003,7 @@ pub fn window_committed(st: &mut State, id: WinId, is_root: bool) {
     let committed = toplevel.current_state();
     let ssd = committed.decoration_mode == Some(DecorationMode::ServerSide);
     let l = st.lg.m();
+    l.data(id).size_constraints = crate::memory::SizeConstraints::of(&toplevel);
     if l.wm.get(id).is_some_and(|w| w.ssd != ssd) {
         let old = l.wm.get(id).map(|w| w.rect).unwrap();
         if let Some(w) = l.wm.get_mut(id) {
@@ -1037,7 +1068,11 @@ pub fn window_unmapped(st: &mut State, id: WinId) {
     let remember = st.az.settings.windows.remember_geometry;
     let l = st.lg.m();
     if let Some(w) = l.wm.get(id) {
-        if w.placement == Placement::Free && w.parent.is_none() && remember {
+        if w.placement == Placement::Free
+            && w.parent.is_none()
+            && remember
+            && l.wins.get(&id).is_some_and(|d| d.size_constraints.remembers(w.rect))
+        {
             let (app, rect) = (w.app_id.clone(), w.rect);
             l.remembered.set(&app, rect);
         }
@@ -1196,7 +1231,7 @@ pub fn adopt_windows(st: &mut State) {
             .map(|c| c.pid);
         let parent = toplevel.parent().and_then(|p| st.az.window_for_surface(&p));
         let l = st.lg.m();
-        l.wins.entry(id).or_default();
+        l.data(id).size_constraints = crate::memory::SizeConstraints::of(&toplevel);
         if let Some(w) = l.wm.get_mut(id) {
             // Known: what it is now (titles change).
             w.title = title;

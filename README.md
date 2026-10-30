@@ -10,7 +10,7 @@ Sekka is an early, experimental project. **It is not ready to be your dependable
 
 - **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
 - **RAID/LVM setup and offline installation are not implemented.** An internet connection is required.
-- **Hardware coverage is limited.** Beyond its automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
+- **Hardware coverage is limited.** Sekka is in daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. A desktop with an RTX 5090 also runs Aizome and is used for GPU component testing. That cannot establish that your Wi-Fi, graphics, sleep, or external displays work. Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
 - **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
 - **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
 
@@ -72,9 +72,8 @@ It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Activity), Nisshi (Logs), Shashin (Images) and Koe (Dictation). Nisshi reads
 the system's journal and /var/log, suggests filters from what wrote each
 message, and asks for an administrator's password only to read what you
-can't. Aizome is new, and so far it
-has run only in virtual machines. See [its README](desktop/aizome/README.md)
-for what is done and what isn't.
+can't. Aizome is new and its hardware coverage is limited. See
+[its README](desktop/aizome/README.md) for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
@@ -158,6 +157,37 @@ Plasma, GNOME and Xfce are available too. Multiple installed desktops share your
 [![GNOME with Files and Yukimi](docs/images/sekka/gnome.png)](docs/images/sekka/gnome.png)
 
 *This GNOME capture predates Yukimi's shared native interface.*
+
+### Playing games
+
+Install Steam through Genkan or Yukimi. Games with desktop shortcuts appear
+under **Toolchest → Applications → Games** in Aizome. Steam also adds a
+separate **Steam** login session, using Gamescope with adaptive sync and HDR
+on capable displays. GE-Proton is available in Steam's compatibility menu;
+choose it for individual games that need it.
+
+For a game to request GameMode while it runs, set its Steam launch options
+to `sekka-game -- %command%`. Use `sekka-game --hud -- %command%` to show
+frame times and GPU usage. To run a game inside Gamescope, add `--mode` with
+your display's resolution and refresh rate, such as
+`sekka-game --mode 2560x1440@144 -- %command%`; plain `--gamescope` renders
+at 1280×720. There is no need to nest Gamescope inside the Steam login
+session; the launcher detects it.
+
+With system tuning enabled, Steam games automatically receive higher CPU
+priority, including games absent from the scheduling rules. Background shader
+cache processing stays at low priority. This helps games compete with other
+CPU work; it does not increase the GPU's rendering capacity.
+
+Aizome offers games explicit synchronization when an NVIDIA GPU drives the
+desktop. Adaptive sync is off by default; to use it, choose **Fullscreen** or
+**Always** under **Settings → Displays**. It is offered on DisplayPort and
+built-in displays, not HDMI, and has so far been tried only on one NVIDIA
+desktop's monitor. If a display flickers with adaptive sync, select **Off**.
+Aizome still displays SDR and does not support tearing; use the Steam login
+session for those features. HDR, VRR and tearing still need physical display
+and game validation on each machine; GPU protocol tests alone do not
+establish them.
 
 ## Trying Sekka
 

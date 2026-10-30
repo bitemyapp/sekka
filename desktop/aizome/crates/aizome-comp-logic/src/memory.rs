@@ -5,7 +5,41 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use smithay::wayland::compositor::with_states;
+use smithay::wayland::shell::xdg::{SurfaceCachedState, ToplevelSurface};
+
 use crate::wm::Rect;
+
+/// Client constraints distinguish fixed-size helpers from normal windows.
+/// Steam, for example, uses one app ID for menus, sign-in and its main UI.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SizeConstraints {
+    min: (i32, i32),
+    max: (i32, i32),
+}
+
+impl SizeConstraints {
+    pub fn of(toplevel: &ToplevelSurface) -> Self {
+        with_states(toplevel.wl_surface(), |s| {
+            let c = *s.cached_state.get::<SurfaceCachedState>().current();
+            Self { min: (c.min_size.w, c.min_size.h), max: (c.max_size.w, c.max_size.h) }
+        })
+    }
+
+    pub fn fixed(self) -> bool {
+        self.min.0 > 0 && self.min.1 > 0 && self.min == self.max
+    }
+
+    pub fn remembers(self, rect: Rect) -> bool {
+        // A fixed-size toplevel owns its size; it must neither inherit nor
+        // replace an app-wide size. Zero means unconstrained, not fixed.
+        !self.fixed()
+            && rect.w >= self.min.0.max(1)
+            && rect.h >= self.min.1.max(1)
+            && (self.max.0 == 0 || rect.w <= self.max.0)
+            && (self.max.1 == 0 || rect.h <= self.max.1)
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Remembered {

@@ -1,4 +1,5 @@
-*.patch whitespace=-blank-at-eol
+# Diff context prefixes may precede tabs from the upstream source.
+*.patch whitespace=-blank-at-eol,-space-before-tab
 
 # Preserve imported evidence, license text, and tab-delimited data verbatim.
 docs/test-results/*.log -whitespace

@@ -291,6 +291,11 @@ pub enum Request {
     },
     /// Re-reads settings.toml and applies it.
     ReloadConfig,
+    /// Set adaptive-sync policy for one output, without persisting it.
+    OutputVrr {
+        name: String,
+        mode: String,
+    },
     /// Changes an output for this session (Settings saves to the file).
     OutputConfig {
         name: String,
@@ -752,6 +757,14 @@ pub struct OutputInfo {
     /// Night Light (and gamma ramps) reach this display.
     #[serde(default)]
     pub gamma: bool,
+    /// KMS can enable adaptive sync at the current mode.
+    #[serde(default)]
+    pub vrr_supported: bool,
+    #[serde(default)]
+    pub vrr_enabled: bool,
+    /// Requested policy: off, fullscreen or always.
+    #[serde(default)]
+    pub vrr: String,
 }
 
 /// Night Light, as `night-light` reports it.

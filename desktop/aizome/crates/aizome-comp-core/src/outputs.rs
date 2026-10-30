@@ -272,6 +272,9 @@ pub fn info(az: &Aizome, output: &Output) -> OutputInfo {
         primary: az.primary_output().as_ref() == Some(output),
         mirror: mirror.map(|s| s.name()),
         gamma: az.out.get(output).is_some_and(|o| o.gamma),
+        vrr_supported: az.out.get(output).is_some_and(|o| o.vrr_supported),
+        vrr_enabled: az.out.get(output).is_some_and(|o| o.vrr_enabled),
+        vrr: az.out.get(output).map(|o| o.vrr).unwrap_or_default().as_str().into(),
     }
 }
 

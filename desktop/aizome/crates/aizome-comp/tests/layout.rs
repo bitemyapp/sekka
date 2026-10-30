@@ -142,6 +142,120 @@ fn oversized_defaults_and_remembered_windows_fit_at_each_scale() {
 }
 
 #[test]
+fn remembered_geometry_respects_client_limits_and_fixed_helpers_do_not_replace_it() {
+    for output in ["1920x1080@1", "3840x2160@2"] {
+        let c = start(Options { outputs: &[output], ..Default::default() });
+        let _shell = shell(&c);
+        // Reproduce old app-wide state poisoned by a 107x100 Steam helper.
+        let stale = c.client(Spec::new("shared-app-id", 0x886644).size(107, 100).csd());
+        let old = c.wait_window("shared-app-id");
+        drop(stale);
+        c.wait_windows("old tiny geometry saved", |ws| ws.iter().all(|w| w.id != old.id));
+
+        // This client follows every configure even below its declared minimum,
+        // just as the X11 bridge does. The compositor must reject stale memory.
+        let spec = Spec::new("shared-app-id", 0x448866).size(1100, 720).min_size(1010, 600).csd();
+        let main = c.client(spec.clone());
+        main.wait_seen("main window uses its own initial size", |s| s.size == (1100, 720));
+        let main_id = c.wait_window("shared-app-id").id;
+        c.ok(Request::Resize { id: Some(main_id), rect: Rect::new(100, 120, 1120, 740) });
+        main.wait_seen("normal geometry deliberately resized", |s| s.size == (1120, 740));
+        c.wait_windows("normal resize committed", |ws| ws.iter().any(|w| w.geometry.w == 1120));
+        drop(main);
+        c.wait_windows("normal geometry saved", |ws| ws.is_empty());
+
+        let helper =
+            c.client(Spec::new("shared-app-id", 0x664488).size(107, 100).min_size(107, 100).max_size(107, 100).csd());
+        helper.wait_seen("fixed helper keeps its own size", |s| s.size == (107, 100));
+        c.wait_window("shared-app-id");
+        // Reload reconstructs client limits from the still-connected surface.
+        let Response::Reload { report } =
+            c.request(Request::Reload { logic: true, shell: false, from: None, shell_from: None, check: false })
+        else {
+            panic!("reload response");
+        };
+        assert_eq!(report.logic.action, "reloaded", "{report:?}");
+        drop(helper);
+        c.wait_windows("helper closed", |ws| ws.is_empty());
+        let reopened = c.client(spec);
+        reopened.wait_seen("helper did not overwrite normal geometry", |s| s.size == (1120, 740));
+        drop(reopened);
+        c.wait_windows("main closed again", |ws| ws.is_empty());
+
+        // A different small resizable window must not inherit a size above
+        // its maximum, either. Its natural default is left to the client.
+        let small = c.client(Spec::new("shared-app-id", 0x884466).size(400, 300).max_size(600, 500).csd());
+        small.wait_seen("oversized remembered geometry rejected", |s| s.size == (400, 300));
+    }
+}
+
+#[test]
+fn fixed_size_games_are_not_enlarged_by_fill_or_split() {
+    for output in ["1920x1080@1", "3840x2160@2", "2880x1620@1.5"] {
+        let c = start(Options { outputs: &[output], ..Default::default() });
+        let _shell = shell(&c);
+        // Like SDL's non-resizable X11 windows, this client declares fixed
+        // bounds but follows any configure. A bad configure stretches its
+        // drawable while the game keeps rendering at its selected resolution.
+        let game = c.client(Spec::new("fixed-game", 0x448866).size(640, 480).min_size(640, 480).max_size(640, 480));
+        let w = c.wait_window("fixed-game");
+        for request in [
+            Request::Fill { id: Some(w.id), state: Some(true) },
+            Request::Fill { id: Some(w.id), state: None },
+            Request::Split { id: Some(w.id), side: Side::Left },
+            Request::Split { id: Some(w.id), side: Side::Right },
+        ] {
+            c.ok(request);
+            c.settle();
+            assert_eq!(c.window("fixed-game").unwrap().geometry, w.geometry);
+            assert_eq!(game.seen().size, (640, 480));
+            assert!(!game.seen().maximized);
+        }
+        // A resizable tab must not enlarge its fixed-size neighbour either.
+        let _other = c.client(Spec::new("flexible-tab", 0x884466).size(640, 480));
+        let other = c.wait_window("flexible-tab");
+        c.ok(Request::Stack { a: w.id, b: other.id });
+        c.ok(Request::Fill { id: Some(other.id), state: Some(true) });
+        c.settle();
+        assert_eq!(game.seen().size, (640, 480));
+        assert!(!c.window("flexible-tab").unwrap().fill);
+    }
+}
+
+#[test]
+fn fixed_size_windows_stay_out_of_their_apps_automatic_groups() {
+    let c = start(Options {
+        settings: "[appearance]\neffects = \"austere\"\n[windows]\nstack_new_windows_of_same_app = true\n",
+        ..Default::default()
+    });
+    let _shell = shell(&c);
+    // Steam opens fixed-size helpers under its main window's app ID.
+    let _main = c.client(Spec::new("shared-app-id", 0x448866).size(800, 600).csd());
+    let main = c.wait_window("shared-app-id");
+    let helper =
+        c.client(Spec::new("shared-app-id", 0x664488).size(107, 100).min_size(107, 100).max_size(107, 100).csd());
+    c.wait_windows("helper opened", |ws| ws.len() == 2);
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "helper joined the group: {ws:?}");
+    assert_eq!(helper.seen().size, (107, 100));
+    // The helper now has the focus; a new ordinary window can't join it.
+    let _second = c.client(Spec::new("shared-app-id", 0x886644).size(800, 600).csd());
+    c.wait_windows("second window opened", |ws| ws.len() == 3);
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "joined the helper: {ws:?}");
+    assert_eq!(helper.seen().size, (107, 100));
+    // Ordinary windows of the app still stack with each other.
+    c.ok(Request::Focus { id: main.id });
+    let _third = c.client(Spec::new("shared-app-id", 0x668844).size(800, 600).csd());
+    c.wait_windows("ordinary window stacked", |ws| {
+        ws.len() == 4 && ws.iter().filter(|w| w.group.is_some()).count() == 2
+    });
+    assert!(c.windows().iter().find(|w| w.id == main.id).unwrap().group.is_some());
+}
+
+#[test]
 fn deskbar_arrival_width_changes_and_removal_refit_without_losing_restore() {
     let c = start(Options::default());
     let _app = c.client(Spec::new("filled", 0x886644));

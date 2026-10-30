@@ -15,7 +15,6 @@ use smithay::desktop::{
 use smithay::input::Seat;
 use smithay::input::pointer::Focus as PointerFocusMode;
 use smithay::output::Output;
-use smithay::reexports::calloop::Interest;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
@@ -26,10 +25,9 @@ use smithay::reexports::wayland_server::{Client, Resource};
 use smithay::utils::{Logical, Point, Rectangle, Serial};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
-    BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, add_blocker,
-    add_pre_commit_hook, get_parent, get_role, is_sync_subsurface, with_states,
+    CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, add_pre_commit_hook, get_parent,
+    get_role, is_sync_subsurface, with_states,
 };
-use smithay::wayland::dmabuf::get_dmabuf;
 use smithay::wayland::input_method::InputMethodSeat;
 use smithay::wayland::session_lock::{LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker};
 use smithay::wayland::shell::wlr_layer::{
@@ -72,32 +70,13 @@ impl CompositorHandler for State {
         add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
             crate::pacing::commit_requested(state, surface);
         });
-        // Wait for a dmabuf's fence before applying the commit, so frames
-        // never sample unfinished buffers.
         add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
-            let dmabuf = with_states(surface, |data| {
-                data.cached_state.get::<SurfaceAttributes>().pending().buffer.as_ref().and_then(|a| match a {
-                    BufferAssignment::NewBuffer(b) => get_dmabuf(b).cloned().ok(),
-                    _ => None,
-                })
-            });
-            if let Some(dmabuf) = dmabuf
-                && let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ)
-                && let Some(client) = surface.client()
-            {
-                let res = state.az.lh.insert_source(source, move |_, _, state| {
-                    let dh = state.az.dh.clone();
-                    state.client_compositor_state(&client).blocker_cleared(state, &dh);
-                    Ok(())
-                });
-                if res.is_ok() {
-                    add_blocker(surface, blocker);
-                }
-            }
+            crate::explicit_sync::commit_requested(state, surface);
         });
     }
 
     fn destroyed(&mut self, surface: &WlSurface) {
+        crate::explicit_sync::surface_destroyed(self, surface);
         // Also when its client goes: an idle inhibitor on it stops counting.
         self.drop_idle_inhibitor(surface);
     }
@@ -184,9 +163,13 @@ impl State {
         self.az.windows.insert(id, Mapped { id, window: window.clone(), view: WinView::default() });
         self.az.by_surface.insert(surface.clone(), id);
         info!(id, app_id, title, ssd, "window opened");
-        let committed = toplevel.current_state();
-        let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
-        let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
+        // The first buffer may acknowledge an older configure: a fullscreen
+        // request can arrive after that configure and before this commit.
+        // Transfer the latest accepted policy into the window manager, not the
+        // state of that older frame, or placement would retract the request.
+        let (fullscreen, fullscreen_output) = toplevel
+            .with_pending_state(|s| (s.states.contains(xdg_toplevel::State::Fullscreen), s.fullscreen_output.clone()));
+        let fullscreen_output = fullscreen_output.as_ref().and_then(Output::from_resource);
         let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));

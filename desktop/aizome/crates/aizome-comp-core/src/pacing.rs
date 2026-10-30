@@ -345,6 +345,9 @@ fn monotonic(t: Timestamp) -> Duration {
 /// recent enough to count from.
 fn vblanks(az: &Aizome, output: &Output) -> Option<(Duration, Duration)> {
     let o = az.out.get(output)?;
+    if o.vrr_enabled {
+        return None;
+    }
     let last = o.presented?;
     (az.now().saturating_sub(last) < PREDICTED).then_some((last, o.refresh))
 }

@@ -103,6 +103,9 @@ pub struct WinData {
     pub resize_anchor: Option<ResizeAnchor>,
     /// The size last asked of the client.
     pub requested_size: Option<(i32, i32)>,
+    /// Last committed client limits, retained after the core removes an
+    /// unmapped surface so helpers cannot replace app-wide geometry.
+    pub size_constraints: memory::SizeConstraints,
 }
 
 #[derive(Clone, Copy, Debug)]

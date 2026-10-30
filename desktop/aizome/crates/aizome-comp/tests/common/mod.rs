@@ -363,6 +363,8 @@ pub struct Spec {
     pub ssd: bool,
     /// xdg_toplevel.set_min_size, if any.
     pub min_size: Option<(i32, i32)>,
+    /// xdg_toplevel.set_max_size, if any.
+    pub max_size: Option<(i32, i32)>,
     /// Delay each configure response to exercise commits of obsolete sizes.
     pub configure_delay: Duration,
     /// Request fullscreen before the first surface commit, optionally on an output.
@@ -387,6 +389,7 @@ impl Spec {
             size: (400, 300),
             ssd: true,
             min_size: None,
+            max_size: None,
             configure_delay: Duration::ZERO,
             fullscreen: false,
             fullscreen_output: None,
@@ -414,6 +417,10 @@ impl Spec {
     }
     pub fn min_size(mut self, w: i32, h: i32) -> Spec {
         self.min_size = Some((w, h));
+        self
+    }
+    pub fn max_size(mut self, w: i32, h: i32) -> Spec {
+        self.max_size = Some((w, h));
         self
     }
     pub fn size(mut self, w: i32, h: i32) -> Spec {
@@ -467,6 +474,9 @@ pub struct Seen {
 
 pub enum Cmd {
     Map,
+    /// Request a new state, then submit the first buffer using the previously
+    /// acknowledged configure, before receiving the response to this request.
+    FullscreenThenMap(bool, Option<usize>),
     Title(String),
     Color(u32),
     Fullscreen(bool, Option<usize>),
@@ -600,6 +610,9 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
     if let Some((w, h)) = spec.min_size {
         tl.set_min_size(w, h);
     }
+    if let Some((w, h)) = spec.max_size {
+        tl.set_max_size(w, h);
+    }
     if let Some(d) = &deco {
         let td = d.get_toplevel_decoration(&tl, &qh, ());
         td.set_mode(zxdg_toplevel_decoration_v1::Mode::ServerSide);
@@ -623,12 +636,16 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     app.spec.color = c;
                     app.needs_draw = true;
                 }
-                Cmd::Fullscreen(on, output) => {
+                Cmd::Fullscreen(on, output) | Cmd::FullscreenThenMap(on, output) => {
                     let tl = app.toplevel.as_ref().unwrap();
                     if on {
                         tl.set_fullscreen(output.and_then(|i| outputs.get(i)));
                     } else {
                         tl.unset_fullscreen();
+                    }
+                    if matches!(cmd, Cmd::FullscreenThenMap(..)) {
+                        app.spec.defer_mapping = false;
+                        app.draw(&qh);
                     }
                 }
                 Cmd::Dialog(title, color) => {

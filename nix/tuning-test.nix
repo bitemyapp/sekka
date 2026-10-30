@@ -28,7 +28,9 @@ let
   probe = pkgs.runCommand "scheduling-probe" { nativeBuildInputs = [ pkgs.stdenv.cc ]; } ''
     mkdir -p $out/bin
     cc -Wall -Wextra -Werror -pthread ${../tests/scheduling-probe.c} -o $out/bin/probe
-    for name in chrome nix codex node; do cp $out/bin/probe $out/bin/$name; done
+    for name in chrome nix codex node steam fossilize_replay wineserver sekka-known-game; do
+      cp $out/bin/probe $out/bin/$name
+    done
   '';
   background = import ./scheduling/background.nix { inherit pkgs; };
   launch = import ./scheduling/aizome-launch-probe.nix {
@@ -53,6 +55,19 @@ let
     ${sleep} 3
     exec ${probe}/bin/codex jobs ${probe}/bin/probe
   '';
+  steamWrapper = pkgs.writeShellScript "steam-game-wrapper" ''
+    ${waitNice "-10"}
+    ${probe}/bin/probe &
+    wait
+  '';
+  shaderTree = pkgs.writeText "shader-tree" ''
+    ${waitNice "16"}
+    ${probe}/bin/probe &
+    wait
+  '';
+  shaderWrapper = pkgs.writeShellScript "steam-shader-wrapper" ''
+    exec -a fossilize_replay ${bash} ${shaderTree}
+  '';
 in
 pkgs.testers.runNixOSTest {
   name = "sekka-tuning";
@@ -61,6 +76,19 @@ pkgs.testers.runNixOSTest {
     {
       imports = [ ../installer/genkan/rust/system/tuning.nix ];
       calamares.tuning.enable = true;
+      # Steam's process-tree rules, without installing Steam itself.
+      calamares.tuning.steam.enable = true;
+      # Most installations: no Steam, so no rule with a child_rule. The test
+      # switches to this and back, as a rebuild that removes or adds Steam.
+      specialisation.without-steam.configuration.calamares.tuning.steam.enable = lib.mkForce false;
+      services.ananicy.extraRules = [
+        {
+          name = "sekka-known-game";
+          type = "Game";
+        }
+      ];
+      # The daemon says at info level whether it follows process ancestry.
+      services.ananicy.settings.loglevel = "info";
       # The kernel installed systems use.
       boot.kernelPackages = pkgs.linuxPackages_latest;
       # The test driver reads the kernel log; tuning lowers it to 3.
@@ -163,6 +191,78 @@ pkgs.testers.runNixOSTest {
         all_threads(nix, policy=5, io="idle")
         all_threads(chrome, nice=-4)
 
+    def steam_job(name, executable):
+        machine.succeed(f"systemd-run --unit={name} --uid=demo --property=KillMode=process ${probe}/bin/steam jobs {executable}")
+        launcher = machine.succeed(f"systemctl show -P MainPID {name}").strip()
+        all_threads(launcher, nice=-5, policy=0, io="best-effort: prio 0")
+        machine.succeed(f"kill -USR1 {launcher}")
+        child = started(".", launcher)
+        return launcher, child
+
+    with subtest("unknown Steam games and known games receive the same priority"):
+        steam, game = steam_job("steam-game", "${probe}/bin/probe")
+        all_threads(game, nice=-10, policy=0, io="best-effort: prio 0")
+        _, known = steam_job("steam-known", "${probe}/bin/sekka-known-game")
+        all_threads(known, nice=-10)
+        # Node's generic background rule must not override a Steam game.
+        _, runtime = steam_job("steam-runtime", "${probe}/bin/node")
+        all_threads(runtime, nice=-10, policy=0, io="best-effort: prio 0")
+        _, wine = steam_job("steam-wine", "${probe}/bin/wineserver")
+        all_threads(wine, nice=-12)
+        _, wrapper = steam_job("steam-wrapper", "${steamWrapper}")
+        wait_nice(wrapper, -10)
+        # By name: the wrapper's own waitNice loop also has short-lived children.
+        wrapped_game = started("${probe}/bin/probe", wrapper)
+        all_threads(wrapped_game, nice=-10)
+
+    with subtest("Steam games fork new processes without exec"):
+        machine.succeed(f"kill -USR1 {game}")
+        forked_game = started(".", game)
+        wait_nice(forked_game, -10)
+        # This probe deliberately lowered its parent before forking.
+        wait_nice(game, 0)
+        machine.succeed(f"renice -n -10 -p {game}")
+
+    with subtest("Steam preserves stronger thread nice values and realtime policy"):
+        tid = machine.succeed(f"ls /proc/{game}/task | grep -vx {game} | head -1").strip()
+        machine.succeed(f"renice -n -15 -p {tid}; chrt -f -p 10 {tid}")
+        # Lower the creator so its new thread inherits 0. Waiting for the
+        # daemon to restore -10 proves it processed the event before checking
+        # that the stronger thread survived that same all-thread application.
+        machine.succeed(f"renice -n 0 -p {game}; kill -USR2 {game}")
+        machine.wait_until_succeeds(f"test $(ls /proc/{game}/task | wc -l) -eq 6")
+        wait_nice(game, -10)
+        wait_nice(tid, -15)
+        assert "SCHED_FIFO" in machine.succeed(f"chrt -p {tid}")
+        # Restore this sleeping fixture thread for the all-thread assertions.
+        machine.succeed(f"chrt -o -p 0 {tid}; renice -n -10 -p {tid}")
+        all_threads(game, nice=-10, policy=0)
+
+    with subtest("Steam background shader processing and its children stay idle"):
+        _, shader = steam_job("steam-shader", "${probe}/bin/fossilize_replay")
+        all_threads(shader, nice=16, policy=5, io="idle")
+        machine.succeed(f"kill -USR1 {shader}")
+        shader_child = started(".", shader)
+        wait_nice(shader_child, 16)
+        assert "SCHED_IDLE" in machine.succeed(f"chrt -p {shader_child}")
+        _, shader_shell = steam_job("steam-shader-wrapper", "${shaderWrapper}")
+        wait_nice(shader_shell, 16)
+        shader_helper = started("${probe}/bin/probe", shader_shell)
+        all_threads(shader_helper, nice=16, policy=5, io="idle")
+
+    with subtest("Steam ancestry survives launcher exit and late thread creation"):
+        machine.succeed(f"kill -KILL {steam}")
+        machine.wait_until_succeeds(f"test $(ps -o ppid= -p {game}) -eq 1")
+        machine.succeed(f"renice -n 0 -p {game}; kill -USR2 {game}")
+        machine.wait_until_succeeds(f"test $(ls /proc/{game}/task | wc -l) -eq 7")
+        all_threads(game, nice=-10)
+
+    with subtest("daemon restart classifies existing Steam trees"):
+        machine.succeed("systemctl stop ananicy-cpp")
+        machine.succeed(f"renice -n 0 -p {known}; chrt -i -p 0 {known}; ionice -c 3 -p {known}")
+        machine.succeed("systemctl start ananicy-cpp")
+        all_threads(known, nice=-10, policy=0, io="best-effort: prio 0")
+
     with subtest("late Nix threads are classified too"):
         machine.succeed(f"kill -USR2 {nix}")
         machine.wait_until_succeeds(f"test $(ls /proc/{nix}/task | wc -l) -eq 6")
@@ -233,5 +333,50 @@ pkgs.testers.runNixOSTest {
         scope = group.strip().split("/")[-1]
         assert scope.endswith(".scope"), group
         assert machine.succeed(user(f"systemctl --user show -P CPUWeight {scope}")).strip() in ("100", "[not set]")
+
+    # ananicy-cpp reads its rules only at startup.
+    def switch_restarts_ananicy(toplevel):
+        before = machine.succeed("systemctl show -P InvocationID ananicy-cpp").strip()
+        machine.succeed(f"{toplevel}/bin/switch-to-configuration test")
+        machine.wait_for_unit("ananicy-cpp.service")
+        after = machine.succeed("systemctl show -P InvocationID ananicy-cpp").strip()
+        assert after != before, "the new rules did not restart ananicy-cpp"
+        return after
+
+    def logged(invocation, message):
+        machine.wait_until_succeeds(
+            f"journalctl _SYSTEMD_INVOCATION_ID={invocation} | grep -qF '{message}'", timeout=30
+        )
+
+    with subtest("without Steam the daemon applies ordinary rules and follows no ancestry"):
+        machine.succeed("journalctl -b -u ananicy-cpp | grep -qF 'Process ancestry: followed for child_rule'")
+        invocation = switch_restarts_ananicy("/run/booted-system/specialisation/without-steam")
+        machine.fail("grep -rq child_rule /etc/ananicy.d")
+        logged(invocation, "Process ancestry: not followed, no rule has a child_rule")
+        machine.succeed("systemd-run --unit=terminal-without-steam ${bash} -c '( exec -a foot ${bash} ${terminal} ) & wait'")
+        terminal = started("^foot ", machine.succeed("systemctl show -P MainPID terminal-without-steam").strip())
+        wait_nice(terminal, -4)
+        shell = started("${shell}", terminal)
+        wait_nice(shell, 0)
+        compiler = started("^rustc ", shell)
+        wait_nice(compiler, 3)
+        # CachyOS's own launcher rule applies to Steam's name again, and
+        # nothing reaches a child of it.
+        machine.succeed("systemd-run --unit=steam-without-rules --uid=demo --property=KillMode=process ${probe}/bin/steam jobs ${probe}/bin/probe")
+        launcher = machine.succeed("systemctl show -P MainPID steam-without-rules").strip()
+        all_threads(launcher, nice=16, io="idle")
+        machine.succeed(f"kill -USR1 {launcher}")
+        child = started(".", launcher)
+        # Events are handled in order: once a later process has its rule, the
+        # child's exec has been seen.
+        machine.succeed("systemd-run --unit=game-without-steam ${probe}/bin/sekka-known-game")
+        wait_nice(machine.succeed("systemctl show -P MainPID game-without-steam").strip(), -5)
+        assert machine.succeed(f"cut -d ' ' -f 19 /proc/{child}/stat").strip() == "16"
+
+    with subtest("adding Steam back restarts the daemon and its rules apply at once"):
+        invocation = switch_restarts_ananicy("/run/booted-system")
+        logged(invocation, "Process ancestry: followed for child_rule")
+        _, readded = steam_job("steam-readded", "${probe}/bin/probe")
+        all_threads(readded, nice=-10, policy=0, io="best-effort: prio 0")
   '';
 }

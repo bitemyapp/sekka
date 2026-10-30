@@ -1,0 +1,216 @@
+diff --git a/include/core/priority.hpp b/include/core/priority.hpp
+index 03f9bf3..758d5e3 100644
+--- a/include/core/priority.hpp
++++ b/include/core/priority.hpp
+@@ -12,7 +12,7 @@
+ 
+ namespace priority {
+ 
+-bool set_priority(pid_t pid, int nice_value);
++bool set_priority(pid_t pid, int nice_value, bool only_raise = false);
+ 
+ bool set_latency_nice(pid_t pid, int latency_nice_value);
+ 
+@@ -20,7 +20,8 @@ int get_latency_nice(pid_t pid);
+ 
+ bool set_io_priority(pid_t pid, const std::string_view &io_class, int value);
+ 
+-bool set_sched(pid_t pid, const std::string_view &sched_name, unsigned rt_prio);
++bool set_sched(pid_t pid, const std::string_view &sched_name, unsigned rt_prio,
++               bool keep_realtime = false);
+ 
+ bool set_oom_score_adjust(pid_t pid, int value);
+ 
+diff --git a/include/core/rules.hpp b/include/core/rules.hpp
+index 1dc9d4c..1c9b75e 100644
+--- a/include/core/rules.hpp
++++ b/include/core/rules.hpp
+@@ -38,6 +38,8 @@ public:
+   void load_rules_from_file(const std::filesystem::path &path);
+   void load_rules_from_directory(const std::filesystem::path &dir_path);
+   nlohmann::json get_rule(const std::string &name) const noexcept;
++  // Whether any program or type rule sets this key.
++  bool any_rule_has(const std::string &key) const noexcept;
+ 
+   void create_cgroups() const noexcept;
+ 
+diff --git a/src/platform/linux/priority.cpp b/src/platform/linux/priority.cpp
+index e4526d7..1c7b07d 100644
+--- a/src/platform/linux/priority.cpp
++++ b/src/platform/linux/priority.cpp
+@@ -60,7 +60,7 @@ static bool for_each_thread(pid_t pid, Apply apply) {
+   return success;
+ }
+ 
+-bool set_priority(pid_t pid, std::int32_t nice_value) {
++bool set_priority(pid_t pid, std::int32_t nice_value, bool only_raise) {
+   std::int32_t errcode = 0;
+   const auto  &task_path = fmt::format("/proc/{}/task", pid);
+   try {
+@@ -68,7 +68,7 @@ bool set_priority(pid_t pid, std::int32_t nice_value) {
+       const auto tid =
+           to_int<std::int32_t>(dir_entry.path().filename().c_str());
+       errno = 0;
+-      if (tid > 0)
++      if (tid > 0 && (!only_raise || getpriority(PRIO_PROCESS, tid) > nice_value))
+         setpriority(PRIO_PROCESS, static_cast<id_t>(tid), nice_value);
+       errcode = errno;
+     }
+@@ -139,7 +139,7 @@ bool set_io_priority(pid_t pid, const std::string_view &io_class,
+ }
+ 
+ bool set_sched(pid_t pid, const std::string_view &sched_name,
+-               unsigned rt_prio) {
++               unsigned rt_prio, bool keep_realtime) {
+   std::int32_t sched = 0;
+   sched_param  param = {};
+   if (sched_name == "idle") {
+@@ -163,8 +163,14 @@ bool set_sched(pid_t pid, const std::string_view &sched_name,
+     spdlog::error("Invalid scheduler '{}'", __func__, sched_name);
+     return false;
+   }
+-  return for_each_thread(pid, [sched, &param](pid_t tid) {
+-    return sched_setscheduler(tid, sched, &param);
++  return for_each_thread(pid, [sched, &param, keep_realtime](pid_t tid) {
++    auto current = sched_getscheduler(tid);
++    if (current < 0) return -1;
++    auto policy = current & ~SCHED_RESET_ON_FORK;
++    if (keep_realtime && (policy == SCHED_FIFO || policy == SCHED_RR ||
++                          policy == SCHED_DEADLINE))
++      return 0;
++    return sched_setscheduler(tid, sched | (current & SCHED_RESET_ON_FORK), &param);
+   });
+ }
+ 
+diff --git a/src/rules.cpp b/src/rules.cpp
+index a4c5a59..aaa5a07 100644
+--- a/src/rules.cpp
++++ b/src/rules.cpp
+@@ -9,6 +9,7 @@
+ #include "utility/regex_utils.hpp"
+ #endif
+ 
++#include <algorithm>   // for any_of
+ #include <filesystem>  // for path, recursive_directory_iterator
+ #include <fstream>     // for ifstream
+ #include <iostream>    // for cout
+@@ -178,6 +179,15 @@ void Rules::create_cgroups() const noexcept {
+   spdlog::info("Finished creating Cgroups...");
+ }
+ 
++bool Rules::any_rule_has(const std::string &key) const noexcept {
++  const auto has = [&](const ruleset &rules) {
++    return std::any_of(rules.begin(), rules.end(), [&](const auto &rule) {
++      return rule.second.contains(key);
++    });
++  };
++  return has(m_program_rules) || has(m_type_rules);
++}
++
+ json Rules::get_rule(const std::string &name) const noexcept {
+   json rule;
+ 
+diff --git a/src/worker.cpp b/src/worker.cpp
+index 9e7a8f2..b0b242b 100644
+--- a/src/worker.cpp
++++ b/src/worker.cpp
+@@ -8,6 +8,7 @@
+ #include "core/priority.hpp"
+ #include "utility/process_info.hpp"
+ #include "version.hpp"
++#include "sekka-descendant-rules.hpp"
+ 
+ #include <chrono>
+ #include <functional>
+@@ -72,6 +73,31 @@ void Worker::build_cpuset_aliases() {
+ 
+ void Worker::work(const std::stop_token &stop_token) {
+   std::optional<Process> proc;
++  sekka::DescendantRules descendants;
++  auto lookup = [&](pid_t pid) {
++    auto normalize = [](std::string value) {
++      // Wine argv[0] can use Windows path separators.
++      std::replace(value.begin(), value.end(), '\\', '/');
++      value = std::filesystem::path(value).filename().string();
++      if (value.starts_with('.') && value.ends_with("-wrapped"))
++        value = value.substr(1, value.find_last_of('-') - 1);
++      return value;
++    };
++    auto rule = rules->get_rule(normalize(get_command_from_pid(pid)));
++    if (rule.is_null()) {
++      std::error_code error;
++      auto exe = std::filesystem::read_symlink(
++          fmt::format("/proc/{}/exe", pid), error);
++      if (!error) rule = rules->get_rule(normalize(exe.filename().string()));
++    }
++    return rule;
++  };
++  // Rules load once, at startup. Without a child_rule, skip the ancestry
++  // walk's /proc reads on every fork, thread and exec.
++  const bool tracks_descendants = rules->any_rule_has("child_rule");
++  spdlog::info("Process ancestry: {}",
++               tracks_descendants ? "followed for child_rule"
++                                  : "not followed, no rule has a child_rule");
+   const bool             is_affected_by_cgroup_bug =
+       control_groups::get_cgroup_version().version ==
+       control_groups::cgroup_info::v2;
+@@ -79,21 +105,24 @@ void Worker::work(const std::stop_token &stop_token) {
+     while ((proc = process_queue->poll(500ms)).has_value()) {
+       const auto &p = proc.value();
+       // A wrapper may have exec'd again while this event was queued.
+-      auto name = get_command_from_pid(p.pid);
+-      auto normalize = [](std::string value) {
+-        if (value.starts_with('.') && value.ends_with("-wrapped"))
+-          value = value.substr(1, value.find_last_of('-') - 1);
+-        return value;
+-      };
+-      auto rule = rules->get_rule(normalize(name));
+-      if (rule.is_null()) {
+-        // Chromium rewrites argv[0] to include its whole command line.
+-        // Its executable still identifies it, even after a zygote fork.
+-        std::error_code error;
+-        auto exe = std::filesystem::read_symlink(
+-            fmt::format("/proc/{}/exe", p.pid), error);
+-        if (!error)
+-          rule = rules->get_rule(normalize(exe.filename().string()));
++      auto rule = lookup(p.pid);
++      std::string inherited_name;
++      if (tracks_descendants)
++        inherited_name = descendants.inherited(
++            p.pid, sekka::process_identity, [&](pid_t pid) {
++              auto parent_rule = lookup(pid);
++              return parent_rule.is_object()
++                  ? parent_rule.value("child_rule", std::string{}) : std::string{};
++            });
++      if (!inherited_name.empty() && !rule.contains("child_rule")) {
++        auto inherited = rules->get_rule(inherited_name);
++        if (!inherited.is_null()) {
++          if (inherited.value("nice_only_raise", false) &&
++              rule.contains("nice") && inherited.contains("nice"))
++            inherited["nice"] = std::min(rule["nice"].get<int>(),
++                                         inherited["nice"].get<int>());
++          rule.merge_patch(inherited);
++        }
+       }
+ 
+       processed_count++;
+@@ -117,7 +146,8 @@ void Worker::work(const std::stop_token &stop_token) {
+             const int &rule_nice = rule["nice"];
+             spdlog::debug("Setting priority of {}({}) to {}", p.name, p.pid,
+                           rule_nice);
+-            if (!priority::set_priority(p.pid, rule_nice)) {
++            if (!priority::set_priority(p.pid, rule_nice,
++                                        rule.value("nice_only_raise", false))) {
+               continue;
+             }
+           }
+@@ -145,7 +175,8 @@ void Worker::work(const std::stop_token &stop_token) {
+             const std::string &rule_sched = rule["sched"];
+             spdlog::debug("Setting scheduler of {}({}) to {}", p.name, p.pid,
+                           rule_sched);
+-            if (!priority::set_sched(p.pid, rule_sched.c_str(), rt_prio)) {
++            if (!priority::set_sched(p.pid, rule_sched.c_str(), rt_prio,
++                                     rule.value("sched_keep_realtime", false))) {
+               continue;
+             }
+           }

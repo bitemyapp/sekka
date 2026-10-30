@@ -32,7 +32,9 @@ pkgs.writeShellApplication {
     # refuses unfree packages, so nothing unfree is published.
     # installed-systems is an installed system for every desktop, refusing
     # unfree packages too: everything they need that cache.nixos.org lacks.
-    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools installed-systems)
+    # gaming is the same for Steam's free companions, such as the patched
+    # Gamescope.
+    packages=(genkan tatami displays wallpapers yukimi kakehashi aquamarine hyprland tools installed-systems gaming)
     mapfile -t outputs < <(nix build --no-link --print-out-paths "''${packages[@]/#/$flake#}")
 
     # Nix only adds a path to a binary cache that already holds its

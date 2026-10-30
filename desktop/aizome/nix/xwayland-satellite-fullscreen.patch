@@ -1,0 +1,496 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index d3bf003..9bfc31c 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -19,6 +19,7 @@ pub trait XConnection: Sized + 'static {
+ 
+     fn set_window_dims(&mut self, window: x::Window, dims: PendingSurfaceState) -> bool;
+     fn set_fullscreen(&mut self, window: x::Window, fullscreen: bool);
++    fn set_minimized(&mut self, window: x::Window, minimized: bool);
+     fn focus_window(&mut self, window: x::Window, output_name: Option<String>);
+     fn send_take_focus(&mut self, window: x::Window);
+     fn close_window(&mut self, window: x::Window);
+diff --git a/src/server/event.rs b/src/server/event.rs
+index acf51d9..167a5c4 100644
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -390,6 +390,10 @@ impl SurfaceEvents {
+                     let prev_fs = toplevel.fullscreen;
+                     toplevel.fullscreen =
+                         states.contains(&(u32::from(xdg_toplevel::State::Fullscreen) as u8));
++                    data.get::<&mut WindowData>()
++                        .unwrap()
++                        .attrs
++                        .requested_fullscreen = Some(toplevel.fullscreen);
+                     if toplevel.fullscreen != prev_fs {
+                         state.connection.set_fullscreen(
+                             *data.get::<&x::Window>().unwrap(),
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index a436331..6c05427 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -112,6 +112,9 @@ struct WindowAttributes {
+     group: Option<x::Window>,
+     decorations: Option<Decorations>,
+     transient_for: Option<x::Window>,
++    // None permits the legacy size heuristic. Explicit EWMH state, including
++    // an empty initial property, always wins and survives role creation.
++    requested_fullscreen: Option<bool>,
+ }
+ 
+ impl WindowAttributes {
+@@ -439,6 +442,9 @@ impl<S: X11Selection> XConnection for NoConnection<S> {
+     fn set_fullscreen(&mut self, _: x::Window, _: bool) {
+         debug!("could not toggle fullscreen without XWayland initialized");
+     }
++    fn set_minimized(&mut self, _: x::Window, _: bool) {
++        debug!("could not minimize without XWayland initialized");
++    }
+     fn set_window_dims(&mut self, _: x::Window, _: crate::server::PendingSurfaceState) -> bool {
+         debug!("could not set window dimensions without XWayland initialized");
+         false
+@@ -623,6 +629,21 @@ impl<S: X11Selection> ServerState<NoConnection<S>> {
+ }
+ 
+ impl<C: XConnection> ServerState<C> {
++    pub fn minimize_window(&mut self, window: x::Window) {
++        let Some(entity) = self.inner.windows.get(&window).copied() else {
++            return;
++        };
++        let Ok(role) = self.inner.world.get::<&SurfaceRole>(entity) else {
++            return;
++        };
++        if let SurfaceRole::Toplevel(Some(toplevel)) = &*role {
++            toplevel.toplevel.set_minimized();
++            // xdg-shell has no minimized configure state. Acknowledge the
++            // request through ICCCM/EWMH; focus will announce restoration.
++            self.connection.set_minimized(window, true);
++        }
++    }
++
+     pub fn run(&mut self) {
+         if let Some(r) = self.queue.prepare_read() {
+             let fd = r.connection_fd();
+@@ -754,6 +775,11 @@ impl<C: XConnection> ServerState<C> {
+                     "focusing (take_focus={has_take_focus:?}) {} {window:?}",
+                     if is_popup { "popup" } else { "window" }
+                 );
++                // Wayland has no unminimize event: keyboard focus is the
++                // restoration, whichever X11 focus model the window uses.
++                if !is_popup {
++                    self.connection.set_minimized(window, false);
++                }
+                 if has_take_focus {
+                     self.connection.send_take_focus(window);
+                 } else {
+@@ -1180,6 +1206,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+                 self.last_hovered.take();
+             }
+             win.mapped = false;
++            win.attrs.requested_fullscreen = None;
+         }
+ 
+         if let Ok(mut role) = self.world.remove_one::<SurfaceRole>(entity.unwrap()) {
+@@ -1204,26 +1231,27 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+             return;
+         };
+ 
+-        let Some(role) = data.get::<&SurfaceRole>() else {
+-            warn!("Tried to set window without role fullscreen: {window:?}");
+-            return;
+-        };
+-
+-        let SurfaceRole::Toplevel(Some(toplevel)) = &*role else {
+-            warn!("Tried to set an unmapped toplevel or non toplevel fullscreen: {window:?}");
+-            return;
+-        };
+-
++        let role = data.get::<&SurfaceRole>();
++        let toplevel = role.as_deref().and_then(|role| match role {
++            SurfaceRole::Toplevel(Some(toplevel)) => Some(toplevel),
++            _ => None,
++        });
++        let mut win = data.get::<&mut WindowData>().unwrap();
+         use crate::xstate::SetState;
+-        match state {
+-            SetState::Add => toplevel.toplevel.set_fullscreen(None),
+-            SetState::Remove => toplevel.toplevel.unset_fullscreen(),
+-            SetState::Toggle => {
+-                if toplevel.fullscreen {
+-                    toplevel.toplevel.unset_fullscreen()
+-                } else {
+-                    toplevel.toplevel.set_fullscreen(None)
+-                }
++        let fullscreen = match state {
++            SetState::Add => true,
++            SetState::Remove => false,
++            SetState::Toggle => !win
++                .attrs
++                .requested_fullscreen
++                .unwrap_or_else(|| toplevel.is_some_and(|t| t.fullscreen)),
++        };
++        win.attrs.requested_fullscreen = Some(fullscreen);
++        if let Some(toplevel) = toplevel {
++            if fullscreen {
++                toplevel.toplevel.set_fullscreen(None);
++            } else {
++                toplevel.toplevel.unset_fullscreen();
+             }
+         }
+     }
+@@ -1401,7 +1429,7 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+     fn create_role_window(&mut self, window: x::Window, entity: Entity) -> bool {
+         let xdg_surface;
+         let mut popup_for = None;
+-        let mut fullscreen = false;
++        let fullscreen;
+         let splash;
+ 
+         {
+@@ -1419,12 +1447,26 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+             splash = window_data.attrs.role == WindowRole::Splash;
+ 
+             let (width, height) = (window_data.attrs.dims.width, window_data.attrs.dims.height);
+-            for (_, dimensions) in self.world.query::<&OutputDimensions>().iter() {
+-                if dimensions.width == width as i32 && dimensions.height == height as i32 {
+-                    fullscreen = true;
+-                    popup_for = None;
+-                    break;
+-                }
++            fullscreen = window_data.attrs.requested_fullscreen.unwrap_or_else(|| {
++                // Older games use an unmanaged or undecorated monitor-sized
++                // window. A normal decorated window of that size is not a
++                // fullscreen request.
++                let legacy = window_data.attrs.override_redirect
++                    || window_data
++                        .attrs
++                        .decorations
++                        .is_some_and(|d| d.is_clientside());
++                legacy
++                    && self
++                        .world
++                        .query::<&OutputDimensions>()
++                        .iter()
++                        .any(|(_, dimensions)| {
++                            dimensions.width == width as i32 && dimensions.height == height as i32
++                        })
++            });
++            if fullscreen {
++                popup_for = None;
+             }
+         }
+ 
+diff --git a/src/server/tests.rs b/src/server/tests.rs
+index fa70c7d..abae7cb 100644
+--- a/src/server/tests.rs
++++ b/src/server/tests.rs
+@@ -3,7 +3,7 @@ use crate::server::selection::{Primary, SelectionType};
+ use crate::xstate::{SetState, WinSize, WmName};
+ use crate::{XConnection, timespec_from_millis};
+ use rustix::event::{PollFd, PollFlags, poll};
+-use std::collections::HashMap;
++use std::collections::{HashMap, HashSet};
+ use std::io::Write;
+ use std::os::fd::{AsRawFd, BorrowedFd};
+ use std::os::unix::net::UnixStream;
+@@ -161,6 +161,7 @@ struct WindowData {
+ struct FakeXConnection {
+     focused_window: Option<Window>,
+     send_take_focus_window: Option<Window>,
++    minimized: HashSet<Window>,
+     windows: HashMap<Window, WindowData>,
+     set_window_dims_counter: usize,
+ }
+@@ -214,6 +215,15 @@ impl super::XConnection for FakeXConnection {
+         self.window_mut(window).fullscreen = fullscreen;
+     }
+ 
++    fn set_minimized(&mut self, window: Window, minimized: bool) {
++        assert!(self.windows.contains_key(&window));
++        if minimized {
++            self.minimized.insert(window);
++        } else {
++            self.minimized.remove(&window);
++        }
++    }
++
+     #[track_caller]
+     fn set_window_dims(&mut self, window: Window, state: super::PendingSurfaceState) -> bool {
+         self.window_mut(window).dims = WindowDims {
+@@ -1334,6 +1344,71 @@ fn fullscreen() {
+     );
+ }
+ 
++#[test]
++fn fullscreen_requests_before_role_creation() {
++    for (requests, expected) in [
++        (vec![SetState::Add], true),
++        (vec![SetState::Remove], false),
++        (vec![SetState::Add, SetState::Remove], false),
++        (vec![SetState::Toggle], true),
++        (vec![SetState::Toggle, SetState::Toggle], false),
++    ] {
++        let (mut f, comp) = TestFixture::new_with_compositor();
++        let win = Window::new(1);
++        let (buffer, surface) = comp.create_surface();
++        f.new_window(win, false, WindowData::default());
++        for request in requests {
++            f.satellite.set_fullscreen(win, request);
++        }
++        f.map_window(&comp, win, &surface.obj, &buffer);
++        f.run();
++        let id = f.check_new_surface();
++        assert_eq!(
++            f.testwl
++                .get_surface_data(id)
++                .unwrap()
++                .toplevel()
++                .states
++                .contains(&xdg_toplevel::State::Fullscreen),
++            expected
++        );
++    }
++}
++
++#[test]
++fn keyboard_focus_restores_minimized_windows_in_every_focus_model() {
++    // SDL and Wine advertise WM_TAKE_FOCUS; they must see the restoration too.
++    for take_focus in [false, true] {
++        let (mut f, comp) = TestFixture::new_with_compositor();
++        let win = Window::new(1);
++        let (buffer, surface) = comp.create_surface();
++        let data = WindowData {
++            mapped: true,
++            dims: WindowDims {
++                width: 50,
++                height: 50,
++                ..Default::default()
++            },
++            ..Default::default()
++        };
++        f.new_window(win, false, data);
++        f.satellite.set_take_focus(win, take_focus);
++        f.map_window(&comp, win, &surface.obj, &buffer);
++        f.run();
++        let id = f.check_new_surface();
++        f.testwl.configure_toplevel(id, 50, 50, vec![]);
++        f.run();
++        // As after WM_CHANGE_STATE: testwl has no set_minimized handler.
++        f.satellite.connection.set_minimized(win, true);
++        f.testwl.focus_toplevel(id);
++        f.run();
++        assert!(
++            !f.connection().minimized.contains(&win),
++            "take_focus={take_focus}"
++        );
++    }
++}
++
+ #[test]
+ fn window_title_and_class() {
+     let (mut f, comp) = TestFixture::new_with_compositor();
+@@ -2399,6 +2474,8 @@ fn fullscreen_heuristic() {
+             fullscreen: false,
+         };
+         f.new_window(window, override_redirect, data);
++        f.satellite
++            .set_win_decorations(window, crate::xstate::Decorations::empty());
+         f.map_window(&comp, window, &surface.obj, &buffer);
+         f.run();
+         let id = f.check_new_surface();
+diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
+index 6f08eb9..be57e70 100644
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -293,6 +293,7 @@ impl XState {
+                 self.atoms.motif_wm_hints,
+                 self.atoms.net_wm_state,
+                 self.atoms.wm_fullscreen,
++                self.atoms.wm_hidden,
+                 self.atoms.moveresize,
+             ],
+         );
+@@ -414,6 +415,21 @@ impl XState {
+                     unwrap_or_skip_bad_window_cont!(
+                         self.handle_window_properties(server_state, e.window())
+                     );
++                    // Clients publish their initial state before mapping;
++                    // later changes arrive as ClientMessage requests. Reading
++                    // only messages loses fullscreen on startup/remapping.
++                    if let Some(fullscreen) =
++                        unwrap_or_skip_bad_window_cont!(self.get_initial_fullscreen(e.window()))
++                    {
++                        server_state.set_fullscreen(
++                            e.window(),
++                            if fullscreen {
++                                SetState::Add
++                            } else {
++                                SetState::Remove
++                            },
++                        );
++                    }
+                     server_state.map_window(e.window());
+                     unwrap_or_skip_bad_window_cont!(self.connection.send_and_check_request(
+                         &x::ChangeProperty {
+@@ -454,6 +470,18 @@ impl XState {
+                         }
+                     ));
+ 
++                    // EWMH: the window manager removes _NET_WM_STATE on
++                    // withdrawal, or its own FULLSCREEN/HIDDEN would be read
++                    // back as client intent on the next map. Do so before
++                    // WM_STATE says Withdrawn: ICCCM clients wait for that
++                    // before setting new state and remapping.
++                    unwrap_or_skip_bad_window_cont!(self.connection.send_and_check_request(
++                        &x::DeleteProperty {
++                            window: e.window(),
++                            property: self.atoms.net_wm_state,
++                        }
++                    ));
++
+                     unwrap_or_skip_bad_window_cont!(self.connection.send_and_check_request(
+                         &x::ChangeProperty {
+                             mode: x::PropMode::Replace,
+@@ -563,6 +591,13 @@ impl XState {
+             x if x == self.atoms.active_win => {
+                 server_state.activate_window(e.window());
+             }
++            x if x == self.atoms.wm_change_state => {
++                if let x::ClientMessageData::Data32(data) = e.data() {
++                    if data[0] == WmState::Iconic as u32 {
++                        server_state.minimize_window(e.window());
++                    }
++                }
++            }
+             x if x == self.atoms.moveresize => {
+                 let x::ClientMessageData::Data32(data) = e.data() else {
+                     unreachable!();
+@@ -701,6 +736,12 @@ impl XState {
+         })
+     }
+ 
++    fn get_initial_fullscreen(&self, window: x::Window) -> XResult<Option<bool>> {
++        let cookie = self.get_property_cookie(window, self.atoms.net_wm_state, x::ATOM_ATOM, 1024);
++        PropertyCookieWrapper::new(&self.connection, cookie)
++            .resolve(|reply| reply.value::<x::Atom>().contains(&self.atoms.wm_fullscreen))
++    }
++
+     fn get_wm_class(&self, window: x::Window) -> XResult<Option<String>> {
+         let cookie = self.get_property_cookie(window, x::ATOM_WM_CLASS, x::ATOM_STRING, 256);
+         let resolver = move |reply: x::GetPropertyReply| {
+@@ -898,6 +939,7 @@ xcb::atoms_struct! {
+         wm_delete_window => b"WM_DELETE_WINDOW" only_if_exists = false,
+         wm_transient_for => b"WM_TRANSIENT_FOR" only_if_exists = false,
+         wm_state => b"WM_STATE" only_if_exists = false,
++        wm_change_state => b"WM_CHANGE_STATE" only_if_exists = false,
+         wm_s0 => b"WM_S0" only_if_exists = false,
+         net_wm_cm_s0 => b"_NET_WM_CM_S0" only_if_exists = false,
+         wm_check => b"_NET_SUPPORTING_WM_CHECK" only_if_exists = false,
+@@ -905,6 +947,7 @@ xcb::atoms_struct! {
+         wm_pid => b"_NET_WM_PID" only_if_exists = false,
+         net_wm_state => b"_NET_WM_STATE" only_if_exists = false,
+         wm_fullscreen => b"_NET_WM_STATE_FULLSCREEN" only_if_exists = false,
++        wm_hidden => b"_NET_WM_STATE_HIDDEN" only_if_exists = false,
+         active_win => b"_NET_ACTIVE_WINDOW" only_if_exists = false,
+         client_list => b"_NET_CLIENT_LIST" only_if_exists = false,
+         supported => b"_NET_SUPPORTED" only_if_exists = false,
+@@ -1280,6 +1323,40 @@ pub struct RealConnection {
+ }
+ 
+ impl RealConnection {
++    fn update_net_wm_state(&self, window: x::Window, atom: x::Atom, enabled: bool) {
++        let cookie = self.connection.send_request(&x::GetProperty {
++            delete: false,
++            window,
++            property: self.atoms.net_wm_state,
++            r#type: x::ATOM_ATOM,
++            long_offset: 0,
++            long_length: 1024,
++        });
++        let reply = unwrap_or_skip_bad_window!(self.connection.wait_for_reply(cookie), return);
++        let mut states = if reply.format() == 32 && reply.r#type() == x::ATOM_ATOM {
++            reply.value::<x::Atom>().to_vec()
++        } else {
++            Vec::new()
++        };
++        if states.contains(&atom) == enabled {
++            return;
++        }
++        if enabled {
++            states.push(atom);
++        } else {
++            states.retain(|state| *state != atom);
++        }
++        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
++            mode: x::PropMode::Replace,
++            window,
++            property: self.atoms.net_wm_state,
++            r#type: x::ATOM_ATOM,
++            data: &states,
++        }) {
++            debug!("Could not update window state ({window:?}: {e:?})");
++        }
++    }
++
+     fn new(connection: Rc<xcb::Connection>, atoms: Atoms) -> Self {
+         Self {
+             atoms,
+@@ -1358,23 +1435,27 @@ impl XConnection for RealConnection {
+     }
+ 
+     fn set_fullscreen(&mut self, window: x::Window, fullscreen: bool) {
+-        let data = if fullscreen {
+-            std::slice::from_ref(&self.atoms.wm_fullscreen)
++        self.update_net_wm_state(window, self.atoms.wm_fullscreen, fullscreen);
++    }
++
++    fn set_minimized(&mut self, window: x::Window, minimized: bool) {
++        if window == x::WINDOW_NONE {
++            return;
++        }
++        self.update_net_wm_state(window, self.atoms.wm_hidden, minimized);
++        let state = if minimized {
++            WmState::Iconic
+         } else {
+-            &[]
++            WmState::Normal
+         };
+-
+-        if let Err(e) = self
+-            .connection
+-            .send_and_check_request(&x::ChangeProperty::<x::Atom> {
+-                mode: x::PropMode::Replace,
+-                window,
+-                property: self.atoms.net_wm_state,
+-                r#type: x::ATOM_ATOM,
+-                data,
+-            })
+-        {
+-            warn!("Failed to set fullscreen state on {window:?} ({e})");
++        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
++            mode: x::PropMode::Replace,
++            window,
++            property: self.atoms.wm_state,
++            r#type: self.atoms.wm_state,
++            data: &[state as u32, 0],
++        }) {
++            debug!("Could not update WM_STATE ({window:?}: {e:?})");
+         }
+     }
+ 
+@@ -1397,15 +1478,6 @@ impl XConnection for RealConnection {
+         }) {
+             debug!("ChangeProperty failed ({window:?}: {e:?})");
+         }
+-        if let Err(e) = self.connection.send_and_check_request(&x::ChangeProperty {
+-            mode: x::PropMode::Replace,
+-            window,
+-            property: self.atoms.wm_state,
+-            r#type: self.atoms.wm_state,
+-            data: &[WmState::Normal as u32, 0],
+-        }) {
+-            debug!("ChangeProperty failed ({window:?}: {e:?})");
+-        }
+ 
+         if let Some(name) = output_name {
+             let Some(output) = self.outputs.get(&name).copied() else {

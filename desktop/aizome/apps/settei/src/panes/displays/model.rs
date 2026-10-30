@@ -139,6 +139,7 @@ pub struct Display {
     /// Reported by the compositor now (else known only from the settings
     /// file, as a display that's off).
     pub present: bool,
+    pub vrr_supported: bool,
     pub settings: Settings,
 }
 
@@ -155,6 +156,7 @@ pub struct Settings {
     pub transform: Transform,
     /// Showing the display with this connector (placed over it).
     pub mirror: Option<String>,
+    pub vrr: aizome_config::VrrMode,
 }
 
 impl Settings {
@@ -204,6 +206,7 @@ impl Display {
             preferred,
             physical_mm: o.physical_size_mm,
             present: true,
+            vrr_supported: o.vrr_supported,
             settings: Settings {
                 name: o.name.clone(),
                 enabled: o.enabled,
@@ -213,6 +216,7 @@ impl Display {
                 scale: if o.scale > 0.0 { o.scale } else { 1.0 },
                 transform: o.transform,
                 mirror,
+                vrr: aizome_config::VrrMode::parse(&o.vrr).unwrap_or_else(|| entry.map(|e| e.vrr).unwrap_or_default()),
             },
         }
     }
@@ -674,7 +678,13 @@ pub fn changed(before: &[Settings], after: &[Settings]) -> Vec<String> {
 /// off or on.
 pub fn risky(before: &[Settings], after: &[Settings]) -> bool {
     after.iter().any(|a| match before.iter().find(|b| b.name == a.name) {
-        Some(b) => a.mode != b.mode || a.transform != b.transform || a.mirror != b.mirror || a.enabled != b.enabled,
+        Some(b) => {
+            a.mode != b.mode
+                || a.transform != b.transform
+                || a.mirror != b.mirror
+                || a.enabled != b.enabled
+                || a.vrr != b.vrr
+        }
         None => true,
     })
 }
@@ -710,7 +720,8 @@ pub fn requests(before: &[Settings], after: &[Settings], names: &[String]) -> Ve
     let mut on: Vec<Request> = Vec::new();
     let mut off: Vec<Request> = Vec::new();
     for s in after.iter().filter(|s| names.contains(&s.name)) {
-        let was = before.iter().find(|b| b.name == s.name).and_then(|b| b.mirror.clone());
+        let previous = before.iter().find(|b| b.name == s.name);
+        let was = previous.and_then(|b| b.mirror.clone());
         let mirror = |source: Option<String>| Request::MirrorOutput { name: s.name.clone(), source };
         if !s.enabled {
             off.push(request(s));
@@ -722,6 +733,9 @@ pub fn requests(before: &[Settings], after: &[Settings], names: &[String]) -> Ve
             if was != s.mirror {
                 on.push(mirror(s.mirror.clone()));
             }
+        }
+        if s.enabled && previous.is_some_and(|b| b.vrr != s.vrr) {
+            on.push(Request::OutputVrr { name: s.name.clone(), mode: s.vrr.as_str().into() });
         }
     }
     on.extend(off);
@@ -747,6 +761,7 @@ pub fn write_entries(outputs: &mut Vec<OutputConfig>, displays: &[(ConfigKey, Se
         };
         let e = &mut outputs[index];
         e.enabled = Some(s.enabled);
+        e.vrr = s.vrr;
         e.mode = Some(s.mode.setting());
         e.scale = Some(s.scale);
         e.position = Some([s.x, s.y]);
@@ -801,6 +816,7 @@ pub fn known_off(outputs: &[OutputConfig], present: &[Display]) -> Vec<Display> 
                 preferred: Some(mode),
                 physical_mm: (0, 0),
                 present: false,
+                vrr_supported: false,
                 settings: Settings {
                     name,
                     enabled: false,
@@ -810,6 +826,7 @@ pub fn known_off(outputs: &[OutputConfig], present: &[Display]) -> Vec<Display> 
                     scale: e.scale.unwrap_or(1.0),
                     transform: e.transform.map(ipc_transform).unwrap_or_default(),
                     mirror: None,
+                    vrr: e.vrr,
                 },
             })
         })
@@ -978,6 +995,27 @@ mod tests {
         use_as(&mut s, &mut main, "DP-1", Use::Off);
         assert!(s[1].mirror.is_none() && s[1].enabled);
         assert_eq!(main.as_deref(), Some("eDP-1"));
+    }
+
+    #[test]
+    fn adaptive_sync_is_previewed_reverted_and_persisted() {
+        use aizome_config::VrrMode;
+        let (before, main) = two();
+        let mut after = before.clone();
+        after[0].vrr = VrrMode::Always;
+        assert!(risky(&before, &after));
+        let names = changed(&before, &after);
+        assert_eq!(names, [before[0].name.clone()]);
+        assert!(matches!(requests(&before, &after, &names).last(),
+            Some(Request::OutputVrr { mode, .. }) if mode == "always"));
+        assert!(matches!(requests(&after, &before, &names).last(),
+            Some(Request::OutputVrr { mode, .. }) if mode == "off"));
+        let d = Display::from_output(&output("DP-1", 3840, 2160, 2.0, 0), None);
+        let mut outputs = vec![];
+        write_entries(&mut outputs, &[(d.config_key(), after[0].clone())], main.as_deref());
+        assert_eq!(outputs[0].vrr, VrrMode::Always);
+        let json = serde_json::to_value(&outputs[0]).unwrap();
+        assert_eq!(json["vrr"], "always");
     }
 
     #[test]

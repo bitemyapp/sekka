@@ -12,6 +12,7 @@
     ./binary-cache.nix
     ./boot-splash
     ./desktops.nix
+    ./gaming.nix
     ./input-method.nix
     ./nvidia.nix
     ./prebuilt-binaries.nix
