@@ -450,6 +450,13 @@ pub struct Seen {
     /// Keys pressed (evdev codes) with the modifiers held then.
     pub keys: Vec<(u32, u32)>,
     pub mods: u32,
+    /// Locked modifiers (Caps Lock is 2) and the layout in use (its
+    /// index), now and as each of `keys` came, and keymaps received.
+    pub locked: u32,
+    pub locked_at_keys: Vec<u32>,
+    pub group: u32,
+    pub group_at_keys: Vec<u32>,
+    pub keymaps: u32,
     pub keyboard_focus: bool,
     /// Vertical scrolling received, summed.
     pub scrolled: f64,
@@ -815,10 +822,19 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
         match event {
             wl_keyboard::Event::Enter { .. } => seen.keyboard_focus = true,
             wl_keyboard::Event::Leave { .. } => seen.keyboard_focus = false,
-            wl_keyboard::Event::Modifiers { mods_depressed, .. } => seen.mods = mods_depressed,
+            wl_keyboard::Event::Modifiers { mods_depressed, mods_locked, group, .. } => {
+                seen.mods = mods_depressed;
+                seen.locked = mods_locked;
+                seen.group = group;
+            }
+            wl_keyboard::Event::Keymap { .. } => seen.keymaps += 1,
             wl_keyboard::Event::Key { key, state: WEnum::Value(wl_keyboard::KeyState::Pressed), .. } => {
                 let m = seen.mods;
                 seen.keys.push((key, m));
+                let l = seen.locked;
+                seen.locked_at_keys.push(l);
+                let g = seen.group;
+                seen.group_at_keys.push(g);
             }
             _ => {}
         }

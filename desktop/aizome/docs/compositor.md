@@ -38,6 +38,24 @@ aizome --build-info                      # how the core was built (what a logic 
   tapped alone latches for the next key; tapped again it lets go) and
   `slow_keys` with `slow_keys_ms` (a key counts once held that long; a
   brush is dropped), and `[performance] renderer` (at the next start).
+- Keyboards of their own: each `[[input.keyboards]]` entry (`name` and
+  `id`, `vendor:product`, as libinput gives them; `options`) has its own
+  modifier swaps, Caps Lock and Compose key (the `altwin:`, `ctrl:`,
+  `caps:` and `compose:` XKB options), in place of `[input.keyboard]`'s;
+  layouts, layout switching, repeat and Num Lock are every keyboard's, and
+  an entry without `options` types as other keyboards do. The seat has one
+  keymap, as Wayland has: before a key from a keyboard that types (one
+  with a space bar and the letters) goes anywhere, the keymap becomes that
+  keyboard's if it isn't already, and the focus hears it; Caps Lock, Num
+  Lock and the layout in use carry over (`keyboards.rs`). Not yet under an
+  input method: smithay gives an input method's keyboard grab
+  (`zwp_input_method_keyboard_grab_v2`, IBus's or Fcitx 5's) the keymap
+  only when the grab begins, and a change of keymap reaches `wl_keyboard`s
+  alone. While IBus or Fcitx 5 holds the grab, it reads every keyboard's
+  keys with the keymap in force when it took it, and the keys it passes on
+  through its virtual keyboard carry that keymap to the app: one keyboard's
+  own modifier swaps then go for all, or for none. Sending the keymap to
+  the grab again after a change would need a change in smithay.
 - Fonts: Archivo, IBM Plex Mono and Noto Sans Symbols 2 from fontconfig,
   else from `$AIZOME_FONT_DIR` or `../share/aizome/fonts` beside the
   binary.
@@ -381,7 +399,8 @@ connections and the way out depend on.
 | `thumbs.rs` | Under pixman, thumbnails (the overview's, the switcher's) kept as pictures at their size, scaled again only where their window drew |
 | `blur.rs` | Under GLES, the blur behind a scene's `Blur` items (dual Kawase, masked by the surface's own alpha), taken again only when what's under it changed |
 | `ghosts.rs` | Layer surfaces' last frames, kept for the logic to move away as they go |
-| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's; keyboard focus, popup grabs, grab wrappers |
+| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, and a key `catch-key` waits for; keyboard focus, popup grabs, grab wrappers |
+| `keyboards.rs` | The keyboards that type, who each is, and the keymap of the one typing (its own keys from `[[input.keyboards]]`) |
 | `shell.rs`, `handlers.rs`, `popups.rs` | Surfaces, xdg-shell, layer shell, session lock and the smaller protocols; the window registry |
 | `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon |
 | `backend/` | headless (GLES on a render node or pixman, 60 Hz pacing only while damaged), winit, udev (DRM/KMS, multi-GPU GLES or pixman dumb buffers) |

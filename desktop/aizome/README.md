@@ -17,7 +17,10 @@ Rust on Sukumo 蒅, its native toolkit, from the compositor to the calculator.
 - **A command palette for everything** (❖Space): every menu command of the
   focused app, with its shortcut taught back to you, plus windows, files,
   apps, settings and arithmetic.
-- **Super is the command key** (❖C, ❖V, ❖Z), in every app.
+- **Super is the command key** (❖C, ❖V, ❖Z), in every app, and on every
+  keyboard where your thumb finds it: plug one in, press the key beside its
+  space bar, and Settei suggests whether to swap Alt and Super on that
+  keyboard alone.
 - **One file chooser**: apps that open and save through the desktop
   portal (browsers, Electron apps, Zed, Flatpaks) get Files in miniature,
   over their window, with their filters and options.

@@ -37,6 +37,11 @@ impl IpcServer {
         IpcServer::default()
     }
 
+    /// Whether connection `id` is still open and listening for events.
+    pub fn is_subscribed(&self, id: u64) -> bool {
+        self.conns.get(&id).is_some_and(|c| c.subscribed)
+    }
+
     /// Binds the socket and starts accepting connections.
     pub fn listen(state: &mut State) -> io::Result<PathBuf> {
         let display = state.az.socket_name.to_string_lossy().into_owned();
@@ -88,6 +93,23 @@ impl IpcServer {
         for c in self.conns.values_mut().filter(|c| c.subscribed) {
             c.outbuf.extend_from_slice(line.as_bytes());
         }
+        self.flush();
+    }
+
+    /// Sends an event to subscriber `id` alone: what it asked for, which
+    /// no other connection hears.
+    pub fn emit_to(&mut self, id: u64, event: &Event) {
+        let mut line = match serde_json::to_string(event) {
+            Ok(l) => l,
+            Err(e) => {
+                warn!("IPC event: {e}");
+                return;
+            }
+        };
+        line.push('\n');
+        let Some(c) = self.conns.get_mut(&id).filter(|c| c.subscribed) else { return };
+        c.outbuf.extend_from_slice(line.as_bytes());
+        self.events_sent += 1;
         self.flush();
     }
 
@@ -185,6 +207,23 @@ impl State {
                 Ok(Request::Subscribe) => {
                     if let Some(c) = self.az.ipc.conns.get_mut(&id) {
                         c.subscribed = true;
+                    }
+                    Response::Ok
+                }
+                // The connection's: the key comes to it alone, and the
+                // wait ends with it (Settei gone) or when it says so;
+                // another connection's word without a tag changes nothing.
+                Ok(Request::CatchKey { tag: Some(tag) }) => {
+                    if self.az.ipc.is_subscribed(id) {
+                        self.az.keyboards.catch = Some((tag, id));
+                        Response::Ok
+                    } else {
+                        Response::error("subscribe first: the key caught comes to the connection that asks")
+                    }
+                }
+                Ok(Request::CatchKey { tag: None }) => {
+                    if self.az.keyboards.catch.as_ref().is_some_and(|(_, c)| *c == id) {
+                        self.az.keyboards.catch = None;
                     }
                     Response::Ok
                 }
