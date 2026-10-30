@@ -196,15 +196,25 @@ parity. Preserve long-running fuzzing and unsafe-code ownership/layout checks.
 
 The [2026-10-30 comparison](ghostty-comparison-2026-10-30.md) of `2f2f73e0` adds
 specific work:
-- Bisect the styled (+43 %) and cursor/erase (+20 %) core slowdowns since the
-  rich-copy checkpoint.
-- Close the feed gaps on Ghostty's random plain lines (1.17) and Unicode-heavy
-  lines (1.23), and measure mode 2027.
-- Time Ghostty's random UTF-8 and OSC inputs, whose screens now match
-  ([stream-parser.md](stream-parser.md)).
+- Bisect what remains of the styled and cursor/erase core slowdowns since the
+  rich-copy checkpoint. The [inline budget check](history-budget-check.md)
+  brought styled text from 27.7 to 22.9 ms and cursor/erase from 92.0 to
+  87.7 ms. The rich-copy checkpoint measured 19.3 and 76.9 ms.
+- Close the feed gaps on Ghostty's suite inputs, and measure mode 2027. Now
+  that their screens match, the gaps are:
+  - random UTF-8, 1.45;
+  - Unicode-heavy lines, 1.20;
+  - random plain lines, 1.12.
+
+  ([history-budget-check.md](history-budget-check.md)).
 - Implement the DEC and ANSI modes the reference reports but Hotaru doesn't
   (2, 12, 3, 4, 5, 8, 40, 45, 1039, 1045, 2026, 2031, 2033, 2048), and
   DECSASD.
+- Fix two differences that fuzzing found
+  ([history-budget-check.md](history-budget-check.md#evidence)):
+  - With a wrap pending, ED and EL with a parameter other than 0–2 clear it in
+    Hotaru but not in the reference.
+  - The reference implements ED 22.
 - Investigate the 60 Hz scroll capture shortfall (114/120) and its compositor cost.
 
 In the software GUI pilot Hotaru already leads on startup, keyboard latency,

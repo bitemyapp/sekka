@@ -343,14 +343,23 @@ validation.
 
 ## Comparable feed benchmarks
 
-The latest measurements, for `2f2f73e0`, are in
-[`ghostty-comparison-2026-10-30.md`](ghostty-comparison-2026-10-30.md), with
-reports in `upstream/benchmarks/clipboard-checkpoint-*.json`. The four reviewed
-patterns matched again. Rust/Zig ratios were **0.878 ASCII**, **1.100 Unicode**,
-**0.848 styled text** and **0.122 cursor/erase**. Styled text and cursor/erase
-are slower than at the rich-copy checkpoint below, and haven't been bisected.
-The same document runs Ghostty's own `ghostty-gen`/`ghostty-bench` suite and
-the matched GUI pilot again.
+The latest measurements are for the
+[history budget check](history-budget-check.md), with reports in
+`upstream/benchmarks/history-budget-check-*.json`. The four reviewed patterns
+matched again. Rust/Zig ratios were:
+
+- **0.844** ASCII;
+- **1.019** Unicode;
+- **0.703** styled text;
+- **0.116** cursor/erase.
+
+The same document times Ghostty's own suite inputs again, feed-only.
+
+[`ghostty-comparison-2026-10-30.md`](ghostty-comparison-2026-10-30.md) measured
+`2f2f73e0`, with reports in `upstream/benchmarks/clipboard-checkpoint-*.json`.
+It also runs Ghostty's `ghostty-gen`/`ghostty-bench` suite whole-command, and
+the matched GUI pilot. Styled text and cursor/erase are still slower than at
+the rich-copy checkpoint below.
 
 The rich-copy core checkpoint still missed the performance gate.
 [`../upstream/candidate-rich-copy-build.json`](../upstream/candidate-rich-copy-build.json)

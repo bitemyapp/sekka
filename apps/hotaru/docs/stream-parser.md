@@ -123,8 +123,8 @@ average of about 1.3; reports are in
 
 **Styled text is about 4 % slower and cursor/erase about 2 % slower.** As first
 written, the fix cost styled text 10 % (27.9 → 30.4 ms, back to back with its
-parent). That corpus is about 700,000 SGR sequences, so the cost was per
-sequence. Two changes recovered most of it:
+parent). That corpus is 524,288 SGR sequences, so the cost was per sequence.
+Two changes recovered most of it:
 
 - `csi()` looks up each command's parameter limit with a `match` instead of
   searching a byte string.
@@ -133,10 +133,13 @@ sequence. Two changes recovered most of it:
 
 Neither alone helped much (29.2–29.8 ms and 30.4 ms); together they gave
 28.7–28.9 ms. Skipping the parameter-count gate entirely was slower still
-(32.0 ms), so the rest is probably code layout rather than the new checks.
-`perf` isn't available to users on wx, and the cause wasn't isolated further.
-The variants and their runs are in
+(32.0 ms). The variants and their runs are in
 [`dispatch-ab.json`](../upstream/stream-parser/dispatch-ab.json).
+
+Profiling later found the rest. It is about 50 extra instructions per escape
+sequence, not code layout, but removing them didn't win the time back. An
+older cost in the same loop did; see
+[history-budget-check.md](history-budget-check.md).
 
 ```sh
 python3 tools/stream-parser-oracle.py \

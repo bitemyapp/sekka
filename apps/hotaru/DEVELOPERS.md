@@ -161,6 +161,10 @@ The [stream parser and width rules](docs/stream-parser.md) cover two things:
 
 `tools/stream-parser-oracle.py` records their cases from the actual library.
 
+The [history budget check](docs/history-budget-check.md) keeps the test that
+runs after every parsed byte inline. It also records how that loop was
+profiled on `wx-workstation`, with `perf`, IBS and callgrind.
+
 [Automatic URL and path detection](docs/automatic-links.md) now uses the pinned
 default rule on bounded logical context from the exact displayed snapshot.
 Worker results and path-helper completion are checked against the original

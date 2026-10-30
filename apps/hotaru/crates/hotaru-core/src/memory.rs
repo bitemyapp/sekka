@@ -67,6 +67,9 @@ impl BudgetSignal {
     pub fn current(&self) -> usize {
         self.bytes.load(Ordering::Relaxed)
     }
+    pub fn changed(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
     pub fn take_change(&self) -> Option<(usize, usize)> {
         if !self.dirty.load(Ordering::Relaxed) {
             return None;

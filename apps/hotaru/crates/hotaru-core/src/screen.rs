@@ -246,7 +246,16 @@ impl Screen {
         self.active_link = link;
         self.budget_signal.adjust(old, new);
     }
+    // The terminal checks after every byte the parser handles, and most
+    // bytes change nothing; keep that test inline and the pruning out of it.
+    #[inline]
     fn enforce_budget(&mut self) {
+        if self.budget_signal.changed() {
+            self.apply_budget_change();
+        }
+    }
+    #[inline(never)]
+    fn apply_budget_change(&mut self) {
         let Some((current, peak)) = self.budget_signal.take_change() else {
             return;
         };
