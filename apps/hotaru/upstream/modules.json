@@ -5368,10 +5368,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/kitty/clipboard_command.zig",
@@ -5386,10 +5391,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/kitty/clipboard_grants.zig",
@@ -5404,10 +5414,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/kitty/clipboard_response.zig",
@@ -5422,10 +5437,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/kitty/clipboard_write.zig",
@@ -5440,10 +5460,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/kitty/color.zig",
@@ -5827,10 +5852,15 @@
       ],
       "evidence": [
         "crates/hotaru-core/tests/kitty_clipboard.rs",
+        "tools/kitty-clipboard-oracle.py",
+        "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs",
+        "upstream/kitty-clipboard/oracle-summary.json",
+        "upstream/kitty-clipboard-fixtures.json",
+        "crates/hotaru-replay/tests/kitty_clipboard.rs",
         "../../desktop/aizome/apps/hotaru/tests/native.rs",
         "../../desktop/aizome/apps/hotaru/tests/wayland/selections.py"
       ],
-      "note": "OSC 5522 ported with pinned Ghostty's own test expectations (exact response bytes); no differential run against the pinned library yet"
+      "note": "OSC 5522 matches the pinned library in 615 differential comparisons (207 scenarios at three chunk sizes), one named difference: Hotaru's bounded event prefix; partial until real programs and an Aizome session accept it"
     },
     {
       "path": "src/terminal/osc/parsers/kitty_color.zig",

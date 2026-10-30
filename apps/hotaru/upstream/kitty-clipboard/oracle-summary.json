@@ -1,0 +1,106 @@
+{
+  "upstream_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "replay_sha256": "b72bc49ecf098d336110ee4fe94276c2dd9dbcec25a523dab398acbd1589bce4",
+  "tool_sha256": "ce5c2916bf0d4200663f933dfa81ecae013baf8c09cf5898645578448a90e8a6",
+  "sources": {
+    "crates/hotaru-core/src/content.rs": "c2aaa4b24b0905855967c5944fbafbec8b6e672770e2981b61efeb9cd1a28dcc",
+    "crates/hotaru-core/src/formatter.rs": "0a189cfa5ad96f27a88b2a0b2717ea81772f880a1dc802ba1719fdaefa2fadc0",
+    "crates/hotaru-core/src/grapheme.rs": "0a97e4dd7153f9e66e89815bb5a13708d11eb89910bef3dfb1e847a17505127f",
+    "crates/hotaru-core/src/history.rs": "88d05071db2a765c87ea8241d80f3ce2d3aa9854b45b7cdea3101584fcee9d53",
+    "crates/hotaru-core/src/hyperlink.rs": "a068f4d49ee0a99cd8296ae2a5c38ee0edd4f62615fdee0709c1b39ad4658872",
+    "crates/hotaru-core/src/input.rs": "e81f3ccb24f3bc5177b6416b53b173b4679d711f76734f5becc645ac7efe0013",
+    "crates/hotaru-core/src/kitty_clipboard.rs": "fc6684690e0ac01914dfe8d3887eec885da1c4627d9fdf1ce560814f74187700",
+    "crates/hotaru-core/src/lib.rs": "42d931537e69443618f0fc8782548a1f5ace5cfaead1084674d6c9bb4a7a37d2",
+    "crates/hotaru-core/src/memory.rs": "52188205f67257959d4d7c6a03fb574d9e5bdd53f80277f82b4c53195058c1d8",
+    "crates/hotaru-core/src/parser.rs": "b9b3ec98f5535d4eeef0b8881599be3ffa7fd7804a40a2d692a51ffff459a5e7",
+    "crates/hotaru-core/src/position.rs": "659b1c337ded105673b9edd23115a801b4db02b1db28982f5be2bcca2fd530e0",
+    "crates/hotaru-core/src/row/ascii.rs": "c5333dfe399011e7c5c3a953888075fcf0fd70bd81ff748600fd38b36c06feaf",
+    "crates/hotaru-core/src/row/history.rs": "406fc81ad683196f564f4b9080655b8a1ca8638eba8e4e8967cfb41292ad250c",
+    "crates/hotaru-core/src/row.rs": "d6eda577d0127a85336e2d124e7008104d7c03efdd959d3cd3d237171d97342b",
+    "crates/hotaru-core/src/scan.rs": "7a4c988f2d378c6106cb3d66003f5a8583bc2a9d3b2ab45583d791d6bb620b25",
+    "crates/hotaru-core/src/screen.rs": "35812c00a217c3c28a0bc6d3cbc56874979a8b395278a8a043ed66d2bb6d0be5",
+    "crates/hotaru-core/src/search.rs": "9ec2ae3f36eb594d0f0684bfdf58e3bd91bed112daa8ccbba75324315579ee76",
+    "crates/hotaru-core/src/style.rs": "ec000c1148437208a6d52b4d9be4be8bb80114f1e16b49a6e800371b9a364791",
+    "crates/hotaru-core/src/unicode.rs": "a40089cf6b60675e37a52dfaec7ede2c60d0a82e0e437f0de9d25c4dc47028bc",
+    "crates/hotaru-core/src/unicode_tables.rs": "4551adea15824f60163af841858b94d57ca66325d3f9c431b0595959b148766c",
+    "crates/hotaru-replay/src/bin/kitty-clipboard-replay.rs": "6d3e4a17845624a85d59c6e5fa2a1cf1f84bcf488dce4bc15a9b4c8afec6e537",
+    "crates/hotaru-replay/src/main.rs": "1c85a7f722d19ee87cd48499da392f7306bbdb1ef7ae8dd829b6c49ef302d308"
+  },
+  "scenarios": 207,
+  "comparisons": 615,
+  "failures": 0,
+  "named_hotaru_differences": 1,
+  "scenario_groups": {
+    "bounded": 1,
+    "capture": 3,
+    "metadata": 84,
+    "mode": 1,
+    "paste": 8,
+    "read": 29,
+    "reset": 2,
+    "write": 79
+  },
+  "chunks": [
+    1,
+    3,
+    65536
+  ],
+  "reference_exercised": {
+    "answer_packets": {
+      "read:DATA": 113,
+      "read:DONE": 133,
+      "read:EBUSY": 1,
+      "read:EIO": 1,
+      "read:ENOSYS": 1,
+      "read:EPERM": 2,
+      "read:OK": 133,
+      "write:DONE": 58,
+      "write:EBUSY": 2,
+      "write:EFBIG": 4,
+      "write:EINVAL": 17,
+      "write:EIO": 1,
+      "write:ENOSYS": 1,
+      "write:EPERM": 1
+    },
+    "requests": {
+      "read": 129,
+      "write": 64,
+      "paste": 12
+    },
+    "grant_states": {
+      "read granted=False can_remember=False": 74,
+      "read granted=False can_remember=True": 50,
+      "read granted=True can_remember=True": 5,
+      "write granted=False can_remember=False": 57,
+      "write granted=False can_remember=True": 6,
+      "write granted=True can_remember=True": 1
+    },
+    "paste_events": {
+      "written": 9,
+      "not written": 3
+    }
+  },
+  "named_hotaru_difference_records": [
+    {
+      "name": "bounded-prefix",
+      "chunk": 1,
+      "hotaru_difference": "bounded-event-prefix",
+      "difference_count": 0
+    },
+    {
+      "name": "bounded-prefix",
+      "chunk": 3,
+      "hotaru_difference": "bounded-event-prefix",
+      "difference_count": 0
+    },
+    {
+      "name": "bounded-prefix",
+      "chunk": 65536,
+      "hotaru_difference": "bounded-event-prefix",
+      "difference_count": 2
+    }
+  ],
+  "fixture_cases": 203,
+  "full_report": "wx-workstation:~/sekka-work/hotaru-5522-oracle.json"
+}

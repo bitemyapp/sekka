@@ -1037,7 +1037,7 @@ impl Protocol {
         for mime in mime_list(text) {
             if mime == TARGETS_MIME {
                 list = true;
-            } else if mimes.len() < MAX_READ_MIMES && mime.len() <= MAX_MIME_LEN {
+            } else if mimes.len() < MAX_READ_MIMES {
                 mimes.push(mime.to_owned());
             }
         }

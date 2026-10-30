@@ -11,6 +11,8 @@ const MAX_OSC_BODY: usize = 2048;
 const MAX_CWD_BODY: usize = 16 * 1024;
 // The pinned allocating capture also needs one byte for its sentinel NUL.
 const MAX_CLIPBOARD_BODY: usize = 8 * 1024 * 1024 - 1;
+// OSC 5522's capture has no sentinel: its whole 8 MiB is the body.
+const MAX_KITTY_CLIPBOARD_BODY: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Param {
@@ -230,8 +232,10 @@ impl Parser {
                 0x00..=0x06 | 0x08..=0x1f => {}
                 _ => {
                     if !self.osc_body && !self.osc_overflow && byte == b';' {
-                        let body_limit = if self.osc == b"52" || self.osc == b"5522" {
+                        let body_limit = if self.osc == b"52" {
                             MAX_CLIPBOARD_BODY
+                        } else if self.osc == b"5522" {
+                            MAX_KITTY_CLIPBOARD_BODY
                         } else if self.osc == b"7" {
                             MAX_CWD_BODY
                         } else {

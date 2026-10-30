@@ -76,6 +76,15 @@ clusters, mode resets, links, reflow and owned history. The ledger remains
 partial, and separate legacy/Unicode measurements show performance parity is
 still unmet. Historical benchmark reports retain their original configuration.
 
+Kitty's clipboard protocol (OSC 5522) is documented in
+[`next-work.md`](next-work.md) §3 and
+[`../upstream/kitty-clipboard/README.md`](../upstream/kitty-clipboard/README.md).
+`tools/kitty-clipboard-oracle.py` drives the library's own clipboard effects,
+paste and a fixed entropy source. It makes 615 comparisons over 207 scenarios
+at three feed chunk sizes, with no failures and one named difference (Hotaru's
+bounded event prefix). The ledger keeps its six modules partial until real
+programs are tried in an Aizome session.
+
 ## Clipboard hang audit
 
 The subsequent OSC8/copy slice is documented in

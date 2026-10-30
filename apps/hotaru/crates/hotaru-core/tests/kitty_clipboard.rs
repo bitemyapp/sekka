@@ -497,3 +497,39 @@ fn a_reset_ends_grants_but_not_answers_requests_or_a_write_already_made() {
     terminal.feed(b"\x1b]5522;type=read:pw=c2VjcmV0:name=YXBw;dGV4dC9wbGFpbg==\x1b\\");
     assert!(!self::read(&mut terminal).granted);
 }
+
+#[test]
+fn a_read_keeps_long_requested_names_as_ghostty_does() {
+    let mut terminal = terminal();
+    let mut list = Vec::new();
+    let long = format!("x/{}", "y".repeat(300));
+    hotaru_core::kitty_clipboard::base64::encode(
+        format!("{long} text/plain").as_bytes(),
+        &mut list,
+    );
+    terminal.feed(b"\x1b]5522;type=read;");
+    terminal.feed(&list);
+    terminal.feed(b"\x1b\\");
+    assert_eq!(read(&mut terminal).mimes, [long.as_str(), "text/plain"]);
+}
+
+#[test]
+fn the_capture_takes_an_osc_5522_body_of_8_mib_and_no_more() {
+    // The last byte isn't base64: a packet taken whole is answered EINVAL.
+    for (size, taken) in [(8 << 20, true), ((8 << 20) + 1, false)] {
+        let mut terminal = terminal();
+        terminal.feed(b"\x1b]5522;type=write:id=c\x1b\\");
+        let mut packet = b"\x1b]5522;type=wdata:mime=dGV4dC9wbGFpbg==;".to_vec();
+        packet.resize(b"\x1b]5522;".len() + size - 1, b'A');
+        packet.extend_from_slice(b"!\x1b\\");
+        terminal.feed(&packet);
+        let einval = "\x1b]5522;type=write:status=EINVAL:id=c\x1b\\";
+        assert_eq!(
+            responses(&mut terminal),
+            if taken { einval } else { "" },
+            "{size}"
+        );
+        terminal.feed(b"\x1b]5522;type=wdata\x1b\\");
+        assert_eq!(requests(&mut terminal).len(), usize::from(!taken), "{size}");
+    }
+}

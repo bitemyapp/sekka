@@ -98,6 +98,26 @@ and private-Sway checks against wl-clipboard: a write's three types pasted by
 type, a 5 KB PNG another program copied read byte for byte, asked and then
 granted, and a paste event whose password reads once and only once.
 
+The core is now checked differentially against the pinned library
+([evidence](../upstream/kitty-clipboard/README.md)).
+`tools/kitty-clipboard-oracle.py` drives libghostty-vt's own clipboard
+effects, paste and a fixed entropy source, and `hotaru-replay`'s
+`kitty-clipboard-replay` gives `hotaru-core` the same embedder model. 207
+scenarios at feed chunks of 1, 3 and 65,536 bytes make 615 comparisons of
+every byte sent back and every request. They cover metadata, read lists,
+grants, write streams split at every boundary, aliases, limits, every result,
+mode 5522, paste events and the OSC capture. None fail, and one named
+difference remains: Hotaru's bounded event prefix (`EBUSY` past 64 requests
+in one feed).
+
+The first run found two divergences, both fixed with core tests:
+- Requested type names over 256 bytes were dropped; the library keeps them.
+- The OSC 5522 capture stopped one byte short of the library's 8 MiB.
+
+The library's answers for 203 scenarios are committed as
+`upstream/kitty-clipboard-fixtures.json` and replayed by `hotaru-replay`'s
+tests.
+
 Deliberate differences from Ghostty: a write may hold 32 MiB (Ghostty's 64)
 so one fits a pane's bounds; a read past those bounds, behind another
 question or past the shared queue hears `EBUSY`; a write under Never is
@@ -107,9 +127,9 @@ most 255 bytes aren't offered to the desktop, and a write of nothing else
 answers `EINVAL`. A reset (RIS) now keeps replies, requests and a write
 already under way, as Ghostty's stream does, where it used to drop them.
 
-**Gate:** compare the protocol differentially against the pinned library (its
-six modules stay `partial` in `upstream/modules.json` until then) and try real
-programs, such as kitty's `kitten clipboard` and Neovim, in an Aizome session.
+**Gate:** try real programs, such as kitty's `kitten clipboard` and Neovim, in
+an Aizome session. The protocol's six modules stay `partial` in
+`upstream/modules.json` until then; the differential is done.
 
 ## 4. Recover the last horizontal-margin cost on Unicode text
 
