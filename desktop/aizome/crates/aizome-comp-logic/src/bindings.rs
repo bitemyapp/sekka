@@ -407,7 +407,7 @@ mod tests {
         assert_eq!(b.find(ctrl_logo, &s), Some(&Action::StackWithBehind));
         assert_eq!(b.find(carry, &[s[0], Keysym::new(keysyms::KEY_S)]), Some(&Action::Unstack));
         let alt_logo = Mods { alt: true, logo: true, ..Default::default() };
-        assert_eq!(b.find(alt_logo, &s), None, "⌥❖S is the app's (Koyomi's Sidebar)");
+        assert_eq!(b.find(alt_logo, &s), None, "⌥❖S is the app's (Koyomi's and Nisshi's Sidebar)");
         assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::WindowMenu));
         // ⌥Print records (Alt turns Print into Sys_Req, so the key's own
         // symbol is what matches).
