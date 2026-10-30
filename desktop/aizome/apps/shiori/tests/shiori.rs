@@ -17,7 +17,7 @@ use aizome_shiori::app::{Load, Msg, Sheet, Shiori};
 use aizome_shiori::engine::{Event, Failure};
 use aizome_shiori::layout::Zoom;
 use aizome_shiori::places::Places;
-use aizome_shiori::protocol::{Reply, TileKey};
+use aizome_shiori::protocol::{Job, Reply, TileKey};
 use aizome_shiori::text::{Caret, Selection};
 
 struct Rig {
@@ -423,6 +423,131 @@ fn the_last_version_is_still_drawn_while_the_file_cant_be_read() {
     settle(&mut r);
     assert_eq!(doc(&r).find.as_ref().map(|f| f.count()), Some(4));
     assert_eq!(doc(&r).pages(), 4);
+}
+
+/// Kill `r`'s worker, and wait for the one started in its place to go
+/// without a document (as it does when it can't open the file).
+fn kill_and_lose_the_worker(r: &mut Rig) {
+    let pid = doc(r).engine.as_ref().and_then(|e| e.pid()).expect("a worker");
+    // SAFETY: a signal to our own child.
+    unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    // The clock stands still, so `watch` doesn't look at the file.
+    let gone = r.h.settle(Duration::from_secs(30), |p| p.docs[0].engine.is_none());
+    assert!(gone, "the worker started again is still there: {:?}", doc(r).trouble);
+}
+
+/// Every tile of the pages in view is drawn at the view's zoom.
+fn all_drawn(r: &Rig) {
+    let d = doc(r);
+    let view = Rect::new(d.scroll.0, d.scroll.1, d.scroll.0 + d.view.width, d.scroll.1 + d.view.height);
+    for i in d.layout.visible(view.y0, view.y1) {
+        for k in d.layout.tiles(i, d.scale, view, view.center()) {
+            assert!(d.tiles.has(&k), "{k:?} wasn't drawn");
+        }
+    }
+}
+
+#[test]
+fn a_worker_started_again_on_a_half_written_file_leaves_the_last_version() {
+    let mut r = rig("restart-unreadable", &[("doc.pdf", common::sample())], &["doc.pdf"]);
+    let drawn = doc(&r).tiles.len();
+    // The file's half written when its worker dies, before Shiori sees it
+    // change: the worker started again can't open it.
+    std::thread::sleep(Duration::from_millis(20));
+    std::fs::write(r.dir.join("doc.pdf"), b"%PDF-1.7 half written").unwrap();
+    kill_and_lose_the_worker(&mut r);
+    settle(&mut r);
+    let d = doc(&r);
+    assert!(matches!(d.load, Load::Open(_)));
+    assert_eq!(d.pages(), 4);
+    assert_eq!(d.tiles.len(), drawn, "what showed went");
+    assert_eq!(d.trouble.as_deref(), Some("The file changed and can't be read yet; this is how it was."));
+    // Seen to change, it's tried again (and can't be read yet), and then
+    // written whole, it's read.
+    r.h.advance(Duration::from_millis(1600));
+    settle(&mut r);
+    assert!(doc(&r).trouble.as_deref().is_some_and(|t| t.contains("can't be read yet")));
+    std::fs::write(r.dir.join("doc.pdf"), common::long(3)).unwrap();
+    r.h.advance(Duration::from_millis(1600));
+    r.h.advance(Duration::from_millis(1600));
+    settle(&mut r);
+    assert_eq!(doc(&r).pages(), 3);
+    assert!(doc(&r).engine.is_some());
+    assert!(doc(&r).trouble.is_none(), "{:?}", doc(&r).trouble);
+    all_drawn(&r);
+}
+
+#[test]
+fn a_worker_started_again_that_finds_no_pages_goes() {
+    let mut r = rig("restart-no-pages", &[("doc.pdf", common::sample())], &["doc.pdf"]);
+    // A file with no pages, as one being written again can be: the worker
+    // started again finds none, and would fail every drawing.
+    std::thread::sleep(Duration::from_millis(20));
+    std::fs::write(r.dir.join("doc.pdf"), common::pdf(&[], &[])).unwrap();
+    kill_and_lose_the_worker(&mut r);
+    settle(&mut r);
+    let d = doc(&r);
+    assert!(matches!(d.load, Load::Open(_)));
+    assert_eq!(d.pages(), 4);
+    assert!(d.broken.is_empty(), "pages were taken for broken: {:?}", d.broken);
+    assert!(d.trouble.as_deref().is_some_and(|t| t.contains("can't be read yet")), "{:?}", d.trouble);
+    // When it has pages again, they show.
+    r.h.advance(Duration::from_millis(1600));
+    settle(&mut r);
+    std::fs::write(r.dir.join("doc.pdf"), common::long(3)).unwrap();
+    r.h.advance(Duration::from_millis(1600));
+    r.h.advance(Duration::from_millis(1600));
+    settle(&mut r);
+    assert_eq!(doc(&r).pages(), 3);
+    assert!(doc(&r).trouble.is_none(), "{:?}", doc(&r).trouble);
+    all_drawn(&r);
+}
+
+#[test]
+fn a_file_that_hasnt_changed_isnt_said_to_have() {
+    // SAFETY: no memory is involved.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipped: root reads a file whatever its mode");
+        return;
+    }
+    let mut r = rig("restart-unchanged", &[("doc.pdf", common::sample())], &["doc.pdf"]);
+    let w = r.h.window();
+    let path = r.dir.join("doc.pdf");
+    let mode = |m: u32| std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(m)).unwrap();
+    // The file can't be read for a while, as it is (its time and size
+    // are), when its worker dies: the worker started again can't open it,
+    // and the file isn't blamed.
+    mode(0o000);
+    kill_and_lose_the_worker(&mut r);
+    mode(0o644);
+    settle(&mut r);
+    let d = doc(&r);
+    assert!(matches!(d.load, Load::Open(_)));
+    assert_eq!(d.pages(), 4);
+    assert_eq!(d.trouble.as_deref(), Some("The page reader couldn't open the file again; Reload (❖R) tries again."));
+    // Nothing tries again by itself, as nothing changed.
+    r.h.advance(Duration::from_millis(3200));
+    settle(&mut r);
+    assert!(doc(&r).engine.is_none());
+    // Reload does, and what shows is drawn again.
+    r.h.send(Msg::Reload);
+    settle(&mut r);
+    assert!(doc(&r).engine.is_some());
+    assert!(doc(&r).trouble.is_none(), "{:?}", doc(&r).trouble);
+    r.h.send(Msg::ZoomIn);
+    settle(&mut r);
+    all_drawn(&r);
+    // A worker that takes too long opening the same file says so.
+    let serial = doc(&r).serial;
+    let late = Event::Failed { job: Some(Job::Open), why: Failure::TooLong, gave_up: true };
+    r.h.send(Msg::Worker(serial, late));
+    assert!(doc(&r).engine.is_none());
+    assert_eq!(
+        doc(&r).trouble.as_deref(),
+        Some("The page reader took too long opening the file again; Reload (❖R) tries again.")
+    );
+    let _ = r.h.render(w, 1.0);
+    assert!(r.h.texts(w).iter().any(|t| t.starts_with("The page reader took too long")), "{:?}", r.h.texts(w));
 }
 
 #[test]

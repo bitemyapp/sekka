@@ -150,20 +150,8 @@ fn supervise(exe: PathBuf, open: Request, shared: Arc<Shared>, sink: Arc<dyn Fn(
             let _ = write_frame(s, &open, None);
         }
         *shared.stdin.lock().unwrap_or_else(|e| e.into_inner()) = stdin;
-        {
-            // The document may have closed while this one started, with
-            // `drop` finding no worker to stop: it's stopped here instead.
-            // Looked at with the lock held: either `drop` finds this
-            // worker, or this sees that the document closed.
-            let mut c = shared.child.lock().unwrap_or_else(|e| e.into_inner());
-            if shared.closed.load(Ordering::SeqCst) {
-                drop(c);
-                let _ = child.kill();
-                let _ = child.wait();
-                *shared.stdin.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                return;
-            }
-            *c = Some(child);
+        if !keep(&shared, child) {
+            return;
         }
         shared.stopped.store(false, Ordering::SeqCst);
         if let Some(out) = stdout {
@@ -192,6 +180,23 @@ fn supervise(exe: PathBuf, open: Request, shared: Arc<Shared>, sink: Arc<dyn Fn(
             return;
         }
     }
+}
+
+/// Make `child` the worker that `Engine::drop` stops, unless the document
+/// closed while it started and `drop` found no worker to stop: then it's
+/// stopped here, and there's none (`false`). Looked at with the lock held,
+/// so either `drop` finds this worker or this sees that the document closed.
+fn keep(shared: &Shared, mut child: Child) -> bool {
+    let mut c = shared.child.lock().unwrap_or_else(|e| e.into_inner());
+    if shared.closed.load(Ordering::SeqCst) {
+        drop(c);
+        let _ = child.kill();
+        let _ = child.wait();
+        *shared.stdin.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        return false;
+    }
+    *c = Some(child);
+    true
 }
 
 /// Whether a worker that opened a document of `pages` pages (`None` if it
@@ -288,15 +293,19 @@ mod tests {
     use super::*;
     use crate::protocol::DocInfo;
 
-    /// What the engine hands on of `stream`, a worker's replies.
-    fn heard(stream: &[u8]) -> Vec<Event> {
-        let shared = Shared {
+    fn fresh() -> Arc<Shared> {
+        Arc::new(Shared {
             stdin: Mutex::new(None),
             child: Mutex::new(None),
             busy: Mutex::new(None),
             stopped: AtomicBool::new(false),
             closed: AtomicBool::new(false),
-        };
+        })
+    }
+
+    /// What the engine hands on of `stream`, a worker's replies.
+    fn heard(stream: &[u8]) -> Vec<Event> {
+        let shared = fresh();
         let events = Mutex::new(Vec::<Event>::new());
         read_replies(stream, &shared, &|e: Event| events.lock().unwrap().push(e));
         events.into_inner().unwrap()
@@ -336,5 +345,28 @@ mod tests {
             assert!(matches!(events[0], Event::Reply(Reply::Opened(_))));
             assert!(matches!(&events[1], Event::Drawn(k, _) if *k == tile));
         }
+    }
+
+    #[test]
+    fn a_worker_starting_as_its_document_closes_is_stopped() {
+        use std::os::unix::process::ExitStatusExt;
+        // Something that runs until it's stopped, for a worker.
+        let worker = || Command::new("sleep").arg("60").stdin(Stdio::null()).stdout(Stdio::null()).spawn().unwrap();
+        let engine = |shared: &Arc<Shared>| Engine { tx: mpsc::channel().0, shared: shared.clone() };
+        // The document closed after its worker started and before it was
+        // kept, `drop` finding none to stop: it's stopped, not kept.
+        let shared = fresh();
+        drop(engine(&shared));
+        let child = worker();
+        let pid = child.id();
+        assert!(!keep(&shared, child));
+        assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists(), "the worker {pid} is still running");
+        assert!(shared.child.lock().unwrap().is_none());
+        // Kept before the document closed, it's the worker `drop` stops.
+        let shared = fresh();
+        assert!(keep(&shared, worker()));
+        drop(engine(&shared));
+        let mut child = shared.child.lock().unwrap().take().expect("the worker kept");
+        assert_eq!(child.wait().unwrap().signal(), Some(libc::SIGKILL));
     }
 }

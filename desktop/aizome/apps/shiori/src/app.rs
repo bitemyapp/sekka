@@ -263,8 +263,11 @@ pub struct Doc {
     pub password: Option<String>,
     pub engine: Option<Engine>,
     pub load: Load,
-    /// What the file was when it was opened (to see it change).
+    /// What the file was when last looked at (to see it change).
     pub stamp: Option<(SystemTime, u64)>,
+    /// What it was when the version that shows was read: when a worker
+    /// can't open it again, whether it's changed since says why.
+    pub showing: Option<(SystemTime, u64)>,
     /// A newer file being opened, by a worker of its own (and its
     /// serial): what shows, and the worker drawing it, stay until it has.
     pub reload: Option<(u64, Engine)>,
@@ -350,12 +353,23 @@ impl Doc {
         }
     }
 
-    /// The file changed and the newer one can't be read (yet: it may
-    /// still be being written). What showed stays, still drawn by the
-    /// worker that read it, if it's there; the file's stamp is kept, so
-    /// the next change to it is tried.
-    fn unreadable_now(&mut self) {
-        self.trouble = Some("The file changed and can't be read yet; this is how it was.".into());
+    /// A worker couldn't open the file again: it `failed` doing so, said
+    /// it can't, or found no pages. What showed stays, and the toolbar
+    /// says why: if the file has changed since it was read, it can't be
+    /// read yet (it may still be being written) and its next change is
+    /// tried (`watch`); if it hasn't, the file isn't to blame, and Reload
+    /// tries again.
+    fn not_reopened(&mut self, failed: Option<Failure>) {
+        self.trouble = Some(if stamp(&self.path) != self.showing {
+            "The file changed and can't be read yet; this is how it was.".into()
+        } else {
+            let what = match failed {
+                Some(Failure::Crashed) => "stopped while opening",
+                Some(Failure::TooLong) => "took too long opening",
+                None => "couldn't open",
+            };
+            format!("The page reader {what} the file again; Reload (❖R) tries again.")
+        });
         self.trouble_until = None;
     }
 
@@ -881,6 +895,7 @@ impl Shiori {
                 engine: None,
                 load: Load::Opening,
                 stamp: stamp(&path),
+                showing: None,
                 reload: None,
                 zoom: pending.map_or(Zoom::FitWidth, |p| p.zoom.into()),
                 layout: Rc::new(Layout::default()),
@@ -980,9 +995,13 @@ impl Shiori {
             // It's not a PDF yet, or has no pages hayro can show yet (a
             // damaged page tree, a filter it doesn't have, a file still
             // being written), or it broke the worker opening it.
-            Event::Reply(Reply::Opened(_) | Reply::OpenFailed(_)) | Event::Failed { gave_up: true, .. } => {
+            Event::Reply(Reply::Opened(_) | Reply::OpenFailed(_)) => {
                 d.reload = None;
-                d.unreadable_now();
+                d.not_reopened(None);
+            }
+            Event::Failed { why, gave_up: true, .. } => {
+                d.reload = None;
+                d.not_reopened(Some(why));
             }
             // It went before it began, and another is opening the file.
             _ => {}
@@ -1146,11 +1165,12 @@ impl Shiori {
             Event::Reply(Reply::OpenFailed(e)) => {
                 let Some(d) = self.doc_mut(w) else { return };
                 if matches!(d.load, Load::Open(_)) && !matches!(e, OpenError::Worker(_)) {
-                    // Started again after a failure, a worker found the
-                    // file changed and unreadable: what showed stays, with
-                    // nothing to draw more of it.
+                    // Started again after a failure, a worker couldn't
+                    // open the file: what showed stays, with nothing to
+                    // draw more of it.
+                    log::warn!("a worker started again couldn't open the file: {}", e.message());
                     d.worker_gone();
-                    d.unreadable_now();
+                    d.not_reopened(None);
                     return;
                 }
                 d.engine = None;
@@ -1229,7 +1249,7 @@ impl Shiori {
                     if matches!(d.load, Load::Open(_)) && job == Some(Job::Open) {
                         // Started again after a failure, a worker broke on
                         // the file as it is now: what showed stays.
-                        d.unreadable_now();
+                        d.not_reopened(Some(why));
                     } else if matches!(d.load, Load::Opening) || job == Some(Job::Open) {
                         d.load = Load::Failed(format!("The page reader {what} while opening it."));
                     } else {
@@ -1252,6 +1272,15 @@ impl Shiori {
     fn opened(&mut self, w: WindowKey, info: DocInfo, reloading: bool, cx: &mut Cx<Msg>) {
         let Some(d) = self.doc_mut(w) else { return };
         let again = matches!(d.load, Load::Open(_));
+        if again && !reloading && info.pages.is_empty() {
+            // A worker started again after a failure found no pages in the
+            // file (one being written again, say): it would fail every
+            // drawing asked of it. It goes, and what showed stays, as when
+            // a newer file has none (`reloaded`).
+            d.worker_gone();
+            d.not_reopened(None);
+            return;
+        }
         if again && !reloading {
             // A worker started again after a failure: carry on, and ask
             // for what's still wanted (the search too).
@@ -1288,6 +1317,9 @@ impl Shiori {
             d.trouble = None;
         }
         let first = !again;
+        // What the file was before this worker read it: taken when it was
+        // opened, or by `watch` or Reload before a newer one was.
+        d.showing = d.stamp;
         d.load = Load::Open(Rc::new(info));
         d.relayout((0.0, 0.0));
         if first {

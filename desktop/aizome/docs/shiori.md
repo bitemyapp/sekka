@@ -209,6 +209,13 @@ fails):
   new one takes over once it has opened the file and found pages; one
   that can't (the file isn't whole yet) goes, and the last version stays
   to read, zoom, find in and copy from.
+- A worker started again after a failure reads the file as it is then. If
+  it can't open it, or finds no pages, it goes too, and what showed stays,
+  though no more of it can be drawn. The toolbar says which it was by the
+  file's time and size: changed since it was read, the file can't be read
+  yet, and it's tried again as it changes; as it was, the page reader
+  couldn't open it again (it was stopped, say, or the file couldn't be
+  read for a moment), and Reload tries again.
 - A panic costs only the job it was on: the worker catches it, answers as
   if that tile couldn't be drawn (so the page is marked) or the page had
   no text, lets go of what hayro had cached, and carries on with the
@@ -347,8 +354,9 @@ real workers (`tests/shiori.rs`: drawing exactly, moving and zooming in
 place, a zoom showing at once with its ink in place, find, selecting and
 copying, copying pages not yet read, links clicked and dragged from, the
 sidebar and the contents following the page, a locked document, a dying
-worker, a page failing at one size, your place and sidebar, a file
-changing, drawing ahead, Escape, panning and selecting past the edge)
+worker, one started again that can't open the file or finds no pages,
+a page failing at one size, your place and sidebar, a file changing,
+drawing ahead, Escape, panning and selecting past the edge)
 and its look in Night and Day (`tests/golden`, drawn with hayro). Documents are written by `tests/common` from text;
 `tests/fixtures/locked.pdf` is the sample encrypted by qpdf 12.4 (the
 command is in `tests/worker.rs`).
