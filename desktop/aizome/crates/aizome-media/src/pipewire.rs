@@ -213,46 +213,50 @@ fn close(cur: &std::rc::Rc<std::cell::RefCell<Option<Playing>>>) {
     }
 }
 
-/// Channel positions for `n` channels, in FFmpeg's default orders (the
-/// ring carries the decoder's channels in that order).
+/// Channel positions for `n` channels, as PipeWire names them, from the
+/// layout the player's resampler makes them in (`av_channel_layout_default`,
+/// FFmpeg's usual layout for `n`: 2.1 for three, 4.0 for four, 5.1(back)
+/// for six), so each channel is placed where FFmpeg put it.
 fn positions(n: u32) -> [u32; spa::sys::SPA_AUDIO_MAX_CHANNELS as usize] {
+    use crate::av::ff::{self, AVChannel::*};
     use spa::sys::*;
-    let order: &[u32] = match n {
-        1 => &[SPA_AUDIO_CHANNEL_MONO],
-        2 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR],
-        3 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_FC],
-        4 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_RL, SPA_AUDIO_CHANNEL_RR],
-        5 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_FC, SPA_AUDIO_CHANNEL_RL, SPA_AUDIO_CHANNEL_RR],
-        6 => &[
-            SPA_AUDIO_CHANNEL_FL,
-            SPA_AUDIO_CHANNEL_FR,
-            SPA_AUDIO_CHANNEL_FC,
-            SPA_AUDIO_CHANNEL_LFE,
-            SPA_AUDIO_CHANNEL_SL,
-            SPA_AUDIO_CHANNEL_SR,
-        ],
-        7 => &[
-            SPA_AUDIO_CHANNEL_FL,
-            SPA_AUDIO_CHANNEL_FR,
-            SPA_AUDIO_CHANNEL_FC,
-            SPA_AUDIO_CHANNEL_LFE,
-            SPA_AUDIO_CHANNEL_RC,
-            SPA_AUDIO_CHANNEL_SL,
-            SPA_AUDIO_CHANNEL_SR,
-        ],
-        _ => &[
-            SPA_AUDIO_CHANNEL_FL,
-            SPA_AUDIO_CHANNEL_FR,
-            SPA_AUDIO_CHANNEL_FC,
-            SPA_AUDIO_CHANNEL_LFE,
-            SPA_AUDIO_CHANNEL_RL,
-            SPA_AUDIO_CHANNEL_RR,
-            SPA_AUDIO_CHANNEL_SL,
-            SPA_AUDIO_CHANNEL_SR,
-        ],
-    };
-    let mut p = [0u32; SPA_AUDIO_MAX_CHANNELS as usize];
-    p[..order.len()].copy_from_slice(order);
+    let mut p = [SPA_AUDIO_CHANNEL_UNKNOWN; SPA_AUDIO_MAX_CHANNELS as usize];
+    let n = n.clamp(1, SPA_AUDIO_MAX_CHANNELS);
+    // SAFETY: a zeroed layout that FFmpeg fills, which is read and then
+    // freed here.
+    unsafe {
+        let mut layout: ff::AVChannelLayout = std::mem::zeroed();
+        ff::av_channel_layout_default(&mut layout, n as i32);
+        for (i, slot) in p.iter_mut().enumerate().take(n as usize) {
+            *slot = match ff::av_channel_layout_channel_from_index(&layout, i as u32) {
+                // FFmpeg's mono is a centre channel; PipeWire's is MONO.
+                AV_CHAN_FRONT_CENTER if n == 1 => SPA_AUDIO_CHANNEL_MONO,
+                AV_CHAN_FRONT_LEFT => SPA_AUDIO_CHANNEL_FL,
+                AV_CHAN_FRONT_RIGHT => SPA_AUDIO_CHANNEL_FR,
+                AV_CHAN_FRONT_CENTER => SPA_AUDIO_CHANNEL_FC,
+                AV_CHAN_LOW_FREQUENCY => SPA_AUDIO_CHANNEL_LFE,
+                AV_CHAN_BACK_LEFT => SPA_AUDIO_CHANNEL_RL,
+                AV_CHAN_BACK_RIGHT => SPA_AUDIO_CHANNEL_RR,
+                AV_CHAN_FRONT_LEFT_OF_CENTER => SPA_AUDIO_CHANNEL_FLC,
+                AV_CHAN_FRONT_RIGHT_OF_CENTER => SPA_AUDIO_CHANNEL_FRC,
+                AV_CHAN_BACK_CENTER => SPA_AUDIO_CHANNEL_RC,
+                AV_CHAN_SIDE_LEFT => SPA_AUDIO_CHANNEL_SL,
+                AV_CHAN_SIDE_RIGHT => SPA_AUDIO_CHANNEL_SR,
+                AV_CHAN_TOP_CENTER => SPA_AUDIO_CHANNEL_TC,
+                AV_CHAN_TOP_FRONT_LEFT => SPA_AUDIO_CHANNEL_TFL,
+                AV_CHAN_TOP_FRONT_CENTER => SPA_AUDIO_CHANNEL_TFC,
+                AV_CHAN_TOP_FRONT_RIGHT => SPA_AUDIO_CHANNEL_TFR,
+                AV_CHAN_TOP_BACK_LEFT => SPA_AUDIO_CHANNEL_TRL,
+                AV_CHAN_TOP_BACK_CENTER => SPA_AUDIO_CHANNEL_TRC,
+                AV_CHAN_TOP_BACK_RIGHT => SPA_AUDIO_CHANNEL_TRR,
+                AV_CHAN_WIDE_LEFT => SPA_AUDIO_CHANNEL_FLW,
+                AV_CHAN_WIDE_RIGHT => SPA_AUDIO_CHANNEL_FRW,
+                AV_CHAN_LOW_FREQUENCY_2 => SPA_AUDIO_CHANNEL_LFE2,
+                _ => SPA_AUDIO_CHANNEL_UNKNOWN,
+            };
+        }
+        ff::av_channel_layout_uninit(&mut layout);
+    }
     p
 }
 
@@ -405,10 +409,32 @@ mod tests {
     }
 
     #[test]
-    fn channels_are_placed_in_ffmpegs_order() {
+    fn channels_are_placed_where_ffmpeg_puts_them() {
         use spa::sys::*;
-        assert_eq!(&positions(2)[..2], &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR]);
-        assert_eq!(positions(6)[3], SPA_AUDIO_CHANNEL_LFE);
-        assert_eq!(positions(1)[0], SPA_AUDIO_CHANNEL_MONO);
+        const FL: u32 = SPA_AUDIO_CHANNEL_FL;
+        const FR: u32 = SPA_AUDIO_CHANNEL_FR;
+        const FC: u32 = SPA_AUDIO_CHANNEL_FC;
+        const LFE: u32 = SPA_AUDIO_CHANNEL_LFE;
+        const RL: u32 = SPA_AUDIO_CHANNEL_RL;
+        const RR: u32 = SPA_AUDIO_CHANNEL_RR;
+        const RC: u32 = SPA_AUDIO_CHANNEL_RC;
+        const SL: u32 = SPA_AUDIO_CHANNEL_SL;
+        const SR: u32 = SPA_AUDIO_CHANNEL_SR;
+        // FFmpeg's default layouts, which the resampler mixes to.
+        let want: [&[u32]; 8] = [
+            &[SPA_AUDIO_CHANNEL_MONO],
+            &[FL, FR],
+            &[FL, FR, LFE],                     // 2.1
+            &[FL, FR, FC, RC],                  // 4.0
+            &[FL, FR, FC, RL, RR],              // 5.0(back)
+            &[FL, FR, FC, LFE, RL, RR],         // 5.1(back)
+            &[FL, FR, FC, LFE, RC, SL, SR],     // 6.1
+            &[FL, FR, FC, LFE, RL, RR, SL, SR], // 7.1
+        ];
+        for (n, want) in (1..).zip(want) {
+            let p = positions(n);
+            assert_eq!(&p[..n as usize], want, "{n} channels");
+            assert!(p[n as usize..].iter().all(|&c| c == SPA_AUDIO_CHANNEL_UNKNOWN), "{n} channels");
+        }
     }
 }
