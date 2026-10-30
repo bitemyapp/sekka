@@ -70,14 +70,15 @@ let
     with its vendored and patched RustyPipe in vendor/rustypipe.
 
     Sekka (https://github.com/bitemyapp/sekka) builds it with Uta's own
-    nix/package.nix, RustyPipe enabled, by Sekka's recipe nix/uta.nix: against
-    Aizome's widget kit and Sukumo from Sekka's desktop/aizome, at the Sekka
-    revision this system was built from. Uta's Cargo.lock names, with
-    checksums, the crates.io sources it compiles.
+    nix/package.nix, RustyPipe enabled, against Aizome's widget kit and
+    Sukumo from Sekka's desktop/aizome. The recipe is nix/uta.nix in Sekka's
+    repository. On a system Sekka installed, the sekka input in
+    /etc/nixos/flake.lock names the Sekka revision the system was built from.
+    Uta's Cargo.lock names, with checksums, the crates.io sources it compiles.
 
     Sekka's binary cache, https://cache.sekka.computer, publishes those
-    sources with each Uta build it serves; from that Sekka revision,
-    `nix build .#uta.source` collects them.
+    sources, the recipe included, with each Uta build it serves; from that
+    Sekka revision, `nix build .#uta.source` collects them.
   '';
 in
 package.overrideAttrs (old: {

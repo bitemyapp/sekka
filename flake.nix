@@ -22,7 +22,8 @@
   # Aizome's kit from this checkout (nix/uta.nix), not the Aizome its own
   # lock names. Pinned by revision, so the nightly's input update doesn't
   # move it: a Uta that needs a different Aizome would fail the nightly's
-  # checks and hold back every other input.
+  # checks and hold back every other input. Re-pin as DEVELOPERS.md (Aizome)
+  # describes: from a sekka branch of bitemyapp/uta, never its main.
   inputs.uta = {
     url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
     flake = false;
@@ -380,7 +381,12 @@
             # The GPL-3.0-only build's notices and directions to its source,
             # and the source push-cache publishes beside it.
             doc=${uta}/share/doc/aizome-uta
-            test -s "$doc/LICENSE-RustyPipe" && test -s "$doc/LICENSE-EJS"
+            for notice in LICENSE-RustyPipe LICENSE-EJS; do
+              if [[ ! -s $doc/$notice ]]; then
+                echo "$doc/$notice is missing or empty" >&2
+                exit 1
+              fi
+            done
             grep -qF "github:bitemyapp/uta/${inputs.uta.rev or "(not a Git revision)"}" "$doc/SOURCE"
             test -f ${uta.source}/uta/vendor/rustypipe/LICENSE
             test -f ${uta.source}/aizome/crates/aizome-kit/Cargo.toml

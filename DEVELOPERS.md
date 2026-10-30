@@ -1132,33 +1132,42 @@ workflow's and the nightly's first step, by `nix flake check` and by
 `push-cache`, so a broken Uta stops publication for that push to `main` and
 holds `nightly`, with every other input update, until it is fixed. Build
 `.#uta` before merging a kit or Sukumo change. When it fails, re-pin Uta in the
-same pull request:
+same pull request.
 
-1. In a scratch directory, put a checkout of bitemyapp/uta at `uta/` and this
-   worktree's `desktop/aizome` at `aizome/` beside it (a symlink works), which
-   is the layout Uta's path dependency `../aizome/crates/aizome-kit` and its
-   `nix/package.nix` expect.
+Re-pin from a `sekka` branch of bitemyapp/uta, never from its `main`. Uta's
+own flake builds against Aizome's former repository with the same
+`Cargo.lock`, and a lock regenerated against the kit here need not build
+there. The first time, create `sekka` from the revision `flake.nix` pins.
+
+1. In a scratch directory, put a checkout of bitemyapp/uta's `sekka` branch at
+   `uta/` and this worktree's `desktop/aizome` at `aizome/` beside it (a
+   symlink works), which is the layout Uta's path dependency
+   `../aizome/crates/aizome-kit` and its `nix/package.nix` expect.
 2. In `uta/`, inside this worktree's `nix develop .#aizome` shell, run
    `cargo update --workspace`, which adds what the kit and Sukumo now need
    and leaves the other locked versions alone, check that
    `cargo build --locked` works, and commit and push `Cargo.lock` (with any
-   source change Uta needs) to bitemyapp/uta. Cargo applies only the
-   `[patch]` sections of the workspace it builds, Uta's: a patch the kit or
-   Sukumo relies on in `desktop/aizome/Cargo.toml` must be repeated in Uta's
+   source change Uta needs) to `sekka`. Cargo applies only the `[patch]`
+   sections of the workspace it builds, Uta's: a patch the kit or Sukumo
+   relies on in `desktop/aizome/Cargo.toml` must be repeated in Uta's
    `Cargo.toml`.
-3. Put the new revision in `inputs.uta.url` in `flake.nix`, run
+3. Put the new `sekka` revision in `inputs.uta.url` in `flake.nix`, run
    `nix flake update uta`, update the pin in `docs/applications.md`, and build
    `.#uta`, `.#checks.x86_64-linux.uta-rustypipe` and
    `.#checks.x86_64-linux.uta-installation`.
 
-The same holds for moving to a new Uta revision: its lock must match the kit
-and Sukumo here, so run step 2 against this worktree before pinning it.
+To move to a newer Uta, merge its revision into `sekka` and run steps 2 and 3.
+Sekka's lock reaches Uta's `main` only together with a change to Uta's flake
+that builds it against the same kit, made and built in Uta.
 
 With RustyPipe, Uta's build is GPL-3.0-only. `share/doc/aizome-uta` holds
 RustyPipe's and EJS's notices and a `SOURCE` note naming Uta's repository,
-revision and narHash, and Sekka's recipe. `uta.source` links the exact sources
-it was built from: the pinned Uta source (with its vendored, patched
-RustyPipe), the kit and Sukumo fileset from `nix/uta.nix`, and that recipe.
+revision and narHash, and where Sekka's recipe lives. The note leaves out
+Sekka's own revision, which would rebuild Uta on every Sekka commit; it points
+to the `sekka` input of an installed system's `/etc/nixos/flake.lock`
+instead. `uta.source` links the exact sources it was built from: the pinned
+Uta source (with its vendored, patched RustyPipe), the kit and Sukumo fileset
+from `nix/uta.nix`, and that recipe.
 `push-cache` publishes `uta.source` beside `uta`, so the cache that serves the
 binary also serves its source; the crates.io sources are named, by checksum, in
 Uta's `Cargo.lock`. `checks.x86_64-linux.uta-rustypipe` runs

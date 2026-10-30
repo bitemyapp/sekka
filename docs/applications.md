@@ -93,11 +93,12 @@ with the kit and Sukumo from `desktop/aizome` rather than the
 Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
 revision, so the nightly's input update doesn't move it: a Uta built for a
 different Aizome would fail the nightly's checks and hold back every other
-input. To move it, put the new revision in `flake.nix`, run `nix flake lock`
-and build `.#uta`; DEVELOPERS.md describes re-pinning when a kit or Sukumo
-change needs a new Uta `Cargo.lock`. RustyPipe handles public browsing and
-anonymous or Premium playback; ytmusicapi and yt-dlp from the applications'
-Nixpkgs handle account operations and playback fallback.
+input. New pins come from a `sekka` branch of bitemyapp/uta whose
+`Cargo.lock` matches the kit and Sukumo here, so Uta's own flake on its
+`main` is unaffected; DEVELOPERS.md describes moving the pin and re-pinning
+when a kit or Sukumo change needs a new Uta `Cargo.lock`. RustyPipe handles
+public browsing and anonymous or Premium playback; ytmusicapi and yt-dlp from
+the applications' Nixpkgs handle account operations and playback fallback.
 Uta's windows are Wayland only, so it runs in every Sekka desktop but Xfce,
 whose session is X11. Connecting an account saves its session in the desktop
 keyring, which every Sekka desktop runs.
@@ -116,9 +117,10 @@ Optional downloads still require the corresponding source and notices when
 distributing binaries; excluding the package from an ISO does not waive those
 requirements. See [GPLv3 section 6](https://www.gnu.org/licenses/gpl-3.0.html#section6).
 The package's `share/doc/aizome-uta/SOURCE` names Uta's repository and
-revision and Sekka's recipe, `nix/uta.nix`. Sekka's binary cache publishes the
-exact sources beside every Uta build it serves: the Uta pin with its vendored
-RustyPipe, the Aizome kit and Sukumo it was built with, and that recipe
+revision and Sekka's recipe, `nix/uta.nix`, and points to the `sekka` input of
+`/etc/nixos/flake.lock` for the Sekka revision. Sekka's binary cache publishes
+the exact sources beside every Uta build it serves: the Uta pin with its
+vendored RustyPipe, the Aizome kit and Sukumo it was built with, and that recipe
 (`nix build .#uta.source` collects them). Uta's `Cargo.lock` names its
 crates.io sources by checksum.
 
