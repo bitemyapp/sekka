@@ -155,7 +155,8 @@ palette. Search filters the sidebar and highlights options.
   Bluetooth keyboard without keys of its own appears (at login, or plugged
   in), the shell offers this setup in a notification, once a session, or
   to have it type as the others do; a laptop's own keyboard and a VM's
-  aren't asked about.
+  aren't asked about. The notification's **Set Up…** opens the sheet with
+  that keyboard chosen (`--keyboard "Name (vendor:product)"`).
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
   typing, scroll speed.

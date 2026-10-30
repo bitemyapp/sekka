@@ -159,7 +159,9 @@ pub enum Msg {
     KeysOf(usize),
     /// The keyboard shown has keys of its own no longer.
     Forget,
-    SetupOpen,
+    /// Open the setup sheet, with the keyboard a launch named
+    /// (`--keyboard`) chosen while no key has come.
+    SetupOpen(Option<String>),
     /// Wait `n`'s key and the keyboard it came from, none if given up.
     SetupCaught(u64, Result<Option<(u32, Option<KeyboardInfo>)>, String>),
     /// A key on the sample's keyboard (the sample has no compositor).
@@ -399,7 +401,7 @@ impl Keyboard {
             );
         }
         // `keyboard.setup` is this button, which opens the setup sheet.
-        whose = whose.push(button("Set Up…").on_press(Msg::SetupOpen).id(vcx.entry_name("setup")));
+        whose = whose.push(button("Set Up…").on_press(Msg::SetupOpen(None)).id(vcx.entry_name("setup")));
         let whose_help = match shown {
             0 if profiles.is_empty() => {
                 "Set up a keyboard to give it keys of its own: press the key beside its space bar, \
@@ -967,9 +969,26 @@ impl Pane for Keyboard {
 
     fn focus_entry(&mut self, entry: &str, cx: &mut PaneCx<Msg>) {
         self.tab = if entry.starts_with("shortcut") || entry == "commands" { Tab::Shortcuts } else { Tab::Typing };
-        // `keyboard.setup`: what the shell opens for a keyboard plugged in.
-        if entry == "setup" && self.setup.is_none() {
-            cx.send(Msg::SetupOpen);
+        // `keyboard.setup`: what the shell opens for a keyboard plugged in,
+        // with `--keyboard` naming it.
+        if entry != "setup" {
+            return;
+        }
+        let asked = cx.keyboard_named().map(str::to_owned);
+        match &mut self.setup {
+            None => cx.send(Msg::SetupOpen(asked)),
+            // Open already, for another keyboard: this one is chosen, once
+            // it's listed.
+            Some(st) if asked.is_some() => {
+                st.asked = asked;
+                if cx.sample() {
+                    let unset = std::mem::take(&mut st.unset);
+                    st.set_unset(unset);
+                } else {
+                    cx.spawn(|| Msg::SetupKeyboards(setup::attached()));
+                }
+            }
+            Some(_) => {}
         }
     }
 
@@ -1075,23 +1094,22 @@ impl Pane for Keyboard {
                 cx.change(|s| s.input.keyboards.retain(|k| !k.matches(&name, &id)));
                 cx.say(format!("{name} types as other keyboards do"));
             }
-            Msg::SetupOpen => {
+            Msg::SetupOpen(asked) => {
                 // The keyboards not set up, for one that has no key to press.
-                let unset = if cx.sample() {
-                    setup::not_set_up(cx.settings(), &setup::sample_keyboards())
+                let mut st = Setup { asked, ..Default::default() };
+                if cx.sample() {
+                    st.set_unset(setup::not_set_up(cx.settings(), &setup::sample_keyboards()));
                 } else {
                     cx.spawn(|| Msg::SetupKeyboards(setup::attached()));
-                    Vec::new()
-                };
-                self.setup = Some(Setup { unset, ..Default::default() });
+                }
+                self.setup = Some(st);
                 cx.open_sheet();
                 self.wait_for_key(cx);
             }
             Msg::SetupKeyboards(attached) => {
                 let unset = setup::not_set_up(cx.settings(), &attached);
                 if let Some(st) = &mut self.setup {
-                    st.unset = unset;
-                    st.chosen = 0;
+                    st.set_unset(unset);
                 }
             }
             Msg::SetupChoose(i) => {

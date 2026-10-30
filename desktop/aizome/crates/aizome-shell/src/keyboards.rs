@@ -29,7 +29,9 @@ impl Shell {
             body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
             ..Default::default()
         };
-        let setup = Action::Settings { pane: "keyboard.setup".into(), anchor: None };
+        // Settei's sheet opens with this keyboard chosen, should no key
+        // come from it.
+        let setup = Action::SetUpKeyboard { name: k.name.clone(), id: k.id.clone() };
         let same = Action::KeyboardAsOthers { name: k.name.clone(), id: k.id.clone() };
         self.shell_note(
             n,

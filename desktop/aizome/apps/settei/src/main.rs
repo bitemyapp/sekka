@@ -2,13 +2,15 @@
 use settei::app::{Settei, Start};
 use settei::instance::{self, Instance};
 
-const HELP: &str = "Usage: aizome-settei [--pane ID] [--sample]
+const HELP: &str = "Usage: aizome-settei [--pane ID] [--keyboard NAME] [--sample]
        aizome-settei --list-settings [--json]
 
 Settei (設定), Aizome's Settings. Changes apply at once.
 
   --pane ID          open a pane (keyboard), or an option in one
                      (keyboard.caps-lock)
+  --keyboard NAME    with --pane keyboard.setup: the keyboard to choose in the
+                     setup sheet, 'Name (vendor:product)' or either alone
   --list-settings    print every pane and option; with --json, as JSON for
                      the command palette (id, pane, title, path, keywords)
   --sample           show a sample computer instead of this one: nothing it

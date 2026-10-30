@@ -40,6 +40,8 @@ pub struct Shared {
     pub launched: Vec<Vec<String>>,
     /// Times the compositor was asked to reload, for tests.
     pub reloads: u32,
+    /// The keyboard a launch named (`--keyboard`), while its pane opens.
+    pub keyboard: Option<String>,
 }
 
 impl Shared {
@@ -60,6 +62,7 @@ impl Shared {
             writer: None,
             launched: Vec::new(),
             reloads: 0,
+            keyboard: None,
         }
     }
 

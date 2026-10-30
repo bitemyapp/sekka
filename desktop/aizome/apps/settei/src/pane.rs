@@ -604,6 +604,12 @@ impl<'a, 'c, Msg: Clone + Send + Sync + 'static> PaneCx<'a, 'c, Msg> {
         self.shared.sample
     }
 
+    /// The keyboard the launch opening this pane named (`--keyboard`):
+    /// for the keyboard pane's setup sheet, in [`Pane::focus_entry`].
+    pub fn keyboard_named(&self) -> Option<&str> {
+        self.shared.keyboard.as_deref()
+    }
+
     /// A wake for `aizome-sys` services the pane keeps: each change the
     /// service sees views the window again.
     pub fn wake(&mut self) -> Wake {

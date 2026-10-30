@@ -104,7 +104,8 @@ fn keyboards_plugged_in_are_offered_their_setup_once() {
     assert!(n.buttons().any(|(_, l)| l == "Set Up…"));
     assert_eq!(
         h.program().note_actions.get(&(id, "set-up".to_owned())),
-        Some(&Action::Settings { pane: "keyboard.setup".into(), anchor: None })
+        Some(&Action::SetUpKeyboard { name: "Apple Inc. Magic Keyboard".into(), id: "05ac:029c".into() }),
+        "Settei opens with this one chosen"
     );
 
     let count = h.program().notes.list.len();

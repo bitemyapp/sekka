@@ -246,3 +246,47 @@ fn a_keyboard_with_no_space_bar_types_as_the_others_without_a_key() {
     assert_eq!(saved.input.keyboards.len(), 2, "{:?}", saved.input.keyboards);
     assert_eq!(saved.input.keyboard_profile(MAC, "05ac:029c").map(|k| k.options.clone()), Some(None));
 }
+
+#[test]
+fn a_sheet_opened_for_one_keyboard_chooses_it() {
+    const RECEIVER: &str = "Logitech USB Receiver";
+    let args: Vec<String> =
+        ["--pane", "keyboard.setup", "--keyboard", "Logitech USB Receiver (046d:c548)"].map(str::to_owned).into();
+    let start = Start::from_args(&args);
+    assert_eq!(start.keyboard.as_deref(), Some("Logitech USB Receiver (046d:c548)"));
+    assert_eq!(Start { keyboard: None, ..start.clone() }, Start::parse("keyboard.setup"));
+
+    // From the shell's "Set up Logitech USB Receiver?": chosen, though the
+    // Mac comes first.
+    let dir = common::temp_dir("setup-asked");
+    let path = dir.join("settings.toml");
+    std::fs::write(&path, "[input.keyboard]\noptions = \"\"\n").unwrap();
+    let mut h = Harness::new(Settei::sample(path.clone(), start));
+    let s = h.program().sheet_window().expect("the setup sheet");
+    assert_eq!(shown_in(&h, s, "setup-keyboard").as_deref(), Some(RECEIVER));
+    assert!(h.click_text(s, "Same as Other Keyboards"));
+    h.program().shared.flush();
+    let saved = Settings::load_from(&path).unwrap();
+    assert_eq!(saved.input.keyboard_profile(RECEIVER, "046d:c548").map(|k| k.options.clone()), Some(None));
+    assert!(saved.input.keyboard_profile(MAC, "05ac:029c").is_none(), "the Mac isn't set up");
+
+    // The sheet open already, with the Mac chosen: a second launch, for
+    // the receiver, chooses it there.
+    let (mut h, _) = sample("setup-asked-again", "[input.keyboard]\noptions = \"\"\n", "keyboard.setup");
+    let s = h.program().sheet_window().expect("the setup sheet");
+    assert_eq!(shown_in(&h, s, "setup-keyboard").as_deref(), Some(MAC), "the first");
+    h.send(settei::AppMsg::Launched(args));
+    assert_eq!(h.program().sheet_window(), Some(s), "the same sheet");
+    assert_eq!(shown_in(&h, s, "setup-keyboard").as_deref(), Some(RECEIVER));
+    // A plain Set Up… chooses the first again.
+    assert!(h.click_text(s, "Not Now"));
+    let w = h.window();
+    assert!(h.click_text(w, "Set Up…"));
+    let s = h.program().sheet_window().expect("the setup sheet");
+    assert_eq!(shown_in(&h, s, "setup-keyboard").as_deref(), Some(MAC));
+}
+
+/// What menu `id` in window `w` shows.
+fn shown_in(h: &Harness<Settei>, w: aizome_kit::WindowKey, id: &str) -> Option<String> {
+    h.inspected(w).into_iter().find(|v| v["name"] == id).and_then(|v| v["value"].as_str().map(str::to_owned))
+}

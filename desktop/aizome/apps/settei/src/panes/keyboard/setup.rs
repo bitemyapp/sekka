@@ -132,6 +132,28 @@ pub struct Setup {
     /// while no key has come.
     pub unset: Vec<KeyboardInfo>,
     pub chosen: usize,
+    /// The keyboard the sheet was opened for (`--keyboard`, from the
+    /// shell's "Set up …?"), chosen once it's among `unset`.
+    pub asked: Option<String>,
+}
+
+impl Setup {
+    /// The keyboards not set up, `unset`: the one asked about chosen, if
+    /// it's one of them, or the first.
+    pub fn set_unset(&mut self, unset: Vec<KeyboardInfo>) {
+        let asked = self.asked.as_deref();
+        self.chosen = asked.and_then(|a| unset.iter().position(|k| asks_for(a, k))).unwrap_or(0);
+        self.unset = unset;
+    }
+}
+
+/// Whether `asked` (`--keyboard`) is keyboard `k`: “Name (vendor:product)”,
+/// as the shell's "Set up …?" gives it, or its vendor:product or name alone.
+pub fn asks_for(asked: &str, k: &KeyboardInfo) -> bool {
+    let both = asked.strip_suffix(')').and_then(|a| a.rsplit_once(" ("));
+    both.is_some_and(|(name, id)| k.name == name && k.id.eq_ignore_ascii_case(id))
+        || k.id.eq_ignore_ascii_case(asked)
+        || k.name == asked
 }
 
 /// The tag of wait `n`.
@@ -215,5 +237,21 @@ mod tests {
         attached.push(builtin);
         let names: Vec<_> = not_set_up(&s, &attached).into_iter().map(|k| k.name).collect();
         assert_eq!(names, ["Apple Inc. Magic Keyboard", "Logitech USB Receiver"]);
+    }
+
+    #[test]
+    fn the_keyboard_asked_about_is_chosen() {
+        let mut st = Setup::default();
+        st.set_unset(sample_keyboards());
+        assert_eq!(st.chosen, 0, "none asked about: the first");
+        for asked in ["Logitech USB Receiver (046D:C548)", "046d:c548", "Logitech USB Receiver"] {
+            st.asked = Some(asked.into());
+            st.set_unset(sample_keyboards());
+            assert_eq!(st.unset[st.chosen].name, "Logitech USB Receiver", "{asked}");
+        }
+        // Another of that name, or one set up since: the first.
+        st.asked = Some("Logitech USB Receiver (046d:c52b)".into());
+        st.set_unset(sample_keyboards());
+        assert_eq!(st.chosen, 0);
     }
 }

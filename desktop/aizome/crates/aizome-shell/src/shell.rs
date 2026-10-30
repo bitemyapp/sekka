@@ -859,6 +859,10 @@ impl Shell {
                 self.focus_app_window(crate::launch::SETTEI);
                 self.launch(crate::launch::settings(&pane, anchor.as_deref()), cx);
             }
+            Action::SetUpKeyboard { name, id } => {
+                self.focus_app_window(crate::launch::SETTEI);
+                self.launch(crate::launch::keyboard_setup(&name, &id), cx);
+            }
             Action::Copy { text } => cx.set_clipboard_text(&text),
             Action::StatusMenuItem { key, id } => self.status_menu_item(&key, id),
             Action::NewDesk => {
@@ -2087,6 +2091,16 @@ mod tests {
                 .values()
                 .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("keyboard.caps")) })
         );
+    }
+
+    #[test]
+    fn setting_up_a_keyboard_opens_settei_with_it_chosen() {
+        let (mut h, requests) = running_settings();
+        let (name, id) = ("Yubico YubiKey OTP+FIDO+CCID", "1050:0407");
+        h.send(Msg::Run(Action::SetUpKeyboard { name: name.into(), id: id.into() }));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 42 });
+        let want = crate::launch::keyboard_setup(name, id);
+        assert!(h.program().launches.values().any(|(launch, _)| *launch == want), "{:?}", h.program().launches);
     }
 
     #[test]
