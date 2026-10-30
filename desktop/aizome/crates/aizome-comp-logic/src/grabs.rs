@@ -167,7 +167,7 @@ pub fn start_move(
         moved: false,
     };
     if tab {
-        state.lg.m().interactive.drag = Some(TabDrag { win, target: None, slot: None });
+        state.lg.m().interactive.drag = Some(TabDrag { win, target: None, at: 0, slot: None });
     }
     state.az.cursor_override = Some(CursorIcon::Grabbing);
     state.set_logic_pointer_grab(grab, serial, PointerFocusMode::Clear);
@@ -229,8 +229,8 @@ impl PointerGrab<State> for MoveGrab {
                 // A click on a background tab shows it.
                 data.show_group_member(self.win);
             }
-            if let Some(TabDrag { target: Some(target), .. }) = drop {
-                data.stack(target, self.win);
+            if let Some(TabDrag { target: Some(target), at, .. }) = drop {
+                data.stack_at(target, self.win, Some(at));
             } else if self.moved {
                 // Dropped on another display: it joins the Desk there.
                 crate::actions::adopt_screen(data, self.win);
@@ -242,14 +242,19 @@ impl PointerGrab<State> for MoveGrab {
     }
 
     fn unset(&mut self, data: &mut State) {
-        data.lg.m().interactive.drag = None;
+        // A strip parted for it closes up.
+        if data.lg.m().interactive.drag.take().is_some_and(|d| d.slot.is_some()) {
+            data.az.queue_redraw_all();
+        }
         data.az.cursor_override = None;
     }
 
     forward_gestures!();
 }
 
-/// Which window's tabs a dragged tab hovers, and where it would go.
+/// Which window's tabs a dragged tab hovers, and which of them it would go
+/// before: the first whose middle is past the pointer, or after them all.
+/// Their strip parts there for it (the slot).
 fn update_drop_target(state: &mut State, win: WinId, pos: Point<f64, Logical>) {
     let dragged = state.lg.m().wm.group_members(win);
     let mut found = None;
@@ -257,14 +262,15 @@ fn update_drop_target(state: &mut State, win: WinId, pos: Point<f64, Logical>) {
         if dragged.contains(&id) {
             continue;
         }
-        let Some(l) = state.lg.r().decor_layout(&mut state.az.labels, id) else { continue };
+        // The tabs where they'd be without the drag, so parting them for
+        // it doesn't move where it goes.
+        let Some(l) = state.lg.r().decor_layout_unparted(&mut state.az.labels, id) else { continue };
         let strip = l.tabs.iter().fold(Rect::default(), |r, t| r.union(t.rect));
         // The strip, and a little beyond its end where the slot goes.
         let reach = Rect::new(strip.x, strip.y - 6, strip.w + 140, strip.h + 12);
         if reach.contains(pos.x, pos.y) {
-            let w = state.lg.r().decor_tab_rect(&mut state.az.labels, win).map(|r| r.w).unwrap_or(100);
-            let slot = Rect::new(strip.right(), strip.y, w.min((l.frame.right() - strip.right()).max(48)), strip.h);
-            found = Some((l.win, slot));
+            let at = l.tabs.iter().position(|t| pos.x < t.rect.x as f64 + t.rect.w as f64 / 2.0);
+            found = Some((l.win, at.unwrap_or(l.tabs.len())));
             break;
         }
         // Windows above hide those below.
@@ -272,14 +278,40 @@ fn update_drop_target(state: &mut State, win: WinId, pos: Point<f64, Logical>) {
             break;
         }
     }
-    let before = state.lg.m().interactive.drag.as_ref().and_then(|d| d.slot);
-    if let Some(d) = &mut state.lg.m().interactive.drag {
-        d.target = found.map(|f| f.0);
-        d.slot = found.map(|f| f.1);
+    let Some(d) = state.lg.r().interactive.drag.as_ref() else { return };
+    let (old, old_slot) = ((d.target, d.at), d.slot);
+    let (target, at) = found.map_or((None, 0), |(t, at)| (Some(t), at));
+    // The tabs that part for it or close up after it, where they are now.
+    let mut moving = Vec::new();
+    if old != (target, at) {
+        for t in old.0.into_iter().chain(target) {
+            for m in state.lg.r().wm.group_members(t) {
+                if let Some(r) = state.lg.r().decor_tab_rect(&mut state.az.labels, m)
+                    && !moving.iter().any(|(n, _)| *n == m)
+                {
+                    moving.push((m, r));
+                }
+            }
+        }
     }
-    let after = found.map(|f| f.1);
-    if before != after {
-        for r in [before, after].into_iter().flatten() {
+    if let Some(d) = &mut state.lg.m().interactive.drag {
+        (d.target, d.at) = (target, at);
+    }
+    let slot = target.and_then(|t| state.lg.r().decor_layout(&mut state.az.labels, t)).and_then(|l| l.slot);
+    if let Some(d) = &mut state.lg.m().interactive.drag {
+        d.slot = slot;
+    }
+    // They slide there from where they show.
+    let ms = state.az.motion_ms();
+    for (m, r0) in moving {
+        if let Some(r1) = state.lg.r().decor_tab_rect(&mut state.az.labels, m) {
+            let anims = &mut state.lg.m().anims;
+            let (dx, dy) = anims.tab_offset(m);
+            anims.start_tab(m, (r0.x - r1.x) as f64 + dx, (r0.y - r1.y) as f64 + dy, ms);
+        }
+    }
+    if old_slot != slot {
+        for r in [old_slot, slot].into_iter().flatten() {
             state.az.queue_redraw_rect(r.grow(40));
         }
     }

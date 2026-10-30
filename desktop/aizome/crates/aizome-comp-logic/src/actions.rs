@@ -55,6 +55,8 @@ pub trait Actions {
     fn set_desk_parked(&mut self, desk: DeskId, park: bool) -> bool;
     fn emit_desks(&mut self);
     fn stack(&mut self, a: WinId, b: WinId) -> bool;
+    /// Stacks `b` before the `at`th of `a`'s tabs (`None`: after them).
+    fn stack_at(&mut self, a: WinId, b: WinId, at: Option<usize>) -> bool;
     fn unstack(&mut self, id: WinId, to: Option<(i32, i32)>) -> bool;
     fn show_group_member(&mut self, id: WinId);
     fn lower_window(&mut self, id: WinId);
@@ -368,6 +370,10 @@ impl Actions for State {
 
     /// Stacks `b` into `a`'s group, sliding its tab into place.
     fn stack(&mut self, a: WinId, b: WinId) -> bool {
+        self.stack_at(a, b, None)
+    }
+
+    fn stack_at(&mut self, a: WinId, b: WinId, at: Option<usize>) -> bool {
         let l = self.lg.m();
         let before: Vec<(WinId, Rect)> =
             l.wm.group_members(b)
@@ -375,7 +381,7 @@ impl Actions for State {
                 .filter_map(|m| l.decor_tab_rect(&mut self.az.labels, *m).map(|r| (*m, r)))
                 .collect();
         let old_b = l.wm.get(b).map(|w| w.rect);
-        let Some(changed) = l.wm.stack(a, b) else { return false };
+        let Some(changed) = l.wm.stack_at(a, b, at) else { return false };
         let rect = l.wm.get(a).map(|w| w.rect).unwrap_or_default();
         for m in &changed {
             self.request_size(*m, rect.w, rect.h);

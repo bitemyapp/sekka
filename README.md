@@ -44,9 +44,12 @@ Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
 choice. It is written from the compositor up in Rust, on its own native
 toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 
-- Every window wears a tab only as wide as its title. Drop one tab on another
-  and the windows stack into a group, from any apps; slide a tab along the
-  top edge with **Shift**.
+- Every window wears a tab only as wide as its title. A new window of the app
+  you're using opens as another tab on its window (Settings can turn this
+  off). Drop one tab among another window's and the windows stack into a
+  group, from any apps, the tab going where you dropped it; drag a group's
+  tab back in elsewhere to reorder it (**Alt**-drag for the one showing),
+  and slide a tab along the top edge with **Shift**.
 - One menu bar shows the focused app's menus. **Super + right-click**
   anywhere opens the whole menu at the pointer, and any menu tears off into
   a palette.
@@ -66,8 +69,10 @@ toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban
 (Calculator), Tenki (Weather), Tansu (Disks), Kura (Disk Usage), Myaku
-(Activity), Shashin (Images) and Koe (Dictation). Aizome is new and its
-hardware coverage is limited. See [its README](desktop/aizome/README.md)
+(Activity), Nisshi (Logs), Shashin (Images) and Koe (Dictation). Nisshi reads
+the system's journal and /var/log, suggests filters from what wrote each
+message, and asks for an administrator's password only to read what you
+can't. Aizome is new and its hardware coverage is limited. See [its README](desktop/aizome/README.md)
 for what is done and what isn't.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
