@@ -29,6 +29,10 @@
 //! - `clean [--older-than-days n]` deletes old system generations and
 //!   collects garbage.
 //!
+//! While a specialisation runs, `change` and `rollback` switch to the same
+//! specialisation of the new generation when it can take over without a
+//! restart. The generation's main entry stays the default boot entry.
+//!
 //! Each generation's configuration is kept: a copy of the configuration's
 //! directory in [`SAVED`]`/generation-<n>`. So going back to a generation
 //! brings back the choices that made it, and the next change builds on
@@ -553,10 +557,11 @@ fn build(setup: &Setup) -> Result<String> {
     build_flake(setup, &host)
 }
 
-/// Make a built system the current generation and start it (`switch`) or
-/// make it the one the next start uses (`boot`), as nixos-rebuild does:
-/// inside the independent system operation, with persistent output files.
-fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
+/// Make a built system the current generation and start its `entry`, itself
+/// or one of its specialisations (`switch`), or make it the one the next
+/// start uses (`boot`), as nixos-rebuild does: inside the independent
+/// system operation, with persistent output files.
+fn activate(setup: &Setup, system: &str, entry: &Path, mode: &str) -> Result<()> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--set", system]);
     run(set, "Setting the system profile")?;
@@ -564,7 +569,7 @@ fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
     if let Some(generation) = current_generation() {
         let _ = save_configuration(setup, generation, true);
     }
-    switch(&format!("{system}/bin/switch-to-configuration"), mode)
+    switch_to(Path::new(system), entry, mode)
 }
 
 type Entries = std::collections::BTreeMap<String, Option<PathBuf>>;
@@ -623,12 +628,26 @@ fn refresh_launchers(before: &Path, after: &Path) {
     }
 }
 
-fn switch(program: &str, mode: &str) -> Result<()> {
+/// Run a system's own switch-to-configuration. For `switch` and `boot` it
+/// also makes that system the bootloader's default.
+fn switch(system: &Path, mode: &str) -> Result<()> {
     // The entire helper already runs in a system service with persistent logs.
     // Never reconnect this process to the GUI's file descriptors.
-    let mut c = command(program);
+    let mut c = command(&system.join("bin/switch-to-configuration").to_string_lossy());
     c.arg(mode);
     run(c, "Switching to the new system")
+}
+
+/// Start `entry` of `generation`. A specialisation starts without becoming
+/// the default (`test`), after the generation's boot menu is installed with
+/// its main entry as the default, as `nixos-rebuild boot` then `nixos-rebuild
+/// test --specialisation` leave it.
+fn switch_to(generation: &Path, entry: &Path, mode: &str) -> Result<()> {
+    if entry == generation {
+        return switch(generation, mode);
+    }
+    switch(generation, "boot")?;
+    switch(entry, "test")
 }
 
 fn activation_mode(requested: &str, reasons: &[String]) -> Result<&'static str> {
@@ -960,14 +979,19 @@ fn change(args: &[String]) -> Result<String> {
         stage_done(3);
         Ok(system)
     };
-    let (system, reasons, mode) = match attempt().and_then(|system| {
+    let (system, entry, reasons, mode) = match attempt().and_then(|system| {
         let active = std::fs::canonicalize("/run/current-system")?;
         let booted =
             std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
-        let reasons = completion::plan(&booted, &active, Path::new(&system));
+        // A running specialisation continues live in the new generation;
+        // anything prepared for the next start is its main entry.
+        let (entry, reasons) = match change.mode.as_str() {
+            "boot" => (PathBuf::from(&system), completion::plan(&booted, &active, Path::new(&system))),
+            _ => completion::plan_entry(Path::new(completion::PROFILES), &booted, &active, Path::new(&system)),
+        };
         let mode = activation_mode(&change.mode, &reasons)?;
         commit()?;
-        Ok((system, reasons, mode))
+        Ok((system, entry, reasons, mode))
     }) {
         Ok(prepared) => prepared,
         Err(e) => {
@@ -976,22 +1000,22 @@ fn change(args: &[String]) -> Result<String> {
         }
     };
     let mut receipt =
-        Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
+        Receipt { system: entry.clone(), boot_id: completion::boot_id(), state: "activating".into(), reasons };
     save_update(&receipt)?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
     // Only for refreshing the launcher afterwards, which never fails an update.
     let before = std::fs::canonicalize("/run/current-system").ok();
-    activate(&setup, &system, mode)?;
-    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
+    activate(&setup, &system, &entry, mode)?;
+    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&entry) {
         return Err(Failure("Activation returned without making the built system current".into()));
     }
     receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
     save_update(&receipt)?;
     if let (Some(before), "switch") = (&before, mode) {
-        refresh_launchers(before, Path::new(&system));
+        refresh_launchers(before, &entry);
     }
     stage_done(4);
-    Ok(serde_json::json!({"ok": true, "system": system, "mode": mode, "completion": completion::read_system()})
+    Ok(serde_json::json!({"ok": true, "system": entry, "mode": mode, "completion": completion::read_system()})
         .to_string())
 }
 
@@ -1017,10 +1041,10 @@ fn rollback(args: &[String]) -> Result<String> {
         return Err(Failure(format!("There is no generation {generation}")));
     }
     let setup = Setup::detect();
-    let target = std::fs::canonicalize(format!("{PROFILE}-{generation}-link"))?;
     let active = std::fs::canonicalize("/run/current-system")?;
     let booted = std::fs::canonicalize("/run/booted-system")?;
-    let reasons = completion::plan(&booted, &active, &target);
+    let chosen = std::fs::canonicalize(format!("{PROFILE}-{generation}-link"))?;
+    let (target, reasons) = completion::plan_entry(Path::new(completion::PROFILES), &booted, &active, &chosen);
     let mode = activation_mode("auto", &reasons)?;
     let running = current_generation();
     if let Some(current) = running {
@@ -1031,12 +1055,7 @@ fn rollback(args: &[String]) -> Result<String> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
     run(set, "Choosing the generation")?;
-    let mut receipt = Receipt {
-        system: std::fs::canonicalize(PROFILE)?,
-        boot_id: completion::boot_id(),
-        state: "activating".into(),
-        reasons,
-    };
+    let mut receipt = Receipt { system: target, boot_id: completion::boot_id(), state: "activating".into(), reasons };
     save_update(&receipt)?;
     // The configuration follows the system, so the next change builds on
     // what this generation was made from.
@@ -1049,7 +1068,7 @@ fn rollback(args: &[String]) -> Result<String> {
             report(1, &format!("{} was changed by hand since, so it was left as it is", file.display()));
         }
     }
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
+    switch_to(&chosen, &receipt.system, mode)?;
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
@@ -1104,7 +1123,7 @@ fn clean(args: &[String]) -> Result<String> {
     // The boot menu lists only generations that still exist.
     stage(3, "Updating the boot menu");
     commit()?;
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
+    switch(Path::new(PROFILE), "boot")?;
     stage_done(3);
     let freed = text.lines().rev().find(|l| l.contains("freed")).unwrap_or("").trim().to_owned();
     Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
