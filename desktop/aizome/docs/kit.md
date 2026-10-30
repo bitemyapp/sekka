@@ -486,7 +486,12 @@ The budget is 4 ms from an event to its frame drawn, at 2880 × 1800 (scale 2).
 
 - An event is handled by the widget under the pointer (or the focused one)
   and its parents; hover, press and focus changes invalidate only the
-  widget's own rectangle and call no view.
+  widget's own rectangle and call no view. A widget that takes only drags
+  (`Widget::drags_only`, the shell's `drawn(..).drags_only()`, such as the
+  Deskbar's resize edge over its rows) shows its cursor and hover, and
+  takes a left press. If no drag comes of the press, the press and its
+  release go to what's under it, as a click; other buttons, the wheel and
+  drops go there directly.
 - A message runs `update`, then `view` for each window, then layout, then
   the diff: only rectangles of nodes that moved, resized or draw
   differently are invalidated, and painting skips every node outside the

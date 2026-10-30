@@ -86,9 +86,22 @@ impl Shell {
         (name, glyph, hue)
     }
 
-    /// The Deskbar's face width, as `[deskbar] width` asks (in range).
+    /// The Deskbar's face width, as `[deskbar] width` asks (in range, and
+    /// within its share of the main display: the setting stays as it is, so
+    /// a wider display gives it back).
     pub fn deskbar_width(&self) -> f64 {
-        crate::deskbar::clamp_width(self.deskbar_cfg.width)
+        crate::deskbar::fit_width(self.deskbar_cfg.width, self.deskbar_most())
+    }
+
+    /// The widest the Deskbar is on the main display.
+    pub fn deskbar_most(&self) -> f64 {
+        crate::deskbar::most_width(self.primary().map_or(f64::INFINITY, |s| s.output.frame.width()))
+    }
+
+    /// The width an edge drag under way would give the Deskbar, shown over
+    /// it until the drag ends.
+    pub fn deskbar_preview_width(&self) -> Option<f64> {
+        self.deskbar_preview.map(|(_, w)| w)
     }
 
     /// The width the bar's systray header keeps: the full Deskbar's when it
@@ -232,6 +245,7 @@ impl Shell {
             cx.close_window(k);
             self.surfaces.remove(&k);
             self.deskbar_size = None;
+            self.end_deskbar_resize(cx);
             self.deskbar_visibility.inside = false;
             self.deskbar_visibility.dragging = None;
             self.deskbar_visibility.native_drag = None;
@@ -245,6 +259,7 @@ impl Shell {
                 self.surfaces.remove(&k);
                 self.deskbar = None;
                 self.deskbar_size = None;
+                self.end_deskbar_resize(cx);
                 self.deskbar_visibility.inside = false;
                 self.deskbar_visibility.menu = None;
                 self.deskbar_visibility.dragging = None;
@@ -449,10 +464,10 @@ impl Shell {
             }
             DeskbarMsg::Grip(_) => {}
             DeskbarMsg::Edge(phase) => {
-                // By how far the pointer has gone since the press: while the
-                // button's held, the compositor reports the pointer from where
-                // the surface was at the press, and a Deskbar at the right
-                // moves away from there as it widens.
+                // By how far the pointer has gone since the press, in the
+                // surface's coordinates, which hold still: the Deskbar keeps
+                // its size until it's let go, and the width shows over it
+                // meanwhile.
                 let p = match phase {
                     DragPhase::Start(p) => {
                         self.deskbar_resize = Some((self.deskbar_width(), p.x));
@@ -465,17 +480,23 @@ impl Shell {
                     DeskbarSide::Left => from + (p.x - x),
                     DeskbarSide::Right => from - (p.x - x),
                 };
-                // Live while dragging; saved when let go.
-                self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                let w = crate::deskbar::fit_width(w, self.deskbar_most());
+                // Shown while dragging; taken, and saved, when let go. The
+                // Deskbar's size, and so the windows beside it, change once.
                 if matches!(phase, DragPhase::End(_)) {
-                    self.deskbar_resize = None;
-                    self.run(Action::PlaceDeskbar { side: None, width: Some(w) }, cx);
+                    self.end_deskbar_resize(cx);
+                    if w != from {
+                        self.run(Action::PlaceDeskbar { side: None, width: Some(w) }, cx);
+                    }
+                } else {
+                    self.preview_deskbar_width(w, cx);
                 }
             }
             DeskbarMsg::PlaceMenu(at) => {
                 let Some(k) = self.deskbar else { return };
                 let side = self.deskbar_cfg.side;
                 let width = self.deskbar_width();
+                let most = self.deskbar_most();
                 let place = |s| Action::PlaceDeskbar { side: Some(s), width: None };
                 let size = |w| Action::PlaceDeskbar { side: None, width: Some(w) };
                 let mut entries = vec![
@@ -483,13 +504,65 @@ impl Shell {
                     Entry::action("At the Right", place(DeskbarSide::Right)).checked(side == DeskbarSide::Right),
                     Entry::separator(),
                 ];
+                // Sizes wider than the main display has room for are off.
                 for (label, w) in aizome_config::DESKBAR_SIZES {
-                    entries.push(Entry::action(label, size(w)).checked(width == w));
+                    entries.push(Entry::action(label, size(w)).checked(width == w).enabled(w <= most));
                 }
                 let menu = ShellMenu::new("Deskbar".to_owned(), entries);
                 let style = self.deskbar_menu_style();
                 self.show_menu(k, at_point(at), &menu, style, cx);
             }
+        }
+    }
+
+    /// Shows the width an edge drag would give the Deskbar, on a surface of
+    /// its own over it (at the same edge, as wide as the Deskbar can be),
+    /// which takes no input: the pointer stays the Deskbar's.
+    fn preview_deskbar_width(&mut self, w: f64, cx: &mut Cx<Msg>) {
+        if let Some((_, shown)) = &mut self.deskbar_preview {
+            *shown = w;
+            return;
+        }
+        let Some(screen) = self.primary() else { return };
+        let output = screen.output.id;
+        let width = crate::deskbar::most_width(screen.output.frame.width()) + crate::deskbar::SHADOW;
+        let height = (screen.output.frame.height() - crate::menubar::HEIGHT).max(1.0);
+        let side = match self.deskbar_cfg.side {
+            DeskbarSide::Right => Anchors::RIGHT,
+            DeskbarSide::Left => Anchors::LEFT,
+        };
+        // Not "aizome-deskbar": the compositor fits windows beside that
+        // one alone, and this one reserves nothing.
+        let opts = LayerOptions::new(Layer::Overlay, "aizome-deskbar-preview")
+            .anchors(Anchors::TOP | side)
+            .exclusive_zone(-1)
+            .margins(Margins::new(crate::menubar::HEIGHT as i32, 0, 0, 0))
+            .keyboard(KeyboardInteractivity::None)
+            .output(output);
+        let k = cx.open_window(layer(opts, width, height, "Deskbar width"));
+        cx.set_input_region(k, Some(Vec::new()));
+        self.surfaces.insert(k, Surface::DeskbarPreview);
+        self.deskbar_preview = Some((k, w));
+    }
+
+    /// The edge drag over (let go, or the Deskbar went): its preview goes.
+    pub(crate) fn end_deskbar_resize(&mut self, cx: &mut Cx<Msg>) {
+        self.deskbar_resize = None;
+        if let Some((k, _)) = self.deskbar_preview.take() {
+            cx.close_window(k);
+            self.surfaces.remove(&k);
+        }
+    }
+
+    /// The preview's view: the Deskbar at the width the drag would give it.
+    pub fn deskbar_preview_view(&self) -> aizome_kit::element::Element<Msg> {
+        match self.deskbar_preview {
+            Some((_, w)) => {
+                let mut m = self.deskbar_model();
+                m.width = w;
+                crate::deskbar::preview(&m)
+            }
+            None => aizome_kit::space(0.0),
         }
     }
 
@@ -605,5 +678,52 @@ mod tests {
         assert!(s.is_folded("firefox", 3, false));
         assert!(!s.is_folded("firefox", 3, true));
         assert!(!s.is_folded("foot", 2, false));
+    }
+
+    #[test]
+    fn a_click_on_a_window_row_under_the_edge_focuses_it() {
+        use aizome_kit::sidestep_ui::PointerButton;
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(crate::shell::Options::default()));
+        let (ipc, requests) = crate::ipc::Ipc::recording();
+        h.program_mut().ipc = ipc;
+        h.set_outputs(vec![aizome_kit::Output {
+            id: 1,
+            name: "eDP-1".into(),
+            connector: Some("eDP-1".into()),
+            frame: Rect::new(0.0, 0.0, 1440.0, 900.0),
+            scale: 1.0,
+            integer_scale: 1,
+            ..Default::default()
+        }]);
+        h.program_mut().wm.reset(crate::wm::Snapshot {
+            windows: vec![
+                aizome_ipc::WindowInfo {
+                    id: 7,
+                    app_id: "foot".into(),
+                    title: "cargo test".into(),
+                    ..Default::default()
+                },
+                aizome_ipc::WindowInfo { id: 8, app_id: "foot".into(), title: "htop".into(), ..Default::default() },
+            ],
+            focused: Some(8),
+            ..Default::default()
+        });
+        h.send(Msg::Nothing);
+        let db = h.program().deskbar.expect("the Deskbar");
+        h.resize(db, crate::deskbar::size(&h.program().deskbar_model()));
+        let row = h.find(db, "cargo test").expect("the window's row");
+        // The Deskbar stands at the right: its inner edge is over the rows'
+        // first 5pt, after the shadow.
+        let at = Point::new(crate::deskbar::SHADOW + 2.0, row.center().y);
+        h.click(db, at);
+        let sent: Vec<Request> = requests.try_iter().map(|(r, _)| r).collect();
+        assert!(sent.contains(&Request::Focus { id: 7 }), "{sent:?}");
+        // A drag from there is the edge's, not the row's.
+        h.press(db, at, PointerButton::Left, 1);
+        h.move_to(db, at - aizome_kit::layout::Vec2::new(40.0, 0.0));
+        h.release(db, at - aizome_kit::layout::Vec2::new(40.0, 0.0), PointerButton::Left);
+        assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH + 40.0);
+        let sent: Vec<Request> = requests.try_iter().map(|(r, _)| r).collect();
+        assert!(!sent.iter().any(|r| matches!(r, Request::Focus { .. })), "{sent:?}");
     }
 }

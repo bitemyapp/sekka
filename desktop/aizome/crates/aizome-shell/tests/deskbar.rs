@@ -405,13 +405,22 @@ fn the_deskbar_moves_to_the_left_and_widens() {
 
 #[test]
 fn deskbar_widths_stay_in_range() {
-    use aizome_shell::deskbar::{Density, MAX_WIDTH, RAIL_WIDTH, SLIM_WIDTH, WIDTH, clamp_width, density};
+    use aizome_shell::deskbar::{
+        Density, MAX_WIDTH, RAIL_WIDTH, SLIM_WIDTH, WIDTH, clamp_width, density, fit_width, most_width,
+    };
     assert_eq!(clamp_width(60.0), RAIL_WIDTH, "narrow snaps to the Rail");
     assert_eq!(clamp_width(100.0), SLIM_WIDTH, "past half way, Slim");
     assert_eq!((density(48.0), density(150.0), density(232.0)), (Density::Rail, Density::Slim, Density::Full));
     assert_eq!(clamp_width(9000.0), MAX_WIDTH);
     assert_eq!(clamp_width(301.4), 301.0);
     assert_eq!(clamp_width(f64::NAN), WIDTH);
+    // Within a narrow display's share, and the Rail when not even Slim fits.
+    assert_eq!((most_width(1440.0), most_width(800.0), most_width(f64::NAN)), (MAX_WIDTH, 360.0, MAX_WIDTH));
+    assert_eq!(fit_width(400.0, most_width(800.0)), 360.0);
+    assert_eq!(fit_width(232.0, most_width(800.0)), 232.0);
+    assert_eq!(fit_width(48.0, most_width(800.0)), RAIL_WIDTH);
+    assert_eq!(fit_width(150.0, 100.0), RAIL_WIDTH);
+    assert_eq!(fit_width(150.0, 130.0), 130.0);
 }
 
 /// Moves the Deskbar to the left, as Settei would.
@@ -425,26 +434,154 @@ fn to_the_left(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>,
 
 #[test]
 fn the_edge_follows_the_pointer_from_where_it_was_pressed() {
+    use aizome_kit::platform::LayerChange;
     use aizome_shell::widgets::drawn::DragPhase::{End, Move, Start};
     let edge = |phase| Msg::Deskbar(DeskbarMsg::Edge(phase));
-    // While the button's held, the compositor reports the pointer from
-    // where the surface was at the press: a Deskbar at the right widens
-    // away from there, and only how far the pointer went counts.
+    let sizes = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        h.platform.layer_changes.iter().filter(|(_, c)| matches!(c, LayerChange::Size(_))).count()
+    };
+    let width = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        h.platform.layer_changes.iter().rev().find_map(|(_, c)| match c {
+            LayerChange::Size(s) => Some(s.width),
+            _ => None,
+        })
+    };
+    // Only how far the pointer went from the press counts: the compositor
+    // reports it from where the surface was then.
     let mut h = scene(false);
+    let resized = sizes(&h);
     h.send(edge(Start(Point::new(5.0, 100.0))));
     for dx in [20.0, 44.0, 66.0, 88.0] {
         h.send(edge(Move(Point::new(5.0 - dx, 100.0))));
-        assert_eq!(h.program().deskbar_model().width, 232.0 + dx, "{dx} left of the press");
+        assert_eq!(h.program().deskbar_preview_width(), Some(232.0 + dx), "{dx} left of the press");
+        // The Deskbar keeps its size while the button's held, so the
+        // compositor doesn't fit the windows beside it at every step.
+        assert_eq!(h.program().deskbar_model().width, 232.0, "{dx}: the Deskbar waits for the release");
+        assert_eq!(sizes(&h), resized, "{dx}: no layer resize during the drag");
     }
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar width"), "the width shows over it");
     h.send(edge(End(Point::new(5.0 - 88.0, 100.0))));
     assert_eq!(h.program().settings.deskbar_settings().width, 320.0, "saved where it was let go");
+    assert_eq!(h.program().deskbar_model().width, 320.0);
+    assert_eq!(h.program().deskbar_preview_width(), None);
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar width"), "the preview goes");
+    assert_eq!(sizes(&h), resized + 1, "one resize, when let go");
+    assert_eq!(width(&h), Some(320.0 + aizome_shell::deskbar::SHADOW));
+
+    // Out and back without letting go: nothing changes, nothing's saved.
+    let resized = sizes(&h);
+    h.send(edge(Start(Point::new(5.0, 100.0))));
+    h.send(edge(Move(Point::new(-75.0, 100.0))));
+    h.send(edge(Move(Point::new(5.0, 100.0))));
+    h.send(edge(End(Point::new(5.0, 100.0))));
+    assert_eq!(sizes(&h), resized, "an edge dragged out and back resizes nothing");
+    assert_eq!(h.program().settings.deskbar_settings().width, 320.0);
 
     // At the left the surface stays put, and the edge follows the same way.
     to_the_left(&mut h, false);
     h.send(edge(Start(Point::new(318.0, 100.0))));
     h.send(edge(Move(Point::new(258.0, 100.0))));
+    assert_eq!(h.program().deskbar_preview_width(), Some(260.0));
     h.send(edge(End(Point::new(238.0, 100.0))));
     assert_eq!(h.program().settings.deskbar_settings().width, 240.0);
+}
+
+#[test]
+fn an_edge_drag_ends_with_the_deskbar() {
+    use aizome_shell::actions::Action;
+    use aizome_shell::widgets::drawn::DragPhase::{Move, Start};
+    let mut h = scene(false);
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Start(Point::new(5.0, 100.0)))));
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-40.0, 100.0)))));
+    assert!(h.program().deskbar_preview_width().is_some());
+    // Folded away mid-drag: its release can't come, and the preview goes.
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(true)));
+    assert_eq!(h.program().deskbar_preview_width(), None);
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar width"));
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(false)));
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-80.0, 100.0)))));
+    assert_eq!(h.program().deskbar_preview_width(), None, "the old drag is over");
+    assert_eq!(h.program().settings.deskbar_settings().width, 232.0);
+}
+
+#[test]
+fn a_narrow_display_keeps_the_deskbar_beside_the_windows() {
+    use aizome_shell::deskbar::{MAX_WIDTH, SHADOW};
+    use aizome_shell::widgets::drawn::DragPhase::{End, Move, Start};
+    let mut h = scene(false);
+    let mut d = h.program().settings.deskbar_settings();
+    d.width = MAX_WIDTH;
+    h.program_mut().settings.set_shell_section("deskbar", &d);
+    h.send(Msg::SettingsChanged);
+    assert_eq!(h.program().deskbar_width(), MAX_WIDTH, "room for it on the 1440pt display");
+    // An 800pt display (1600 × 900 at 2×): 45% of it, so the Deskbar and
+    // its shadow stand in one half and the compositor still sets filled
+    // windows beside it.
+    let mut narrow = output();
+    narrow.frame.x1 = 800.0;
+    h.set_outputs(vec![narrow]);
+    let m = h.program().deskbar_model();
+    assert_eq!(m.width, 360.0);
+    assert!(aizome_shell::deskbar::size(&m).width < 400.0, "{m:?}");
+    assert_eq!(h.program().settings.deskbar_settings().width, MAX_WIDTH, "the setting stays");
+    // An edge drag can't take it past that either.
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Start(Point::new(5.0, 100.0)))));
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(Move(Point::new(-200.0, 100.0)))));
+    assert_eq!(h.program().deskbar_preview_width(), Some(360.0));
+    h.send(Msg::Deskbar(DeskbarMsg::Edge(End(Point::new(-200.0, 100.0)))));
+    assert_eq!(h.program().settings.deskbar_settings().width, MAX_WIDTH, "nothing to save: it was as wide");
+    assert_eq!(h.program().deskbar_width() + SHADOW, 363.0);
+    // Back on the wide display, its width comes back.
+    h.set_outputs(vec![output()]);
+    assert_eq!(h.program().deskbar_width(), MAX_WIDTH);
+}
+
+#[test]
+fn a_click_on_the_inner_edge_is_the_rows() {
+    use aizome_kit::sidestep_ui::PointerButton;
+    use aizome_shell::deskbar::SHADOW;
+    let mut h = scene(false);
+    // Firefox's windows start folded; its count, at the row's right end,
+    // unfolds them. At the left, that end is under the inner edge.
+    to_the_left(&mut h, false);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    assert!(!h.texts(db).iter().any(|t| t == "docs.rs"), "folded: {:?}", h.texts(db));
+    let firefox = h.find(db, "Firefox").expect("Firefox's row");
+    let width = h.program().deskbar_width();
+    let at = Point::new(width - 2.0, firefox.center().y);
+    h.click(db, at);
+    assert!(h.texts(db).iter().any(|t| t == "docs.rs"), "the click reached the count: {:?}", h.texts(db));
+    // A drag from the same place resizes, and the row doesn't take it.
+    h.press(db, at, PointerButton::Left, 1);
+    h.move_to(db, at + Vec2::new(30.0, 0.0));
+    assert_eq!(h.program().deskbar_preview_width(), Some(width + 30.0));
+    h.release(db, at + Vec2::new(30.0, 0.0), PointerButton::Left);
+    assert_eq!(h.program().settings.deskbar_settings().width, width + 30.0);
+    assert!(h.texts(db).iter().any(|t| t == "docs.rs"), "still unfolded");
+
+    // At the right, the edge is over the rows' left end: a right-click
+    // there opens the app's menu, and the wheel scrolls the list.
+    let mut h = scene(false);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    let foot = h.find(db, "Foot").expect("Foot's row");
+    let at = Point::new(SHADOW + 2.0, foot.center().y);
+    assert!(h.popups(db).is_empty());
+    h.press(db, at, PointerButton::Right, 1);
+    h.release(db, at, PointerButton::Right);
+    assert_eq!(h.popups(db).len(), 1, "the app's menu, from under the edge");
+
+    let mut h = scene(false);
+    with_mail_and_shelf(&mut h);
+    let mut small = output();
+    small.frame.y1 = 240.0;
+    h.set_outputs(vec![small]);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    assert!(h.find(db, "Drop to park").is_none(), "the fixture overflows");
+    h.scroll(db, Point::new(SHADOW + 2.0, 100.0), Vec2::new(0.0, 2000.0));
+    assert!(h.find(db, "Drop to park").is_some(), "the wheel over the edge scrolls the rows");
 }
 
 #[test]

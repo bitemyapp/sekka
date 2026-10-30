@@ -146,6 +146,8 @@ pub enum Surface {
         output: u32,
     },
     Deskbar,
+    /// The width an edge drag would give the Deskbar, over it.
+    DeskbarPreview,
     Palette,
     Panel,
     Osd,
@@ -321,6 +323,8 @@ pub struct Shell {
     /// An edge drag under way: the width at the press, and the pointer's x
     /// then.
     pub(crate) deskbar_resize: Option<(f64, f64)>,
+    /// The surface showing the width that drag would give, and the width.
+    pub(crate) deskbar_preview: Option<(WindowKey, f64)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -452,6 +456,7 @@ impl Shell {
             deskbar_output: None,
             deskbar_side: aizome_config::DeskbarSide::Right,
             deskbar_resize: None,
+            deskbar_preview: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -1627,6 +1632,7 @@ impl Program for Shell {
             }
             Some(Surface::Desktop { output }) => self.desktop_view(*output),
             Some(Surface::Deskbar) => crate::deskbar::view(&self.deskbar_model()).map(Msg::Deskbar),
+            Some(Surface::DeskbarPreview) => self.deskbar_preview_view(),
             Some(Surface::Palette) => match self.palette_in(window) {
                 Some(p) => {
                     let inner = crate::palette::view::view(&self.palette_view_of(p), p.scroll)
@@ -1707,6 +1713,11 @@ impl Program for Shell {
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // An edge drag on it can't end now.
+                self.end_deskbar_resize(cx);
+            }
+            if s == Surface::DeskbarPreview {
+                self.deskbar_preview = None;
             }
         }
         true

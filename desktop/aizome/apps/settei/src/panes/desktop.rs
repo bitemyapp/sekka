@@ -108,6 +108,18 @@ impl Pane for Desktop {
             SettingEntry::new("auto-hide", "Automatically hide the Deskbar").keywords(&["auto hide", "dock", "apps"]),
             SettingEntry::new("pinned", "Apps kept in the Deskbar").keywords(&["pin", "favourites", "keep in deskbar"]),
             SettingEntry::new("shelf", "Show the Shelf").keywords(&["drag", "park", "shelf"]),
+            SettingEntry::new("deskbar-side", "Where the Deskbar stands")
+                .keywords(&["deskbar", "left", "right", "side", "edge", "move"]),
+            SettingEntry::new("deskbar-width", "Deskbar width").keywords(&[
+                "size",
+                "slim",
+                "icons only",
+                "narrow",
+                "standard",
+                "wide",
+                "wider",
+                "compact",
+            ]),
             SettingEntry::new("desktop-icons", "Icons on the desktop").keywords(&["home", "disks", "trash"]),
             SettingEntry::new("stack-new", "Stack new windows of the same app").keywords(&["tabs", "tab groups"]),
             SettingEntry::new("double-click", "Double-click a tab").keywords(&[

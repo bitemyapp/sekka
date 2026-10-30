@@ -63,6 +63,7 @@ pub fn drawn<Msg>(
             press: None,
             drag: None,
             drag_local: false,
+            drags_only: false,
             hover: false,
             cursor: None,
             label: None,
@@ -134,6 +135,15 @@ impl<Msg: Clone + Send + 'static> Drawn<Msg> {
     pub fn on_drag_local(mut self, f: impl Fn(DragPhase) -> Msg + 'static) -> Self {
         self.w.drag = Some(MsgMap::new(f));
         self.w.drag_local = true;
+        self
+    }
+
+    /// Takes only its drags (an edge to resize by, over rows): a press that
+    /// doesn't become one is a click on what's under it, and the other
+    /// buttons, the wheel and drops go there too. Use it with
+    /// [`on_drag`](Self::on_drag) and no click handlers.
+    pub fn drags_only(mut self) -> Self {
+        self.w.drags_only = true;
         self
     }
 
@@ -231,6 +241,8 @@ struct DrawnWidget {
     press: Option<MsgMap<Press>>,
     drag: Option<MsgMap<DragPhase>>,
     drag_local: bool,
+    /// Takes only its drags: a click comes to what's under it.
+    drags_only: bool,
     hover: bool,
     cursor: Option<Cursor>,
     label: Option<String>,
@@ -310,6 +322,10 @@ impl Widget for DrawnWidget {
 
     fn hover_paints(&self) -> bool {
         self.hover
+    }
+
+    fn drags_only(&self) -> bool {
+        self.drags_only
     }
 
     fn overflow(&self) -> f64 {
@@ -392,6 +408,11 @@ impl Widget for DrawnWidget {
                     cx.release_pointer();
                 }
                 cx.invalidate();
+                if !s.dragging && self.drags_only {
+                    // No drag came of it: the press was a click on what's
+                    // under it, which gets it now.
+                    return Status::Ignored;
+                }
                 if s.dragging {
                     if let Some(d) = &self.drag {
                         cx.emit_map(d, DragPhase::End(*pos + drag_origin));

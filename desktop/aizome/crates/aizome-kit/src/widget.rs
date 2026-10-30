@@ -243,6 +243,15 @@ pub trait Widget: 'static {
         self.hit()
     }
 
+    /// Whether it takes only drags with the left button (an edge to resize
+    /// by, over rows that take clicks). A left press that ends without a
+    /// drag reaches what's under it as a click, once released. Other
+    /// buttons, the wheel and drops go straight there. It still shows its
+    /// cursor and hover.
+    fn drags_only(&self) -> bool {
+        false
+    }
+
     /// Whether hovering it changes how it draws.
     fn hover_paints(&self) -> bool {
         self.hit()

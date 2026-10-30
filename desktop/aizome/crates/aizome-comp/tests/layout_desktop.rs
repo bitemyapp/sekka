@@ -47,9 +47,10 @@ fn real_deskbar_autohides_after_leaving_its_app_rows() {
 }
 
 /// The real shell's Deskbar edge, dragged out 90pt at either side, makes
-/// it 90pt wider. While the button's held, the compositor reports the
-/// pointer from where the surface was at the press, which a Deskbar at the
-/// right moves away from as it widens.
+/// it 90pt wider. The Deskbar keeps its size while the button's held (an
+/// outline shows the width on a surface of its own), so the windows beside
+/// it are fitted once, when it's let go: a drag out and back leaves them as
+/// they were.
 #[test]
 #[ignore = "requires AIZOME_LAYOUT_TEST_SHELL pointing at the shell under test"]
 fn real_deskbar_edge_resizes_at_either_side() {
@@ -63,23 +64,52 @@ fn real_deskbar_edge_resizes_at_either_side() {
                 .is_some_and(|s| s["surfaces"].as_array().is_some_and(|ss| ss.iter().any(|v| v == "Deskbar")))
         });
         c.settle();
+        // A free window that fits beside the Deskbar as it is, and not
+        // beside one 90pt wider.
+        let _app = c.client(Spec::new("beside", 0x886644).size(1000, 600));
+        c.wait_window("beside");
+        c.settle();
+        let geometry = || c.window("beside").expect("the free window").geometry;
+        let before = geometry();
+        let button = |pressed| Synthetic::PointerButton { button: "left".into(), pressed };
+        let drag = |path: &[f64], y: f64, release: bool| {
+            c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: path[0], y }] });
+            c.settle();
+            c.ok(Request::Synthesize { events: vec![button(true)] });
+            for pair in path.windows(2) {
+                for i in 1..=30 {
+                    let x = pair[0] + (pair[1] - pair[0]) * f64::from(i) / 30.0;
+                    c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x, y }] });
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+            c.settle();
+            std::thread::sleep(Duration::from_millis(300));
+            c.settle();
+            if release {
+                c.ok(Request::Synthesize { events: vec![button(false)] });
+            }
+        };
         // On a 1280pt output, 2pt inside the 232pt face's inner edge, under
         // the grip.
         let y = 24.0 + 10.0 + 6.0;
-        let (from, to) = if side == "left" { (230.0, 320.0) } else { (1050.0, 960.0) };
-        let button = |pressed| Synthetic::PointerButton { button: "left".into(), pressed };
-        c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: from, y }] });
-        c.settle();
-        c.ok(Request::Synthesize { events: vec![button(true)] });
-        for i in 1..=30 {
-            let x = from + (to - from) * f64::from(i) / 30.0;
-            c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x, y }] });
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        c.settle();
+        let (from, to, out) = if side == "left" { (230.0, 320.0, 380.0) } else { (1050.0, 960.0, 900.0) };
+        drag(&[from, to], y, false);
+        assert_eq!(geometry(), before, "at the {side}: the windows wait for the release");
         c.ok(Request::Synthesize { events: vec![button(false)] });
         let saved = || std::fs::read_to_string(c.dir.join("config/aizome/settings.toml")).unwrap_or_default();
         wait("a new width saved", || saved().contains("width = ") && !saved().contains("width = 232.0"));
+        assert!(saved().contains("width = 322.0"), "at the {side}:\n{}", saved());
+        wait("the window fitted beside the wider Deskbar", || geometry() != before);
+        let fitted = geometry();
+        assert!(fitted.w < before.w, "at the {side}: {before:?} -> {fitted:?}");
+        // Out 60pt from the new edge and back before letting go: nothing
+        // changes, and the window keeps its size.
+        drag(&[to, out, to], y, true);
+        c.settle();
+        std::thread::sleep(Duration::from_millis(500));
+        c.settle();
+        assert_eq!(geometry(), fitted, "at the {side}: a drag out and back leaves the window alone");
         assert!(saved().contains("width = 322.0"), "at the {side}:\n{}", saved());
     }
 }

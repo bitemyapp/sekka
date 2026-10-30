@@ -123,6 +123,11 @@ pub(crate) struct Win {
     pub size: Size,
     pub hot: Option<NodeId>,
     pub active: Option<NodeId>,
+    /// A left press taken by what takes only drags
+    /// ([`drags_only`](crate::widget::Widget::drags_only)):
+    /// it, where, and how many clicks. What's under it gets the press if no
+    /// drag comes of it.
+    pub press_under: Option<(NodeId, Point, u32)>,
     pub focused: Option<NodeId>,
     /// Focus suspended by a modal, restored when that layer is uncovered.
     modal_focus: HashMap<Option<NodeId>, (Option<NodeId>, bool)>,
@@ -177,6 +182,7 @@ impl Win {
             size,
             hot: None,
             active: None,
+            press_under: None,
             focused: None,
             modal_focus: HashMap::new(),
             focus_modal: None,
@@ -1841,64 +1847,43 @@ impl Core {
                 self.close_win(m, platform);
             }
             self.update_hot(win, p, platform);
-            let Some(w) = self.wins.get(&win) else { return };
-            let path = w.tree.path_at(p, w.modal());
-            let Some(&last) = path.last() else { return };
-            // A click focuses what takes focus by clicking, else clears it.
-            // What takes the focus by a click: the nearest such around the
-            // pointer, unless a control (a button) is nearer, which leaves
-            // the focus where it is.
-            let mut target = None;
-            for &i in path.iter().rev() {
-                let wd = &w.tree.nodes[i].widget;
-                if matches!(wd.focusable(), Focusable::Click | Focusable::Pointer) {
-                    target = Some(i);
-                    break;
-                }
-                if wd.hit() {
-                    target = w.focused.and_then(|f| w.tree.get(f));
-                    break;
-                }
-            }
-            let focus = target.map(|i| w.tree.nodes[i].id);
-            let ev = Event::PointerDown { pos: p, button, clicks, mods };
-            let handled = self.bubble(win, last, &ev, platform);
-            if button == PointerButton::Left {
-                match focus {
-                    Some(f) => self.set_focus(win, Some(f), false, platform),
-                    None if handled.is_none_or(|h| {
-                        self.wins.get(&win).is_some_and(|w| w.tree.nodes[h].widget.focusable() == Focusable::No)
-                    }) =>
-                    {
-                        let keep = self.wins.get(&win).and_then(|w| w.focused).and_then(|f| {
-                            let w = self.wins.get(&win)?;
-                            let i = w.tree.get(f)?;
-                            path.contains(&i).then_some(())
-                        });
-                        if keep.is_none() {
-                            self.set_focus(win, None, false, platform);
-                        }
-                    }
-                    None => {}
-                }
-            }
-            if let Some(h) = handled
+            let Some(w) = self.wins.get_mut(&win) else { return };
+            w.press_under = None;
+            // Only a left press can start a drag of what takes only drags;
+            // the other buttons reach what's under it.
+            let path = if button == PointerButton::Left {
+                w.tree.path_at(p, w.modal())
+            } else {
+                w.tree.path_under(p, w.modal())
+            };
+            let handled = self.press(win, &path, p, button, clicks, platform);
+            // Kept for what's under it, should no drag come of it.
+            if button == PointerButton::Left
+                && let Some(h) = handled
                 && let Some(w) = self.wins.get_mut(&win)
+                && w.tree.nodes[h].widget.drags_only()
             {
-                // What took the press gets the release.
-                if w.active.is_none() {
-                    w.active = w.tree.nodes.get(h).map(|n| n.id);
-                }
-                let r = w.tree.nodes[h].own_rect();
-                if w.tree.nodes[h].widget.hover_paints() {
-                    platform.invalidate(win, r);
-                }
+                w.press_under = Some((w.tree.nodes[h].id, p, clicks));
             }
         } else {
             let Some(w) = self.wins.get_mut(&win) else { return };
             let active = w.active.take().and_then(|a| w.tree.get(a));
+            let under = w.press_under.take();
             let ev = Event::PointerUp { pos: p, button, mods };
             match active {
+                Some(i) if w.tree.nodes[i].widget.drags_only() => {
+                    if w.tree.nodes[i].widget.hover_paints() {
+                        platform.invalidate(win, w.tree.nodes[i].own_rect());
+                    }
+                    let id = w.tree.nodes[i].id;
+                    // Its own drag ending; else the press and this release
+                    // were a click on what's under it.
+                    if self.send(win, i, &ev, platform) == Status::Ignored
+                        && let Some((_, at, clicks)) = under.filter(|u| u.0 == id && button == PointerButton::Left)
+                    {
+                        self.click_under(win, at, p, clicks, platform);
+                    }
+                }
                 Some(i) => {
                     if w.tree.nodes[i].widget.hover_paints() {
                         platform.invalidate(win, w.tree.nodes[i].own_rect());
@@ -1917,6 +1902,92 @@ impl Core {
         self.stats.event(started.elapsed());
     }
 
+    /// A left press at `at` and its release at `p`, for what's under what
+    /// takes only drags: none came of the press it took.
+    fn click_under(&mut self, win: WinId, at: Point, p: Point, clicks: u32, platform: &mut dyn Platform) {
+        let mods = self.mods;
+        let Some(w) = self.wins.get(&win) else { return };
+        let path = w.tree.path_under(at, w.modal());
+        self.press(win, &path, at, PointerButton::Left, clicks, platform);
+        let Some(w) = self.wins.get_mut(&win) else { return };
+        let active = w.active.take().and_then(|a| w.tree.get(a));
+        let ev = Event::PointerUp { pos: p, button: PointerButton::Left, mods };
+        let target = active.or_else(|| w.tree.path_under(p, w.modal()).last().copied());
+        if let Some(i) = target {
+            if w.tree.nodes[i].widget.hover_paints() {
+                platform.invalidate(win, w.tree.nodes[i].own_rect());
+            }
+            self.bubble(win, i, &ev, platform);
+        }
+    }
+
+    /// A press at `p` to the deepest node of `path` (and its parents), the
+    /// focus it moves, and the node that gets the release: which took it.
+    fn press(
+        &mut self,
+        win: WinId,
+        path: &[usize],
+        p: Point,
+        button: PointerButton,
+        clicks: u32,
+        platform: &mut dyn Platform,
+    ) -> Option<usize> {
+        let mods = self.mods;
+        let w = self.wins.get(&win)?;
+        let &last = path.last()?;
+        // A click focuses what takes focus by clicking, else clears it.
+        // What takes the focus by a click: the nearest such around the
+        // pointer, unless a control (a button) is nearer, which leaves
+        // the focus where it is.
+        let mut target = None;
+        for &i in path.iter().rev() {
+            let wd = &w.tree.nodes[i].widget;
+            if matches!(wd.focusable(), Focusable::Click | Focusable::Pointer) {
+                target = Some(i);
+                break;
+            }
+            if wd.hit() {
+                target = w.focused.and_then(|f| w.tree.get(f));
+                break;
+            }
+        }
+        let focus = target.map(|i| w.tree.nodes[i].id);
+        let ev = Event::PointerDown { pos: p, button, clicks, mods };
+        let handled = self.bubble(win, last, &ev, platform);
+        if button == PointerButton::Left {
+            match focus {
+                Some(f) => self.set_focus(win, Some(f), false, platform),
+                None if handled.is_none_or(|h| {
+                    self.wins.get(&win).is_some_and(|w| w.tree.nodes[h].widget.focusable() == Focusable::No)
+                }) =>
+                {
+                    let keep = self.wins.get(&win).and_then(|w| w.focused).and_then(|f| {
+                        let w = self.wins.get(&win)?;
+                        let i = w.tree.get(f)?;
+                        path.contains(&i).then_some(())
+                    });
+                    if keep.is_none() {
+                        self.set_focus(win, None, false, platform);
+                    }
+                }
+                None => {}
+            }
+        }
+        if let Some(h) = handled
+            && let Some(w) = self.wins.get_mut(&win)
+        {
+            // What took the press gets the release.
+            if w.active.is_none() {
+                w.active = w.tree.nodes.get(h).map(|n| n.id);
+            }
+            let r = w.tree.nodes[h].own_rect();
+            if w.tree.nodes[h].widget.hover_paints() {
+                platform.invalidate(win, r);
+            }
+        }
+        handled
+    }
+
     pub fn scroll(
         &mut self,
         win: WinId,
@@ -1931,7 +2002,8 @@ impl Core {
         if w.tree.root.is_none() {
             return;
         }
-        let path = w.tree.path_at(p, w.modal());
+        // Past what takes only drags: the wheel is for what scrolls under it.
+        let path = w.tree.path_under(p, w.modal());
         if let Some(&last) = path.last() {
             let ev = Event::Scroll { pos: p, delta, phase, momentum, mods: self.mods };
             self.bubble(win, last, &ev, platform);
@@ -1946,7 +2018,7 @@ impl Core {
         if w.tree.root.is_none() {
             return;
         }
-        let path = w.tree.path_at(p, w.modal());
+        let path = w.tree.path_under(p, w.modal());
         if let Some(&last) = path.last() {
             let ev = Event::Pinch { pos: p, scale, phase, mods: self.mods };
             self.bubble(win, last, &ev, platform);
@@ -2184,7 +2256,7 @@ impl Core {
         if w.tree.root.is_none() {
             return false;
         }
-        let path = w.tree.path_at(p, w.modal());
+        let path = w.tree.path_under(p, w.modal());
         let Some(&last) = path.last() else { return false };
         let ev = Event::DragOver { pos: p, urls: urls.to_vec(), has_text };
         self.bubble(win, last, &ev, platform).is_some()
@@ -2207,7 +2279,7 @@ impl Core {
         if w.tree.root.is_none() {
             return false;
         }
-        let path = w.tree.path_at(p, w.modal());
+        let path = w.tree.path_under(p, w.modal());
         let Some(&last) = path.last() else { return false };
         let ev = Event::Drop { pos: p, urls, text };
         self.bubble(win, last, &ev, platform).is_some()

@@ -62,6 +62,29 @@ pub fn clamp_width(w: f64) -> f64 {
     let w = w.round();
     if w < (SLIM_WIDTH + RAIL_WIDTH) / 2.0 { RAIL_WIDTH } else { w.clamp(SLIM_WIDTH, MAX_WIDTH) }
 }
+
+/// The most of a screen's width the Deskbar takes. Windows filled or split
+/// beside it keep the rest, and the compositor sets them beside a Deskbar
+/// only while it stands in one half of the screen.
+pub const MAX_SHARE: f64 = 0.45;
+
+/// The widest the Deskbar is on a screen `screen` points wide: its share,
+/// in whole points, and never more than [`MAX_WIDTH`].
+pub fn most_width(screen: f64) -> f64 {
+    if screen.is_finite() && screen > 0.0 { (screen * MAX_SHARE).floor().min(MAX_WIDTH) } else { MAX_WIDTH }
+}
+
+/// [`clamp_width`], and no wider than `most` (a narrow screen's share):
+/// `most` itself when the width asked for is more, and the Rail when not
+/// even Slim fits.
+pub fn fit_width(w: f64, most: f64) -> f64 {
+    let w = clamp_width(w);
+    if w <= most {
+        return w;
+    }
+    let w = clamp_width(most);
+    if w <= most { w } else { RAIL_WIDTH }
+}
 const APP_ROW: f64 = 26.0;
 const WINDOW_ROW: f64 = 22.0;
 const CARD: f64 = 62.0;
@@ -473,7 +496,8 @@ fn grip(width: f64) -> Element<DeskbarMsg> {
 }
 
 /// The inner edge, a thin target over the rows: the resize cursor and the
-/// focus colour while the pointer's on it.
+/// focus colour while the pointer's on it. It takes only drags: a click
+/// there (any button, or the wheel) is the row's under it.
 fn edge(height: f64) -> Element<DeskbarMsg> {
     drawn(EDGE, height, ("edge", height.to_bits()), |cx| {
         if cx.is_hovered() {
@@ -483,6 +507,7 @@ fn edge(height: f64) -> Element<DeskbarMsg> {
         }
     })
     .on_drag(DeskbarMsg::Edge)
+    .drags_only()
     .cursor(aizome_kit::sidestep_ui::Cursor::EwResize)
     .text("Resize the Deskbar", SemanticRole::Button)
     .key("edge")
@@ -588,6 +613,28 @@ pub fn input_region(m: &DeskbarModel) -> Vec<Rect> {
 
 pub fn size(m: &DeskbarModel) -> Size {
     Size::new(m.width + SHADOW, m.height())
+}
+
+/// What an edge drag would make the Deskbar, `m` at the width it would
+/// take: its face outlined in the focus colour, against the same edge, on
+/// a surface of its own over it that takes no input. The Deskbar itself
+/// keeps its size until the drag ends, so the windows beside it are fitted
+/// once, not at every step.
+pub fn preview<Msg: 'static>(m: &DeskbarModel) -> Element<Msg> {
+    let (width, side) = (m.width, m.side);
+    let height = (m.height() - SHADOW).max(1.0);
+    drawn(0.0, 0.0, ("deskbar-preview", width.to_bits(), height.to_bits(), side), move |cx| {
+        let t = cx.theme();
+        let b = cx.bounds();
+        let x0 = match side {
+            DeskbarSide::Right => b.x1 - width,
+            DeskbarSide::Left => 0.0,
+        };
+        let face = Rect::new(x0, 0.0, x0 + width, height.min(b.y1));
+        cx.canvas.fill_rect(face, t.focus().with_alpha(0.16));
+        draw::border(cx.canvas, face, t.focus(), 2.0);
+    })
+    .into()
 }
 
 #[cfg(test)]
