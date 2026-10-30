@@ -684,6 +684,10 @@ details below the list.
   with a button that filters by it. **Around This Time** clears every
   filter and shows a minute either side; **Activity** opens Myaku on its
   process while it runs.
+- **Newest first**: the newest message is at the top, as the toolbar's
+  **Newest First** says and the Time column's arrow shows; either turns the
+  list round (**Oldest First**, the newest at the bottom), and Nisshi keeps
+  the choice in `$XDG_CONFIG_HOME/aizome/nisshi.toml`.
 - **Live**: new messages of the running boot come in as they're
   written, and the list follows the newest until a message is selected
   (the status line then counts what's new, and goes to it). The toolbar

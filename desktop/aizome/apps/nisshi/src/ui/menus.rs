@@ -65,9 +65,13 @@ pub fn menus(n: &Nisshi) -> MenuBar<Msg> {
             MenuItem::new(if n.details { "Hide Details" } else { "Show Details" }, Msg::ToggleDetails)
                 .shortcut(Shortcut::cmd('I')),
         )
-        .item(MenuItem::new("Newest at the Top", Msg::NewestFirst(!n.newest_first)).checked(n.newest_first))
+        .item(MenuItem::new("Newest First", Msg::NewestFirst(!n.newest_first)).checked(n.newest_first))
         .separator()
-        .item(MenuItem::new("Go to the Newest", Msg::JumpToNewest).shortcut(Shortcut::cmd_key(ShortcutKey::Down)));
+        .item(MenuItem::new("Go to the Newest", Msg::JumpToNewest).shortcut(Shortcut::cmd_key(if n.newest_first {
+            ShortcutKey::Up
+        } else {
+            ShortcutKey::Down
+        })));
     let live_possible = !n.in_file() && matches!(n.boot, Boot::Current | Boot::All);
     let names = crate::ui::view::boot_names(n);
     let count = names.len();

@@ -111,6 +111,20 @@ fn toolbar(n: &Nisshi) -> Element<Msg> {
             .tooltip("The least severe level shown")
             .into(),
     );
+    // Which end the newest message is at: said, not left to guess.
+    items.push(
+        button(if n.newest_first { "Newest First" } else { "Oldest First" })
+            .icon(if n.newest_first { Icon::ArrowDown } else { Icon::ArrowUp })
+            .toolbar()
+            .on_press(Msg::NewestFirst(!n.newest_first))
+            .tooltip(if n.newest_first {
+                "The newest message is at the top: press for the oldest first"
+            } else {
+                "The oldest message is at the top: press for the newest first"
+            })
+            .id("order")
+            .into(),
+    );
     if journal {
         items.push(
             button(if n.live_on && live_possible { "Live" } else { "Paused" })
@@ -355,7 +369,7 @@ fn status(n: &Nisshi) -> Element<Msg> {
                 button(words)
                     .compact()
                     .plain()
-                    .icon(Icon::ArrowDown)
+                    .icon(if n.newest_first { Icon::ArrowUp } else { Icon::ArrowDown })
                     .on_press(Msg::JumpToNewest)
                     .tooltip("Go to the newest message")
                     .id("newest")

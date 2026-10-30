@@ -67,7 +67,8 @@ pub fn view(n: &Nisshi) -> Element<Msg> {
     });
     let file = n.in_file();
     let columns = vec![
-        Column::new("Time").width(if file { 130.0 } else { 118.0 }).min_width(80.0),
+        // Sorted by time, the arrow saying which way; pressed, the other.
+        Column::new("Time").width(if file { 130.0 } else { 118.0 }).min_width(80.0).sortable(),
         Column::new("").width(24.0).min_width(24.0),
         Column::new("Source").width(150.0).min_width(70.0),
         Column::new("Message").width(600.0).min_width(160.0),
@@ -89,6 +90,8 @@ pub fn view(n: &Nisshi) -> Element<Msg> {
         .type_select(names)
         .context_menu(menus)
         .row_height(22.0)
+        .sorted(0, !n.newest_first)
+        .on_sort(|_, ascending| Msg::NewestFirst(!ascending))
         .width(Length::Fill)
         .height(Length::Fill)
         .id("messages");

@@ -212,7 +212,10 @@ pub struct Nisshi {
     pub following: bool,
     /// Messages that came while it didn't.
     pub unseen: usize,
+    /// The newest message at the top (the default), or the oldest.
     pub newest_first: bool,
+    /// Where the settings are kept: none in tests and pictures.
+    settings_path: Option<std::path::PathBuf>,
     pub details: bool,
     pub sidebar: bool,
     pub all_sources: bool,
@@ -233,7 +236,14 @@ impl Nisshi {
     pub fn live(request: Request) -> Nisshi {
         // SAFETY: getuid has no preconditions.
         let uid = unsafe { libc::getuid() };
-        Nisshi { live: true, ..Nisshi::empty(Clock::system(), uid, request) }
+        let path = crate::settings::default_path();
+        let settings = crate::settings::Settings::load(&path);
+        Nisshi {
+            live: true,
+            newest_first: settings.newest_first,
+            settings_path: Some(path),
+            ..Nisshi::empty(Clock::system(), uid, request)
+        }
     }
 
     fn empty(clock: Clock, uid: u32, request: Request) -> Nisshi {
@@ -267,7 +277,8 @@ impl Nisshi {
             live_on: true,
             following: true,
             unseen: 0,
-            newest_first: false,
+            newest_first: true,
+            settings_path: None,
             details: true,
             sidebar: true,
             all_sources: false,
@@ -1206,7 +1217,13 @@ impl Program for Nisshi {
             }
             Msg::ToggleDetails => self.details = !self.details,
             Msg::ToggleSidebar => self.sidebar = !self.sidebar,
-            Msg::NewestFirst(on) => self.newest_first = on,
+            Msg::NewestFirst(on) => {
+                // The view keeps to the newest, or to the message selected.
+                self.newest_first = on;
+                if let Some(path) = &self.settings_path {
+                    crate::settings::Settings { newest_first: on }.save(path);
+                }
+            }
             Msg::OpenActivity(pid) => {
                 if let Err(e) = std::process::Command::new("aizome-myaku").arg("--pid").arg(pid.to_string()).spawn() {
                     self.notice = Some((format!("Activity couldn't open: {e}"), true));

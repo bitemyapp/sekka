@@ -251,7 +251,10 @@ fn copying_and_exporting() {
     let copied = h.platform.clipboard.clone().unwrap();
     let lines: Vec<&str> = copied.lines().collect();
     assert_eq!(lines.len(), 2);
-    assert!(lines[0].starts_with("14:55:00.000 sudo[6754]: alice : TTY=pts/1"), "{copied}");
+    // The two at the top are the newest; copied, they read oldest first,
+    // as journal lines do.
+    assert!(lines[0].starts_with("14:55:30.000 sudo[6754]: pam_unix(sudo:session): session closed"), "{copied}");
+    assert!(lines[1].starts_with("14:56:00.000 sudo[6799]: alice : 3 incorrect password attempts"), "{copied}");
     let text = h.program().export_text(false);
     assert_eq!(text.lines().count(), 4);
     let json = h.program().export_text(true);
@@ -280,13 +283,31 @@ fn the_keyboard() {
 }
 
 #[test]
-fn newest_at_the_top() {
+fn newest_first_unless_asked_otherwise() {
     let mut h = start();
-    let newest = h.program().store.entries.last().unwrap().seq;
-    h.send(Msg::NewestFirst(true));
+    let w = h.window();
+    let entries = &h.program().store.entries;
+    let (oldest, newest) = (entries[0].seq, entries.last().unwrap().seq);
+    let last = h.program().view.rows.len() - 1;
+    // The newest at the top, kept in view, and said so.
+    assert!(h.program().newest_first);
+    assert_eq!(h.program().reveal(), Some(0));
+    assert!(h.texts(w).iter().any(|t| t == "Newest First"), "{:?}", h.texts(w));
     h.send(Msg::SelectRows(vec![0]));
     assert_eq!(h.program().selected, [newest]);
-    assert_eq!(h.program().selected_rows(), [0]);
+    // The Time column's header turns it round, as the toolbar does.
+    h.send(Msg::JumpToNewest);
+    let table = h.find_id(w, "messages").expect("the table");
+    h.click(w, aizome_kit::Point::new(table.x0 + 30.0, table.y0 + 8.0));
+    assert!(!h.program().newest_first);
+    assert_eq!(h.program().reveal(), Some(last), "the newest at the bottom, in view");
+    assert!(h.texts(w).iter().any(|t| t == "Oldest First"));
+    h.send(Msg::SelectRows(vec![0]));
+    assert_eq!(h.program().selected, [oldest]);
+    assert!(h.click_text(w, "Oldest First"));
+    assert!(h.program().newest_first);
+    // The selection stays the one shown.
+    assert_eq!(h.program().selected_rows(), [last]);
 }
 
 #[test]

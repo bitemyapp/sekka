@@ -24,6 +24,7 @@ pub mod model;
 pub mod protocol;
 pub mod query;
 pub mod search;
+pub mod settings;
 pub mod shape;
 pub mod suggest;
 pub mod time;

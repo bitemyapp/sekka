@@ -34,3 +34,4 @@ aho-corasick = "1"
 memchr = "2"
 jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
 libc = "0.2"
+toml.workspace = true
