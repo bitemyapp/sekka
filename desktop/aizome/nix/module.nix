@@ -3,9 +3,10 @@
 # screen, with what its shell and apps stand on: the portals, the services
 # behind Settings (NetworkManager, BlueZ, UPower, power profiles, UDisks2,
 # AccountsService, CUPS, geoclue), the lock screen's PAM service, the fonts,
-# and foot themed for Aizome. Everything session-specific is read only in
-# Aizome sessions (/etc/xdg/aizome, the `aizome` dconf profile), so other
-# desktops on the same machine keep their own look.
+# and foot themed for Aizome, opening fish where it's installed. Everything
+# session-specific is read only in Aizome sessions (/etc/xdg/aizome, the
+# `aizome` dconf profile), so other desktops on the same machine keep their
+# own look.
 { self }:
 {
   config,
@@ -343,6 +344,11 @@ in
         )
       );
       "xdg/aizome/foot/foot.ini".source = ../etc/foot/foot.ini;
+      # foot.ini's shell: fish where it's installed, else $SHELL.
+      "xdg/aizome/foot/start-shell" = {
+        source = ../etc/foot/start-shell;
+        mode = "0755";
+      };
       "xdg/aizome/xdg-desktop-portal-wlr/config".text = sharePickerConfig;
       # Aizome's apps open what they're for in Aizome sessions: the
       # desktop-specific list (XDG_CURRENT_DESKTOP=Aizome) is read before

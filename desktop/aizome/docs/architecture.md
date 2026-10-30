@@ -196,7 +196,8 @@ sunrise and sunset: the shell writes what GeoClue says).
   ext-image-copy-capture, for outputs and windows, chosen with
   `aizome-share-picker`); xdg-desktop-portal-gtk for the rest
   (`aizome-portals.conf`).
-- Terminal: foot. Shell: Sekka's fish (set up as Omarchy sets it up).
+- Terminal: foot. Shell: fish where it's installed (`etc/foot/start-shell`), else
+  `$SHELL`; on Sekka, its fish, set up as Omarchy sets it up.
 - The lock screen uses PAM service `aizome`.
 
 ## Repository layout

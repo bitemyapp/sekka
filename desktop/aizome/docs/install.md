@@ -71,9 +71,9 @@ Add Sekka's flake and its Aizome module to the system's flake:
 
 `programs.aizome.enable` brings everything Aizome stands on: the session
 entry, portals, NetworkManager, BlueZ, PipeWire, UPower, power profiles,
-UDisks2, AccountsService, CUPS, GeoClue, GNOME Keyring, polkit, fonts, foot,
-and fish as the terminal's shell. Keep (or enable) a display manager such as
-GDM: Aizome adds itself to its session list. Then
+UDisks2, AccountsService, CUPS, GeoClue, GNOME Keyring, polkit, fonts, and
+foot, which opens in fish where fish is installed. Keep (or enable) a display
+manager such as GDM: Aizome adds itself to its session list. Then
 `sudo nixos-rebuild boot --flake .#<host>`, reboot and choose Aizome.
 
 ## Anywhere else

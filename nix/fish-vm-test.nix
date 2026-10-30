@@ -52,6 +52,11 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     machine.wait_for_unit("multi-user.target")
 
+    # Bash stays everyone's login shell; Aizome's terminals start fish themselves.
+    for user in ("alice", "root"):
+        shell = machine.succeed(f"getent passwd {user} | cut -d: -f7").strip()
+        assert shell == "/run/current-system/sw/bin/bash", (user, shell)
+
     # The TTY login's bash handed over to fish.
     machine.wait_until_succeeds("pgrep -u alice -x fish", timeout=60)
     machine.fail("pgrep -u alice -x bash")

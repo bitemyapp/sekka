@@ -1899,10 +1899,23 @@ fish.
 nix build .#checks.x86_64-linux.fish --no-update-lock-file
 ```
 
-The check logs in on a disposable VM's console. It checks that bash handed
-over to fish, with Omarchy's settings, functions, fzf.fish bindings, zoxide,
-mise, eza and prompt, and that `cd` falls back to zoxide. `bash -c`, root's
-interactive bash, and bash started from fish stay in bash.
+The check logs in on a disposable VM's console. It checks that bash is the
+login shell of the person and of root, that the person's bash handed over to
+fish, with Omarchy's settings, functions, fzf.fish bindings, zoxide, mise, eza
+and prompt, and that `cd` falls back to zoxide. `bash -c`, root's interactive
+bash, and bash started from fish stay in bash.
+
+A terminal started from a shell inherits its `SHLVL`, so the hand-over skips
+it. Aizome's foot starts fish itself instead: Aizome's `foot.ini` sets
+`shell=/etc/xdg/aizome/foot/start-shell`, which starts fish where it's
+installed, else `$SHELL`, else `/bin/sh`. foot reads only the first `foot.ini`
+it finds, so a person's own `~/.config/foot/foot.ini` replaces Aizome's, shell
+included. foot then starts `$SHELL` (bash), and the hand-over applies. Adding
+that `shell=` line, or `include=/etc/xdg/aizome/foot/foot.ini`, keeps fish.
+The hand-over still covers the console, SSH, and other desktops' terminals.
+`aizome-checks.terminal-shortcuts` opens foot in an Aizome session with fish
+installed and checks that foot's shell is fish, then runs `start-shell`
+without fish on `PATH`.
 
 To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes

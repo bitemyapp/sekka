@@ -19,6 +19,9 @@ pkgs.testers.runNixOSTest {
       uid = 1000;
       password = "test-only";
     };
+    # As on Sekka: bash is the login shell, fish is installed, and foot
+    # starts fish (foot.ini's start-shell).
+    programs.fish.enable = true;
     services.greetd = {
       enable = true;
       settings.initial_session = {

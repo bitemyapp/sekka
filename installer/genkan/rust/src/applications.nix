@@ -210,7 +210,8 @@ in
     # Bash stays the login shell, and interactive bash hands over to fish as
     # Omarchy's omarchy-setup-fish has ~/.bashrc do: not for bash -c, shells
     # started from fish or nested shells. For people, not root, whose
-    # ~/.bashrc Omarchy leaves alone.
+    # ~/.bashrc Omarchy leaves alone. Aizome's terminals start fish
+    # themselves; this covers the console, SSH and other terminals.
     programs.bash.interactiveShellInit = lib.mkIf (has "fish") (
       lib.mkBefore ''
         if [[ $EUID -ne 0 && $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} && ''${SHLVL} == 1 ]]; then

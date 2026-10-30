@@ -1,0 +1,9 @@
+#!/bin/sh
+# The shell foot starts in Aizome sessions (foot.ini's shell=), installed as
+# /etc/xdg/aizome/foot/start-shell: fish where it's installed, else $SHELL,
+# else /bin/sh. Started directly, fish doesn't depend on /etc/bashrc handing
+# bash over, which skips a terminal started from a shell (it inherits SHLVL).
+if fish=$(command -v fish); then
+  exec "$fish" "$@"
+fi
+exec "${SHELL:-/bin/sh}" "$@"

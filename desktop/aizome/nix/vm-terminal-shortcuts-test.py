@@ -57,8 +57,30 @@ def focus(w):
     click(g["x"] + g["w"] / 2, g["y"] + g["h"] / 2)
 
 
+def fish_in_foot():
+    status, out = machine.execute("pgrep -u alice -x fish")
+    return status == 0 and out.split()
+
+
 machine.start()
 machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
+
+with subtest("foot starts fish, where it's installed, rather than bash"):
+    assert user("getent passwd alice | cut -d: -f7").strip().endswith("/bash")
+    chord("super+Return")
+    until("terminal", feet)
+    fish = until("fish in the terminal", fish_in_foot)
+    parent = machine.succeed(f"ps -o comm= -p $(ps -o ppid= -p {fish[0]})").strip()
+    assert parent == "foot", parent
+    # Without fish, start-shell starts $SHELL.
+    fallback = user(
+        "env PATH=/var/empty SHELL=/run/current-system/sw/bin/bash "
+        "/etc/xdg/aizome/foot/start-shell -c 'echo $BASH_VERSION'"
+    )
+    assert fallback.strip() != "", "start-shell without fish"
+    chord("super+q")
+    until("terminal closed", lambda: not feet())
+    machine.wait_until_fails("pgrep -u alice -x fish", timeout=20)
 
 with subtest("Close affects one terminal; Quit affects that terminal app"):
     chord("super+Return")
