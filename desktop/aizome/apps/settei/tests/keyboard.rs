@@ -207,3 +207,42 @@ fn setting_up_a_pc_keyboard_swaps_and_can_start_from_another() {
     let saved = Settings::load_from(&path).unwrap();
     assert_eq!(saved.input.keyboard_profile(MAC, "05ac:029c").map(|k| k.options.clone()), Some(None));
 }
+
+#[test]
+fn a_keyboard_with_no_space_bar_types_as_the_others_without_a_key() {
+    let (mut h, path) =
+        sample("setup-receiver", "[input.keyboard]\noptions = \"altwin:swap_alt_win\"\n", "keyboard.setup");
+    let s = h.program().sheet_window().expect("the setup sheet");
+    let texts = h.texts(s);
+    assert!(texts.iter().any(|t| t == "Waiting for the key…"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == MAC), "the keyboards not set up, the first chosen: {texts:?}");
+    // The mouse's receiver says it's a keyboard, with no space bar to
+    // press beside: chosen, it types as the others do, and is known.
+    choose_in(&mut h, s, "setup-keyboard", 1);
+    assert!(h.texts(s).iter().any(|t| t == "Logitech USB Receiver"), "{:?}", h.texts(s));
+    h.save_png(s, common::shots_dir().join("keyboard-setup-receiver.png"), 1.0);
+    assert!(h.click_text(s, "Same as Other Keyboards"));
+    assert_eq!(h.program().sheet_window(), None);
+    h.program().shared.flush();
+    let saved = Settings::load_from(&path).unwrap();
+    assert_eq!(
+        saved.input.keyboard_profile("Logitech USB Receiver", "046d:c548").map(|k| k.options.clone()),
+        Some(None)
+    );
+    assert!(saved.input.keyboard_profile(MAC, "05ac:029c").is_none(), "the Mac isn't set up");
+    assert_eq!(saved.input.keyboard.options, "altwin:swap_alt_win");
+
+    // Set up again, the Mac is left to choose; a key caught names its
+    // keyboard, and the menu goes.
+    let w = h.window();
+    assert!(h.click_text(w, "Set Up…"));
+    let s = h.program().sheet_window().expect("the setup sheet");
+    assert!(h.find_id(s, "setup-keyboard").is_some());
+    press(&mut h, 125);
+    assert!(h.find_id(s, "setup-keyboard").is_none());
+    assert!(h.click_text(s, "Same as Other Keyboards"));
+    h.program().shared.flush();
+    let saved = Settings::load_from(&path).unwrap();
+    assert_eq!(saved.input.keyboards.len(), 2, "{:?}", saved.input.keyboards);
+    assert_eq!(saved.input.keyboard_profile(MAC, "05ac:029c").map(|k| k.options.clone()), Some(None));
+}

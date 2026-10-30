@@ -142,6 +142,12 @@ pub enum Action {
     ShowInMenu {
         trail: String,
     },
+    /// Have a keyboard type as other keyboards do, without setting it up,
+    /// so it isn't asked about again (`keyboards.rs`).
+    KeyboardAsOthers {
+        name: String,
+        id: String,
+    },
 }
 
 /// Leaving or pausing the session.

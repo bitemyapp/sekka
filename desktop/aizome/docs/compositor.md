@@ -45,9 +45,9 @@ aizome --build-info                      # how the core was built (what a logic 
   layouts, layout switching, repeat and Num Lock are every keyboard's, and
   an entry without `options` types as other keyboards do. The seat has one
   keymap, as Wayland has: before a key from a keyboard that types (one
-  with a space bar) goes anywhere, the keymap becomes that keyboard's if
-  it isn't already, and the focus hears it; Caps Lock, Num Lock and the
-  layout in use carry over (`keyboards.rs`).
+  with a space bar and the letters) goes anywhere, the keymap becomes that
+  keyboard's if it isn't already, and the focus hears it; Caps Lock, Num
+  Lock and the layout in use carry over (`keyboards.rs`).
 - Fonts: Archivo, IBM Plex Mono and Noto Sans Symbols 2 from fontconfig,
   else from `$AIZOME_FONT_DIR` or `../share/aizome/fonts` beside the
   binary.

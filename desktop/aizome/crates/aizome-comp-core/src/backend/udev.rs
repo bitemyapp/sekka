@@ -191,9 +191,11 @@ impl Udev {
                         }
                         u.input_devices.push(d.clone());
                     }
-                    // One that types (a space bar), not a power button.
-                    const KEY_SPACE: u32 = 57;
-                    if d.has_capability(DeviceCapability::Keyboard) && d.keyboard_has_key(KEY_SPACE) == Ok(true) {
+                    // One that types (a space bar and letters), not a power
+                    // button.
+                    if d.has_capability(DeviceCapability::Keyboard)
+                        && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
+                    {
                         let bustype = smithay::backend::input::Device::syspath(&d)
                             .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
                             .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());

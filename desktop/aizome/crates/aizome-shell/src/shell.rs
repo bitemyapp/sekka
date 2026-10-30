@@ -928,6 +928,7 @@ impl Shell {
                 self.shelf.remove(index);
                 self.save_shelf();
             }
+            Action::KeyboardAsOthers { name, id } => self.keyboard_as_others(&name, &id),
             Action::Service(verb) => self.run_service(verb, cx),
             Action::NewFolderOnDesktop => {
                 let dir = crate::launch::desktop_dir();

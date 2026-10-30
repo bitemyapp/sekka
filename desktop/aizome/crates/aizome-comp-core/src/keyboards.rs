@@ -4,9 +4,9 @@
 //! becomes the typing keyboard's before its key goes anywhere; Caps Lock,
 //! Num Lock and the layout in use carry over.
 //!
-//! Only keyboards that type count (a space bar): not a power button, nor
-//! the media keys a keyboard's second device sends, which leave the keymap
-//! as it is.
+//! Only keyboards that type count (a space bar and the letters): not a
+//! power button, nor the media keys a keyboard's second device sends, nor
+//! another device with a few keys, which leave the keymap as it is.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -39,6 +39,15 @@ impl Keyboard {
     fn info(&self, last: bool) -> KeyboardInfo {
         KeyboardInfo { name: self.name.clone(), id: self.id.clone(), bus: self.bus, last }
     }
+}
+
+/// Whether a device with these keys (evdev codes) types: a space bar and
+/// the letters A to Z.
+pub fn types(has_key: impl Fn(u32) -> bool) -> bool {
+    const KEY_SPACE: u32 = 57;
+    // Q to P, A to L, Z to M.
+    const LETTERS: [std::ops::RangeInclusive<u32>; 3] = [16..=25, 30..=38, 44..=50];
+    has_key(KEY_SPACE) && LETTERS.into_iter().flatten().all(has_key)
 }
 
 /// How an input device is connected, from its `id/bustype` in sysfs. QEMU's
@@ -228,6 +237,15 @@ mod tests {
         assert_eq!(bus(Some(0x03), 0x0627), KeyboardBus::Other, "QEMU's USB keyboard");
         assert_eq!(bus(None, 0x046d), KeyboardBus::Other);
         assert_eq!(Keyboard::new("K", 0x5ac, 0x29c, KeyboardBus::Usb).id, "05ac:029c");
+    }
+
+    #[test]
+    fn only_a_keyboard_with_a_space_bar_and_letters_types() {
+        assert!(types(|k| k < 128), "a keyboard");
+        assert!(!types(|k| k == 57 || k == 28), "a space bar and Return alone");
+        assert!(!types(|k| k == 116), "a power button");
+        assert!(!types(|k| k != 57), "no space bar");
+        assert!(!types(|k| k != 50), "no M");
     }
 
     #[test]

@@ -61,6 +61,35 @@ pub fn sample_keyboard() -> KeyboardInfo {
     }
 }
 
+/// The sample computer's keyboards: its Magic Keyboard, and a mouse's
+/// receiver that says it's a keyboard too.
+pub fn sample_keyboards() -> Vec<KeyboardInfo> {
+    let receiver = KeyboardInfo {
+        name: "Logitech USB Receiver".into(),
+        id: "046d:c548".into(),
+        bus: KeyboardBus::Usb,
+        last: false,
+    };
+    vec![sample_keyboard(), receiver]
+}
+
+/// The keyboards attached, as the compositor lists them (none when it
+/// doesn't answer).
+pub fn attached() -> Vec<KeyboardInfo> {
+    match aizome_ipc::Client::connect().and_then(|mut c| c.request(&Request::Keyboards)) {
+        Ok(Response::Keyboards { keyboards }) => keyboards,
+        _ => Vec::new(),
+    }
+}
+
+/// Those of `attached` plugged in or paired without an entry of their own:
+/// what the shell asks about, and what can be set to type as other
+/// keyboards do without a key pressed (a security key or a mouse's
+/// receiver has no space bar to press beside).
+pub fn not_set_up(s: &Settings, attached: &[KeyboardInfo]) -> Vec<KeyboardInfo> {
+    attached.iter().filter(|k| k.bus.plugged() && s.input.keyboard_profile(&k.name, &k.id).is_none()).cloned().collect()
+}
+
 /// Where a keyboard's other keys can start from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
@@ -99,6 +128,10 @@ pub struct Setup {
     /// keys come from (in [`sources`]).
     pub modifiers: usize,
     pub from: usize,
+    /// Keyboards not set up ([`not_set_up`]), and the one chosen of them
+    /// while no key has come.
+    pub unset: Vec<KeyboardInfo>,
+    pub chosen: usize,
 }
 
 /// The tag of wait `n`.
@@ -168,5 +201,14 @@ mod tests {
         let v = sources(&s);
         let labels: Vec<_> = v.iter().map(|s| (s.label.as_str(), s.options.as_str())).collect();
         assert_eq!(labels, [("Other keyboards", "ctrl:nocaps"), ("PC", "altwin:swap_alt_win,compose:ralt")]);
+
+        // Those not set up: plugged in or paired, without an entry.
+        let mut attached = sample_keyboards();
+        attached.push(KeyboardInfo { name: "PC".into(), id: "046D:C31C".into(), bus: KeyboardBus::Usb, last: false });
+        let builtin =
+            KeyboardInfo { name: "Built in".into(), id: "0001:0001".into(), bus: KeyboardBus::BuiltIn, last: false };
+        attached.push(builtin);
+        let names: Vec<_> = not_set_up(&s, &attached).into_iter().map(|k| k.name).collect();
+        assert_eq!(names, ["Apple Inc. Magic Keyboard", "Logitech USB Receiver"]);
     }
 }

@@ -167,8 +167,13 @@ pub enum Msg {
     SetupAgain,
     SetupModifiers(usize),
     SetupFrom(usize),
+    /// The keyboards attached, as the compositor lists them.
+    SetupKeyboards(Vec<KeyboardInfo>),
+    /// One of those not set up, chosen while no key has come.
+    SetupChoose(usize),
     SetupSave,
-    /// Set up to type as other keyboards do.
+    /// Set up to type as other keyboards do: the keyboard whose key came,
+    /// or else the one chosen.
     SetupSame,
     SetupCancel,
 }
@@ -624,6 +629,33 @@ impl Keyboard {
                     .align(Align::Center),
             );
         }
+        // One with no space bar to press beside (a security key, a mouse's
+        // receiver) can be chosen instead, to type as the others do.
+        if st.keyboard.is_none() && !st.unset.is_empty() {
+            let labels: Vec<String> = st
+                .unset
+                .iter()
+                .map(|k| {
+                    if st.unset.iter().filter(|o| o.name == k.name).count() > 1 {
+                        format!("{} ({})", k.name, k.id)
+                    } else {
+                        k.name.clone()
+                    }
+                })
+                .collect();
+            col = col.push(form::note(
+                "No space bar on it, as on a security key or a mouse's receiver? Choose it, then \
+                 Same as Other Keyboards.",
+            ));
+            col = col.push(
+                row![
+                    text("Keyboard").width(170.0),
+                    dropdown(labels, st.chosen).on_select(Msg::SetupChoose).min_width(240.0).id("setup-keyboard")
+                ]
+                .spacing(8.0)
+                .align(Align::Center),
+            );
+        }
         if let (Some(k), Some(b)) = (&st.keyboard, &st.beside) {
             col = col.push(
                 container(
@@ -679,12 +711,13 @@ impl Keyboard {
             }
         }
         let ready = st.keyboard.is_some();
+        let known = ready || !st.unset.is_empty();
         col.push(text(st.error.clone().unwrap_or_default()).size(11.0).role(Role::Danger))
             .push(
                 row![
                     spacer(),
                     button("Not Now").cancel().on_press(Msg::SetupCancel),
-                    button("Same as Other Keyboards").enabled(ready).on_press(Msg::SetupSame),
+                    button("Same as Other Keyboards").enabled(known).on_press(Msg::SetupSame),
                     button("Save").primary().default().enabled(ready).on_press(Msg::SetupSave),
                 ]
                 .spacing(8.0)
@@ -716,10 +749,12 @@ impl Keyboard {
 
     /// The keyboard set up gets keys of its own (`own`: the modifier keys
     /// chosen, the rest from where the sheet says), or types as other
-    /// keyboards do; the Keys section shows it after.
+    /// keyboards do (the one chosen, if no key came); the Keys section
+    /// shows it after.
     fn finish_setup(&mut self, own: bool, cx: &mut PaneCx<Msg>) {
         let Some(st) = &self.setup else { return };
-        let Some(k) = st.keyboard.clone() else { return };
+        let chosen = if own { None } else { st.unset.get(st.chosen) };
+        let Some(k) = st.keyboard.as_ref().or(chosen).cloned() else { return };
         let options = own.then(|| {
             let sources = setup::sources(cx.settings());
             let from = sources.get(st.from).map(|s| s.options.clone()).unwrap_or_default();
@@ -1041,9 +1076,28 @@ impl Pane for Keyboard {
                 cx.say(format!("{name} types as other keyboards do"));
             }
             Msg::SetupOpen => {
-                self.setup = Some(Setup::default());
+                // The keyboards not set up, for one that has no key to press.
+                let unset = if cx.sample() {
+                    setup::not_set_up(cx.settings(), &setup::sample_keyboards())
+                } else {
+                    cx.spawn(|| Msg::SetupKeyboards(setup::attached()));
+                    Vec::new()
+                };
+                self.setup = Some(Setup { unset, ..Default::default() });
                 cx.open_sheet();
                 self.wait_for_key(cx);
+            }
+            Msg::SetupKeyboards(attached) => {
+                let unset = setup::not_set_up(cx.settings(), &attached);
+                if let Some(st) = &mut self.setup {
+                    st.unset = unset;
+                    st.chosen = 0;
+                }
+            }
+            Msg::SetupChoose(i) => {
+                if let Some(st) = &mut self.setup {
+                    st.chosen = i;
+                }
             }
             Msg::SetupCaught(n, result) => {
                 if n != self.waits.load(Ordering::SeqCst) || self.setup.is_none() {
