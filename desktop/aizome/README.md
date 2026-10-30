@@ -34,6 +34,15 @@ Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban (Calculator), Tenki
 (Weather), Tansu (Disks), Kura (Disk Usage), Myaku (Activity), Nisshi (Logs)
 and Koe (Dictation), with foot as the terminal. See [docs/apps.md](docs/apps.md).
 
+Myaku can record performance on demand: select an app, choose **Timeline** or
+**CPU samples + timeline**, and record for 10, 30 or 60 seconds, or stop early.
+Captures stay on your computer; **Open Folder** reveals the saved files.
+Open `trace.json` in Perfetto to compare native app phases with desktop timing.
+Other Wayland apps expose compositor-side surface activity, and CPU sampling
+depends on the system's permissions. XWayland and Gamescope surface activity
+cannot yet be attributed to individual apps. These tracks show correlations; they do
+not yet establish which input caused a particular frame.
+
 ## Using it
 
 On Sekka, choose Aizome in the installer (it is the default), or add it to

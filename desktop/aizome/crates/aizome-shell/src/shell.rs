@@ -225,6 +225,7 @@ pub struct Shell {
     pub wm: Wm,
     pub ipc: Ipc,
     pub server: Option<Server>,
+    profile: Option<(u64, Vec<u32>)>,
     pub registry: Registry,
     pub apps: Option<Arc<AppIndex>>,
     pub sys: crate::sys::Sys,
@@ -382,6 +383,7 @@ impl Shell {
             wm: Wm::default(),
             ipc: Ipc::none(),
             server: None,
+            profile: None,
             registry: Registry::default(),
             apps: None,
             sys: crate::sys::Sys::default(),
@@ -1278,6 +1280,38 @@ impl Shell {
     /// A request from the compositor or `aizomectl`.
     pub fn shell_request(&mut self, r: proto::ShellRequest, cx: &mut Cx<Msg>) -> (bool, String) {
         match r {
+            proto::ShellRequest::Profile { pids, config } => {
+                if self.lock.phase != crate::lock::Phase::Unlocked {
+                    return (false, "the session is locked".into());
+                }
+                if pids.len() > 64 {
+                    return (false, "too many capture participants".into());
+                }
+                if let Err(e) = config.validate() {
+                    return (false, e.to_string());
+                }
+                let mut found = Vec::new();
+                for pid in pids {
+                    if let Some(app) = self.registry.by_pid(pid) {
+                        if let Some(server) = &self.server {
+                            server.send(app.conn, &proto::ShellMessage::Profile { config: config.clone() });
+                        }
+                        found.push(pid);
+                    }
+                }
+                self.profile = Some((config.session, found.clone()));
+                (true, serde_json::to_string(&found).unwrap())
+            }
+            proto::ShellRequest::ProfileStop { pids, session } => {
+                for pid in pids.into_iter().take(64) {
+                    if let Some(app) = self.registry.by_pid(pid) {
+                        if let Some(server) = &self.server {
+                            server.send(app.conn, &proto::ShellMessage::ProfileStop { session });
+                        }
+                    }
+                }
+                (true, String::new())
+            }
             proto::ShellRequest::Toolchest => {
                 self.open_toolchest(None, cx);
                 (true, String::new())
@@ -1737,6 +1771,9 @@ impl Program for Shell {
     }
 
     fn session_locked(&mut self, cx: &mut Cx<Msg>) {
+        if let Some((session, pids)) = self.profile.take() {
+            self.shell_request(proto::ShellRequest::ProfileStop { pids, session }, cx);
+        }
         self.lock_confirmed(cx);
     }
 

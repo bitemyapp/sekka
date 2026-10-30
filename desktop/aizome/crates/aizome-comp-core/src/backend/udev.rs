@@ -426,6 +426,7 @@ impl Udev {
         clear: [f32; 4],
         started: Instant,
     ) {
+        let _trace = aizome_trace::Span::new(aizome_trace::Phase::Render, 0, 0);
         let primary = self.primary_gpu;
         let Some(id) = output.user_data().get::<UdevOutputId>().copied() else { return };
         let Some(device) = self.devices.get_mut(&id.node) else { return };
@@ -1095,6 +1096,17 @@ fn vblank(state: &mut State, node: DrmNode, crtc: crtc::Handle, metadata: &mut O
         _ => (state.az.clock.now(), wp_presentation_feedback::Kind::Vsync),
     };
     let seq = metadata.as_ref().map(|m| m.sequence as u64).unwrap_or(0);
+    if aizome_trace::enabled() {
+        let id = state.az.outputs.iter().position(|o| o == &output).map_or(0, |i| i as u64 + 1);
+        // The event's timestamp is receipt time. The DRM timestamp is carried
+        // explicitly in aux, with hardware validity in the phase name.
+        let phase = if flags.contains(wp_presentation_feedback::Kind::HwClock) {
+            aizome_trace::Phase::DrmPresentation
+        } else {
+            aizome_trace::Phase::PresentationEstimate
+        };
+        aizome_trace::instant(phase, id, Duration::from(time).as_nanos() as u64);
+    }
     if let Some(o) = state.az.out.get_mut(&output) {
         o.presented = Some(Duration::from(time));
     }

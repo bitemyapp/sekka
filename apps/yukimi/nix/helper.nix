@@ -18,6 +18,7 @@ let
       # Completion detection uses the UI-independent Aizome IPC protocol.
       ../../../desktop/aizome/Cargo.toml
       ../../../desktop/aizome/crates/aizome-ipc
+      ../../../desktop/aizome/crates/aizome-trace
       ../../../desktop/aizome/session/aizome-session
     ];
   };

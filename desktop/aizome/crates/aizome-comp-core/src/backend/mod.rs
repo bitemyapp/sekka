@@ -273,6 +273,7 @@ where
     R: Renderer + ImportAll + ImportMem + crate::blur::BlurRenderer,
     R::TextureId: Clone + Send + 'static,
 {
+    let _trace = aizome_trace::Span::new(aizome_trace::Phase::Render, 0, 0);
     let res = tracker.render_output(renderer, framebuffer, age, elements, clear).map_err(|e| format!("{e:?}"))?;
     let cpu = started.elapsed();
     let damaged = res.damage.is_some_and(|d| !d.is_empty());
@@ -290,6 +291,13 @@ where
 /// After a frame: statistics, the surfaces' primary outputs, frame
 /// callbacks, fifo barriers and presentation feedback.
 pub fn post_frame(az: &mut Aizome, output: &Output, frame: &Frame, presented: bool) {
+    if aizome_trace::enabled() && frame.damaged {
+        let id = az.outputs.iter().position(|o| o == output).map_or(0, |i| i as u64 + 1);
+        aizome_trace::instant(aizome_trace::Phase::FrameQueued, id, az.out.get(output).map_or(0, |o| o.frame_seq + 1));
+        if presented {
+            aizome_trace::instant(aizome_trace::Phase::PresentationEstimate, id, 0);
+        }
+    }
     if let Some(o) = az.out.get_mut(output) {
         if frame.damaged {
             o.stats.record(frame.cpu, frame.gpu);

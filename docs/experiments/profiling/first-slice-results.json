@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-28 UTC",
+  "host": "wx-workstation",
+  "source_base": "4dc885718ce48fd5555adff48908ab517efb62fe",
+  "sidestep": "dae957e913376a26e642d6abee533eb755fb9092",
+  "root_flake_build": {
+    "runtime": "/nix/store/3659kfs4widn6pf4zqvaw92n8mmiq2yg-aizome-0.1.0",
+    "debug": "/nix/store/wm14qdp04wglchka4hrfkqw4gs2lls2a-aizome-0.1.0-debug",
+    "verified": [
+      {
+        "binary": "bin/aizome",
+        "build_id": "bd529f7e1b2400975e6859abdcf1de377d3dcc09",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-comp/src/main.rs:7",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      },
+      {
+        "binary": "bin/.aizome-myaku-wrapped",
+        "build_id": "452a4097909900f9a39841b3062eaa83ee080786",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-config/src/lib.rs:35",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      },
+      {
+        "binary": "bin/.aizome-profile-wrapped",
+        "build_id": "bcaf7d16fdd34848fd3e3a421dfc3ccb55b32425",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-ipc/src/lib.rs:822",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      },
+      {
+        "binary": "bin/aizome-sumi",
+        "build_id": "b3dab33415b72bd104a341359365964d2eab5dc2",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-config/src/lib.rs:35",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      },
+      {
+        "binary": "lib/aizome/libaizome_comp_core.so",
+        "build_id": "d13a365b87ca7c181f8d9da6b8530db0e3b3d325",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-ipc/src/lib.rs:42",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      },
+      {
+        "binary": "lib/aizome/libaizome_comp_logic.so",
+        "build_id": "df32633ce811d4c407e98b3d8430e506c1ef7664",
+        "source_lookup": "/build/aizome-source/desktop/aizome/crates/aizome-comp-logic/src/anim.rs:28",
+        "runtime_has_dwarf": false,
+        "unwind_tables_preserved": true
+      }
+    ]
+  },
+  "runtime_closure_excludes_debug_and_rustc": true,
+  "headless_packaged": {
+    "result": "passed",
+    "perfetto_imported_events": 485,
+    "phases": [
+      "app event dispatch",
+      "app update",
+      "capture started",
+      "compositor input dispatch",
+      "compositor render",
+      "frame queued",
+      "paint recording (before raster)",
+      "presentation estimate (no hardware timestamp)",
+      "surface commit (correlation only)",
+      "view and layout"
+    ],
+    "cycles": [
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished",
+      "finished"
+    ],
+    "myaku_close": "finished",
+    "locked_start_refused": true,
+    "lock_stop_reason": "desktop locked or capture revoked",
+    "target_exit_reason": "a selected process exited or changed identity"
+  },
+  "memory_snapshots_kib": {
+    "myaku_before": {
+      "Threads": 9,
+      "voluntary_ctxt_switches": 27,
+      "nonvoluntary_ctxt_switches": 39,
+      "Pss": 37420
+    },
+    "myaku_after": {
+      "Threads": 9,
+      "voluntary_ctxt_switches": 45,
+      "nonvoluntary_ctxt_switches": 39,
+      "Pss": 37047
+    },
+    "native_before": {
+      "Threads": 9,
+      "voluntary_ctxt_switches": 11,
+      "nonvoluntary_ctxt_switches": 46,
+      "Pss": 30671
+    },
+    "native_after": {
+      "Threads": 9,
+      "voluntary_ctxt_switches": 756,
+      "nonvoluntary_ctxt_switches": 50,
+      "Pss": 30445
+    }
+  },
+  "cpu_sampling": {
+    "status": "failed",
+    "error": "CPU sampling unavailable (exit status: 255). Open Folder and check perf.log for permissions or tool availability.",
+    "perf_event_paranoid": "4",
+    "successful_sampling_verified": false
+  },
+  "component_checks": [
+    "Myaku unit/UI/golden/performance suites (2 existing ignored tests)",
+    "trace/profile/ipc/shell-proto/kit/shell unit suites",
+    "Genkan UI cargo check --locked and root derivation evaluation",
+    "test_aizome_development.py (4 tests)"
+  ],
+  "performance_fixture": {
+    "processes": 600,
+    "scale": 2,
+    "reading_p50_ms": 2.163362,
+    "reading_p95_ms": 2.528445,
+    "click_p50_ms": 0.182187,
+    "scroll_p50_ms": 0.245923,
+    "rss_before_200_readings_kib": 233656,
+    "rss_after_200_readings_kib": 233656
+  },
+  "limits": [
+    "No physical DRM/VRR/multimonitor/battery/ISO/aarch64 qualification",
+    "Memory snapshots are not a controlled baseline/active A/B measurement",
+    "No causal input-to-frame tokens, app raster/GPU/async tracks or third-party internal adapters"
+  ]
+}

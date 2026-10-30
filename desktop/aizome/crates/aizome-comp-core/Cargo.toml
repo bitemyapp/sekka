@@ -16,6 +16,7 @@ repository.workspace = true
 crate-type = ["dylib"]
 
 [dependencies]
+aizome-trace = { path = "../aizome-trace" }
 aizome-theme.workspace = true
 aizome-config.workspace = true
 aizome-ipc.workspace = true

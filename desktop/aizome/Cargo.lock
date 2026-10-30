@@ -78,6 +78,7 @@ dependencies = [
  "aizome-config",
  "aizome-ipc",
  "aizome-theme",
+ "aizome-trace",
  "bitflags 2.13.2",
  "libc",
  "libloading",
@@ -191,6 +192,7 @@ dependencies = [
 name = "aizome-ipc"
 version = "0.1.0"
 dependencies = [
+ "aizome-trace",
  "serde",
  "serde_json",
 ]
@@ -202,6 +204,7 @@ dependencies = [
  "aizome-config",
  "aizome-shell-proto",
  "aizome-theme",
+ "aizome-trace",
  "libc",
  "log",
  "png 0.18.1",
@@ -276,6 +279,7 @@ version = "0.1.0"
 dependencies = [
  "aizome-ipc",
  "aizome-kit",
+ "aizome-profile",
  "aizome-sys",
  "env_logger",
  "libc",
@@ -330,6 +334,18 @@ dependencies = [
  "serde",
  "serde_json",
  "zbus",
+]
+
+[[package]]
+name = "aizome-profile"
+version = "0.1.0"
+dependencies = [
+ "aizome-ipc",
+ "aizome-shell-proto",
+ "aizome-trace",
+ "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -395,6 +411,7 @@ dependencies = [
  "aizome-shell-proto",
  "aizome-sys",
  "aizome-theme",
+ "aizome-trace",
  "env_logger",
  "jiff",
  "libc",
@@ -409,6 +426,7 @@ dependencies = [
 name = "aizome-shell-proto"
 version = "0.1.0"
 dependencies = [
+ "aizome-trace",
  "serde",
  "serde_json",
 ]
@@ -503,6 +521,14 @@ dependencies = [
  "serde",
  "serde_json",
  "zbus",
+]
+
+[[package]]
+name = "aizome-trace"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
 ]
 
 [[package]]

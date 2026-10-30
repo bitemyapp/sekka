@@ -1101,6 +1101,43 @@ logs the same user back in. These are component checks; they do not qualify
 an ISO or physical suspend/resume. An uncatchable SIGKILL or a dead user
 manager cannot run the launcher's cleanup trap.
 
+The [on-demand profiling investigation](docs/profiling-options.md) compares
+sampling, native interaction timelines, third-party adapters and game profiling,
+with reproducible workstation experiments. The first slice adds Myaku's finite
+local captures and `aizome-profile timeline|cpu 10|30|60 PID [PID…]`. CPU sampling
+uses unprivileged perf with fixed user-space sampling settings; denial is
+reported without changing kernel policy. On ordinary upstream kernels,
+`kernel.perf_event_paranoid=2` permits this mode. The recorder explicitly uses
+`--user-callchains` as well as `cpu-clock:u`, because DWARF recording can otherwise
+request kernel callchains and fail at that setting. Native events are dormant until an
+explicit session is armed. There is no tracing worker or timer in idle apps.
+Myaku invokes its sibling `aizome-profile` executable on a temporary control
+thread, so exporter and symbol-inventory memory is released with the recorder
+process. Keep the app and recorder from the same package/build.
+
+`nix build .#aizome .#aizome-debug` produces the stripped runtime and its exact
+matching line tables separately. The debug output is not part of the runtime
+closure. For offline symbol lookup, set `NIX_DEBUG_INFO_DIRS` to the matching
+output's `lib/debug`; for perf use `perf report --symfs` with a suitable
+build-ID symbol tree or `perf buildid-cache --add` on the matching debug files.
+Never substitute symbols from a later rebuild, including a reloaded logic
+library. Captures inventory executable mappings and build IDs before and after
+recording; missing or replaced files are reported with null IDs.
+
+Focused validation in the Aizome development shell:
+
+```sh
+cargo test --release -p aizome-trace -p aizome-profile -p aizome-myaku --lib
+python3 scripts/test-profile-session.py --bin target/release --output /tmp/new-profile-check
+python3 scripts/verify-profile-symbols.py /path/to/aizome /path/to/aizome-debug
+```
+
+Run the headless exercise with optimized compositor, logic, shell, Sumi, Myaku,
+IPC and profile binaries built together. It drives Myaku through real pointer
+input and covers repeated captures, reload, collector crash, target exit and
+lock. It is component evidence, not an ISO or physical display/battery test.
+The investigation records the implementation's current coverage and limits.
+
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own

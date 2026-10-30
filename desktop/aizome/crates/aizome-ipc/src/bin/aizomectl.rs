@@ -583,6 +583,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
 
 fn print_response(r: &Response) -> ExitCode {
     match r {
+        Response::Profile { .. } => println!("{}", serde_json::to_string_pretty(r).unwrap()),
         Response::Ok => {}
         Response::Error { message } => {
             eprintln!("aizomectl: {message}");

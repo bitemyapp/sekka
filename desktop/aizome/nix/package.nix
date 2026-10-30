@@ -40,6 +40,7 @@
   pam,
   systemd,
   util-linux,
+  linuxPackages,
   cmake,
   shaderc,
   openblas,
@@ -113,6 +114,7 @@ rustPlatform.buildRustPackage {
   src = source;
   sourceRoot = "aizome-source/desktop/aizome";
   cargoLock.lockFile = "${src}/Cargo.lock";
+  separateDebugInfo = true;
 
   nativeBuildInputs = [
     pkg-config
@@ -168,7 +170,12 @@ rustPlatform.buildRustPackage {
     runHook preBuild
     # -C prefer-dynamic for the compositor's core alone (scripts/rustc-wrapper).
     export RUSTC_WRAPPER=$PWD/scripts/rustc-wrapper
-    flags=(-j "$NIX_BUILD_CORES" --target ${target} --offline)
+    # Keep Cargo's line tables and identical release flags for the reload ABI.
+    # The split-debug hook otherwise adds full DWARF and strip flags to rustc.
+    export NIX_RUSTFLAGS="''${NIX_RUSTFLAGS// -g -C strip=none/}"
+    flags=(-j "$NIX_BUILD_CORES" --target ${target} --offline
+      --config 'profile.release.strip=false'
+      --config 'profile.release-lto.strip=false')
     # Plain cargo for the compositor: nixpkgs' cargo-auditable wrapper is a
     # RUSTC_WORKSPACE_WRAPPER, whose path Cargo hashes into every workspace
     # crate's symbols, and a logic built from a checkout couldn't match.
@@ -297,6 +304,10 @@ rustPlatform.buildRustPackage {
       patchelf --set-rpath "$(patchelf --print-rpath "$f" | tr ':' '\n' | grep -v -- '-rustc-' | paste -sd:)" "$f"
     done
     patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} $out/lib/aizome/libaizome_comp_core.so
+    # Tools are started only for an explicit CPU capture, with fixed arguments.
+    for bin in aizome-myaku aizome-profile; do
+      wrapProgram $out/bin/$bin --set-default AIZOME_PERF ${linuxPackages.perf}/bin/perf
+    done
   '';
 
   passthru = {

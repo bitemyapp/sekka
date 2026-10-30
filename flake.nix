@@ -173,6 +173,7 @@
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
+        aizome-debug = inputs.aizome.packages.${system}.aizome.debug;
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;

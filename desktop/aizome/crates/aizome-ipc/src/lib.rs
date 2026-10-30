@@ -107,6 +107,14 @@ pub enum Transform {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "request", rename_all = "kebab-case")]
 pub enum Request {
+    /// A bounded user-session trace; rejected while locked or already recording.
+    ProfileStart {
+        config: aizome_trace::Config,
+    },
+    ProfileStop {
+        session: u64,
+    },
+    ProfileState,
     /// → [`Response::Version`].
     Version,
     /// → [`Response::Outputs`].
@@ -486,6 +494,12 @@ fn yes() -> bool {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "response", rename_all = "kebab-case")]
 pub enum Response {
+    Profile {
+        pid: u32,
+        session: Option<u64>,
+        locked: bool,
+        backend: String,
+    },
     Ok,
     Error {
         message: String,

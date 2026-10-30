@@ -1,0 +1,23 @@
+{
+  "drvPath": "/nix/store/5h2039ghd0qzcn8jb62cd6gjyz3zbkcz-sekka-profiling-symbol-probe-1.drv",
+  "outputs": {
+    "debug": "/nix/store/i9wqddj5pr1v449qxd24z99dhm0iqgbn-sekka-profiling-symbol-probe-1-debug",
+    "out": "/nix/store/lg6mgslh5gkdbgz6f9nikrhln2vqdh8f-sekka-profiling-symbol-probe-1"
+  },
+  "runtime_closure_includes_debug": false,
+  "source_resolution": "probe::interaction_stage\n/build/source/probe.rs:5\n",
+  "build_id": "43a383c160dd195a94896666503fa300d87e72ce",
+  "checks": [
+    "text bytes unchanged",
+    "eh_frame bytes unchanged",
+    "build-id matched debug file exists",
+    "source line resolved",
+    "stripped program executed",
+    "runtime closure excludes debug"
+  ],
+  "baseline_aizome_outputs": [
+    "out"
+  ],
+  "root_revision": "4dc885718ce48fd5555adff48908ab517efb62fe",
+  "nixpkgs_revision": "f20cd90e28fe0403873f473b29e42662cd86e8c4"
+}

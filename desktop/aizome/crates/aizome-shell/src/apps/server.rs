@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
@@ -109,6 +110,21 @@ fn serve(
     writers: Arc<Mutex<HashMap<ConnId, Sender<String>>>>,
     sink: Arc<dyn Fn(ServerEvent) + Send + Sync>,
 ) {
+    // Hello's identity must be the socket peer, not a PID supplied in JSON.
+    let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
+    let mut len = std::mem::size_of_val(&cred) as libc::socklen_t;
+    if unsafe {
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            (&mut cred as *mut libc::ucred).cast(),
+            &mut len,
+        )
+    } != 0
+    {
+        return;
+    }
     let Ok(mut write) = stream.try_clone() else { return };
     let (tx, rx) = channel::<String>();
     writers.lock().unwrap_or_else(|e| e.into_inner()).insert(conn, tx);
@@ -127,7 +143,12 @@ fn serve(
                 continue;
             }
             match proto::decode::<proto::AppMessage>(&line) {
-                Ok(m) => sink(ServerEvent::Message(conn, m)),
+                Ok(mut m) => {
+                    if let proto::AppMessage::Hello { pid, .. } = &mut m {
+                        *pid = cred.pid as u32;
+                    }
+                    sink(ServerEvent::Message(conn, m));
+                }
                 Err(e) => log::debug!("connection {conn}: {e}: {line}"),
             }
         }

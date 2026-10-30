@@ -27,6 +27,7 @@ dependencies = [
  "aizome-config",
  "aizome-shell-proto",
  "aizome-theme",
+ "aizome-trace",
  "libc",
  "log",
  "png",
@@ -42,6 +43,7 @@ dependencies = [
 name = "aizome-shell-proto"
 version = "0.1.0"
 dependencies = [
+ "aizome-trace",
  "serde",
  "serde_json",
 ]
@@ -50,6 +52,14 @@ dependencies = [
 name = "aizome-theme"
 version = "0.1.0"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "aizome-trace"
+version = "0.1.0"
+dependencies = [
+ "libc",
  "serde",
 ]
 
