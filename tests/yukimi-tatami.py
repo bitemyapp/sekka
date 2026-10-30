@@ -54,15 +54,16 @@ def capture(name):
     return ocr(name)
 
 
-def capture_until(name, check, timeout=WAIT):
+def capture_until(name, check, timeout=WAIT, both=False):
     # Capture until the screen shows what the last action asked for. OCR can
     # miss a word in one capture and every capture after it of the same
-    # screen, so a miss gets a second, sparse-text reading as well. The check
-    # then sees both readings: text it rules out counts if either has it.
+    # screen, so a miss gets a second, sparse-text reading as well. A check
+    # that rules text out passes both=True: it always sees both readings, so
+    # the text counts if either has it.
     deadline = time.monotonic() + timeout
     while True:
         text = capture(name)
-        if check(text):
+        if not both and check(text):
             return text
         text += "\n" + ocr(name, "--psm", "11")
         if check(text):
@@ -103,9 +104,9 @@ tatami.send_chars("yukimi")
 print(capture_until("launcher-yukimi", lambda text: "Package Manager" in text))
 tatami.send_key("ret")
 until(lambda: window() is not None, clients)
-print(capture_until("native-overview", lambda text: "freshness" in text.casefold()))
-# Starting up is over before the idle overview is measured.
+# Starting up is over before the idle overview is captured and measured.
 time.sleep(15)
+print(capture_until("native-overview", lambda text: "freshness" in text.casefold()))
 assert not window()["xwayland"], window()
 assert user("pgrep -x weston || true").strip() == ""
 print(json.dumps(window()))
@@ -185,7 +186,7 @@ until(lambda: user("WAYLAND_DISPLAY=" + shlex.quote(wayland) + " wl-paste --no-n
 tatami.send_chars("no-such-package-yukimi-test")
 tatami.send_key("ctrl-a")
 tatami.send_key("meta_l-v")
-capture_until("discover-pasted", lambda text: "Steam" in text and "no-such-package" not in text)
+capture_until("discover-pasted", lambda text: "Steam" in text and "no-such-package" not in text, both=True)
 click_word("before-steam-details", "steam", exact_case=True)
 capture_until("steam-details", lambda text: "32-bit graphics drivers" in text and "for everyone" in text)
 before = len(clients())
@@ -221,7 +222,7 @@ tatami.fail("test -e /etc/nixos/yukimi.nix")
 tatami.wait_until_fails("pgrep -f '[y]ukimi-helper|[p]kexec'", timeout=WAIT)
 # The finished operation sheet has Close as its default button.
 tatami.send_key("ret")
-capture_until("after-authentication", lambda text: "Nothing was changed" not in text)
+capture_until("after-authentication", lambda text: "Nothing was changed" not in text, both=True)
 
 # Fractional scaling and a smaller 1280×800 monitor, with the app still open.
 for scale, mode, label in [(1.25, "1920x1080@60", "fractional"), (1, "1280x800@60", "small")]:
