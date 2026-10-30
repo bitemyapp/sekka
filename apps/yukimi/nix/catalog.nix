@@ -7,32 +7,48 @@
 # too, so a system refusing unfree packages would have reported those as
 # unsupported. Wrappers whose metadata claims more than their dependencies
 # support, as Steam's 32-bit runtime does on ARM, list their `platforms` in
-# the catalog; checks.application-platforms instantiates everything to keep
-# those lists and the `unfree` flags honest.
+# the catalog. So do entries from other flakes, whose packages systems never
+# read: reading them would fetch those flakes for every system. Checks of the
+# catalogs instantiate everything to keep those lists and the `unfree` flags
+# honest.
 {
   lib,
   hostPlatform,
   packagesFor,
+  # The configuration of the Nixpkgs the packages come from. Packages it
+  # would install although unsupported or broken are offered too.
+  config ? { },
+  # Entries whose `platforms` list alone decides, without reading their
+  # packages: those another flake packages, which reading would fetch and
+  # evaluate on every system, picked or not. One without a list is not
+  # offered.
+  listed ? _: false,
   # Also instantiate each package, without building or retaining its closure.
+  # Every entry's packages are read then, listed or not.
   instantiate ? false,
 }:
 catalog:
 let
+  inherit (hostPlatform) system;
+  allowUnsupported = config.allowUnsupportedSystem or false;
+  allowBroken = config.allowBroken or false;
   describe =
     app:
     let
       problems =
-        if app ? platforms && !builtins.elem hostPlatform.system app.platforms then
-          [ "Not available for ${hostPlatform.system}." ]
+        if app ? platforms && !builtins.elem system app.platforms then
+          [ "Not available for ${system}." ]
+        else if listed app && !instantiate then
+          lib.optional (!(app ? platforms)) "Not listed as available for ${system}."
         else
           lib.concatMap (
             package:
             if package == null || !lib.isDerivation package then
               [ "A required package is missing from this system's package source." ]
-            else if !lib.meta.availableOn hostPlatform package then
-              [ "Not available for ${hostPlatform.system}." ]
-            else if package.meta.broken or false then
-              [ "A required package is marked broken for ${hostPlatform.system}." ]
+            else if !allowUnsupported && !lib.meta.availableOn hostPlatform package then
+              [ "Not available for ${system}." ]
+            else if !allowBroken && package.meta.broken or false then
+              [ "A required package is marked broken for ${system}." ]
             else
               [ ]
           ) (packagesFor app);
@@ -47,7 +63,7 @@ let
     // {
       unavailable =
         if !checked.success then
-          "A required package cannot be evaluated for ${hostPlatform.system}."
+          "A required package cannot be evaluated for ${system}."
         else if checked.value != [ ] then
           builtins.head checked.value
         else

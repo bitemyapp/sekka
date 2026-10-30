@@ -28,7 +28,12 @@ let
   };
   availableCatalog = import ../../../../apps/yukimi/nix/catalog.nix {
     inherit lib;
+    inherit (applicationPkgs) config;
     inherit (pkgs.stdenv) hostPlatform;
+    # Only Nixpkgs' packages are read. Those of other flakes would fetch and
+    # evaluate those flakes, and their own Nixpkgs, on every system, so their
+    # entries list the systems they install on.
+    listed = app: (app.source or "nixpkgs") != "nixpkgs";
     instantiate = config.programs.yukimi.instantiateCatalogs or false;
     packagesFor =
       app:

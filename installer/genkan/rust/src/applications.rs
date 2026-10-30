@@ -22,8 +22,9 @@ pub struct Application {
     pub terminal: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
-    /// The systems it installs on, when its packages' metadata claims more
-    /// (Steam's 32-bit runtime): read by Yukimi's catalog resolver.
+    /// The systems it installs on, for Yukimi's catalog resolver: required
+    /// with a `source`, whose packages systems don't read, and otherwise only
+    /// when its packages' metadata claims more (Steam's 32-bit runtime).
     #[serde(default)]
     pub platforms: Vec<String>,
 }
@@ -112,6 +113,13 @@ mod tests {
                 app.source.as_deref(),
                 None | Some("ai" | "omp" | "sekka")
             ));
+            // Systems read only Nixpkgs' packages, so they never fetch
+            // another flake for an application nobody picked.
+            assert!(
+                app.source.is_none() || !app.platforms.is_empty(),
+                "{} comes from another flake, so it must list its platforms",
+                app.id
+            );
         }
         for removed in ["thunderbird", "keepassxc", "gemini-cli", "orbstack"] {
             assert!(!ids.contains(removed));
