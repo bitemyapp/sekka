@@ -171,6 +171,10 @@ GPU: startup, latency, idle cost, paced updates and bulk throughput.
 `tools/frame-benchmark.py --renderer gpu` and the throughput phase are
 described in [frame-benchmark.md](docs/frame-benchmark.md).
 
+Each pane reads its PTY on a [reader thread](docs/pty-reader.md), which hands
+chunks to the pane's thread so reading overlaps parsing. The page records how
+the throughput gap was profiled on wx, and the A/B on both machines.
+
 [Automatic URL and path detection](docs/automatic-links.md) now uses the pinned
 default rule on bounded logical context from the exact displayed snapshot.
 Worker results and path-helper completion are checked against the original

@@ -137,7 +137,9 @@ cursor/erase run, and 195–198 in Ghostty's 3.1 s one.
   Ghostty's core runs at about 1,258 MiB/s and its application at 715 MiB/s.
   The path from the PTY to the screen costs Hotaru about twice what it costs
   Ghostty. The likely parts are reading the PTY, handing data to the terminal
-  and drawing, but the run doesn't isolate them.
+  and drawing, but the run doesn't isolate them. Profiling later found the
+  cause: reading and parsing in sequence on one thread. The
+  [PTY reader thread](pty-reader.md) overlaps them.
 
 ## Limits
 

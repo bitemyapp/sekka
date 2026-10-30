@@ -213,11 +213,14 @@ specific work:
   - The 60 Hz scroll shortfall (114/120) doesn't occur with a GPU compositor.
     Hotaru's compositor cost does: about 45–70 % more than Ghostty's when
     scrolling at 60 Hz, from copying CPU-drawn buffers.
-  - Close the GUI throughput gap. Ghostty consumes ASCII 1.2–1.6× faster, and
-    Unicode and (on the laptop) styled text up to 1.7× faster. Hotaru's
-    application reaches about 30 % of its own core feed's speed on ASCII.
-    Profile the path from the PTY to the screen: reading, handing data to the
-    terminal, and drawing.
+  - The GUI throughput gap was reading and parsing in sequence on one thread.
+    The [PTY reader thread](pty-reader.md) overlaps them. In its runs Hotaru
+    consumes ASCII, styled and cursor/erase output faster than Ghostty on both
+    machines; the laptop's ASCII gain depends on its load. Unicode remains
+    6–13 % slower, and the time is in the core: mode
+    2027's print path (`print_utf8`, grapheme clustering) and scalar validation
+    of short UTF-8 runs. Speed those up without the malformed-input cost that
+    rejected the [short-run experiment](short-utf8.md).
 
 In the software GUI pilot Hotaru already leads on startup, keyboard latency,
 idle CPU and memory.
