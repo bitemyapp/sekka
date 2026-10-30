@@ -120,20 +120,26 @@ def click_word(name, word, *, sidebar=False, exact_case=False, aliases=()):
     deadline = time.monotonic() + WAIT
     while True:
         capture(name)
-        data = ocr(name, "--psm", "11", "tsv")
-        # Tesseract doesn't quote its fields; a word with a quote mark in it
-        # is just a word.
-        rows = list(csv.DictReader(io.StringIO(data), delimiter="\t", quoting=csv.QUOTE_NONE))
-        candidates = []
-        for row in rows:
-            label = row["text"].strip()
-            matches = label == word if exact_case else label.casefold() in {
-                candidate.casefold() for candidate in (word, *aliases)
-            }
-            x, y = int(row["left"]) / SCALE, int(row["top"]) / SCALE
-            if matches and (not sidebar or (x < 210 and y > 100)):
-                candidates.append((x + int(row["width"]) / SCALE / 2,
-                                   y + int(row["height"]) / SCALE / 2))
+        # The sparse-text pass finds scattered labels. A disabled button's dim
+        # label can be misread there in every capture, and the block pass
+        # reads it with more confidence.
+        for psm in ("11", "6"):
+            data = ocr(name, "--psm", psm, "tsv")
+            # Tesseract doesn't quote its fields; a word with a quote mark in
+            # it is just a word.
+            rows = list(csv.DictReader(io.StringIO(data), delimiter="\t", quoting=csv.QUOTE_NONE))
+            candidates = []
+            for row in rows:
+                label = row["text"].strip()
+                matches = label == word if exact_case else label.casefold() in {
+                    candidate.casefold() for candidate in (word, *aliases)
+                }
+                x, y = int(row["left"]) / SCALE, int(row["top"]) / SCALE
+                if matches and (not sidebar or (x < 210 and y > 100)):
+                    candidates.append((x + int(row["width"]) / SCALE / 2,
+                                       y + int(row["height"]) / SCALE / 2))
+            if candidates:
+                break
         if candidates:
             break
         assert time.monotonic() < deadline, (word, [row["text"] for row in rows if row["text"].strip()])
