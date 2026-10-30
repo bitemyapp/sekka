@@ -7,10 +7,10 @@
 # too, so a system refusing unfree packages would have reported those as
 # unsupported. Wrappers whose metadata claims more than their dependencies
 # support, as Steam's 32-bit runtime does on ARM, list their `platforms` in
-# the catalog. So do entries from other flakes, whose packages systems never
-# read: reading them would fetch those flakes for every system. Checks of the
-# catalogs instantiate everything to keep those lists and the `unfree` flags
-# honest.
+# the catalog. So do the entries a caller marks `listed`, whose packages
+# systems never read, such as those of other flakes, which reading would fetch
+# for every system. Checks of the catalogs instantiate everything to keep
+# those lists and the `unfree` flags honest.
 {
   lib,
   hostPlatform,
@@ -19,8 +19,8 @@
   # would install although unsupported or broken are offered too.
   config ? { },
   # Entries whose `platforms` list alone decides, without reading their
-  # packages: those another flake packages, which reading would fetch and
-  # evaluate on every system, picked or not. One without a list is not
+  # packages, such as those another flake packages, which reading would fetch
+  # and evaluate on every system, picked or not. One without a list is not
   # offered.
   listed ? _: false,
   # Also instantiate each package, without building or retaining its closure.
