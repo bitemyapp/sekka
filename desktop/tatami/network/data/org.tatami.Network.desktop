@@ -6,5 +6,6 @@ Comment=Join Wi-Fi networks and set up wired connections, VPNs, DNS and addresse
 Exec=tatami-network
 Icon=preferences-system-network
 Categories=Settings;HardwareSettings;
+OnlyShowIn=Tatami;
 Keywords=wifi;wi-fi;wireless;internet;connection;ethernet;wired;vpn;wireguard;dns;ip;address;hidden;enterprise;eduroam;
 StartupNotify=true

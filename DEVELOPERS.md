@@ -727,7 +727,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `sidestep`, `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, Sidestep for Aizome's build and the others as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `sidestep` input names its revision, so the nightly's input update never moves it: a new Sidestep is a change to `flake.nix`, reviewed with the Aizome changes that need it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -1033,6 +1033,50 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+The shell observes application launch attempts through `aizome-sys`:
+process creation and exit are separate events, and only a compositor window
+event confirms that a window opened. D-Bus acceptance and successful
+single-instance handoffs keep their narrower meaning. Desktop-entry launches
+and commands launched by the shell share this path. Raw compositor `spawn`
+bindings and processes started from terminals remain outside it.
+Toolchest ▸ System ▸ Application Launches shows the last 64 attempts; early
+failures and unconfirmed graphical launches offer Show Details. The shell
+also exposes outcomes through `aizome-shell msg state`; `aizome-shell msg
+'{"request":"open","what":"launches"}'` opens the same details window.
+
+Each observed launch writes directly to journald with a unique
+`SYSLOG_IDENTIFIER=aizome-launch-…`. The details window queries that exact
+identifier on a worker, capped at 200 entries and 64 KiB with a five-second
+deadline. Its **Open in Logs** runs `aizome-nisshi --launch` with
+that identifier, through the same observed launch path. It never displays other attempts' output, captures the user's
+environment, or pipes application output through the shell. The latter
+preserves application lifetime when the shell is replaced. Accepted D-Bus
+activation may have no output here because the bus owns that process.
+History is bounded in memory and resets with the shell; the journal keeps
+output according to its own retention. Failure details are local to the
+user and are copied only on request.
+
+The Aizome package's mandatory check phase runs the shell and system-library
+unit tests, including delayed process failure, literal command arguments,
+notification actions, details rendering and handoffs. For focused checks:
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-sys -p aizome-shell --lib
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell --lib journal_output_is_isolated -- --ignored
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#grim -c python3 desktop/aizome/scripts/test-startup.py \
+  --shell desktop/aizome/target/debug/aizome-shell --evidence .work/startup-evidence
+```
+
+The journal check writes only uniquely identified fixture output. The last
+command uses the named shell with installed Aizome and Koe (override
+`--compositor`, `--ctl`, `--koe` for other binaries), private home and runtime
+directories, and disconnected session/system buses. It launches a delayed
+failure and a missing program through the real palette, checks that stderr
+is visible in Details, then opens a real Koe window without enabling
+dictation. Its screenshots and JSON identify component evidence, not an ISO
+or physical-hardware qualification.
+
 Aizome's session launcher owns desktop cleanup even when logind terminates
 only the login scope, as Yukimi's Sign Out does. The compositor runs in the
 user manager, outside that scope; HUP, INT and TERM must therefore stop the
@@ -1253,6 +1297,41 @@ Sidestep stays a separate product for objc2 programs. It is not kept in
 step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
 same.
+
+Nisshi (`desktop/aizome/apps/nisshi`), Aizome's log viewer, reads the
+journal and /var/log through `aizome-nisshi-helper`, a second binary of the
+same crate that uses only the library's `query` and `protocol` modules.
+The window runs it as the user. **Unlock** runs another copy through
+`/run/wrappers/bin/pkexec --disable-internal-agent` under
+`org.aizome.Nisshi.read-system-logs`, whose policy the package writes to
+`share/polkit-1/actions` naming `$out/libexec/aizome-nisshi-helper`, the
+path the window finds beside itself. Keep that boundary: the window sends
+data, never arguments. The helper checks each query and builds journalctl's
+arguments itself from options that only read. It reads files only under
+/var/log, honours `NISSHI_JOURNALCTL` and `NISSHI_LOG_DIR` only when it
+isn't root, and ends when its input closes. The Aizome module turns on
+NixOS's pkexec wrapper (`security.polkit.enablePkexecWrapper`, where the
+option exists).
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi
+nix develop .#aizome -c cargo test --release --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi --test perf -- --nocapture
+nix build .#aizome-checks.nisshi -L
+```
+
+The first runs the real helper over a stand-in journalctl and pkexec
+(`tests/reader.rs`), besides the headless window and its pictures. The
+last boots a disposable VM to check the installed policy, the setuid
+wrapper and the helper as root through real polkit. Neither types a
+password into a desktop's dialog.
+
+Whole-boot search pages through older journal entries and uses the same
+matcher as the visible messages, including friendly source names and text
+with terminal styling removed. Raw `FIELD=value` terms are sent to the
+helper as journal matches. Opening a second instance replaces the current
+query and passes its `XDG_ACTIVATION_TOKEN` to the existing window; it does
+not request a fresh token from that background window's old input.
+
 
 ## Tatami Bluetooth
 

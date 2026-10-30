@@ -981,6 +981,13 @@ impl Window<'_> {
         self.request(WindowRequest::Activate);
     }
 
+    /// Activate with a token forwarded by the launcher of another instance.
+    pub fn activate_with_token(&mut self, token: &str) {
+        if let Some(window) = self.data.showing {
+            send(self.tx, ToRender::ActivateWithToken { window, token: token.to_owned() });
+        }
+    }
+
     /// Move the window with the pointer, from the button press under way:
     /// for a window that draws its own title bar or moves by its
     /// background.

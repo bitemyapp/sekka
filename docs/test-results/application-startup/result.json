@@ -1,0 +1,63 @@
+{
+  "executables": {
+    "shell": "/home/callen/work/sekka-application-startup/desktop/aizome/target/debug/aizome-shell",
+    "compositor": "/nix/store/z3bq0larglsmsc0815d8kq78gk868psy-aizome-0.1.0/bin/aizome",
+    "ctl": "/nix/store/z3bq0larglsmsc0815d8kq78gk868psy-aizome-0.1.0/bin/aizomectl",
+    "koe": "/nix/store/z3bq0larglsmsc0815d8kq78gk868psy-aizome-0.1.0/bin/aizome-koe"
+  },
+  "delayed_failure": {
+    "id": 1,
+    "journal_id": "aizome-launch-32d60406eecebed9ae4af3532603ca03",
+    "name": "Startup Delayed Failure",
+    "outcome": "Launch failed: exit status: 23",
+    "window_observed": false
+  },
+  "state": {
+    "apps": [
+      "org.aizome.Koe"
+    ],
+    "focused": 4,
+    "launches": [
+      {
+        "id": 1,
+        "journal_id": "aizome-launch-32d60406eecebed9ae4af3532603ca03",
+        "name": "Startup Delayed Failure",
+        "outcome": "Launch failed: exit status: 23",
+        "window_observed": false
+      },
+      {
+        "id": 2,
+        "journal_id": "aizome-launch-bb3661aaae9a08df49cdba1c5c4e7048",
+        "name": "Startup Missing Program",
+        "outcome": "Could not start",
+        "window_observed": false
+      },
+      {
+        "id": 3,
+        "journal_id": "aizome-launch-aade4309c5c5084e76d783aa6425df1d",
+        "name": "Startup Window",
+        "outcome": "Window opened",
+        "window_observed": true
+      }
+    ],
+    "menu": null,
+    "notes": [],
+    "palette": null,
+    "panel": null,
+    "panel_under": null,
+    "pid": 282587,
+    "recording": null,
+    "screens": [
+      "HEADLESS-1"
+    ],
+    "sharing": [],
+    "surfaces": [
+      "Palette",
+      "Deskbar",
+      "Startup",
+      "Desktop { output: 48 }",
+      "MenuBar { output: 48 }"
+    ]
+  },
+  "coverage": "private headless compositor; actual palette, shell, launcher and integrated Koe window"
+}

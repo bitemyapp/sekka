@@ -181,6 +181,14 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         }
     }
 
+    /// Activate using a launcher's xdg-activation token, for example when
+    /// a second instance hands a request to an already running window.
+    pub fn activate_with_token(&mut self, window: WindowKey, token: &str) {
+        if let Some(win) = self.core.window_of(window) {
+            self.platform.activate_with_token(win, token);
+        }
+    }
+
     /// The open windows (not sheets), oldest first.
     pub fn windows(&self) -> Vec<WindowKey> {
         self.core.app_windows().into_iter().map(|(_, k)| k).collect()
