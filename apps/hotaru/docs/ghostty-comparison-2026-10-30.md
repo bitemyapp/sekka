@@ -158,7 +158,10 @@ differences that Ghostty's own generators turned up.
   Ghostty's top row is blank, so the two end some malformed OSC sequences
   differently.
 
-Neither has been traced to its first differing byte yet.
+Both were traced and fixed after this comparison, together with the related
+parser, CSI and width rules that fuzzing and a CSI sweep found. All eight
+inputs now leave the reference's screen; see
+[stream-parser.md](stream-parser.md).
 
 ## Follow-up
 
@@ -167,7 +170,8 @@ Neither has been traced to its first differing byte yet.
 - Close the feed gaps on random plain lines and Unicode-heavy text, and measure
   mode 2027.
 - Find where random UTF-8 and malformed OSC first diverge from the pinned
-  library, then fix or name each difference.
+  library, then fix or name each difference. Done; see
+  [stream-parser.md](stream-parser.md).
 - Investigate the 60 Hz scroll capture shortfall and its compositor cost.
 - Let `hotaru-replay --bench` stream its input, so whole-command comparisons
   with `ghostty-bench` stop counting a read Ghostty doesn't do.

@@ -153,6 +153,14 @@ handling. Native OSC 8 activation uses the displayed snapshot and a bounded
 desktop-opener worker; [its scope and tests](../../desktop/aizome/apps/hotaru/README.md)
 remain distinct from full selection/URL-detection compatibility.
 
+The [stream parser and width rules](docs/stream-parser.md) cover two things:
+
+- Which raw bytes and malformed sequences the reference acts on, and the
+  parameter counts each CSI accepts.
+- Legacy-mode widths, which now come from the pinned uucode table.
+
+`tools/stream-parser-oracle.py` records their cases from the actual library.
+
 [Automatic URL and path detection](docs/automatic-links.md) now uses the pinned
 default rule on bounded logical context from the exact displayed snapshot.
 Worker results and path-helper completion are checked against the original

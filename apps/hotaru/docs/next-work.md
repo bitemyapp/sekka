@@ -200,8 +200,11 @@ specific work:
   rich-copy checkpoint.
 - Close the feed gaps on Ghostty's random plain lines (1.17) and Unicode-heavy
   lines (1.23), and measure mode 2027.
-- Trace where Ghostty's random UTF-8 and malformed OSC inputs first leave a
-  different screen, then fix or name each difference.
+- Time Ghostty's random UTF-8 and OSC inputs, whose screens now match
+  ([stream-parser.md](stream-parser.md)).
+- Implement the DEC and ANSI modes the reference reports but Hotaru doesn't
+  (2, 12, 3, 4, 5, 8, 40, 45, 1039, 1045, 2026, 2031, 2033, 2048), and
+  DECSASD.
 - Investigate the 60 Hz scroll capture shortfall (114/120) and its compositor cost.
 
 In the software GUI pilot Hotaru already leads on startup, keyboard latency,

@@ -2,7 +2,8 @@
 //! only OSC strings allocate, with a strict size bound and discard-until-ST on
 //! overflow. No chunk boundary is semantically significant.
 
-const MAX_PARAMS: usize = 32;
+// The reference drops a CSI or DCS with a 24th separator.
+const MAX_PARAMS: usize = 24;
 // Ghostty's fixed capture excludes the command prefix and its semicolon.
 // Clipboard OSC 52 and Kitty's OSC 5522 have a separate allocating cap for
 // their much larger payloads.
@@ -43,6 +44,9 @@ enum State {
     #[default]
     Ground,
     Escape,
+    /// An escape with more intermediates than any known one; its final byte
+    /// (0x30-0x7E) ends it without a dispatch.
+    IgnoreEscape,
     Csi,
     DcsEntry,
     DcsString,
@@ -50,7 +54,10 @@ enum State {
     IgnoreCsi,
     Osc,
     OscEscape,
+    /// An invalid DCS header's payload: every byte up to ST is ignored.
     IgnoreString,
+    /// SOS, PM or APC: ignored up to ST, but a C1 control still acts.
+    SosPmApcString,
     IgnoreStringEscape,
 }
 
@@ -119,7 +126,8 @@ impl Parser {
                 0x1b => self.escape(),
                 0x00..=0x1f => out.execute(byte),
                 0x20..=0x7e => out.print(byte as char),
-                0x7f => {}
+                // The reference prints DEL, one cell wide, where xterm drops it.
+                0x7f => out.print('\u{7f}'),
                 0xc2..=0xdf => self.utf8_start(byte & 0x1f, 1, 0x80),
                 0xe0..=0xef => self.utf8_start(byte & 0x0f, 2, 0x800),
                 0xf0..=0xf4 => self.utf8_start(byte & 0x07, 3, 0x10000),
@@ -128,44 +136,43 @@ impl Parser {
             State::Escape => match byte {
                 0x1b => self.escape(),
                 0x00..=0x1f => out.execute(byte),
-                b'[' | b'P' if self.intermediate_count == 0 => {
-                    self.state = if byte == b'[' {
-                        State::Csi
-                    } else {
-                        State::DcsEntry
-                    };
-                    self.params.fill(Param::default());
-                    self.param_count = 1;
-                    self.has_parameters = false;
-                    self.private = None;
-                }
-                b']' if self.intermediate_count == 0 => {
-                    self.state = State::Osc;
-                    self.osc.clear();
-                    self.osc_overflow = false;
-                    self.osc_body = false;
-                    self.osc_limit = MAX_OSC_BODY;
-                }
+                b'[' if self.intermediate_count == 0 => self.enter_parameters(State::Csi),
+                b'P' if self.intermediate_count == 0 => self.enter_parameters(State::DcsEntry),
+                b']' if self.intermediate_count == 0 => self.enter_osc(),
                 b'X' | b'^' | b'_' if self.intermediate_count == 0 => {
-                    self.state = State::IgnoreString
+                    self.state = State::SosPmApcString
                 }
                 0x20..=0x2f => {
                     if self.intermediate_count < 2 {
                         self.intermediates[self.intermediate_count] = byte;
                         self.intermediate_count += 1;
                     } else {
-                        self.state = State::IgnoreCsi;
+                        self.state = State::IgnoreEscape;
                     }
                 }
                 0x30..=0x7e => {
                     out.esc(&self.intermediates[..self.intermediate_count], byte);
                     self.state = State::Ground;
                 }
+                0x80..=0x9f => self.c1(byte, out),
+                _ => {}
+            },
+            State::IgnoreEscape => match byte {
+                0x1b => self.escape(),
+                0x00..=0x1f => out.execute(byte),
+                0x30..=0x7e => self.state = State::Ground,
+                0x80..=0x9f => self.c1(byte, out),
                 _ => {}
             },
             State::Csi | State::DcsEntry => match byte {
                 0x1b => self.escape(),
-                0x00..=0x1f => out.execute(byte),
+                // A DCS header ignores the C0 controls a CSI executes. Guards
+                // inside the arms keep the byte match a single dispatch.
+                0x00..=0x1f => {
+                    if self.state == State::Csi {
+                        out.execute(byte)
+                    }
+                }
                 b'0'..=b'9' if self.intermediate_count == 0 => {
                     self.has_parameters = true;
                     let p = &mut self.params[self.param_count - 1];
@@ -177,16 +184,20 @@ impl Parser {
                 }
                 b';' | b':' if self.intermediate_count == 0 => {
                     self.has_parameters = true;
-                    if self.param_count == MAX_PARAMS {
+                    // DCS parameters have no colon subparameters.
+                    if self.param_count == MAX_PARAMS
+                        || (byte == b':' && self.state == State::DcsEntry)
+                    {
                         self.ignore_control();
                     } else {
                         self.params[self.param_count - 1].colon = byte == b':';
                         self.param_count += 1;
                     }
                 }
+                // A private marker only leads the header; after a parameter
+                // byte it makes the sequence invalid.
                 0x3c..=0x3f
-                    if self.param_count == 1
-                        && self.params[0].value == 0
+                    if !self.has_parameters
                         && self.private.is_none()
                         && self.intermediate_count == 0 =>
                 {
@@ -206,6 +217,12 @@ impl Parser {
                         self.osc.clear();
                         self.osc_overflow = false;
                         self.state = State::DcsString;
+                    } else if byte != b'm'
+                        && self.params[..self.param_count].iter().any(|p| p.colon)
+                    {
+                        // Only SGR takes colon subparameters; the reference
+                        // drops any other sequence that has them.
+                        self.state = State::Ground;
                     } else {
                         out.csi(Csi {
                             params: &self.params[..self.complete_param_count()],
@@ -217,13 +234,15 @@ impl Parser {
                         self.state = State::Ground;
                     }
                 }
-                0x7f => {}
+                0x7f | 0xa0..=0xff => {}
+                0x80..=0x9f => self.c1(byte, out),
                 _ => self.ignore_control(),
             },
             State::IgnoreCsi => match byte {
                 0x1b => self.escape(),
                 0x00..=0x1f => out.execute(byte),
                 0x40..=0x7e => self.state = State::Ground,
+                0x80..=0x9f => self.c1(byte, out),
                 _ => {}
             },
             State::Osc => match byte {
@@ -258,7 +277,8 @@ impl Parser {
             }
             State::DcsString => match byte {
                 0x1b => self.state = State::DcsEscape,
-                0x00..=0x1f | 0x7f => {}
+                // C0 controls are part of the payload; only DEL is dropped.
+                0x7f => {}
                 _ => {
                     self.capture_byte(byte, 8192);
                 }
@@ -290,6 +310,11 @@ impl Parser {
                     self.state = State::IgnoreStringEscape;
                 }
             }
+            State::SosPmApcString => match byte {
+                0x1b => self.state = State::IgnoreStringEscape,
+                0x80..=0x9f => self.c1(byte, out),
+                _ => {}
+            },
             State::IgnoreStringEscape => {
                 if byte == b'\\' {
                     self.state = State::Ground;
@@ -304,6 +329,39 @@ impl Parser {
     fn escape(&mut self) {
         self.state = State::Escape;
         self.intermediate_count = 0;
+    }
+    fn enter_parameters(&mut self, state: State) {
+        self.state = state;
+        self.params.fill(Param::default());
+        self.param_count = 1;
+        self.has_parameters = false;
+        self.private = None;
+        self.intermediate_count = 0;
+    }
+    fn enter_osc(&mut self) {
+        self.state = State::Osc;
+        self.osc.clear();
+        self.osc_overflow = false;
+        self.osc_body = false;
+        self.osc_limit = MAX_OSC_BODY;
+    }
+    /// A raw C1 control (0x80-0x9F) where the reference parser's "anywhere"
+    /// transitions apply: escape and CSI/DCS headers, and SOS/PM/APC strings.
+    /// OSC and DCS payloads keep these bytes, and ground decodes UTF-8. The
+    /// introducers begin their sequences, ST ends one, and the rest execute
+    /// as `ESC (byte - 0x40)`, as Ghostty's stream does.
+    fn c1(&mut self, byte: u8, out: &mut impl Handler) {
+        match byte {
+            0x90 => self.enter_parameters(State::DcsEntry),
+            0x9b => self.enter_parameters(State::Csi),
+            0x9d => self.enter_osc(),
+            0x98 | 0x9e | 0x9f => self.state = State::SosPmApcString,
+            0x9c => self.state = State::Ground,
+            _ => {
+                self.state = State::Ground;
+                out.esc(&[], byte - 0x40);
+            }
+        }
     }
     fn complete_param_count(&self) -> usize {
         self.param_count

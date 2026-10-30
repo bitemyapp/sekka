@@ -24,6 +24,21 @@ fn color(value: Color) -> Value {
 fn repeat_and_saved_modes_match_actual_pinned_library() {
     let fixtures: Value =
         serde_json::from_str(include_str!("../../../upstream/vt-controls-fixtures.json")).unwrap();
+    assert_matches_recorded(&fixtures);
+}
+
+#[test]
+fn stream_parser_and_widths_match_actual_pinned_library() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../upstream/stream-parser-fixtures.json"
+    ))
+    .unwrap();
+    assert_matches_recorded(&fixtures);
+}
+
+/// Feeds every recorded case at several chunk sizes and compares the cells,
+/// cursor, selected modes and replies the actual pinned library produced.
+fn assert_matches_recorded(fixtures: &Value) {
     for case in fixtures["cases"].as_array().unwrap() {
         let data = bytes(&case["input"]);
         for chunk in [1, 7, 65536] {

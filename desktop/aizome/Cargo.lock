@@ -1944,7 +1944,6 @@ dependencies = [
  "lz4_flex",
  "simdutf8",
  "triomphe",
- "unicode-width",
 ]
 
 [[package]]
