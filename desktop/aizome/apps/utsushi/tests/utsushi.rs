@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use aizome_kit::testing::{Harness, assert_golden};
-use aizome_kit::{Size, WindowKey, WindowState};
+use aizome_kit::{Point, Size, WindowKey, WindowState};
 use aizome_utsushi::Utsushi;
 use aizome_utsushi::app::{Msg, Status, VIDEO};
 
@@ -173,6 +173,62 @@ fn full_screen_controls_go_again_after_another_desk() {
     h.window_state(w, WindowState { suspended: true, ..FULL_SCREEN });
     h.window_state(w, FULL_SCREEN);
     controls_went_again(&mut h, "after the window came back");
+}
+
+/// The pointer moves over the picture, which shows the full-screen
+/// controls, then straight onto `name` in them.
+fn pointer_onto(h: &mut Harness<Utsushi>, w: WindowKey, name: &str) {
+    h.move_to(w, Point::new(100.0, 100.0));
+    assert!(h.program().controls, "a move over the picture shows them");
+    let at = h.find_id(w, name).unwrap_or_else(|| panic!("{name} in the controls")).center();
+    h.move_to(w, at);
+}
+
+#[test]
+fn full_screen_controls_go_after_the_pointer_leaves_a_control_for_the_picture() {
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    pointer_onto(&mut h, w, "volume");
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "they stay while the pointer is over them");
+    // Off the volume onto the picture in one move, not crossing the bar's
+    // own background: the bar never hears the pointer leave it.
+    h.move_to(w, Point::new(100.0, 100.0));
+    controls_went_again(&mut h, "after the pointer went from a control to the picture");
+}
+
+#[test]
+fn full_screen_controls_go_after_the_pointer_leaves_the_window_from_a_control() {
+    // To another output, say.
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    pointer_onto(&mut h, w, "volume");
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "they stay while the pointer is over them");
+    h.leave(w);
+    controls_went_again(&mut h, "after the pointer left the window from a control");
+}
+
+#[test]
+fn full_screen_controls_stay_while_the_pointer_rests_on_the_timeline() {
+    // Reading the times along it: the timeline is part of the controls.
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    pointer_onto(&mut h, w, "timeline");
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "they stay while the pointer is over the timeline");
+    h.move_to(w, Point::new(100.0, 100.0));
+    controls_went_again(&mut h, "after the pointer went from the timeline to the picture");
+}
+
+#[test]
+fn full_screen_controls_go_after_full_screen_left_with_the_pointer_on_them() {
+    // Escape and F with the pointer resting where the volume was: the
+    // floating bar went with the pointer on it, and heard nothing.
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    pointer_onto(&mut h, w, "volume");
+    h.send(Msg::Escape);
+    h.window_state(w, WINDOWED);
+    h.send(Msg::ToggleFullscreen);
+    h.window_state(w, FULL_SCREEN);
+    controls_went_again(&mut h, "after full screen came again");
 }
 
 #[test]

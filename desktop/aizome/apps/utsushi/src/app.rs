@@ -177,6 +177,7 @@ pub struct Utsushi {
     pub hidden: bool,
     /// The full-screen controls show.
     pub controls: bool,
+    /// The pointer is over the full-screen controls: they stay.
     over_controls: bool,
     controls_timer: Option<TimerHandle>,
     controls_shown_at: Option<Instant>,
@@ -431,8 +432,10 @@ impl Utsushi {
         if !self.fullscreen {
             return;
         }
+        // Moves come many a second: once shown, the timer is set again at
+        // most four times a second, as long as one is set.
         let fresh = self.controls_shown_at.is_some_and(|t| t.elapsed() < Duration::from_millis(250));
-        if self.controls && fresh {
+        if self.controls && fresh && self.controls_timer.is_some() {
             return;
         }
         let was = self.controls;
@@ -942,7 +945,13 @@ impl Program for Utsushi {
                 }
                 self.show_controls(cx);
             }
-            Msg::Pointer => self.show_controls(cx),
+            Msg::Pointer => {
+                // Over the picture, so off the controls, which are over it:
+                // the bar hears the pointer leave only from its own
+                // background, not from a control it went straight off.
+                self.over_controls = false;
+                self.show_controls(cx);
+            }
             Msg::OverControls(on) => {
                 self.over_controls = on;
                 if !on {
@@ -1114,17 +1123,30 @@ impl Program for Utsushi {
             }
         }
         self.controls = true;
+        if was != state.fullscreen {
+            // The controls move between the bar and over the picture: keys
+            // go to the picture, whatever had them in the bar, and the
+            // floating bar starts with the pointer off it (as it hears it
+            // come).
+            self.over_controls = false;
+            cx.focus("stage");
+        }
         if entering {
             self.show_controls(cx);
         }
         self.rest_controls(cx);
-        if was != state.fullscreen {
-            // The controls move between the bar and over the picture: keys
-            // go to the picture, whatever had them in the bar.
-            cx.focus("stage");
-        }
         self.pos = self.player().map_or(self.pos, Player::position);
         self.schedule(cx);
+    }
+
+    fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
+        // Off the window from a control (to another output, or under
+        // another window): the bar doesn't hear it go, so the controls go
+        // as though the pointer had rested.
+        if window == self.window && !inside && self.over_controls {
+            self.over_controls = false;
+            self.rest_controls(cx);
+        }
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {

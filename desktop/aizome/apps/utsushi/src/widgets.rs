@@ -167,11 +167,14 @@ impl Widget for Timeline {
             }
             Event::PointerMove { pos, .. } => {
                 cx.state::<Hover>().x = Some(pos.x);
+                cx.invalidate();
                 if cx.is_pressed() {
                     Self::send(cx, Scrub::Move(self.time_at(pos.x)));
+                    return Status::Handled;
                 }
-                cx.invalidate();
-                Status::Handled
+                // On to what's around it: full screen's controls stay
+                // while the pointer is over them, the timeline included.
+                Status::Ignored
             }
             Event::PointerUp { pos, button: PointerButton::Left, .. } => {
                 Self::send(cx, Scrub::End(self.time_at(pos.x)));
