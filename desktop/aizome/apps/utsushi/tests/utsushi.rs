@@ -65,8 +65,9 @@ fn an_empty_window_offers_to_open() {
 fn a_video_plays_with_its_picture_over_the_window() {
     let mut h = harness();
     let w = window(&h);
-    h.send(Msg::Open(vec![fixture("clip.mp4")]));
-    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    // The clip's subtitles go over the picture from 0.2 s (the next test
+    // shows them), and on a loaded machine one is up by the time it plays.
+    play_without_subtitles(&mut h, "clip.mp4");
     assert_eq!(h.title(w), "Test Card");
     let (rect, below) = placed(&h).expect("the video placed");
     // 16:9 fitted in the stage, centred, on whole points.
@@ -99,12 +100,12 @@ fn subtitles_go_over_the_picture_or_into_the_letterbox() {
     assert_eq!(placed(&h).map(|p| p.1), Some(false));
 }
 
-/// The chaptered film playing, with its subtitles off: a cue over the
-/// picture puts it under the drawing whatever the controls do, and when
-/// one shows depends on how fast the machine is (on a loaded one, a cue
-/// had come up by the time the controls went).
-fn play_without_subtitles(h: &mut Harness<Utsushi>) {
-    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+/// Fixture `name` playing, with its subtitles off: a cue over the picture
+/// puts it under the drawing whatever the window and its controls do, and
+/// when one shows depends on how fast the machine is (on a loaded one, a
+/// cue had come up by the time a test looked, or the controls went).
+fn play_without_subtitles(h: &mut Harness<Utsushi>, name: &str) {
+    h.send(Msg::Open(vec![fixture(name)]));
     until(h, 5.0, |a| a.status == Status::Playing);
     h.send(Msg::Subtitles(None));
     until(h, 2.0, |a| a.sub_track.is_none());
@@ -115,7 +116,7 @@ fn play_without_subtitles(h: &mut Harness<Utsushi>) {
 fn full_screen_controls_cover_the_picture_until_they_hide() {
     let mut h = harness();
     let w = window(&h);
-    play_without_subtitles(&mut h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
     h.window_state(w, WindowState { fullscreen: true, maximized: false, suspended: false });
     assert!(h.program().controls);
     assert_eq!(placed(&h).map(|p| p.1), Some(true), "the controls are over the picture");
@@ -136,7 +137,7 @@ const WINDOWED: WindowState = WindowState { fullscreen: false, maximized: false,
 fn full_screen_with_the_controls_gone() -> (Harness<Utsushi>, WindowKey) {
     let mut h = harness();
     let w = window(&h);
-    play_without_subtitles(&mut h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
     h.window_state(w, FULL_SCREEN);
     h.advance(Duration::from_secs(3));
     assert!(!h.program().controls);
