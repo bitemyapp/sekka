@@ -58,9 +58,7 @@
 //! Not handled here: `Type=Link` entries (open their `URL` with the default
 //! browser).
 
-use super::entry::{DesktopEntry, EntryKind};
-use super::exec::{Exec, ExecContext};
-use super::xdg::find_program;
+use aizome_apps::{DesktopEntry, EntryKind, Exec, ExecContext, find_program, random_hex};
 use crate::{Error, Result, Task, Wake};
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -148,7 +146,7 @@ pub struct LaunchObserver {
 
 impl LaunchObserver {
     pub fn new(send: impl Fn(LaunchEvent) + Send + Sync + 'static) -> Self {
-        Self { journal_id: format!("aizome-launch-{}", super::random_hex(16)), send: Arc::new(send) }
+        Self { journal_id: format!("aizome-launch-{}", random_hex(16)), send: Arc::new(send) }
     }
 
     pub fn journal_id(&self) -> &str {
@@ -255,7 +253,7 @@ fn target_uri(target: &str) -> String {
     } else {
         std::env::current_dir().map(|d| d.join(path)).unwrap_or_else(|_| path.to_owned())
     };
-    super::path_to_file_uri(&absolute)
+    aizome_apps::path_to_file_uri(&absolute)
 }
 
 /// [`launch`] on a new thread; `wake` is called when the result is ready.
@@ -342,7 +340,7 @@ fn command_entry(argv: &[String], app_id: Option<&str>) -> Result<DesktopEntry> 
     let mut entry = DesktopEntry::parse(
         "[Desktop Entry]\nType=Application\nName=Command\nExec=true\n",
         &id,
-        &super::Locale::parse("C"),
+        &aizome_apps::Locale::parse("C"),
     )?;
     entry.name = argv.first().cloned().unwrap_or_else(|| "Command".into());
     Ok(entry)
@@ -509,7 +507,7 @@ fn spawn_scope(
     let Some((program, prefix)) = systemd_run.split_first() else {
         return Err(Fallback("no systemd-run".into()));
     };
-    let unit = unit_name(entry.app_id(), &super::random_hex(8));
+    let unit = unit_name(entry.app_id(), &random_hex(8));
     let mut command = Command::new(program);
     command.args(prefix).args(["--user", "--scope", "--collect"]);
     command.arg(format!("--unit={unit}"));
@@ -707,8 +705,8 @@ pub fn systemd_escape(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::entry::Locale;
-    use super::super::testutil::TempDir;
+    use aizome_apps::Locale;
+    use aizome_apps::testutil::TempDir;
     use super::*;
 
     fn entry(text: &str) -> DesktopEntry {

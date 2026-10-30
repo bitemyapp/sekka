@@ -185,6 +185,17 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<aizome_apps::Error> for Error {
+    fn from(error: aizome_apps::Error) -> Error {
+        match error {
+            aizome_apps::Error::ManagedBySystem(what) => Error::ManagedBySystem(what),
+            aizome_apps::Error::InvalidArgument(what) => Error::InvalidArgument(what),
+            aizome_apps::Error::NotFound(what) => Error::NotFound(what),
+            aizome_apps::Error::Io { kind, message } => Error::from(std::io::Error::new(kind, message)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
