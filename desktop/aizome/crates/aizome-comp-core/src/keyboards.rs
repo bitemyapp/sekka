@@ -189,12 +189,18 @@ impl State {
                 // A new keymap starts unlocked, in the first layout, and the
                 // focus has heard so; it hears the locks again before the
                 // key on its way (whose modifiers would come after it).
-                kb.with_xkb_state(self, |mut c| c.set_layout(layout));
+                // The locks first: smithay's set_modifier_state puts the
+                // seat back in the first layout, which set_layout then
+                // undoes (keeping the locks).
                 let mut now = kb.modifier_state();
-                if (now.caps_lock, now.num_lock) != (before.caps_lock, before.num_lock) {
+                let locks = (now.caps_lock, now.num_lock) != (before.caps_lock, before.num_lock);
+                if locks {
                     now.caps_lock = before.caps_lock;
                     now.num_lock = before.num_lock;
                     kb.set_modifier_state(now);
+                }
+                kb.with_xkb_state(self, |mut c| c.set_layout(layout));
+                if locks {
                     let seat = self.az.seat.clone();
                     self.led_state_changed(&seat, kb.led_state());
                     if let Some(focus) = kb.current_focus() {

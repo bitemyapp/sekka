@@ -255,6 +255,85 @@ fn each_keyboard_types_with_its_own_modifier_keys() {
     assert_eq!(got.as_deref(), Some("Another"));
 }
 
+/// Two layouts: the PC switches to the second (Alt+Shift), then the Mac,
+/// with keys of its own (so a keymap of its own), types b twice, then a
+/// capital Y and a y. The Shift is the first change of modifiers since the
+/// change of keyboard, which tells the app the layout the seat is really
+/// in. What the app saw.
+fn layout_after_a_change_of_keyboard(numlock: bool, caps: bool) -> common::Seen {
+    const PC: &str = "Logitech K120";
+    const MAC: &str = "Apple Inc. Magic Keyboard";
+    let settings = format!(
+        "[input.keyboard]\nlayouts = [\"us\", \"de\"]\noptions = \"grp:alt_shift_toggle\"\nnumlock = {numlock}\n\
+         [[input.keyboards]]\nname = \"{MAC}\"\nid = \"05ac:029c\"\noptions = \"altwin:swap_alt_win\"\n"
+    );
+    let c = Compositor::start(Options { settings: &settings, ..Default::default() });
+    let a = c.client(Spec::new("org.aizome.layout-test", 0x2222cc));
+    c.wait_window("org.aizome.layout-test");
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    for (name, id) in [(PC, "046d:c31c"), (MAC, "05ac:029c")] {
+        c.ok(Request::Synthesize {
+            events: vec![Synthetic::PlugKeyboard {
+                name: name.into(),
+                id: id.into(),
+                bus: aizome_ipc::KeyboardBus::Usb,
+            }],
+        });
+    }
+    let on = |keyboard: &str, key: &str, pressed: bool| {
+        c.ok(Request::Synthesize {
+            events: vec![Synthetic::KeyOn { keyboard: keyboard.into(), key: key.into(), pressed }],
+        })
+    };
+    if caps {
+        on(PC, "58", true);
+        on(PC, "58", false);
+        a.wait_seen("Caps Lock on", |s| s.locked & 2 != 0);
+    }
+    on(PC, "56", true);
+    on(PC, "42", true);
+    on(PC, "42", false);
+    on(PC, "56", false);
+    a.wait_seen("the second layout on the PC", |s| s.group == 1);
+    for _ in 0..2 {
+        on(MAC, "48", true);
+        on(MAC, "48", false);
+    }
+    on(MAC, "42", true);
+    on(MAC, "21", true);
+    on(MAC, "21", false);
+    on(MAC, "42", false);
+    on(MAC, "21", true);
+    on(MAC, "21", false);
+    a.wait_seen("Shift+y and y", |s| s.keys.iter().filter(|(k, _)| *k == 21).count() == 2);
+    c.settle();
+    let s = a.seen();
+    // b, b, Shift, Y and y: all in the second layout.
+    let last: Vec<u32> = s.group_at_keys.iter().rev().take(5).copied().collect();
+    assert_eq!(last, [1; 5], "the layout as each key on the Mac came: {:?}", s.group_at_keys);
+    s
+}
+
+#[test]
+fn layout_survives_a_change_of_keyboard_without_locks() {
+    let s = layout_after_a_change_of_keyboard(false, false);
+    assert_eq!(s.group, 1, "the second layout after typing on the Mac");
+}
+
+#[test]
+fn layout_survives_a_change_of_keyboard_with_num_lock() {
+    let s = layout_after_a_change_of_keyboard(true, false);
+    assert_eq!(s.group, 1, "the second layout after typing on the Mac with Num Lock on");
+    assert_ne!(s.locked & 0x10, 0, "and Num Lock still on: {:#x}", s.locked);
+}
+
+#[test]
+fn layout_survives_a_change_of_keyboard_with_caps_lock() {
+    let s = layout_after_a_change_of_keyboard(false, true);
+    assert_eq!(s.group, 1, "the second layout after typing on the Mac with Caps Lock on");
+    assert_ne!(s.locked & 2, 0, "and Caps Lock still on");
+}
+
 #[test]
 fn a_caught_key_says_which_keyboard_and_reaches_no_app() {
     const SUPER: u32 = 1 << 6;
