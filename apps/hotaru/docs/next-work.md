@@ -194,6 +194,19 @@ latency, frame pacing and resident memory on the same host with equivalent
 features and workloads. Parser microbenchmarks cannot establish application
 parity. Preserve long-running fuzzing and unsafe-code ownership/layout checks.
 
+The [2026-10-30 comparison](ghostty-comparison-2026-10-30.md) of `2f2f73e0` adds
+specific work:
+- Bisect the styled (+43 %) and cursor/erase (+20 %) core slowdowns since the
+  rich-copy checkpoint.
+- Close the feed gaps on Ghostty's random plain lines (1.17) and Unicode-heavy
+  lines (1.23), and measure mode 2027.
+- Trace where Ghostty's random UTF-8 and malformed OSC inputs first leave a
+  different screen, then fix or name each difference.
+- Investigate the 60 Hz scroll capture shortfall (114/120) and its compositor cost.
+
+In the software GUI pilot Hotaru already leads on startup, keyboard latency,
+idle CPU and memory.
+
 **Gate:** close the relevant feature inventory, qualify desktop clipboard stress
 and races, and demonstrate the original efficiency requirement with reproducible
 whole-application evidence before calling Hotaru a complete replacement.

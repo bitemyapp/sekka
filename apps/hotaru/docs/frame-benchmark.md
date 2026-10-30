@@ -9,7 +9,9 @@ binary; unrelated Uta builds were active, so all its timestamps are excluded
 from comparative conclusions.
 
 The subsequent [sprite-package GUI pilot](gui-pilot-sprites.md) records the first
-accepted matched timing window: four startup pairs and one sustained pair. Its
+accepted matched timing window: four startup pairs and one sustained pair. The
+[2026-10-30 comparison](ghostty-comparison-2026-10-30.md) repeats it for
+`2f2f73e0` with two sustained pairs. Its
 software-rendering scope, raw observations and remaining scrolling gap are
 separate from this earlier harness/calibration qualification.
 

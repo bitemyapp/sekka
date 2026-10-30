@@ -343,7 +343,16 @@ validation.
 
 ## Comparable feed benchmarks
 
-The current measured core checkpoint still misses the performance gate.
+The latest measurements, for `2f2f73e0`, are in
+[`ghostty-comparison-2026-10-30.md`](ghostty-comparison-2026-10-30.md), with
+reports in `upstream/benchmarks/clipboard-checkpoint-*.json`. The four reviewed
+patterns matched again. Rust/Zig ratios were **0.878 ASCII**, **1.100 Unicode**,
+**0.848 styled text** and **0.122 cursor/erase**. Styled text and cursor/erase
+are slower than at the rich-copy checkpoint below, and haven't been bisected.
+The same document runs Ghostty's own `ghostty-gen`/`ghostty-bench` suite and
+the matched GUI pilot again.
+
+The rich-copy core checkpoint still missed the performance gate.
 [`../upstream/candidate-rich-copy-build.json`](../upstream/candidate-rich-copy-build.json)
 identifies the audited owned-history, hyperlink and formatter build. Its four
 compared states matched. Rust/Zig median feed ratios were **1.115 ASCII**,
