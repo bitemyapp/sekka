@@ -89,6 +89,16 @@ fn finish(state: &mut State) -> Option<Report> {
     report
 }
 
+/// Gives up (Esc, or the session locked): whoever asked hears nothing was
+/// picked.
+pub fn cancel(state: &mut State) {
+    if state.lg.r().overlays.area.is_some()
+        && let Some(r) = finish(state)
+    {
+        emit(state, r.tag, None, None);
+    }
+}
+
 /// Tells subscribers what was picked (`None`: nothing, Esc).
 fn emit(state: &mut State, tag: String, area: Option<Rect>, window: Option<WinId>) {
     let output = area.and_then(|r| {
@@ -198,9 +208,7 @@ pub fn key(state: &mut State, syms: &[Keysym], pressed: bool) -> Option<KeyDecis
     let a = state.lg.m().overlays.area.as_mut()?;
     if pressed {
         if syms.iter().any(|s| s.raw() == keysyms::KEY_Escape) {
-            if let Some(r) = finish(state) {
-                emit(state, r.tag, None, None);
-            }
+            cancel(state);
         } else if syms.iter().any(|s| s.raw() == keysyms::KEY_space) {
             // Between windows and the rest, where both may be picked.
             let toggles = a.report.as_ref().is_none_or(|r| r.window && (r.area || r.display));

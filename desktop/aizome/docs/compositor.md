@@ -187,7 +187,10 @@ Notes for client authors:
   window urgent (IPC `urgent`) instead.
 - ext-session-lock: `locked` is sent once every output has drawn a frame
   without the desktop; lock surfaces get the output's size and all input.
-  A locker that dies leaves the session locked.
+  A locker that dies leaves the session locked. Locking closes the
+  overview, the switcher, the marking menu and the area picker (one
+  borrowed with `pick-area` reports nothing picked), so a menu left open
+  can't act on the windows behind the prompt.
 - wlr-screencopy (what wf-recorder and grim use): each frame offers
   wl_shm XRGB8888 and, under GLES on a render node (or a GPU on udev), a
   linux-dmabuf XRGB8888 buffer too (`linux_dmabuf`, then `buffer_done`).

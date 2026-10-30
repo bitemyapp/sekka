@@ -229,6 +229,45 @@ fn keys_after_the_keyboard_marking_menu_carry_no_stale_modifiers() {
     assert!(!keys.iter().any(|k| [1, 33, 57, 103].contains(k)), "{keys:?}");
 }
 
+fn poll(what: &str, f: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !f() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn a_keyboard_marking_menu_does_nothing_behind_the_lock() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("test.a", 0xcc2222));
+    let _w = c.wait_window("test.a");
+    let chord = |keys: &str| c.ok(Request::Synthesize { events: vec![Synthetic::Chord { keys: keys.into() }] });
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    let desk = c.windows()[0].desk;
+    // The menu is up when the lid closes or the idle lock fires.
+    chord("ctrl+super+space");
+    c.settle();
+    let lock = LockClient::spawn(&c, 0x7e2553);
+    poll("locked", || *lock.locked.lock().unwrap() == Some(true));
+    // A password's first letters: C would close the window, ↑ fill it, S
+    // stack it, D then 2 move it to Desk 2.
+    for k in ["c", "up", "s", "d", "2"] {
+        chord(k);
+    }
+    c.settle();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(!a.seen().close_requested, "a key typed at the lock screen closed the window behind it");
+    let w = &c.windows()[0];
+    assert!(!w.fill && w.desk == desk, "a key typed at the lock screen moved the window: {w:?}");
+    // The lock closed the menu rather than hiding it: once unlocked, keys
+    // go to the app again.
+    a.wait_seen("the lock has the keyboard", |s| !s.keyboard_focus);
+    lock.unlock();
+    a.wait_seen("keyboard focus again", |s| s.keyboard_focus);
+    assert_eq!(type_x(&c, &a), 0, "x after the unlock: {:?}", a.seen().keys);
+}
+
 #[test]
 fn a_marking_menu_shows_after_a_pause_and_picks() {
     let c = Compositor::start(Options::default());
