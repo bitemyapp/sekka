@@ -5,7 +5,7 @@
 | Sekka's copy | [`dpt-cursor.patch`](../../../installer/genkan/rust/system/xe-dpt/dpt-cursor.patch), for 7.3 |
 | Upstream version | [xe-dpt-cursor.patch](xe-dpt-cursor.patch), for `master` at d89e1d186ec9 |
 | Status | Not sent ([Submitting](#submitting)) |
-| Fixes | 44e694958b95 ("drm/xe/display: Implement display support") |
+| Fixes | 44e694958b95 ("drm/xe/display: Implement display support"), 216d62bb241a ("drm/xe/display: Add writing of remapped dpt") |
 
 ## What goes wrong
 
@@ -14,13 +14,21 @@ buffer object holding one GGTT-format entry per 4 KiB page of the framebuffer.
 `intel_plane_pin_fb()` keeps the old plane state's mapping only when the plane
 shows the same framebuffer as before. Every page flip to another one, which
 is every flip of a compositor's swapchain or of a client's buffer on a plane,
-goes through `__xe_pin_fb_vma_dpt()`, which creates a DPT and fills it:
+goes through `__xe_pin_fb_vma_dpt()`, which creates a DPT and fills it.
+
+Display version 14 and later (and Alder Lake-P) map every DPT framebuffer
+through the *remapped* view, which pads its stride to a power of two
+(`intel_fb_needs_pot_stride_remap()`). That view is filled by
+`write_dpt_remapped_tiled()`, the normal view by a loop in
+`__xe_pin_fb_vma_dpt()`, and both look each page up on its own:
 
 ```c
-for (x = 0; x < size / XE_PAGE_SIZE; x++) {
-	u64 addr = xe_bo_addr(bo, x * XE_PAGE_SIZE, XE_PAGE_SIZE);
+for (column = 0; column < plane->width; column++) {
+	u64 addr = xe_bo_addr(bo, offset, XE_PAGE_SIZE);
 
-	iosys_map_wr(&dpt->vmap, x * 8, u64, pte | addr);
+	iosys_map_wr(map, dest, u64, addr | pte);
+	dest += sizeof(u64);
+	offset += XE_PAGE_SIZE;
 }
 ```
 
@@ -32,9 +40,10 @@ runs, so the cost grows as memory fragments. All of it is in
 `drm_atomic_helper_prepare_planes()`, inside the atomic commit ioctl, on the
 compositor's thread, nonblocking commits included.
 
-The per-page lookup is as old as xe's display support (`pte_encode_bo()` per
-page in 44e694958b95). It is the same in 7.2, 7.3 and `master`. The GGTT path,
-`xe_ggtt_map_bo()`, already walks a buffer with one cursor.
+The per-page lookups are as old as each path: `pte_encode_bo()` per page in
+44e694958b95 for the normal view, and in 216d62bb241a for the remapped one.
+They are the same in 7.2, 7.3 and `master`. The GGTT path, `xe_ggtt_map_bo()`,
+already walks a buffer with one cursor.
 
 ## What it did in Sekka
 
@@ -62,14 +71,18 @@ buffer, walked about 4,000–5,000 times.
 
 ## The fix
 
-**drm/xe/display: Fill a DPT with one walk over the BO**. For the normal view,
-`__xe_pin_fb_vma_dpt()` takes one `xe_res_cursor` over the buffer and advances
-it a page at a time, as `xe_ggtt_map_bo()` does: `xe_res_first_sg()` over the
-sg table for system memory, `xe_res_first()` over the resource with
-`vram_region_gpu_offset()` for VRAM and stolen memory, the same split
-`__xe_bo_addr()` makes. Each entry is the same value as before. The remapped
-and rotated views still look pages up one at a time; they write entries for
-tiles scattered across the buffer, and Sekka doesn't use them.
+**drm/xe/display: Look up a DPT's pages with one cursor**. A `dpt_cursor`
+holds an `xe_res_cursor` over the buffer and the offset it is at. Asked for a
+later offset, it moves forward with `xe_res_next()`. Asked for an earlier one,
+as when a remapped view moves on to its next plane, it starts again from the
+head. It makes the same split `__xe_bo_addr()` makes: `xe_res_first_sg()` over
+the sg table for system memory, and `xe_res_first()` over the resource plus
+`vram_region_gpu_offset()` for VRAM and stolen memory. The normal view and
+both remapped writers (`write_dpt_remapped_tiled()` and
+`write_dpt_remapped_linear()`) look pages up through it, and each entry is the
+same value as before. The rotated view's offsets go back at every step, so
+`write_dpt_rotated()` keeps `xe_bo_addr()`, as does the GGTT path's
+`write_ggtt_rotated()`.
 
 ## Sekka's copy
 
@@ -79,12 +92,17 @@ context: on `master`, `__xe_pin_fb_vma_dpt()` tests the view with
 `intel_gtt_view_is_normal()`. DEVELOPERS.md ("Intel page flips") explains how
 Sekka builds xe alone with it.
 
+The first version of the patch changed only the normal view's loop. Booted on
+ganymede, every flip still went through the old lookups, about 3,700
+`xe_bo_addr()` calls per pin, all from the remapped view. The commit history of
+bitemyapp/sekka#153 has both versions.
+
 ## Testing
 
 On 2026-10-29, on wx-workstation:
 
 - Sekka's copy builds xe for Nixpkgs' 7.3 with no compiler warnings: 294
-  objects, BTF generated, 1,550,092 bytes compressed against the kernel's own
+  objects, BTF generated, 1,553,176 bytes compressed against the kernel's own
   1,546,232. Its version magic (`7.3.0 SMP preempt mod_unload`), `retpoline`
   and dependencies match the kernel's own xe.
 - `checks.x86_64-linux.xe-dpt` passes. Its NixOS VM resolves `xe` to
@@ -92,9 +110,20 @@ On 2026-10-29, on wx-workstation:
   taints the kernel only `O` and `E`.
 - `checkpatch.pl --strict` passes the code (see [Submitting](#submitting)).
 
-Not yet tested: QEMU has no xe device, so no DPT was filled. The fix still
-needs a boot on xe hardware, with `aizomectl stats` and the ftrace profile
-above taken again after a few days of uptime, before the patch is sent.
+On ganymede, the first version (normal view only) was booted through a
+specialisation of its own system, with the module built on wx-workstation for
+the same kernel. modprobe loaded `updates/xe.ko.xz`, the desktop came up on it,
+and it tainted the kernel `O` and `E` only. Its commits still made about 3,700
+`xe_bo_addr()` calls per pin: every flip used the remapped view. Commit times
+were low (p50 0.26 ms, p95 1.0 ms), but only because memory had just been
+booted (3,121 free order-10 blocks in the Normal zone, against none before),
+so each walk was short. That is what led to this version.
+
+Not yet tested: this version on xe hardware. Booted on ganymede, a profile of
+`drm_mode_atomic_ioctl` should show no `xe_bo_addr()` calls under
+`__xe_pin_fb_vma`. After a few days of uptime, `aizomectl stats` should stay
+near the fresh-boot figures above rather than return to 3–4 ms. Both are
+needed before the patch is sent.
 
 ## Submitting
 
