@@ -288,6 +288,19 @@ pub trait Widget: 'static {
         None
     }
 
+    /// The video it shows, if it's a video's place (see
+    /// [`widgets::video`](crate::widgets::video)), as last laid out: the
+    /// kit places the window's video there.
+    fn video(&self) -> Option<crate::widgets::video::VideoSpec> {
+        None
+    }
+
+    /// Whether it's drawn over the window's videos ([`over_video`](crate::widgets::video::over_video)):
+    /// a video it overlaps goes under the window's drawing.
+    fn over_video(&self) -> bool {
+        false
+    }
+
     /// Carry out an Edit menu command (it has the focus): whether it did.
     fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
         let _ = (cx, command);

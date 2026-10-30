@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Utsushi
+GenericName=Media Player
+Comment=Play videos and music, gently on the battery
+Keywords=media player;video player;videos;movies;films;music;audio;player;subtitles;mp4;mkv;webm;mp3;flac;
+Categories=AudioVideo;Video;Audio;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;video/ogg;video/x-ogm+ogg;video/3gpp;video/3gpp2;video/x-flv;video/mp2t;video/vnd.avi;video/x-ms-wmv;video/av1;video/x-m4v;audio/mpeg;audio/mp4;audio/x-m4a;audio/aac;audio/flac;audio/x-flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/x-opus+ogg;audio/wav;audio/x-wav;audio/webm;audio/x-matroska;audio/x-aiff;audio/x-ape;audio/x-wavpack;audio/x-ms-wma;
+Icon=org.aizome.Utsushi
+Exec=aizome-utsushi %F
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Utsushi
+DBusActivatable=false

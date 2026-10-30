@@ -35,7 +35,8 @@ The design lives in [aizome-design](https://github.com/bitemyapp/aizome-design).
 Settei (Settings), Yukimi (Software), Hako (Files), Sumi (Text Editor),
 Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban (Calculator), Tenki
 (Weather), Tansu (Disks), Kura (Disk Usage), Myaku (Activity), Nisshi (Logs),
-Shashin (Images), Shiori (Documents) and Koe (Dictation), with foot as the terminal.
+Shashin (Images), Shiori (Documents), Utsushi (Media Player) and Koe
+(Dictation), with foot as the terminal.
 See [docs/apps.md](docs/apps.md).
 
 ## Using it

@@ -37,6 +37,10 @@ let
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
       libsecret
+      # aizome-media: FFmpeg demuxes and decodes (VA-API through its
+      # hwcontext), PipeWire plays. The same FFmpeg as mpv's.
+      ffmpeg
+      pipewire
     ];
   # Only what the build reads: the workspace and the files the package
   # installs.
@@ -115,6 +119,9 @@ let
       file-panel-multiple = import ./vm-file-panel-multiple-test.nix { inherit pkgs self; };
       terminal-shortcuts = import ./vm-terminal-shortcuts-test.nix { inherit pkgs self; };
       shashin-wallpaper = import ./vm-shashin-wallpaper-test.nix { inherit pkgs self; };
+      # Utsushi playing a video opened as the desktop opens one, and a song
+      # paused and resumed, through PipeWire (vm-utsushi-test.nix).
+      utsushi = import ./vm-utsushi-test.nix { inherit pkgs self; };
       standard-menu = import ./vm-standard-menu-test.nix { inherit pkgs self; };
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };
@@ -152,6 +159,8 @@ let
           mold
           # Koe's whisper.cpp, built by whisper-rs-sys.
           cmake
+          # Bindings generated from C headers: FFmpeg's and PipeWire's.
+          rustPlatform.bindgenHook
         ];
         buildInputs = buildInputs pkgs;
         # dlopen'd at run time: EGL/GL drivers, fontconfig, xkbcommon.

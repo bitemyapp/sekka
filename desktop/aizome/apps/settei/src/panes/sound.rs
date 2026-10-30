@@ -230,9 +230,13 @@ impl Sound {
             cx.say(format!("Plays “{}”", sound_label(&name)));
             return;
         }
+        // On short cycles, as the shell plays it, so it's heard as the
+        // slider's let go (over music, once the sound card has played out
+        // the long cycles it holds).
         let spawned = std::process::Command::new("pw-play")
             .arg("--volume")
             .arg(format!("{volume:.2}"))
+            .args(["--latency", "20ms"])
             .arg(file)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())

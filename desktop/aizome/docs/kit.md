@@ -105,7 +105,8 @@ What `launched` and `update` act with:
 `Program` also has `menus()` (see Menus), `close_requested(window) -> bool`,
 `open(paths)` (files from the command line), `window_state(window, state)`
 (the window went full screen or back, by `set_fullscreen` or the desktop's
-⌃❖F; maximised; told once per change, then viewed again),
+⌃❖F; maximised; suspended, out of sight on a Desk no one is looking at;
+told once per change, then viewed again),
 `provide_drag_data(drag, mime)` (a destination asks for data a drag
 promised) and `drag_ended(drag, DropAction)` (copied, moved: the program
 removes what moved, or `None`), and, for the shell, `outputs_changed`,
@@ -291,6 +292,38 @@ An unchanged rebuild does not reopen a dismissed tooltip or restart its delay;
 a pending text change uses the original deadline and the current text.
 `cargo test -p aizome-kit --test tooltip_refresh` compares rendered tooltips and
 checks their delay, removal, ancestor changes and click dismissal.
+
+### Video
+
+A player's frames are shown by the compositor, never drawn by the kit:
+each video is a subsurface of the window (Sidestep's `video`), scaled
+by the compositor to where the view puts it.
+
+```rust
+cx.open_window(WindowSpec::new("Film").size(960.0, 600.0).video());
+let sink = cx.video_sink(window, VIDEO);      // Send + Clone: the player's thread shows frames through it
+// in view:
+stack![
+    video_surface(VIDEO).picture(1920.0, 1080.0).inhibit_idle(playing),
+    over_video(subtitle_box),                // what's drawn over the picture
+]
+```
+
+| | |
+|---|---|
+| `video_surface(id)` | Takes the room it's given (`Fill` both ways) and fits the picture in it, centred on whole points, the rest `ground` (black). `.picture(w, h)` its display size or shape; `.inhibit_idle(b)` keeps the screen awake while it shows; `.below(true)` keeps it under the window's drawing always. After every layout the kit places video `id` there. |
+| `over_video(el)` | `el` is drawn over the window's videos: a video it overlaps (by its laid-out rectangle) goes under the window's drawing, which draws the picture clear, until nothing overlaps it. Wrap exactly what draws (a subtitle's box, a bar of controls). |
+| `Cx::video_sink(window, id)` | Where video `id`'s frames go, from any thread (`sidestep_ui::video::VideoSink`): dmabufs or shared memory, each with the time it's for, each hearing whether it reached the screen. In tests, a detached sink the test platform keeps (`TestPlatform::video_sinks`, `videos`). |
+| `WindowSpec::video()` | The window's pixels carry alpha, so a video under its drawing shows where the drawing is clear; the kit tells the compositor the rest is opaque. Videos over the drawing need nothing of the window. |
+| `Cx::hide_cursor_until_moved()` | For full screen with its controls gone. |
+
+Over the window's drawing, a video is the window's topmost surface, and
+a compositor can scan it out on a display plane without composing
+anything; under it, every frame is composed with the window's drawing
+over it. So keep things off the picture: Utsushi sets subtitles in the
+letterbox's bar when they fit, and its full-screen controls hide.
+`WindowState::suspended` says the desktop isn't showing the window (a
+player stops decoding video then).
 
 ### Sheets, alerts and panels
 

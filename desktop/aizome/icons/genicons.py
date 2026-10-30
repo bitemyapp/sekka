@@ -219,6 +219,19 @@ def shiori():
     return g
 
 
+@icon("org.aizome.Utsushi", "Utsushi (Media Player)")
+def utsushi():
+    # A frame of film: sprockets along the strip, the picture deep in it,
+    # and amber light playing through it.
+    g = R(10, 12, 40, 36, MID)
+    for x in range(13, 48, 6):
+        g += R(x, 14, 3, 3, KON) + R(x, 43, 3, 3, KON)
+    g += R(12, 19, 36, 22, AI)
+    for i, (y, h) in enumerate(((22, 16), (24, 12), (26, 8), (28, 4))):
+        g += R(28 + 2 * i, y, 2, h, AMBER)
+    return g
+
+
 @icon("org.aizome.Annai", "Annai (Welcome)")
 def annai():
     # A signpost made of the mark: the amber tab, then boards in the dye

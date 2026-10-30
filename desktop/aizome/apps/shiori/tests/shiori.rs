@@ -692,7 +692,7 @@ fn a_drag_from_a_link_chooses_its_text() {
 fn escape_empties_find_closes_it_and_leaves_full_screen() {
     let mut r = rig("escape", &[("sample.pdf", common::sample())], &["sample.pdf"]);
     let w = r.h.window();
-    r.h.window_state(w, WindowState { fullscreen: true, maximized: false });
+    r.h.window_state(w, WindowState { fullscreen: true, maximized: false, suspended: false });
     settle(&mut r);
     assert!(r.h.find_id(w, "page-number").is_none(), "the toolbar showed in full screen");
     // Find shows in full screen too, and has the keys.

@@ -465,6 +465,24 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         }
     }
 
+    /// Hide the pointer until it next moves: full-screen video with its
+    /// controls gone.
+    pub fn hide_cursor_until_moved(&mut self) {
+        self.platform.hide_cursor_until_moved();
+    }
+
+    /// Where the frames of video `video` of `window` go, from any thread:
+    /// they show where the window's `video_surface(video)` element is (see
+    /// [`widgets::video`](crate::widgets::video)). None for a window
+    /// that isn't open. In tests, a detached sink the test platform keeps.
+    pub fn video_sink(
+        &mut self,
+        window: WindowKey,
+        video: crate::widgets::video::VideoId,
+    ) -> Option<sidestep_ui::video::VideoSink> {
+        self.core.video_sink(window, video, self.platform)
+    }
+
     /// Lock the session: open a [`WindowSpec::lock`] window on each output
     /// at once; the program hears `session_locked` when the compositor
     /// has, or `session_lock_finished` if it won't.
