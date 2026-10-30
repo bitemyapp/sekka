@@ -292,8 +292,10 @@ Handled by the compositor:
 | ⌃❖←, ⌃❖→ (with ⇧: take the window) | `previous-desk`, `next-desk`, `take-to-previous-desk`, `take-to-next-desk` |
 | ⌃❖↑ | `overview` |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | `fill`, `minimise` (park), `split-left`, `split-right` |
-| ⌥❖S | `stack-with-behind` |
-| ⌥❖[, ⌥❖] | `previous-tab`, `next-tab` (in tab order, wrapping round) |
+| ⌃❖Space | `window-menu` (the focused window's marking menu, its keys showing) |
+| ⌃❖S, ⌃⇧❖S | `stack-with-behind`, `unstack` (the showing tab, out of its group) |
+| ❖⇧[, ❖⇧] | `previous-tab`, `next-tab` (in tab order, wrapping round) |
+| ⌃⇧❖[, ⌃⇧❖] | `move-tab-left`, `move-tab-right` (the showing tab, stopping at the ends) |
 | ⌃❖F | `fullscreen` |
 | ❖Return | `terminal` (`keys.terminal`, default `foot`, in the Desk's folder) |
 | ❖⇧3 | `screenshot-screen` |

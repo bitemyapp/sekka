@@ -44,8 +44,13 @@ pub enum Action {
     SplitLeft,
     SplitRight,
     StackWithBehind,
+    Unstack,
     PrevTab,
     NextTab,
+    MoveTabLeft,
+    MoveTabRight,
+    /// The tab's marking menu, opened from the keyboard.
+    WindowMenu,
     Fullscreen,
     Terminal,
     TerminalClose,
@@ -98,8 +103,12 @@ impl Action {
             "split-left" => Action::SplitLeft,
             "split-right" => Action::SplitRight,
             "stack-with-behind" | "stack" => Action::StackWithBehind,
+            "unstack" => Action::Unstack,
             "previous-tab" => Action::PrevTab,
             "next-tab" => Action::NextTab,
+            "move-tab-left" => Action::MoveTabLeft,
+            "move-tab-right" => Action::MoveTabRight,
+            "window-menu" => Action::WindowMenu,
             "fullscreen" => Action::Fullscreen,
             "terminal" => Action::Terminal,
             "terminal-close" => Action::TerminalClose,
@@ -234,11 +243,17 @@ pub fn defaults() -> Vec<(&'static str, String)> {
         ("Alt+Super+Down", "minimise".into()),
         ("Alt+Super+Left", "split-left".into()),
         ("Alt+Super+Right", "split-right".into()),
-        ("Alt+Super+S", "stack-with-behind".into()),
-        // Not ❖[ ❖] (apps' Back and Forward) or ❖PgUp ❖PgDn (through the
-        // command key, Ctrl+PgUp/PgDn: a browser's own tabs).
-        ("Alt+Super+bracketleft", "previous-tab".into()),
-        ("Alt+Super+bracketright", "next-tab".into()),
+        // ⌃❖ is the window manager's, and ⌃⇧❖ carries: a window to a
+        // Desk, a tab along its group or out of it.
+        ("Ctrl+Super+S", "stack-with-behind".into()),
+        ("Ctrl+Shift+Super+S", "unstack".into()),
+        ("Ctrl+Super+Space", "window-menu".into()),
+        // ⌘⇧[ ⌘⇧] as on a Mac; not ❖[ ❖] (Aizome's apps' Back and
+        // Forward). Shift matches as a modifier: these are ❖{ ❖} typed.
+        ("Super+Shift+bracketleft", "previous-tab".into()),
+        ("Super+Shift+bracketright", "next-tab".into()),
+        ("Ctrl+Shift+Super+bracketleft", "move-tab-left".into()),
+        ("Ctrl+Shift+Super+bracketright", "move-tab-right".into()),
         ("Ctrl+Super+F", "fullscreen".into()),
         ("Super+Return", "terminal".into()),
         ("Super+W", "terminal-close".into()),
@@ -359,8 +374,8 @@ mod tests {
         assert_eq!(parse_chord("Super+Shift+3").unwrap().sym.raw(), keysyms::KEY_3);
         assert!(parse_chord("Hyper+Q").is_none());
         assert_eq!(parse_chord("XF86AudioMute").unwrap().sym.raw(), keysyms::KEY_XF86AudioMute);
-        assert_eq!(parse_chord("Alt+Super+["), parse_chord("Alt+Super+bracketleft"));
-        assert_eq!(parse_chord("Alt+Super+]").unwrap().sym.raw(), keysyms::KEY_bracketright);
+        assert_eq!(parse_chord("Super+Shift+["), parse_chord("Super+Shift+bracketleft"));
+        assert_eq!(parse_chord("Super+Shift+]").unwrap().sym.raw(), keysyms::KEY_bracketright);
     }
 
     #[test]
@@ -377,10 +392,23 @@ mod tests {
         assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_3)]), Some(&Action::GoToDesk(3)));
         assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::Shell("palette".into())));
         assert!(Action::parse("go-to-desk-7") == Some(Action::GoToDesk(7)));
+        // ❖⇧[ arrives as braceleft with bracketleft, the key's own symbol,
+        // first (as the core passes them).
+        let shift_logo = Mods { shift: true, logo: true, ..Default::default() };
+        let (bl, br) = (Keysym::new(keysyms::KEY_bracketleft), Keysym::new(keysyms::KEY_bracketright));
+        let (cl, cr) = (Keysym::new(keysyms::KEY_braceleft), Keysym::new(keysyms::KEY_braceright));
+        assert_eq!(b.find(shift_logo, &[bl, cl]), Some(&Action::PrevTab));
+        assert_eq!(b.find(shift_logo, &[br, cr]), Some(&Action::NextTab));
+        assert_eq!(b.find(logo, &[bl]), None, "❖[ is the app's (Back)");
+        let carry = Mods { ctrl: true, shift: true, logo: true, ..Default::default() };
+        assert_eq!(b.find(carry, &[bl, cl]), Some(&Action::MoveTabLeft));
+        assert_eq!(b.find(carry, &[br, cr]), Some(&Action::MoveTabRight));
+        let s = [Keysym::new(keysyms::KEY_s)];
+        assert_eq!(b.find(ctrl_logo, &s), Some(&Action::StackWithBehind));
+        assert_eq!(b.find(carry, &[s[0], Keysym::new(keysyms::KEY_S)]), Some(&Action::Unstack));
         let alt_logo = Mods { alt: true, logo: true, ..Default::default() };
-        assert_eq!(b.find(alt_logo, &[Keysym::new(keysyms::KEY_bracketleft)]), Some(&Action::PrevTab));
-        assert_eq!(b.find(alt_logo, &[Keysym::new(keysyms::KEY_bracketright)]), Some(&Action::NextTab));
-        assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_bracketleft)]), None, "❖[ is the app's (Back)");
+        assert_eq!(b.find(alt_logo, &s), None, "⌥❖S is the app's (Koyomi's Sidebar)");
+        assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::WindowMenu));
         // ⌥Print records (Alt turns Print into Sys_Req, so the key's own
         // symbol is what matches).
         let alt = Mods { alt: true, ..Default::default() };

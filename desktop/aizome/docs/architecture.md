@@ -97,8 +97,10 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ⌃❖←, ⌃❖→ | Previous, next Desk on this display (past those other displays show); with ⇧, take the window along |
 | ⌃❖↑ | Desks overview |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | Fill, park (minimise), split left, split right: the marking menu's verbs |
-| ⌥❖S | Stack with the window behind |
-| ⌥❖[, ⌥❖] | Previous, next tab of the window's group |
+| ⌃❖Space | The marking menu of the focused window, from the keyboard |
+| ⌃❖S; with ⇧ | Stack with the window behind; take the tab out of its group |
+| ❖⇧[, ❖⇧] | Previous, next tab of the window's group (⌘⇧[ ⌘⇧] on a Mac) |
+| ⌃⇧❖[, ⌃⇧❖] | Move the tab left, right in its group |
 | ⌃❖F | Full screen |
 | ❖Return | Terminal (foot) in the Desk's folder |
 | ⌃❖Q | Lock |
@@ -111,8 +113,15 @@ apps, as ⌘ does on a Mac. The system takes only:
 | media keys | Volume, mute, brightness, players, with the OSD |
 
 Right-click on a tab opens the marking menu of window verbs (fill, park,
-split ←/→, close, stack, float, to desk ▸). Right-click on empty desktop opens
-the NeXT menu.
+split ←/→, close, stack, float, to desk ▸). ⌃❖Space opens it around the
+focused window's tab with its keys showing: an arrow picks the verb that
+way and the first letter one of the others (S, C, F); D opens the Desks,
+where a digit picks one. Esc or ⌃❖Space again closes it.
+Right-click on empty desktop opens the NeXT menu.
+
+⌃❖ is the window manager's layer and ⇧ added to it carries something:
+the window to a Desk, the tab along its group or out of it. Switching tabs
+is Mac's ⌘⇧[ ⌘⇧], since ❖[ ❖] are Back and Forward in Aizome's apps.
 
 For apps that don't use Aizome's kit, the compositor translates ❖ shortcuts
 into the Ctrl ones they expect (❖C → Ctrl+C; in terminals Ctrl+Shift+C), so

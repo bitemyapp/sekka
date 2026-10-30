@@ -119,7 +119,7 @@ fn system_chords_stay_with_the_system_and_shell_ones_go_to_subscribers() {
 }
 
 #[test]
-fn alt_super_brackets_switch_a_groups_tabs() {
+fn super_shift_brackets_switch_a_groups_tabs_and_ctrl_carries_them() {
     let c = Compositor::start(Options::default());
     let a = c.client(Spec::new("org.example.a", 0x2222cc));
     let wa = c.wait_window("org.example.a");
@@ -128,14 +128,28 @@ fn alt_super_brackets_switch_a_groups_tabs() {
     c.ok(Request::Stack { a: wa.id, b: wb.id });
     let shows = |id| move |ws: &[aizome_ipc::WindowInfo]| ws.iter().any(|w| w.id == id && w.group_active && w.focused);
     c.wait_windows("b shows", shows(wb.id));
-    // ⌥❖] from the last tab wraps round to the first; ⌥❖[ goes back.
-    chord(&c, "alt+super+]");
-    c.wait_windows("⌥❖] shows a", shows(wa.id));
-    chord(&c, "alt+super+[");
-    c.wait_windows("⌥❖[ shows b", shows(wb.id));
-    // The brackets stayed with the system (not Ctrl+Alt+[ for the apps).
+    // ❖⇧] from the last tab wraps round to the first; ❖⇧[ goes back.
+    chord(&c, "shift+super+]");
+    c.wait_windows("❖⇧] shows a", shows(wa.id));
+    chord(&c, "shift+super+[");
+    c.wait_windows("❖⇧[ shows b", shows(wb.id));
+    // ⌃⇧❖[ moves the showing tab left, stopping first; ⌃⇧❖] takes it back.
+    let order = |want: Vec<u64>| move |ws: &[aizome_ipc::WindowInfo]| ws.iter().all(|w| w.group_members == want);
+    chord(&c, "ctrl+shift+super+[");
+    c.wait_windows("b first", order(vec![wb.id, wa.id]));
+    c.settle();
+    keep(&c.screenshot(), "tab-moved-by-keys");
+    chord(&c, "ctrl+shift+super+[");
+    chord(&c, "ctrl+shift+super+]");
+    c.wait_windows("b last again, still showing", |ws| order(vec![wa.id, wb.id])(ws) && shows(wb.id)(ws));
+    // ⌃⇧❖S takes it out of the group; ⌃❖S stacks it with the one behind.
+    chord(&c, "ctrl+shift+super+s");
+    c.wait_windows("unstacked", |ws| ws.iter().all(|w| w.group.is_none()));
+    chord(&c, "ctrl+super+s");
+    c.wait_windows("stacked again", |ws| ws.iter().all(|w| w.group.is_some()) && shows(wb.id)(ws));
+    // The chords stayed with the system (not Ctrl+[ or Ctrl+S for the apps).
     for s in [a.seen(), b.seen()] {
-        assert!(!s.keys.iter().any(|(k, _)| *k == 26 || *k == 27), "a bracket reached an app: {:?}", s.keys);
+        assert!(!s.keys.iter().any(|(k, _)| [26, 27, 31].contains(k)), "a chord reached an app: {:?}", s.keys);
     }
 }
 

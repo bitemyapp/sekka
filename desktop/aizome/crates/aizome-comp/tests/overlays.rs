@@ -136,6 +136,52 @@ fn a_marking_menu_flick_fills_without_drawing() {
 }
 
 #[test]
+fn ctrl_super_space_opens_the_marking_menu_for_the_keys() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("test.a", 0xcc2222));
+    let w = c.wait_window("test.a");
+    let chord = |keys: &str| c.ok(Request::Synthesize { events: vec![Synthetic::Chord { keys: keys.into() }] });
+    // The pointer is in the window, well away from its tab.
+    let away = (w.geometry.x as f64 + 40.0, w.geometry.y as f64 + 200.0);
+    c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: away.0, y: away.1 }] });
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    chord("ctrl+super+space");
+    c.settle();
+    let img = c.screenshot();
+    keep(&img, "marking-menu-keys");
+    // Around the tab, not the pointer: nothing drawn where it is.
+    assert!(near(img.px(away.0 as i32, away.1 as i32), rgb(0xcc2222)), "the menu isn't at the pointer");
+    // Esc closes it with nothing done, and keys go to the app again; so
+    // does ⌃❖Space again.
+    chord("escape");
+    chord("up");
+    a.wait_seen("↑ reached the app", |s| s.keys.iter().any(|(k, _)| *k == 103));
+    chord("ctrl+super+space");
+    chord("ctrl+super+space");
+    chord("up");
+    a.wait_seen("↑ reached the app again", |s| s.keys.iter().filter(|(k, _)| *k == 103).count() == 2);
+    // A click away from its verbs closes it too, picking nothing.
+    chord("ctrl+super+space");
+    c.ok(Request::Synthesize { events: vec![Synthetic::Click { button: "left".into() }] });
+    c.settle();
+    let now = c.windows();
+    assert!(!now[0].fill && !now[0].minimised, "a click away picks nothing");
+    // The arrows pick the verb that way.
+    chord("ctrl+super+space");
+    chord("up");
+    a.wait_seen("filled by ⌃❖Space ↑", |s| s.maximized);
+    // D opens the Desk ring, and a digit picks the Desk.
+    chord("ctrl+super+space");
+    chord("d");
+    chord("2");
+    c.wait_windows("on Desk 2", |ws| ws[0].desk == Some(2));
+    // None of it reached the app but the two ↑ while the menu was shut.
+    let keys: Vec<u32> = a.seen().keys.iter().map(|(k, _)| *k).collect();
+    assert_eq!(keys.iter().filter(|k| **k == 103).count(), 2, "{keys:?}");
+    assert!(!keys.iter().any(|k| [1, 3, 32, 57].contains(k)), "{keys:?}");
+}
+
+#[test]
 fn a_marking_menu_shows_after_a_pause_and_picks() {
     let c = Compositor::start(Options::default());
     let a = c.client(Spec::new("test.a", 0xcc2222));

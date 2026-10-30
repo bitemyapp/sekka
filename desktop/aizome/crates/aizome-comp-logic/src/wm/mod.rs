@@ -910,7 +910,7 @@ impl Model {
     }
 
     /// The tab beside a window in its group, in tab order, wrapping round
-    /// (⌥❖[ and ⌥❖]). `None` when it has no group.
+    /// (❖⇧[ and ❖⇧]). `None` when it has no group.
     pub fn neighbour_tab(&self, id: WinId, forward: bool) -> Option<WinId> {
         let g = self.group_of(id)?;
         let n = g.members.len();
@@ -919,8 +919,20 @@ impl Model {
         Some(g.members[j])
     }
 
+    /// Moves a tab one place along its group (⌃⇧❖[ and ⌃⇧❖]), stopping
+    /// at the ends. False when it has no group or is already there.
+    pub fn move_tab(&mut self, id: WinId, forward: bool) -> bool {
+        let Some(g) = self.group_of(id) else { return false };
+        let Some(i) = g.members.iter().position(|m| *m == id) else { return false };
+        let j = if forward { i + 1 } else { i.wrapping_sub(1) };
+        if j >= g.members.len() {
+            return false;
+        }
+        self.reorder_tab(id, j);
+        true
+    }
+
     /// Moves a tab within its group to position `index`.
-    #[allow(dead_code)]
     pub fn reorder_tab(&mut self, id: WinId, index: usize) {
         self.generation += 1;
         if let Some(g) = self.wins.get(&id).and_then(|w| w.group).and_then(|g| self.groups.get_mut(&g)) {
