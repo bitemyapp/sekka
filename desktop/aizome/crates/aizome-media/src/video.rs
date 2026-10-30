@@ -118,6 +118,10 @@ pub struct Queue {
     pub eof: bool,
     pub cmds: VecDeque<Cmd>,
     pub generation: u64,
+    /// Something the video thread may be waiting for happened (packets,
+    /// the last of them, the clock starting) since it last waited: its
+    /// next wait doesn't sleep through it.
+    pub woken: bool,
 }
 
 /// What the video thread did, for the info window.
@@ -164,8 +168,24 @@ impl Shared {
     }
 
     pub fn poke(&self) {
-        let _g = self.q.lock().unwrap_or_else(|e| e.into_inner());
+        self.q.lock().unwrap_or_else(|e| e.into_inner()).woken = true;
         self.cv.notify_all();
+    }
+
+    /// The video thread's wait, for a command, a poke or `timeout`. A poke
+    /// that came while it was busy (decoding, between looking for work and
+    /// waiting) counts: it looks again rather than sleep, so the last
+    /// packets, or the clock starting, aren't slept through.
+    fn wait(&self, timeout: Option<Duration>) {
+        let mut q = self.q.lock().unwrap_or_else(|e| e.into_inner());
+        if q.cmds.is_empty() && !q.woken {
+            q = match timeout {
+                Some(t) => self.cv.wait_timeout(q, t).unwrap_or_else(|e| e.into_inner()).0,
+                None => self.cv.wait(q).unwrap_or_else(|e| e.into_inner()),
+            };
+        }
+        // It looks at everything again now.
+        q.woken = false;
     }
 }
 
@@ -544,17 +564,10 @@ impl State {
         true
     }
 
+    /// Woken by packets, commands and the clock starting; a decoder short
+    /// of frames waits only for packets.
     fn wait(&self, timeout: Option<Duration>) {
-        let q = self.shared.q.lock().unwrap_or_else(|e| e.into_inner());
-        if !q.cmds.is_empty() {
-            return;
-        }
-        // Woken by packets, commands and the clock starting; a decoder
-        // short of frames waits only for packets.
-        match timeout {
-            Some(t) => drop(self.shared.cv.wait_timeout(q, t)),
-            None => drop(self.shared.cv.wait(q)),
-        }
+        self.shared.wait(timeout);
     }
 
     /// Keep `AHEAD` frames decoded, while there are packets.
@@ -887,4 +900,35 @@ pub fn frame_duration(stream: &ff::AVStream) -> f64 {
         .or_else(|| av::ratio(stream.r_frame_rate))
         .filter(|r| *r > 1.0 && *r < 1000.0)
         .map_or(1.0 / 30.0, |r| 1.0 / r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_poke_while_the_video_thread_is_busy_isnt_slept_through() {
+        // Poked after it looked for work and before it waits (the last
+        // packets came while it was decoding, say): it doesn't sleep.
+        let shared = Shared::new(crate::player::Wake::new());
+        shared.poke();
+        let s = shared.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            s.wait(None);
+            let _ = tx.send(());
+        });
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "the wait slept through the poke");
+        // Seen once: the next wait sleeps until it's woken again.
+        assert!(!shared.q.lock().unwrap().woken);
+        let s = shared.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            s.wait(None);
+            let _ = tx.send(());
+        });
+        std::thread::sleep(Duration::from_millis(50));
+        shared.poke();
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "a poke didn't wake the wait");
+    }
 }

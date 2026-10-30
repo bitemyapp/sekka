@@ -44,7 +44,7 @@ pub struct Wake {
 }
 
 impl Wake {
-    fn new() -> Arc<Wake> {
+    pub(crate) fn new() -> Arc<Wake> {
         Arc::new(Wake { flag: Mutex::new(false), cv: Condvar::new(), seekable: AtomicBool::new(false) })
     }
 
@@ -1310,6 +1310,8 @@ impl Ctl {
                 if !suspended {
                     let mut q = self.video.q.lock().unwrap_or_else(|e| e.into_inner());
                     q.packets.push_back(pkt);
+                    // Seen at its next wait, if the video thread is busy now.
+                    q.woken = true;
                     if q.packets.len() == 1 || q.packets.len().is_multiple_of(8) {
                         self.video.cv.notify_all();
                     }
@@ -1331,7 +1333,7 @@ impl Ctl {
             }
         }
         if packets_read > 0 && s.video.is_some() {
-            self.video.cv.notify_all();
+            self.video.poke();
         }
         // Decode audio into the ring.
         let speed = self.speed;
