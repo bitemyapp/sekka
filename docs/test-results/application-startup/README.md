@@ -70,6 +70,11 @@ AIZOME_STARTUP_SCREENSHOTS="$PWD/.work/startup-evidence/pr144" \
   -- --exact
 ```
 
+The two mocks were rendered again, by the same test, once **Open in Logs**
+was added beside Copy Details and Refresh Logs (it opens the attempt in
+Nisshi, `aizome-nisshi --launch <identifier>`). The runtime screenshots
+above are unchanged and predate that button.
+
 The private-compositor regression and the lifecycle test both passed for
 these captures. The capture additions change test and documentation code;
 the runtime implementation is unchanged from the recorded source commit.

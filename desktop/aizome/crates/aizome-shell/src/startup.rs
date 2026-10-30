@@ -20,7 +20,11 @@ const WAIT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    Begin { launch: Launch, token: Option<String>, cwd: Option<PathBuf> },
+    Begin {
+        launch: Launch,
+        token: Option<String>,
+        cwd: Option<PathBuf>,
+    },
     Process(u64, LaunchEvent),
     Failed(u64, String),
     Check(u64),
@@ -28,6 +32,8 @@ pub enum Event {
     Logs(u64, String),
     Refresh,
     Copy,
+    /// Open the selected attempt's output in Nisshi, the log viewer.
+    OpenLogs,
     Close,
 }
 
@@ -218,6 +224,12 @@ impl Shell {
                     cx.set_clipboard_text(&a.details());
                 }
             }
+            Event::OpenLogs => {
+                if let Some(a) = self.startup.selected.and_then(|id| self.startup.attempts.get(&id)) {
+                    let argv = logs_command(&a.journal_id);
+                    self.launch(crate::launch::Launch::Argv(argv), cx);
+                }
+            }
             Event::Close => {
                 if let Some(w) = self.startup.window.take() {
                     self.surfaces.remove(&w);
@@ -406,6 +418,10 @@ impl Shell {
             row![
                 button("Copy Details").enabled(enabled).on_press(Msg::Startup(Event::Copy)),
                 button("Refresh Logs").enabled(enabled).on_press(Msg::Startup(Event::Refresh)),
+                button("Open in Logs")
+                    .enabled(enabled)
+                    .on_press(Msg::Startup(Event::OpenLogs))
+                    .tooltip("This launch's output in Logs (Nisshi), with what else was written then"),
                 spacer(),
                 button("Close").cancel().on_press(Msg::Startup(Event::Close)),
             ]
@@ -417,6 +433,12 @@ impl Shell {
         .height(Length::Fill)
         .into()
     }
+}
+
+/// Nisshi, the log viewer, on one launch's output: where its colours,
+/// search and what else was written at the time are a press away.
+pub(crate) fn logs_command(journal_id: &str) -> Vec<String> {
+    vec!["aizome-nisshi".into(), "--launch".into(), journal_id.into()]
 }
 
 /// Read only this launch's journal stream. Bound time and memory, drain
@@ -586,6 +608,28 @@ mod tests {
         }
         h.send(Msg::Startup(Event::Close));
         assert!(h.program().startup.window.is_none());
+    }
+
+    #[test]
+    fn open_in_logs_opens_this_launch_in_nisshi() {
+        let mut h = fixture();
+        let journal_id = "aizome-launch-0123456789abcdef0123456789abcdef";
+        h.program_mut().startup.attempts.get_mut(&1).unwrap().journal_id = journal_id.into();
+        exit(&mut h, 23);
+        h.send(Msg::Startup(Event::Select(1)));
+        let w = h.program().startup.window.expect("the launches window");
+        assert!(h.settle(Duration::from_secs(7), |s| s.startup.attempts[&1].logs != "Reading application output…"));
+        // Activation is asked for and recorded; no token comes, so nothing
+        // actually starts.
+        h.program_mut().opts.live = true;
+        h.render(w, 1.0);
+        h.click_text(w, "Open in Logs");
+        let launches: Vec<_> = h.program().launches.values().map(|(l, _)| l.clone()).collect();
+        assert_eq!(
+            launches,
+            [crate::launch::Launch::Argv(vec!["aizome-nisshi".into(), "--launch".into(), journal_id.into()])]
+        );
+        assert_eq!(h.platform.activation_requests.len(), 1, "the window it opens may take the focus");
     }
 
     #[test]

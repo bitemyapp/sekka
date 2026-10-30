@@ -174,6 +174,11 @@ observed during that interval clears the waiting notice.
 
 Details include the selected desktop entry, executable, process result,
 and that attempt's journal output, with **Refresh Logs** and **Copy Details**.
+**Open in Logs** opens that output in Nisshi (Logs), on that launch alone
+(`aizome-nisshi --launch <identifier>`), where its colours, search and
+what the rest of the desktop wrote at the time (Around This Time) are a
+press away. Nisshi names a launch's output after its app, so every launch
+of an app is under it there.
 Opening an already running application normally focuses its existing window.
 For a launch that hands work to another process, a successful command or
 accepted activation is reported without claiming that a new window opened.

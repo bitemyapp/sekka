@@ -356,7 +356,7 @@ pub struct Shell {
     /// What's shared (screen and window sharing), as the compositor says.
     pub(crate) shares: Vec<crate::sharing::Share>,
     pub text: aizome_kit::text::TextCache,
-    launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
+    pub(crate) launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
     pub(crate) startup: crate::startup::Startup,
     stream: Option<MsgSender<Msg>>,
     _settings_watch: Option<aizome_config::Watcher>,

@@ -1047,7 +1047,8 @@ also exposes outcomes through `aizome-shell msg state`; `aizome-shell msg
 Each observed launch writes directly to journald with a unique
 `SYSLOG_IDENTIFIER=aizome-launch-…`. The details window queries that exact
 identifier on a worker, capped at 200 entries and 64 KiB with a five-second
-deadline. It never displays other attempts' output, captures the user's
+deadline. Its **Open in Logs** runs `aizome-nisshi --launch` with
+that identifier, through the same observed launch path. It never displays other attempts' output, captures the user's
 environment, or pipes application output through the shell. The latter
 preserves application lifetime when the shell is replaced. Accepted D-Bus
 activation may have no output here because the bus owns that process.

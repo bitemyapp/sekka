@@ -41,16 +41,17 @@
       "kind": "synthetic UI mock",
       "width": 900,
       "height": 600,
-      "bytes": 43578,
-      "sha256": "7da0537ba44f811281e72982caabb219d681a5e0ae0b3f15d9720d58ae68db7e"
+      "bytes": 44565,
+      "sha256": "7b92431d421cc78c8ac108be8c1573b7c01ce74cdb5115deec4d9c5bfdb6cb50"
     },
     {
       "file": "mock-window-opened.png",
       "kind": "synthetic UI mock",
       "width": 900,
       "height": 600,
-      "bytes": 46301,
-      "sha256": "40411d60e76f7341f439f1700344d50741dc60ff97a16d30688db15b40722782"
+      "bytes": 47256,
+      "sha256": "42217839ca3296edbed9b9d7817508871bb083184a05549af5e76b1d0826be9f"
     }
-  ]
+  ],
+  "mocks_regenerated": "Both synthetic UI mocks were rendered again after Open in Logs was added to the window; the runtime screenshots are unchanged from shell_runtime_source."
 }
