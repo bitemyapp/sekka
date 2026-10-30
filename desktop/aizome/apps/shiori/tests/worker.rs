@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use aizome_shiori::engine::{Engine, Event, Failure};
 use aizome_shiori::protocol::{DocInfo, Job, OpenError, Reply, Request, Target, TileKey};
+use common::{LinkTo, Page};
 
 fn start(path: std::path::PathBuf, password: Option<&str>) -> (Engine, Receiver<Event>) {
     let (tx, rx) = mpsc::channel();
@@ -210,4 +211,57 @@ fn opens_a_locked_document_with_its_password() {
     let info = opened(&rx);
     assert_eq!(info.pages.len(), 4);
     assert!(info.encrypted);
+}
+
+/// A page with a link 10^40 points wide and a word 10^39 points along,
+/// numbers an `f32` can't hold, besides an ordinary link and line.
+fn too_large() -> Vec<u8> {
+    let mut page = Page::letter().text(72.0, 720.0, 18.0, "An ordinary line.");
+    page.links.push(([70.0, 700.0, 300.0, 740.0], LinkTo::Uri("https://sekka.computer/".into())));
+    page.raw_annots.push(format!(
+        "<< /Type /Annot /Subtype /Link /Rect [0 0 1{} 20] /A << /S /URI /URI (https://example.com/) >> >>",
+        "0".repeat(40)
+    ));
+    page.raw_content = format!("BT /F1 18 Tf 72 680 Td (far) Tj 1{} 0 Td (away) Tj ET\n", "0".repeat(39));
+    common::pdf(&[page], &[])
+}
+
+#[test]
+fn what_isnt_a_number_is_left_out_not_taken_for_a_crash() {
+    let dir = common::scratch("worker-too-large");
+    let path = common::write(&dir, "too-large.pdf", &too_large());
+    let (e, rx) = start(path, None);
+    opened(&rx);
+    e.send(Request::Links(0));
+    e.send(Request::Text(0));
+    e.send(Request::Find { serial: 3, query: "away".into(), case: false, pages: vec![0] });
+    let (mut links, mut text, mut hits) = (None, None, None);
+    while links.is_none() || text.is_none() || hits.is_none() {
+        wait(&rx, |ev| {
+            match ev {
+                Event::Reply(Reply::Links { links: l, .. }) => links = Some(l),
+                Event::Reply(Reply::Text { text: t, .. }) => text = Some(t),
+                Event::Reply(Reply::Found { hits: h, .. }) => hits = Some(h),
+                Event::Failed { job, why, .. } => panic!("the worker was taken for broken on {job:?} ({why:?})"),
+                _ => return None,
+            }
+            Some(())
+        });
+    }
+    // The link too large to be is left out; the ordinary one stays.
+    let links = links.unwrap();
+    assert_eq!(links.len(), 1, "{links:?}");
+    assert_eq!(links[0].target, Target::Uri("https://sekka.computer/".into()));
+    let text = text.unwrap();
+    let s: String = text.chars.iter().collect();
+    assert!(s.contains("An ordinary line."), "{s:?}");
+    assert!(text.boxes.iter().flatten().all(|v| v.is_finite()), "{:?}", text.boxes);
+    assert!(hits.unwrap().iter().flatten().flatten().all(|v| v.is_finite()));
+    // And it carries on.
+    e.send(Request::Draw(vec![TileKey { page: 0, size: (61, 79), at: (0, 0), w: 61, h: 79 }]));
+    wait(&rx, |ev| match ev {
+        Event::Drawn(..) => Some(()),
+        Event::Failed { job, .. } => panic!("the worker was taken for broken on {job:?}"),
+        _ => None,
+    });
 }

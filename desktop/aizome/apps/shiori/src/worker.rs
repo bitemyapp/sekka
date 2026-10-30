@@ -12,7 +12,7 @@
 //! replace what's waiting while a page draws.
 
 use std::collections::VecDeque;
-use std::io::{BufReader, BufWriter};
+use std::io::{self, BufReader, BufWriter, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
@@ -167,40 +167,40 @@ pub fn run() -> i32 {
         };
         let sent = match next {
             Next::Open(path, password) => {
-                let _ = write_frame(&mut out, &Reply::Working(Job::Open), None);
+                let _ = send(&mut out, Reply::Working(Job::Open), None);
                 doc = None;
                 match Doc::open(&path, password.as_deref()) {
                     Ok((d, info)) => {
                         doc = Some(d);
-                        write_frame(&mut out, &Reply::Opened(Box::new(info)), None)
+                        send(&mut out, Reply::Opened(Box::new(info)), None)
                     }
-                    Err(e) => write_frame(&mut out, &Reply::OpenFailed(e), None),
+                    Err(e) => send(&mut out, Reply::OpenFailed(e), None),
                 }
             }
             Next::Job(job) => {
                 let Some(d) = doc.as_mut() else { continue };
-                let _ = write_frame(&mut out, &Reply::Working(job.clone()), None);
+                let _ = send(&mut out, Reply::Working(job.clone()), None);
                 match job {
                     Job::Draw(key) => match d.guarded(|d| d.draw(&key)).flatten() {
-                        Some(px) => write_frame(&mut out, &Reply::Drawn(key), Some(px.data_as_u8_slice())),
-                        None => write_frame(&mut out, &Reply::DrawFailed(key), None),
+                        Some(px) => send(&mut out, Reply::Drawn(key), Some(px.data_as_u8_slice())),
+                        None => send(&mut out, Reply::DrawFailed(key), None),
                     },
                     Job::Text(page) => {
                         let text = d.guarded(|d| d.text(page)).flatten().unwrap_or_default();
-                        write_frame(&mut out, &Reply::Text { page, text }, None)
+                        send(&mut out, Reply::Text { page, text }, None)
                     }
                     Job::Links(page) => {
                         let links = d.guarded(|d| d.links(page)).unwrap_or_default();
-                        write_frame(&mut out, &Reply::Links { page, links }, None)
+                        send(&mut out, Reply::Links { page, links }, None)
                     }
                     Job::Open | Job::Find(_) => Ok(()),
                 }
             }
             Next::Find { serial, query, case, page } => {
                 let Some(d) = doc.as_mut() else { continue };
-                let _ = write_frame(&mut out, &Reply::Working(Job::Find(page)), None);
+                let _ = send(&mut out, Reply::Working(Job::Find(page)), None);
                 let hits = d.guarded(|d| d.find(page, &query, case)).unwrap_or_default();
-                write_frame(&mut out, &Reply::Found { serial, page, hits }, None)
+                send(&mut out, Reply::Found { serial, page, hits }, None)
             }
         };
         if sent.is_err() {
@@ -208,6 +208,12 @@ pub fn run() -> i32 {
             return 0;
         }
     }
+}
+
+/// Send `reply` (and a drawing's pixels), with what JSON can't carry left
+/// out of it (`Reply::finite`).
+fn send(out: &mut impl Write, reply: Reply, pixels: Option<&[u8]>) -> io::Result<()> {
+    write_frame(out, &reply.finite(), pixels)
 }
 
 /// An open document. The worker reads one document for its whole life, so

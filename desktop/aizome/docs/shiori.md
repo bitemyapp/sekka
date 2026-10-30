@@ -193,9 +193,22 @@ fails):
   a minute the app stops trying, and says so; a search it gave up on says
   it stopped.
 - The app takes no drawing on the worker's word: one wider or taller
-  than 4096 pixels (a tile is 1024) is treated as the worker going wrong,
-  and it's stopped, rather than the app making room for it; a page's
-  text whose characters and boxes don't pair up is cut to the shorter.
+  than 4096 pixels (a tile is 1024), one of a page the document hasn't,
+  or one reaching past the edge of its page is treated as the worker
+  going wrong, and it's stopped, rather than the app making room for it.
+  A drawing, or a search's hits, on a page the window doesn't have are
+  let go; a page's text whose characters and boxes don't pair up is cut
+  to the shorter.
+- Only numbers cross: JSON has none for infinity or NaN, and a document
+  can make either (a link 10^40 points wide is infinite as an `f32`). The
+  worker leaves such a link, or rectangle of a hit, out, and gives such a
+  character no box and such a page A4's size, rather than send what the
+  app couldn't read and would take for a broken worker.
+- A file that changes is opened again by a worker of its own, while the
+  worker that read the last version (all of it) goes on drawing it. The
+  new one takes over once it has opened the file and found pages; one
+  that can't (the file isn't whole yet) goes, and the last version stays
+  to read, zoom, find in and copy from.
 - A panic costs only the job it was on: the worker catches it, answers as
   if that tile couldn't be drawn (so the page is marked) or the page had
   no text, lets go of what hayro had cached, and carries on with the

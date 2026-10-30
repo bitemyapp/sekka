@@ -394,6 +394,70 @@ fn reloads_a_file_that_changes() {
 }
 
 #[test]
+fn the_last_version_is_still_drawn_while_the_file_cant_be_read() {
+    let mut r = rig("unreadable", &[("doc.pdf", common::sample())], &["doc.pdf"]);
+    let w = r.h.window();
+    let pid = doc(&r).engine.as_ref().and_then(|e| e.pid());
+    std::thread::sleep(Duration::from_millis(20));
+    std::fs::write(r.dir.join("doc.pdf"), b"%PDF-1.7 half written").unwrap();
+    r.h.advance(Duration::from_millis(1600));
+    settle(&mut r);
+    assert!(doc(&r).trouble.as_deref().is_some_and(|t| t.contains("can't be read yet")));
+    // The worker that read it is the one still drawing it.
+    assert_eq!(doc(&r).engine.as_ref().and_then(|e| e.pid()), pid);
+    assert!(doc(&r).reload.is_none());
+    // A zoom is drawn sharp, and find finds, in the last version.
+    r.h.send(Msg::ZoomIn);
+    settle(&mut r);
+    let d = doc(&r);
+    assert!(matches!(d.zoom, Zoom::Fixed(_)));
+    let view = Rect::new(d.scroll.0, d.scroll.1, d.scroll.0 + d.view.width, d.scroll.1 + d.view.height);
+    for i in d.layout.visible(view.y0, view.y1) {
+        for k in d.layout.tiles(i, d.scale, view, view.center()) {
+            assert!(d.tiles.has(&k), "{k:?} wasn't drawn");
+        }
+    }
+    r.h.send(Msg::Find);
+    r.h.send(Msg::FindQuery(w, "needle".into()));
+    r.h.advance(Duration::from_millis(250));
+    settle(&mut r);
+    assert_eq!(doc(&r).find.as_ref().map(|f| f.count()), Some(4));
+    assert_eq!(doc(&r).pages(), 4);
+}
+
+#[test]
+fn a_drawing_of_a_page_that_isnt_there_is_let_go() {
+    let mut r = rig("bad-drawing", &[("long.pdf", common::long(3))], &["long.pdf"]);
+    let w = r.h.window();
+    let serial = doc(&r).serial;
+    let image = Image::from_premultiplied_rgba(10, 10, vec![255u8; 400]).unwrap();
+    // Of a page past the last, and of a part past a page's edge (and past
+    // the end of a `u32`).
+    let far = TileKey { page: 9999, size: (10, 10), at: (0, 0), w: 10, h: 10 };
+    let past = TileKey { page: 0, at: (u32::MAX - 5, 0), ..far };
+    for key in [far, past] {
+        r.h.send(Msg::Worker(serial, Event::Drawn(key, image.clone())));
+        settle(&mut r);
+        assert!(!doc(&r).tiles.has(&key), "{key:?} was kept");
+    }
+    // Hits on a page past the last are let go too.
+    r.h.send(Msg::Find);
+    r.h.send(Msg::FindQuery(w, "page".into()));
+    r.h.advance(Duration::from_millis(250));
+    settle(&mut r);
+    let find = doc(&r).find.as_ref().map(|f| f.serial).expect("a search");
+    let hits = vec![vec![[0.0, 0.0, 10.0, 10.0]]];
+    r.h.send(Msg::Worker(serial, Event::Reply(Reply::Found { serial: find, page: 9999, hits })));
+    assert_eq!(doc(&r).find.as_ref().map(|f| f.count()), Some(3));
+    r.h.send(Msg::FindNext);
+    r.h.send(Msg::FindNext);
+    r.h.send(Msg::FindNext);
+    settle(&mut r);
+    assert!(matches!(doc(&r).load, Load::Open(_)));
+    assert_eq!(doc(&r).find.as_ref().and_then(|f| f.current).map(|(p, _)| p), Some(0));
+}
+
+#[test]
 fn says_what_it_cant_open() {
     let r = rig("bad", &[("notes.pdf", b"not a PDF".to_vec())], &["notes.pdf"]);
     let w = r.h.window();

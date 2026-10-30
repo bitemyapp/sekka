@@ -29,6 +29,10 @@ pub struct Page {
     pub links: Vec<([f32; 4], LinkTo)>,
     /// Filled rectangles (x, y, w, h, gray 0–1).
     pub boxes: Vec<(f32, f32, f32, f32, f32)>,
+    /// Annotation dictionaries and content written as they are: numbers
+    /// an `f32` can't hold, say.
+    pub raw_annots: Vec<String>,
+    pub raw_content: String,
 }
 
 pub enum LinkTo {
@@ -38,7 +42,16 @@ pub enum LinkTo {
 
 impl Page {
     pub fn letter() -> Page {
-        Page { size: (612.0, 792.0), rotate: 0, crop: None, runs: Vec::new(), links: Vec::new(), boxes: Vec::new() }
+        Page {
+            size: (612.0, 792.0),
+            rotate: 0,
+            crop: None,
+            runs: Vec::new(),
+            links: Vec::new(),
+            boxes: Vec::new(),
+            raw_annots: Vec::new(),
+            raw_content: String::new(),
+        }
     }
 
     pub fn text(mut self, x: f32, y: f32, size: f32, t: &str) -> Page {
@@ -132,6 +145,7 @@ pub fn pdf(pages: &[Page], outline: &[Mark]) -> Vec<u8> {
                 r[0], r[1], r[2], r[3]
             ));
         }
+        annots.extend(p.raw_annots.iter().cloned());
         let mut d = format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Resources << /Font << /F1 3 0 R >> >> /Contents {} 0 R",
             p.size.0,
@@ -156,6 +170,7 @@ pub fn pdf(pages: &[Page], outline: &[Mark]) -> Vec<u8> {
         for (x, y, size, t) in &p.runs {
             content += &format!("BT /F1 {size} Tf {x} {y} Td ({}) Tj ET\n", esc(t));
         }
+        content += &p.raw_content;
         objs.push(format!("<< /Length {} >>\nstream\n{content}endstream", content.len()));
     }
     outline_objs.sort_by_key(|(id, _)| *id);

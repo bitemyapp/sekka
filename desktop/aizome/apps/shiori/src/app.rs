@@ -265,8 +265,9 @@ pub struct Doc {
     pub load: Load,
     /// What the file was when it was opened (to see it change).
     pub stamp: Option<(SystemTime, u64)>,
-    /// A newer file is being opened; what shows stays until it has.
-    pub reloading: bool,
+    /// A newer file being opened, by a worker of its own (and its
+    /// serial): what shows, and the worker drawing it, stay until it has.
+    pub reload: Option<(u64, Engine)>,
     pub zoom: Zoom,
     pub layout: Rc<Layout>,
     /// The view's top left in the document, in points.
@@ -350,12 +351,32 @@ impl Doc {
     }
 
     /// The file changed and the newer one can't be read (yet: it may
-    /// still be being written). What showed stays; its stamp is kept, so
+    /// still be being written). What showed stays, still drawn by the
+    /// worker that read it, if it's there; the file's stamp is kept, so
     /// the next change to it is tried.
     fn unreadable_now(&mut self) {
-        self.reloading = false;
         self.trouble = Some("The file changed and can't be read yet; this is how it was.".into());
         self.trouble_until = None;
+    }
+
+    /// No worker will draw or read for it again (until a newer file is
+    /// opened): what was waiting on one won't come.
+    fn worker_gone(&mut self) {
+        self.engine = None;
+        self.sent.clear();
+        self.asked.clear();
+        self.copying = None;
+        if let Some(f) = self.find.as_mut().filter(|f| !f.done()) {
+            f.stopped = true;
+        }
+    }
+
+    /// Whether a drawing the worker sent is of a page as this layout has
+    /// it: a worker started again after a failure reads the file as it is
+    /// now, which may have fewer pages than show, and the app takes no
+    /// page or part of one on a worker's word.
+    fn fits(&self, k: &TileKey) -> bool {
+        k.plausible() && (k.page as usize) < self.layout.len()
     }
 
     fn place(&self) -> Option<Place> {
@@ -819,7 +840,7 @@ impl Shiori {
     pub fn idle(&self) -> bool {
         self.docs.iter().all(|d| {
             !matches!(d.load, Load::Opening)
-                && !d.reloading
+                && d.reload.is_none()
                 && d.sent.is_empty()
                 && !d.settling
                 && d.find.as_ref().is_none_or(|f| f.query.is_empty() || f.done())
@@ -860,7 +881,7 @@ impl Shiori {
                 engine: None,
                 load: Load::Opening,
                 stamp: stamp(&path),
-                reloading: false,
+                reload: None,
                 zoom: pending.map_or(Zoom::FitWidth, |p| p.zoom.into()),
                 layout: Rc::new(Layout::default()),
                 scroll: (0.0, 0.0),
@@ -914,7 +935,8 @@ impl Shiori {
         })
     }
 
-    /// Start a new worker for `w`'s document (a password, a newer file).
+    /// Start a new worker for `w`'s document in place of its last (a
+    /// password given).
     fn restart(&mut self, w: WindowKey) {
         let serial = self.next_serial();
         let Some(d) = self.doc(w) else { return };
@@ -924,6 +946,47 @@ impl Shiori {
         d.engine = Some(engine);
         d.sent.clear();
         d.asked.clear();
+    }
+
+    /// Open `w`'s file again, as it is now, in a worker of its own. The
+    /// worker drawing what shows goes on until the new one has opened it
+    /// (`reloaded`), so a file that can't be read yet leaves the last
+    /// version showing and still drawn, found in and copied from.
+    fn reload(&mut self, w: WindowKey) {
+        let serial = self.next_serial();
+        let Some(d) = self.doc(w) else { return };
+        let engine = self.start_engine(serial, &d.path.clone(), d.password.clone());
+        if let Some(d) = self.doc_mut(w) {
+            d.reload = Some((serial, engine));
+        }
+    }
+
+    /// What the worker opening a newer file says. Nothing is asked of it
+    /// until it's opened the file and taken over; if it can't, it goes,
+    /// and the last version stays.
+    fn reloaded(&mut self, w: WindowKey, ev: Event, cx: &mut Cx<Msg>) {
+        let Some(d) = self.doc_mut(w) else { return };
+        match ev {
+            // hayro found pages: the newer file takes over, and the worker
+            // drawing the last version goes with it.
+            Event::Reply(Reply::Opened(info)) if !info.pages.is_empty() => {
+                let Some((serial, engine)) = d.reload.take() else { return };
+                d.serial = serial;
+                d.engine = Some(engine);
+                d.sent.clear();
+                d.asked.clear();
+                self.opened(w, *info, true, cx);
+            }
+            // It's not a PDF yet, or has no pages hayro can show yet (a
+            // damaged page tree, a filter it doesn't have, a file still
+            // being written), or it broke the worker opening it.
+            Event::Reply(Reply::Opened(_) | Reply::OpenFailed(_)) | Event::Failed { gave_up: true, .. } => {
+                d.reload = None;
+                d.unreadable_now();
+            }
+            // It went before it began, and another is opening the file.
+            _ => {}
+        }
     }
 
     fn keep_place(&mut self, w: WindowKey) {
@@ -1039,12 +1102,18 @@ impl Shiori {
     }
 
     fn worker(&mut self, serial: u64, ev: Event, cx: &mut Cx<Msg>) {
+        let reloading = |d: &&Doc| d.reload.as_ref().is_some_and(|(s, _)| *s == serial);
+        if let Some(w) = self.docs.iter().find(reloading).map(|d| d.window) {
+            self.reloaded(w, ev, cx);
+            return;
+        }
         let Some(w) = self.docs.iter().find(|d| d.serial == serial).map(|d| d.window) else { return };
         match ev {
             Event::Drawn(key, img) => {
                 let Some(d) = self.doc_mut(w) else { return };
                 d.sent.retain(|k| *k != key);
-                if d.reloading {
+                if !d.fits(&key) {
+                    log::warn!("the worker sent a drawing of a page that doesn't show: {key:?}");
                     return;
                 }
                 // Kept whatever else goes: the drawings of the pages in view
@@ -1073,10 +1142,14 @@ impl Shiori {
                 }
                 self.request(w);
             }
-            Event::Reply(Reply::Opened(info)) => self.opened(w, *info, cx),
+            Event::Reply(Reply::Opened(info)) => self.opened(w, *info, false, cx),
             Event::Reply(Reply::OpenFailed(e)) => {
                 let Some(d) = self.doc_mut(w) else { return };
-                if d.reloading {
+                if matches!(d.load, Load::Open(_)) && !matches!(e, OpenError::Worker(_)) {
+                    // Started again after a failure, a worker found the
+                    // file changed and unreadable: what showed stays, with
+                    // nothing to draw more of it.
+                    d.worker_gone();
                     d.unreadable_now();
                     return;
                 }
@@ -1106,6 +1179,9 @@ impl Shiori {
             }
             Event::Reply(Reply::Found { serial, page, hits }) => {
                 let Some(d) = self.doc_mut(w) else { return };
+                if page as usize >= d.pages() {
+                    return;
+                }
                 let Some(f) = d.find.as_mut().filter(|f| f.serial == serial) else { return };
                 let first = !hits.is_empty() && f.jump;
                 f.results.insert(page, hits);
@@ -1148,16 +1224,11 @@ impl Shiori {
                 // About ten seconds, then the page number again.
                 d.trouble_until = Some(ticks + 7);
                 if gave_up {
-                    d.engine = None;
-                    d.asked.clear();
+                    d.worker_gone();
                     d.trouble = None;
-                    // What was waiting on the worker won't come.
-                    d.copying = None;
-                    if let Some(f) = d.find.as_mut().filter(|f| !f.done()) {
-                        f.stopped = true;
-                    }
-                    if d.reloading && job == Some(Job::Open) {
-                        // The changed file broke it: what showed stays.
+                    if matches!(d.load, Load::Open(_)) && job == Some(Job::Open) {
+                        // Started again after a failure, a worker broke on
+                        // the file as it is now: what showed stays.
                         d.unreadable_now();
                     } else if matches!(d.load, Load::Opening) || job == Some(Job::Open) {
                         d.load = Load::Failed(format!("The page reader {what} while opening it."));
@@ -1175,10 +1246,12 @@ impl Shiori {
         }
     }
 
-    fn opened(&mut self, w: WindowKey, info: DocInfo, cx: &mut Cx<Msg>) {
+    /// The document opened: for the first time, or again in a worker
+    /// started after a failure, or newer (`reloading`, its worker taken
+    /// over).
+    fn opened(&mut self, w: WindowKey, info: DocInfo, reloading: bool, cx: &mut Cx<Msg>) {
         let Some(d) = self.doc_mut(w) else { return };
         let again = matches!(d.load, Load::Open(_));
-        let reloading = d.reloading;
         if again && !reloading {
             // A worker started again after a failure: carry on, and ask
             // for what's still wanted (the search too).
@@ -1197,18 +1270,13 @@ impl Shiori {
         }
         if info.pages.is_empty() {
             // hayro read it and found no pages it can show (a damaged
-            // page tree, a filter it doesn't have; a file still being
-            // written, when it changed while open).
-            if reloading {
-                d.unreadable_now();
-            } else {
-                d.load = Load::Failed("It has no pages Shiori can read.".into());
-                d.engine = None;
-            }
+            // page tree, a filter it doesn't have). A newer file without
+            // any doesn't get here (`reloaded`).
+            d.load = Load::Failed("It has no pages Shiori can read.".into());
+            d.engine = None;
             return;
         }
         if reloading {
-            d.reloading = false;
             d.tiles.clear();
             d.standins.clear();
             d.broken.clear();
@@ -1638,7 +1706,7 @@ impl Shiori {
     fn watch(&mut self) {
         let mut changed = Vec::new();
         for d in &mut self.docs {
-            if !matches!(d.load, Load::Open(_)) || d.reloading {
+            if !matches!(d.load, Load::Open(_)) || d.reload.is_some() {
                 continue;
             }
             let now = stamp(&d.path);
@@ -1652,10 +1720,7 @@ impl Shiori {
             }
         }
         for w in changed {
-            if let Some(d) = self.doc_mut(w) {
-                d.reloading = true;
-            }
-            self.restart(w);
+            self.reload(w);
         }
     }
 }
@@ -1980,14 +2045,14 @@ impl Program for Shiori {
             }
             Msg::Reload => {
                 let Some(w) = target else { return };
-                if let Some(d) = self.doc_mut(w) {
-                    d.reloading = matches!(d.load, Load::Open(_));
-                    if !d.reloading {
-                        d.load = Load::Opening;
-                    }
-                    d.stamp = stamp(&d.path);
+                let Some(d) = self.doc_mut(w) else { return };
+                d.stamp = stamp(&d.path);
+                if matches!(d.load, Load::Open(_)) {
+                    self.reload(w);
+                } else {
+                    d.load = Load::Opening;
+                    self.restart(w);
                 }
-                self.restart(w);
             }
             Msg::ShowInHako => {
                 let Some(path) = self.focused_doc().map(|d| d.path.clone()) else { return };

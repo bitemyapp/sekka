@@ -40,9 +40,14 @@ impl TileKey {
         self.w as usize * self.h as usize * 4
     }
 
-    /// Whether it's a drawing the app could have asked for.
+    /// Whether it's a drawing the app could have asked for: no wider or
+    /// taller than `MOST_SIDE`, and within the page drawn `size` large.
     pub fn plausible(&self) -> bool {
-        (1..=MOST_SIDE).contains(&self.w) && (1..=MOST_SIDE).contains(&self.h)
+        let within = |at: u32, side: u32, of: u32| at.checked_add(side).is_some_and(|end| end <= of);
+        (1..=MOST_SIDE).contains(&self.w)
+            && (1..=MOST_SIDE).contains(&self.h)
+            && within(self.at.0, self.w, self.size.0)
+            && within(self.at.1, self.h, self.size.1)
     }
 }
 
@@ -98,6 +103,74 @@ pub enum Reply {
         page: u32,
         hits: Vec<Vec<PageRect>>,
     },
+}
+
+/// What a page with no size a JSON number can give is taken to be: A4, as
+/// hayro takes a page whose boxes are empty.
+const NO_SIZE: (f32, f32) = (595.0, 842.0);
+
+/// Whether each of `r`'s corners is a number JSON can carry.
+fn finite(r: &PageRect) -> bool {
+    r.iter().all(|v| v.is_finite())
+}
+
+fn finite_target(t: &mut Target) {
+    if let Target::Page { y, .. } = t
+        && y.is_some_and(|y| !y.is_finite())
+    {
+        *y = None;
+    }
+}
+
+fn finite_outline(entries: &mut [Outline]) {
+    for e in entries {
+        if let Some(t) = e.target.as_mut() {
+            finite_target(t);
+        }
+        finite_outline(&mut e.children);
+    }
+}
+
+impl Reply {
+    /// It, with nothing in it that isn't a number. JSON has no infinity
+    /// or NaN: serde_json writes them as `null`, a reply with one can't be
+    /// read, and the app would take the worker for broken. A document can
+    /// give either: a link 10^40 points wide is infinite as an `f32`, and
+    /// NaN once turned with its page. Such a link, or rectangle of a hit,
+    /// is left out; such a character keeps its place in the text with no
+    /// box (as an inferred space has); such a page is A4; such a
+    /// destination keeps its page and not its place down it.
+    pub fn finite(mut self) -> Reply {
+        match &mut self {
+            Reply::Opened(info) => {
+                for p in &mut info.pages {
+                    if !(p.0.is_finite() && p.1.is_finite()) {
+                        *p = NO_SIZE;
+                    }
+                }
+                finite_outline(&mut info.outline);
+            }
+            Reply::Text { text, .. } => {
+                for b in text.boxes.iter_mut().filter(|b| !finite(b)) {
+                    *b = [0.0; 4];
+                }
+            }
+            Reply::Links { links, .. } => {
+                links.retain(|l| finite(&l.rect));
+                for l in links {
+                    finite_target(&mut l.target);
+                }
+            }
+            Reply::Found { hits, .. } => {
+                hits.retain_mut(|h| {
+                    h.retain(finite);
+                    !h.is_empty()
+                });
+            }
+            Reply::OpenFailed(_) | Reply::Working(_) | Reply::Drawn(_) | Reply::DrawFailed(_) => {}
+        }
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,8 +327,54 @@ mod tests {
         assert!(key(224, 896).plausible());
         assert!(!key(0, 10).plausible());
         assert!(!key(u32::MAX, u32::MAX).plausible());
+        // The last tile of a page drawn 1500 wide, and parts past its edge.
+        let edge = TileKey { page: 0, size: (1500, 2000), at: (1024, 1024), w: 476, h: 976 };
+        assert!(edge.plausible());
+        assert!(!TileKey { w: 477, ..edge }.plausible());
+        assert!(!TileKey { at: (u32::MAX - 10, 0), w: 100, ..edge }.plausible());
+        assert!(!TileKey { size: (0, 0), at: (0, 0), ..edge }.plausible());
         let mut t = PageText { chars: vec!['a', 'b'], boxes: vec![[0.0; 4]] };
         t.agree();
         assert_eq!((t.chars.len(), t.boxes.len()), (1, 1));
+    }
+
+    /// The reply, sent and read back as the app reads it.
+    fn through(r: Reply) -> Reply {
+        let mut buf = Vec::new();
+        write_frame(&mut buf, &r.finite(), None).unwrap();
+        read_frame(&mut &buf[..]).expect("a reply the app can read").unwrap()
+    }
+
+    #[test]
+    fn what_isnt_a_number_is_left_out() {
+        let inf = f32::INFINITY;
+        let to = |y| Target::Page { page: 1, y: Some(y) };
+        // Unsent as it is, a reply with one can't be read.
+        let mut buf = Vec::new();
+        let link = Link { rect: [0.0, 0.0, inf, 20.0], target: Target::Uri("https://example.com".into()) };
+        write_frame(&mut buf, &Reply::Links { page: 0, links: vec![link.clone()] }, None).unwrap();
+        assert!(read_frame::<Reply>(&mut &buf[..]).is_err());
+        let kept = Link { rect: [1.0, 2.0, 3.0, 4.0], target: to(f32::NAN) };
+        let Reply::Links { links, .. } = through(Reply::Links { page: 0, links: vec![link, kept.clone()] }) else {
+            panic!()
+        };
+        assert_eq!(links, vec![Link { target: Target::Page { page: 1, y: None }, ..kept }]);
+        let text = PageText { chars: vec!['a', 'b'], boxes: vec![[1.0, 2.0, 3.0, 4.0], [f32::NAN, 0.0, inf, 1.0]] };
+        let Reply::Text { text, .. } = through(Reply::Text { page: 0, text }) else { panic!() };
+        assert_eq!(text.chars, ['a', 'b']);
+        assert_eq!(text.boxes, [[1.0, 2.0, 3.0, 4.0], [0.0; 4]]);
+        let hits = vec![vec![[inf; 4]], vec![[1.0; 4], [-inf; 4]]];
+        let Reply::Found { hits, .. } = through(Reply::Found { serial: 1, page: 0, hits }) else { panic!() };
+        assert_eq!(hits, vec![vec![[1.0; 4]]]);
+        let outline = vec![Outline {
+            title: "A".into(),
+            target: Some(to(inf)),
+            children: vec![Outline { title: "B".into(), target: Some(to(f32::NAN)), children: Vec::new() }],
+        }];
+        let info = DocInfo { pages: vec![(612.0, 792.0), (inf, 792.0)], outline, ..DocInfo::default() };
+        let Reply::Opened(info) = through(Reply::Opened(Box::new(info))) else { panic!() };
+        assert_eq!(info.pages, [(612.0, 792.0), NO_SIZE]);
+        assert_eq!(info.outline[0].target, Some(Target::Page { page: 1, y: None }));
+        assert_eq!(info.outline[0].children[0].target, Some(Target::Page { page: 1, y: None }));
     }
 }

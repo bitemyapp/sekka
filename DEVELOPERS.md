@@ -1203,7 +1203,7 @@ SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
 `unsafe` code on the document's bytes. A panic costs the job it was on (a page it was drawing shows as
 unreadable at that size; one whose text it was reading has none); the
 reader restarts a worker that dies or spends too long on a page, and
-refuses a drawing larger than it could have asked for. Fonts a document names but doesn't carry come from hayro's built-in
+refuses a drawing it couldn't have asked for (too large, or of a page the document hasn't). Fonts a document names but doesn't carry come from hayro's built-in
 Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
 fontconfig for. Its tests start real workers over generated documents and a
 qpdf-encrypted fixture:

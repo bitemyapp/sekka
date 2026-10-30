@@ -839,7 +839,7 @@ is put together, is in `docs/shiori.md`.
   (`$XDG_STATE_HOME/aizome/shiori/places.json`, the newest 400). A file
   that changes while open (a LaTeX build, a download finishing) is read
   again where you are; one that's half written leaves the last version
-  showing.
+  showing, and still drawn as you zoom and move about, until it's whole.
 - **Robustness**: a page that makes hayro panic, keeps it busy over 20
   seconds, or brings its worker down costs that drawing of that page
   ("This page couldn't be drawn"), not the window; it's tried again at
