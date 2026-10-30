@@ -318,11 +318,14 @@ Notes for client authors:
   the back; right-click opens the marking menu.
 - **Frame**: edges and corners resize, 6pt beyond the edge; ⌃❖-drag moves
   and ⌃❖-right-drag resizes from anywhere in a window.
-- **Stacks**: drag a tab past another window's tab (a dashed slot and
-  "Release to stack with ‹title›" show) to stack; click a background tab
-  to show it, drag it away to tear it out (⌥-drag tears out the showing
-  one); ⌥❖S stacks with the window behind; ⌥❖[ and ⌥❖] show the
-  previous and next tab; IPC `stack`/`unstack`.
+- **Stacks**: drag a tab over another window's tabs to stack: they part
+  where it would go, before the first whose middle is past the pointer or
+  after them all (a dashed slot and "Release to stack with ‹title›"
+  show); click a background tab to show it, drag it away to tear it out
+  (⌥-drag tears out the showing one), and drop it back on its group to
+  move it along; ⌥❖S stacks with the window behind; ⌥❖[ and ⌥❖] show
+  the previous and next tab; IPC `stack`/`unstack` (`stack` adds at the
+  end).
 - **Desks**: four by default (settings `[[desks]]`). Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is

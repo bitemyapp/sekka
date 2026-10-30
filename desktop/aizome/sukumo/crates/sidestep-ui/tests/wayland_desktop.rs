@@ -163,6 +163,72 @@ mod linux {
         }
     }
 
+    /// Consume a launcher's token on an already mapped background window.
+    /// The token must reach xdg_activation directly, rather than requesting
+    /// a new one from the target window's input history.
+    struct Activated {
+        started: Instant,
+        target: Option<WindowId>,
+        source: Option<WindowId>,
+        source_drawn: bool,
+        typed: bool,
+        activated: bool,
+        done: bool,
+        input: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl Handler for Activated {
+        fn launched(&mut self, cx: &mut Cx) {
+            self.target = Some(cx.open_window(WindowOptions::new("Activation target")));
+            cx.set_repeating_timer(Duration::from_millis(20));
+        }
+
+        fn draw(&mut self, cx: &mut Cx, window: WindowId, canvas: &mut Canvas) {
+            canvas.fill_rect(Rect::from_origin_size(Point::ZERO, canvas.size()), GREEN);
+            if Some(window) == self.target && self.source.is_none() {
+                self.source = Some(cx.open_window(WindowOptions::new("Activation source")));
+            } else if Some(window) == self.source {
+                self.source_drawn = true;
+            }
+        }
+
+        fn timer(&mut self, _cx: &mut Cx, _timer: TimerId) {
+            assert!(
+                self.started.elapsed() < DEADLINE,
+                "the forwarded token never focused the target: drawn={}, typed={}, activated={}",
+                self.source_drawn,
+                self.typed,
+                self.activated
+            );
+            if self.source_drawn && !self.typed {
+                self.typed = true;
+                // A headless seat initially has no keyboard. Keep the
+                // virtual one alive until activation uses its input.
+                self.input = Some(std::thread::spawn(|| {
+                    assert!(
+                        Command::new("wtype").args(["-s", "200", "-k", "a", "-s", "1000"]).status().unwrap().success()
+                    );
+                }));
+            }
+        }
+
+        fn window_event(&mut self, cx: &mut Cx, window: WindowId, event: WindowEvent) {
+            if Some(window) == self.source && matches!(&event, WindowEvent::Key(k) if k.pressed) {
+                cx.request_activation_token(None);
+            }
+            if self.activated && Some(window) == self.target && event == WindowEvent::Focused(true) {
+                self.done = true;
+                cx.quit();
+            }
+        }
+
+        fn activation_token(&mut self, cx: &mut Cx, _request: ActivationRequest, token: Option<String>) {
+            let token = token.expect("sway supports activation");
+            cx.window(self.target.unwrap()).unwrap().activate_with_token(&token);
+            self.activated = true;
+        }
+    }
+
     /// The cells of `Buffers`' grid, 8 by 4, each recolored by a frame.
     const CELLS: usize = 32;
 
@@ -975,6 +1041,25 @@ mod linux {
         let toplevel = Toplevel { started: Instant::now(), drawn: false, checked: false };
         let toplevel = App::new().app_id("org.sidestep.DesktopTest").run(toplevel).expect("a compositor");
         assert!(toplevel.checked);
+
+        if has("wtype") {
+            let activated = Activated {
+                started: Instant::now(),
+                target: None,
+                source: None,
+                source_drawn: false,
+                typed: false,
+                activated: false,
+                done: false,
+                input: None,
+            };
+            let activated = App::new().run(activated).expect("a compositor");
+            assert!(activated.done);
+            activated.input.unwrap().join().expect("the virtual keyboard");
+            println!("  a forwarded activation token focused an existing background window");
+        } else {
+            println!("skipped: activation test needs wtype");
+        }
 
         let buffers = Buffers { started: Instant::now(), window: None, colors: vec![0; CELLS], frame: 0, done: false };
         assert!(App::new().run(buffers).expect("a compositor").done);
