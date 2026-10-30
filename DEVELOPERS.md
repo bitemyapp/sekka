@@ -1197,6 +1197,34 @@ revisions in Shiori's `Cargo.toml`, run `cargo update -p hayro`, and put the
 new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
 --fetch-submodules` hash in `outputHashes`.
 
+The zune-core and moxcms entries in the `[patch.crates-io]` of
+`desktop/aizome/Cargo.toml` aren't Shiori's alone: Cargo applies a patch to
+the whole workspace. Everything that reaches `image` builds it against the
+forks: the compositor (`aizome-comp`, `aizome-comp-core` and
+`aizome-comp-logic`, through Sukumo's `sidestep-ui` and `sidestep-engine`),
+`aizome-kit` the same way, and so the shell and every app (Hako and Shashin
+use `sidestep-engine` directly too, and Shashin `image`). `image` still
+decodes JPEGs with crates.io's zune-jpeg, compiled against the forked
+zune-core, and manages colour with the forked moxcms. Sukumo's own
+workspace has its own `Cargo.lock` and no patch. A change to either fork
+can change how wallpapers, icons and thumbnails decode, so moving one needs
+Shashin's tests, the `aizome` package's check phase and a look at a
+session, not only Shiori's tests:
+
+- zune-core is named by its branch, `scaled-idct`, as hayro names its
+  zune-jpeg, so a plain `cargo update` moves both (one repository) to the
+  branch's head. Choose the commit with `cargo update -p zune-core
+  --precise REV`, and replace the zune-image hash in `outputHashes`.
+- moxcms is pinned by `rev`: change it, run `cargo update -p moxcms`, and
+  replace its hash.
+- The moxcms patch only saves work (its tables are the same), so dropping
+  it with its hash costs Shiori time on ICC-based and Lab colour, nothing
+  else; it can go once awxkee/moxcms#209 is released.
+- The zune-core patch can go only once hayro's zune-jpeg and `image`'s
+  agree on a zune-core Nix can vendor, as it can't hold two crates of one
+  name and version: the fork's work released and hayro's fork moved to
+  it, or the fork's zune-core given a version of its own.
+
 Only the worker process, `aizome-shiori --worker`, one for each open
 document, runs hayro: a document can panic it or keep it busy, and the
 SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
