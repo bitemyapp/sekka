@@ -41,9 +41,9 @@ def until(description, check, timeout=30):
     raise AssertionError(description)
 
 
-def window():
+def window(app=APP):
     return next(
-        (w for w in json.loads(user("aizomectl --json windows"))["windows"] if w["app_id"] == APP),
+        (w for w in json.loads(user("aizomectl --json windows"))["windows"] if w["app_id"] == app),
         None,
     )
 
@@ -70,7 +70,8 @@ def seconds(clock):
 
 
 def stats():
-    """The last stats line Utsushi logged (UTSUSHI_STATS)."""
+    """The last stats line Utsushi logged (UTSUSHI_STATS, every 5 s from
+    its start, ending with where playback was)."""
     lines = [
         l for l in machine.succeed("journalctl _UID=1000 --no-pager -o cat").splitlines() if l.startswith("utsushi: ")
     ]
@@ -87,9 +88,31 @@ def stream():
     return None
 
 
+def at_the_end(clip):
+    """The last stats line, once it was logged at the clip's end (an
+    earlier one counts frames shown before the end)."""
+    m = re.search(r"shown: (\d+), dropped: (\d+).* at ([0-9.]+)$", stats())
+    return m if m and float(m.group(3)) >= clip - 0.5 else None
+
+
+def held(secs=2.0):
+    """The time shown, if it stays put for `secs`."""
+    before = timeline()
+    time.sleep(secs)
+    return before if before is not None and timeline() == before else None
+
+
 machine.wait_for_unit("multi-user.target")
-machine.wait_until_succeeds("ls /run/user/1000 | grep -q '^wayland-[0-9]*$'", timeout=120)
+# The session is up once its shell is; aizomectl talks to the compositor's
+# own socket, which comes a moment after Wayland's.
+machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
+machine.wait_until_succeeds("ls /run/user/1000 | grep -q '^aizome\\.wayland-[0-9]*\\.sock$'", timeout=120)
 user(f"mkdir -p {INSPECT}")
+# The first-run tour opens by itself: close it, so it can't take the
+# keyboard from Utsushi.
+tour = until("the first-run tour", lambda: window("org.aizome.Annai"), timeout=60)
+user(f"aizomectl close {tour['id']}")
+until("the tour closed", lambda: window("org.aizome.Annai") is None)
 
 with subtest("the module lets streams ask for long cycles"):
     settings = user("pw-metadata -n settings 0 clock.max-quantum")
@@ -109,10 +132,10 @@ with subtest("a video opens as the desktop opens videos"):
 
 with subtest("it plays to the end"):
     until("the end", lambda: timeline() in ("0:05", "0:06"), timeout=40)
-    line = until("its stats", lambda: re.search(r"shown: (\d+), dropped: (\d+)", stats()))
+    line = until("its stats at the end", lambda: at_the_end(6.0), timeout=20)
     shown, dropped = int(line.group(1)), int(line.group(2))
-    assert shown >= 100, stats()
-    assert "path: Software" in stats(), stats()
+    assert shown >= 100, line.group(0)
+    assert "path: Software" in line.group(0), line.group(0)
     machine.screenshot("utsushi-video")
 
 with subtest("a song pauses and goes on from where it stopped"):
@@ -122,11 +145,9 @@ with subtest("a song pauses and goes on from where it stopped"):
     props = until("its stream", stream)
     assert props.get("media.role") == "Music", props
     assert props.get("node.latency", "").startswith("8192/"), props
+    user(f"aizomectl focus {window()['id']}")
     user("aizomectl input key space")
-    time.sleep(1.0)
-    paused = timeline()
-    time.sleep(2.0)
-    assert timeline() == paused, (paused, timeline())
+    paused = until("paused", held, timeout=15)
     user("aizomectl input key space")
     until("playing again", lambda: seconds(timeline()) > seconds(paused), timeout=10)
     machine.screenshot("utsushi-song")
