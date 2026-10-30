@@ -130,9 +130,28 @@ palette. Search filters the sidebar and highlights options.
   list of Aizome's shortcuts (from the compositor's `keys` config, editable).
   In Typing → Keys → Modifier keys, choose **Swap Alt and Super** for a
   Mac-style position, or the left-only swap to keep Right Alt for accents.
-  Changes apply immediately to all keyboards and persist across logins;
-  **Default** restores the modifier arrangement. Open this control directly
-  with `aizome-settei --pane keyboard.modifiers`.
+  Changes apply immediately and persist across logins; **Default**
+  restores the modifier arrangement. Open this control directly with
+  `aizome-settei --pane keyboard.modifiers`.
+  The modifier keys, Caps Lock and Compose key can differ from keyboard to
+  keyboard: Keys → Keyboard chooses whose they are, every keyboard's
+  without its own (`[input.keyboard]`) or one keyboard's
+  (`[[input.keyboards]]`, by the name and vendor:product it gives), and −
+  forgets a keyboard's own. **Set Up…** (`aizome-settei --pane
+  keyboard.setup`) asks for the key just left of the space bar on the
+  keyboard to set up. The compositor catches that key (`catch-key`: an
+  app never hears a modifier key alone) with the keyboard it came from,
+  so the press says which keyboard and where its ❖ should go: Alt there,
+  as on a PC, suggests **Swap Alt and Super**; ⌘ Command or the Windows
+  key, nothing; Control, **Swap Control and Super**. The space bar or a
+  key right of it asks again. Its Caps Lock and Compose key start as
+  other keyboards' or, when there's one, as another keyboard's own.
+  **Same as Other Keyboards** keeps it typing as the others do, without
+  being asked again. Layouts, repeat, Num Lock and shortcuts are every
+  keyboard's. When a USB or Bluetooth keyboard without keys of its own
+  appears (at login, or plugged in), the shell offers this setup in a
+  notification, once a session; a laptop's own keyboard and a VM's
+  aren't asked about.
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
   typing, scroll speed.

@@ -68,6 +68,7 @@ impl State {
     pub fn process_input<B: InputBackend>(&mut self, event: InputEvent<B>) {
         match event {
             InputEvent::Keyboard { event } => {
+                self.key_from(Some(&event.device().id()));
                 let pressed = event.state() == KeyState::Pressed;
                 self.keyboard_key(event.key_code().raw().saturating_sub(8), pressed, event.time_msec());
             }
@@ -449,6 +450,18 @@ impl State {
         }
         // A swallowed press swallows its release.
         if !pressed && self.az.suppressed_keys.remove(&keycode) {
+            return Decision::Swallow;
+        }
+        // A key someone asked for (Settei's keyboard setup): which it was,
+        // and on which keyboard; the app hears nothing of it.
+        if pressed
+            && !self.az.lock.is_locked()
+            && let Some((tag, conn)) = self.az.keyboards.catch.take()
+            && self.az.ipc.is_open(conn)
+        {
+            self.az.suppressed_keys.insert(keycode);
+            let keyboard = self.az.keyboards.sending();
+            self.az.ipc.emit(&aizome_ipc::Event::KeyCaught { tag, code: keycode.raw() - 8, keyboard });
             return Decision::Swallow;
         }
         if pressed && let Some(a) = core_binding(mods, &syms, self.az.lock.is_locked()) {

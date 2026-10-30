@@ -37,6 +37,11 @@ impl IpcServer {
         IpcServer::default()
     }
 
+    /// Whether connection `id` is still open.
+    pub fn is_open(&self, id: u64) -> bool {
+        self.conns.contains_key(&id)
+    }
+
     /// Binds the socket and starts accepting connections.
     pub fn listen(state: &mut State) -> io::Result<PathBuf> {
         let display = state.az.socket_name.to_string_lossy().into_owned();
@@ -186,6 +191,11 @@ impl State {
                     if let Some(c) = self.az.ipc.conns.get_mut(&id) {
                         c.subscribed = true;
                     }
+                    Response::Ok
+                }
+                // The connection's, so the wait ends with it (Settei gone).
+                Ok(Request::CatchKey { tag }) => {
+                    self.az.keyboards.catch = tag.map(|t| (t, id));
                     Response::Ok
                 }
                 Ok(req) => {

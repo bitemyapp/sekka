@@ -86,6 +86,39 @@ fn screenshots_say_where_they_went() {
 }
 
 #[test]
+fn keyboards_plugged_in_are_offered_their_setup_once() {
+    use aizome_ipc::{KeyboardBus, KeyboardInfo};
+    let mut h = scene(false);
+    let added = |name: &str, id: &str, bus| {
+        let keyboard = KeyboardInfo { name: name.into(), id: id.into(), bus, last: false };
+        Msg::Ipc(aizome_shell::ipc::IpcEvent::Event(aizome_ipc::Event::KeyboardAdded { keyboard }))
+    };
+    h.send(added("AT Translated Set 2 keyboard", "0001:0001", KeyboardBus::BuiltIn));
+    h.send(added("QEMU Virtio Keyboard", "0000:0000", KeyboardBus::Other));
+    assert_eq!(h.program().banner, None, "the computer's own, or a VM's");
+
+    h.send(added("Apple Inc. Magic Keyboard", "05ac:029c", KeyboardBus::Bluetooth));
+    let id = h.program().banner.expect("shown in the bar");
+    let n = h.program().notes.get(id).unwrap().clone();
+    assert_eq!(n.summary, "Set up Apple Inc. Magic Keyboard?");
+    assert!(n.buttons().any(|(_, l)| l == "Set Up…"));
+    assert_eq!(
+        h.program().note_actions.get(&(id, "set-up".to_owned())),
+        Some(&Action::Settings { pane: "keyboard.setup".into(), anchor: None })
+    );
+
+    let count = h.program().notes.list.len();
+    h.send(added("Apple Inc. Magic Keyboard", "05AC:029C", KeyboardBus::Bluetooth));
+    h.program_mut().settings.input.keyboards.push(aizome_config::KeyboardProfile {
+        name: "Logitech K120".into(),
+        id: "046d:c31c".into(),
+        ..Default::default()
+    });
+    h.send(added("Logitech K120", "046d:c31c", KeyboardBus::Usb));
+    assert_eq!(h.program().notes.list.len(), count, "asked once, and not about one set up");
+}
+
+#[test]
 fn the_bar_goes_back_to_the_menus_five_seconds_after_the_last_notification() {
     let mut h = scene(false);
     let note = |s: &str| Box::new(Incoming { app_name: "Mail".into(), summary: s.into(), ..Default::default() });

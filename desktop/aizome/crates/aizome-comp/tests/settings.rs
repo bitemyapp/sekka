@@ -1,6 +1,6 @@
 //! Settings keys Settei writes, honoured: whether new windows of the same
-//! app stack, what double-clicking a tab does, scrolling distance, sticky
-//! keys and slow keys.
+//! app stack, what double-clicking a tab does, scrolling distance, each
+//! keyboard's own modifier keys, sticky keys and slow keys.
 
 mod common;
 
@@ -156,6 +156,161 @@ fn modifier_swaps_apply_live_to_both_sides_and_can_be_undone() {
             assert_eq!(mods & (ALT | SUPER | CTRL), want, "physical key {physical}, options {options}");
         }
     }
+}
+
+#[test]
+fn each_keyboard_types_with_its_own_modifier_keys() {
+    const CAPS: u32 = 1 << 1;
+    const ALT: u32 = 1 << 3;
+    const SUPER: u32 = 1 << 6;
+    const MAC: &str = "Apple Inc. Magic Keyboard";
+    const PC: &str = "Logitech K120";
+    let settings = |mac: &str| {
+        format!(
+            "[input.keyboard]\noptions = \"altwin:swap_alt_win,grp:alt_shift_toggle\"\n\
+             [[input.keyboards]]\nname = \"{MAC}\"\nid = \"05ac:029c\"\noptions = \"{mac}\"\n"
+        )
+    };
+    let c = Compositor::start(Options { settings: &settings(""), ..Default::default() });
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let a = c.client(Spec::new("org.aizome.modifier-test", 0x2222cc));
+    c.wait_window("org.aizome.modifier-test");
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+
+    let plug = |name: &str, id: &str| {
+        c.ok(Request::Synthesize {
+            events: vec![Synthetic::PlugKeyboard {
+                name: name.into(),
+                id: id.into(),
+                bus: aizome_ipc::KeyboardBus::Usb,
+            }],
+        })
+    };
+    plug(PC, "046d:c31c");
+    plug(MAC, "05ac:029c");
+    for name in [PC, MAC] {
+        let got = events.by_ref().find_map(|e| match e {
+            Ok(aizome_ipc::Event::KeyboardAdded { keyboard }) => Some(keyboard),
+            _ => None,
+        });
+        assert_eq!(got.map(|k| k.name).as_deref(), Some(name));
+    }
+    let on = |keyboard: &str, key: &str, pressed: bool| {
+        c.ok(Request::Synthesize {
+            events: vec![Synthetic::KeyOn { keyboard: keyboard.into(), key: key.into(), pressed }],
+        })
+    };
+    let mut count = 0;
+    // The key beside the space bar (left Super on the Mac, left Alt on the
+    // PC) held with a: what the app hears it as.
+    let mut beside_space = |keyboard: &str, physical: &str| {
+        on(keyboard, physical, true);
+        on(keyboard, "a", true);
+        on(keyboard, "a", false);
+        on(keyboard, physical, false);
+        count += 1;
+        let s = a.wait_seen("modified a", |s| s.keys.iter().filter(|(k, _)| *k == KEY_A).count() == count);
+        let (_, mods) = s.keys.iter().rfind(|(k, _)| *k == KEY_A).unwrap();
+        mods & (ALT | SUPER)
+    };
+    assert_eq!(beside_space(PC, "56"), SUPER, "the PC's Alt is Super: swapped, as every keyboard's");
+    assert_eq!(beside_space(MAC, "125"), SUPER, "the Mac's Command is Super: its own, unswapped");
+    assert_eq!(beside_space(MAC, "56"), ALT, "and its Option is Alt");
+    let keymaps = a.seen().keymaps;
+    assert_eq!(beside_space(PC, "56"), SUPER, "back on the PC");
+    assert_eq!(beside_space(PC, "125"), ALT);
+    assert_eq!(a.seen().keymaps, keymaps + 1, "one keymap for the change of keyboard, none for its keys");
+
+    let aizome_ipc::Response::Keyboards { keyboards } = c.request(Request::Keyboards) else { panic!() };
+    let last: Vec<_> = keyboards.iter().map(|k| (k.name.as_str(), k.last)).collect();
+    assert_eq!(last, [(MAC, false), (PC, true)]);
+
+    // Caps Lock locked on one keyboard stays locked on the other.
+    on(PC, "58", true);
+    on(PC, "58", false);
+    a.wait_seen("Caps Lock", |s| s.locked & CAPS != 0);
+    on(MAC, "b", true);
+    on(MAC, "b", false);
+    let s = a.wait_seen("b", |s| s.keys.iter().any(|(k, _)| *k == KEY_B));
+    // Locked as b came, or the app would type it in lower case.
+    assert_ne!(s.locked_at_keys.last().copied().unwrap_or_default() & CAPS, 0, "Caps Lock with the Mac's keymap");
+    on(MAC, "58", true);
+    on(MAC, "58", false);
+    a.wait_seen("Caps Lock off", |s| s.locked & CAPS == 0);
+
+    // A change to the keyboard typing applies at once.
+    std::fs::write(c.dir.join("config/aizome/settings.toml"), settings("altwin:swap_lalt_lwin")).unwrap();
+    c.ok(Request::ReloadConfig);
+    assert_eq!(beside_space(MAC, "125"), ALT, "the Mac swapped too, on its left");
+    // Unplugged and plugged in again, it isn't news.
+    c.ok(Request::Synthesize { events: vec![Synthetic::UnplugKeyboard { name: MAC.into() }] });
+    plug(MAC, "05ac:029c");
+    assert_eq!(beside_space(MAC, "125"), ALT, "back, with its own keys");
+    plug("Another", "1234:5678");
+    let got = events.by_ref().find_map(|e| match e {
+        Ok(aizome_ipc::Event::KeyboardAdded { keyboard }) => Some(keyboard.name),
+        _ => None,
+    });
+    assert_eq!(got.as_deref(), Some("Another"));
+}
+
+#[test]
+fn a_caught_key_says_which_keyboard_and_reaches_no_app() {
+    const SUPER: u32 = 1 << 6;
+    let c = Compositor::start(Options::default());
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let a = c.client(Spec::new("org.aizome.catch-test", 0x2222cc));
+    c.wait_window("org.aizome.catch-test");
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    let synth = |e: Synthetic| c.ok(Request::Synthesize { events: vec![e] });
+    synth(Synthetic::PlugKeyboard {
+        name: "Apple Inc. Magic Keyboard".into(),
+        id: "05ac:029c".into(),
+        bus: aizome_ipc::KeyboardBus::Bluetooth,
+    });
+    let on = |key: &str, pressed: bool| {
+        synth(Synthetic::KeyOn { keyboard: "Apple Inc. Magic Keyboard".into(), key: key.into(), pressed })
+    };
+
+    let catch = |tag: Option<&str>| {
+        let mut asker = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+        let r = asker.request(&Request::CatchKey { tag: tag.map(str::to_owned) }).unwrap();
+        assert_eq!(r, aizome_ipc::Response::Ok);
+        asker
+    };
+    let asker = catch(Some("setup"));
+    // Command, beside the space bar, alone: no app ever hears that.
+    on("125", true);
+    on("a", true);
+    on("a", false);
+    on("125", false);
+    let caught = events.by_ref().find_map(|e| match e {
+        Ok(aizome_ipc::Event::KeyCaught { tag, code, keyboard }) => Some((tag, code, keyboard)),
+        _ => None,
+    });
+    let (tag, code, keyboard) = caught.expect("caught");
+    assert_eq!((tag.as_str(), code), ("setup", 125));
+    assert_eq!(keyboard.map(|k| (k.name, k.id)), Some(("Apple Inc. Magic Keyboard".into(), "05ac:029c".into())));
+    let s = a.wait_seen("a", |s| s.keys.iter().any(|(k, _)| *k == KEY_A));
+    assert!(!s.keys.iter().any(|(k, _)| *k == 125), "Command was swallowed: {:?}", s.keys);
+    assert_eq!(s.keys.iter().find(|(k, _)| *k == KEY_A).unwrap().1 & SUPER, 0, "and held nothing");
+
+    drop(asker);
+
+    // Given up on, or the asker gone (Settei quit), nothing is caught.
+    let mut asker = catch(Some("setup"));
+    asker.request(&Request::CatchKey { tag: None }).unwrap();
+    on("b", true);
+    on("b", false);
+    a.wait_seen("b", |s| s.keys.iter().any(|(k, _)| *k == KEY_B));
+    drop(catch(Some("setup")));
+    // The compositor sees the connection close before the key comes.
+    c.settle();
+    on("e", true);
+    on("e", false);
+    a.wait_seen("e", |s| s.keys.iter().any(|(k, _)| *k == 18));
 }
 
 #[test]

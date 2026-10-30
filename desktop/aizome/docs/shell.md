@@ -278,7 +278,11 @@ ones stay as a card under the bar until acted on. Actions appear as buttons
 on the card and in the Deskbar preview. Do Not Disturb (from the palette,
 the clock panel, or a schedule in settings) files them without the line.
 Screenshots post a notification with the image's thumbnail and "Show in
-Hako".
+Hako". A USB or Bluetooth keyboard without keys of its own
+(`[[input.keyboards]]`), there when the shell connects or plugged in
+later (`keyboard-added`), gets "Set up …?" with **Set Up…**, which opens
+Settei's keyboard setup (`keyboard.setup`); each is asked about once a
+session (`keyboards.rs`).
 
 Opening a notification raises its application's most recent window on the
 current Desk, falling back to another Desk if necessary. It reveals minimised

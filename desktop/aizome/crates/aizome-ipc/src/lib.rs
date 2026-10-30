@@ -396,6 +396,19 @@ pub enum Request {
     /// The seat's grabs, pressed buttons and keys, pointer constraint and
     /// cursor. → [`Response::InputState`].
     InputState,
+    /// The keyboards that type, one entry for each (a keyboard with several
+    /// devices is one), and which typed last. → [`Response::Keyboards`].
+    Keyboards,
+    /// Swallows the next key pressed (unless the screen is locked) and
+    /// tells subscribers which it was and on which keyboard, by
+    /// [`Event::KeyCaught`] with this `tag`: Settei's keyboard setup asks,
+    /// as an app never hears a modifier key alone. It waits while the
+    /// connection that asked stays open; asked without a tag, it stops.
+    /// Answered at once with `ok`.
+    CatchKey {
+        #[serde(default)]
+        tag: Option<String>,
+    },
     /// Blocks the compositor's main loop for a while (at most 60 s), to
     /// try the watchdog: nothing draws or answers meanwhile.
     DebugStall {
@@ -476,6 +489,19 @@ pub enum Synthetic {
     Chord { keys: String },
     /// Closes or opens the laptop's lid, as its switch does.
     Lid { closed: bool },
+    /// Plugs in a keyboard that types (a space bar and all): `id` is its
+    /// vendor and product (`05ac:029c`).
+    PlugKeyboard {
+        name: String,
+        id: String,
+        #[serde(default)]
+        bus: KeyboardBus,
+    },
+    /// Unplugs a keyboard [`Synthetic::PlugKeyboard`] plugged in.
+    UnplugKeyboard { name: String },
+    /// Presses or releases a key, as [`Synthetic::Key`] does, on a keyboard
+    /// [`Synthetic::PlugKeyboard`] plugged in: its own keys' settings apply.
+    KeyOn { keyboard: String, key: String, pressed: bool },
 }
 
 fn yes() -> bool {
@@ -537,6 +563,9 @@ pub enum Response {
     },
     InputState {
         state: InputState,
+    },
+    Keyboards {
+        keyboards: Vec<KeyboardInfo>,
     },
     Shares {
         shares: Vec<ShareInfo>,
@@ -659,6 +688,41 @@ pub struct InputState {
 impl Response {
     pub fn error(message: impl Into<String>) -> Response {
         Response::Error { message: message.into() }
+    }
+}
+
+/// A keyboard, as `[[input.keyboards]]` names it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyboardInfo {
+    /// What it calls itself: `Apple Inc. Magic Keyboard`.
+    pub name: String,
+    /// Its vendor and product, as `lsusb` writes them: `05ac:029c`.
+    pub id: String,
+    #[serde(default)]
+    pub bus: KeyboardBus,
+    /// It typed the last key.
+    #[serde(default)]
+    pub last: bool,
+}
+
+/// How a keyboard is connected.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum KeyboardBus {
+    Usb,
+    Bluetooth,
+    /// A laptop's own keyboard (PS/2, I²C, SPI).
+    BuiltIn,
+    /// Virtual (a VM's, uinput) or unknown.
+    #[default]
+    Other,
+}
+
+impl KeyboardBus {
+    /// Plugged in or paired, rather than one the computer came with or a
+    /// virtual one.
+    pub fn plugged(self) -> bool {
+        matches!(self, KeyboardBus::Usb | KeyboardBus::Bluetooth)
     }
 }
 
@@ -929,6 +993,20 @@ pub enum Event {
     SharesChanged {
         shares: Vec<ShareInfo>,
     },
+    /// A keyboard that types appeared, for the first time since the
+    /// compositor started: one plugged in again isn't new.
+    KeyboardAdded {
+        keyboard: KeyboardInfo,
+    },
+    /// The key a [`Request::CatchKey`] caught: its evdev code, the same
+    /// whatever the keymap makes of the key, and the keyboard that typed
+    /// it (none for a key from IPC).
+    KeyCaught {
+        tag: String,
+        code: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        keyboard: Option<KeyboardInfo>,
+    },
 }
 
 /// `$XDG_RUNTIME_DIR/aizome.$WAYLAND_DISPLAY.sock`.
@@ -1050,6 +1128,28 @@ impl Iterator for Events {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboards_are_named_as_settings_name_them() {
+        let r: Request = serde_json::from_str(r#"{"request":"catch-key","tag":"setup"}"#).unwrap();
+        assert_eq!(r, Request::CatchKey { tag: Some("setup".into()) });
+        let r: Request = serde_json::from_str(r#"{"request":"catch-key"}"#).unwrap();
+        assert_eq!(r, Request::CatchKey { tag: None });
+        let k = KeyboardInfo {
+            name: "Magic Keyboard".into(),
+            id: "004c:029c".into(),
+            bus: KeyboardBus::Bluetooth,
+            last: true,
+        };
+        let e = Event::KeyCaught { tag: "setup".into(), code: 125, keyboard: Some(k) };
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            r#"{"event":"key-caught","tag":"setup","code":125,"keyboard":{"name":"Magic Keyboard","id":"004c:029c","bus":"bluetooth","last":true}}"#
+        );
+        let s: Synthetic = serde_json::from_str(r#"{"type":"plug-keyboard","name":"K120","id":"046d:c31c"}"#).unwrap();
+        assert_eq!(s, Synthetic::PlugKeyboard { name: "K120".into(), id: "046d:c31c".into(), bus: KeyboardBus::Other });
+        assert!(KeyboardBus::Usb.plugged() && !KeyboardBus::BuiltIn.plugged() && !KeyboardBus::Other.plugged());
+    }
 
     #[test]
     fn requests_are_tagged_in_kebab_case() {

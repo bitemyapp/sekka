@@ -329,6 +329,8 @@ pub struct Aizome {
     pub suppressed_keys: HashSet<Keycode>,
     /// Command-key translation in force for these pressed keys.
     pub translated_keys: HashSet<Keycode>,
+    /// The keyboards that type, and whose keymap is in force.
+    pub keyboards: crate::keyboards::Keyboards,
     /// Surfaces that keep the screen awake (idle-inhibit).
     pub idle_inhibitors: HashSet<WlSurface>,
     /// Activation tokens that may move focus.
@@ -436,19 +438,19 @@ impl State {
         let mut seat = seat_state.new_wl_seat(&dh, backend.seat_name());
         seat.add_pointer();
         let k = &settings.input.keyboard;
-        let layouts = k.layouts.join(",");
-        let xkb = XkbConfig {
-            rules: "",
-            model: &k.model,
-            layout: &layouts,
-            variant: &k.variant,
-            options: if k.options.is_empty() { None } else { Some(k.options.clone()) },
+        // Other keyboards' keymap, until one with keys of its own types.
+        let spec = crate::keyboards::KeymapSpec {
+            layout: k.layouts.join(","),
+            variant: k.variant.clone(),
+            model: k.model.clone(),
+            options: k.options.clone(),
         };
-        if let Err(e) = seat.add_keyboard(xkb, k.repeat_delay as i32, k.repeat_rate as i32) {
-            warn!("keyboard layout {layouts} failed ({e:?}); using the default");
+        if let Err(e) = seat.add_keyboard(spec.xkb(), k.repeat_delay as i32, k.repeat_rate as i32) {
+            warn!("keyboard layout {} failed ({e:?}); using the default", spec.layout);
             seat.add_keyboard(XkbConfig::default(), k.repeat_delay as i32, k.repeat_rate as i32)
                 .expect("a keyboard with the default layout");
         }
+        let keyboards = crate::keyboards::Keyboards::new(spec);
         // Settings' "Num Lock on at start".
         if k.numlock
             && let Some(kb) = seat.get_keyboard()
@@ -554,6 +556,7 @@ impl State {
             lock: LockState::Unlocked,
             suppressed_keys: HashSet::new(),
             translated_keys: HashSet::new(),
+            keyboards,
             idle_inhibitors: HashSet::new(),
             valid_tokens: HashSet::new(),
             idle: Default::default(),
