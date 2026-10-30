@@ -65,10 +65,14 @@ fn stage(app: &Utsushi) -> Element<Msg> {
         .label("Picture");
     layers.push(input.into());
     if app.fullscreen && app.controls && app.has_video() {
+        // Every move over the bar says so, not only coming onto it: off a
+        // control straight onto the picture, the bar never hears the
+        // pointer leave, so it wouldn't hear it come back either.
         layers.push(
             container(
                 mouse_area(over_video(container(bar(app, true)).floating().max_width(900.0)))
-                    .on_hover(Msg::OverControls),
+                    .on_hover(Msg::OverControls)
+                    .on_move(|_| Msg::OverControls(true)),
             )
             .padding([0.0, 24.0, 24.0, 24.0])
             .align_x(Align::Center)

@@ -118,6 +118,8 @@ pub enum Msg {
     PictureSaved(Result<PathBuf, String>),
     TracksMenu,
     SpeedMenu,
+    /// A menu from the controls (Subtitles and Audio, Speed) closed.
+    ControlsMenuClosed,
     Mpris(mpris::Action),
     OpenRecent(usize),
     ClearRecent,
@@ -181,6 +183,9 @@ pub struct Utsushi {
     pub controls: bool,
     /// The pointer is over the full-screen controls: they stay.
     over_controls: bool,
+    /// Menus open from the controls: they stay under them (the pointer
+    /// in a menu is off the window).
+    controls_menus: u32,
     controls_timer: Option<TimerHandle>,
     controls_shown_at: Option<Instant>,
     tick: Option<TimerHandle>,
@@ -242,6 +247,7 @@ impl Utsushi {
             hidden: false,
             controls: true,
             over_controls: false,
+            controls_menus: 0,
             controls_timer: None,
             controls_shown_at: None,
             tick: None,
@@ -463,6 +469,17 @@ impl Utsushi {
         if self.fullscreen && self.controls && self.playing() && self.has_video() && self.controls_timer.is_none() {
             self.controls_shown_at = Some(Instant::now());
             self.controls_timer = Some(cx.after(CONTROLS_STAY, Msg::HideControls));
+        }
+    }
+
+    /// A menu from the bar, by its button `at`. In full screen the controls
+    /// stay while it's open: the pointer in it is off the window, and the
+    /// bar would go from under it. Counted, as one can open in another's
+    /// place, which closes after the new one opens.
+    fn controls_menu(&mut self, at: &str, menu: Menu<Msg>, cx: &mut Cx<Msg>) {
+        if let Some(r) = cx.element_rect(self.window, at) {
+            self.controls_menus += 1;
+            cx.show_menu(self.window, r, menu, MenuStyle::default().on_closed(Msg::ControlsMenuClosed));
         }
     }
 
@@ -962,7 +979,8 @@ impl Program for Utsushi {
             }
             Msg::HideControls => {
                 self.controls_timer = None;
-                if self.fullscreen && self.playing() && !self.over_controls && self.has_video() {
+                let using = self.over_controls || self.controls_menus > 0;
+                if self.fullscreen && self.playing() && !using && self.has_video() {
                     self.controls = false;
                     cx.hide_cursor_until_moved();
                     // What had the keys in the bar goes with it.
@@ -1060,15 +1078,19 @@ impl Program for Utsushi {
                 }
             }
             Msg::TracksMenu => {
-                if let Some(r) = cx.element_rect(self.window, "tracks") {
-                    let menu = crate::ui::tracks_menu(self);
-                    cx.show_menu(self.window, r, menu, MenuStyle::default());
-                }
+                let menu = crate::ui::tracks_menu(self);
+                self.controls_menu("tracks", menu, cx);
             }
             Msg::SpeedMenu => {
-                if let Some(r) = cx.element_rect(self.window, "speed") {
-                    let menu = crate::ui::speed_menu(self);
-                    cx.show_menu(self.window, r, menu, MenuStyle::default());
+                let menu = crate::ui::speed_menu(self);
+                self.controls_menu("speed", menu, cx);
+            }
+            Msg::ControlsMenuClosed => {
+                self.controls_menus = self.controls_menus.saturating_sub(1);
+                // From here as after a move: they go once the pointer
+                // rests off them.
+                if self.controls_menus == 0 {
+                    self.show_controls(cx);
                 }
             }
             Msg::Mpris(a) => self.on_mpris(a, cx),
@@ -1147,7 +1169,8 @@ impl Program for Utsushi {
     fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
         // Off the window from a control (to another output, or under
         // another window): the bar doesn't hear it go, so the controls go
-        // as though the pointer had rested.
+        // as though the pointer had rested. (Into one of their menus, they
+        // stay until it closes.)
         if window == self.window && !inside && self.over_controls {
             self.over_controls = false;
             self.rest_controls(cx);

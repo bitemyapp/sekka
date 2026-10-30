@@ -232,6 +232,46 @@ fn full_screen_controls_go_after_full_screen_left_with_the_pointer_on_them() {
 }
 
 #[test]
+fn full_screen_controls_stay_when_the_pointer_comes_straight_back_onto_them() {
+    // Off a control onto the picture and straight back onto one, within
+    // the 2.5 s: a button, then the volume.
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    for name in ["tracks", "volume"] {
+        pointer_onto(&mut h, w, name);
+        h.advance(Duration::from_secs(3));
+        assert!(h.program().controls, "they stay while the pointer is over {name}");
+        h.move_to(w, Point::new(100.0, 100.0));
+        let at = h.find_id(w, name).expect("the control").center();
+        h.move_to(w, at);
+        h.advance(Duration::from_secs(3));
+        assert!(h.program().controls, "they went from under the pointer back on {name}");
+    }
+}
+
+#[test]
+fn full_screen_controls_stay_while_their_menu_is_open() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+    let (mut h, w) = full_screen_with_the_controls_gone();
+    pointer_onto(&mut h, w, "tracks");
+    let at = h.find_id(w, "tracks").expect("tracks").center();
+    h.click(w, at);
+    assert_eq!(h.popups(w).len(), 1, "Subtitles and Audio opened");
+    // Into the menu, a surface of its own: the pointer left the window.
+    h.leave(w);
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "the controls stay under their menu");
+    // Another in its place: the first closes once the second has opened.
+    h.send(Msg::TracksMenu);
+    let popups = h.popups(w);
+    assert_eq!(popups.len(), 1, "one in its place: {popups:?}");
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().controls, "the controls stay under the next menu");
+    h.popup_keyboard(popups[0].0, Key::Named(NamedKey::Escape), Modifiers::NONE);
+    assert!(h.popups(w).is_empty(), "Escape closed it");
+    controls_went_again(&mut h, "after their menu closed");
+}
+
+#[test]
 fn the_keys_stay_with_the_picture_after_the_volume() {
     let mut h = harness();
     let w = window(&h);
