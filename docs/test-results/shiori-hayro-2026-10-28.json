@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "date": "2026-10-28",
-  "scope": "Shiori's worker with hayro (bitemyapp/hayro aizome-perf a2e9e62b) against its worker with PDFium (Sekka 52a7ee29), through Shiori's own path over the pdf.js corpus. Component evidence on a laptop; not VM, ISO or hardware qualification.",
+  "scope": "Shiori's worker with hayro (bitemyapp/hayro aizome-perf a2e9e62b) against its worker with PDFium (Sekka PR #135 before Shiori moved to hayro: built from 52a7ee29, a merge with main that the PR's rebase dropped, whose Shiori is that of 6edff0e3 in the PR's history; neither commit is on main, as the PR is squashed when merged), through Shiori's own path over the pdf.js corpus. Component evidence on a laptop; not VM, ISO or hardware qualification.",
   "follows": "hayro-fork-2026-10-28.json",
   "machine": "ganymede (Intel Core Ultra 7 365, 30 GiB RAM), shared with other sessions, one-minute load average 1.2 to 5.8 across the runs",
   "corpus": "the 1,012 files of the pdf.js test corpus used for the engine evaluation (many broken on purpose)",
-  "method": "cargo run --release -p aizome-shiori --example corpus -- DIR 4: four files at a time, each opened by a worker through the engine the app uses, its first three pages drawn at 1.5× (a 900-point window's width) in tiles of at most 1024 pixels, their text and links read, and its first ten pages searched for \"the\"; a file's time is from starting its worker to the last answer. The PDFium build is the merge commit before the change, built the same way; the two ran back to back, PDFium first.",
+  "method": "cargo run --release -p aizome-shiori --example corpus -- DIR 4: four files at a time, each opened by a worker through the engine the app uses, its first three pages drawn at 1.5× (a 900-point window's width) in tiles of at most 1024 pixels, their text and links read, and its first ten pages searched for \"the\"; a file's time is from starting its worker to the last answer. The PDFium build is that merge commit, built the same way; the two ran back to back, PDFium first.",
   "results": {
     "files_opened_drawn_read_and_searched": {"pdfium": 985, "hayro": 995},
     "per_file_ms": {
