@@ -17,6 +17,8 @@ use crate::widgets::drawn::{Press, drawn};
 use crate::wm::WindowNote;
 
 const SLIM_APP: f64 = 24.0;
+/// The red count's target at the right of a Slim app's row.
+const SLIM_COUNT: f64 = 32.0;
 const SLIM_WINDOW: f64 = 19.0;
 const SLIM_NOTE: f64 = 20.0;
 const SLIM_SHELF: f64 = 22.0;
@@ -197,7 +199,7 @@ fn slim_app(a: &AppRow, w: f64) -> Element<DeskbarMsg> {
     let (name, n, folded, unread) = (a.name.clone(), a.windows.len(), a.folded, a.unread);
     let (id, id2, id3) = (a.app_id.clone(), a.app_id.clone(), a.app_id.clone());
     let label = name.clone();
-    drawn(w, SLIM_APP, (name.clone(), a.glyph, a.hue, n, folded, unread), move |cx| {
+    let row: Element<DeskbarMsg> = drawn(w, SLIM_APP, (name.clone(), a.glyph, a.hue, n, folded, unread), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         if cx.is_hovered() {
@@ -219,7 +221,17 @@ fn slim_app(a: &AppRow, w: f64) -> Element<DeskbarMsg> {
     .on_middle_click(DeskbarMsg::Fold(id3))
     .text(label, SemanticRole::ListItem)
     .key(("app", a.app_id.as_str()))
-    .into()
+    .into();
+    if unread == 0 {
+        return row;
+    }
+    // The red count, a target of its own as the full Deskbar's is: it
+    // shows every notification, and again marks them read.
+    let count = drawn(SLIM_COUNT, SLIM_APP, "count", |_cx| {})
+        .on_click(DeskbarMsg::ShowNotes(a.app_id.clone()))
+        .text(format!("{unread} new"), SemanticRole::Button)
+        .key(("count", a.app_id.as_str()));
+    aizome_kit::stack(vec![row, aizome_kit::container(count).padding([0.0, 0.0, 0.0, w - SLIM_COUNT]).into()]).into()
 }
 
 fn slim_window(win: &WindowRow, w: f64) -> Element<DeskbarMsg> {
