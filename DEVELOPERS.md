@@ -412,6 +412,28 @@ every-desktop systems, which must select the patched portal and no other XApp
 package, and every live boot entry, where any XApp portal must be the patched
 one. This is component evidence, not ISO qualification.
 
+Avahi's PID file is visible before its normal SIGHUP handler is installed.
+An openresolv notification in that interval kills the daemon and leaves a PID
+file that can also prevent the next activation. `nix/overlays/avahi.nix` applies
+`nix/patches/avahi-startup-sighup.patch`: ignore HUP during that interval. The
+real handler is installed before the initial resolver, host and service reads,
+and later HUPs retain their normal reload behavior. `modules/avahi-fixes.nix`
+selects the patched service package for live media and installed desktop choices;
+clients retain the unchanged upstream libraries.
+
+`nix build .#checks.x86_64-linux.avahi-startup .#checks.x86_64-linux.avahi-packages`
+checks the actual original and patched packages. The startup check uses private
+user, mount, PID and network namespaces and requires unprivileged user namespaces.
+GDB pauses at the real PID-file creation return, then injects HUP: the original
+must die and retain its PID file; the patched daemon must start, reload on a
+later HUP, and shut down cleanly. An original-package control without early HUP
+must also work. There are no sleeps, host services or injected signal handlers.
+The namespace harness disables D-Bus and privilege dropping; the full
+`session-environment` VM still checks real service activation. The package
+check covers live boot configurations and prebuilt installed systems.
+These are component checks, not ISO qualification. When upstream fixes this
+window, review and remove the patch and its failing control together.
+
 Sekka backports Aquamarine's upstream null-connector teardown fix
 [`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
 onto Nixpkgs' 0.15.1 through `nix/overlays/aquamarine.nix`. Both Tatami and

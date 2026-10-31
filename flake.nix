@@ -70,6 +70,8 @@
       hyprlandPkgs = pkgs.extend hyprlandOverlay;
       xappOverlay = import ./nix/overlays/xapp.nix;
       xappPkgs = pkgs.extend xappOverlay;
+      avahiOverlay = import ./nix/overlays/avahi.nix;
+      avahiPkgs = pkgs.extend avahiOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -119,6 +121,7 @@
       overlays.default = nixpkgs.lib.composeManyExtensions [
         hyprlandOverlay
         xappOverlay
+        avahiOverlay
       ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
@@ -286,6 +289,19 @@
         };
       };
       checks.${system} = {
+        avahi-packages = import ./nix/avahi-packages-test.nix {
+          inherit
+            pkgs
+            inputs
+            installer
+            applicationCatalog
+            ;
+          patched = avahiPkgs.sekka-avahi-daemon;
+        };
+        avahi-startup = import ./nix/avahi-startup-test.nix {
+          inherit pkgs;
+          patched = avahiPkgs.sekka-avahi-daemon;
+        };
         plasma-login-config = import ./nix/plasma-login-config-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
