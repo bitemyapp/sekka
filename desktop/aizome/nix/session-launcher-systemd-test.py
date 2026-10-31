@@ -71,10 +71,19 @@ def relogin(name):
 
 
 try:
-    # Another desktop's graphical session does not start Hako's provider.
+    # Another desktop's graphical session, once started, has not started
+    # Hako's provider, and Aizome's activation files leave FileManager1 to
+    # other file managers. The portal backend's own file shows they're read.
     subprocess.run(['systemd-run', '--user', '--unit=other-desktop',
                     '--property=BindsTo=graphical-session.target', 'sleep', 'infinity'],
                    env=ENV, check=True)
+    until(lambda: ctl('is-active', 'graphical-session.target', check=False).returncode == 0)
+    until(lambda: 'No jobs running.' in ctl('list-jobs').stdout)
+    names = subprocess.run(['busctl', '--user', 'call', 'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                            'org.freedesktop.DBus', 'ListActivatableNames'],
+                           env=ENV, check=True, text=True, capture_output=True).stdout
+    assert '"org.freedesktop.impl.portal.desktop.aizome"' in names, names
+    assert '"org.freedesktop.FileManager1"' not in names, names
     assert file_manager_state() == 'inactive'
     ctl('start', 'aizome-shutdown.target')
     # Before StartUnit has even been sent: a completed shutdown target

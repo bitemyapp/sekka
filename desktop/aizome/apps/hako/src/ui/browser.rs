@@ -231,8 +231,8 @@ impl Browser {
     }
 
     /// Show `loc`, opening columns from `root` down to it (each selecting
-    /// the next), and select `select` in it once it's read.
-    pub fn go(&mut self, root: Loc, loc: &Loc, select: Option<OsString>, generation: u64) {
+    /// the next), and select the names in `select` once it's read.
+    pub fn go(&mut self, root: Loc, loc: &Loc, select: impl IntoIterator<Item = OsString>, generation: u64) {
         self.columns.clear();
         self.rename = None;
         self.search = None;
@@ -253,10 +253,11 @@ impl Browser {
             }
             _ => self.columns.push(Column::new(loc.clone())),
         }
-        if let Some(name) = select
+        let select: Vec<OsString> = select.into_iter().collect();
+        if !select.is_empty()
             && let Some(c) = self.columns.last_mut()
         {
-            c.pending = Some(vec![name]);
+            c.pending = Some(select);
         }
         self.focus = self.columns.len().saturating_sub(1);
         self.reveal = (self.focus, generation);

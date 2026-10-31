@@ -2,61 +2,88 @@
 //! OpenURI portal. The Aizome session owns it even with no Files window.
 //! No global D-Bus activation entry: other desktops keep their provider.
 
+use std::collections::HashSet;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
+use aizome_sys::apps::{LaunchEvent, LaunchObserver, LaunchOptions, find_program, launch_command_observed};
 use zbus::blocking::{Connection, connection::Builder};
-use zbus::fdo::{self, RequestNameFlags, RequestNameReply};
+use zbus::fdo;
 
+use crate::fsops::names;
 use crate::model::uri;
+use crate::ui::{Request, instance};
 
 pub const BUS_NAME: &str = "org.freedesktop.FileManager1";
 pub const OBJECT_PATH: &str = "/org/freedesktop/FileManager1";
 
+/// The most windows one call may open.
+pub const MAX_WINDOWS: usize = 16;
+
 pub struct FileManager {
-    executable: PathBuf,
+    /// The running Hako's instance socket.
+    socket: PathBuf,
+    /// The Hako to start when none runs.
+    program: PathBuf,
 }
 
 impl FileManager {
-    fn launch(&self, uris: Vec<String>, startup_id: &str, select: bool) -> fdo::Result<()> {
-        // Validate the whole request before opening anything. Pass canonical
-        // file URIs as individual argv entries, never through a shell; this
-        // also preserves Unix filenames that aren't UTF-8.
-        let uris = uris
+    pub fn new(socket: PathBuf, program: PathBuf) -> FileManager {
+        FileManager { socket, program }
+    }
+
+    fn show(&self, uris: Vec<String>, startup_id: &str, select: bool) -> fdo::Result<()> {
+        // Validate the whole request before opening anything.
+        let paths = uris
             .iter()
             .map(|u| {
-                let path = uri::path_of(u)
+                uri::path_of(u)
                     .filter(|p| !p.as_os_str().as_bytes().contains(&0))
-                    .ok_or_else(|| fdo::Error::InvalidArgs("Hako needs local file:// URIs".into()))?;
-                Ok(uri::file_uri(&path))
+                    .map(|p| names::normalize(&p))
+                    .ok_or_else(|| fdo::Error::InvalidArgs("Hako needs local file:// URIs".into()))
             })
             .collect::<fdo::Result<Vec<_>>>()?;
-        if uris.is_empty() {
+        if paths.is_empty() {
             return Ok(());
         }
-        let mut command = Command::new(&self.executable);
-        for uri in uris {
+        // Hako gives items in one folder a single window.
+        let windows = if select {
+            paths.iter().map(|p| p.parent().unwrap_or(p)).collect::<HashSet<&Path>>().len()
+        } else {
+            paths.len()
+        };
+        if windows > MAX_WINDOWS {
+            return Err(fdo::Error::InvalidArgs(format!("Hako opens at most {MAX_WINDOWS} folders at a time")));
+        }
+        let token = Some(startup_id).filter(|t| !t.is_empty());
+        let requests: Vec<Request> =
+            paths.iter().map(|p| if select { Request::Reveal(p.clone()) } else { Request::Open(p.clone()) }).collect();
+        // A running Hako takes the requests directly, with the caller's
+        // permission to take focus.
+        if instance::hand_over(&self.socket, &requests, token).is_ok() {
+            return Ok(());
+        }
+        // Otherwise start one as the Dock would, in an app scope of its
+        // own, so it outlives this service and runs with apps' weight.
+        // Canonical file URIs as separate arguments, never through a shell,
+        // keep names that aren't UTF-8.
+        let mut argv = vec![self.program.to_string_lossy().into_owned()];
+        for p in &paths {
             if select {
-                command.arg("--select");
+                argv.push("--select".into());
             }
-            command.arg(uri);
+            argv.push(uri::file_uri(p));
         }
-        if !startup_id.is_empty() {
-            command.env("DESKTOP_STARTUP_ID", startup_id);
-            // OpenURI passes its Wayland activation token in StartupId.
-            command.env("XDG_ACTIVATION_TOKEN", startup_id);
-        }
-        let mut child = command.spawn().map_err(|e| fdo::Error::Failed(format!("could not start Hako: {e}")))?;
-        // A new window may live for hours; an existing instance returns at
-        // once. Neither holds up the bus, and both are reaped when done.
-        std::thread::spawn(move || {
-            if let Ok(status) = child.wait()
+        let options = LaunchOptions { activation_token: token.map(str::to_owned), ..LaunchOptions::default() };
+        let observer = LaunchObserver::new(|event| {
+            if let LaunchEvent::Exited { status: Ok(status), .. } = event
                 && !status.success()
             {
                 log::warn!("Hako exited with {status}");
             }
         });
+        launch_command_observed(&argv, Some(crate::APP_ID), &options, &observer)
+            .map_err(|e| fdo::Error::Failed(format!("could not start Hako: {e}")))?;
         Ok(())
     }
 }
@@ -64,11 +91,11 @@ impl FileManager {
 #[zbus::interface(name = "org.freedesktop.FileManager1")]
 impl FileManager {
     fn show_items(&self, uris: Vec<String>, startup_id: &str) -> fdo::Result<()> {
-        self.launch(uris, startup_id, true)
+        self.show(uris, startup_id, true)
     }
 
     fn show_folders(&self, uris: Vec<String>, startup_id: &str) -> fdo::Result<()> {
-        self.launch(uris, startup_id, false)
+        self.show(uris, startup_id, false)
     }
 
     fn show_item_properties(&self, _uris: Vec<String>, _startup_id: &str) -> fdo::Result<()> {
@@ -79,18 +106,21 @@ impl FileManager {
 /// Export the object before claiming the name. Don't queue behind another
 /// provider or allow a file manager opened later to displace this session's
 /// provider. An old provider may be replaced only if it permits replacement.
-pub fn connect(builder: Builder<'_>, executable: PathBuf) -> zbus::Result<Connection> {
-    let connection = builder.serve_at(OBJECT_PATH, FileManager { executable })?.build()?;
-    let reply = connection
-        .request_name_with_flags(BUS_NAME, RequestNameFlags::DoNotQueue | RequestNameFlags::ReplaceExisting)?;
-    if reply != RequestNameReply::PrimaryOwner {
-        return Err(zbus::Error::Failure("another file manager owns the session bus name".into()));
-    }
-    Ok(connection)
+pub fn connect(builder: Builder<'_>, manager: FileManager) -> zbus::Result<Connection> {
+    builder.serve_at(OBJECT_PATH, manager)?.name(BUS_NAME)?.allow_name_replacements(false).build()
 }
 
 pub fn serve() -> Result<(), Box<dyn std::error::Error>> {
-    let connection = connect(Builder::session()?, std::env::current_exe()?)?;
+    // The Hako on PATH (the current system's), as the Dock starts it: this
+    // service's own build is older after an update until the next login.
+    let program = match find_program("aizome-hako") {
+        Some(_) => PathBuf::from("aizome-hako"),
+        None => std::env::current_exe()?,
+    };
+    let connection = match connect(Builder::session()?, FileManager::new(instance::socket_path(), program)) {
+        Err(zbus::Error::NameTaken) => return Err(format!("another file manager owns {BUS_NAME}").into()),
+        connection => connection?,
+    };
     let bus = zbus::blocking::fdo::DBusProxy::new(&connection)?;
     // Keep serving until the session bus closes. systemd stops this process
     // with aizome-session.target, releasing the name on logout.

@@ -450,11 +450,30 @@ fn the_location_bar_and_reveal() {
     h.named(w, NamedKey::Escape, Modifiers::NONE);
     // `--select FILE` opens a window with it selected.
     let n = h.windows().len();
-    h.send(Msg::Requests(vec![Request::Reveal(s.home().join("Pictures/mark.png"))]));
+    h.send(Msg::Requests(vec![Request::Reveal(s.home().join("Pictures/mark.png"))], None));
     settle(&mut h);
     let w2 = *h.windows().last().unwrap();
     assert_eq!(h.windows().len(), n + 1);
     assert_eq!(h.program().browser(w2).unwrap().selection(), vec![s.home().join("Pictures/mark.png")]);
+    // Files shown together in one folder share its window; the window
+    // opened last takes the launcher's token.
+    let n = h.windows().len();
+    let downloads = s.home().join("Downloads");
+    h.send(Msg::Requests(
+        vec![
+            Request::Reveal(downloads.join("release-notes.pdf")),
+            Request::Reveal(s.home().join("Documents/roadmap.md")),
+            Request::Reveal(downloads.join("fonts.tar.gz")),
+        ],
+        Some("launchers-token".into()),
+    ));
+    settle(&mut h);
+    let ws = h.windows();
+    assert_eq!(ws.len(), n + 2);
+    assert_eq!(h.program().browser(ws[n]).unwrap().location(), Some(&Loc::Folder(downloads)));
+    assert_eq!(selected(&h, ws[n]), ["fonts.tar.gz", "release-notes.pdf"]);
+    assert_eq!(selected(&h, ws[n + 1]), ["roadmap.md"]);
+    assert_eq!(h.platform.activations.last().unwrap().1.as_deref(), Some("launchers-token"));
 }
 
 #[test]

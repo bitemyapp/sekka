@@ -1,7 +1,8 @@
 //! Hako, the program: its state, its messages, and what they do.
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -89,24 +90,25 @@ pub enum Request {
     Reveal(PathBuf),
 }
 
-/// Requests from a command line: `PATH…`, `--select FILE`.
-pub fn parse_args(args: &[String], cwd: &Path) -> Vec<Request> {
+/// Requests from a command line: `PATH…`, `--select FILE`. Unix names
+/// needn't be UTF-8, so neither need the arguments.
+pub fn parse_args(args: &[OsString], cwd: &Path) -> Vec<Request> {
     let mut out = Vec::new();
     let mut it = args.iter();
-    let abs = |s: &str| {
-        let p = uri::path_of(s).unwrap_or_else(|| PathBuf::from(s));
+    let abs = |s: &OsStr| {
+        let p = s.to_str().and_then(uri::path_of).unwrap_or_else(|| PathBuf::from(s));
         names::normalize(&if p.is_absolute() { p } else { cwd.join(p) })
     };
     while let Some(a) = it.next() {
-        match a.as_str() {
-            "--select" | "-s" => {
-                if let Some(f) = it.next() {
-                    out.push(Request::Reveal(abs(f)));
-                }
+        let bytes = a.as_bytes();
+        if a == "--select" || a == "-s" {
+            if let Some(f) = it.next() {
+                out.push(Request::Reveal(abs(f)));
             }
-            s if s.starts_with("--select=") => out.push(Request::Reveal(abs(&s["--select=".len()..]))),
-            s if s.starts_with('-') => {}
-            s => out.push(Request::Open(abs(s))),
+        } else if let Some(f) = bytes.strip_prefix(b"--select=") {
+            out.push(Request::Reveal(abs(OsStr::from_bytes(f))));
+        } else if !bytes.starts_with(b"-") {
+            out.push(Request::Open(abs(a)));
         }
     }
     out
@@ -173,7 +175,8 @@ pub enum Msg {
     // Windows.
     NewWindow,
     CloseWindow(WindowKey),
-    Requests(Vec<Request>),
+    /// A later launch's requests, and its activation token.
+    Requests(Vec<Request>, Option<String>),
     // Going places.
     Go(WindowKey, Loc),
     GoPath(WindowKey, PathBuf),
@@ -415,7 +418,12 @@ impl Hako {
 
     // Windows.
 
-    pub(crate) fn open_window(&mut self, cx: &mut Cx<Msg>, loc: Loc, select: Option<OsString>) -> WindowKey {
+    pub(crate) fn open_window(
+        &mut self,
+        cx: &mut Cx<Msg>,
+        loc: Loc,
+        select: impl IntoIterator<Item = OsString>,
+    ) -> WindowKey {
         let (w, h) = self.settings.window;
         let key = cx.open_window(WindowSpec::new("Files").size(w, h).min_size(520.0, 320.0));
         self.windows.insert(key, Browser::new(self.settings.layout));
@@ -423,16 +431,33 @@ impl Hako {
         key
     }
 
-    pub(crate) fn handle_request(&mut self, cx: &mut Cx<Msg>, r: Request) {
-        let (loc, select) = match &r {
-            Request::Open(p) if p.is_dir() => (self.loc_for(p), None),
-            Request::Open(p) | Request::Reveal(p) => match (p.parent(), p.file_name()) {
-                (Some(dir), Some(name)) => (self.loc_for(dir), Some(name.to_os_string())),
-                _ => (Loc::Folder(p.clone()), None),
-            },
-        };
-        let w = self.open_window(cx, loc, select);
-        cx.activate(w);
+    /// A window for each folder asked for. Files shown in the same folder
+    /// share its window, all selected, as a file manager's ShowItems asks.
+    /// The last window opened takes the launcher's token.
+    pub(crate) fn handle_requests(&mut self, cx: &mut Cx<Msg>, requests: Vec<Request>, token: Option<&str>) {
+        let mut windows: Vec<(Loc, Vec<OsString>)> = Vec::new();
+        for r in &requests {
+            let (loc, select) = match r {
+                Request::Open(p) if p.is_dir() => (self.loc_for(p), None),
+                Request::Open(p) | Request::Reveal(p) => match (p.parent(), p.file_name()) {
+                    (Some(dir), Some(name)) => (self.loc_for(dir), Some(name.to_os_string())),
+                    _ => (Loc::Folder(p.clone()), None),
+                },
+            };
+            let shared = windows.iter_mut().find(|(l, names)| select.is_some() && !names.is_empty() && *l == loc);
+            match shared {
+                Some((_, names)) => names.extend(select.filter(|n| !names.contains(n))),
+                None => windows.push((loc, select.into_iter().collect())),
+            }
+        }
+        let last = windows.len().saturating_sub(1);
+        for (i, (loc, select)) in windows.into_iter().enumerate() {
+            let w = self.open_window(cx, loc, select);
+            match token {
+                Some(token) if i == last => cx.activate_with_token(w, token),
+                _ => cx.activate(w),
+            }
+        }
     }
 
     /// A folder as a place: the Trash's files folder is the Trash.
@@ -463,7 +488,14 @@ impl Hako {
     }
 
     /// Show `loc` in window `w`.
-    pub(crate) fn go(&mut self, cx: &mut Cx<Msg>, w: WindowKey, loc: Loc, select: Option<OsString>, history: bool) {
+    pub(crate) fn go(
+        &mut self,
+        cx: &mut Cx<Msg>,
+        w: WindowKey,
+        loc: Loc,
+        select: impl IntoIterator<Item = OsString>,
+        history: bool,
+    ) {
         let root = self.root_for(&loc);
         let g = self.next_gen();
         let Some(b) = self.windows.get_mut(&w) else { return };

@@ -912,6 +912,12 @@ mod tests {
                     .ok()?;
                 let mut address = String::new();
                 BufReader::new(child.stdout.take().unwrap()).read_line(&mut address).unwrap();
+                // A build sandbox has the program but no /etc/dbus-1 for
+                // --session to read: the daemon exits without an address.
+                if address.trim().is_empty() {
+                    let _ = child.wait();
+                    return None;
+                }
                 Some(Self(child, address.trim().into()))
             }
         }
