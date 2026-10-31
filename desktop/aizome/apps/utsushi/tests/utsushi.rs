@@ -492,3 +492,83 @@ fn a_folder_plays_in_order_and_goes_on_to_the_next() {
     until(&mut h, 8.0, |a| a.current == Some(1) && a.status == Status::Playing);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn stage_recent_button_reopens_the_video_instead_of_opening_a_file_panel() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "clip.mp4");
+    h.send(Msg::Close);
+    assert_eq!(h.program().status, Status::Empty);
+    let recent = h.texts(w).into_iter().find(|t| t.starts_with("Test Card")).expect("recent video button");
+    assert!(h.click_text(w, &recent));
+    assert_eq!(h.program().current_path(), Some(fixture("clip.mp4").as_path()));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+}
+
+#[test]
+fn stage_failed_media_next_button_plays_the_next_item() {
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("missing.mp4"), fixture("clip.mp4")]));
+    until(&mut h, 5.0, |a| a.status == Status::Failed);
+    assert!(h.click_text(w, "Play the Next"));
+    assert_eq!(h.program().current, Some(1));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+}
+
+#[test]
+fn stage_resumed_start_over_button_receives_the_pointer() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "clip.mp4");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    // The short decoder fixture cannot produce the long-film resume notice;
+    // present the same view state while retaining real playback and input.
+    h.program_mut().resumed = Some(1.0);
+    h.send(Msg::InfoTick);
+    assert!(h.click_text(w, "Start Over"));
+    assert!(h.program().resumed.is_none());
+    assert_eq!(h.program().status, Status::Paused, "the button must not toggle playback underneath");
+}
+
+#[test]
+fn stage_music_queue_row_receives_double_click() {
+    use aizome_kit::sidestep_ui::PointerButton;
+
+    let mut h = harness();
+    let w = window(&h);
+    let second = h.program().state_dir.as_ref().unwrap().join("second.flac");
+    std::fs::create_dir_all(second.parent().unwrap()).unwrap();
+    std::fs::copy(fixture("song.flac"), &second).unwrap();
+    h.send(Msg::Open(vec![fixture("song.flac"), second]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    let at = h.find(w, "second").expect("second queue row").center();
+    h.press(w, at, PointerButton::Left, 2);
+    h.release(w, at, PointerButton::Left);
+    assert_eq!(h.program().current, Some(1));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+}
+
+#[test]
+fn stage_background_keeps_playback_keys_and_double_click() {
+    use aizome_kit::sidestep_ui::PointerButton;
+
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    let at = Point::new(100.0, 100.0);
+    h.click(w, at);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+    h.type_text(w, " ");
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+    h.click(w, at);
+    h.press(w, at, PointerButton::Left, 2);
+    h.release(w, at, PointerButton::Left);
+    assert_eq!(h.fullscreen_asked(w), Some(true));
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+}
