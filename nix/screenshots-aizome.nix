@@ -183,7 +183,9 @@ pkgs.testers.runNixOSTest {
     ctl(f"resize {hotaru['id']} 600 500 580 340")
     time.sleep(2)
     ctl(f"focus {hotaru['id']}")
-    ctl("input type 'clear; fastfetch --logo nixos_small'")
+    # Hotaru's tab and status bars leave 62 × 14 cells: a short fastfetch
+    # keeps its logo and title on screen with nothing wrapping.
+    ctl("input type 'clear; fastfetch --logo nixos_small --structure Title:Separator:OS:Kernel:Shell:Terminal:Memory:Break:Colors'")
     ctl("input key return")
     time.sleep(3)
     launch("aizome-sumi /home/demo/Documents/architecture.md")
