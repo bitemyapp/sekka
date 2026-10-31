@@ -211,7 +211,7 @@ in
       # Hako compresses and extracts archives with bsdtar.
       pkgs.libarchive
       # Tokei rings with pw-play and the freedesktop sound theme.
-      pkgs.pipewire
+      config.services.pipewire.package
       pkgs.sound-theme-freedesktop
       pkgs.libnotify
       # Screen recording where gpu-screen-recorder can't run (no hardware

@@ -72,6 +72,8 @@
       xappPkgs = pkgs.extend xappOverlay;
       avahiOverlay = import ./nix/overlays/avahi.nix;
       avahiPkgs = pkgs.extend avahiOverlay;
+      pipewireOverlay = import ./nix/overlays/pipewire.nix;
+      pipewirePkgs = pkgs.extend pipewireOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -133,6 +135,7 @@
         hyprlandOverlay
         xappOverlay
         avahiOverlay
+        pipewireOverlay
       ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
@@ -302,6 +305,19 @@
         };
       };
       checks.${system} = {
+        pipewire-packages = import ./nix/pipewire-packages-test.nix {
+          inherit
+            pkgs
+            inputs
+            installer
+            applicationCatalog
+            ;
+          patched = pipewirePkgs.sekka-pipewire-daemon;
+        };
+        pipewire-x11-disconnect = import ./nix/pipewire-x11-disconnect-test.nix {
+          inherit pkgs;
+          patched = pipewirePkgs.sekka-pipewire-daemon;
+        };
         avahi-packages = import ./nix/avahi-packages-test.nix {
           inherit
             pkgs

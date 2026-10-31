@@ -1,0 +1,27 @@
+diff --git a/src/modules/module-x11-bell.c b/src/modules/module-x11-bell.c
+--- a/src/modules/module-x11-bell.c
++++ b/src/modules/module-x11-bell.c
+@@ -159,6 +159,11 @@ static void x11_io_error_exit_handler(Display *display, void *data)
+ 
+ 	spa_assert(display == impl->display);
+ 
++	/* Xlib can report the same disconnect more than once, including
++	 * while XCloseDisplay tears down an already disconnected display. */
++	if (impl->source == NULL)
++		return;
++
+ 	pw_log_warn("X11 display (%s) has encountered a fatal I/O error", DisplayString(display));
+ 
+ 	pw_loop_destroy_source(impl->loop, impl->source);
+@@ -223,8 +228,10 @@ static void module_destroy(void *data)
+ 	if (impl->module)
+ 		spa_hook_remove(&impl->module_listener);
+ 
+-	if (impl->source)
++	if (impl->source) {
+ 		pw_loop_destroy_source(impl->loop, impl->source);
++		impl->source = NULL;
++	}
+ 
+ 	if (impl->display)
+ 		XCloseDisplay(impl->display);
