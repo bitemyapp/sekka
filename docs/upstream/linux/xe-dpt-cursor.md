@@ -133,12 +133,46 @@ boot:
   fresh, had 31 of 780 (4.0%), about 0.57 ms per pin. Both counts are small.
 - `aizomectl stats` over the profile: p50 0.25 ms, p95 1.5 ms, p99 2.1 ms.
 
-Not yet tested: a run long enough for memory to fragment. On the old lookups
-that took close to 3 ms per flip. With the cursor, the fill is linear in pages
-and segments, so after a few days `aizomectl stats` should stay near the
-figures above.
+On 2026-10-31, Chris reported using the patched driver for a while on the
+ThinkPad, but did not capture frame timings after more than 24 hours of
+uptime. That use is not a measured fragmented-memory result. Another burn-in
+is pending, with periodic capture through `scripts/xe-dpt-burn-in.sh` so the
+uptime, module identity, memory state and recent frame timings are retained.
+On the old lookups the fill took close to 3 ms per flip after days of uptime;
+the cursor's behavior under those conditions still needs measured hardware
+evidence.
+
+The 2026-10-31 packaging review also found that `kernel.kernelPatches` omits
+Nixpkgs' own build patches. Sekka now uses `kernel.patches` and rejects
+randomized-layout and signature-enforcing kernels rather than claiming that
+configuration equality makes those builds compatible. The live ISO imports
+the same module, and the VM check loads it from the initrd. These changes do
+not alter the driver's cursor patch.
+
+Validation of those packaging changes on ganymede, combined with main at
+4316baf9, on 2026-10-31:
+
+- `checks.x86_64-linux.xe-dpt` passed, including replacement-module loading
+  from the initrd, matching version magic/dependencies, and only O/E taint.
+- `checks.x86_64-linux.xe-dpt-config` passed: the real stock configuration
+  is accepted; randomized layouts, mandatory signatures and built-in xe are
+  rejected. The complete kernel patch list is retained.
+- Live-ISO evaluation selects the replacement; disabling the option and
+  selecting the live LTS entry both retain stock xe. The installed-system
+  assertion also passes.
+- ShellCheck and a real invocation of the burn-in capture script passed.
+  A local user timer captured a stock-driver baseline successfully.
+- The rebuilt module's SHA-256 is
+  `204a49252d023b8f37ab15c138a629e28d66d03c26e5fdb44313980bf0ef6271`.
+  A ganymede test specialisation was built using the existing installed lock
+  and the same kernel image. Booting it and collecting the new burn-in are
+  still pending. No full ISO build or installation was qualified here.
 
 ## Submitting
+
+Upstream submission is separate from carrying the fix in Sekka. Nothing has
+been sent; the remaining downstream hardware check does not depend on an
+LKML or intel-xe review.
 
 The patch has no `Signed-off-by`: the kernel's
 `Documentation/process/coding-assistants.rst` leaves that to the person who

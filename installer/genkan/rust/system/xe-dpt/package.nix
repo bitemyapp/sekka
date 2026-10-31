@@ -21,7 +21,9 @@ in
 kernel.stdenv.mkDerivation {
   pname = "linux-xe-dpt-cursor";
   inherit (kernel) src version postPatch;
-  patches = map (p: p.patch) kernel.kernelPatches ++ [ ./dpt-cursor.patch ];
+  # kernelPatches omits patches added by Nixpkgs' kernel builder (including
+  # its deterministic RANDSTRUCT seed patch). Use the actual source patches.
+  patches = kernel.patches ++ [ ./dpt-cursor.patch ];
   nativeBuildInputs = kernel.nativeBuildInputs ++ [ xz ];
   # Rust's library source, without which the configuration loses CONFIG_RUST.
   inherit (kernel.drvAttrs) env;
@@ -30,9 +32,11 @@ kernel.stdenv.mkDerivation {
     runHook preConfigure
     cp ${kernel.configfile} .config
     chmod u+w .config
+    bash ${./check-config.sh} .config
     make ${flags} olddefconfig
     # Any other configuration would build a module this kernel can't use.
     cmp .config ${kernel.configfile}
+    cmp .config ${build}/.config
     make ${flags} -j$NIX_BUILD_CORES modules_prepare
     test "$(cat include/config/kernel.release)" = ${kernel.modDirVersion}
     # The kernel's exported symbols, and its BTF as the module's base.

@@ -24,7 +24,9 @@ in
     description = ''
       Whether to replace Linux's xe module with one that fills display page
       tables in a single pass. Only Linux 7.3 gets it; other kernels keep
-      their own xe.
+      their own xe. The replacement requires modular xe, no randomized
+      structure layouts, and no mandatory module signatures. Disable this
+      option for kernels with those settings.
     '';
   };
   config = lib.mkIf (cfg.enable && lib.versions.majorMinor kernel.version == "7.3") {

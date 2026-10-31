@@ -13,10 +13,15 @@ pkgs.testers.runNixOSTest {
   nodes.machine = {
     imports = [ ../installer/genkan/rust/system/xe-dpt ];
     boot.kernelPackages = pkgs.linuxPackages_latest;
+    # Real Intel machines may load xe before the root filesystem is mounted.
+    boot.initrd.kernelModules = [ "xe" ];
     virtualisation.memorySize = 1024;
   };
   testScript = ''
     machine.wait_for_unit("multi-user.target")
+    machine.succeed("grep -q '^xe ' /proc/modules")
+    taint = machine.succeed("cat /sys/module/xe/taint").strip()
+    assert "O" in taint, f"initrd did not load the replacement xe: {taint!r}"
 
     path = machine.succeed("modinfo -n xe").strip()
     assert "/updates/xe.ko" in path, f"modprobe resolves xe to {path}"

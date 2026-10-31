@@ -1986,17 +1986,27 @@ build stops if its configuration differs from the kernel's in any line. The
 module is built apart and unsigned, so loading it taints the kernel `O` and
 `E`; the kernel doesn't require signed modules.
 
-Only Linux 7.3 gets the module; other kernels keep their own xe.
+Only Linux 7.3 gets the module; other kernels keep their own xe. Both the
+live ISO and installed systems import it; the live LTS entry keeps stock xe.
+The build uses the kernel derivation's complete `patches` list, including
+Nixpkgs' extra build patches, and checks its configuration against the
+kernel's development tree too. It requires `CONFIG_DRM_XE=m` and
+`CONFIG_RANDSTRUCT_NONE=y`, and refuses `CONFIG_MODULE_SIG_FORCE=y`:
+matching configuration text does not establish matching randomized layouts,
+and this module is unsigned. Set `calamares.xeDpt.enable = false` for those
+custom kernels. `checks.x86_64-linux.xe-dpt-config` exercises these guards.
+
 `checks.x86_64-linux.xe-dpt` boots Nixpkgs' latest kernel in QEMU with the
-module. It checks that modprobe resolves `xe` to the rebuilt module, that its
-version magic and dependencies match the kernel's own copy, and that it loads.
+module loaded from the initrd. It checks that modprobe resolves `xe` to the
+rebuilt module, that its version magic and dependencies match the kernel's
+own copy, and that it loads.
 The check fails when Nixpkgs moves to a kernel the module isn't built for:
 then see whether that kernel has the fix, and either drop the module or carry
 the patch forward. QEMU has no Intel GPU, so the check covers the module's
 build and fit, not page flips.
 
 ```sh
-nix build .#checks.x86_64-linux.xe-dpt --no-update-lock-file
+nix build .#checks.x86_64-linux.xe-dpt .#checks.x86_64-linux.xe-dpt-config --no-update-lock-file
 ```
 
 `aizomectl stats` (Settei → Performance) times each output's frames from
@@ -2005,6 +2015,18 @@ toward the 4 ms budget there. Aizome's `frame_bench` renders headlessly and
 never commits. To see the kernel's share, profile the compositor as root (it
 is non-dumpable), for example `perf ftrace profile -G drm_mode_atomic_ioctl
 -p <pid> -s total`.
+
+For a hardware burn-in, run `bash scripts/xe-dpt-burn-in.sh` as the desktop
+user after boot and again after at least 24 hours of ordinary use. It appends
+timestamps, boot ID, uptime, booted system, module path and SHA-256, taint,
+`/proc/buddyinfo` and `aizomectl stats` to
+`~/.local/state/sekka-xe-dpt-burn-in/<boot-id>.log`. A user timer can call it
+every 15 minutes. Each stats report describes Aizome's recent frame samples,
+not a whole-boot average; compare similar activity, resolution and refresh
+rate, and retain the frame counts to spot unchanged samples while idle.
+Exercise suspend/resume and any external display normally used. Check the
+kernel journal for xe/DRM errors as well as frame times. This is hardware
+driver evidence, separate from ISO installation qualification.
 
 ## Boot splash
 
