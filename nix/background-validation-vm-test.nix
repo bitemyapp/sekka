@@ -53,6 +53,7 @@ pkgs.testers.runNixOSTest {
     import json, shlex, time
     from datetime import timedelta
     from PIL import Image
+    from typing import Any
 
     machine.start()
     machine.wait_for_unit("multi-user.target")
@@ -75,6 +76,16 @@ pkgs.testers.runNixOSTest {
         for key in sequence:
             machine.send_key(key)
             time.sleep(0.3)
+    def park_pointer():
+        # Real tablet input keeps the pointer below the menu and wallpaper
+        # sample even when the compositor leaves it visible after typing.
+        event: Any = {"events": [
+            {"type": "abs", "data": {"axis": "x", "value": 0}},
+            {"type": "abs", "data": {"axis": "y", "value": 32767}},
+        ]}
+        assert machine.qmp_client is not None
+        machine.qmp_client.send("input-send-event", event)
+        time.sleep(0.3)
     def menu_open():
         return '"namespace": "walker"' in json.dumps(json.loads(user("hyprctl -j layers")))
     def text(expected):
@@ -103,6 +114,7 @@ pkgs.testers.runNixOSTest {
     def choose_path(path, output=False):
         keys("meta_l-spc")
         wait(menu_open)
+        park_pointer()
         text("Style")
         keys("down", "down", "down", "ret")
         # This narrow menu ellipsizes "Background settings"; Hyprland is the
@@ -136,8 +148,9 @@ pkgs.testers.runNixOSTest {
     user("tatami background set /etc/background-fixtures/before.png")
     time.sleep(1)
     before = state()
-    # Keep the comparison away from the centered pointer (which keyboard input
-    # hides), the bar and the top-right notification.
+    park_pointer()
+    # Keep the comparison away from the parked pointer, the bar and the
+    # top-right notification.
     wallpaper_region = (100, 250, 600, 650)
     pixels = screen("before").crop(wallpaper_region)
     assert pixels.getpixel((100, 100)) == (180, 40, 40)
