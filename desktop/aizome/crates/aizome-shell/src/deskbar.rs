@@ -185,6 +185,17 @@ pub struct ShelfRow {
     pub drag_text: String,
 }
 
+/// Where a drag of the grip stands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Moving {
+    #[default]
+    No,
+    /// Held over its own half of the screen: let go, it stays.
+    Held,
+    /// Over the other half: let go, it moves to that edge.
+    Leaving,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeskbarModel {
     pub apps: Vec<AppRow>,
@@ -197,6 +208,8 @@ pub struct DeskbarModel {
     pub side: DeskbarSide,
     /// `[deskbar] width`, clamped: the face's, without the shadow.
     pub width: f64,
+    /// Its grip dragged: held, then leaving once letting go would move it.
+    pub moving: Moving,
 }
 
 impl Default for DeskbarModel {
@@ -208,6 +221,7 @@ impl Default for DeskbarModel {
             max_height: None,
             side: DeskbarSide::Right,
             width: WIDTH,
+            moving: Moving::No,
         }
     }
 }
@@ -469,23 +483,38 @@ fn drop_row(width: f64) -> Element<DeskbarMsg> {
     .into()
 }
 
+/// The grip's dots, across the top of `b`: three when it's the Rail's.
+fn grip_dots(canvas: &mut aizome_kit::sidestep_ui::Canvas, b: Rect, c: aizome_kit::Color) {
+    let n = if b.width() < SLIM_WIDTH { 3 } else { 5 };
+    let x0 = b.x0 + (b.width() - (n as f64 * 4.0 - 2.0)) / 2.0;
+    for i in 0..n {
+        let x = (x0 + i as f64 * 4.0).round();
+        canvas.fill_rect(Rect::new(x, b.y0 + 4.0, x + 2.0, b.y0 + 6.0), c);
+    }
+}
+
 /// The strip to drag the Deskbar by: a row of dots, as Haiku's Deskbar
-/// knob, darker under the pointer. Right-click for where and how wide.
-fn grip(width: f64) -> Element<DeskbarMsg> {
-    let el = drawn(width, GRIP, ("grip", width.to_bits()), move |cx| {
+/// knob, darker under the pointer and pressed in, its dots in the focus
+/// colour, while it's dragged. Right-click for where and how wide.
+fn grip(width: f64, moving: Moving) -> Element<DeskbarMsg> {
+    let held = moving != Moving::No;
+    let el = drawn(width, GRIP, ("grip", width.to_bits(), held), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         let hover = cx.is_hovered();
-        if hover {
+        if held {
+            cx.canvas.fill_rect(b, t.pressed(t.chrome()));
+        } else if hover {
             cx.canvas.fill_rect(b, t.hover(t.chrome()));
         }
-        let c = if hover { t.text2() } else { t.faint() };
-        let n = if width < SLIM_WIDTH { 3 } else { 5 };
-        let x0 = (b.width() - (n as f64 * 4.0 - 2.0)) / 2.0;
-        for i in 0..n {
-            let x = (x0 + i as f64 * 4.0).round();
-            cx.canvas.fill_rect(Rect::new(x, 4.0, x + 2.0, 6.0), c);
-        }
+        let c = if held {
+            t.focus()
+        } else if hover {
+            t.text2()
+        } else {
+            t.faint()
+        };
+        grip_dots(cx.canvas, b, c);
     })
     .on_drag(DeskbarMsg::Grip)
     .on_right_click(|p: Press| DeskbarMsg::PlaceMenu(p.at))
@@ -560,7 +589,7 @@ pub fn view(m: &DeskbarModel) -> Element<DeskbarMsg> {
     };
     let h = m.height();
     let list = aizome_kit::scroll(column(rows).width(width)).width(width).height((h - SHADOW - GRIP).max(1.0));
-    let content = column(vec![grip(width), list.into()]).width(width);
+    let content = column(vec![grip(width, m.moving), list.into()]).width(width);
     let side = m.side;
     let face_x = m.face_x();
     // The ground: `chrome`, its edges toward the screen and the bottom, the
@@ -595,14 +624,21 @@ pub fn view(m: &DeskbarModel) -> Element<DeskbarMsg> {
         DeskbarSide::Right => face_x,
         DeskbarSide::Left => face_x + width - EDGE,
     };
-    aizome_kit::stack(vec![
+    let mut layers = vec![
         ground.into(),
         aizome_kit::container(content).padding([0.0, 0.0, 0.0, face_x]).into(),
         aizome_kit::container(edge((h - SHADOW - GRIP).max(1.0))).padding([GRIP, 0.0, 0.0, edge_x]).into(),
-    ])
-    .width(width + SHADOW)
-    .height(h)
-    .into()
+    ];
+    // Let go now and it leaves: its rows fade under a veil of `chrome`,
+    // the grip still lit above them.
+    if m.moving == Moving::Leaving {
+        let veil = drawn(width, (h - SHADOW - GRIP).max(1.0), "deskbar-leaving", |cx| {
+            let t = cx.theme();
+            cx.canvas.fill_rect(cx.bounds(), t.chrome().with_alpha(0.6));
+        });
+        layers.push(aizome_kit::container(veil).padding([GRIP, 0.0, 0.0, face_x]).into());
+    }
+    aizome_kit::stack(layers).width(width + SHADOW).height(h).into()
 }
 
 /// Where the Deskbar takes the pointer: not its shadow.
@@ -633,6 +669,58 @@ pub fn preview<Msg: 'static>(m: &DeskbarModel) -> Element<Msg> {
         let face = Rect::new(x0, 0.0, x0 + width, height.min(b.y1));
         cx.canvas.fill_rect(face, t.focus().with_alpha(0.16));
         draw::border(cx.canvas, face, t.focus(), 2.0);
+    })
+    .into()
+}
+
+/// Where a drag of the grip would put the Deskbar: its face against the
+/// other edge (`side`), on a surface of its own of the face's size that
+/// takes no input. While the pointer's over the Deskbar's own half it's a
+/// dashed outline whose badge says to drag there; over this half, where
+/// letting go moves it, the outline is solid in the focus colour, as the
+/// edge drag's is, and the badge says to let go. The badge sits near the
+/// top, by the grip's path, with an arrow toward the edge and as much of
+/// its line as fits (none at the Rail's width).
+pub fn landing<Msg: 'static>(side: DeskbarSide, armed: bool) -> Element<Msg> {
+    drawn(0.0, 0.0, ("deskbar-landing", side, armed), move |cx| {
+        let t = cx.theme();
+        let b = cx.bounds();
+        let focus = t.focus();
+        if armed {
+            cx.canvas.fill_rect(b, focus.with_alpha(0.16));
+            draw::border(cx.canvas, b, focus, 2.0);
+        } else {
+            cx.canvas.fill_rect(b, focus.with_alpha(0.06));
+            let dashes = aizome_kit::sidestep_ui::StrokeStyle::new(2.0).with_dash(vec![6.0, 4.0], 0.0);
+            cx.canvas.stroke(&b.inset(-1.0), &dashes, focus.with_alpha(0.8));
+        }
+        grip_dots(cx.canvas, b, focus);
+
+        let (pad, icon, gap) = (10.0, 14.0, 6.0);
+        let ink = if armed { t.on_focus() } else { t.text() };
+        let s = ui(t, typeface::BODY, typeface::WEIGHT_TAB, ink);
+        let lines = if armed { ["Release to move here", "Release"] } else { ["Drag here to move", "Drag here"] };
+        let room = b.width() - 2.0 * pad - (2.0 * pad + icon + gap);
+        let label = lines.iter().map(|l| cx.layout_text(l, &s, None)).find(|l| l.size().width <= room);
+        let w = 2.0 * pad + icon + label.as_ref().map_or(0.0, |l| gap + l.size().width.ceil());
+        let x0 = (b.x0 + (b.width() - w) / 2.0).round();
+        let badge = Rect::new(x0, GRIP + 14.0, x0 + w, GRIP + 14.0 + 28.0);
+        if armed {
+            look::shadow(cx.canvas, t, badge);
+            cx.canvas.fill_rect(badge, focus);
+        } else {
+            look::panel(cx.canvas, t, badge);
+        }
+        let arrow = match side {
+            DeskbarSide::Left => Icon::ArrowLeft,
+            DeskbarSide::Right => Icon::ArrowRight,
+        };
+        let top = badge.y0 + ((badge.height() - icon) / 2.0).round();
+        arrow.draw(cx.canvas, Point::new(badge.x0 + pad, top), icon, if armed { ink } else { focus });
+        if let Some(l) = label {
+            let y = badge.y0 + ((badge.height() - l.size().height) / 2.0).round();
+            cx.canvas.draw_text(&l, Point::new(badge.x0 + pad + icon + gap, y));
+        }
     })
     .into()
 }
