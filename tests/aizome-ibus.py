@@ -294,7 +294,17 @@ with subtest("GNOME keeps its own IBus service and composition"):
     machine.wait_until_succeeds(
         "pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon '", timeout=60
     )
-    user("systemctl --user is-active org.freedesktop.IBus.session.GNOME.service")
+    # The daemon can exist before its D-Bus service finishes activating.
+    # Require actual readiness; a failed or stuck unit still fails the test.
+    machine.wait_until_succeeds(
+        "su alice -c "
+        + shlex.quote(
+            "export XDG_RUNTIME_DIR=/run/user/1000 "
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; "
+            "systemctl --user is-active org.freedesktop.IBus.session.GNOME.service"
+        ),
+        timeout=60,
+    )
     machine.wait_until_succeeds(
         "su alice -c 'XDG_RUNTIME_DIR=/run/user/1000 busctl --user call org.gnome.SessionManager /org/gnome/SessionManager org.gnome.SessionManager IsSessionRunning' | grep -Fx 'b true'",
         timeout=60,
