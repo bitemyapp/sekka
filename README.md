@@ -100,7 +100,8 @@ less than they would in Ghostty, because it doesn't yet support:
 - DECSASD.
 
 foot is still installed. To go back to it, choose it in Settei, under
-General → Default Apps → Terminal.
+General → Default Apps → Terminal. Upgrading from a Sekka without Hotaru
+switches foot to Hotaru once; if you had chosen another terminal, it stays.
 
 [![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

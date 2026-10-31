@@ -410,7 +410,7 @@ fn exec_program_name(exec: &str) -> Option<String> {
     Some(unwrap_program_name(&name).to_owned()).filter(|name| !name.is_empty())
 }
 
-fn file_name(path: &str) -> &str {
+pub(crate) fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 

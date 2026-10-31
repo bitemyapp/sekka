@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# Installed applications; this crate adds launching them (apps.rs).
+aizome-apps.workspace = true
 log.workspace = true
 # D-Bus: the blocking API for calls, the async one (on a thread of our own)
 # for following each daemon's signals.
@@ -24,3 +26,6 @@ roxmltree = "0.21"
 # PipeWire's volume and devices, through pipewire-pulse (see audio.rs).
 libpulse-binding = "2.30"
 serde.workspace = true
+
+[dev-dependencies]
+aizome-apps = { workspace = true, features = ["test-util"] }

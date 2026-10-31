@@ -441,11 +441,8 @@ impl InputExt for State {
                 }
             }
             Action::Terminal => {
-                let argv = self.az.settings.keys.terminal.clone();
                 let cwd = self.desk_folder();
-                if let Err(e) = self.spawn(&argv, cwd) {
-                    tracing::warn!("{e}");
-                }
+                aizome_comp_core::terminal::spawn(&self.az, cwd);
             }
             Action::TerminalClose | Action::TerminalQuit => {
                 // Match the shell's fallback Close/Quit: a polite close

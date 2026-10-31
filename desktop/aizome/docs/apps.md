@@ -204,8 +204,11 @@ As built, beyond the above:
 - **Date & Time** shows automatic time as set by the system configuration
   where NixOS keeps systemd's units in the store (timedated can't switch
   it there): change `services.timesyncd.enable`.
-- **Default Apps**: the terminal chosen is also `[keys] terminal`, what
-  ❖Return starts.
+- **Default Apps**: the terminal chosen is what ❖Return starts: the
+  compositor reads the same `xdg-terminals.list`, so the two can't
+  disagree. The first session of an Aizome with Hotaru moves foot, the
+  default before it, to Hotaru; a terminal chosen before stays
+  (`AppIndex::move_terminal_to_hotaru`).
 - **Printers & Scanners**: Add Printer leaves out printers already set
   up, cups-browsed's queues among them.
 - **Trackpad** says when no trackpad is connected; its settings are kept
