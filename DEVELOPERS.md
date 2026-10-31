@@ -1338,7 +1338,11 @@ Sekka's own revision, which would rebuild Uta on every Sekka commit; it points
 to the `sekka` input of an installed system's `/etc/nixos/flake.lock`
 instead. `uta.source` links the exact sources it was built from: the pinned
 Uta source (with its vendored, patched RustyPipe), the kit and Sukumo fileset
-from `nix/uta.nix`, and that recipe.
+from `nix/uta.nix`, that recipe, and its packaging patches. The MPRIS test waits
+for bus-name ownership before creating its caching proxy: zbus retains an
+initial `ServiceUnknown` error, so polling that proxy cannot recover from
+asynchronous registration. The existing readiness deadline and cache-update
+assertions remain in place.
 `push-cache` publishes `uta.source` beside `uta`, so the cache that serves the
 binary also serves its source; the crates.io sources are named, by checksum, in
 Uta's `Cargo.lock`. `checks.x86_64-linux.uta-rustypipe` runs

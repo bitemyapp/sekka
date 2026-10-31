@@ -42,7 +42,7 @@ let
   # With RustyPipe the build is GPL-3.0-only. push-cache publishes these
   # sources beside the binary: Uta's pinned source (its vendored, patched
   # RustyPipe included), the kit and Sukumo it was built with, and this
-  # recipe. Uta's Cargo.lock names the crates.io sources by checksum.
+  # recipe and patches. Uta's Cargo.lock names the crates.io sources by checksum.
   source = pkgs.linkFarm "aizome-uta-${package.version}-source" [
     {
       name = "uta";
@@ -55,6 +55,10 @@ let
     {
       name = "sekka/nix/uta.nix";
       path = ./uta.nix;
+    }
+    {
+      name = "sekka/nix/patches/uta-mpris-readiness.patch";
+      path = ./patches/uta-mpris-readiness.patch;
     }
   ];
   # Directions to that source, next to the binary. They name no store path,
@@ -77,11 +81,14 @@ let
     Uta's Cargo.lock names, with checksums, the crates.io sources it compiles.
 
     Sekka's binary cache, https://cache.sekka.computer, publishes those
-    sources, the recipe included, with each Uta build it serves; from that
+    sources, the recipe and patches included, with each Uta build it serves; from that
     Sekka revision, `nix build .#uta.source` collects them.
   '';
 in
 package.overrideAttrs (old: {
+  # Wait for the asynchronous bus registration before the test's caching proxy
+  # can permanently cache an initial ServiceUnknown from GetAll.
+  patches = (old.patches or [ ]) ++ [ ./patches/uta-mpris-readiness.patch ];
   postInstall = (old.postInstall or "") + ''
     install -Dm644 ${note} $out/share/doc/aizome-uta/SOURCE
   '';

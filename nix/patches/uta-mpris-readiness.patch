@@ -1,0 +1,29 @@
+diff --git a/tests/mpris.rs b/tests/mpris.rs
+--- a/tests/mpris.rs
++++ b/tests/mpris.rs
+@@ -56,6 +56,17 @@
+         ..State::default()
+     });
+     let connection = Connection::session().unwrap();
++    let until = Instant::now() + Duration::from_secs(5);
++    // The server registers asynchronously. zbus permanently caches an initial
++    // GetAll failure, so wait for ownership before creating the caching proxy.
++    let bus = zbus::blocking::fdo::DBusProxy::new(&connection).unwrap();
++    while !bus
++        .name_has_owner("org.mpris.MediaPlayer2.uta".try_into().unwrap())
++        .unwrap()
++    {
++        assert!(Instant::now() < until, "MPRIS acquires its bus name");
++        std::thread::sleep(Duration::from_millis(20));
++    }
+     let player = Proxy::new(
+         &connection,
+         "org.mpris.MediaPlayer2.uta",
+@@ -63,7 +74,6 @@
+         "org.mpris.MediaPlayer2.Player",
+     )
+     .unwrap();
+-    let until = Instant::now() + Duration::from_secs(5);
+     loop {
+         let status = player.get_property::<String>("PlaybackStatus");
+         if status.as_deref().ok() == Some("Playing") {
