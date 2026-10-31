@@ -43,9 +43,8 @@ impl Program for Hako {
             let home = self.opts.home.clone();
             self.open_window(cx, Loc::Folder(home), None);
         } else {
-            for r in pending {
-                self.handle_request(cx, r);
-            }
+            // The kit gives this launch's own token to the first window.
+            self.handle_requests(cx, pending, None);
         }
     }
 
@@ -113,11 +112,7 @@ impl Program for Hako {
                 }
                 self.save_settings();
             }
-            Msg::Requests(rs) => {
-                for r in rs {
-                    self.handle_request(cx, r);
-                }
-            }
+            Msg::Requests(rs, token) => self.handle_requests(cx, rs, token.as_deref()),
             Msg::Go(w, loc) => {
                 let w = self.owner(w);
                 self.go(cx, w, loc, None, true);

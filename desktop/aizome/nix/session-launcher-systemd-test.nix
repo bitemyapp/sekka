@@ -17,6 +17,11 @@ let
     substituteInPlace $out/lib/systemd/user/aizome.service \
       --replace-fail 'ExecStart=/usr/bin/env aizome --backend udev' \
         'ExecStart=${pkgs.python3}/bin/python3 /etc/launcher-test/compositor.py'
+    # Aizome's D-Bus activation files, as the package ships them.
+    for service in ${../session/dbus}/*.service; do
+      install -Dm644 "$service" "$out/share/dbus-1/services/$(basename "$service")"
+      substituteInPlace "$out/share/dbus-1/services/$(basename "$service")" --replace-fail @bindir@ /run/current-system/sw/bin
+    done
   '';
   systemctl = pkgs.writeShellScriptBin "systemctl" ''
     if [ "$*" = '--user --wait start aizome.service' ]; then
@@ -36,8 +41,11 @@ pkgs.testers.runNixOSTest {
       linger = true;
     };
     services.dbus.enable = true;
+    # Both of the module's routes for the package: its units and, through
+    # the system path, its D-Bus activation files.
     systemd.packages = [ units ];
     environment.systemPackages = [
+      units
       pkgs.python3
       pkgs.dbus
       pkgs.util-linux
