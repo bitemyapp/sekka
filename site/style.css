@@ -207,10 +207,19 @@ kbd {
   background: var(--accent);
   color: var(--on-accent);
   border: var(--border-width) solid var(--accent);
-  padding: 0.55em 1.2em;
+  padding: 0.7em 1.4em;
+  font-size: 1.05rem;
   text-decoration: none;
 }
 .button:hover { background: var(--surface); color: var(--accent); }
+.page-head .cta { margin-top: 1.25em; }
+
+/* A closing call to action: a focused window with its button at the right. */
+.cta-band { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pad); }
+.cta-band > div { flex: 1 1 30em; min-width: 0; }
+.cta-band h2 { font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.4rem); }
+.cta-band .lead { margin: 0; }
+.cta-band .cta { margin: 0; flex: 0 1 auto; min-width: 0; }
 
 /* Aizome, Sekka's desktop, in the focused window under the hero. */
 .flagship { display: grid; gap: var(--pad); }

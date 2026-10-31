@@ -215,7 +215,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
     <p class="eyebrow">Aizome {kanji}</p>
     <h1>A desktop of its own, from the compositor to the calculator.</h1>
     <p class="lead"><em>Aizome</em> is indigo dyeing: cloth dipped again and again, each dip adding depth. It is also Sekka's desktop, the one Sekka is made for: a Wayland desktop written in Rust on its own toolkit, Sukumo {sukumo}, taking its ideas from Haiku, NeXTSTEP and IRIX.</p>
-    <p><a href="{AIZOME}/">aizome.computer</a> goes through every app in detail.</p>
+    <p class="cta"><a class="button" href="{AIZOME}/">Visit aizome.computer →</a><a href="/download/">Download Sekka</a></p>
   </div>
 </section>
 {shot}
@@ -389,6 +389,17 @@ pub fn aizome(site: &Site) -> Result<Page> {
 </section>
 "#,
     );
+    write!(
+        b,
+        r#"<section class="win focus cta-band" aria-labelledby="more">
+  <div>
+    <h2 id="more">Every app, in detail.</h2>
+    <p class="lead">Aizome has a site of its own, <a href="{AIZOME}/">aizome.computer</a>, which takes each of its apps, the desktop and its keys further than this page can.</p>
+  </div>
+  <p class="cta"><a class="button" href="{AIZOME}/">Visit aizome.computer →</a><a href="/download/">Download Sekka</a></p>
+</section>
+"#
+    )?;
     Ok(Page {
         path: "/aizome/",
         title: "Aizome: Sekka's own desktop".into(),
