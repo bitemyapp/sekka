@@ -27,8 +27,9 @@ pub struct Page {
 }
 
 /// The workspaces in the bar are the site's pages, numbered as Tatami's are.
-pub const NAV: [(&str, &str); 6] = [
+pub const NAV: [(&str, &str); 7] = [
     ("/", "sekka"),
+    ("/aizome/", "aizome"),
     ("/tatami/", "tatami"),
     ("/yukimi/", "yukimi"),
     ("/design/", "design"),
@@ -37,6 +38,9 @@ pub const NAV: [(&str, &str); 6] = [
 ];
 
 pub const ORIGIN: &str = "https://sekka.computer";
+
+/// Aizome's own site, which links back here.
+pub const AIZOME: &str = "https://aizome.computer";
 
 /// The bar's theme switch shows the theme in use: a moon for Night, a sun
 /// for Day, in the text colour.
@@ -95,9 +99,9 @@ pub fn shell(site: &Site, page: &Page) -> Result<String> {
 <footer class="foot">
   <div class="foot-grid">
     <p><strong>No cookies, no analytics.</strong> The one script remembers Night or Day in your browser and sends it nowhere. Every page, script, font and image here is served from this site; nothing is loaded from anywhere else.</p>
-    <p>Sekka builds on NixOS, Determinate Nix and many other free-software projects. Tatami is inspired by Omarchy. Sekka is not an official NixOS, Determinate Systems, Calamares or Omarchy product.</p>
-    <p>Genkan is GPL-3.0-or-later; Tatami and Yukimi are MIT OR Apache-2.0. JetBrains Mono and Atkinson Hyperlegible Next are under the <a href="/fonts/">SIL Open Font License</a>.</p>
-    <p><a href="{REPO}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="/design/">Brand</a></p>
+    <p>Sekka builds on NixOS, Determinate Nix and many other free-software projects. Aizome takes its ideas from Haiku, NeXTSTEP and IRIX; Tatami is inspired by Omarchy. Sekka is not an official NixOS, Determinate Systems, Calamares or Omarchy product.</p>
+    <p>Genkan is GPL-3.0-or-later; Aizome, Tatami and Yukimi are MIT OR Apache-2.0. JetBrains Mono and Atkinson Hyperlegible Next are under the <a href="/fonts/">SIL Open Font License</a>.</p>
+    <p><a href="{AIZOME}/">aizome.computer</a> · <a href="{REPO}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="/design/">Brand</a></p>
   </div>
 </footer>
 </body>

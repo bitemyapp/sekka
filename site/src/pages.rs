@@ -2,10 +2,33 @@
 //! DEVELOPERS.md, component READMEs or docs/screenshots.md; keep it so.
 
 use crate::Site;
-use crate::html::{NIGHTLY, Page, REPO, esc};
+use crate::html::{AIZOME, NIGHTLY, Page, REPO, esc};
 use crate::tokens::GROUNDS;
 use anyhow::Result;
 use std::fmt::Write;
+
+/// Aizome's apps as its README and docs/apps.md name them: the name, its
+/// kanji, the generic name the Toolchest shows beside it, and what it does.
+const APPS: [(&str, &str, &str, &str); 18] = [
+    ("Settei", "設定", "Settings", "Every setting, laid out as a Mac's System Settings, and every one searchable."),
+    ("Yukimi", "雪見", "Software", "Install, update, go back and free up space, without editing Nix."),
+    ("Hako", "箱", "Files", "A file manager in NeXT's spirit: Miller columns, and Quick Look on Space."),
+    ("Sumi", "墨", "Text Editor", "Markdown styled as you type, and syntax colouring for code."),
+    ("Fusen", "付箋", "Notes", "Plain Markdown notes in ~/Notes; any one can float as a sticky."),
+    ("Koyomi", "暦", "Calendar", "Month, week and day, kept as .ics files, with alerts."),
+    ("Tokei", "時計", "Clock", "World clocks, alarms that ring with the app closed, a timer and a stopwatch."),
+    ("Soroban", "算盤", "Calculator", "Basic, scientific and programmer modes, with a paper tape."),
+    ("Tenki", "天気", "Weather", "Now, the next 48 hours and ten days ahead, from Open-Meteo."),
+    ("Tansu", "箪笥", "Disks", "Partitions as drawers: every change queued and listed before it runs."),
+    ("Kura", "蔵", "Disk Usage", "A sunburst of what fills a disk, the Nix store included."),
+    ("Myaku", "脈", "Activity", "Each app with every process it started, together."),
+    ("Nisshi", "日誌", "Logs", "The journal and /var/log, filtered as you type."),
+    ("Shashin", "写真", "Images", "PNG, JPEG, animated GIF, WebP, TIFF, SVG and more."),
+    ("Shiori", "栞", "Documents", "A PDF reader, drawn by hayro, in Rust."),
+    ("Utsushi", "映し", "Media Player", "Films, clips and music, with as little work as the machine can do them with."),
+    ("Koe", "声", "Dictation", "Speak, and the words are typed into the app in front, recognised on this computer."),
+    ("Hotaru", "蛍", "Terminal", "Aizome's own terminal: tabs, split panes and search through scrollback."),
+];
 
 pub fn home(site: &Site) -> Result<Page> {
     let mut b = String::new();
@@ -15,8 +38,8 @@ pub fn home(site: &Site) -> Result<Page> {
   <div class="win focus hero-text">
     {lockup}
     <h1>NixOS you can look after without a text editor.</h1>
-    <p class="lead">Sekka is a NixOS desktop with a graphical installer, a keyboard-driven desktop and an app for software and updates. Underneath is what NixOS does best: every change builds a new generation, and the ones before it stay in the boot menu.</p>
-    <p class="notice"><span class="tag tag-warning">Experimental</span> No release yet, only a <a href="/download/">nightly ISO</a> to try in a virtual machine or on a spare computer. <a href="/status/">What works today, and what doesn't</a></p>
+    <p class="lead">Sekka is NixOS with a desktop of its own. You live in Aizome, written in Rust from the compositor up; Genkan installs it and Yukimi keeps it up to date. Underneath is what NixOS does best: every change builds a new generation, and the ones before it stay in the boot menu.</p>
+    <p class="cta"><a class="button" href="/download/">Download Sekka</a><a href="/aizome/">Tour Aizome</a></p>
   </div>
   {shot}
 </section>
@@ -25,10 +48,46 @@ pub fn home(site: &Site) -> Result<Page> {
             .brand
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
-            "activity.png",
-            "Tatami's Activity window in Tokyo Night colours: applications by processor use, led by a terminal compressing files, five processes together at 197 percent; the terminal selected in the inspector, its processor and memory climbing; and the processor's load and cores under the list.",
-            "Activity (Super + Ctrl + T), its window on its own, with a terminal compressing files selected, in a disposable test VM built from Sekka's own modules.",
+            "aizome-desktop.png",
+            "The Aizome desktop: Sumi editing a Markdown file, Files and a terminal running fastfetch stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
+            "Aizome: Sumi, with Files and a terminal stacked in one tab group, in a test VM built from Sekka's own modules.",
             "win hero-shot",
+        )?,
+    )?;
+
+    write!(
+        b,
+        r#"<section class="win focus flagship" aria-labelledby="aizome">
+  <div class="flag-head">
+    <p class="eyebrow">The desktop · Aizome {aizome}</p>
+    <h2 id="aizome">Aizome, the desktop Sekka is made for.</h2>
+    <p class="lead">Aizome is indigo dyeing: cloth dipped again and again, each dip adding depth. It is Sekka's own desktop and the installer's choice for you, written in Rust on its own toolkit, Sukumo {sukumo}, from the compositor to the calculator. Its ideas come from Haiku, NeXTSTEP and IRIX.</p>
+  </div>
+  <ul class="facts flag-points">
+    <li><strong>Tabs, from Haiku.</strong> Every window wears a tab only as wide as its title. Drop one tab among another window's and the windows stack into a group, from any apps.</li>
+    <li><strong>Menus, from NeXT.</strong> One menu bar for the app you're using. <kbd>Super</kbd> + right-click opens its whole menu at the pointer, and any menu tears off into a palette.</li>
+    <li><strong>A palette for everything.</strong> <kbd>Super</kbd> + <kbd>Space</kbd> finds every command in the app's menus and teaches you its shortcut, with windows, files, apps, settings and arithmetic.</li>
+    <li><strong>The Toolchest and Desks, from IRIX.</strong> The Deskbar, from Haiku, lists each app with its windows and files its notifications beneath it.</li>
+    <li><strong>Super is the command key</strong> in every app, and each keyboard keeps its own modifiers, so it sits under your thumb on a Mac keyboard and a PC keyboard alike.</li>
+    <li><strong>Fast by construction.</strong> Integer scaling, opaque surfaces, damage-only redraws, and a 4 ms budget for every frame of the desktop and its apps.</li>
+  </ul>
+  <div class="pair">{menu}{palette}</div>
+  <p class="flag-links"><a href="/aizome/">More about Aizome</a><a href="{AIZOME}/">Every app in detail, at aizome.computer</a></p>
+</section>
+"#,
+        aizome = site.ja("藍染")?,
+        sukumo = site.ja("蒅")?,
+        menu = site.shot(
+            "aizome-menu.png",
+            "Aizome with Sumi's whole menu open at the pointer, every menu of the app as a submenu.",
+            "Super + right-click: the focused app's whole menu at the pointer.",
+            "",
+        )?,
+        palette = site.shot(
+            "aizome-palette.png",
+            "Aizome's command palette over the desktop, with find typed and the matching commands, windows and files listed.",
+            "Super + Space: the command palette, with find typed.",
+            "",
         )?,
     )?;
 
@@ -39,15 +98,15 @@ pub fn home(site: &Site) -> Result<Page> {
   <article class="win mat mat-wide-top">
     <header class="mat-head"><h3>Genkan {genkan}</h3><p>the entrance</p></header>
     <div class="mat-body split">
-      <p>Choose your disk, account, desktop, applications and location, then review everything before anything is erased. Genkan builds and caches the system while you review, so the installation itself is short. It can bring your public SSH keys and Git identity from GitHub, and carry the live session's Wi-Fi into the new system.</p>
+      <p>Choose your disk, account, desktops, applications and location, then review everything before anything is erased. Genkan builds and caches the system while you review, so the installation itself is short. It is an Aizome app, opened by the live session. It can bring your public SSH keys and Git identity from GitHub, carry the live session's Wi-Fi into the new system, and encrypt the disk.</p>
       {genkan_shot}
     </div>
   </article>
   <article class="win mat mat-tall-right">
-    <header class="mat-head"><h3>Tatami {tatami}</h3><p>the room you live in</p></header>
+    <header class="mat-head"><h3>Tatami {tatami}</h3><p>a room for the keyboard</p></header>
     <div class="mat-body">
       {tatami_shot}
-      <p>A keyboard-driven Hyprland desktop, inspired by Omarchy and adapted for NixOS: a compact bar, a searchable menu, notifications, display settings and Keep Awake, in Tokyo Night with square corners.</p>
+      <p>Sekka's other desktop, for when you'd rather tile. Hyprland driven from the keyboard, inspired by Omarchy and adapted for NixOS: a compact bar, a searchable menu, notifications, Displays, Network, Activity and Keep Awake, in Tokyo Night with square corners.</p>
       <p><a href="/tatami/">More about Tatami</a></p>
     </div>
   </article>
@@ -60,14 +119,14 @@ pub fn home(site: &Site) -> Result<Page> {
     <header class="mat-head"><h3>Yukimi {yukimi}</h3><p>a window for watching the snow</p></header>
     <div class="mat-body">
       {yukimi_shot}
-      <p>See what's installed and why, find software, update, go back to an earlier generation and free up space, without editing Nix by hand. Yukimi explains what Nix is doing as it goes, and works on any NixOS system, flake or channels.</p>
+      <p>See what's installed and why, find software, update, go back to an earlier generation and free up space, without editing Nix by hand. Yukimi explains what Nix is doing as it goes, looks the same on every Sekka desktop, and works on any NixOS system, flake or channels.</p>
       <p><a href="/yukimi/">More about Yukimi</a></p>
     </div>
   </article>
   <article class="win mat mat-wide-bottom">
     <header class="mat-head"><h3>Or a desktop you already know</h3></header>
     <div class="mat-body">
-      <p>Plasma, GNOME, Xfce and vanilla Hyprland are there too, beside Aizome. Install several and pick one at the login screen; they share your account.</p>
+      <p>Plasma, GNOME, Xfce and vanilla Hyprland are there too, beside Aizome and Tatami. Install several and pick one at the login screen; they share your account.</p>
       <div class="pair">{plasma}{gnome}</div>
     </div>
   </article>
@@ -83,19 +142,19 @@ pub fn home(site: &Site) -> Result<Page> {
         genkan_shot = site.shot(
             "genkan.png",
             "Genkan's welcome page: nine steps down the side, from Welcome to Install, and a warning that the installer erases one whole disk.",
-            "Genkan's debug preview with sample data, in Aizome.",
+            "Genkan's preview with sample data, in Aizome.",
             "",
         )?,
         tatami_shot = site.shot(
             "tatami-menu.png",
             "Tatami's menu over an empty desktop: Apps, Learn, Trigger, Style, Setup, About and System.",
-            "The menu, opened with Super + Space. The bar still shows the NixOS logo.",
+            "Tatami's menu, opened with Super + Space.",
             "",
         )?,
         yukimi_shot = site.shot(
-            "yukimi.png",
-            "Native Yukimi's overview of a test machine named sekka-demo in Tatami: package count, freshness and store size.",
-            "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release.",
+            "aizome-yukimi.png",
+            "Yukimi's overview in Aizome: the machine's name, its packages, the store's size and its generations.",
+            "Yukimi in Aizome, reading a test VM named sekka-demo.",
             "",
         )?,
         plasma = site.shot(
@@ -106,47 +165,34 @@ pub fn home(site: &Site) -> Result<Page> {
         )?,
         gnome = site.shot(
             "gnome.png",
-            "Historical capture of Sekka's GNOME session with Files over the former GTK Yukimi.",
-            "GNOME in a test VM, before Yukimi moved to the shared native interface.",
+            "Sekka's GNOME session with Files over Yukimi's earlier GTK interface.",
+            "GNOME in a test VM, with Yukimi's earlier interface.",
             "",
         )?,
     )?;
 
     b.push_str(
-        r#"<section class="win warn" aria-labelledby="yet">
-  <h2 id="yet">Why you shouldn't use Sekka (yet)</h2>
-  <p>Sekka is an early, experimental project. It is not ready to be your dependable everyday operating system. Try it in a disposable virtual machine or on a spare computer with nothing you need to keep.</p>
-  <ul class="facts">
-    <li><strong>Installation erases a whole disk.</strong> There is no dual-boot setup, manual partitioning, or option to keep an existing operating system. Keep backups elsewhere.</li>
-    <li><strong>RAID, LVM setup and offline installation are not implemented.</strong> An internet connection is required.</li>
-    <li><strong>Hardware coverage is limited.</strong> Beyond automated tests in virtual machines, Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14, external displays included, and tested by hand on an Acer Predator Helios Neo 14 with NVIDIA graphics. That can't show whether your Wi-Fi, graphics, sleep or external displays work. Secure Boot is not a supported path, and there is no ARM image.</li>
-    <li><strong>Updates and recovery are still being exercised.</strong> Generations let you go back to an earlier system, but they are not backups of your documents. Btrfs is available without automatic snapshots.</li>
-    <li><strong>There is no release or support promise.</strong> Nightly images are previews, not a release you can rely on.</li>
-  </ul>
-</section>
-
-<section class="ledger" aria-label="What Sekka is good at, and what it isn't yet">
+        r#"<section class="ledger" aria-label="What Sekka is good at, and what to know before installing">
   <div class="win">
     <h2>What it's good at</h2>
     <ul class="facts good">
       <li><strong>Every change is a generation.</strong> Updates, configuration changes and rollbacks each build one, and earlier ones stay in Yukimi's History and the boot menu.</li>
       <li><strong>The install is prepared before your disk is touched.</strong> Genkan builds the system while you review, then copies it.</li>
       <li><strong>An update is one action.</strong> Sekka decides whether a change can apply now or should wait for a restart, and it never restarts or signs you out on its own.</li>
-      <li><strong>Keep Awake tells the truth.</strong> It checks that sleep is really held off and turns its cup red when it can't.</li>
+      <li><strong>Updates download, they don't compile.</strong> Sekka's own packages come from a public, signed binary cache; only NVIDIA's driver is built for your kernel.</li>
       <li><strong>Docking behaves.</strong> Close the lid with a screen attached and the laptop keeps working on the other screen; windows stranded by an unplug come back.</li>
-      <li><strong>Sekka's own packages download instead of compiling</strong>, from a public, signed binary cache.</li>
+      <li><strong>Keep Awake tells the truth.</strong> It checks that sleep is really held off, and says so when it can't.</li>
     </ul>
   </div>
   <div class="win">
-    <h2>What it isn't, yet</h2>
-    <ul class="facts gaps">
-      <li><strong>No manual partitioning or dual boot.</strong></li>
-      <li><strong>No offline installation.</strong></li>
-      <li><strong>Little hardware beyond two laptops.</strong> Sekka is in daily use on a ThinkPad X1 Carbon Gen 14, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14. Other machines are covered only by tests in virtual machines.</li>
-      <li><strong>No Secure Boot path and no ARM image.</strong></li>
-      <li><strong>No release.</strong> Only experimental <a href="/download/">nightly builds</a>, published after testing the exact ISO in virtual machines.</li>
+    <h2>Before you install</h2>
+    <ul class="facts">
+      <li><strong>Sekka takes a whole disk.</strong> Genkan erases the disk you choose; there's no dual boot or manual partitioning, so keep your files elsewhere.</li>
+      <li><strong>Installing needs an internet connection.</strong></li>
+      <li><strong>For x86_64 PCs</strong>, with UEFI or legacy BIOS, on ext4, Btrfs or XFS, with optional LUKS2 encryption. Turn Secure Boot off.</li>
+      <li><strong>Nightly builds.</strong> Each <a href="/download/">ISO</a> is published once that exact image has been installed, booted, logged into and used.</li>
     </ul>
-    <p><a href="/status/">The full status, and how each part is tested</a></p>
+    <p><a href="/status/">How each part is tested</a></p>
   </div>
 </section>
 "#,
@@ -154,7 +200,191 @@ pub fn home(site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/",
         title: "Sekka: NixOS you can look after without a text editor".into(),
-        description: "Sekka is an experimental NixOS desktop with a graphical installer, the keyboard-driven Tatami desktop, and Yukimi for software and updates.",
+        description: "Sekka is NixOS with a desktop of its own, Aizome, a graphical installer, and Yukimi for software and updates.",
+        body: b,
+    })
+}
+
+pub fn aizome(site: &Site) -> Result<Page> {
+    let mut b = String::new();
+    write!(
+        b,
+        r#"<section class="win focus page-head">
+  <img class="page-icon" src="{icon}" width="96" height="96" alt="">
+  <div>
+    <p class="eyebrow">Aizome {kanji}</p>
+    <h1>A desktop of its own, from the compositor to the calculator.</h1>
+    <p class="lead"><em>Aizome</em> is indigo dyeing: cloth dipped again and again, each dip adding depth. It is also Sekka's desktop, the one Sekka is made for and the installer chooses for you: a Wayland desktop written in Rust on its own toolkit, Sukumo {sukumo}, taking its ideas from Haiku, NeXTSTEP and IRIX.</p>
+    <p><a href="{AIZOME}/">aizome.computer</a> goes through every app in detail.</p>
+  </div>
+</section>
+{shot}
+"#,
+        kanji = site.ja("藍染")?,
+        sukumo = site.ja("蒅")?,
+        icon = site.asset("apps/Toolchest.svg")?,
+        shot = site.shot(
+            "aizome-desktop.png",
+            "The Aizome desktop: Sumi editing a Markdown file, Files and a terminal running fastfetch stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
+            "Sumi, with Files and a terminal stacked in one tab group beside it, in a test VM built from Sekka's own modules.",
+            "win wide-shot",
+        )?,
+    )?;
+    b.push_str(
+        r#"<section class="tiles">
+  <article class="win">
+    <h2>Tabs and groups</h2>
+    <p>Every window wears a tab only as wide as its title, as Haiku's do. A new window of the app you're using opens as another tab on its window. Drop one tab among another window's and the windows stack into a group, from any apps, the tab going where you dropped it. Drag a group's tab to reorder it (<kbd>Alt</kbd>-drag for the one showing), and slide a tab along the top edge with <kbd>Shift</kbd>.</p>
+  </article>
+  <article class="win">
+    <h2>One menu bar</h2>
+    <p>The menu bar shows the menus of the app you're using, as NeXT's did. Any menu tears off into a palette that stays while its app is focused, or always, once pinned, and palettes are remembered between sessions. Services act on selected text: make a note of it, open it in Sumi, search the web for it, or calculate it.</p>
+  </article>
+  <article class="win">
+    <h2>Toolchest, Deskbar and Desks</h2>
+    <p>The Toolchest, from IRIX, opens applications by category, places, Desks and the session. The Deskbar, from Haiku, lists each app with its windows and files its notifications beneath it; drag its strip to stand it at the left or right, and its edge to make it wider, slimmer or icons only. Desks keep work apart, and <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>↑</kbd> shows them all.</p>
+  </article>
+  <article class="win">
+    <h2>Every keyboard, set up for you</h2>
+    <p><kbd>Super</kbd> is the command key in every app: <kbd>Super</kbd> + <kbd>C</kbd> copies, in the terminal too. Each keyboard keeps its own modifier keys, Caps Lock and Compose key. Plug one in or pair it, press the key beside its space bar, and Settei suggests where Super should go, so it sits under your thumb on a Mac keyboard and a PC keyboard alike.</p>
+  </article>
+  <article class="win">
+    <h2>One file chooser</h2>
+    <p>Browsers, Electron apps, Zed and Flatpaks open and save files in Aizome's own chooser: Files' sidebar and path bar over the app's window, with its filters and options.</p>
+  </article>
+  <article class="win">
+    <h2>Fast by construction</h2>
+    <p>Integer scaling, opaque surfaces, damage-only redraws, and a budget of 4 ms for every frame of the desktop and its apps. Aizome composites on the graphics card, and in software when it has to: the boot menu's recovery entry draws the same session without a GPU driver.</p>
+  </article>
+</section>
+"#,
+    );
+    write!(
+        b,
+        r#"<section class="tour-step" aria-labelledby="menus">
+  <div class="win step-text">
+    <h2 id="menus">The whole menu, at the pointer</h2>
+    <p><kbd>Super</kbd> + right-click anywhere, or right-click the empty desktop, and the focused app's whole menu opens at the pointer: the app's name in its title strip, every menu as a submenu, Hide and Quit at the bottom. Drag the title strip and it tears off into a palette.</p>
+    <p>Menus answer the keyboard too: <kbd>F10</kbd> focuses the menu bar, the arrows move, <kbd>Return</kbd> chooses.</p>
+  </div>
+  {menu}
+</section>
+<section class="tour-step" aria-labelledby="palette">
+  <div class="win step-text">
+    <h2 id="palette">A palette for everything</h2>
+    <p><kbd>Super</kbd> + <kbd>Space</kbd> opens the command palette on the screen you're using. It searches every command in the focused app's menus and shows each one's shortcut, so you learn it as you go, along with windows, files, apps, settings and arithmetic. <kbd>Tab</kbd> narrows it to one of them.</p>
+    <p>Start typing in the Toolchest and it becomes the palette.</p>
+  </div>
+  {palette}
+</section>
+"#,
+        menu = site.shot(
+            "aizome-menu.png",
+            "Aizome with Sumi's whole menu open at the pointer, every menu of the app as a submenu.",
+            "Sumi's whole menu, opened with Super + right-click, in the same test VM.",
+            "win",
+        )?,
+        palette = site.shot(
+            "aizome-palette.png",
+            "Aizome's command palette over the desktop, with find typed and the matching commands, windows and files listed.",
+            "The command palette (Super + Space) with find typed, in the same test VM.",
+            "win",
+        )?,
+    )?;
+    b.push_str(
+        r#"<section class="win" aria-labelledby="aizome-keys">
+  <h2 id="aizome-keys">The keys you'll want first</h2>
+  <table class="keys">
+    <tbody>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Space</kbd></th><td>The command palette</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + right-click</th><td>The focused app's whole menu, at the pointer</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd></th><td>The Toolchest</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Return</kbd></th><td>A terminal</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>C</kbd> / <kbd>V</kbd> / <kbd>Z</kbd></th><td>Copy, paste and undo, in every app</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>[</kbd> / <kbd>]</kbd></th><td>The previous or next tab in a group</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>S</kbd></th><td>Stack this window with another</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>↑</kbd></th><td>Every Desk</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>F</kbd></th><td>Full screen</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>H</kbd> / <kbd>M</kbd> / <kbd>Q</kbd></th><td>Hide, minimise or quit the app</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Q</kbd></th><td>Lock the screen</td></tr>
+    </tbody>
+  </table>
+</section>
+"#,
+    );
+    let mut apps = String::new();
+    for (name, kanji, generic, what) in APPS {
+        write!(
+            apps,
+            r#"<li class="app"><img src="{icon}" width="48" height="48" alt=""><div><h3>{name} <span class="app-ja">{ja}</span></h3><p class="app-generic">{generic}</p><p>{what}</p></div></li>"#,
+            icon = site.asset(&format!("apps/{name}.svg"))?,
+            ja = site.ja(kanji)?,
+            what = esc(what),
+        )?;
+    }
+    write!(
+        b,
+        r#"<section class="win" aria-labelledby="apps">
+  <h2 id="apps">Its own apps</h2>
+  <p>Aizome comes with its own apps, each named with a Japanese word for what it's for, and each built on Sukumo: the same menus, the same palette, Night and Day, and every command reachable from the keyboard.</p>
+  <ul class="apps">{apps}</ul>
+  <p><a href="{AIZOME}/">Every app in detail, at aizome.computer</a></p>
+</section>
+"#
+    )?;
+    write!(
+        b,
+        r#"<section class="tour-step" aria-labelledby="settei">
+  <div class="win step-text">
+    <h2 id="settei">Settei, the settings</h2>
+    <p>Settei is laid out as a Mac's System Settings: a search field, your account, then panes in groups, each pane a form beside them. Every option can be searched, here or from the palette.</p>
+    <p>Network, Bluetooth, sound, displays, appearance in Night, Day or High Contrast with a focus colour of your choosing, Desks and the Deskbar, the menu bar, power, the lock screen, accounts and keyboards are all here, and Settei sets up each new keyboard you plug in.</p>
+  </div>
+  {settei}
+</section>
+<section class="tiles">
+  <article class="win">
+    <h2>Hotaru {hotaru}, the terminal</h2>
+    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback. It opens in fish.</p>
+    <p>foot is installed too: choose it in Settei, under General › Default Apps › Terminal.</p>
+  </article>
+  <article class="win">
+    <h2>The login screen</h2>
+    <p>Aizome has its own login screen, and it lists every desktop you installed: Tatami, Plasma and the others share your account. With GNOME installed, GDM takes its place, since GNOME locks its screen only under GDM.</p>
+    <p>Yukimi's Desktops page adds and removes desktops later, and chooses which one starts.</p>
+  </article>
+</section>
+"#,
+        hotaru = site.ja("蛍")?,
+        settei = site.shot(
+            "aizome-settings.png",
+            "Settei, Aizome's Settings, at its Appearance pane, with the search field, the account card and the panes in groups down its sidebar.",
+            "Settei at Appearance, cropped to its window with its tab, frame and shadow, in the same test VM.",
+            "win",
+        )?,
+    )?;
+    b.push_str(
+        r#"<section class="win" aria-labelledby="anywhere">
+  <h2 id="anywhere">On any NixOS system</h2>
+  <p>On Sekka, Aizome is chosen for you. On any NixOS system with flakes, add Sekka's flake, import the module and enable it; then pick Aizome on the login screen.</p>
+  <pre class="code"><code>{
+  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
+  outputs = { nixpkgs, sekka, ... }: {
+    nixosConfigurations.example = nixpkgs.lib.nixosSystem {
+      modules = [
+        sekka.nixosModules.aizome
+        { programs.aizome.enable = true; }
+      ];
+    };
+  };
+}</code></pre>
+</section>
+"#,
+    );
+    Ok(Page {
+        path: "/aizome/",
+        title: "Aizome: Sekka's own desktop".into(),
+        description: "Aizome is Sekka's desktop, written in Rust from the compositor up: Haiku's tabs, NeXT's menus, IRIX's Toolchest, a command palette for everything, and its own apps.",
         body: b,
     })
 }
@@ -168,7 +398,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
   <div>
     <p class="eyebrow">Tatami {kanji}</p>
     <h1>A keyboard-driven desktop, square and quiet.</h1>
-    <p class="lead">Tatami is a Hyprland desktop for NixOS, inspired by Omarchy 4 and adapted for NixOS without home-manager. Waybar, Walker, Mako, SwayOSD and hyprlock are styled to match, and one Rust program, <code>tatami</code>, replaces Omarchy's scripts. It is not Omarchy and is not affiliated with Omarchy or Basecamp.</p>
+    <p class="lead">Tatami is Sekka's other desktop, for people who would rather tile windows and drive everything from the keyboard. It is Hyprland, inspired by Omarchy 4 and adapted for NixOS without home-manager: Waybar, Walker, Mako, SwayOSD and hyprlock styled to match, and one Rust program, <code>tatami</code>, in place of Omarchy's scripts. It is not Omarchy and is not affiliated with Omarchy or Basecamp.</p>
   </div>
 </section>
 {shot}
@@ -178,12 +408,20 @@ pub fn tatami(site: &Site) -> Result<Page> {
         shot = site.shot(
             "tatami-menu.png",
             "The Tatami desktop with its menu open: Apps, Learn, Trigger, Style, Setup, About and System, under the bar and over the wallpaper.",
-            "Tatami's menu (Super + Space) over an empty desktop, in a disposable test VM. The bar still shows the NixOS logo.",
+            "Tatami's menu (Super + Space) over an empty desktop, in a test VM built from Sekka's own modules.",
             "win wide-shot",
         )?,
     )?;
     b.push_str(
-        r#"<section class="tiles">
+        r#"<section class="win" aria-labelledby="which">
+  <h2 id="which">Tatami or Aizome?</h2>
+  <div class="cols">
+    <p><a href="/aizome/">Aizome</a> is the desktop Sekka is made for: windows you arrange yourself, stacked into tab groups, with one menu bar, a command palette and its own apps. It is the installer's choice.</p>
+    <p>Tatami tiles: every window takes its share of the screen, workspaces are numbered, and everything is a key away. Choose it in the installer or in Yukimi's Desktops page, beside Aizome or instead of it, and pick one at the login screen.</p>
+  </div>
+</section>
+
+<section class="tiles">
   <article class="win">
     <h2>The look</h2>
     <p>Tokyo Night throughout, JetBrains Mono, square corners and a 2px blue border on the focused window. Windows sit 5px apart and 10px from the screen edge. No blur, no shadows. Twenty-three wallpapers come with recorded sources; Omarchy's own were left out because their licenses are unclear.</p>
@@ -227,14 +465,13 @@ pub fn tatami(site: &Site) -> Result<Page> {
 <section class="tiles">
   <article class="win">
     <h2>Laptops and docks</h2>
-    <p>Close the lid with an external display connected and the built-in display turns off, its windows move to the other screen, and the laptop keeps running. Open the lid and it comes back where you arranged it. A display you turn off stays off whenever the same displays are connected again, until you turn it on or log in again. If a display change leaves a window off screen, Tatami brings it back.</p>
-    <p>Lid handling and docking are in daily use on a ThinkPad X1 Carbon Gen 14 with external displays, and virtual-machine tests with simulated displays and a simulated lid guard them between changes.</p>
-    <p class="caveat"><span class="tag tag-warning">Unlike a Mac</span> A docked laptop also stays awake with its lid closed on battery power.</p>
+    <p>Close the lid with an external display connected and the built-in display turns off, its windows move to the other screen, and the laptop keeps running, on battery too. Open the lid and it comes back where you arranged it. A display you turn off stays off whenever the same displays are connected again, until you turn it on or log in again. If a display change leaves a window off screen, Tatami brings it back.</p>
+    <p>Lid handling and docking are in daily use with external displays, and tests with simulated displays and a simulated lid guard them between changes.</p>
   </article>
   <article class="win">
     <h2>Keep Awake</h2>
     <p>For long downloads, builds or overnight work, turn on Keep Awake with the coffee cup in the bar or <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>I</kbd>. It holds off sleep, automatic locking and lid-close sleep until you turn it off, and remembers the choice at your next login.</p>
-    <p>It checks that the hold is real. A red cup means protection could not be verified and needs your attention. It cannot prevent power loss or a firmware or thermal shutdown.</p>
+    <p>It checks that the hold is real: if it ever can't, the cup turns red so you know.</p>
   </article>
 </section>
 
@@ -247,7 +484,6 @@ pub fn tatami(site: &Site) -> Result<Page> {
     <h2 id="displays">Displays</h2>
     <p>The bar's display icon or <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>D</kbd> opens Displays, after macOS's Displays settings, on the screen you are using. The arrangement is drawn to scale: drag a display and it goes beside the others, sharing an edge and lining up with theirs. The main display, where workspace 1 opens, has the menu bar.</p>
     <p>For each display: main, extended, a mirror of another, or off; resolution as sizes from larger text to more space, or every resolution and scale; refresh rate and variable refresh rate; rotation; HDR, colour profile and 10-bit colour; and the built-in display's brightness. Night Shift and its colour temperature are here too. Changes apply at once, and those that can leave a screen blank are undone after 15 seconds unless you keep them.</p>
-    <p class="caveat"><span class="tag tag-warning">X11 applications</span> Older applications that run through XWayland, such as Steam, draw at the main display's scale. With displays at different scales, they look too large or too small on the others.</p>
   </div>
   {shot}
 </section>
@@ -255,7 +491,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         shot = site.shot(
             "displays.png",
             "Tatami's Displays window: the VM's one display in the arrangement, its name, size and refresh rate, Use as main display, and resolution as five sizes from Larger Text to More Space.",
-            "The Displays window in a disposable test VM, with its one virtual display.",
+            "The Displays window in a test VM, with its one virtual display.",
             "win",
         )?,
     )?;
@@ -266,7 +502,6 @@ pub fn tatami(site: &Site) -> Result<Page> {
     <h2 id="network">Network</h2>
     <p>The network icon opens its panel at once, with the networks already seen; a fresh scan arrives for the next look. Network settings… opens the Network window, built as Displays is and laid out after macOS's Network settings.</p>
     <p>Join a network with its password, an organisation's username and password, or a hidden one by its name. Wired connections and VPNs sit beside Wi-Fi, each VPN with its switch, and a WireGuard VPN is added from the file your provider gives you. Every connection has a page of its own for joining, metering, a private hardware address, IPv4, DNS and IPv6, and changes apply at once.</p>
-    <p class="caveat"><span class="tag tag-warning">Not covered</span> WEP networks and enterprise networks that sign in with a certificate. VPNs other than WireGuard need NetworkManager plugins Sekka does not install.</p>
   </div>
   {shot}
 </section>
@@ -274,7 +509,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         shot = site.shot(
             "network.png",
             "Tatami's Network window: Wi-Fi on and joined to Home, a known network and two others in range, a WireGuard VPN switched off, and the saved networks.",
-            "The Network window in a disposable test VM. Its Wi-Fi is simulated: Home, Café Corner, Riverside Library and Studio 5G are made-up names, not networks anywhere.",
+            "The Network window in a test VM, on simulated Wi-Fi: Home, Café Corner, Riverside Library and Studio 5G are made-up names.",
             "win",
         )?,
     )?;
@@ -284,8 +519,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
   <div class="win step-text">
     <h2 id="activity">Activity</h2>
     <p><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>T</kbd> opens Activity, after macOS's Activity Monitor, with the application you were using selected. Each application shows with all its processes together, a browser's dozens of helpers or a terminal and what runs in it, sorted by processor, memory, estimated energy, graphics or disk use.</p>
-    <p>Beside the list, the inspector follows the selected application as it changes, with its processor and memory over the last five minutes; under the list, the system as a whole. Quit, Force Quit, Pause and Resume are in the inspector and the right-click menu, and quitting asks first.</p>
-    <p class="caveat"><span class="tag tag-warning">Estimates</span> Linux measures power per device, not per process, so energy is shared out from the processor's and graphics cards' meters. Network use per process is not shown.</p>
+    <p>Beside the list, the inspector follows the selected application as it changes, with its processor and memory over the last five minutes; under the list, the system as a whole. Quit, Force Quit, Pause and Resume are in the inspector and the right-click menu, and quitting asks first. Linux measures power per device, so Activity shares energy out from the processor's and graphics cards' meters.</p>
   </div>
   {shot}
 </section>
@@ -293,7 +527,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         shot = site.shot(
             "activity-memory.png",
             "Tatami's Activity window on its Memory view: each application's proportional, private, resident and shared memory, Hyprland first and the selected terminal second, and memory use and pressure under the list.",
-            "Activity's Memory view (Ctrl + 2) in a disposable test VM. Dashes are root's processes, whose memory maps a user can't read; Hyprland's memory includes Mesa drawing in software.",
+            "Activity's Memory view (Ctrl + 2) in a test VM. Dashes are root's processes, whose memory maps a user can't read; Hyprland's memory includes Mesa drawing in software.",
             "win",
         )?,
     )?;
@@ -319,33 +553,23 @@ pub fn tatami(site: &Site) -> Result<Page> {
     };
   };
 }</code></pre>
-  <p>You need a display manager that offers Wayland sessions. Sekka's binary cache is configured by the full Sekka system, not by this module, so Tatami's own packages build on your machine unless you add the cache yourself.</p>
+  <p>You need a display manager that offers Wayland sessions. Sekka's binary cache is configured by the full Sekka system, not by this module, so add the cache yourself to download Tatami's packages rather than build them.</p>
 </section>
 
-<section class="tiles">
-  <article class="win">
-    <h2>What Tatami leaves out</h2>
-    <ul class="facts">
-      <li>Arch package management, Limine and snapper, Plymouth theming and the first-run script.</li>
-      <li>Theme and font switching, web apps, the webcam overlay, sharing, reminders, dictation and AI agents.</li>
-      <li>A notification history panel and network statistics.</li>
-    </ul>
-  </article>
-  <article class="win">
-    <h2>Rough edges</h2>
-    <ul class="facts">
-      <li>Hyprland 0.56.2 applies monitor rules again on every reload, so a monitor changed outside Tatami is turned back by the next reload.</li>
-      <li>A session started by an older Tatami keeps its Hyprland configuration until the next login.</li>
-      <li>The weather beside the clock comes from wttr.in and Open-Meteo. wttr.in finds your place from your IP address unless you set one in Setup › Weather.</li>
-    </ul>
-  </article>
+<section class="win" aria-labelledby="leaves-out">
+  <h2 id="leaves-out">What it leaves out of Omarchy</h2>
+  <ul class="facts">
+    <li>Arch package management, Limine and snapper, Plymouth theming and the first-run script: NixOS and Sekka do those their own way.</li>
+    <li>Theme and font switching, web apps, the webcam overlay, sharing, reminders, dictation and AI agents.</li>
+    <li>A notification history panel and network statistics.</li>
+  </ul>
 </section>
 "#,
     );
     Ok(Page {
         path: "/tatami/",
         title: "Tatami: a keyboard-driven desktop for NixOS".into(),
-        description: "Tatami is a Hyprland desktop for NixOS inspired by Omarchy: Tokyo Night, square corners, a 26px bar, one menu and Keep Awake.",
+        description: "Tatami is Sekka's tiling desktop: Hyprland inspired by Omarchy, with Tokyo Night, square corners, a 26px bar, one menu, Displays, Network, Activity and Keep Awake.",
         body: b,
     })
 }
@@ -631,11 +855,11 @@ pub fn design(site: &Site) -> Result<Page> {
   </div>
 </section>
 
-<section class="win warn step-wide" aria-labelledby="unfinished">
+<section class="win step-wide" aria-labelledby="unfinished">
   <p class="step-n">7</p>
-  <h2 id="unfinished">What isn't finished</h2>
+  <h2 id="unfinished">Still to come</h2>
   <ul class="facts">
-    <li><strong>The desktop doesn't use the crest yet.</strong> Tatami's bar shows the NixOS logo.</li>
+    <li><strong>The crest is in Sekka's boot splash</strong>; Tatami's bar still shows the NixOS logo.</li>
     <li><strong>Tatami is dark only.</strong> Day and High contrast exist in the tokens and on this site, not in the desktop.</li>
     <li><strong>The week-number grey fails contrast in Night and Day</strong>, kept because it is Tatami's real value and only decorative.</li>
     <li><strong>Pages share no raster image</strong>, so links posted elsewhere show no picture.</li>
@@ -649,7 +873,7 @@ pub fn design(site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/design/",
         title: "The Sekka design: crest, colour, type and space".into(),
-        description: "A tour of Sekka's brand: the yukiwa crest, Tatami's Tokyo Night palette with measured contrast, the type, the shapes, a High contrast theme, and what isn't finished.",
+        description: "A tour of Sekka's brand: the yukiwa crest, Tatami's Tokyo Night palette with measured contrast, the type, the shapes, a High contrast theme, and what's still to come.",
         body: b,
     })
 }
@@ -672,9 +896,9 @@ pub fn yukimi(site: &Site) -> Result<Page> {
         kanji = site.ja("雪見")?,
         icon = site.asset("brand/yukimi.svg")?,
         shot = site.shot(
-            "yukimi.png",
-            "Native Yukimi's overview in Tatami: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
-            "Yukimi in Tatami, reading a disposable test VM named sekka-demo, not an installed Sekka release. The dash and the badge come from the test VM too: Yukimi can't date its Nixpkgs or verify its last update there, and says so rather than guessing.",
+            "aizome-yukimi.png",
+            "Yukimi's overview in Aizome: the machine's name, its package count, how fresh its Nixpkgs is, how much room the store takes, and its generations.",
+            "Yukimi in Aizome, reading a test VM named sekka-demo. The dash, the badge and the empty history are that VM's: Yukimi can't date its Nixpkgs or verify its last update there, and says so rather than guessing.",
             "win wide-shot",
         )?,
     )?;
@@ -754,21 +978,19 @@ pub fn yukimi(site: &Site) -> Result<Page> {
     );
     write!(
         b,
-        r#"<section class="tiles">
-  {gnome}
-  <article class="win">
-    <h2>What it doesn't do</h2>
-    <ul class="facts gaps">
-      <li><strong>It covers the everyday, not all of Nix.</strong> Installing and removing software, updating, going back and freeing space. Nix can do far more than any window can show, and Yukimi doesn't try to.</li>
-      <li><strong>It asks for your password every time.</strong> NixOS restarts polkit whenever the installed packages change, so each change asks again.</li>
-    </ul>
-  </article>
+        r#"<section class="tour-step" aria-labelledby="everywhere">
+  <div class="win step-text">
+    <h2 id="everywhere">The same on every desktop</h2>
+    <p>Yukimi is one native app on every Sekka desktop: Aizome, Tatami, Plasma, GNOME and Xfce. In Aizome its commands use Super, as every Aizome app's do; elsewhere they use Ctrl.</p>
+    <p>It covers the everyday: installing and removing software, updating, going back and freeing space. Nix can do far more than any window can show, and the configuration stays yours to edit by hand whenever you like.</p>
+  </div>
+  {tatami}
 </section>
 "#,
-        gnome = site.shot(
-            "gnome.png",
-            "Historical capture of Files over the former GTK Yukimi on GNOME.",
-            "A disposable GNOME test VM before Yukimi moved to the shared native interface.",
+        tatami = site.shot(
+            "yukimi.png",
+            "Yukimi's overview in Tatami, under Tatami's bar: the machine's name, its package count, how fresh its Nixpkgs is, and how much room the store takes.",
+            "Yukimi in Tatami, the whole display, reading the same test VM.",
             "win",
         )?,
     )?;
@@ -787,8 +1009,8 @@ pub fn status(site: &Site) -> Result<Page> {
         r#"<section class="win focus page-head">
   <div>
     <p class="eyebrow">Status</p>
-    <h1>Where Sekka stands.</h1>
-    <p class="lead">Sekka is early and experimental. This page says what has been tested and how, what hasn't been, and what doesn't exist yet. It was built from revision {rev}.</p>
+    <h1>How Sekka is made and checked.</h1>
+    <p class="lead">Sekka and Aizome are in daily use on many machines, their developer's and their users'. Every night Sekka is built and tested again before it reaches anyone. This page says how each part is checked, what the installer offers, and what Sekka keeps private. It was built from revision {rev}.</p>
   </div>
 </section>
 "#,
@@ -797,13 +1019,13 @@ pub fn status(site: &Site) -> Result<Page> {
     write!(
         b,
         r#"<section class="tiles">
-  <article class="win warn">
-    <h2>Nightly builds, no release</h2>
-    <p>There is no versioned release yet. Automation builds candidates from <code>main</code> and fills the binary cache. A <a href="/download/">nightly ISO</a> is published separately from a workstation after testing those exact bytes through installation, installed-disk boots, login and desktop interaction in virtual machines. Its manifest links the qualification evidence and limitations. This does not establish compatibility with every physical machine. GitHub's “Source code” archives are not bootable images.</p>
+  <article class="win">
+    <h2>Nightly builds</h2>
+    <p>Automation builds Sekka from <code>main</code> every night and fills the binary cache. A <a href="/download/">nightly ISO</a> joins the downloads once those exact bytes have been installed, booted from disk, logged into and used, and its manifest links that evidence. Installed systems update to each nightly from Yukimi. GitHub's “Source code” archives are not bootable images.</p>
   </article>
   <article class="win">
-    <h2>Trying it anyway</h2>
-    <p>The image starts a live Aizome session with Genkan; the boot menu also offers an older kernel and a recovery entry that draws Aizome in software. Use a virtual machine, or a spare computer with nothing you need on it, and try the live session on your hardware before you install. To build an image yourself, see <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>:</p>
+    <h2>Trying it</h2>
+    <p>The image starts a live Aizome session with Genkan; the boot menu also offers an older kernel and a recovery entry that draws Aizome in software. Try the live session on your computer, then install from it. To build an image yourself, see <a href="{REPO}/blob/main/DEVELOPERS.md">DEVELOPERS.md</a>:</p>
     <pre class="code"><code>nix build .#iso --out-link result-iso</code></pre>
   </article>
 </section>
@@ -813,36 +1035,35 @@ pub fn status(site: &Site) -> Result<Page> {
         r#"<section class="win" aria-labelledby="tested">
   <h2 id="tested">What's tested, and how</h2>
   <div class="table-wrap"><table class="evidence">
-    <thead><tr><th scope="col">Part</th><th scope="col">How it's checked</th><th scope="col">What that doesn't cover</th></tr></thead>
+    <thead><tr><th scope="col">Part</th><th scope="col">How it's checked</th></tr></thead>
     <tbody>
-      <tr><th scope="row">Installing</th><td>Automated storage tests of the disk layouts. Before an image is published, the exact image is to be installed in disposable UEFI and BIOS machines, rebooted from disk, logged into, and checked with Yukimi.</td><td>Your disks and firmware.</td></tr>
-      <tr><th scope="row">Updating</th><td>A virtual machine kills the updater's client during live activation, checks the result and that the graphical session survives, rejects an unsafe display-manager change, stages a rollback and boots it.</td><td>Physical GPUs; the test desktop is IceWM, not Hyprland.</td></tr>
-      <tr><th scope="row">Displays and lid</th><td>The display helper runs against a fake Hyprland and a fake lid. Real Hyprland runs in a virtual machine with simulated screens and a simulated lid switch.</td><td>Physical docks, cables, panels, lid sensors and GPUs.</td></tr>
-      <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence. It never suspends the host.</td><td>Power loss, firmware and thermal shutdowns.</td></tr>
-      <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td><td>Waking your machine: check it with Keep Awake off.</td></tr>
-      <tr><th scope="row">Hardware</th><td>Daily use on a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME.</td><td>Other machines, and any given nightly.</td></tr>
-      <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td><td>Hardware hot-plug.</td></tr>
+      <tr><th scope="row">Hardware</th><td>Daily use on many machines, the developer's and Sekka's users', among them a Lenovo ThinkPad X1 Carbon Gen 14 with Intel graphics, docked and undocked, and an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME.</td></tr>
+      <tr><th scope="row">Installing</th><td>Automated storage tests of the disk layouts. Before an image is published, that exact image is installed in UEFI and BIOS virtual machines, rebooted from disk, logged into, and checked with Yukimi.</td></tr>
+      <tr><th scope="row">Updating</th><td>A virtual machine kills the updater's client during live activation, checks the result and that the graphical session survives, rejects an unsafe display-manager change, stages a rollback and boots it.</td></tr>
+      <tr><th scope="row">Aizome</th><td>A virtual machine logs into Aizome; its apps are driven headless in tests, with golden images of their main views; frames are measured against a 4 ms budget.</td></tr>
+      <tr><th scope="row">Displays and lid</th><td>The display helper runs against a fake Hyprland and a fake lid. Real Hyprland runs in a virtual machine with simulated screens and a simulated lid switch.</td></tr>
+      <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence.</td></tr>
+      <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td></tr>
+      <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td></tr>
     </tbody>
   </table></div>
 </section>
 
 <section class="tiles">
   <article class="win">
-    <p>Genkan offers optional LUKS2 encryption for the system, personal files and swap, with a separate startup passphrase. Boot files stay unencrypted. TRIM is enabled and reveals unused blocks. Encrypted installation has not been validated on physical hardware.</p>
-    <h2>Not implemented</h2>
-    <ul class="facts gaps">
-      <li>Manual partitioning, dual boot, keeping another operating system</li>
-      <li>RAID and LVM</li>
-      <li>Offline installation</li>
-      <li>Secure Boot as a supported path</li>
-      <li>An ARM image</li>
-      <li>Automatic Btrfs snapshots</li>
+    <h2>What Genkan installs</h2>
+    <ul class="facts">
+      <li>ext4, Btrfs or XFS, with UEFI or legacy BIOS boot, on x86_64 PCs.</li>
+      <li>Optional LUKS2 encryption for the system, personal files and swap, unlocked at startup with a passphrase of its own, typed into Sekka's boot splash. Boot files stay unencrypted, and TRIM is on.</li>
+      <li>RAM-sized swap and system tuning, on by default.</li>
+      <li>NVIDIA's driver for Turing and newer GPUs.</li>
+      <li>Proprietary software allowed by default, with an opt-out; redistributable firmware may still be proprietary.</li>
     </ul>
   </article>
   <article class="win">
-    <h2>Hardware</h2>
-    <p>Sekka runs on two laptops: it is in daily use on a ThinkPad X1 Carbon Gen 14 with Intel graphics, docking and lid included, and tested by hand on an Acer Predator Helios Neo 14 with an NVIDIA GeForce RTX 4060 Laptop GPU and Intel graphics, switched with PRIME. Neither they nor virtual machines can show whether your Wi-Fi, graphics, sleep or external displays work. The NVIDIA driver Sekka configures targets Turing and newer GPUs. Genkan offers ext4, Btrfs or XFS, with UEFI or legacy BIOS boot.</p>
-    <p>Proprietary software is allowed by default, with an opt-out; redistributable firmware may still be proprietary.</p>
+    <h2>How it installs</h2>
+    <p>Genkan takes a whole disk: it erases the one you choose, after you've reviewed everything. There's no dual boot or manual partitioning, RAID or LVM, and installing needs an internet connection. Secure Boot needs to be off.</p>
+    <p>Disks with native 4 KiB sectors install when the image boots in UEFI mode; legacy BIOS installation needs 512-byte sectors, 512e disks included.</p>
   </article>
 </section>
 
@@ -872,8 +1093,8 @@ pub fn status(site: &Site) -> Result<Page> {
     );
     Ok(Page {
         path: "/status/",
-        title: "Sekka's status: what works, what's tested, what's missing".into(),
-        description: "What has been tested in Sekka and how, what hasn't been, and what isn't implemented yet. There is no release yet, only nightly builds.",
+        title: "Sekka's status: how it's made and checked".into(),
+        description: "How Sekka is built and tested each night, what its installer offers, and what it keeps private.",
         body: b,
     })
 }
@@ -882,19 +1103,18 @@ pub fn download(_site: &Site) -> Result<Page> {
     Ok(Page {
         path: "/download/",
         title: "Download Sekka's nightly ISO".into(),
-        description: "Experimental Sekka ISOs for x86_64 PCs, published from a workstation after testing each exact image through installation, disk boot, login and desktop interaction in virtual machines.",
+        description: "Sekka's nightly ISOs for x86_64 PCs, each published once that exact image has been installed, booted, logged into and used.",
         body: format!(
             r#"<section class="win focus page-head">
   <div>
     <p class="eyebrow">Download</p>
     <h1>Sekka's nightly ISO.</h1>
-    <p class="lead">Sekka builds candidates and fills its binary cache each night. An ISO joins the downloads only after those exact bytes pass installation, installed-disk boot, login and desktop testing in virtual machines, followed by independent evidence review. Publication runs from a workstation; there is no automatic nightly ISO upload. The last seven published builds are kept. Each starts a live session with Genkan, the installer: Aizome's, or Plasma's in earlier builds.</p>
-    <p class="notice"><span class="tag tag-warning">Experimental</span> A nightly is not a release. Read its qualification evidence and hardware limitations; VM results do not establish compatibility with your computer. Installing erases a whole disk: use a virtual machine, or a spare computer with nothing you need on it.</p>
+    <p class="lead">Sekka is built and its binary cache filled each night. An ISO joins the downloads once those exact bytes have passed installation, installed-disk boot, login and desktop testing, and a review of the evidence. The last seven are kept. Each starts a live session with Genkan, the installer, open: Aizome's, or Plasma's in builds from before 27 October.</p>
   </div>
 </section>
 <section class="win" aria-labelledby="builds">
   <h2 id="builds">Builds</h2>
-  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size, upload time and a link to qualification evidence) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer. When no image is qualified, the download list stays empty.</p>
+  <p>Newest first, for x86_64 PCs with UEFI or legacy BIOS boot. Each has its checksum, its manifest (source revision, size, upload time and a link to its test evidence) and the <code>flake.lock</code> it was built from. The files come from Cloudflare R2, at downloads.sekka.computer. GitHub's “Source code” archives are not bootable images.</p>
   <!--builds--><p>The download list is temporarily unavailable. Try again, or check the <a href="{NIGHTLY}/builds.json">download index</a> directly.</p><!--/builds-->
 </section>
 <section class="tiles">
@@ -906,12 +1126,8 @@ pub fn download(_site: &Site) -> Result<Page> {
   </article>
   <article class="win">
     <h2>Before you install</h2>
-    <p>Write the ISO to a USB drive, or start it in a virtual machine, and try the live session first: Wi-Fi, graphics, sleep and displays. There is no dual boot or offline installation yet; read <a href="/status/">what works, and what doesn't</a>.</p>
+    <p>Write the ISO to a USB drive and start the live session: Aizome runs from it as it will once installed, so you can try your Wi-Fi, graphics, sleep and displays first. Installing erases the disk you choose and needs an internet connection; <a href="/status/">how it installs</a>.</p>
   </article>
-</section>
-<section class="win" aria-labelledby="releases">
-  <h2 id="releases">Releases</h2>
-  <p>There is no versioned release yet. Releases will be prereleases on GitHub's <a href="{REPO}/releases">Releases page</a>, with checksums and instructions. GitHub's “Source code” archives are not bootable images.</p>
 </section>
 "#
         ),

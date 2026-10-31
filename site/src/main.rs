@@ -35,7 +35,12 @@ pub struct Site {
 
 /// Screenshots shown on the site, copied byte for byte. Their provenance is
 /// recorded in docs/screenshots.md, and every caption says it.
-const IMAGES: [(&str, &str); 9] = [
+const IMAGES: [(&str, &str); 14] = [
+    ("aizome-desktop.png", "docs/images/sekka/aizome-desktop.png"),
+    ("aizome-menu.png", "docs/images/sekka/aizome-menu.png"),
+    ("aizome-palette.png", "docs/images/sekka/aizome-palette.png"),
+    ("aizome-settings.png", "docs/images/sekka/aizome-settings.png"),
+    ("aizome-yukimi.png", "docs/images/sekka/aizome-yukimi.png"),
     ("genkan.png", "docs/images/sekka/genkan.png"),
     ("yukimi.png", "docs/images/sekka/yukimi.png"),
     ("tatami-menu.png", "docs/images/sekka/tatami-menu.png"),
@@ -71,6 +76,30 @@ const BRAND_FILES: [(&str, &str); 8] = [
         "yukimi.svg",
         "desktop/aizome/icons/apps/org.aizome.Yukimi.svg",
     ),
+];
+
+/// Aizome's app icons, as the desktop installs them, published as
+/// "apps/<Name>.svg". Toolchest is Aizome's mark on its tile.
+pub const APP_ICONS: [(&str, &str); 19] = [
+    ("Toolchest", "desktop/aizome/icons/apps/org.aizome.Toolchest.svg"),
+    ("Settei", "desktop/aizome/icons/apps/org.aizome.Settei.svg"),
+    ("Yukimi", "desktop/aizome/icons/apps/org.aizome.Yukimi.svg"),
+    ("Hako", "desktop/aizome/icons/apps/org.aizome.Hako.svg"),
+    ("Sumi", "desktop/aizome/icons/apps/org.aizome.Sumi.svg"),
+    ("Fusen", "desktop/aizome/icons/apps/org.aizome.Fusen.svg"),
+    ("Koyomi", "desktop/aizome/icons/apps/org.aizome.Koyomi.svg"),
+    ("Tokei", "desktop/aizome/icons/apps/org.aizome.Tokei.svg"),
+    ("Soroban", "desktop/aizome/icons/apps/org.aizome.Soroban.svg"),
+    ("Tenki", "desktop/aizome/icons/apps/org.aizome.Tenki.svg"),
+    ("Tansu", "desktop/aizome/icons/apps/org.aizome.Tansu.svg"),
+    ("Kura", "desktop/aizome/icons/apps/org.aizome.Kura.svg"),
+    ("Myaku", "desktop/aizome/icons/apps/org.aizome.Myaku.svg"),
+    ("Nisshi", "desktop/aizome/icons/apps/org.aizome.Nisshi.svg"),
+    ("Shashin", "desktop/aizome/icons/apps/org.aizome.Shashin.svg"),
+    ("Shiori", "desktop/aizome/icons/apps/org.aizome.Shiori.svg"),
+    ("Utsushi", "desktop/aizome/icons/apps/org.aizome.Utsushi.svg"),
+    ("Koe", "desktop/aizome/icons/apps/org.aizome.Koe.svg"),
+    ("Hotaru", "desktop/aizome/apps/hotaru/data/org.aizome.Hotaru.svg"),
 ];
 
 /// A PNG's pixel size, from its header, so images reserve their space.
@@ -321,6 +350,14 @@ fn main() -> Result<()> {
             &mut assets,
         )?;
     }
+    for (name, source) in APP_ICONS {
+        publish_file(
+            &a.repo.join(source),
+            out,
+            &format!("apps/{name}.svg"),
+            &mut assets,
+        )?;
+    }
     for (from, path) in [
         (&a.mono, "fonts/JetBrainsMono.ttf"),
         (&a.mono_license, "fonts/JetBrainsMono-OFL.txt"),
@@ -364,6 +401,7 @@ fn main() -> Result<()> {
 
     let pages = [
         pages::home(&site)?,
+        pages::aizome(&site)?,
         pages::tatami(&site)?,
         pages::yukimi(&site)?,
         pages::design(&site)?,
