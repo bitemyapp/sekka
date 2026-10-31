@@ -238,8 +238,8 @@ pub struct Settings {
     pub cursor_blink: bool,
     pub scrollback: usize,
     pub copy_format: CopyFormat,
-    /// The shell new panes start, given no arguments. Unset, it's fish where
-    /// it's installed (the shell Sekka's terminals open in), else `$SHELL`.
+    /// The shell new panes start, given no arguments. Unset, use the system's
+    /// default; without one, prefer installed fish, then `$SHELL`.
     /// A command named at launch (`-- COMMAND`) runs instead.
     pub shell: Option<String>,
     /// Applies only to future default-shell panes; explicit commands bypass it.
@@ -305,13 +305,18 @@ pub fn default_path() -> Option<PathBuf> {
         .map(|directory| directory.join("aizome/hotaru.toml"))
 }
 
-/// The shell a pane starts: `configured`, else fish on `path`, else `shell`
-/// (`$SHELL`), else `/bin/sh`. Fish is the shell Sekka's terminals open in.
+/// The shell a pane starts: the person's override, the system's default,
+/// fish on `path`, `shell` (`$SHELL`), then `/bin/sh`.
 /// Started directly it loads Hotaru's fish integration, which a bash handing
 /// itself over to fish skips, and it can't be lost to a bash that keeps
 /// itself because the `SHLVL` it inherited isn't 1.
-fn resolve_shell(configured: Option<&str>, path: Option<&OsStr>, shell: Option<OsString>) -> OsString {
-    if let Some(configured) = configured {
+fn resolve_shell(
+    configured: Option<&str>,
+    system: Option<&str>,
+    path: Option<&OsStr>,
+    shell: Option<OsString>,
+) -> OsString {
+    if let Some(configured) = configured.or(system) {
         return configured.into();
     }
     let fish = path.into_iter().flat_map(std::env::split_paths).map(|directory| directory.join("fish")).find(|fish| {
@@ -324,10 +329,25 @@ fn resolve_shell(configured: Option<&str>, path: Option<&OsStr>, shell: Option<O
         .unwrap_or_else(|| "/bin/sh".into())
 }
 
+/// Read on each new pane: switching the system can change this default while
+/// Hotaru is already open. A missing file keeps standalone Hotaru's defaults.
+fn system_shell(file: &Path) -> Option<String> {
+    std::fs::read_to_string(file)
+        .ok()
+        .map(|shell| shell.trim().to_owned())
+        .filter(|shell| Path::new(shell).is_absolute() && !shell.chars().any(char::is_control))
+}
+
 impl Settings {
     /// The program a new default-shell pane runs.
     pub fn shell_program(&self) -> OsString {
-        resolve_shell(self.shell.as_deref(), std::env::var_os("PATH").as_deref(), std::env::var_os("SHELL"))
+        let system = system_shell(Path::new("/etc/xdg/aizome/hotaru-shell"));
+        resolve_shell(
+            self.shell.as_deref(),
+            system.as_deref(),
+            std::env::var_os("PATH").as_deref(),
+            std::env::var_os("SHELL"),
+        )
     }
 
     /// The family the terminal asks for first.
@@ -838,12 +858,28 @@ mod tests {
         std::fs::write(other.join("fish"), "").unwrap();
         let path = std::env::join_paths([&other, &bin]).unwrap();
         let bash = || Some(OsString::from("/run/current-system/sw/bin/bash"));
-        assert_eq!(resolve_shell(None, Some(&path), bash()), "/run/current-system/sw/bin/bash");
+        assert_eq!(resolve_shell(None, None, Some(&path), bash()), "/run/current-system/sw/bin/bash");
         std::fs::write(bin.join("fish"), "").unwrap();
         std::fs::set_permissions(bin.join("fish"), std::fs::Permissions::from_mode(0o755)).unwrap();
-        assert_eq!(resolve_shell(None, Some(&path), bash()), bin.join("fish").into_os_string());
-        assert_eq!(resolve_shell(Some("zsh"), Some(&path), bash()), "zsh");
-        assert_eq!(resolve_shell(None, None, Some(OsString::new())), "/bin/sh");
+        assert_eq!(resolve_shell(None, None, Some(&path), bash()), bin.join("fish").into_os_string());
+        assert_eq!(resolve_shell(Some("zsh"), None, Some(&path), bash()), "zsh");
+        assert_eq!(resolve_shell(None, None, None, Some(OsString::new())), "/bin/sh");
+        // A system's Bash choice must work even when fish remains installed.
+        let file = root.join("system-shell");
+        assert_eq!(system_shell(&file), None);
+        std::fs::write(&file, "/system/bin/bash\n").unwrap();
+        let system = system_shell(&file);
+        assert_eq!(resolve_shell(None, system.as_deref(), Some(&path), bash()), "/system/bin/bash");
+        // An explicit per-app shell still wins over the system's choice.
+        assert_eq!(resolve_shell(Some("fish"), system.as_deref(), Some(&path), bash()), "fish");
+        std::fs::write(&file, "/system/bin/fish\n").unwrap();
+        let system = system_shell(&file);
+        assert_eq!(resolve_shell(None, system.as_deref(), Some(&path), bash()), "/system/bin/fish");
+        assert_eq!(resolve_shell(Some("bash"), system.as_deref(), Some(&path), bash()), "bash");
+        for invalid in ["", "fish", "/bin/bash\n/bin/fish"] {
+            std::fs::write(&file, invalid).unwrap();
+            assert_eq!(system_shell(&file), None);
+        }
         assert_eq!(Settings::parse("shell = 'zsh'").unwrap().shell.as_deref(), Some("zsh"));
         assert!(Settings::parse("shell = ' '").is_err());
         assert_eq!(Settings::default().shell, None);

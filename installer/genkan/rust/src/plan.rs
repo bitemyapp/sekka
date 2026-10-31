@@ -30,6 +30,9 @@ pub struct RawRequest {
     pub locale: String,
     pub timezone: String,
     pub keyboard: String,
+    /// The key just left of the space bar, as ❖ or as it is.
+    #[serde(default)]
+    pub super_key: crate::SuperKey,
     pub desktops: Vec<crate::Desktop>,
     pub default_desktop: crate::Desktop,
     #[serde(default = "crate::applications::default_selection")]
@@ -159,6 +162,7 @@ pub struct InstallPlan {
     locale: &'static str,
     timezone: TimeZone,
     keyboard: &'static str,
+    super_key: crate::SuperKey,
     desktops: DesktopSelection,
     applications: crate::applications::ApplicationSelection,
     wifi: WifiTransfer,
@@ -241,6 +245,7 @@ impl RawRequest {
             locale,
             timezone,
             keyboard,
+            super_key: self.super_key,
             desktops,
             applications,
             wifi,
@@ -295,6 +300,9 @@ impl InstallPlan {
     }
     pub fn keyboard(&self) -> &str {
         self.keyboard
+    }
+    pub fn super_key(&self) -> crate::SuperKey {
+        self.super_key
     }
     pub fn desktops(&self) -> &DesktopSelection {
         &self.desktops
@@ -388,6 +396,7 @@ impl ConfirmedInstall {
             locale: plan.locale.into(),
             timezone: plan.timezone.as_str().into(),
             keyboard: plan.keyboard.into(),
+            super_key: plan.super_key,
             desktops,
             default_desktop,
             applications: plan.applications.ids(),

@@ -1,54 +1,20 @@
 //! Setting up a keyboard: the key pressed beside the space bar says which
-//! keyboard it is and which modifier arrangement puts ❖ there. The
-//! compositor catches the key, with the keyboard it came from, since no app
-//! hears a modifier key alone; the sample has a keyboard of its own. The
-//! keyboard's other keys (Caps Lock, Compose) start as other keyboards'
-//! or as another keyboard's.
+//! keyboard it is and which modifier arrangement puts ❖ there
+//! ([`aizome_ipc::setup`], which Genkan's keyboard step shares); the
+//! sample has a keyboard of its own. The keyboard's other keys (Caps Lock,
+//! Compose) start as other keyboards' or as another keyboard's.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 
 use aizome_config::{Settings, key_options};
-use aizome_ipc::{Event, KeyboardBus, KeyboardInfo, Request, Response};
+use aizome_ipc::{KeyboardBus, KeyboardInfo, Request, Response};
 
-/// What the key beside the space bar is, and what to do about it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Beside {
-    /// For “Beside the space bar: …”.
-    pub what: &'static str,
-    /// The arrangement (in [`super::modifiers::CHOICES`]) that puts ❖
-    /// there, if one does.
-    pub suggest: Option<usize>,
-    pub why: &'static str,
-}
+pub use aizome_ipc::setup::{Beside, beside_space};
 
-/// The key beside the space bar, by its evdev code; an error says which key
-/// to press instead.
-pub fn beside_space(code: u32) -> Result<Beside, &'static str> {
-    Ok(match code {
-        125 => Beside {
-            what: "❖ Super (⌘ Command, or the Windows key)",
-            suggest: Some(0),
-            why: "❖ is there already, as on a Mac: the modifier keys can stay as they are.",
-        },
-        56 => Beside {
-            what: "⌥ Alt (Option)",
-            suggest: Some(1),
-            why: "Swap Alt and Super to put ❖ there, under your thumb, where ⌘ is on a Mac.",
-        },
-        29 => Beside {
-            what: "⌃ Control",
-            suggest: Some(4),
-            why: "Swap Control and Super to put ❖ there, under your thumb.",
-        },
-        57 => return Err("That's the space bar: press the key just to its left."),
-        97 | 100 | 126 => return Err("That's right of the space bar: press the key just to its left."),
-        _ => Beside {
-            what: "a key that can't be ❖",
-            suggest: None,
-            why: "Choose the modifier keys yourself, or press another key.",
-        },
-    })
+/// The arrangement (in [`super::modifiers::CHOICES`]) that puts ❖ beside
+/// the space bar, if one does.
+pub fn suggested(b: &Beside) -> Option<usize> {
+    b.suggest.map(super::modifiers::selected)
 }
 
 /// The sample computer's keyboard, which the sample's key comes from.
@@ -161,41 +127,11 @@ fn tag(n: u64) -> String {
     format!("settei-{}-{n}", std::process::id())
 }
 
-/// Wait `n` for the next key, on a thread: listening first, so the key
-/// can't come between, then asking the compositor to catch it, on the same
-/// connection, held while waiting (the compositor tells no other
-/// connection of the key, and waits no longer than this one is open, so
-/// not after Settei is gone). `None` when given up on: `waits` moved past
-/// `n` (another wait began, or the sheet closed).
+/// Wait `n` for the next key, on a thread ([`aizome_ipc::setup::catch_key`]).
+/// `None` when given up on: `waits` moved past `n` (another wait began, or
+/// the sheet closed).
 pub fn catch_key(n: u64, waits: &AtomicU64) -> Result<Option<(u32, Option<KeyboardInfo>)>, String> {
-    let given_up = || waits.load(Ordering::SeqCst) != n;
-    let mut events = aizome_ipc::Client::connect().and_then(|c| c.events()).map_err(|e| e.to_string())?;
-    // The latest to ask is the one that waits: not this, after a newer one.
-    if given_up() {
-        return Ok(None);
-    }
-    match events.request(&Request::CatchKey { tag: Some(tag(n)) }) {
-        Ok(Response::Error { message }) => return Err(message),
-        Err(e) => return Err(e.to_string()),
-        Ok(_) => {}
-    }
-    events.stream().set_read_timeout(Some(Duration::from_millis(500))).map_err(|e| e.to_string())?;
-    loop {
-        if given_up() {
-            // This wait's alone: a newer one, on its own connection, goes on.
-            let _ = events.request(&Request::CatchKey { tag: None });
-            return Ok(None);
-        }
-        match events.next() {
-            Some(Ok(Event::KeyCaught { tag: t, code, keyboard })) if t == tag(n) => return Ok(Some((code, keyboard))),
-            Some(Ok(_)) => {}
-            Some(Err(e)) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
-            // A line cut short by the timeout.
-            Some(Err(e)) if e.kind() == std::io::ErrorKind::InvalidData => {}
-            Some(Err(e)) => return Err(e.to_string()),
-            None => return Err("Aizome stopped answering".into()),
-        }
-    }
+    aizome_ipc::setup::catch_key(&tag(n), || waits.load(Ordering::SeqCst) != n)
 }
 
 #[cfg(test)]
@@ -204,16 +140,14 @@ mod tests {
 
     #[test]
     fn the_key_beside_the_space_bar_says_where_super_goes() {
-        assert_eq!(beside_space(125).unwrap().suggest, Some(0), "a Mac's Command: nothing to swap");
-        assert_eq!(beside_space(56).unwrap().suggest, Some(1), "a PC's Alt: swap Alt and Super");
-        assert_eq!(beside_space(29).unwrap().suggest, Some(4));
-        assert_eq!(beside_space(94).unwrap().suggest, None, "無変換 can't be Super");
+        let suggest = |code| suggested(&beside_space(code).unwrap());
+        assert_eq!(suggest(125), Some(0), "a Mac's Command: nothing to swap");
+        assert_eq!(suggest(56), Some(2), "a PC's Alt: swap the left keys, preserving AltGr");
+        assert_eq!(suggest(29), Some(4));
+        assert_eq!(suggest(94), None, "無変換 can't be Super");
         assert!(beside_space(57).is_err());
         assert!(beside_space(100).is_err());
-        for i in [0, 1, 4] {
-            assert!(super::super::modifiers::CHOICES.get(i).is_some());
-        }
-        assert_eq!(super::super::modifiers::CHOICES[1].0, "Swap Alt and Super");
+        assert_eq!(super::super::modifiers::CHOICES[2].0, "Swap left Alt and Super");
         assert_eq!(super::super::modifiers::CHOICES[4].0, "Swap Control and Super");
     }
 

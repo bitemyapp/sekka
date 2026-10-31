@@ -182,7 +182,7 @@ fn setting_up_a_pc_keyboard_swaps_and_can_start_from_another() {
     // Alt beside the space bar.
     press(&mut h, 56);
     let texts = h.texts(s);
-    assert!(texts.iter().any(|t| t == "Swap Alt and Super"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Swap left Alt and Super"), "{texts:?}");
     assert!(texts.iter().any(|t| t == "Caps Lock and Compose"), "another keyboard to start from");
     choose_in(&mut h, s, "setup-from", 1);
     assert!(h.click_text(s, "Save"));
@@ -190,8 +190,8 @@ fn setting_up_a_pc_keyboard_swaps_and_can_start_from_another() {
     let saved = Settings::load_from(&path).unwrap();
     assert_eq!(
         saved.input.keyboard_profile(MAC, "05ac:029c").and_then(|k| k.options.as_deref()),
-        Some("compose:ralt,altwin:swap_alt_win"),
-        "the Logitech's Compose key, with Alt and Super swapped"
+        Some("compose:ralt,altwin:swap_lalt_lwin"),
+        "the Logitech's Compose key, with left Alt and Super swapped"
     );
 
     // Set up again, it starts from its own; Escape gives up.

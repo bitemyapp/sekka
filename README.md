@@ -22,7 +22,7 @@ Images below link to their original, full-resolution PNGs, captured with a scale
 
 ### Genkan: welcome home
 
-Choose your disk, account, desktop, applications, and location. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk. Genkan opens when the live session starts, and it is an Aizome app: it shares Aizome's look and menu bar, and follows its Night and Day themes.
+Choose your disk, account, desktop, applications, location, and keyboard. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk. Genkan opens when the live session starts, and it is an Aizome app: it shares Aizome's look and menu bar, and follows its Night and Day themes.
 
 [![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
 
@@ -34,15 +34,22 @@ Installed systems start behind Sekka's boot splash: the crest on the night groun
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
-Choose **fish** among the applications, here or later in Yukimi, and your terminals open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work.
+The keyboard step asks you to press the key just left of your space bar. Aizome's command key is ❖ (Super), as ⌘ is on a Mac, and it belongs under your thumb: if that key is Alt, as on most PC keyboards, Genkan strongly recommends swapping left Alt and Super, and you can keep your keys as they are instead. Right Alt (AltGr) stays available for accents and symbols. If it's ❖ already, as on a Mac, nothing needs changing. Genkan swaps nothing else: with another key there, your keys stay as they are, and Settings can rearrange them after installing. The layout and the swap apply to every keyboard of the installed system, from the login screen and the console to Aizome and Tatami; Aizome still offers to set up a keyboard you plug in later with keys of its own. Genkan hears the key through Aizome, so started anywhere else, it lets you choose the swap without pressing it. The step has been tried in virtual machines with QEMU's keyboard, not yet with physical keyboards.
+
+[![Genkan's keyboard step](docs/images/sekka/genkan-keyboard.png)](docs/images/sekka/genkan-keyboard.png)
+
+*Genkan's keyboard step in preview mode, in a test VM, having heard the Alt key beside the space bar of QEMU's keyboard.*
+
+With Aizome, your terminals (Hotaru, foot, and the others) open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work. Without Aizome, terminals open in bash, as in Omarchy; the **Terminal shell** choice on Yukimi's Desktops page turns fish on there, or off with Aizome. Hotaru also accepts a shell override in its configuration file, which takes precedence over the system choice. Systems that chose fish among Genkan's applications before it came with Aizome keep it.
 
 Programs built for other Linux distributions start as they would there. Editors and tools that download their own programs work without extra setup: Zed's language servers, debugger and AI agents, for example. These downloaded programs find the common libraries: the C and C++ runtimes, zlib, OpenSSL, curl, systemd and a few more. One that needs others, such as most graphical programs, still won't start, and neither will a script that asks for `/bin/bash`.
 
 ### Aizome: Sekka's own desktop
 
 Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
-choice. It is written from the compositor up in Rust, on its own native
-toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
+choice, with Tatami beside it. It is written from the compositor up in Rust,
+on its own native toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP
+and IRIX:
 
 - Every window wears a tab only as wide as its title. A new window of the app
   you're using opens as another tab on its window (Settings can turn this
@@ -115,7 +122,7 @@ switches foot to Hotaru once; if you had chosen another terminal, it stays.
 
 ### Tatami: a desktop under your fingertips
 
-Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS.
+Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS. Genkan selects it beside Aizome; log in to it from the login screen, or leave it out when installing.
 
 [![The Tatami menu over an empty desktop](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 

@@ -20,6 +20,9 @@ calamares-nixos = { path = "../rust" }
 # Aizome's widget kit, on Sukumo (desktop/aizome/crates/aizome-kit), with
 # the workspace's own manifest for the versions it inherits.
 aizome-kit = { path = "../../../desktop/aizome/crates/aizome-kit" }
+# The compositor's IPC: the keyboard step asks it for the key beside the
+# space bar, as Settei's keyboard setup does.
+aizome-ipc = { path = "../../../desktop/aizome/crates/aizome-ipc" }
 anyhow = "=1.0.100"
 # Local times in the time zone being chosen, read from the media's tzdata.
 jiff = "=0.2.38"

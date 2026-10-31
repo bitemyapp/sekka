@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod setup;
+
 /// Bumped when a message changes incompatibly.
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -760,8 +762,8 @@ pub struct WindowInfo {
     pub output: Option<String>,
     /// Draws its own title bar; Aizome adds only the tab.
     pub client_side_decorations: bool,
-    /// Uses Aizome's kit (app_id `org.aizome.…`): no command-key
-    /// translation.
+    /// Uses Aizome's kit (app_id `org.aizome.…`, or Genkan's): no
+    /// command-key translation.
     pub kit_app: bool,
     /// The window this one is a dialog of.
     pub parent: Option<WindowId>,

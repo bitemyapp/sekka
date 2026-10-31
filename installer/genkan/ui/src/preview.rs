@@ -4,14 +4,15 @@
 //! and confirming it only shows the Install page.
 //!
 //! In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|
-//! desktop|applications|location|review|ready|prepfail|install|done|failed`
+//! desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
 //! opens the window on that page; `CALAMARES_UI_SIZE=800x600` sizes it.
 //! Release builds never read either.
 use crate::app::{Genkan, Msg, Review, Step};
 use crate::zone::detection_note;
+use aizome_ipc::{KeyboardBus, KeyboardInfo};
 use aizome_kit::prelude::*;
 use calamares_nixos::{
-    Desktop, Filesystem, Firmware,
+    Desktop, Filesystem, Firmware, SuperKey,
     disk::{self, Disk},
     github::{self, GithubUser},
     install::{Event, Summary},
@@ -120,7 +121,6 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
     };
     app.update(Msg::Github(0, Ok(profile)), cx);
     app.update(Msg::SshServer(true), cx);
-    app.update(Msg::ToggleDesktop(Desktop::Tatami, true), cx);
     if let Some(index) = app.zones.as_ref().and_then(|z| z.find("America/Chicago")) {
         app.show_zone(index, &detection_note(Source::Internet("geoip.kde.org")));
     }
@@ -134,7 +134,17 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         },
         cx,
     );
-    app.reached = Step::Location;
+    // The key beside a ThinkPad's space bar, as the keyboard step heard it.
+    app.caught(
+        56,
+        Some(KeyboardInfo {
+            name: "AT Translated Set 2 keyboard".into(),
+            id: "0001:0001".into(),
+            bus: KeyboardBus::BuiltIn,
+            last: true,
+        }),
+    );
+    app.reached = Step::Keyboard;
     let step = match page {
         "disk" => Step::Disk,
         "account" => Step::Account,
@@ -142,6 +152,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         "desktop" => Step::Desktop,
         "applications" => Step::Applications,
         "location" => Step::Location,
+        "keyboard" => Step::Keyboard,
         "review" | "ready" | "prepfail" => Step::Review,
         "install" | "done" | "failed" => Step::Install,
         _ => Step::Welcome,
@@ -169,6 +180,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         locale: "en_US.UTF-8".into(),
         timezone: "America/Chicago".into(),
         keyboard: "us".into(),
+        super_key: SuperKey::SwapAlt,
         desktops: vec![Desktop::Aizome, Desktop::Tatami],
         default_desktop: Desktop::Aizome,
         applications: "Firefox, Ghostty, Development build tools, Rustup".into(),
