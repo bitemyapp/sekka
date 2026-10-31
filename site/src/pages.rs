@@ -49,8 +49,8 @@ pub fn home(site: &Site) -> Result<Page> {
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
         shot = site.shot(
             "aizome-desktop.png",
-            "The Aizome desktop: Sumi editing a Markdown file, Files and a terminal running fastfetch stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
-            "Aizome: Sumi, with Files and a terminal stacked in one tab group, in a test VM built from Sekka's own modules.",
+            "The Aizome desktop: Sumi editing a Markdown file, Files and Hotaru, Aizome's terminal, running fastfetch, stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
+            "Aizome: Sumi, with Files and Hotaru, its terminal, stacked in one tab group, in a test VM built from Sekka's own modules.",
             "win hero-shot",
         )?,
     )?;
@@ -225,8 +225,8 @@ pub fn aizome(site: &Site) -> Result<Page> {
         icon = site.asset("apps/Toolchest.svg")?,
         shot = site.shot(
             "aizome-desktop.png",
-            "The Aizome desktop: Sumi editing a Markdown file, Files and a terminal running fastfetch stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
-            "Sumi, with Files and a terminal stacked in one tab group beside it, in a test VM built from Sekka's own modules.",
+            "The Aizome desktop: Sumi editing a Markdown file, Files and Hotaru, Aizome's terminal, running fastfetch, stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
+            "Sumi, with Files and Hotaru, Aizome's terminal, stacked in one tab group beside it, in a test VM built from Sekka's own modules.",
             "win wide-shot",
         )?,
     )?;
@@ -353,7 +353,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
 <section class="tiles">
   <article class="win">
     <h2>Hotaru {hotaru}, the terminal</h2>
-    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback. It opens in fish.</p>
+    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback.</p>
     <p>foot is installed too: choose it in Settei, under General › Default Apps › Terminal.</p>
   </article>
   <article class="win">

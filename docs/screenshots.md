@@ -73,7 +73,7 @@ it keeps the whole Tatami display, including its bar and window edges.
 | [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Shared native Yukimi in Tatami, reading the test VM `sekka-demo`; whole display, scale 2 |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
 | [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Historical capture of Sekka's GNOME session with Files over the former GTK Yukimi |
-| [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file, Files and a terminal (running fastfetch) stacked in one tab group, a notification filed under Tenki in the Deskbar |
+| [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file beside Files and Hotaru, Aizome's terminal (running fastfetch), stacked in one tab group, a notification filed under Tenki in the Deskbar |
 | [Aizome's menu at the pointer](images/sekka/aizome-menu.png) | 2880 × 1800 | The same desktop with Super + right-click's whole menu of Sumi at the pointer |
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
 | [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
@@ -146,4 +146,6 @@ virtual display at its native resolution, and the three application images are
 crops of it to the window with its tab and shadow, unscaled. Genkan is the
 debug build's welcome preview (`CALAMARES_UI_PREVIEW=welcome`), with the
 pointer moved off its window; its sample data are fixed, and production builds
-leave the preview out.
+leave the preview out. The current captures were made on 31 October 2026 from
+commit f1bb0c7a, on a build host's KVM, with Hotaru as the stacked terminal;
+fastfetch prints a short structure so its output fits Hotaru's window.

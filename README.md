@@ -73,7 +73,7 @@ Kitty graphics protocol, DEC modes 1039 and 1045, or DECSASD; foot is still
 installed for programs that want them. To use foot instead, choose it in
 Settei, under General → Default Apps → Terminal.
 
-[![Aizome with Sumi beside Files and a terminal stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
+[![Aizome with Sumi beside Files and Hotaru stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
 [![The whole menu at the pointer](docs/images/sekka/aizome-menu.png)](docs/images/sekka/aizome-menu.png)
 
