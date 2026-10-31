@@ -50,6 +50,10 @@ let
     programs.bash.loginShellInit = ''
       if [ "$(tty)" = /dev/tty1 ]; then
         export LIBGL_ALWAYS_SOFTWARE=1
+        # Own the cursor fixture instead of relying on Hyprland's emergency
+        # 32px fallback bitmap, which cannot supply scaled theme images.
+        export XCURSOR_THEME=Adwaita XCURSOR_SIZE=32
+        export XCURSOR_PATH=${pkgs.adwaita-icon-theme}/share/icons
         exec Hyprland -c /etc/hypr-test.lua > /tmp/hyprland.log 2>&1
       fi
     '';
