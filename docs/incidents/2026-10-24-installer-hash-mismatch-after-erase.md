@@ -7,6 +7,13 @@ Genkan's installer and the ISO's live store. Fix:
 and
 [installer-memory-2026-10-24.json](../test-results/installer-memory-2026-10-24.json).
 
+**Update, 2026-10-30:** Genkan's mandatory live-store and prepared-system content
+scans were removed because of their preparation latency. The investigation and
+results below describe the original fix. ISO build-time verification and Nix's
+copy-time checks remain; corrupt live data may again be detected only during
+copying after the target has been erased. Optional, faster verification is
+future work.
+
 ## Report
 
 A user installing on an Intel-based Mac (model, RAM and USB writer not

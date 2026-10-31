@@ -321,72 +321,6 @@ fn nix_activity(tracker: &Mutex<nixlog::Tracker>) -> impl Fn(&str) + Sync + '_ {
     }
 }
 
-/// Verify bytes, not just Nix's validity records. A readable store path can
-/// still be corrupt; cache warming and `nix build` do not establish integrity.
-/// The live store includes build inputs and paths used by deferred installs,
-/// so check all of it before evaluation, then the newly built runtime closure.
-fn verify_store(system: Option<&str>) -> Result<()> {
-    let tracker = Mutex::new(nixlog::Tracker::default());
-    let last = Mutex::new(Instant::now());
-    // Locally built outputs and the ISO registration need not have signatures.
-    // --no-trust skips that policy check only; content hashing stays enabled.
-    let mut args = vec![
-        "store",
-        "verify",
-        "--no-trust",
-        "--log-format",
-        "internal-json",
-    ];
-    match system {
-        Some(system) => args.extend(["--recursive", system]),
-        None => args.push("--all"),
-    }
-    let result = output_lines("nix", &args, 7200, &|line| {
-        let mut tracker = tracker.lock().unwrap();
-        if tracker.line(line) == Some(nixlog::Update::Progress) {
-            let mut last = last.lock().unwrap();
-            if last.elapsed() >= Duration::from_millis(250) {
-                *last = Instant::now();
-                let (done, total) = tracker.verified;
-                preparing(&format!("Checking installation files · {done} of {total}"));
-            }
-        }
-    });
-    if let Err(error) = result {
-        let error = nix_failure(error, &tracker);
-        if process::cancelled() {
-            return Err(error);
-        }
-        // Keep the original failure even if diagnostics cannot be saved. The
-        // file is root-owned, mode 0600, and contains no installation secrets.
-        let saved = (|| -> Result<PathBuf> {
-            let mut file = tempfile::Builder::new()
-                .prefix("sekka-integrity-")
-                .suffix(".log")
-                .tempfile_in("/run")?;
-            writeln!(
-                file,
-                "Verification scope: {}\n{error:#}",
-                system.unwrap_or("entire live store")
-            )?;
-            if let Ok(messages) = output("dmesg", &["--level=err,warn"], 15) {
-                writeln!(file, "\nKernel warnings and errors:\n{messages}")?;
-            }
-            Ok(file.keep()?.1)
-        })();
-        let details = saved.map_or_else(
-            |_| "Copy these details before closing.".into(),
-            |path| format!("Diagnostics saved to {}.", path.display()),
-        );
-        return Err(error).context(format!(
-            "Installation files could not be verified. The target disk has not been changed. \
-             Restart with freshly downloaded and verified installation media. If this happens \
-             again, try another USB drive or port and check the computer's memory. {details}"
-        ));
-    }
-    Ok(())
-}
-
 /// Non-destructive preparation. No disk is written; the plan stays reviewable.
 pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     let started = Instant::now();
@@ -406,10 +340,6 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     );
     let lock = installer_lock()?;
     disk::revalidate(plan.disk())?;
-    let integrity = Stage::start("verify-live-store");
-    preparing("Checking installation files before making changes to the disk");
-    verify_store(None)?;
-    integrity.done();
     preparing("Checking filesystem support before erasing the disk");
     plan.filesystem().preflight(plan.firmware())?;
     if plan.swap() {
@@ -557,11 +487,6 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
             layout.root_bytes() as f64 / memory::GIB as f64
         );
         stage.done();
-
-        let integrity = Stage::start("verify-system");
-        preparing("Verifying the prepared system before making changes to the disk");
-        verify_store(Some(&system))?;
-        integrity.done();
 
         let stage = Stage::start("cache");
         preparing("Caching the installed system in memory");

@@ -364,9 +364,9 @@
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
-        genkan-store-integrity = import ./nix/genkan-integrity-test.nix {
+        genkan-preflight = import ./nix/genkan-preflight-test.nix {
           inherit pkgs;
-          genkan = calamares;
+          helper = calamares.helper;
           nixPackage = runnerNix;
         };
         iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };

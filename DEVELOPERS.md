@@ -95,20 +95,15 @@ exercises discovery and revalidation on disposable 4Kn and 512e disks.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
-Genkan verifies the live store's contents before evaluating the installation,
-including paths needed by the low-memory, deferred-build route. After a normal
-build it verifies the complete prepared runtime closure again. Nix's validity
-records, successful builds and page-cache warming do not verify existing bytes:
-without this check, a readable but corrupt package passes preparation, and
-`nix copy` discovers its hash mismatch only after the target has been erased.
-All nonzero verification results (including read errors) stop preparation.
-Progress remains cancellable, and failures retain Nix's expected/actual hashes
-plus kernel warnings in a root-only `/run/sekka-integrity-*.log`.
-`--no-trust` skips signatures for locally built/ISO-registered paths; it does
-not disable content hashing. Never use `--no-contents` or rewrite the expected
-hash to make a damaged path pass.
+Genkan no longer hashes the entire live store before evaluation or the prepared
+system's runtime closure after building. Those mandatory scans made preparation
+too slow; content verification may return later as an optional feature. Live
+media, disk identity, filesystem support, configuration, pinned-lock and size
+checks remain, as do the existing build and page-cache warming steps. Nix still
+checks copied contents: corruption can now be detected during copying after
+the target has been erased, rather than during preparation.
 
-The public `iso` package also verifies the actual compressed store before
+The public `iso` package verifies the actual compressed store before
 packing it into the ISO. `nix/verified-iso.nix` extends the upstream builder's
 squashfs command; `nix/verify-squashfs.nix` extracts it into a disposable local
 store, compares its registration with the build's closure manifest and checks
@@ -118,22 +113,22 @@ additional unpacked store. The upstream raw `nixosConfigurations.installer`
 image is an implementation input; build and publish `.#iso`.
 
 ```sh
-nix build .#genkan .#checks.x86_64-linux.genkan-store-integrity \
+nix build .#genkan.helper .#checks.x86_64-linux.genkan-preflight \
   .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
 ```
 
-The installer regression uses the packaged helper and Determinate Nix in a
-disposable VM. Its negative control shows an existing-path build and ordinary
-read accepting corrupt bytes, followed by a real Nix copy reporting a hash
-mismatch. The helper must reject confirmed installs with corrupt or missing
-paths, preserve the entire 40 GiB target byte-for-byte and save private,
-secret-free diagnostics. The image regression builds a small ISO through the
-same mandatory gate and rejects changed contents, executable bits, symlinks,
+The preflight regression uses the packaged helper and Determinate Nix in a
+disposable VM. Unrelated corrupt or missing registered paths must not prevent
+preparation from reaching configuration. The missing-template and changed-disk
+guards still refuse confirmed requests and preserve the entire 40 GiB target
+byte-for-byte. A real Nix copy still rejects the corrupted contents. The image
+regression builds a small ISO through the same mandatory gate and rejects
+changed contents, executable bits, symlinks,
 missing directories/paths and altered registration. Neither check certifies
 a complete release image or physical hardware.
 
-Checks cannot guarantee against RAM faults, media changes or I/O failures
-after verification. Keep Nix's copy-time checks enabled; deferred installations
+Build-time verification cannot guarantee against RAM faults, media changes or
+later I/O failures. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
 or build failures at that point. The deferred route builds the system on the
 target, so the complete system need not fit in physical RAM, but it does not
