@@ -1,4 +1,5 @@
-//! A PTY and terminal state live on one worker, awakened with an eventfd.
+//! A PTY and terminal state live on one worker, awakened with an eventfd; a
+//! second thread reads the PTY's output for it, so reading overlaps parsing.
 //! The UI only exchanges commands and immutable, shared row snapshots.
 
 use crate::app::Msg;
@@ -211,6 +212,134 @@ impl Drop for Session {
     }
 }
 
+// PTY output is gathered on a thread of its own, as Ghostty's io-gather does.
+// Reading is mostly kernel time, a few KiB per read; overlapping it with
+// parsing on the session's thread is most of a bulk-output speedup.
+const GATHER_CHUNK: usize = 64 * 1024;
+// Bounded, so a terminal that stops consuming (its reply budget) stops the
+// reader, and with it the writing program.
+const GATHER_QUEUE: usize = 4;
+
+enum Gathered {
+    Output(Vec<u8>),
+    /// The PTY ended: EOF (Linux's EIO once the last slave closes), or an error.
+    End(io::Result<()>),
+}
+
+/// The session's side of its PTY reader thread.
+struct Gather {
+    output: mpsc::Receiver<Gathered>,
+    spare: mpsc::SyncSender<Vec<u8>>,
+    stop: OwnedFd,
+}
+
+impl Gather {
+    fn spawn(id: u64, pty: &Pty, shared: Arc<Shared>) -> io::Result<Self> {
+        // The reader owns a duplicate, so the session keeps the PTY itself for
+        // writes, resizes and its child.
+        let fd = pty.as_fd().try_clone_to_owned()?;
+        // SAFETY: eventfd takes no pointers. A successful fd is taken once below.
+        let raw = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
+        if raw < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let stop = unsafe { OwnedFd::from_raw_fd(raw) };
+        let reader_stop = stop.try_clone()?;
+        let (sender, output) = mpsc::sync_channel(GATHER_QUEUE);
+        let (spare, spares) = mpsc::sync_channel(GATHER_QUEUE);
+        std::thread::Builder::new()
+            .name(format!("hotaru-read-{id}"))
+            .spawn(move || gather(fd, reader_stop, sender, spares, shared))?;
+        Ok(Self { output, spare, stop })
+    }
+
+    /// A drained chunk's buffer goes back to the reader.
+    fn recycle(&self, buffer: Vec<u8>) {
+        if buffer.capacity() != 0 {
+            let _ = self.spare.try_send(buffer);
+        }
+    }
+}
+
+impl Drop for Gather {
+    fn drop(&mut self) {
+        let one = 1u64.to_ne_bytes();
+        // SAFETY: this owns the live eventfd; one is eight readable bytes.
+        unsafe {
+            libc::write(self.stop.as_raw_fd(), one.as_ptr().cast(), one.len());
+        }
+    }
+}
+
+/// Reads a PTY until it ends, in chunks of whatever it has ready, and hands
+/// them to the session. Stops when the session drops its side.
+fn gather(
+    fd: OwnedFd,
+    stop: OwnedFd,
+    output: mpsc::SyncSender<Gathered>,
+    spares: mpsc::Receiver<Vec<u8>>,
+    shared: Arc<Shared>,
+) {
+    loop {
+        let mut buffer = spares.try_recv().unwrap_or_default();
+        buffer.clear();
+        buffer.reserve_exact(GATHER_CHUNK);
+        let mut ended = None;
+        while buffer.len() < GATHER_CHUNK {
+            let room = GATHER_CHUNK - buffer.len();
+            // SAFETY: the descriptor is live; the reserved capacity is writable.
+            let read = unsafe { libc::read(fd.as_raw_fd(), buffer.as_mut_ptr().add(buffer.len()).cast(), room) };
+            if read > 0 {
+                // SAFETY: read initialized this many more bytes.
+                unsafe { buffer.set_len(buffer.len() + read as usize) };
+                continue;
+            }
+            let error = io::Error::last_os_error();
+            if read == 0 || error.raw_os_error() == Some(libc::EIO) {
+                ended = Some(Ok(()));
+            } else if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            } else if error.kind() != io::ErrorKind::WouldBlock {
+                ended = Some(Err(error));
+            }
+            break;
+        }
+        let full = buffer.len() == GATHER_CHUNK;
+        if !buffer.is_empty() {
+            // Blocks while the session's queue is full; fails once it has gone.
+            if output.send(Gathered::Output(buffer)).is_err() {
+                return;
+            }
+            shared.wake();
+        }
+        if let Some(result) = ended {
+            let _ = output.send(Gathered::End(result));
+            shared.wake();
+            return;
+        }
+        if full {
+            continue;
+        }
+        let mut polls = [
+            libc::pollfd { fd: fd.as_raw_fd(), events: libc::POLLIN, revents: 0 },
+            libc::pollfd { fd: stop.as_raw_fd(), events: libc::POLLIN, revents: 0 },
+        ];
+        // SAFETY: initialized pollfd storage and owned fds remain alive throughout.
+        if unsafe { libc::poll(polls.as_mut_ptr(), polls.len() as libc::nfds_t, -1) } < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                let _ = output.send(Gathered::End(Err(error)));
+                shared.wake();
+                return;
+            }
+            continue;
+        }
+        if polls[1].revents != 0 {
+            return;
+        }
+    }
+}
+
 struct PendingWrite {
     bytes: Arc<[u8]>,
     user: bool,
@@ -313,6 +442,7 @@ fn run(
     shared: Arc<Shared>,
 ) -> io::Result<()> {
     let mut pty = Pty::spawn(command, PtySize::default())?;
+    let gather = Gather::spawn(id, &pty, shared.clone())?;
     let started = Instant::now();
     let clipboard = Arc::new(crate::selections::Bounds::default());
     let hostname = hotaru_io::launch::local_hostname();
@@ -325,8 +455,10 @@ fn run(
     terminal.set_kitty_clipboard_write_limit(crate::selections::MAX_PENDING_BYTES);
     let mut output = VecDeque::<PendingWrite>::new();
     let (mut output_at, mut reply_bytes) = (0usize, 0usize);
-    let mut buffer = [0u8; 65_536];
-    let (mut buffered_at, mut buffered_end) = (0usize, 0usize);
+    // The reader's latest chunk, and how much of it the terminal has taken.
+    let mut chunk = Vec::new();
+    let mut chunk_at = 0usize;
+    // The reader may have queued output.
     let mut readable = true;
     let (mut eof, mut hung_up, mut notified_exit) = (false, false, false);
     let mut changed = true;
@@ -514,34 +646,38 @@ fn run(
             }
         }
 
-        // Keep unread bytes in this fixed buffer until bounded reply storage has
-        // space. No live peer's protocol reply is dropped to make room for paste.
+        // Keep unread bytes in the current chunk until bounded reply storage has
+        // space; the reader's queue then fills and it stops reading. No live
+        // peer's protocol reply is dropped to make room for paste.
         let mut fed = 0;
         while fed < 1024 * 1024 && (hung_up || reply_bytes < REPLY_LIMIT) {
-            if buffered_at == buffered_end {
+            if chunk_at == chunk.len() {
                 if eof || !readable {
                     break;
                 }
-                match pty.read(&mut buffer) {
-                    Ok(0) => {
+                match gather.output.try_recv() {
+                    Ok(Gathered::Output(bytes)) => {
+                        gather.recycle(std::mem::replace(&mut chunk, bytes));
+                        chunk_at = 0;
+                    }
+                    Ok(Gathered::End(result)) => {
+                        result?;
                         eof = true;
                         break;
                     }
-                    Ok(n) => {
-                        buffered_at = 0;
-                        buffered_end = n;
-                    }
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    Err(mpsc::TryRecvError::Empty) => {
                         readable = false;
                         break;
                     }
-                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => return Err(e),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        eof = true;
+                        break;
+                    }
                 }
             }
             let budget = if hung_up { REPLY_LIMIT } else { REPLY_LIMIT - reply_bytes };
-            let consumed = terminal.feed_bounded(&buffer[buffered_at..buffered_end], budget);
-            buffered_at += consumed;
+            let consumed = terminal.feed_bounded(&chunk[chunk_at..], budget);
+            chunk_at += consumed;
             fed += consumed;
             changed |= consumed != 0;
             let mut replies = terminal.take_responses();
@@ -619,7 +755,7 @@ fn run(
             // Retain history for copying/scrolling until the tab is closed.
         }
         let can_feed = hung_up || reply_bytes < REPLY_LIMIT;
-        let ready_work = can_feed && (buffered_at < buffered_end || (!eof && readable));
+        let ready_work = can_feed && (chunk_at < chunk.len() || (!eof && readable));
         if compress_more && !ready_work && output.is_empty() && last_activity.elapsed() >= Duration::from_millis(100) {
             compress_more = terminal.compress_history_step();
         }
@@ -636,9 +772,10 @@ fn run(
         };
         let mut polls = [
             libc::pollfd { fd: shared.wake.as_raw_fd(), events: libc::POLLIN, revents: 0 },
+            // The reader thread reads; this watches for writes and hangup.
             libc::pollfd {
                 fd: if eof { -1 } else { pty.as_fd().as_raw_fd() },
-                events: if can_feed { libc::POLLIN } else { 0 } | if output.is_empty() { 0 } else { libc::POLLOUT },
+                events: if output.is_empty() { 0 } else { libc::POLLOUT },
                 revents: 0,
             },
         ];
@@ -656,8 +793,10 @@ fn run(
             unsafe {
                 libc::read(shared.wake.as_raw_fd(), (&mut value as *mut u64).cast(), 8);
             }
+            // Commands, a received frame or the reader: look at its queue again.
+            readable = true;
         }
-        if polls[1].revents & (libc::POLLIN | libc::POLLHUP | libc::POLLERR) != 0 {
+        if polls[1].revents & (libc::POLLHUP | libc::POLLERR) != 0 {
             readable = true;
         }
         if polls[1].revents & libc::POLLHUP != 0 {
@@ -785,6 +924,54 @@ mod tests {
         assert!(frame.plain_text().contains("KERNEL-SIZE-201x51-2211x1275"));
         drop(harness);
         worker.join().unwrap().unwrap();
+    }
+
+    const BULK_LINES: usize = 100_000;
+
+    #[test]
+    fn bulk_output_arrives_whole_before_the_pane_ends() {
+        // Far more than the reader's queue holds, so the reader waits on the
+        // session; the end is reported only after the last of it is parsed.
+        let (session, commands) = Session::channel().unwrap();
+        let shared = session.shared.clone();
+        let mut harness = Harness::new(Probe { session, sender: None, frame: None, exited: false });
+        let sender = harness.program().sender.clone().unwrap();
+        let mut child = PtyCommand::new(std::env::current_exe().unwrap());
+        child.args = ["--ignored", "--exact", "session::tests::bulk_output_child", "--nocapture", "--test-threads=1"]
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        child.env.push(("HOTARU_BULK_OUTPUT_CHILD".into(), "1".into()));
+        let defaults = Defaults {
+            colors: TerminalColors::default(),
+            scrollback: 100,
+            cursor: (hotaru_core::CursorShape::Block, true),
+        };
+        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
+        assert!(harness.settle(Duration::from_secs(30), |probe| probe.exited));
+        let text = harness.program().frame.as_ref().unwrap().plain_text();
+        let mut at = 0;
+        for line in (BULK_LINES - 5..BULK_LINES).map(|n| format!("bulk {n:07}")).chain(["BULK-END".into()]) {
+            let found = text[at..].find(&line).unwrap_or_else(|| panic!("{line} missing or out of order:\n{text}"));
+            at += found + line.len();
+        }
+        drop(harness);
+        worker.join().unwrap().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn bulk_output_child() {
+        use std::io::Write;
+        if std::env::var_os("HOTARU_BULK_OUTPUT_CHILD").is_none() {
+            return;
+        }
+        let mut out = std::io::stdout().lock();
+        for n in 0..BULK_LINES {
+            write!(out, "bulk {n:07}\r\n").unwrap();
+        }
+        write!(out, "BULK-END\r\n").unwrap();
+        out.flush().unwrap();
     }
 
     #[test]

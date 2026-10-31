@@ -25,6 +25,100 @@ fn click(c: &Compositor, x: f64, y: f64) {
     });
 }
 
+fn stationary_click(c: &Compositor) {
+    // No PointerMotion: a freshly opened/reanchored layer can be under a
+    // stationary pointer, as the Deskbar is after releasing its grip.
+    c.ok(Request::Synthesize { events: vec![Synthetic::Click { button: "left".into() }] });
+}
+
+fn reopened_deskbar_receives_stationary_click(fallback: bool) {
+    let c = Compositor::start(Options {
+        logic: fallback.then(|| std::path::Path::new("/does-not-exist/aizome-logic.so")),
+        ..Options::default()
+    });
+    let shell = ShellClient::spawn(&c);
+    for (name, replacement, from, to, start, end) in [
+        ("right-old", "left-new", Anchor::Right, Anchor::Left, 1163.0, 115.0),
+        ("left-old", "right-new", Anchor::Left, Anchor::Right, 115.0, 1163.0),
+    ] {
+        let layer = |name, edge| {
+            LayerSpec::new(name, Layer::Top, KeyboardInteractivity::None)
+                .anchor(Anchor::Top | edge, (232, 100))
+                .top_margin(24)
+                .zone(-1)
+        };
+        shell.layer(layer(name, from));
+        c.settle();
+        motion(&c, start, 29.0);
+        c.ok(Request::Synthesize {
+            events: vec![
+                Synthetic::PointerButton { button: "left".into(), pressed: true },
+                Synthetic::PointerMotion { x: end, y: 29.0 },
+                Synthetic::PointerButton { button: "left".into(), pressed: false },
+            ],
+        });
+        shell
+            .wait("grip drag has a press and release", |s| s.buttons.iter().filter(|(n, _, _)| n == name).count() == 2);
+        // sync_deskbar destroys/recreates its layer when the edge changes.
+        shell.send(ShellCmd::Destroy(name));
+        shell.layer(layer(replacement, to));
+        c.settle();
+        stationary_click(&c);
+        shell.wait("stationary click delivered to replacement layer", |s| {
+            s.buttons.iter().filter(|(n, _, _)| n == replacement).count() == 2
+        });
+        assert_eq!(
+            shell
+                .seen()
+                .buttons
+                .iter()
+                .filter(|(n, _, _)| n == replacement)
+                .map(|(_, b, p)| (*b, *p))
+                .collect::<Vec<_>>(),
+            vec![(0x110, true), (0x110, false)]
+        );
+        assert_eq!(shell.seen().buttons.iter().filter(|(n, _, _)| n == name).count(), 2);
+        shell.send(ShellCmd::Destroy(replacement));
+        c.settle();
+    }
+}
+
+#[test]
+fn reopened_deskbar_takes_a_stationary_click_on_either_edge() {
+    reopened_deskbar_receives_stationary_click(false);
+}
+
+#[test]
+fn fallback_reopened_deskbar_takes_a_stationary_click_on_either_edge() {
+    reopened_deskbar_receives_stationary_click(true);
+}
+
+#[test]
+fn a_layer_appearing_under_a_stationary_pointer_does_not_steal_a_held_button() {
+    let (c, a, shell) = setup();
+    let (x, y) = centre(&c.window("org.example.editor").unwrap());
+    motion(&c, x, y);
+    c.ok(Request::Synthesize { events: vec![Synthetic::PointerButton { button: "left".into(), pressed: true }] });
+    a.wait_seen("window got initial press", |s| s.buttons == [(0x110, true)]);
+    shell.layer(
+        LayerSpec::new("cover", Layer::Overlay, KeyboardInteractivity::None)
+            .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right, (0, 0)),
+    );
+    c.settle();
+    // A second press and both releases still belong to the implicit grab.
+    c.ok(Request::Synthesize {
+        events: vec![
+            Synthetic::PointerButton { button: "right".into(), pressed: true },
+            Synthetic::PointerButton { button: "right".into(), pressed: false },
+            Synthetic::PointerButton { button: "left".into(), pressed: false },
+        ],
+    });
+    a.wait_seen("grab retained all buttons", |s| {
+        s.buttons == [(0x110, true), (0x111, true), (0x111, false), (0x110, false)]
+    });
+    assert!(shell.seen().buttons.is_empty(), "new layer stole a held grab");
+}
+
 /// A compositor with a focused window, and a shell client.
 fn setup() -> (Compositor, TestClient, ShellClient) {
     let c = Compositor::start(Options::default());

@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cpu/cycles/P'
+# Event count (approx.): 3036171869
+#
+# Overhead  Symbol                                                                                                                                                                                        
+# ........  ..............................................................................................................................................................................................
+#
+    16.17%  [.] <hotaru_core::screen::State>::print_utf8
+     6.33%  [.] <hotaru_core::row::Row>::combine
+     6.22%  [.] core::str::converts::from_utf8
+     6.12%  [.] <hotaru_core::screen::State as hotaru_core::parser::Handler>::print
+     3.73%  [.] hotaru_core::screen::unicode_batch_boundary
+     3.67%  [.] <compact_str::CompactString>::push
+     3.59%  [.] <hotaru_core::row::Row>::prepare_write_with_left
+     3.19%  [.] <hotaru_core::row::Row>::put_semantic
+     1.67%  [.] <hotaru_core::row::Row>::style_id
+     1.47%  [.] <alloc::vec::Vec<(usize, compact_str::CompactString)>>::retain::<<hotaru_core::grapheme::GraphemeMap>::retain<<hotaru_core::row::Row>::prepare_write_with_left::{closure#0}>::{closure#0}>
+     1.31%  [.] <hotaru_core::parser::Parser>::advance::<hotaru_core::screen::State>
+     1.25%  [.] <hotaru_core::Terminal>::feed_inner
+     0.97%  [.] <hotaru_core::row::Row>::needs_scalar_write_order
+     0.87%  [.] <hotaru_core::screen::Screen>::scroll_up
+     0.76%  [.] <hotaru_core::row::Row>::reset
+     0.71%  [.] __memmove_avx512_unaligned_erms
+     0.61%  [.] <hotaru_core::style::Style as core::cmp::PartialEq>::eq
+     0.51%  [.] <hotaru_core::screen::Screen>::row
+     0.50%  [.] <hotaru_core::screen::State as hotaru_core::parser::Handler>::execute
+     0.45%  [.] core::str::validations::next_code_point::<core::slice::iter::Iter<u8>>
+     0.41%  [.] <alloc::collections::vec_deque::VecDeque<triomphe::arc::Arc<hotaru_core::row::Row>>>::remove
+     0.41%  [.] <alloc::collections::vec_deque::VecDeque<triomphe::arc::Arc<hotaru_core::row::Row>>>::insert_mut
+     0.20%  [.] hotaru_core::validate_utf8_run
+     0.15%  [.] <core::str::iter::Chars as core::iter::traits::iterator::Iterator>::advance_by
+     0.05%  [k] 0xffffffffa7c5336b
+     0.05%  [k] 0xffffffffa6e00080
+     0.05%  [k] 0xffffffffa72a7d19
+     0.05%  [k] 0xffffffffa7088c74
+     0.05%  [k] 0xffffffffa72cea30
+     0.01%  [k] 0xffffffffa74ee190
+     0.01%  [k] 0xffffffffa70f2fd0
+     0.00%  [k] 0xffffffffa8354920
+     0.00%  [k] 0xffffffffa836e7e7
+     0.00%  [k] 0xffffffffa7668be6

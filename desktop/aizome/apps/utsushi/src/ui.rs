@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::{Canvas, Key, NamedKey, PointerButton};
 use aizome_kit::theme::FontSpec;
-use aizome_kit::widget::{Event, FocusRing};
+use aizome_kit::widget::{
+    Event, EventCx, FocusRing, Focusable, SemanticRole, Semantics, Status as EventStatus, Widget,
+};
 use aizome_kit::{column, over_video, row, video_surface};
 use aizome_media::{CueBody, FramePath};
 
@@ -54,16 +56,6 @@ fn stage(app: &Utsushi) -> Element<Msg> {
     if let Some(at) = app.resumed.filter(|_| app.info.is_some()) {
         layers.push(resumed(at).key("resumed"));
     }
-    // Over everything but the full-screen controls: what takes keys and
-    // clicks on the picture.
-    let input = canvas(app.fullscreen, |_c: &mut Canvas, _b: Rect, _s: &bool, _t: &Theme| {})
-        .on_event(stage_event)
-        .focusable()
-        .focus_ring(FocusRing::Never)
-        .id("stage")
-        .key("input")
-        .label("Picture");
-    layers.push(input.into());
     if app.fullscreen && app.controls && app.has_video() {
         // Every move over the bar says so, not only coming onto it: off a
         // control straight onto the picture, the bar never hears the
@@ -83,10 +75,57 @@ fn stage(app: &Utsushi) -> Element<Msg> {
             .into(),
         );
     }
-    mouse_area(aizome_kit::widgets::layout::stack(layers).width(Fill).height(Fill))
+    // Background input surrounds the content, so its buttons and queue
+    // receive the pointer first. An invisible layer over them would turn
+    // Recent, Start Over and error actions into background playback clicks.
+    let input = Element::new(
+        StageInput { fullscreen: app.fullscreen },
+        vec![aizome_kit::widgets::layout::stack(layers).width(Fill).height(Fill).into()],
+    )
+    .width(Fill)
+    .height(Fill)
+    .id("stage")
+    .key("input")
+    .label("Picture");
+    mouse_area(input)
         .on_drop(|d| Msg::Open(d.urls.iter().filter_map(|u| file_path(u)).collect()))
         .key("stage-area")
         .into()
+}
+
+struct StageInput {
+    fullscreen: bool,
+}
+
+impl Widget for StageInput {
+    fn name(&self) -> &'static str {
+        "utsushi-stage"
+    }
+
+    fn hit(&self) -> bool {
+        true
+    }
+
+    fn focusable(&self) -> Focusable {
+        Focusable::Click
+    }
+
+    fn focus_ring(&self) -> FocusRing {
+        FocusRing::Never
+    }
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> EventStatus {
+        if let Some(msg) = stage_event(event, cx.size(), &self.fullscreen) {
+            cx.emit(&aizome_kit::element::MsgFn::new(msg));
+            EventStatus::Handled
+        } else {
+            EventStatus::Ignored
+        }
+    }
+
+    fn semantics(&self) -> Option<Semantics> {
+        Some(Semantics { role: SemanticRole::Canvas, ..Default::default() })
+    }
 }
 
 fn stage_event(ev: &Event, _size: Size, fullscreen: &bool) -> Option<Msg> {

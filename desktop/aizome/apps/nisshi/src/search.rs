@@ -237,6 +237,7 @@ impl Search {
             && self.since.is_none()
             && self.until.is_none()
             && self.fields.is_empty()
+            && self.problems.is_empty()
     }
 
     pub fn matches(&self, e: &Entry) -> bool {
@@ -245,6 +246,10 @@ impl Search {
 
     /// [`matches`](Search::matches), remembering what names decided.
     pub fn matches_in(&self, e: &Entry, names: &mut Names) -> bool {
+        // A malformed term must not silently broaden the query.
+        if !self.problems.is_empty() {
+            return false;
+        }
         if self.level.is_some_and(|l| e.priority > l) {
             return false;
         }

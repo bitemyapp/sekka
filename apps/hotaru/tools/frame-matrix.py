@@ -155,19 +155,28 @@ def cleanup_descendants():
     raise RuntimeError("owned benchmark descendants survived bounded cleanup")
 
 
-def preflight(cpus):
-    before = sample(cpus)
-    time.sleep(1)
-    after = sample(cpus)
-    activity = utilization(before, after)
-    reasons = []
-    if before["compilers"] or after["compilers"]:
-        reasons.append("compiler process observed")
-    if any(p["active_percent"] > 10 for p in activity.values()):
-        reasons.append("monitored CPU or SMT sibling exceeds 10% activity")
-    if any(p["iowait_percent"] > 2 for p in activity.values()):
-        reasons.append("monitored CPU or SMT sibling exceeds 2% iowait")
-    return {"before": before, "after": after, "activity": activity, "reasons": reasons, "passed": not reasons}
+def preflight(cpus, wait=0):
+    """One-second activity check. With `wait`, retry until a quiet second or
+    the deadline: a host in interactive use (a laptop) is rarely quiet for long."""
+    deadline = time.monotonic() + wait
+    attempts = 0
+    while True:
+        attempts += 1
+        before = sample(cpus)
+        time.sleep(1)
+        after = sample(cpus)
+        activity = utilization(before, after)
+        reasons = []
+        if before["compilers"] or after["compilers"]:
+            reasons.append("compiler process observed")
+        if any(p["active_percent"] > 10 for p in activity.values()):
+            reasons.append("monitored CPU or SMT sibling exceeds 10% activity")
+        if any(p["iowait_percent"] > 2 for p in activity.values()):
+            reasons.append("monitored CPU or SMT sibling exceeds 2% iowait")
+        if not reasons or time.monotonic() >= deadline:
+            return {"before": before, "after": after, "activity": activity, "reasons": reasons, "passed": not reasons,
+                    "attempts": attempts}
+        time.sleep(2)
 
 
 def self_test():
@@ -257,17 +266,25 @@ def main():
     parser.add_argument("--calibration", type=Path, required=True, help="qualified calibration directory with summary.json and original runs")
     parser.add_argument("--font-dir", type=Path, required=True)
     parser.add_argument("--fallback-dir", type=Path, required=True)
-    parser.add_argument("--mesa", type=Path, required=True)
-    parser.add_argument("--phase", choices=("startup", "steady"), required=True)
+    parser.add_argument("--mesa", type=Path, help="software GL stack; required with --renderer software")
+    parser.add_argument("--renderer", choices=("software", "gpu"), default="software")
+    parser.add_argument("--ghostty-env", type=Path, help="JSON environment for Ghostty only (GPU driver paths)")
+    parser.add_argument("--protocol-xml", action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--phase", choices=("startup", "steady", "throughput"), required=True)
+    parser.add_argument("--corpus", action="append", default=[], type=Path, help="throughput phase: corpus written through each terminal")
+    parser.add_argument("--throughput-repeat", type=int, default=8)
     parser.add_argument("--rounds", type=int, required=True)
     parser.add_argument("--start-round", type=int, default=0)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--quiet-wait", type=float, default=0, help="seconds each preflight may wait for a quiet second (0: none)")
     for name, default in [("app", "8-11"), ("compositor", "12-13"), ("observer", "14"), ("controller", "15"), ("fixture", "16")]:
         parser.add_argument("--" + name + "-cpus", default=default)
     parser.add_argument("--lock", type=Path, default=Path.home() / ".cache/hotaru-workstation.lock")
     args = parser.parse_args()
     if not 1 <= args.rounds <= 30 or not 0 <= args.start_round <= 1000:
         parser.error("round range outside bounded batch limits")
+    if (args.renderer == "software") != (args.mesa is not None):
+        parser.error("--mesa goes with --renderer software, and only with it")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     snapshot = output / "tools"; snapshot.mkdir()
     for name in ("frame-matrix.py", "frame-benchmark.py", "frame-observer.c"):
@@ -294,7 +311,9 @@ def main():
         cpus.update(cpu_list(siblings))
     report = {"schema": 1, "status": "running", "phase": args.phase, "requested_rounds": args.rounds,
               "start_round": args.start_round, "recorded_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "scope": "software private-compositor observations, no hardware or exclusive-host claim",
+              "scope": ("software" if args.renderer == "software" else "GPU (gles2)") +
+                       " private-compositor observations, no physical scanout or exclusive-host claim",
+              "renderer": args.renderer,
               "shared_lock": str(args.lock), "private_child_lock": str(output / "child.lock"),
               "calibration_sha256": sha(args.calibration / "summary.json"), "topology": topology,
               "cpu_sets": roles,
@@ -307,7 +326,7 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX)
             for round_id in range(args.start_round, args.start_round + args.rounds):
                 for kind in (("hotaru", "ghostty") if round_id % 2 == 0 else ("ghostty", "hotaru")):
-                    receipt = {"round": round_id, "kind": kind, "preflight": preflight(cpus)}
+                    receipt = {"round": round_id, "kind": kind, "preflight": preflight(cpus, args.quiet_wait)}
                     report["trials"].append(receipt); save()
                     if not receipt["preflight"]["passed"]:
                         report["status"] = "stopped_for_interference"; save(); return 75
@@ -321,13 +340,23 @@ def main():
                     command = [sys.executable, str(snapshot / "frame-benchmark.py"), kind, spec["binary"],
                         "--purpose", "measurement", "--output", str(directory / "run"), "--lock", str(output / "child.lock"),
                         "--font-dir", str(args.font_dir.resolve()), "--fallback-dir", str(args.fallback_dir.resolve()),
-                        "--mesa", str(args.mesa.resolve()), "--window-width", str(spec["window_pixels"][0]),
+                        "--renderer", args.renderer, "--window-width", str(spec["window_pixels"][0]),
                         "--window-height", str(spec["window_pixels"][1]), "--cell-width", "11", "--cell-height", "24",
-                        "--keys", "1" if args.phase == "startup" else "500",
-                        "--frames", "1" if args.phase == "startup" else "120",
-                        "--control-seconds", ".1" if args.phase == "startup" else "30"]
+                        "--keys", "500" if args.phase == "steady" else "1",
+                        "--frames", "120" if args.phase == "steady" else "1",
+                        "--control-seconds", "30" if args.phase == "steady" else ".1"]
+                    if args.phase == "throughput":
+                        command.extend(["--throughput-repeat", str(args.throughput_repeat)])
+                        for corpus in args.corpus:
+                            command.extend(["--throughput", str(corpus.resolve())])
+                    if args.mesa:
+                        command.extend(["--mesa", str(args.mesa.resolve())])
+                    for item in args.protocol_xml:
+                        command.extend(["--protocol-xml", item])
                     if kind == "ghostty":
                         command.extend(["--ghostty-cell-height=-1"])
+                        if args.ghostty_env:
+                            command.extend(["--app-env", str(args.ghostty_env.resolve())])
                     for name, value in roles.items():
                         command.extend(["--" + name + "-cpus", value])
                     receipt["command"] = command; save()

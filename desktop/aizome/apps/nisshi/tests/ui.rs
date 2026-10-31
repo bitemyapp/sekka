@@ -117,6 +117,72 @@ fn search_and_its_keys() {
 }
 
 #[test]
+fn invalid_search_is_explained_and_editing_recovers() {
+    let mut h = start();
+    let w = h.window();
+    h.command(w, 'f');
+    h.type_text(w, "kex");
+    assert_eq!(shown(&h).len(), 34);
+    h.send(Msg::SelectRows(vec![0]));
+    h.command(w, 'a');
+    // The exact malformed expression from ISO qualification.
+    h.type_text(w, "/[/");
+    assert_eq!(h.program().search_text, "/[/");
+    assert!(h.texts(w).iter().any(|t| t.contains("/[/ isn't a pattern Nisshi can read")), "{:?}", h.texts(w));
+    assert!(shown(&h).is_empty(), "an invalid query must not look like an unfiltered result");
+    assert!(h.program().selected.is_empty());
+    assert_eq!(h.program().export_text(false), "");
+    assert!(!h.texts(w).iter().any(|t| t == "Nothing matches the filters."));
+    assert!(h.click_text(w, "Edit Search"));
+    assert_eq!(h.focused_name(w).as_deref(), Some("search"));
+
+    h.command(w, 'a');
+    h.type_text(w, "/kex/");
+    assert_eq!(shown(&h).len(), 34);
+    assert!(!h.texts(w).iter().any(|t| t.contains("isn't a pattern")));
+    h.command(w, 'a');
+    h.type_text(w, "/[/");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(h.program().search_text.is_empty());
+    assert_eq!(shown(&h).len(), h.program().store.entries.len());
+    assert!(!h.texts(w).iter().any(|t| t.contains("isn't a pattern")));
+}
+
+#[test]
+fn invalid_search_terms_are_not_silently_ignored_or_sent_to_the_journal() {
+    for query in ["/[/", "-/[/", "kex /[/", "pid:x", "level:loud", "since:soon", "pid:x level:loud since:soon"] {
+        let mut h = start();
+        h.program_mut().store.complete = false;
+        h.send(Msg::Search(query.into()));
+        assert!(shown(&h).is_empty(), "{query}");
+        assert!(!h.program().can_search_journal(), "{query}");
+        let words = h.texts(h.window()).join("\n");
+        for problem in &h.program().filter.search.problems {
+            assert!(words.contains(problem), "{query}: {problem} absent from {words}");
+        }
+        h.send(Msg::SubmitSearch);
+        h.send(Msg::SearchJournal);
+        assert!(h.program().journal_search.is_none(), "{query}");
+        h.send(Msg::Search("kex".into()));
+        assert_eq!(shown(&h).len(), 34, "{query}");
+        assert!(h.program().can_search_journal(), "{query}");
+    }
+}
+
+#[test]
+fn invalid_search_in_a_file_can_be_cleared_without_leaving_the_file() {
+    let mut h = start();
+    h.program_mut().sample_file("/var/log/Xorg.0.log", fixture::xorg());
+    h.send(Msg::Search("/[/".into()));
+    assert!(shown(&h).is_empty());
+    assert!(h.texts(h.window()).iter().any(|t| t.contains("isn't a pattern")));
+    assert!(h.click_text(h.window(), "Clear Filters"));
+    assert_eq!(h.program().filter.scope, Scope::File("/var/log/Xorg.0.log".into()));
+    assert_eq!(shown(&h).len(), 7);
+    assert!(!h.texts(h.window()).iter().any(|t| t.contains("isn't a pattern")));
+}
+
+#[test]
 fn completing_a_key() {
     let mut h = start();
     h.send(Msg::Search("error app:net".into()));
