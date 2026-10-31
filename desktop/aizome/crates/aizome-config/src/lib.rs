@@ -299,11 +299,14 @@ pub struct Keyboard {
 
 impl Default for Keyboard {
     fn default() -> Self {
+        // The session supplies the system keyboard. Serde uses these only
+        // for missing fields; a person's saved choices still win.
+        let layout = std::env::var("XKB_DEFAULT_LAYOUT").unwrap_or_default();
         Keyboard {
-            layouts: vec!["us".into()],
-            variant: String::new(),
-            options: String::new(),
-            model: String::new(),
+            layouts: if layout.is_empty() { vec!["us".into()] } else { layout.split(',').map(String::from).collect() },
+            variant: std::env::var("XKB_DEFAULT_VARIANT").unwrap_or_default(),
+            options: std::env::var("XKB_DEFAULT_OPTIONS").unwrap_or_default(),
+            model: std::env::var("XKB_DEFAULT_MODEL").unwrap_or_default(),
             repeat_delay: 600,
             repeat_rate: 25,
             numlock: false,
