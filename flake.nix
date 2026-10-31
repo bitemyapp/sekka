@@ -622,6 +622,24 @@
           aizomeSource = inputs.aizome.outPath;
         };
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
+        # Both installed systems and live media select the replacement.
+        xe-dpt =
+          let
+            installed =
+              (import ./nix/reference-systems.nix {
+                inherit inputs applicationCatalog;
+                desktops = [ "tatami" ];
+              }).systems.tatami.config;
+            live = self.nixosConfigurations.installer.config;
+            hasXeDpt =
+              config:
+              builtins.elem "linux-xe-dpt-cursor" (map (p: p.pname or "") config.boot.extraModulePackages);
+          in
+          assert hasXeDpt installed;
+          assert hasXeDpt live;
+          assert !(hasXeDpt live.specialisation.lts_kernel.configuration);
+          import ./nix/xe-dpt-test.nix { inherit pkgs; };
+        xe-dpt-config = import ./nix/xe-dpt-config-test.nix { inherit pkgs; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };

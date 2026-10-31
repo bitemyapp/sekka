@@ -1964,6 +1964,70 @@ real machine's live session under build load for about 15 minutes.
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
 
+## Intel page flips
+
+Linux's xe driver runs Intel graphics from Lunar Lake on. It gives each tiled
+framebuffer it shows a display page table (DPT), and builds a new one on every
+page flip to a framebuffer the plane isn't already showing, inside the
+compositor's atomic commit. Linux 7.3 fills that table by looking each 4 KiB
+page up from the start of the buffer's scatterlist. Once physical memory is
+fragmented, a 2880 × 1800 buffer comes in hundreds of segments. On ganymede
+(the X1 Carbon Gen 14, at 120 Hz) after three days up, the lookups took close
+to 3 ms of every flip: most of Aizome's live frame time, spent in the kernel.
+
+`installer/genkan/rust/system/xe-dpt` (`calamares.xeDpt.enable`, on by
+default) fills the table in one pass instead. The patch and its upstream
+version are in [docs/upstream/linux](docs/upstream/linux/xe-dpt-cursor.md).
+Rather than rebuild the kernel, the module builds xe alone from the kernel's
+own source, Nixpkgs patches, configuration and toolchain, and installs it in
+`lib/modules/<version>/updates`, where modprobe looks before the kernel's own
+directory. The kernel and its other modules stay Nixpkgs' cached build. The
+build stops if its configuration differs from the kernel's in any line. The
+module is built apart and unsigned, so loading it taints the kernel `O` and
+`E`; the kernel doesn't require signed modules.
+
+Only Linux 7.3 gets the module; other kernels keep their own xe. Both the
+live ISO and installed systems import it; the live LTS entry keeps stock xe.
+The build uses the kernel derivation's complete `patches` list, including
+Nixpkgs' extra build patches, and checks its configuration against the
+kernel's development tree too. It requires `CONFIG_DRM_XE=m` and
+`CONFIG_RANDSTRUCT_NONE=y`, and refuses `CONFIG_MODULE_SIG_FORCE=y`:
+matching configuration text does not establish matching randomized layouts,
+and this module is unsigned. Set `calamares.xeDpt.enable = false` for those
+custom kernels. `checks.x86_64-linux.xe-dpt-config` exercises these guards.
+
+`checks.x86_64-linux.xe-dpt` boots Nixpkgs' latest kernel in QEMU with the
+module loaded from the initrd. It checks that modprobe resolves `xe` to the
+rebuilt module, that its version magic and dependencies match the kernel's
+own copy, and that it loads.
+The check fails when Nixpkgs moves to a kernel the module isn't built for:
+then see whether that kernel has the fix, and either drop the module or carry
+the patch forward. QEMU has no Intel GPU, so the check covers the module's
+build and fit, not page flips.
+
+```sh
+nix build .#checks.x86_64-linux.xe-dpt .#checks.x86_64-linux.xe-dpt-config --no-update-lock-file
+```
+
+`aizomectl stats` (Settei → Performance) times each output's frames from
+collecting the scene through the atomic commit, so the kernel's share counts
+toward the 4 ms budget there. Aizome's `frame_bench` renders headlessly and
+never commits. To see the kernel's share, profile the compositor as root (it
+is non-dumpable), for example `perf ftrace profile -G drm_mode_atomic_ioctl
+-p <pid> -s total`.
+
+For a hardware burn-in, run `bash scripts/xe-dpt-burn-in.sh` as the desktop
+user after boot and again after at least 24 hours of ordinary use. It appends
+timestamps, boot ID, uptime, booted system, module path and SHA-256, taint,
+`/proc/buddyinfo` and `aizomectl stats` to
+`~/.local/state/sekka-xe-dpt-burn-in/<boot-id>.log`. A user timer can call it
+every 15 minutes. Each stats report describes Aizome's recent frame samples,
+not a whole-boot average; compare similar activity, resolution and refresh
+rate, and retain the frame counts to spot unchanged samples while idle.
+Exercise suspend/resume and any external display normally used. Check the
+kernel journal for xe/DRM errors as well as frame times. This is hardware
+driver evidence, separate from ISO installation qualification.
+
 ## Boot splash
 
 Genkan writes `calamares.bootSplash.enable = true;` into every installation; the
