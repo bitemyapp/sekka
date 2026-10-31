@@ -276,7 +276,10 @@ or delete one, and then it stays as you left it.
   of yours.
 
 To leave the skills out of every account, set
-`calamares.agentSkills.enable = false;` in `/etc/nixos/configuration.nix`.
+`calamares.agentSkills.enable = false;` in `/etc/nixos/configuration.nix`
+and apply it. At each user's next login or system switch, Sekka removes its
+managed copies and links, keeping edited copies in its backup folder.
+Unrelated skills are left alone, and `sekka-agent-skills` stays available.
 
 The password dialog has only been tried in Aizome, in a virtual machine.
 The dialog needs a desktop session. An agent working over SSH, or one whose

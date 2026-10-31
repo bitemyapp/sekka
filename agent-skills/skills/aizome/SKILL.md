@@ -22,8 +22,9 @@ dialog over the desktop (`sekka` skill).
 
 ## Settings
 
-Settei (Settings, `aizome-settei`) covers most things. When the person can
-click, point them to the right pane. Otherwise everything lives in
+Settei (Settings, `aizome-settei`) covers most things. When the person would
+rather click, point them to the right pane. When asked to make a change,
+edit the relevant setting and apply it. Shared desktop settings live in
 `~/.config/aizome/settings.toml`. Settei writes that file, and the
 compositor, shell and apps read it.
 

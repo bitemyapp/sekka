@@ -14,6 +14,12 @@ let
     set -eu
     test "$(${pkgs.coreutils}/bin/id -u)" = 0
     echo "$*" >> /var/lib/agent-helper-calls
+    if [ "''${2:-}" = --configuration ]; then
+      ${pkgs.diffutils}/bin/diff -r "$3/before" /etc/nixos
+      while IFS= read -r file; do
+        ${pkgs.coreutils}/bin/install -D -m 0644 "$file" "/etc/nixos/''${file#"$3/after/"}"
+      done < <(${pkgs.findutils}/bin/find "$3/after" -type f)
+    fi
     echo '{"ok":true,"mode":"switch"}'
   '';
   # Yukimi's own action, naming the fixture.
@@ -118,6 +124,7 @@ pkgs.testers.runNixOSTest {
       };
       # A switch to this must sync everyone's skills again.
       specialisation.switched.configuration.environment.etc."agent-skills-switched".text = "";
+      specialisation.withoutSkills.configuration.calamares.agentSkills.enable = false;
       systemd.user.settings.Manager.DefaultEnvironment = "AIZOME_KIT_INSPECT=/run/user/1000/auth-inspect";
       systemd.user.tmpfiles.rules = [ "d %t/auth-inspect 0700 - - -" ];
       virtualisation = {

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Apply edited files of Sekka's /etc/nixos as Yukimi applies its own changes:
-# build the new system as the current user first, then, after one password
-# in the desktop's dialog, put the files in place and let Yukimi's helper
-# switch (or prepare the next start), putting the files back on failure.
+# freeze and build the new system as the user, then pass that snapshot to
+# Yukimi's transaction through the desktop's password dialog.
 set -euo pipefail
 
 usage() {
@@ -13,8 +12,9 @@ Replace /etc/nixos/NAME with FILE for each NAME=FILE (for example
 configuration.nix=/tmp/edit/configuration.nix, or a new module that the
 configuration imports), build the system as you, then ask through the
 desktop's password dialog to install the files and apply them with Yukimi's
-helper: live when that is safe, otherwise for the next start. If anything
-fails, the files are put back. With no NAME=FILE, it applies /etc/nixos as
+helper: live when that is safe, otherwise for the next start. Failures
+before activation restore the files; after activation starts, follow the
+helper's reported outcome. With no NAME=FILE, it applies /etc/nixos as
 it is.
 
   --check   stop after the build: nothing is installed, no password is asked
@@ -41,15 +41,19 @@ for argument in "$@"; do
           echo "apply-configuration: $name belongs to Sekka; sekka-update changes it" >&2
           exit 2
           ;;
-        yukimi.nix)
-          echo "apply-configuration: yukimi.nix belongs to Yukimi; change software through it (yukimi skill)" >&2
+        yukimi.nix | hardware-configuration.nix)
+          echo "apply-configuration: $name is managed by Yukimi or the installer" >&2
           exit 2
           ;;
-        /* | *..* | '' | *[!A-Za-z0-9._/-]*)
+        /* | .* | */.* | *..* | '' | *[!A-Za-z0-9._/-]*)
           echo "apply-configuration: $name isn't a file name inside $nixos" >&2
           exit 2
           ;;
       esac
+      if [[ $name != *.nix ]] || [[ " ${names[*]} " == *" $name "* ]]; then
+        echo "apply-configuration: name each .nix module only once" >&2
+        exit 2
+      fi
       if [ ! -f "$file" ]; then
         echo "apply-configuration: $file doesn't exist" >&2
         exit 2
@@ -66,20 +70,25 @@ done
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir "$work/nixos"
-if ! cp -R "$nixos/." "$work/nixos/" 2>"$work/copy.log"; then
+mkdir -p "$work/staged/before"
+if [ -n "$(find "$nixos" -type l -print -quit)" ]; then
+  echo "apply-configuration: configuration snapshots cannot contain symlinks" >&2
+  exit 1
+fi
+if ! cp -R "$nixos/." "$work/staged/before/" 2>"$work/copy.log"; then
   echo "apply-configuration: couldn't read $nixos:" >&2
   cat "$work/copy.log" >&2
   exit 1
 fi
-chmod -R u+w "$work/nixos"
+cp -R "$work/staged/before" "$work/staged/after"
+chmod -R u+w "$work/staged/after"
 changed=false
 for i in "${!names[@]}"; do
-  target=$work/nixos/${names[$i]}
+  target=$work/staged/after/${names[$i]}
   mkdir -p "$(dirname "$target")"
   cp "${files[$i]}" "$target"
-  if [ -e "$nixos/${names[$i]}" ]; then
-    original=$nixos/${names[$i]}
+  if [ -e "$work/staged/before/${names[$i]}" ]; then
+    original=$work/staged/before/${names[$i]}
   else
     original=/dev/null
   fi
@@ -93,7 +102,11 @@ fi
 
 # The configuration named after this computer, or the only one, as Yukimi
 # and nixos-rebuild choose it.
-flake="path:$work/nixos"
+# Both the build and the helper consume the same immutable bytes. Hold a
+# GC root until the helper has copied the plan into its operation directory.
+plan=$(nix store add-path "$work/staged")
+nix-store --add-root "$work/plan" --indirect --realise "$plan" >/dev/null
+flake="path:$plan/after"
 host=$(nix eval --raw "$flake#nixosConfigurations" --apply "configurations:
   let names = builtins.attrNames configurations; host = \"$(</proc/sys/kernel/hostname)\"; in
   if builtins.elem host names then host
@@ -108,7 +121,7 @@ if [ -z "$host" ]; then
 fi
 
 echo "Building the new system as $(id -un); nothing is changed yet."
-if ! system=$(nix build --no-link --print-out-paths \
+if ! system=$(nix build --out-link "$work/system" --print-out-paths \
   "$flake#nixosConfigurations.\"$host\".config.system.build.toplevel" 2>"$work/build.log"); then
   echo "apply-configuration: the new configuration doesn't build; nothing was changed." >&2
   tail -n 60 "$work/build.log" >&2
@@ -129,17 +142,12 @@ decode() {
     sed -E -e 's/\\u001b\[[0-9;]*m//g' -e 's/\\n/\n/g' -e 's/\\t/\t/g' -e 's/\\"/"/g' -e 's/\\\\/\\/g'
 }
 
-pairs=()
-for i in "${!names[@]}"; do
-  pairs+=("${names[$i]}" "${files[$i]}")
-done
-
 echo "Asking for an administrator's password to apply it."
 status=0
 # The result on standard output, the progress decoded on standard error.
 {
-  pkexec --disable-internal-agent "$(dirname "$(readlink -f "$0")")/install-configuration" \
-    "$nixos" "$helper" "${pairs[@]}" </dev/null 2>&1 1>&3 3>&- | decode >&2 3>&-
+  pkexec --disable-internal-agent "$helper" change --configuration "$plan" --mode auto \
+    </dev/null 2>&1 1>&3 3>&- | decode >&2 3>&-
   status=${PIPESTATUS[0]}
 } 3>&1 || true
 case $status in

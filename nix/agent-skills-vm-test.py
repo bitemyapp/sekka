@@ -98,7 +98,7 @@ for skill in ["aizome", "tatami"]:
 machine.succeed("grep -q 'My note.' /home/alice/.local/state/sekka/agent-skills/backups/*/aizome/SKILL.md")
 
 # The skill's command reads the real flake and yukimi.nix with Nix, then
-# asks once through Aizome's dialog and gives the helper the whole list.
+# asks once through Aizome's dialog and gives the helper an add request.
 listed = user(f"cd /home/alice && {SKILLS}/yukimi/scripts/software list")
 assert "Packages for everyone (yukimi.nix): ripgrep" in listed, listed
 catalog = user(f"{SKILLS}/yukimi/scripts/software catalog")
@@ -108,7 +108,7 @@ answer("install", ["type test-only", "key Return"])
 status, out = finished("install")
 assert status == 0, out
 assert machine.succeed("cat /var/lib/agent-helper-calls").splitlines() == [
-    "change --packages ripgrep,hello --mode auto"], out
+    "change --add-packages hello --mode auto"], out
 assert '"ok":true' in out, out
 
 # A NixOS option: built as alice first, then installed and applied as root
@@ -119,7 +119,8 @@ answer("configure", ["type test-only", "key Return"])
 status, out = finished("configure")
 assert status == 0, out
 assert "+{ ... }: { services.openssh.enable = true; }" in out, out
-assert machine.succeed("cat /var/lib/agent-helper-calls").splitlines()[-1] == "change --mode auto", out
+call = machine.succeed("cat /var/lib/agent-helper-calls").splitlines()[-1]
+assert call.startswith("change --configuration /nix/store/") and call.endswith(" --mode auto"), out
 machine.succeed("cmp /home/alice/configuration.nix /etc/nixos/configuration.nix")
 assert machine.succeed("stat -c %U:%a /etc/nixos/configuration.nix").strip() == "root:644"
 
@@ -139,4 +140,13 @@ answer("dismissed", ["key Escape"])
 status, out = finished("dismissed")
 assert status == 126, (status, out)
 machine.succeed("test ! -e /root/ran")
+# Disabling removes managed discovery entries while preserving edits in backups
+# and keeping the management command available.
+user(f"echo 'Keep this note.' >> {SKILLS}/aizome/SKILL.md")
+machine.succeed("/run/booted-system/specialisation/withoutSkills/bin/switch-to-configuration test")
+machine.wait_until_succeeds(f"test ! -e {SKILLS}/aizome", timeout=60)
+for skill in ["sekka", "yukimi", "aizome", "tatami"]:
+    machine.succeed(f"test ! -e {SKILLS}/{skill} -a ! -L {CLAUDE}/{skill}")
+machine.succeed("grep -q 'Keep this note.' /home/alice/.local/state/sekka/agent-skills/backups/disabled-*/aizome/SKILL.md")
+user("sekka-agent-skills status")
 machine.screenshot("done")

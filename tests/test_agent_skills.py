@@ -196,6 +196,34 @@ class Command(unittest.TestCase):
         self.assertTrue((self.home / 'claude-config/skills/alpha').is_symlink())
         self.assertFalse((self.claude / 'alpha').exists())
 
+    def test_disable_removes_managed_copies_and_backs_up_edits(self):
+        self.run_command('sync')
+        (self.agents / 'alpha/SKILL.md').write_text('Mine.\n')
+        (self.agents / 'unrelated').mkdir()
+        (self.agents / 'unrelated/SKILL.md').write_text('Unrelated.\n')
+        self.run_command('disable')
+        self.assertFalse((self.agents / 'alpha').exists())
+        self.assertFalse((self.agents / 'beta').exists())
+        self.assertFalse((self.claude / 'alpha').is_symlink())
+        self.assertFalse((self.claude / 'beta').is_symlink())
+        self.assertTrue((self.agents / 'unrelated/SKILL.md').is_file())
+        self.assertEqual([p.read_text() for p in self.state.glob('backups/*/alpha/SKILL.md')], ['Mine.\n'])
+        self.run_command('disable')
+        self.run_command('sync')
+        self.assertTrue((self.agents / 'alpha/SKILL.md').is_file())
+        self.assertTrue((self.claude / 'alpha').is_symlink())
+
+    def test_disable_preserves_prior_user_removals_and_other_claude_skills(self):
+        self.run_command('sync')
+        shutil.rmtree(self.agents / 'alpha')
+        (self.claude / 'beta').unlink()
+        (self.claude / 'beta').mkdir()
+        (self.claude / 'beta/SKILL.md').write_text('Unrelated Claude skill.\n')
+        self.run_command('disable')
+        self.run_command('sync')
+        self.assertFalse((self.agents / 'alpha').exists())
+        self.assertEqual((self.claude / 'beta/SKILL.md').read_text(), 'Unrelated Claude skill.\n')
+
     def test_nothing_is_removed_without_sekkas_skills(self):
         self.run_command('sync')
         result = self.run_command('sync', check=False, SEKKA_AGENT_SKILLS=str(self.home / 'missing'))
@@ -214,7 +242,15 @@ fixture=@fixture@
 case "$*" in
   *--expr*) exec @real@ "$@" ;;
 esac
+if [ "$1" = store ] && [ "$2" = add-path ]; then
+  cp -R "$3" "$fixture/frozen"
+  echo "$fixture/frozen"
+  exit 0
+fi
 if [ "$1" = build ]; then
+  if [ -e "$fixture/change-source" ]; then
+    echo 'changed after staging' >"$fixture/new.nix"
+  fi
   printf '%s\n' "$*" >>"$fixture/builds"
   if [ -e "$fixture/build-fails" ]; then
     echo "error: builder for nixos-system failed" >&2
@@ -265,12 +301,19 @@ exec "$@"
 FAKE_HELPER = r'''#!@bash@
 fixture=@fixture@
 printf '%s\n' "$*" >>"$fixture/helper"
-cp "$fixture/nixos/configuration.nix" "$fixture/seen.nix"
+if [ "${2:-}" = --configuration ]; then
+  cp -R "$3" "$fixture/received-plan"
+  cp "$3/after/configuration.nix" "$fixture/seen.nix"
+fi
 echo '@nix {"action":"start","fields":[],"id":3,"level":0,"text":"Evaluating your configuration","type":0}' >&2
 echo '@nix {"action":"start","id":9,"level":3,"parent":0,"text":"building noise","type":105}' >&2
 echo '@nix {"action":"stop","id":3}' >&2
 if [ -e "$fixture/helper-fails" ]; then
   message=$(cat "$fixture/helper-fails")
+  case $message in
+    *"System changes had already begun"*)
+      cp "$fixture/seen.nix" "$fixture/nixos/configuration.nix" ;;
+  esac
   echo "@nix {\"action\":\"msg\",\"level\":0,\"msg\":\"error: $message\\nsecond line\"}" >&2
   echo "{\"ok\":false,\"error\":\"$message\"}"
   exit 1
@@ -308,6 +351,7 @@ class Scripts(unittest.TestCase):
         bin = self.fixture / 'bin'
         bin.mkdir()
         fakes = {'nix': FAKE_NIX, 'pkexec': FAKE_PKEXEC, 'yukimi-helper': FAKE_HELPER,
+                 'nix-store': '#!/bin/sh\nexit 0\n',
                  'sekka-update': '#!/bin/sh\necho "Up to date."\n'}
         for name, text in fakes.items():
             path = bin / name
@@ -368,7 +412,7 @@ class Scripts(unittest.TestCase):
         result = self.run_script('yukimi', 'software', 'add', 'jq', 'ripgrep', 'hello')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls('helper'),
-                         ['change --packages ripgrep,python3Packages.requests,jq,hello --mode auto'])
+                         ['change --add-packages jq,ripgrep,hello --mode auto'])
         self.assertEqual(self.calls('pkexec'), [str(self.fixture / 'bin/yukimi-helper')])
         self.assertIn('Evaluating your configuration', result.stderr)
         self.assertNotIn('building noise', result.stderr)
@@ -378,7 +422,7 @@ class Scripts(unittest.TestCase):
     def test_adding_without_yukimi_nix_starts_its_list(self):
         (self.nixos / 'yukimi.nix').unlink()
         self.run_script('yukimi', 'software', 'add', 'hello')
-        self.assertEqual(self.calls('helper'), ['change --packages hello --mode auto'])
+        self.assertEqual(self.calls('helper'), ['change --add-packages hello --mode auto'])
 
     def test_installed_or_unknown_packages_ask_for_nothing(self):
         result = self.run_script('yukimi', 'software', 'add', 'ripgrep')
@@ -395,7 +439,7 @@ class Scripts(unittest.TestCase):
 
     def test_removing_a_package_keeps_the_others(self):
         self.run_script('yukimi', 'software', 'remove', 'ripgrep')
-        self.assertEqual(self.calls('helper'), ['change --packages python3Packages.requests --mode auto'])
+        self.assertEqual(self.calls('helper'), ['change --remove-packages ripgrep --mode auto'])
 
     def test_unreadable_yukimi_nix_changes_nothing(self):
         (self.nixos / 'yukimi.nix').write_text('{ broken')
@@ -407,8 +451,8 @@ class Scripts(unittest.TestCase):
         self.run_script('yukimi', 'software', 'add-app', 'docker')
         self.run_script('yukimi', 'software', 'remove-app', 'codex')
         self.assertEqual(self.calls('helper'), [
-            'change --setting calamares.applications --applications codex,fish,docker --mode auto',
-            'change --setting calamares.applications --applications fish --mode auto',
+            'change --setting calamares.applications --add-applications docker --mode auto',
+            'change --setting calamares.applications --remove-applications codex --mode auto',
         ])
         result = self.run_script('yukimi', 'software', 'add-app', 'steam')
         self.assertEqual(result.returncode, 1)
@@ -427,7 +471,7 @@ class Scripts(unittest.TestCase):
         self.assertEqual(result.returncode, 126)
         self.assertEqual((self.nixos / 'configuration.nix').read_text(), self.configuration)
 
-    def test_applying_a_configuration_builds_first_then_installs_it(self):
+    def test_preflight_passes_the_frozen_plan_to_the_helper(self):
         new = self.fixture / 'edit/configuration.nix'
         new.parent.mkdir()
         new.write_text(self.configuration.replace('}\n', '  services.openssh.enable = true;\n}\n'))
@@ -439,13 +483,14 @@ class Scripts(unittest.TestCase):
         self.assertIn('+++ b/modules/extra.nix', result.stdout)
         [build] = self.calls('builds')
         self.assertIn('#nixosConfigurations."machine".config.system.build.toplevel', build)
-        # The dialog shows this command line, so it names a script, not a
-        # shell program.
-        self.assertEqual(self.calls('pkexec'), [str(SKILLS / 'sekka/scripts/install-configuration')])
-        self.assertEqual(self.calls('helper'), ['change --mode auto'])
+        # Authenticate Yukimi's packaged helper directly, so its own polkit
+        # action and transaction own the entire change.
+        self.assertEqual(self.calls('pkexec'), [str(self.fixture / 'bin/yukimi-helper')])
+        self.assertEqual(self.calls('helper'), [f'change --configuration {self.fixture}/frozen --mode auto'])
         self.assertEqual((self.fixture / 'seen.nix').read_text(), new.read_text())
-        self.assertEqual((self.nixos / 'configuration.nix').read_text(), new.read_text())
-        self.assertTrue((self.nixos / 'modules/extra.nix').is_file())
+        self.assertEqual((self.nixos / 'configuration.nix').read_text(), self.configuration)
+        self.assertTrue((self.fixture / 'received-plan/after/modules/extra.nix').is_file())
+        self.assertEqual((self.fixture / 'received-plan/before/configuration.nix').read_text(), self.configuration)
         self.assertIn('{"ok":true', result.stdout)
         self.assertIn('Evaluating your configuration', result.stderr)
 
@@ -467,7 +512,7 @@ class Scripts(unittest.TestCase):
         self.assertEqual(len(self.calls('builds')), 1)
         self.assertEqual(self.calls('pkexec'), [])
 
-    def test_failed_changes_put_the_files_back(self):
+    def test_scripts_leave_installation_and_failure_handling_to_the_helper(self):
         (self.fixture / 'helper-fails').write_text('Building the new system failed')
         new = self.fixture / 'new.nix'
         new.write_text('{ ... }: { services.openssh.enable = true; }\n')
@@ -480,7 +525,7 @@ class Scripts(unittest.TestCase):
         self.assertFalse((self.nixos / 'extra.nix').exists())
         self.assertIn('error: Building the new system failed\nsecond line', result.stderr)
 
-    def test_files_stay_once_the_switch_has_begun(self):
+    def test_scripts_do_not_restore_files_after_an_activation_error(self):
         (self.fixture / 'helper-fails').write_text('System changes had already begun; the configuration was not restored.')
         new = self.fixture / 'new.nix'
         new.write_text('{ ... }: { services.openssh.enable = true; }\n')
@@ -488,10 +533,21 @@ class Scripts(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual((self.nixos / 'configuration.nix').read_text(), new.read_text())
 
+    def test_editing_the_source_during_build_does_not_change_the_plan(self):
+        new = self.fixture / 'new.nix'
+        new.write_text('{ ... }: { services.openssh.enable = true; }\n')
+        expected = new.read_text()
+        (self.fixture / 'change-source').touch()
+        result = self.run_script('sekka', 'apply-configuration', f'configuration.nix={new}')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(new.read_text(), expected)
+        self.assertEqual((self.fixture / 'seen.nix').read_text(), expected)
+        self.assertEqual((self.nixos / 'configuration.nix').read_text(), self.configuration)
+
     def test_sekkas_and_yukimis_files_are_refused(self):
         new = self.fixture / 'new.nix'
         new.write_text('{ }\n')
-        for name in ['flake.nix', 'flake.lock', 'yukimi.nix', '../etc/passwd', '/etc/passwd', 'a b.nix']:
+        for name in ['flake.nix', 'flake.lock', 'yukimi.nix', '../etc/passwd', '/etc/passwd', 'a b.nix', 'hardware-configuration.nix', './flake.nix', 'modules/../flake.nix', 'secret.txt']:
             result = self.run_script('sekka', 'apply-configuration', f'{name}={new}')
             self.assertEqual(result.returncode, 2, name)
         self.assertEqual(self.calls('builds'), [])

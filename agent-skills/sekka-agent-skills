@@ -21,6 +21,7 @@ Usage: sekka-agent-skills status
        sekka-agent-skills diff [SKILL...]
        sekka-agent-skills restore [SKILL...]
        sekka-agent-skills sync
+       sekka-agent-skills disable
 
 Sekka's skills for coding agents live in $agents, with links in
 $claude. They follow Sekka's updates until you change or remove them.
@@ -31,6 +32,8 @@ $claude. They follow Sekka's updates until you change or remove them.
             copy is moved to $state/backups first
   sync      install new skills and update unchanged ones (run at login and
             after each system update)
+  disable   remove managed copies and links, backing up edited copies;
+            leave unrelated skills alone
 EOF
 }
 
@@ -202,7 +205,8 @@ diff_skills() {
 restore() {
   local names name backup
   names=$(chosen "$@")
-  backup=$state/backups/$(date -u +%Y%m%dT%H%M%SZ)
+  mkdir -p "$state/backups"
+  backup=$(mktemp -d "$state/backups/$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
   while IFS= read -r name; do
     if exists "$agents/$name" &&
       { [ -L "$agents/$name" ] || [ "$(tree_hash "$agents/$name")" != "$(tree_hash "$shipped/$name")" ]; }; then
@@ -221,12 +225,38 @@ restore() {
     fi
     echo "Restored $name"
   done <<<"$names"
+  rmdir "$backup" 2>/dev/null || true
+}
+
+disable() {
+  local record name backup=
+  for record in "$installed"/*; do
+    [ -f "$record" ] || continue
+    name=${record##*/}
+    if our_link "$name"; then
+      rm -f "$claude/$name" "$linked/$name"
+    fi
+    # Keep records of removals the person made: reenabling must respect them.
+    exists "$agents/$name" || continue
+    if [ -d "$agents/$name" ] && [ ! -L "$agents/$name" ] &&
+      [ "$(tree_hash "$agents/$name")" = "$(<"$record")" ]; then
+      rm -rf "${agents:?}/$name"
+    else
+      if [ -z "$backup" ]; then
+        mkdir -p "$state/backups"
+        backup=$(mktemp -d "$state/backups/disabled-XXXXXX")
+      fi
+      mv "$agents/$name" "$backup/$name"
+      echo "Kept your $name in $backup/$name"
+    fi
+    rm -f "$record"
+  done
 }
 
 command=${1:-}
 [ $# -gt 0 ] && shift
 case $command in
-  status | diff | restore | sync)
+  status | diff | restore | sync | disable)
     if [ ! -d "$shipped" ]; then
       echo "sekka-agent-skills: Sekka's skills aren't at $shipped" >&2
       exit 1
@@ -241,6 +271,7 @@ case $command in
   diff) diff_skills "$@" ;;
   restore) restore "$@" ;;
   sync) sync ;;
+  disable) disable ;;
   -h | --help | help) usage ;;
   *)
     usage >&2

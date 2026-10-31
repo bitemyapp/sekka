@@ -2,7 +2,7 @@
 # Install or remove software for everyone on a Sekka computer through
 # Yukimi's helper, as Yukimi's window does: Nixpkgs packages in yukimi.nix,
 # catalog applications in calamares.applications. The helper takes each
-# list whole, so this reads the current one, changes it and passes it all.
+# add/remove request under its lock, preserving changes made during the dialog.
 set -euo pipefail
 
 usage() {
@@ -100,30 +100,14 @@ run_helper() {
     0) sekka-update --status 2>/dev/null || true ;;
     126) echo "software: the password dialog was dismissed; nothing was changed." >&2 ;;
     127) echo "software: no authorization. If pkexec said it must be setuid root, run this outside your sandbox; if no authentication agent was found, there is no desktop session to ask in." >&2 ;;
-    *) echo "software: the change failed (above); the system is as it was." >&2 ;;
+    *) echo "software: the change failed; see the helper's result above and check sekka-update --status before retrying." >&2 ;;
   esac
   return "$status"
 }
 
-# Words of $1 with those of $2 added (add) or taken out (remove), in order.
-changed() {
-  local operation=$1 list=$2 word
-  shift 2
-  local -a result=()
-  read -ra result <<<"$list"
-  for word in "$@"; do
-    local -a kept=()
-    local item
-    for item in "${result[@]}"; do
-      [ "$item" = "$word" ] || kept+=("$item")
-    done
-    result=("${kept[@]}")
-    if [ "$operation" = add ]; then
-      result+=("$word")
-    fi
-  done
+comma_list() {
   local IFS=,
-  printf '%s' "${result[*]}"
+  printf '%s' "$*"
 }
 
 command=${1:-}
@@ -158,7 +142,6 @@ case $command in
         echo "Already installed for everyone: $*"
         exit 0
       fi
-      set -- "${new[@]}"
       system=$(configuration)
       for name in "$@"; do
         case $name in
@@ -184,7 +167,7 @@ case $command in
         esac
       done
     fi
-    run_helper change --packages "$(changed "$command" "$packages" "$@")" --mode auto
+    run_helper change "--$command-packages" "$(comma_list "$@")" --mode auto
     ;;
   add-app | remove-app)
     [ $# -gt 0 ] || { usage >&2; exit 2; }
@@ -217,10 +200,9 @@ case $command in
         echo "Already installed for everyone: $*"
         exit 0
       fi
-      set -- "${new[@]}"
     fi
     operation=${command%-app}
-    run_helper change --setting calamares.applications --applications "$(changed "$operation" "$apps" "$@")" --mode auto
+    run_helper change --setting calamares.applications "--$operation-applications" "$(comma_list "$@")" --mode auto
     ;;
   -h | --help | help)
     usage

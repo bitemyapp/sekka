@@ -21,15 +21,17 @@ in
       Each login and system switch installs new skills and updates the
       unchanged ones; skills a user changed or removed stay as they are, and
       `sekka-agent-skills restore` brings back Sekka's versions. Turning
-      this off leaves copies already made in place.
+      this off removes managed copies and links at login or switch, backing
+      up edited copies first. Unrelated skills are left alone.
     '';
   };
-  config = lib.mkIf config.calamares.agentSkills.enable {
+  config = {
     environment.systemPackages = [ package ];
     # nixos-activation runs this at each login, and for everyone logged in
     # at every switch. A failure here must not fail an update.
     system.userActivationScripts.sekkaAgentSkills = ''
-      ${lib.getExe package} sync || echo "sekka-agent-skills: the agent skills were not updated" >&2
+      ${lib.getExe package} ${if config.calamares.agentSkills.enable then "sync" else "disable"} \
+        || echo "sekka-agent-skills: the agent skills were not updated" >&2
     '';
   };
 }

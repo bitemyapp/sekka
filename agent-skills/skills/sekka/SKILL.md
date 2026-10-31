@@ -129,15 +129,23 @@ cp /etc/nixos/configuration.nix "$work/configuration.nix"
 scripts/apply-configuration configuration.nix="$work/configuration.nix"
 ```
 
-It shows the changes and builds the new system as you, without root, so
-mistakes surface before anyone is asked for a password. Then it asks once,
-through the dialog, to put the files in place and apply them with Yukimi's
-helper. The helper switches to the new system at once when that is safe.
+It shows the changes, freezes the original and edited files in the Nix
+store, and builds that exact edited snapshot as you, without root. Then it
+asks once through the dialog for Yukimi's helper to apply it. Under its
+operation lock, the helper checks that `/etc/nixos` still matches the
+original snapshot and saves the previous generation before installing any
+edits. If another change finished meanwhile, it refuses the stale plan;
+read the current files and prepare the edit again. The helper switches to
+the new system at once when that is safe.
 Otherwise it prepares the system for the next start, and Yukimi and Settei
-offer the restart. If anything fails, the files are put back.
+offer the restart. Failures before activation restore the original files;
+after activation begins, follow the helper's reported outcome.
 
 - `--check` stops after the build. With no files named, it applies
   `/etc/nixos` as it is.
+- Snapshots contain regular files, not symlinks. Only `.nix` modules can
+  change; the flake, hardware configuration and `yukimi.nix` stay managed
+  by Sekka and Yukimi.
 - A new module goes in beside the configuration, with its name added to
   `imports`: `configuration.nix=… my-module.nix=…`.
 - Edit narrowly. Add options inside the top-level attribute set, keep the
@@ -146,8 +154,11 @@ offer the restart. If anything fails, the files are put back.
   Look options up with `nix eval` as above, or at https://search.nixos.org/options.
 - It takes minutes whenever something must be built or downloaded. Run it in
   the background or with your longest timeout, and wait. Interrupting it
-  before the switch cancels the change and restores the files; once the
-  switch has begun, it finishes regardless.
+  by signalling the helper before activation cancels the change and
+  restores the files; once activation has begun, it finishes regardless.
+  If the agent loses contact, check `sekka-update --status` and the operation
+  log before retrying. Never restore configuration files independently of
+  the helper.
 
 Don't use `nixos-rebuild` on Sekka. It needs sudo, and it skips Yukimi's
 side of a change: the free-space check, putting files back after a failed
@@ -215,3 +226,8 @@ Sekka keeps its skills in `~/.agents/skills`, with links in
 or removed, and then they are left as they are. `sekka-agent-skills status` lists them,
 `sekka-agent-skills diff` shows what changed, and `sekka-agent-skills restore`
 brings back Sekka's versions, keeping a copy of the changed ones.
+
+Disabling `calamares.agentSkills.enable` removes Sekka's managed copies and
+links at each user's next login or system switch. Edited copies are backed
+up outside the skill folders; unrelated skills are left alone. The
+`sekka-agent-skills` command remains available to inspect or restore them.

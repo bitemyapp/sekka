@@ -65,8 +65,10 @@ scripts/software remove-app ID...
 
 It checks the names before anyone is asked for a password: each package
 must evaluate in the system's own Nixpkgs, and each application id must be
-in the catalog. Then it gives the helper the whole new list, because the
-helper replaces a list rather than adding to it. The helper switches to the
+in the catalog. Then it gives the helper an add/remove request. The helper
+reads and
+changes the current list under its operation lock, so another installation
+completed during the password dialog is preserved. The helper switches to the
 result at once when that is safe, or prepares it for the next start. Run it
 in the background or with a long timeout, and don't interrupt it.
 
@@ -145,6 +147,9 @@ pkexec --disable-internal-agent "$(readlink -f /run/current-system/sw/bin/yukimi
 | Arguments | Does |
 | --- | --- |
 | `change --mode auto` | Builds and applies `/etc/nixos` as it is (`auto`: live when safe, else the next start; also `switch`, `boot`) |
+| `change --add-packages a,b --mode auto` | Adds packages to the current `yukimi.nix` list under the operation lock |
+| `change --remove-packages a,b --mode auto` | Removes only these packages from `yukimi.nix` |
+| `change --setting calamares.applications --add-applications a,b --mode auto` | Adds catalog applications under the operation lock; `--remove-applications` removes them |
 | `change --packages a,b --mode auto` | Sets the whole package list of `yukimi.nix` |
 | `change --programs a,b --mode auto` | Sets `yukimi.nix`'s `programs.<name>.enable` list |
 | `change --setting calamares.applications --applications a,b --mode auto` | Sets the whole catalog list |
@@ -154,6 +159,9 @@ pkexec --disable-internal-agent "$(readlink -f /run/current-system/sw/bin/yukimi
 | `change --choose SETTING=VALUE[,VALUE] --mode auto` | One of the system's declared choices (`sekka-update --choose`) |
 | `rollback N` | Returns to generation N |
 | `clean [--older-than-days N]` | Deletes older generations, then collects garbage |
+
+The replacement-list options are for deliberately replacing an entire list;
+use add/remove options for individual software changes.
 
 If it fails with "Another Yukimi operation is running", wait for the other
 change to finish. Don't remove the lock.

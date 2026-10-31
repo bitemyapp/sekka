@@ -2080,7 +2080,11 @@ the skill in the same pull request.
 `calamares.agentSkills.enable` defaults to on. It runs
 `sekka-agent-skills sync` from NixOS's user activation: at each login, and
 for users already logged in, at every switch. A failed sync is reported and
-never fails the activation.
+never fails the activation. With the option disabled, user activation runs
+`sekka-agent-skills disable` instead: managed copies and links are removed,
+edited copies move to backups, and unrelated skills stay. The command remains
+installed. Reenabling installs copies removed by disabling, while preserving
+removals the person made beforehand.
 
 Copies go in `~/.agents/skills/<name>`. That folder is read by Codex, by
 the Codex inside the ChatGPT app, and by OpenCode, Gemini CLI, pi and
@@ -2127,21 +2131,28 @@ The two scripts make one root request each, through `pkexec` with
 because the helper takes a closing input pipe as Stop. Both reduce the
 helper's `internal-json` progress to its stages and messages.
 
-`apply-configuration` works in four steps:
+`apply-configuration` copies the original and edited configuration into one
+immutable Nix store snapshot and holds a GC root while building its edited
+side as the user. It calls `yukimi-helper change --configuration SNAPSHOT
+--mode auto` directly through polkit. The helper copies the bounded snapshot
+into its private operation directory before starting its independent worker,
+so the agent can exit without removing the worker's inputs.
 
-1. Copies `/etc/nixos`, with the edited files in place.
-2. Builds that system as the user.
-3. Runs `scripts/install-configuration` as root. It backs up the files,
-   installs the new ones and runs `yukimi-helper change --mode auto`. The
-   root step is a script of its own because the dialog shows its command
-   line.
-4. Puts the files back, unless the helper reports that the switch had begun.
+Under the existing operation lock, the worker checks that the original
+snapshot still matches the complete configuration. It rejects stale plans,
+symlinks, deletions and changes to files other than ordinary `.nix` modules
+(the flake, hardware configuration and `yukimi.nix` are protected). It saves
+the old generation before installing edits, includes every changed module in
+its failure backup, then builds and activates through the normal transaction.
+Cancellation before activation restores all edited files; after commit the
+worker finishes and reports its result. History also restores imported
+modules, preserving files changed by hand since their generation.
 
-`software` reads `yukimi.nix` by evaluating it with a `lib` and `pkgs` that
-return names. It reads `calamares.applications` from the system's own
-evaluation. It checks each package against the system's Nixpkgs, and then
-hands the helper the whole new list: `--packages` and `--applications`
-replace a list rather than add to it.
+`software` reads the current selections and checks requested names without
+root, then sends `--add-packages` / `--remove-packages` or
+`--add-applications` / `--remove-applications`. The helper changes the current
+list under its lock. Replacement-list options remain compatible with
+existing clients, but these scripts no longer submit stale whole lists.
 
 ```sh
 nix build .#checks.x86_64-linux.agent-skills .#checks.x86_64-linux.agent-skills-vm --no-update-lock-file
@@ -2151,13 +2162,25 @@ nix build .#checks.x86_64-linux.agent-skills .#checks.x86_64-linux.agent-skills-
 the format. It runs the packaged command in temporary homes and covers:
 
 - installing, updating, keeping changes and removals
-- restoring with a backup
+- restoring with a backup, disabling and reenabling
 - `CLAUDE_CONFIG_DIR`
 - dropped skills
 - refusing to act without Sekka's skills
 
 It also runs the scripts against a fake flake, pkexec and helper, with real
-Nix evaluation of their expressions.
+Nix evaluation of their expressions. `tests/test_sekka_update.py` runs the
+packaged helper in disposable rootless namespaces and covers lock contention,
+stale prepared configurations, cancellation, pre-activation failure, committed
+failure, generation snapshots, imported-module rollback and software deltas:
+
+```sh
+nix build .#yukimi.helper --no-link --print-out-paths --no-update-lock-file
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#bubblewrap -c python3 tests/test_sekka_update.py /nix/store/…-yukimi-helper-0.1.0/bin
+```
+
+The prepared-configuration fixtures add their small snapshots to the Nix
+store; all helper writes, builds, profiles and systemd actions are confined
+to disposable namespaces, with builds and activation stubbed.
 
 `agent-skills-vm` logs into Aizome in a disposable VM and checks that:
 
