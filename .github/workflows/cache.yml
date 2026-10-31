@@ -30,6 +30,10 @@ jobs:
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     environment: nightly
+    env:
+      # Avoid repeated full-heap GC in the large NixOS evaluations. The job
+      # container has 64 GiB; start Nix's heap at 16 GiB (DEVELOPERS.md).
+      GC_INITIAL_HEAP_SIZE: "17179869184"
     steps:
       - name: Check the cache secrets
         shell: bash
