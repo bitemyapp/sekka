@@ -12,6 +12,13 @@ outstanding. Tabs contain independently focused, draggable split panes. Keyboard
 and mouse protocols are encoded on the PTY owner using the running program's
 negotiated modes; component tests cover Kitty press/release and SGR mouse input.
 
+`aizome-hotaru --new-window` opens a separate window instead of adding a tab
+in a running Hotaru. `--app-id ID` gives a terminal application its own window
+identity (and also opens it separately); Tatami uses this for its TUI tools.
+`--hold` keeps the finished command visible until a key is pressed, for this
+invocation only. All three can precede `-- COMMAND [ARG…]`, alongside
+`--working-directory DIR`.
+
 ## Ownership and responsiveness
 
 Find searches the active pane's captured scrollback and visible screen on a

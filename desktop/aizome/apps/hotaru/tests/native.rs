@@ -1212,6 +1212,22 @@ fn shell(script: &str) -> PtyCommand {
 }
 
 #[test]
+fn invocation_hold_keeps_output_without_changing_saved_preferences() {
+    let mut app = Hotaru::new(shell("printf 'finished successfully'"));
+    app.hold = true;
+    app.app_id = "org.tatami.fastfetch".into();
+    assert_eq!(aizome_kit::Program::info(&app).app_id, "org.tatami.fastfetch");
+    let mut h = Harness::new(app);
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().is_some_and(|p| p.ended)));
+    assert!(!h.program().settings.wait_after_command);
+    let pane = h.program().active_pane().unwrap();
+    assert!(pane.snapshot.plain_text().contains("finished successfully"));
+    let id = pane.id;
+    h.send(Msg::Key(id, Arc::new(hotaru_core::input::KeyEvent::new(hotaru_core::input::Key::Character('q')))));
+    assert!(h.windows().is_empty());
+}
+
+#[test]
 fn an_ended_shell_closes_its_pane_then_its_tab_then_the_window() {
     use aizome_hotaru::settings::Action;
     let mut h = Harness::new(Hotaru::new(shell("read line")));

@@ -40,7 +40,7 @@ pkgs.testers.runNixOSTest {
     def clients():
         return json.loads(user("hyprctl -j clients"))
     def window():
-        return next((c for c in clients() if c["class"] == "foot"), None)
+        return next((c for c in clients() if c["class"] == "org.aizome.Hotaru"), None)
     def monitor():
         return json.loads(user("hyprctl -j monitors"))[0]
     def wait(predicate, seconds=20):
@@ -105,6 +105,48 @@ pkgs.testers.runNixOSTest {
         machine.send_key("meta_l-w")
         wait(lambda: window() is None)
         machine.send_key("meta_l-1")
+
+    with subtest("Hotaru is the default, and terminal shortcuts keep separate windows and cwd"):
+        machine.fail("command -v foot")
+        machine.succeed("test -f /run/current-system/sw/share/applications/org.aizome.Hotaru.desktop")
+        machine.send_key("meta_l-ret")
+        wait(lambda: window() is not None)
+        first = window()
+        user("mkdir -p '/home/demo/terminal space'")
+        machine.send_chars("cd '/home/demo/terminal space'\n")
+        def shell_cwd(pid):
+            children = machine.succeed(f"pgrep -P {pid} || true").split()
+            return [machine.succeed(f"readlink /proc/{p}/cwd").strip() for p in children]
+        wait(lambda: "/home/demo/terminal space" in shell_cwd(first["pid"]))
+        machine.send_key("meta_l-ret")
+        wait(lambda: len([c for c in clients() if c["class"] == "org.aizome.Hotaru"]) == 2)
+        second = next(c for c in clients() if c["class"] == "org.aizome.Hotaru" and c["pid"] != first["pid"])
+        wait(lambda: "/home/demo/terminal space" in shell_cwd(second["pid"]))
+        machine.screenshot("hotaru-separate-windows")
+        machine.send_key("meta_l-w")
+        wait(lambda: len(clients()) == 1)
+        machine.send_key("meta_l-w")
+        wait(lambda: window() is None)
+
+    with subtest("TUI focus and About hold preserve their independent window identity"):
+        user("tatami tui sleep 120")
+        wait(lambda: any(c["class"] == "org.tatami.sleep" for c in clients()))
+        first = next(c for c in clients() if c["class"] == "org.tatami.sleep")
+        user("tatami tui sleep 120")
+        time.sleep(1)
+        assert [c["pid"] for c in clients() if c["class"] == "org.tatami.sleep"] == [first["pid"]]
+        machine.send_key("meta_l-w")
+        wait(lambda: not clients())
+        user("tatami about")
+        wait(lambda: any(c["class"] == "org.tatami.fastfetch" for c in clients()))
+        about = next(c for c in clients() if c["class"] == "org.tatami.fastfetch")
+        assert about["floating"], about
+        machine.wait_until_fails("pgrep -u demo -x fastfetch", timeout=30)
+        time.sleep(1)
+        assert any(c["pid"] == about["pid"] for c in clients())
+        machine.screenshot("hotaru-about-held")
+        machine.send_key("q")
+        wait(lambda: not clients())
 
     for scale in [1, 2]:
         if scale == 2:

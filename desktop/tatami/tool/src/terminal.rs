@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Terminals and terminal applications in foot, Omarchy 4's terminal. foot
-//! finds the Tatami configuration through XDG_CONFIG_DIRS, which the
-//! session prepends with /etc/xdg/tatami; a user's own ~/.config/foot
-//! still takes precedence.
+//! Hotaru terminals and terminal applications, with independent windows
+//! for the desktop's shortcuts and application-specific window rules.
 use crate::{hypr, util};
 use std::{fs, path::Path};
 
@@ -72,13 +70,13 @@ pub fn active_cwd() -> String {
 
 /// Open a terminal in the focused terminal's directory.
 pub fn terminal(command: &[String]) {
-    let cwd = format!("--working-directory={}", active_cwd());
-    let mut args = vec![cwd.as_str()];
+    let cwd = active_cwd();
+    let mut args = vec!["--new-window", "--working-directory", cwd.as_str()];
     if !command.is_empty() {
         args.push("--");
         args.extend(command.iter().map(String::as_str));
     }
-    util::launch("foot", &args);
+    util::launch("aizome-hotaru", &args);
 }
 
 /// How a terminal application opens.
@@ -117,14 +115,13 @@ pub fn tui(command: &[String], mode: Tui) {
         ));
         return;
     }
-    let app_id = format!("--app-id={class}");
-    let mut args = vec![app_id.as_str()];
+    let mut args = vec!["--app-id", class.as_str()];
     if mode == Tui::Hold {
         args.push("--hold");
     }
     args.push("--");
     args.extend(command.iter().map(String::as_str));
-    util::launch("foot", &args);
+    util::launch("aizome-hotaru", &args);
 }
 
 /// Terminal editors open in a terminal, others in their own window.

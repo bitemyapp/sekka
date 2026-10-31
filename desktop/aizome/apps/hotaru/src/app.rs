@@ -160,6 +160,10 @@ pub struct Tab {
 }
 
 pub struct Hotaru {
+    /// A separate terminal application's Wayland ID, when requested by its desktop.
+    pub app_id: String,
+    /// Invocation-only hold; never written into the user's preferences.
+    pub hold: bool,
     pub tabs: Vec<Tab>,
     pub panes: Vec<Pane>,
     pub active: u64,
@@ -221,6 +225,8 @@ pub struct Hotaru {
 impl Hotaru {
     pub fn new(command: PtyCommand) -> Self {
         Self {
+            app_id: "org.aizome.Hotaru".into(),
+            hold: false,
             tabs: Vec::new(),
             panes: Vec::new(),
             active: 0,
@@ -1399,7 +1405,7 @@ impl Hotaru {
 impl Program for Hotaru {
     type Msg = Msg;
     fn info(&self) -> AppInfo {
-        AppInfo::new("org.aizome.Hotaru", "Hotaru", "Terminal")
+        AppInfo::new(self.app_id.clone(), "Hotaru", "Terminal")
             .icon(Icon::from_name("terminal").unwrap_or(Icon::Search))
     }
     fn launched(&mut self, cx: &mut Cx<Msg>) {
@@ -1912,7 +1918,7 @@ impl Program for Hotaru {
             Msg::Exited(id, status, abnormal) => {
                 // As Control-D at the prompt: the pane goes, and with the
                 // last of them, its tab and then the window.
-                if !abnormal && !self.settings.wait_after_command {
+                if !abnormal && !self.settings.wait_after_command && !self.hold {
                     self.remove_pane(id, cx);
                 } else if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
                     tab.status = if abnormal {

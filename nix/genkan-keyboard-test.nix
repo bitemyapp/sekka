@@ -15,7 +15,7 @@
 #   keys through the compositor: the space bar asks again, Alt suggests
 #   swapping left Alt and Super, which can be declined, Esc stops waiting, and
 #   Control is left as it is, saying Genkan swaps only Alt and Super;
-# - Hotaru and foot open fish, which no application choice brought.
+# - Hotaru and an explicitly installed Foot open fish, which no application choice brought.
 #
 # Its display is 2880 × 1800 at scale 2, drawn in software (pixman); the
 # captures crop Genkan's window from it pixel for pixel.
@@ -51,6 +51,8 @@ pkgs.testers.runNixOSTest {
       calamares.defaultDesktop = "aizome";
       # No applications: fish has to come with Aizome.
       calamares.applications = [ ];
+      # Optional terminal compatibility, not part of the default application set.
+      environment.systemPackages = [ pkgs.foot ];
       calamares.installUser = "demo";
       # What Genkan writes when the key left of the space bar is Alt and
       # the person keeps its suggestion.

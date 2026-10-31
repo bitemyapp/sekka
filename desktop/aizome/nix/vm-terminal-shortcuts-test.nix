@@ -54,6 +54,8 @@ pkgs.testers.runNixOSTest {
       settings.default_session.command = "${pkgs.greetd}/bin/agreety --cmd /run/current-system/sw/bin/aizome-session";
     };
     environment.systemPackages = [
+      # Explicit compatibility fixture; Foot is not a desktop default.
+      pkgs.foot
       python
       pkgs.wl-clipboard
     ];

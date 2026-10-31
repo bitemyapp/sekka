@@ -305,6 +305,14 @@
         };
       };
       checks.${system} = {
+        terminal-defaults = import ./nix/terminal-defaults-test.nix {
+          inherit
+            pkgs
+            inputs
+            installer
+            applicationCatalog
+            ;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs

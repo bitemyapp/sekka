@@ -227,7 +227,7 @@ hl.config({
 })
 
 -- Scroll nicely in the terminal.
-hl.window_rule({ match = { class = "(Alacritty|kitty|foot)" }, scroll_touchpad = 1.5 })
+hl.window_rule({ match = { class = "(org\\.aizome\\.Hotaru|Alacritty|kitty|foot)" }, scroll_touchpad = 1.5 })
 hl.window_rule({ match = { class = "com.mitchellh.ghostty" }, scroll_touchpad = 0.2 })
 
 -------------------------------------------------------------------------------
@@ -395,7 +395,7 @@ hl.window_rule({ match = { class = "org.telegram.desktop" }, focus_on_activate =
 
 -- Terminals, including the helper's terminal applications.
 hl.window_rule({
-  match = { class = "(Alacritty|kitty|com.mitchellh.ghostty|foot|org\\.codeberg\\.dnkl\\.foot|wezterm|org\\.tatami\\..*|TUI\\..*)" },
+  match = { class = "(org\\.aizome\\.Hotaru|Alacritty|kitty|com.mitchellh.ghostty|foot|org\\.codeberg\\.dnkl\\.foot|wezterm|org\\.tatami\\..*|TUI\\..*)" },
   tag = "+terminal",
 })
 

@@ -194,7 +194,7 @@ pkgs.testers.runNixOSTest {
         machine.send_key("meta_l-ret")  # Tatami's terminal
         machine.wait_until_succeeds(
             "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
-            f"HYPRLAND_INSTANCE_SIGNATURE={signature} hyprctl clients | grep -q foot",
+            f"HYPRLAND_INSTANCE_SIGNATURE={signature} hyprctl clients | grep -q org.aizome.Hotaru",
             timeout=60)
         time.sleep(3)
         # Something for the terminal to be busy with.
@@ -216,10 +216,11 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("activity")
 
     with subtest("The application inspector resumes every process it paused"):
-        foot = machine.succeed("pgrep -x foot").strip()
+        terminal = str(next(c["pid"] for c in json.loads(user("hyprctl -j clients"))
+                            if c["class"] == "org.aizome.Hotaru"))
         busy = machine.succeed("pgrep -x yes").strip()
         # Include the terminal's shell without assuming the fixture user's shell.
-        pids = sorted({foot, busy, *machine.succeed("pgrep -P " + foot).split()})
+        pids = sorted({terminal, busy, *machine.succeed("pgrep -P " + terminal).split()})
         inspector_pause_button()
         wait_paused(pids, True)
         wait_action("resume")
@@ -239,9 +240,9 @@ pkgs.testers.runNixOSTest {
         assert re.search(r"Power: processor [0-9.]+ m?W \(Service\)", reading), reading
         # The terminal running `yes` uses a whole processor: it is given
         # most of the processor's power above its idle floor.
-        foot = [line for line in reading.splitlines() if line.startswith("Foot")]
-        assert foot, reading
-        assert re.search(r"\b[0-9.]+ W\b", foot[0]), foot[0]
+        terminal = [line for line in reading.splitlines() if line.startswith("Hotaru")]
+        assert terminal, reading
+        assert re.search(r"\b[0-9.]+ W\b", terminal[0]), terminal[0]
         time.sleep(10)
         machine.screenshot("energy")
 

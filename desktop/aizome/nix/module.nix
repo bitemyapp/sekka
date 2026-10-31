@@ -3,7 +3,7 @@
 # screen, with what its shell and apps stand on: the portals, the services
 # behind Settings (NetworkManager, BlueZ, UPower, power profiles, UDisks2,
 # AccountsService, CUPS, geoclue), the lock screen's PAM service, the fonts,
-# and foot themed for Aizome. Everything session-specific is read only in
+# and native applications. Everything session-specific is read only in
 # Aizome sessions (/etc/xdg/aizome, the `aizome` dconf profile), so other
 # desktops on the same machine keep their own look.
 { self }:
@@ -196,7 +196,6 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       cfg.package
-      pkgs.foot
       pkgs.xwayland-satellite
       pkgs.wl-clipboard
       pkgs.xdg-utils
@@ -493,13 +492,12 @@ in
       configPackages = [ cfg.package ];
     };
     # Terminal applications open in Hotaru, Aizome's terminal, in Aizome
-    # sessions. foot stays installed, as a choice in Settei's Default Apps
-    # and the fallback; a person's own xdg-terminals.list comes first.
+    # sessions; a person's own xdg-terminals.list comes first. Alternative
+    # terminals can be installed explicitly instead of shipping another one.
     xdg.terminal-exec = {
       enable = true;
       settings.Aizome = [
         "org.aizome.Hotaru.desktop"
-        "foot.desktop"
       ];
     };
 
