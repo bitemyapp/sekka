@@ -2,7 +2,7 @@
 
 **A NixOS desktop you can install and look after through a graphical interface.**
 
-Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the compositor up, and the installer's choice for you. **Genkan**, a graphical installer, sets it up; **Yukimi**, an app for software and system updates, keeps it current; and **Tatami**, a keyboard-driven tiling desktop, is there for people who would rather tile. Sekka uses Determinate Nix and lets you choose Aizome, Tatami, Plasma, GNOME, vanilla Hyprland, or Xfce—or install several and switch at login. Sekka and Aizome are in daily use on many machines, their developer's and their users'.
+Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the compositor up. **Genkan**, a graphical installer, sets it up; **Yukimi**, an app for software and system updates, keeps it current; and **Tatami**, a keyboard-driven tiling desktop, is there for people who would rather tile. Sekka uses Determinate Nix and lets you choose Aizome, Tatami, Plasma, GNOME, vanilla Hyprland, or Xfce—or install several and switch at login. Sekka and Aizome are in daily use on many machines, their developer's and their users'.
 
 ## Before you install
 
@@ -17,8 +17,8 @@ Images below link to their original, full-resolution PNGs, captured with a scale
 
 ### Aizome: Sekka's own desktop
 
-Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
-choice. It is written from the compositor up in Rust, on its own native
+Aizome 藍染 is the desktop Sekka is made for, selected by default in the
+installer. It is written from the compositor up in Rust, on its own native
 toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP and IRIX:
 
 - Every window wears a tab only as wide as its title. A new window of the app

@@ -61,7 +61,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <div class="flag-head">
     <p class="eyebrow">The desktop · Aizome {aizome}</p>
     <h2 id="aizome">Aizome, the desktop Sekka is made for.</h2>
-    <p class="lead">Aizome is indigo dyeing: cloth dipped again and again, each dip adding depth. It is Sekka's own desktop and the installer's choice for you, written in Rust on its own toolkit, Sukumo {sukumo}, from the compositor to the calculator. Its ideas come from Haiku, NeXTSTEP and IRIX.</p>
+    <p class="lead">Aizome is indigo dyeing: cloth dipped again and again, each dip adding depth. It is Sekka's own desktop, written in Rust on its own toolkit, Sukumo {sukumo}, from the compositor to the calculator. Its ideas come from Haiku, NeXTSTEP and IRIX.</p>
   </div>
   <ul class="facts flag-points">
     <li><strong>Tabs, from Haiku.</strong> Every window wears a tab only as wide as its title. Drop one tab among another window's and the windows stack into a group, from any apps.</li>
@@ -214,7 +214,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
   <div>
     <p class="eyebrow">Aizome {kanji}</p>
     <h1>A desktop of its own, from the compositor to the calculator.</h1>
-    <p class="lead"><em>Aizome</em> is indigo dyeing: cloth dipped again and again, each dip adding depth. It is also Sekka's desktop, the one Sekka is made for and the installer chooses for you: a Wayland desktop written in Rust on its own toolkit, Sukumo {sukumo}, taking its ideas from Haiku, NeXTSTEP and IRIX.</p>
+    <p class="lead"><em>Aizome</em> is indigo dyeing: cloth dipped again and again, each dip adding depth. It is also Sekka's desktop, the one Sekka is made for: a Wayland desktop written in Rust on its own toolkit, Sukumo {sukumo}, taking its ideas from Haiku, NeXTSTEP and IRIX.</p>
     <p><a href="{AIZOME}/">aizome.computer</a> goes through every app in detail.</p>
   </div>
 </section>
@@ -366,7 +366,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
     b.push_str(
         r#"<section class="win" aria-labelledby="anywhere">
   <h2 id="anywhere">On any NixOS system</h2>
-  <p>On Sekka, Aizome is chosen for you. On any NixOS system with flakes, add Sekka's flake, import the module and enable it; then pick Aizome on the login screen.</p>
+  <p>On Sekka, choose Aizome in the installer, where it is selected by default, or add it later in Yukimi's Desktops page. On any NixOS system with flakes, add Sekka's flake, import the module and enable it; then pick Aizome on the login screen.</p>
   <pre class="code"><code>{
   inputs.sekka.url = "github:bitemyapp/sekka/nightly";
   outputs = { nixpkgs, sekka, ... }: {
@@ -416,7 +416,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         r#"<section class="win" aria-labelledby="which">
   <h2 id="which">Tatami or Aizome?</h2>
   <div class="cols">
-    <p><a href="/aizome/">Aizome</a> is the desktop Sekka is made for: windows you arrange yourself, stacked into tab groups, with one menu bar, a command palette and its own apps. It is the installer's choice.</p>
+    <p><a href="/aizome/">Aizome</a> is the desktop Sekka is made for: windows you arrange yourself, stacked into tab groups, with one menu bar, a command palette and its own apps.</p>
     <p>Tatami tiles: every window takes its share of the screen, workspaces are numbered, and everything is a key away. Choose it in the installer or in Yukimi's Desktops page, beside Aizome or instead of it, and pick one at the login screen.</p>
   </div>
 </section>
