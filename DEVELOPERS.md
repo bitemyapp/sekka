@@ -2226,6 +2226,36 @@ gh secret set CACHE_R2_ACCESS_KEY_ID --env nightly --repo bitemyapp/sekka
 gh secret set CACHE_R2_SECRET_ACCESS_KEY --env nightly --repo bitemyapp/sekka
 ```
 
+### Hourly nixpkgs refresh
+
+`.github/workflows/hourly.yml` runs at minute 17 of every hour and from its
+**Run workflow** button (Actions, "Refresh and cache nixpkgs hourly"), on
+`main` only. Scheduled runs may start later when GitHub or the builder is
+busy. One hourly run builds at a time, without cancellation; only the newest
+waiting run is kept. It checks out current `main` when the job starts.
+
+It refreshes only the base-system `nixpkgs` and application `applications`
+inputs with `nix flake update nixpkgs applications`, then commits any lock
+change locally before evaluation. It builds Uta, runs every component check,
+builds and uploads the package set through `.#push-cache`, and checks Uta and
+installed-system cache coverage. Only after all these steps pass does it
+fast-forward `main` to the exact tested and cached commit. A failed update,
+build, test, upload or coverage check leaves `main` untouched. If another
+push advances `main` during the build, the final push fails; the next run
+starts from the new tip, without rebasing an untested combination. Runs with
+unchanged inputs still check and populate the cache, without an empty commit.
+
+It uses the builder and the `nightly` environment's existing cache secrets.
+Its `GITHUB_TOKEN` push starts no duplicate cache workflow. It moves only
+`main`; the nightly continues to refresh every input and advance `nightly`
+on its own schedule. No hourly step builds or publishes an ISO.
+
+`nix build .#checks.x86_64-linux.hourly-nixpkgs` exercises the workflow's
+actual shell steps with fake Nix commands and disposable Git remotes. It
+covers successful promotion, unchanged inputs, missing credentials, each
+failed build/cache gate, a concurrent merge, and post-check tree changes.
+`checks.x86_64-linux.release-workflow` also lints the hourly workflow.
+
 ### Caching main
 
 `.github/workflows/cache.yml` runs on the builder for every push to `main`
