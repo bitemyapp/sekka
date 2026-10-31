@@ -91,6 +91,12 @@ impl Widget for SheetLayer {
         true
     }
 
+    fn over_video(&self) -> bool {
+        // The sheet and its full-window dimming must cover native video
+        // surfaces too, including alerts and open/save panels.
+        true
+    }
+
     fn event(&mut self, _cx: &mut EventCx, event: &Event) -> Status {
         // Nothing under the sheet hears the pointer.
         match event {
