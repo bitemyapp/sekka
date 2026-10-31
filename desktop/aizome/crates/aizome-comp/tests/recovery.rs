@@ -238,6 +238,36 @@ fn only_safe_actions_over_the_lock_screen() {
 }
 
 #[test]
+fn a_stationary_press_preserves_an_active_pointer_lock() {
+    use common::layer::{Anchor, KeyboardInteractivity, Layer, LayerSpec, ShellClient};
+
+    let c = Compositor::start(Options::default());
+    let app = Probe::spawn(&c, ProbeSpec::new("org.example.Locked", 0x3366ff));
+    let w = c.wait_window("org.example.Locked");
+    let (x, y) = (w.geometry.x + w.geometry.w / 2, w.geometry.y + w.geometry.h / 2);
+    motion(&c, x, y);
+    app.send(PCmd::LockPointer);
+    motion(&c, x + 1, y + 1);
+    app.wait("pointer locked", |s| s.locked);
+    let shell = ShellClient::spawn(&c);
+    shell.layer(
+        LayerSpec::new("cover", Layer::Overlay, KeyboardInteractivity::None)
+            .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right, (0, 0)),
+    );
+    c.settle();
+    assert_eq!(input(&c).pointer_constraint.as_deref(), Some("locked"));
+    // A constraint is not a button grab. The new surface must not steal a
+    // stationary click from the still-locked client.
+    synth(&c, vec![Synthetic::Click { button: "left".into() }]);
+    app.wait("locked client received click", |s| s.buttons == [(0x110, true), (0x110, false)]);
+    assert!(shell.seen().buttons.is_empty());
+    let state = input(&c);
+    assert_eq!(state.pointer_constraint.as_deref(), Some("locked"));
+    assert_eq!(state.pointer_focus.as_deref(), Some("org.example.Locked"));
+    assert!(app.seen().locked);
+}
+
+#[test]
 fn reset_input_ends_a_stuck_grab_and_frees_a_locked_pointer() {
     let c = Compositor::start(Options::default());
     let app = Probe::spawn(&c, ProbeSpec::new("org.example.Stuck", 0x3366ff));

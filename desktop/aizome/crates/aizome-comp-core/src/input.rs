@@ -346,6 +346,24 @@ impl State {
         if crate::recovery::pointer_button(self, button, pressed) {
             return;
         }
+        // A surface may have opened or moved under a stationary pointer
+        // (the Deskbar reopens at the other edge after its grip is let go).
+        // A fresh press needs that surface's enter and local coordinates,
+        // not the last motion's now-stale target. Existing grabs and active
+        // constraints keep their target, including on additional presses.
+        if pressed
+            && let Some(pointer) = self.az.seat.get_pointer()
+            && !pointer.is_grabbed()
+        {
+            let constrained = pointer.current_focus().is_some_and(|f| {
+                let mut active = false;
+                with_pointer_constraint(&f.0, &pointer, |c| active = c.is_some_and(|c| c.is_active()));
+                active
+            });
+            if !constrained {
+                self.pointer_motion_absolute(self.az.pointer_pos, time);
+            }
+        }
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.pointer_button)(st, button, pressed, time));
         } else {

@@ -108,6 +108,8 @@ pub struct ShellSeen {
     pub dismissed: Vec<String>,
     /// The surface the pointer is over, by name.
     pub pointer: Option<String>,
+    /// Pointer buttons with their actual Wayland recipient (not keyboard focus).
+    pub buttons: Vec<(String, u32, bool)>,
 }
 
 impl ShellSeen {
@@ -205,6 +207,9 @@ impl Shell {
             let mut seen = self.seen.lock().unwrap();
             if seen.focus.as_deref() == Some(name) {
                 seen.focus = None;
+            }
+            if seen.pointer.as_deref() == Some(name) {
+                seen.pointer = None;
             }
         }
         if let Some(s) = self.surfaces.remove(name) {
@@ -419,8 +424,14 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Shell {
         _: &QueueHandle<Self>,
     ) {
         match event {
-            wl_pointer::Event::Button { serial, state: WEnum::Value(wl_pointer::ButtonState::Pressed), .. } => {
-                shell.serial = Some(serial)
+            wl_pointer::Event::Button { serial, button, state: WEnum::Value(state), .. } => {
+                let pressed = state == wl_pointer::ButtonState::Pressed;
+                if pressed {
+                    shell.serial = Some(serial);
+                }
+                let mut seen = shell.seen.lock().unwrap();
+                let to = seen.pointer.clone().unwrap_or_default();
+                seen.buttons.push((to, button, pressed));
             }
             wl_pointer::Event::Enter { surface, .. } => {
                 let name = shell.name_of(&surface);
