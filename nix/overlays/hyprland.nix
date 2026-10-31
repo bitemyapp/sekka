@@ -11,9 +11,21 @@
 # capture-cursor-vm check passes with an upstream fix, including mirrors.
 final: prev: {
   hyprland = prev.hyprland.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [
-      ../patches/hyprland-screenshare-sessions.patch
-      ../patches/hyprland-capture-cursor.patch
-    ];
+    patches =
+      (old.patches or [ ])
+      ++ (
+        # 0.57 adds workspace capture and passes rendering state explicitly.
+        # Keep the earlier variants for installations using the older lock.
+        if final.lib.versionAtLeast old.version "0.57" then
+          [
+            ../patches/hyprland-screenshare-sessions-0.57.patch
+            ../patches/hyprland-capture-cursor-0.57.patch
+          ]
+        else
+          [
+            ../patches/hyprland-screenshare-sessions.patch
+            ../patches/hyprland-capture-cursor.patch
+          ]
+      );
   });
 }

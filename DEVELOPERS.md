@@ -538,6 +538,17 @@ failure during an input update requires that review; do not just skip the patch.
 
 Hyprland itself carries `nix/patches/hyprland-screenshare-sessions.patch`
 (`nix/overlays/hyprland.nix`), which is proposed upstream as the same commit.
+The overlay selects the `-0.57.patch` variants of both Hyprland fixes for
+0.57 and newer, adapting them to explicit rendering contexts and workspace
+capture while retaining the earlier patches for older input locks. Upstream
+0.57 still needs the session cleanup and cursor fixes; version selection does
+not bypass either patch or its regression checks.
+The 0.57 capture variant also preserves native monitor orientation and reports
+that transform to ext capture. Legacy wlr clients infer it from the output;
+exporting an already upright buffer made them rotate it again and misplaced
+the cursor in regional captures. Window and workspace captures stay upright.
+Read the frame's zoom after the animation tick, so an immediate zoom change
+also reaches a mirrored display on its first redraw.
 wlr-screencopy and hyprland-toplevel-export clients, xdg-desktop-portal-hyprland
 among them, ask for one frame at a time, so Hyprland keeps a "managed" session
 per client and target. In 0.56.2 those sessions ended only when their monitor
