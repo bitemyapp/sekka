@@ -2437,6 +2437,17 @@ from its client: the job image sets 32 builds at a time with 16 cores each.
 Nix's default, one at a time, made the first nightly build its 3,400
 derivations in sequence, an hour and a half where most of them could run
 together.
+
+The nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=17179869184`
+(16 GiB) for the Nix client's Boehm garbage collector. Nix's default initial
+heap is 4 GiB; the large NixOS configuration checks repeatedly collected it,
+spending most of their CPU time in collector workers before builds began.
+The larger initial heap trades memory for fewer collections within the job
+container's 64 GiB allowance. It leaves collector/evaluator threads, build
+jobs, build cores and check coverage unchanged. This job environment setting
+takes effect on the next run without redeploying the runner or restarting
+the host's daemon.
+
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
