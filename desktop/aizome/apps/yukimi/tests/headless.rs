@@ -65,6 +65,66 @@ fn has(h: &Harness<Yukimi>, w: WindowKey, text: &str) -> bool {
     h.texts(w).iter().any(|t| t == text)
 }
 
+fn active_aliases(selected: u32, active: &[u32], expected: Option<u32>) {
+    let mut model = aizome_yukimi::fixture::model();
+    model.generations.truncate(3);
+    let target = model.generations[0].target.clone();
+    for (i, generation) in model.generations.iter_mut().enumerate() {
+        generation.number = i as u32 + 1;
+        generation.link = format!("/nix/var/nix/profiles/system-{}-link", generation.number).into();
+        if matches!(generation.number, 1 | 3) {
+            generation.target = target.clone();
+        }
+        generation.current = generation.number == selected;
+        generation.active = active.contains(&generation.number);
+    }
+    let app = Yukimi::with(
+        Source::Sample(Arc::new(model)),
+        Runner::Mock(Arc::new(|_| panic!("reading generation labels must not change the system"))),
+        Clock::Fixed(aizome_yukimi::fixture::NOW, 21),
+    );
+    let mut h = Harness::new(app);
+    let w = h.window();
+    // Optional comparison evidence includes the real native window, before
+    // asserting, so the original failure's rendered labels are preserved.
+    if let Some(dir) = std::env::var_os("YUKIMI_ALIAS_PICTURES") {
+        let file = format!("selected-{selected}-active-{active:?}.png");
+        h.save_png(w, std::path::PathBuf::from(dir).join(file), 1.0);
+    }
+    let words = h.texts(w);
+    match expected {
+        Some(number) => {
+            assert!(words.iter().any(|s| s.starts_with(&format!("generation {number} · Linux"))), "footer: {words:?}");
+            assert!(words.iter().any(|s| s.contains(&format!("generation {number}, built"))), "overview: {words:?}");
+        }
+        None => assert!(!words.iter().any(|s| s.starts_with("generation ") || s.contains(", built ")), "{words:?}"),
+    }
+    assert_eq!(h.program().model.current_generation().map(|g| g.number), expected);
+}
+
+#[test]
+fn active_generation_alias_prefers_the_selected_build() {
+    // Installing then removing a package can make generation3 identical
+    // to generation1, with the profile selecting3 and both marked active.
+    active_aliases(3, &[1, 3], Some(3));
+}
+
+#[test]
+fn active_generation_alias_can_be_an_older_selected_build() {
+    active_aliases(1, &[1, 3], Some(1));
+}
+
+#[test]
+fn active_generation_alias_uses_newest_running_when_selection_is_not_active() {
+    // A different system is only selected for the next boot.
+    active_aliases(2, &[1, 3], Some(3));
+}
+
+#[test]
+fn active_generation_alias_does_not_call_a_prepared_build_running() {
+    active_aliases(3, &[], None);
+}
+
 #[test]
 fn completion_advice_only_offers_the_applicable_power_action() {
     use yukimi_system::completion::{Action, Completion};

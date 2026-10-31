@@ -303,7 +303,9 @@ impl Model {
     }
 
     pub fn current_generation(&self) -> Option<&Generation> {
-        self.generations.iter().find(|g| g.active)
+        // Several generation links can name the running build. Prefer the
+        // selected one, as History does, then the newest active alias.
+        self.generations.iter().filter(|g| g.active).max_by_key(|g| (g.current, g.number))
     }
 
     /// Attributes the current user installed for themselves.
