@@ -33,6 +33,30 @@ struct Cells {
 }
 
 pub fn view(n: &Nisshi) -> Element<Msg> {
+    if !n.filter.search.problems.is_empty() {
+        let explanation = aizome_kit::column![
+            icon(Icon::CircleAlert).role(Role::Warning),
+            text("Check the search").bold(),
+            text(n.filter.search.problems.join("\n")).role(Role::Text2).width(Length::Fill),
+            text("Edit the search above, or clear the filters to see messages again.")
+                .role(Role::Text3)
+                .width(Length::Fill),
+            aizome_kit::row![
+                button("Edit Search").compact().on_press(Msg::FocusSearch),
+                button("Clear Filters").compact().on_press(Msg::ClearFilters),
+            ]
+            .spacing(8.0),
+        ]
+        .spacing(10.0)
+        .align(Align::Center);
+        return container(scroll(explanation).width(Length::Fill).height(Length::Fill))
+            .padding(24.0)
+            .fill(Tone::Surface)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .id("messages")
+            .into();
+    }
     let store = n.shown();
     let count = n.view.rows.len();
     if count == 0 {
