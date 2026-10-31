@@ -130,7 +130,6 @@ in
       # Kernel and udev messages only for errors, so the splash isn't drawn
       # over text, and the initrd says nothing on the way.
       boot.consoleLogLevel = lib.mkDefault 3;
-      boot.initrd.verbose = false;
       boot.kernelParams = [
         "quiet"
         "udev.log_level=3"
