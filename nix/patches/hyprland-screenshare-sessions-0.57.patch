@@ -1,0 +1,240 @@
+diff --git a/src/managers/screenshare/ScreenshareManager.cpp b/src/managers/screenshare/ScreenshareManager.cpp
+index dc74b89..8bec6ec 100644
+--- a/src/managers/screenshare/ScreenshareManager.cpp
++++ b/src/managers/screenshare/ScreenshareManager.cpp
+@@ -4,12 +4,17 @@
+ #include "../../desktop/view/window/Window.hpp"
+ #include "../../protocols/core/Seat.hpp"
+ #include "../../state/MonitorState.hpp"
++#include "../eventLoop/EventLoopManager.hpp"
+ #include "WorkspaceCaptureSource.hpp"
+ #include "../permissions/DynamicPermissionManager.hpp"
+ #include "hyprland-workspace-image-capture-source-v1.hpp"
+ 
+ using namespace Screenshare;
+ 
++// A managed session whose client asks for no frame for this long is done.
++constexpr std::chrono::milliseconds MANAGED_SESSION_IDLE_TIMEOUT{5000};
++constexpr size_t MAX_MANAGED_SESSIONS_PER_CLIENT = 32;
++
+ CScreenshareManager::CScreenshareManager() {
+     ;
+ }
+@@ -137,14 +142,14 @@ WP<CScreenshareSession> CScreenshareManager::getManagedSession(eScreenshareType
+         return {};
+ 
+     auto it = std::ranges::find_if(m_managedSessions, [&](const auto& session) {
+-        if (session->m_session->m_client != client || session->m_session->m_type != type)
++        if (session->m_session->m_stopped || session->m_session->m_client != client || session->m_session->m_type != type)
+             return false;
+ 
+         switch (type) {
+             case SHARE_MONITOR: return session->m_session->m_monitor == monitor;
+             case SHARE_WINDOW: return session->m_session->m_window == window;
+             case SHARE_WORKSPACE: return session->m_session->m_workspace == ws;
+-            case SHARE_REGION: return session->m_session->m_monitor == monitor && session->m_session->m_captureBox == captureBox;
++            case SHARE_REGION: return session->m_session->m_monitor == monitor && session->m_session->m_requestedBox == captureBox;
+             case SHARE_NONE:
+             default: return false;
+         }
+@@ -153,6 +158,28 @@ WP<CScreenshareSession> CScreenshareManager::getManagedSession(eScreenshareType
+     });
+ 
+     if (it == m_managedSessions.end()) {
++        const size_t CLIENTSESSIONS =
++            std::ranges::count_if(m_managedSessions, [client](const auto& session) { return !session->m_session->m_stopped && session->m_session->m_client == client; });
++
++        if (CLIENTSESSIONS >= MAX_MANAGED_SESSIONS_PER_CLIENT) {
++            // end the client's least recently used session, preferring one it isn't waiting on
++            SManagedSession* oldest     = nullptr;
++            bool             oldestBusy = true;
++            for (const auto& session : m_managedSessions) {
++                if (session->m_session->m_stopped || session->m_session->m_client != client)
++                    continue;
++
++                const bool BUSY = hasPendingFrames(session->m_session.get());
++                if (!oldest || (oldestBusy && !BUSY) || (oldestBusy == BUSY && session->m_lastUsed < oldest->m_lastUsed)) {
++                    oldest     = session.get();
++                    oldestBusy = BUSY;
++                }
++            }
++
++            LOG(Log::WARN, "Client holds {} screencopy sessions, ending its least recently used one", CLIENTSESSIONS);
++            oldest->m_session->stop(); // erases it from m_managedSessions
++        }
++
+         UP<CScreenshareSession> session;
+         switch (type) {
+             case SHARE_MONITOR: session = UP<CScreenshareSession>(new CScreenshareSession(monitor, client)); break;
+@@ -176,14 +203,49 @@ WP<CScreenshareSession> CScreenshareManager::getManagedSession(eScreenshareType
+             if (!managed)
+                 return;
+ 
+-            const auto& session = managed->m_session;
+-            std::erase_if(Screenshare::mgr()->m_managedSessions, [&session](const auto& s) { return s && s->m_session.get() == session.get(); });
++            // compare addresses only: erasing destroys the session this points to
++            const auto* const PSESSION = managed->m_session.get();
++            std::erase_if(Screenshare::mgr()->m_managedSessions, [PSESSION](const auto& s) { return s && s->m_session.get() == PSESSION; });
+         });
++
++        managed->m_idleTimer = makeShared<CEventLoopTimer>(
++            MANAGED_SESSION_IDLE_TIMEOUT, [managed = WP<SManagedSession>(managed)](SP<CEventLoopTimer> self, void* data) { Screenshare::mgr()->onManagedSessionTimer(managed); },
++            nullptr);
++
++        if (g_pEventLoopManager)
++            g_pEventLoopManager->addTimer(managed->m_idleTimer);
+     }
+ 
++    (*it)->m_lastUsed = Time::steadyNow();
++
+     return (*it)->m_session;
+ }
+ 
++void CScreenshareManager::onManagedSessionTimer(WP<SManagedSession> managed) {
++    if (!managed || managed->m_session->m_stopped)
++        return;
++
++    const auto IDLE = Time::steadyNow() - managed->m_lastUsed;
++    if (IDLE < MANAGED_SESSION_IDLE_TIMEOUT || hasPendingFrames(managed->m_session.get())) {
++        managed->m_idleTimer->updateTimeout(IDLE < MANAGED_SESSION_IDLE_TIMEOUT ? MANAGED_SESSION_IDLE_TIMEOUT - IDLE : Time::steady_dur{MANAGED_SESSION_IDLE_TIMEOUT});
++        return;
++    }
++
++    LOG(Log::DEBUG, "Ending screencopy session for {}: no frame asked for in {}ms", managed->m_session->m_name,
++         std::chrono::duration_cast<std::chrono::milliseconds>(IDLE).count());
++    managed->m_session->stop(); // erases managed
++}
++
++bool CScreenshareManager::hasPendingFrames(const CScreenshareSession* session) {
++    return std::ranges::any_of(m_pendingFrames, [session](const auto& frame) { return frame && !frame->done() && frame->m_session.get() == session; });
++}
++
++void CScreenshareManager::onManagedSessionClientDestroy(wl_listener* listener, void* data) {
++    SManagedSession::SClientDestroyListener* wrap = wl_container_of(listener, wrap, listener);
++    if (wrap->session)
++        wrap->session->stop(); // erases the managed session, and wrap with it
++}
++
+ bool CScreenshareManager::isOutputBeingSSd(PHLMONITOR monitor) {
+     return std::ranges::any_of(m_sessions, [monitor](const auto& s) {
+         if (!s)
+@@ -278,6 +340,20 @@ bool CScreenshareManager::needsWorkspaceCaptureSnapshot(PHLWINDOW window) const
+     return std::ranges::any_of(m_pendingFrames, [&](const auto& frame) { return frame && frame->m_shared && !frame->done() && includesWindow(frame->m_session); });
+ }
+ 
+-CScreenshareManager::SManagedSession::SManagedSession(UP<CScreenshareSession>&& session) : m_session(std::move(session)) {
+-    ;
++CScreenshareManager::SManagedSession::SManagedSession(UP<CScreenshareSession>&& session) : m_session(std::move(session)), m_lastUsed(Time::steadyNow()) {
++    // the session ends with its client; the late signal follows the destruction of the client's frames
++    wl_list_init(&m_clientDestroy.listener.link);
++    m_clientDestroy.listener.notify = CScreenshareManager::onManagedSessionClientDestroy;
++    m_clientDestroy.session         = m_session;
++    if (m_session->m_client)
++        wl_client_add_destroy_late_listener(m_session->m_client, &m_clientDestroy.listener);
++}
++
++CScreenshareManager::SManagedSession::~SManagedSession() {
++    wl_list_remove(&m_clientDestroy.listener.link);
++    wl_list_init(&m_clientDestroy.listener.link);
++
++    // the event loop drops timers only it still holds (and may be gone at exit); a cancelled one never fires
++    if (m_idleTimer)
++        m_idleTimer->cancel();
+ }
+diff --git a/src/managers/screenshare/ScreenshareManager.hpp b/src/managers/screenshare/ScreenshareManager.hpp
+index fa1eabd..cac4b91 100644
+--- a/src/managers/screenshare/ScreenshareManager.hpp
++++ b/src/managers/screenshare/ScreenshareManager.hpp
+@@ -6,6 +6,7 @@ namespace Render {
+ }
+ 
+ #include <vector>
++#include <wayland-server-core.h>
+ #include "../../helpers/memory/Memory.hpp"
+ #include "../../protocols/types/Buffer.hpp"
+ #include "../../render/Framebuffer.hpp"
+@@ -79,7 +80,8 @@ namespace Screenshare {
+         PHLMONITORREF               m_monitor;
+         PHLWINDOWREF                m_window;
+         SP<CWorkspaceCaptureSource> m_workspace;
+-        CBox                        m_captureBox = {}; // given capture area in logical coordinates (see xdg_output)
++        CBox                        m_requestedBox = {}; // capture area as the client gave it, in logical coordinates
++        CBox                        m_captureBox   = {}; // m_requestedBox in the monitor's pixels
+ 
+         wl_client*                  m_client = nullptr;
+         std::string                 m_name   = "";
+@@ -253,15 +255,29 @@ namespace Screenshare {
+         std::vector<WP<CCursorshareSession>> m_cursorSessions;
+         std::vector<WP<CScreenshareFrame>>   m_pendingFrames;
+ 
++        // Legacy capture protocols request individual frames. Release their managed
++        // sessions when the client disconnects or stops asking for frames, and cap
++        // each client's session count so abandoned captures cannot accumulate.
+         struct SManagedSession {
+             SManagedSession(UP<CScreenshareSession>&& session);
++            ~SManagedSession();
+ 
+             UP<CScreenshareSession> m_session;
+             CHyprSignalListener     stoppedListener;
++            SP<CEventLoopTimer>     m_idleTimer;
++            Time::steady_tp         m_lastUsed;
++
++            struct SClientDestroyListener {
++                wl_listener             listener;
++                WP<CScreenshareSession> session;
++            } m_clientDestroy;
+         };
+ 
+         std::vector<UP<SManagedSession>> m_managedSessions;
+         WP<CScreenshareSession> getManagedSession(eScreenshareType type, wl_client* client, PHLMONITOR monitor, PHLWINDOW window, SP<CWorkspaceCaptureSource> ws, CBox captureBox);
++        void                        onManagedSessionTimer(WP<SManagedSession> managed);
++        bool                        hasPendingFrames(const CScreenshareSession* session);
++        static void                 onManagedSessionClientDestroy(wl_listener* listener, void* data);
+ 
+         friend class CScreenshareSession;
+     };
+diff --git a/src/managers/screenshare/ScreenshareSession.cpp b/src/managers/screenshare/ScreenshareSession.cpp
+index a316081..dbe3791 100644
+--- a/src/managers/screenshare/ScreenshareSession.cpp
++++ b/src/managers/screenshare/ScreenshareSession.cpp
+@@ -46,7 +46,7 @@ CScreenshareSession::CScreenshareSession(PHLWINDOW window, wl_client* client) :
+ }
+ 
+ CScreenshareSession::CScreenshareSession(PHLMONITOR monitor, CBox captureRegion, wl_client* client) :
+-    m_type(SHARE_REGION), m_monitor(monitor), m_captureBox(captureRegion), m_client(client) {
++    m_type(SHARE_REGION), m_monitor(monitor), m_requestedBox(captureRegion), m_client(client) {
+     if UNLIKELY (!m_monitor)
+         return;
+ 
+@@ -121,10 +121,6 @@ void CScreenshareSession::init() {
+     if (g_pEventLoopManager)
+         g_pEventLoopManager->addTimer(m_shareStopTimer);
+ 
+-    // scale capture box since it's in logical coords; round to integer pixel
+-    // dims so m_bufferSize matches the int32 size we send to the client
+-    m_captureBox.scale(PMONITOR->m_scale).round();
+-
+     m_listeners.monitorDestroyed = PMONITOR->m_events.disconnect.listen([this]() { stop(); });
+     if (m_type != SHARE_WORKSPACE)
+         m_listeners.monitorModeChanged = PMONITOR->m_events.modeChanged.listen([this]() {
+@@ -167,7 +163,7 @@ void CScreenshareSession::calculateConstraints() {
+ 
+     switch (m_type) {
+         case SHARE_MONITOR:
+-            m_bufferSize = PMONITOR->m_transformedSize;
++            m_bufferSize = PMONITOR->m_pixelSize;
+             m_name       = PMONITOR->m_name;
+             break;
+         case SHARE_WINDOW:
+@@ -175,7 +171,10 @@ void CScreenshareSession::calculateConstraints() {
+             m_name       = m_window->metadata().title();
+             break;
+         case SHARE_REGION:
+-            m_bufferSize = m_captureBox.size();
++            // Preserve the logical box for session lookup; derive pixels afresh
++            // when monitor constraints change.
++            m_captureBox = m_requestedBox.copy().scale(PMONITOR->m_scale).round();
++            m_bufferSize = PMONITOR->m_transform % 2 == 0 ? m_captureBox.size() : Vector2D{m_captureBox.h, m_captureBox.w};
+             m_name       = PMONITOR->m_name;
+             break;
+         case SHARE_NONE:

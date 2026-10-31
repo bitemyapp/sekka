@@ -1,0 +1,311 @@
+diff --git a/src/managers/screenshare/ScreenshareFrame.cpp b/src/managers/screenshare/ScreenshareFrame.cpp
+index 67e3381..d5374bf 100644
+--- a/src/managers/screenshare/ScreenshareFrame.cpp
++++ b/src/managers/screenshare/ScreenshareFrame.cpp
+@@ -219,7 +219,9 @@ void CScreenshareFrame::renderMonitor(Render::CRenderContext& ctx) {
+ 
+     const bool IS_CM_AWARE = PROTO::colorManagement && PROTO::colorManagement->isClientCMAware(m_session->m_client);
+     ctx.m_data.fbSize      = m_bufferSize;
+-    g_pHyprRenderer->setProjectionType(ctx, Render::RPT_EXPORT);
++    // Export native output orientation for wlr-screencopy; ext capture
++    // receives the same orientation through transform().
++    g_pHyprRenderer->setProjectionType(ctx, Render::RPT_FB);
+     ctx.m_data.transformDamage = false;
+     ctx.m_data.noSimplify      = true;
+     g_pHyprRenderer->setViewport(0, 0, m_bufferSize.x, m_bufferSize.y);
+@@ -330,8 +332,8 @@ void CScreenshareFrame::renderMonitor(Render::CRenderContext& ctx) {
+ 
+     if (m_overlayCursor) {
+         CRegion  fakeDamage = {0, 0, m_bufferSize.x, m_bufferSize.y};
+-        Vector2D cursorPos  = Pointer::mgr()->untransformedPosition() - PMONITOR->m_position - m_session->m_captureBox.pos() / PMONITOR->m_scale;
+-        Pointer::mgr()->renderSoftwareCursorsFor(ctx, PMONITOR, Time::steadyNow(), fakeDamage, cursorPos, true);
++        Vector2D cursorPos  = Pointer::mgr()->untransformedPosition() - PMONITOR->m_position;
++        Pointer::mgr()->renderSoftwareCursorsFor(ctx, PMONITOR, Time::steadyNow(), fakeDamage, cursorPos, true, m_session->m_captureBox.pos());
+     }
+ }
+ 
+@@ -375,7 +377,7 @@ void CScreenshareFrame::renderWindow(Render::CRenderContext& ctx) {
+ 
+     CRegion fakeDamage = {0, 0, INT16_MAX, INT16_MAX};
+     Pointer::mgr()->renderSoftwareCursorsFor(ctx, PMONITOR->m_self.lock(), NOW, fakeDamage,
+-                                             Pointer::mgr()->untransformedPosition() - PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT), true, true);
++                                             Pointer::mgr()->untransformedPosition() - PWINDOW->position(Desktop::View::IGeometric::GEOMETRIC_CURRENT), true);
+ }
+ 
+ void CScreenshareFrame::renderWorkspace(Render::CRenderContext& ctx) {
+@@ -394,7 +396,7 @@ void CScreenshareFrame::renderWorkspace(Render::CRenderContext& ctx) {
+         return;
+ 
+     CRegion damage{0, 0, m_bufferSize.x, m_bufferSize.y};
+-    Pointer::mgr()->renderSoftwareCursorsFor(ctx, MONITOR, NOW, damage, Pointer::mgr()->untransformedPosition() - MONITOR->m_position, true, true);
++    Pointer::mgr()->renderSoftwareCursorsFor(ctx, MONITOR, NOW, damage, Pointer::mgr()->untransformedPosition() - MONITOR->m_position, true);
+ }
+ 
+ void CScreenshareFrame::render(Render::CRenderContext& ctx) {
+@@ -599,6 +601,10 @@ Vector2D CScreenshareFrame::bufferSize() const {
+ }
+ 
+ wl_output_transform CScreenshareFrame::transform() const {
++    if (m_session->m_type == SHARE_MONITOR || m_session->m_type == SHARE_REGION) {
++        if (const auto MONITOR = m_session->monitor())
++            return MONITOR->m_transform;
++    }
+     return WL_OUTPUT_TRANSFORM_NORMAL;
+ }
+ 
+diff --git a/src/output/Monitor.cpp b/src/output/Monitor.cpp
+index 4a50c9f..d0eb938 100644
+--- a/src/output/Monitor.cpp
++++ b/src/output/Monitor.cpp
+@@ -2660,6 +2660,11 @@ bool CMonitor::needsACopyFB() {
+ }
+ 
+ bool CMonitor::needsUnmodifiedCopy() {
++    // The copy used by captures must not include the software cursor. Keep it
++    // separate from the displayed image even when no color conversion is needed.
++    if (needsACopyFB())
++        return true;
++
+     static const auto PKEEP = CConfigValue<Hyprlang::INT>("render:keep_unmodified_copy");
+     if (*PKEEP == 1)
+         return true;
+diff --git a/src/output/MonitorResources.cpp b/src/output/MonitorResources.cpp
+index 4cc4d1b..e383c61 100644
+--- a/src/output/MonitorResources.cpp
++++ b/src/output/MonitorResources.cpp
+@@ -125,12 +125,20 @@ void CMonitorResources::markMirrorFBStale() {
+     m_mirrorFBStaleDamage.clear();
+ }
+ 
+-void CMonitorResources::markMirrorFBUpdated() {
++void CMonitorResources::markMirrorFBUpdated(const CBox& imageBox) {
++    // Retain the exact transform used for this image. Re-running the zoom
++    // controller here or during capture would advance its detached camera.
++    m_mirrorFBOffset = imageBox.pos();
++    m_mirrorFBScale  = imageBox.w / m_monitor->m_transformedSize.x;
+     m_mirrorFBValid            = true;
+     m_mirrorFBNeedsFullRefresh = false;
+     m_mirrorFBStaleDamage.clear();
+ }
+ 
++CBox CMonitorResources::projectMirrorBox(CBox box) const {
++    return box.scale(m_mirrorFBScale).translate(m_mirrorFBOffset);
++}
++
+ CRegion CMonitorResources::pendingMirrorFBDamage() const {
+     const auto DAMAGE_SIZE = mirrorFBDamageSize();
+     if (!hasMirrorFB() || !m_mirrorFBValid || m_mirrorFBNeedsFullRefresh)
+diff --git a/src/output/MonitorResources.hpp b/src/output/MonitorResources.hpp
+index 9a63811..093710d 100644
+--- a/src/output/MonitorResources.hpp
++++ b/src/output/MonitorResources.hpp
+@@ -25,7 +25,8 @@ namespace Monitor {
+         void                               invalidateMirrorFB();
+         void                               markMirrorFBStale(const CRegion& damage);
+         void                               markMirrorFBStale();
+-        void                               markMirrorFBUpdated();
++        void                               markMirrorFBUpdated(const CBox& imageBox);
++        CBox                               projectMirrorBox(CBox box) const;
+         CRegion                            pendingMirrorFBDamage() const;
+         void                               enableMirror();
+         void                               disableMirror();
+@@ -51,6 +52,8 @@ namespace Monitor {
+         DRMFormat                           m_drmFormat;
+         Vector2D                            m_size;
+         NColorManagement::PImageDescription m_imageDescription;
++        Vector2D                            m_mirrorFBOffset;
++        double                              m_mirrorFBScale = 1.0;
+         bool                                m_mirrorFBValid            = false;
+         bool                                m_mirrorFBNeedsFullRefresh = true;
+ 
+diff --git a/src/pointer/PointerManager.cpp b/src/pointer/PointerManager.cpp
+index 54eb8cb..e6184ba 100644
+--- a/src/pointer/PointerManager.cpp
++++ b/src/pointer/PointerManager.cpp
+@@ -23,6 +23,7 @@
+ #include "../helpers/Drm.hpp"
+ #include "../event/EventBus.hpp"
+ #include "../state/MonitorState.hpp"
++#include "../output/MonitorResources.hpp"
+ #include <climits>
+ #include <cstring>
+ #include <gbm.h>
+@@ -734,7 +735,7 @@ SP<Aquamarine::IBuffer> CPointerManager::renderHWCursorBuffer(SP<CPointerManager
+ }
+ 
+ void CPointerManager::renderSoftwareCursorsFor(Render::CRenderContext& ctx, PHLMONITOR pMonitor, const Time::steady_tp& now, CRegion& damage, std::optional<Vector2D> overridePos,
+-                                               bool screencopy, bool forceRender) {
++                                               bool screencopy, std::optional<Vector2D> monitorCaptureOffset) {
+     if (!hasCursor())
+         return;
+ 
+@@ -746,11 +747,8 @@ void CPointerManager::renderSoftwareCursorsFor(Render::CRenderContext& ctx, PHLM
+         return;
+     }
+ 
+-    // don't render cursor on screencopy if using sw cursors
+-    // otherwise we draw the cursor again for screencopy when using sw cursors
+-    // unless this is toplevel capture and we *actually* have to force render cursors
+-    if (screencopy && !forceRender && (state->hardwareFailed || state->softwareLocks != 0))
+-        return;
++    // The monitor copy is cursor-free for both hardware and software cursors.
++    // Capture clients requesting a cursor therefore always need this overlay.
+ 
+     auto& image = cursorImageForMonitor(pMonitor);
+     auto  box   = overridePos ? image.logicalBox(*overridePos) : state->box.copy();
+@@ -769,8 +767,11 @@ void CPointerManager::renderSoftwareCursorsFor(Render::CRenderContext& ctx, PHLM
+     box.y = std::round(box.y);
+ 
+     CTexPassElement::SRenderData data;
+-    data.tex = texture;
+-    data.box = box.round();
++    data.tex               = texture;
++    data.box               = box.round();
++    if (monitorCaptureOffset)
++        data.box = pMonitor->resources()->projectMirrorBox(data.box).translate(-*monitorCaptureOffset);
++    data.excludeFromMirror = !screencopy;
+ 
+     g_pHyprRenderer->addPassElement(ctx, makeUnique<CTexPassElement>(std::move(data)));
+ 
+diff --git a/src/pointer/PointerManager.hpp b/src/pointer/PointerManager.hpp
+index 72e24d7..707e2c8 100644
+--- a/src/pointer/PointerManager.hpp
++++ b/src/pointer/PointerManager.hpp
+@@ -65,7 +65,8 @@ namespace Pointer {
+         bool hasVisibleHWCursor(PHLMONITOR pMonitor);
+ 
+         void renderSoftwareCursorsFor(Render::CRenderContext& ctx, PHLMONITOR pMonitor, const Time::steady_tp& now, CRegion& damage /* logical */,
+-                                      std::optional<Vector2D> overridePos = {} /* monitor-local */, bool screencopy = false, bool forceRender = false);
++                                      std::optional<Vector2D> overridePos = {} /* monitor-local */, bool screencopy = false,
++                                      std::optional<Vector2D> monitorCaptureOffset = {} /* shared-image crop, after zoom */);
+ 
+         // this is needed e.g. during screensharing where
+         // the software cursors aren't locked during the cursor move, but they
+diff --git a/src/render/OpenGL.cpp b/src/render/OpenGL.cpp
+index cb2801c..8bf29ff 100644
+--- a/src/render/OpenGL.cpp
++++ b/src/render/OpenGL.cpp
+@@ -832,7 +832,7 @@ void CHyprOpenGLImpl::end(CRenderContext& ctx) {
+             // we can't use the offloadFB for mirroring / ss, as it contains artifacts from blurring
+             if UNLIKELY (ctx.m_data.pMonitor->needsACopyFB() && !ctx.m_gl.fakeFrame) {
+                 if (saveBufferForMirror(ctx, monbox))
+-                    ctx.m_data.pMonitor->resources()->markMirrorFBUpdated();
++                    ctx.m_data.pMonitor->resources()->markMirrorFBUpdated(monbox);
+                 else
+                     ctx.m_data.pMonitor->resources()->invalidateMirrorFB();
+             }
+diff --git a/src/render/Renderer.cpp b/src/render/Renderer.cpp
+index 4bbb606..0de77b8 100644
+--- a/src/render/Renderer.cpp
++++ b/src/render/Renderer.cpp
+@@ -2243,6 +2243,24 @@ void IHyprRenderer::renderMirrored(CRenderContext& ctx) {
+     data.box = monbox;
+ 
+     addPassElement(ctx, makeUnique<CTexPassElement>(std::move(data)));
++
++    // Captures and mirrored displays share a cursor-free image. A physical
++    // mirror still shows the source pointer, at the same scale and projection.
++    const auto CURSOR = Pointer::mgr()->getCurrentCursorTexture();
++    auto       cursorBox = Pointer::mgr()->getCursorBoxGlobal().translate(-mirrored->m_position);
++    if (shouldRenderCursor() && CURSOR && !cursorBox.intersection(CBox{{}, mirrored->m_size}).empty()) {
++        const Vector2D mirrorSize = mirrored->m_transformedSize * scale;
++        const Vector2D origin     = (monitor->m_transformedSize - mirrorSize) / 2.0;
++        cursorBox = mirrored->resources()->projectMirrorBox(cursorBox.scale(mirrored->m_scale).round());
++        cursorBox.scale(scale).translate(origin);
++        CTexPassElement::SRenderData cursorData;
++        cursorData.tex               = CURSOR;
++        cursorData.box               = cursorBox;
++        cursorData.a                 = 1.F - mirrored->m_dpmsBlackOpacity->value();
++        cursorData.excludeFromMirror = true;
++        cursorData.clipBox           = CBox{origin, mirrorSize};
++        addPassElement(ctx, makeUnique<CTexPassElement>(std::move(cursorData)));
++    }
+ }
+ 
+ void IHyprRenderer::renderMonitor(PHLMONITOR pMonitor, bool commit) {
+@@ -2265,8 +2283,6 @@ void IHyprRenderer::renderMonitor(PHLMONITOR pMonitor, bool commit) {
+ 
+     static int                                            damageBlinkCleanup = 0; // because double-buffered
+ 
+-    const float                                           ZOOMFACTOR = pMonitor->m_cursorZoom->value();
+-
+     if (pMonitor->m_pixelSize.x < 1 || pMonitor->m_pixelSize.y < 1) {
+         LOG(Log::ERR, "Refusing to render a monitor because of an invalid pixel size: {}", pMonitor->m_pixelSize);
+         return;
+@@ -2354,6 +2370,9 @@ void IHyprRenderer::renderMonitor(PHLMONITOR pMonitor, bool commit) {
+ 
+     TRACY_GPU_ZONE("Render");
+ 
++    // frameTick() above applies the current zoom, including immediate changes
++    // with animations disabled. Use that value for this frame, not the prior one.
++    const float ZOOMFACTOR = pMonitor->m_cursorZoom->value();
+     static bool zoomLock = false;
+     if (zoomLock && ZOOMFACTOR == 1.f) {
+         Pointer::mgr()->unlockSoftwareAll();
+diff --git a/src/render/gl/GLElementRenderer.cpp b/src/render/gl/GLElementRenderer.cpp
+index f07ba4a..e5889d6 100644
+--- a/src/render/gl/GLElementRenderer.cpp
++++ b/src/render/gl/GLElementRenderer.cpp
+@@ -26,15 +26,22 @@ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CClearPassElement> element
+     TRACY_GPU_ZONE("RenderClear");
+     const std::array<GLfloat, 4> c = {sc<GLfloat>(color.r), sc<GLfloat>(color.g), sc<GLfloat>(color.b), sc<GLfloat>(color.a)};
+ 
++    const auto clear = [&ctx, &c]() {
++        glClearBufferfv(GL_COLOR, 0, c.data());
++        // A solid background must also initialize the separate shared image.
++        if (ctx.m_data.currentFB->getMirrorTexture())
++            glClearBufferfv(GL_COLOR, 1, c.data());
++    };
++
+     if (!ctx.m_data.damage.empty()) {
+-        ctx.m_data.damage.forEachRect([&ctx, &c](const auto& RECT) {
++        ctx.m_data.damage.forEachRect([&ctx, &clear](const auto& RECT) {
+             g_pHyprOpenGL->scissor(ctx, &RECT, ctx.m_data.transformDamage);
+-            glClearBufferfv(GL_COLOR, 0, c.data());
++            clear();
+         });
+ 
+         g_pHyprOpenGL->disableScissor();
+     } else
+-        glClearBufferfv(GL_COLOR, 0, c.data());
++        clear();
+ };
+ 
+ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CFramebufferElement> element, const CRegion& damage) {
+@@ -83,6 +90,13 @@ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CInnerGlowPassElement> ele
+ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CTexPassElement> element, const CRegion& damage) {
+     const auto& m_data = element->m_data;
+ 
++    // Keep software cursors out of the cursor-free capture attachment.
++    const bool EXCLUDE_FROM_MIRROR = m_data.excludeFromMirror && ctx.m_data.currentFB->getMirrorTexture();
++    if (EXCLUDE_FROM_MIRROR) {
++        const GLenum BUFFERS[] = {GL_COLOR_ATTACHMENT0};
++        glDrawBuffers(1, BUFFERS);
++    }
++
+     g_pHyprOpenGL->renderTexture(ctx, //
+                                  m_data.tex, m_data.box,
+                                  {
+@@ -115,6 +129,10 @@ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CTexPassElement> element,
+                                      .primarySurfaceUVBottomRight = ctx.m_data.primarySurfaceUVBottomRight,
+                                      .motionBlur                  = m_data.motionBlur,
+                                  });
++    if (EXCLUDE_FROM_MIRROR) {
++        const GLenum BUFFERS[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
++        glDrawBuffers(2, BUFFERS);
++    }
+ };
+ 
+ void CGLElementRenderer::draw(CRenderContext& ctx, WP<CTextureMatteElement> element, const CRegion& damage) {
+diff --git a/src/render/pass/TexPassElement.hpp b/src/render/pass/TexPassElement.hpp
+index 15f3946..a75fdb5 100644
+--- a/src/render/pass/TexPassElement.hpp
++++ b/src/render/pass/TexPassElement.hpp
+@@ -41,6 +41,7 @@ class CTexPassElement : public IPassElement {
+         float                             overallA = 1.F;
+         CRegion                           damage;
+         bool                              useProvidedDamage = false;
++        bool                              excludeFromMirror = false;
+         int                               round             = 0;
+         float                             roundingPower     = 2.0f;
+         CBox                              clipBox;
