@@ -225,7 +225,7 @@ pub const APPS: [App; 19] = [
 
 /// Provenance shared by several captions.
 pub const VM: &str = "From Sekka's screenshot VM (nix build .#screenshots-aizome): a disposable NixOS VM built from the desktop module installed systems import, at 2880 × 1800 and scale 2, composited in software and driven through Aizome's own input path.";
-pub const WALKTHROUGH: &str = "From Aizome's end-to-end walkthrough of 18 October 2026: the real session (compositor, shell and apps, release builds) running headless at 2880 × 1800, scale 2, driven through aizomectl input as a person would, and captured with grim.";
+pub const WALKTHROUGH: &str = "From Aizome's end-to-end walkthrough of 18 October 2026: the real session (compositor, shell and apps, release builds) running headless at 2880 × 1800, scale 2, driven through aizomectl input as a person would, and captured with grim. Its terminal is foot, the default before Hotaru.";
 pub const NISSHI: &str = "Nisshi's release build of 29 October 2026, alone under a private headless sway at 1440 × 900, scale 1, drawing its own menu bar. It read a made-up boot through a stand-in journalctl, so no message of a real computer is shown.";
 pub const GROUP: &str = "From the compositor's tab-group check (desktop/aizome/docs/ipc.md): Google Chrome and Soroban in a private headless compositor at 1440 × 900, grouped, switched by clicking their tabs, and torn apart again.";
 
@@ -374,7 +374,7 @@ pub fn body(site: &Site, app: &App) -> Result<String> {
         "sumi" => {
             b += &site.shot(
                 "desktop.png",
-                "The Aizome desktop with Sumi focused on a Markdown file, architecture.md: its headings, code and line numbers styled; a terminal and Files stacked in one group below it; Tenki's notification filed in the Deskbar.",
+                "The Aizome desktop with Sumi focused on a Markdown file, architecture.md: its headings, code and line numbers styled; Hotaru and Files stacked in one group below it; Tenki's notification filed in the Deskbar.",
                 &format!("Sumi focused on the whole desktop. {VM}"),
                 Frame::Lead,
             )?;
@@ -412,7 +412,7 @@ pub fn body(site: &Site, app: &App) -> Result<String> {
                 "native",
                 "Built with Aizome",
                 "span-2",
-                "<p>Native application menus, tab controls, search fields, the theme's colours, window activation and accessibility labels, with no GTK and no web view. ⟦❖ ↩⟧ opens Hotaru in the Desk's folder, and programs that need a terminal open in it too. foot stays installed, and Settei › General › Default Apps can choose it instead.</p>",
+                "<p>Native application menus, tab controls, search fields, the theme's colours, window activation and accessibility labels, with no GTK and no web view. ⟦❖ ↩⟧ opens Hotaru in the Desk's folder, and programs that need a terminal open in it too. foot stays installed, and Settei › General › Default Apps can choose it instead; ⟦❖ ↩⟧ then opens foot.</p>",
             );
             b += &win(
                 "panes",

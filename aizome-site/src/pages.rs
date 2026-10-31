@@ -68,8 +68,8 @@ pub fn home(site: &Site) -> Result<Page> {
                 "The desktop",
                 site.shot(
                     "desktop.png",
-                    "The whole Aizome desktop in Night: the menu bar along the top with Sumi's menus and four Desks; Sumi editing a Markdown file; Files and a terminal running fastfetch stacked in one tab group; the Deskbar at the top right with each app's windows and Tenki's notification filed under it.",
-                    &format!("The whole desktop: Sumi, then Files and a terminal stacked in one group, and a notification filed under Tenki in the Deskbar. {VM}"),
+                    "The whole Aizome desktop in Night: the menu bar along the top with Sumi's menus and four Desks; Sumi editing a Markdown file; Files and Hotaru, Aizome's terminal, running fastfetch, stacked in one tab group; the Deskbar at the top right with each app's windows and Tenki's notification filed under it.",
+                    &format!("The whole desktop: Sumi, then Files and Hotaru stacked in one group, and a notification filed under Tenki in the Deskbar. {VM}"),
                     Frame::BareLead,
                 )?,
             ),
@@ -187,7 +187,7 @@ pub fn home(site: &Site) -> Result<Page> {
             "Get it with Sekka",
             "",
             &format!(
-                r#"<p>Aizome is the desktop Sekka is made for, and the one its installer, Genkan, chooses for you. Download Sekka, start it, and the live session is Aizome with Genkan open. Installing erases the disk you choose.</p><p class="actions"><a class="button primary" href="{SEKKA_DOWNLOAD}">Download Sekka</a><a class="button" href="{SEKKA}">sekka.computer</a></p>"#
+                r#"<p>Aizome is the desktop Sekka is made for, selected by default in Genkan, its installer, which also offers Tatami, Plasma, GNOME, Hyprland and Xfce, instead or alongside. Download Sekka, start it, and the live session is Aizome with Genkan open. Installing erases the disk you choose.</p><p class="actions"><a class="button primary" href="{SEKKA_DOWNLOAD}">Download Sekka</a><a class="button" href="{SEKKA}">sekka.computer</a></p>"#
             ),
         ),
         nixos = win(
@@ -340,7 +340,7 @@ pub fn desktop(site: &Site) -> Result<Page> {
         ),
         &site.shot(
             "day.png",
-            "Aizome in Day: the Toolchest open at the top left with Applications and its categories, over Sumi and a terminal, the Deskbar at the right.",
+            "Aizome in Day: the Toolchest open at the top left with Applications and its categories, over Sumi and foot, the Deskbar at the right.",
             &format!("Day, switched live from Settings, with the Toolchest's Applications open. {WALKTHROUGH}"),
             Frame::Window,
         )?,
@@ -355,7 +355,7 @@ pub fn desktop(site: &Site) -> Result<Page> {
         ),
         &site.shot(
             "walkthrough-desktop.png",
-            "Night: Sumi with text selected, a terminal and Files stacked as one group, three notifications from Mail filed in the Deskbar, README.md and docs parked on the Shelf, and icons on the desktop.",
+            "Night: Sumi with text selected, foot and Files stacked as one group, three notifications from Mail filed in the Deskbar, README.md and docs parked on the Shelf, and icons on the desktop.",
             &format!("The Deskbar with Mail's notifications filed under it and two items parked on the Shelf. {WALKTHROUGH}"),
             Frame::Window,
         )?,
@@ -595,7 +595,7 @@ pub fn keys(_site: &Site) -> Result<Page> {
             ("The app's next window", "⟦❖ `⟧"),
             ("Hide the app, hide the others", "⟦❖ H⟧ ⟦⌥ ❖ H⟧"),
             ("Minimise the window", "⟦❖ M⟧"),
-            ("A terminal, in the Desk's folder", "⟦❖ ↩⟧"),
+            ("Your terminal, Hotaru unless Settei names another, in the Desk's folder", "⟦❖ ↩⟧"),
             ("Lock", "⟦⌃ ❖ Q⟧"),
             ("Recovery: force quit, reset input, restart the shell", "⟦⌃ ⌥ Del⟧"),
             ("Reload what changed: the compositor's logic, the shell, the settings", "⟦⌃ ❖ R⟧"),
@@ -906,7 +906,7 @@ pub fn install(site: &Site) -> Result<Page> {
     let mut b = head(
         "Install",
         &format!(
-            "<p class=\"eyebrow\">Install</p><h1>Get Aizome.</h1><p class=\"lead\">Aizome is the desktop Sekka is made for, and the one Sekka's installer chooses unless you pick another. It also installs on any NixOS system with flakes.</p><p class=\"actions\"><a class=\"button primary\" href=\"{SEKKA_DOWNLOAD}\">Get it with Sekka</a><a class=\"button\" href=\"{SEKKA}\">sekka.computer</a></p>"
+            "<p class=\"eyebrow\">Install</p><h1>Get Aizome.</h1><p class=\"lead\">Aizome is the desktop Sekka is made for, selected by default in Sekka's installer among the desktops you can pick. It also installs on any NixOS system with flakes.</p><p class=\"actions\"><a class=\"button primary\" href=\"{SEKKA_DOWNLOAD}\">Get it with Sekka</a><a class=\"button\" href=\"{SEKKA}\">sekka.computer</a></p>"
         ),
         "",
     );

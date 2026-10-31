@@ -303,7 +303,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Space</kbd></th><td>The command palette</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + right-click</th><td>The focused app's whole menu, at the pointer</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd></th><td>The Toolchest</td></tr>
-      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Return</kbd></th><td>Hotaru, the terminal, in the Desk's folder</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Return</kbd></th><td>The default terminal, Hotaru unless Settei names another, in the Desk's folder</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>C</kbd> / <kbd>V</kbd> / <kbd>Z</kbd></th><td>Copy, paste and undo, in every app</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Tab</kbd></th><td>Switch apps, then that app's windows</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>←</kbd> / <kbd>→</kbd></th><td>Fill the screen, or split it left or right</td></tr>

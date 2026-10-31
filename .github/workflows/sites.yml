@@ -56,7 +56,7 @@ jobs:
             # site/, nix/site.nix and its content fileset: keep in step.
             sources: >-
               site nix/site.nix docs/brand docs/images/sekka
-              desktop/aizome/icons/apps
+              desktop/aizome/icons/apps desktop/aizome/apps/hotaru/data
           - site: aizome.computer
             package: aizome-site
             project: aizome
