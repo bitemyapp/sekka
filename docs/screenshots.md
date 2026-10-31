@@ -79,9 +79,10 @@ it keeps the whole Tatami display, including its bar and window edges.
 | [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
 | [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window, captured before the Keyboard step was added |
-| [Genkan's keyboard step](images/sekka/genkan-keyboard.png) | 2216 × 1580 | Genkan's Keyboard step in its debug-only preview, after QEMU's Alt was pressed on the VM's Virtio keyboard and caught through the compositor: the swap suggested and taken; the footer's caching line is sample data |
+| [Genkan's keyboard step](images/sekka/genkan-keyboard.png) | 2216 × 1580 | Genkan's Keyboard step in its debug-only preview, after QEMU's Alt was pressed on the VM's Virtio keyboard and caught through the compositor: the swap of Alt and Super recommended; the footer's caching line is sample data |
 | [Waiting for the key](images/sekka/genkan-keyboard-waiting.png) | 2216 × 1580 | The same step waiting for the key, after Press Again |
-| [The keys kept](images/sekka/genkan-keyboard-kept.png) | 2216 × 1580 | The same step after As They Are was chosen in Modifier keys |
+| [The keys kept](images/sekka/genkan-keyboard-kept.png) | 2216 × 1580 | The same step after Swap Alt and Super was turned off |
+| [Control beside the space bar](images/sekka/genkan-keyboard-control.png) | 2216 × 1580 | The same step after QEMU's Control was pressed: the keys stay as they are |
 
 The shared native Yukimi image was captured on 2026-10-28 by
 [`yukimi-tatami`](../nix/yukimi-discover.nix), a disposable component-test VM

@@ -39,9 +39,10 @@ The new implementation is GPL-3.0-or-later. It has no upstream endorsement.
   of eight system locales and keyboard layouts. Allowing unfree packages is
   enabled by default, with an explicit checkbox opt-out and review summary.
 - A keyboard step that asks for the key just left of the space bar, through
-  Aizome's compositor, and suggests swapping it with Super (❖) when it's Alt
-  or Control (`services.xserver.xkb.options`); the person can keep the keys
-  as they are.
+  Aizome's compositor, and recommends swapping Alt and Super when it's Alt
+  (`altwin:swap_alt_win` in `services.xserver.xkb.options`); the person can
+  keep the keys as they are. ❖ there needs nothing, and Genkan leaves any
+  other key as it is.
 - An optional GitHub step: the public SSH keys of a GitHub account as the
   user's authorized keys, the OpenSSH server, and Git's name and email address
   (see [GitHub, SSH and Git](#github-ssh-and-git)).

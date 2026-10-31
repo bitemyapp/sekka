@@ -340,21 +340,21 @@ fn the_location_goes_on_to_the_keyboard_and_the_keyboard_to_the_review() {
 }
 
 #[test]
-fn the_key_beside_the_space_bar_is_suggested_as_super_and_can_be_kept() {
+fn alt_beside_the_space_bar_is_swapped_with_super_unless_declined() {
     let (mut h, w) = open("keyboard");
-    // The sample's ThinkPad has Alt there: Genkan suggests the swap.
+    // The sample's ThinkPad has Alt there: Genkan recommends the swap.
     assert_eq!(h.program().super_key, SuperKey::SwapAlt);
     assert!(says(&h, w, "AT Translated Set 2 keyboard"));
     assert!(says(&h, w, "Swap Alt and Super to put ❖ there"));
-    assert!(says(&h, w, "Genkan swaps them on the installed system."));
+    assert!(says(&h, w, "Recommended: Genkan swaps Alt and Super"));
     // Declined, it says what stays.
-    h.send(Msg::SuperKey(0));
+    h.send(Msg::SwapAltSuper(false));
     assert_eq!(h.program().super_key, SuperKey::AsIs);
-    assert!(says(&h, w, "Kept as they are"));
-    h.send(Msg::SuperKey(1));
+    assert!(says(&h, w, "Kept as they are: ❖ stays where it is now"));
+    h.send(Msg::SwapAltSuper(true));
     assert_eq!(h.program().super_key, SuperKey::SwapAlt);
 
-    // A Mac keyboard has ❖ there already: nothing to swap.
+    // A Mac keyboard has ❖ there already: nothing needs changing.
     h.program_mut().caught(
         125,
         Some(KeyboardInfo {
@@ -367,16 +367,23 @@ fn the_key_beside_the_space_bar_is_suggested_as_super_and_can_be_kept() {
     h.send(Msg::Dismissed);
     assert_eq!(h.program().super_key, SuperKey::AsIs);
     assert!(says(&h, w, "❖ is there already, as on a Mac"));
-    assert!(!says(&h, w, "Kept as they are"));
-    // A PC keyboard's Control there, from IPC (no keyboard named).
-    h.program_mut().caught(29, None);
-    h.send(Msg::Dismissed);
-    assert_eq!(h.program().super_key, SuperKey::SwapControl);
-    assert!(says(&h, w, "Your keyboard"));
-    // A key that can't be ❖ leaves the choice as it was.
-    h.program_mut().caught(94, None);
-    h.send(Msg::Dismissed);
-    assert_eq!(h.program().super_key, SuperKey::SwapControl);
+    assert!(says(&h, w, "Nothing needs changing."));
+
+    // Anything else (Control, from IPC with no keyboard named; a key that
+    // can't be ❖) stays as it is, plainly: Genkan remaps nothing else.
+    for code in [29, 94] {
+        h.send(Msg::SwapAltSuper(true));
+        h.program_mut().caught(code, None);
+        h.send(Msg::Dismissed);
+        assert_eq!(h.program().super_key, SuperKey::AsIs, "{code}");
+        assert!(says(&h, w, "Your keyboard"));
+        assert!(says(
+            &h,
+            w,
+            "Genkan swaps only Alt and Super, so your keys stay as they are."
+        ));
+        assert!(!says(&h, w, "Swap Control and Super"), "{code}");
+    }
     assert_eq!(h.program().key_check.clone(), {
         let beside = aizome_ipc::setup::beside_space(94).unwrap();
         KeyCheck::Caught {

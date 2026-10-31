@@ -14,7 +14,7 @@
 # - Genkan's keyboard step (its debug build's sample pages) hears QEMU's
 #   keys through the compositor: the space bar asks again, Alt suggests
 #   swapping Alt and Super, which can be declined, Esc stops waiting, and
-#   Control suggests swapping Control and Super;
+#   Control is left as it is, saying Genkan swaps only Alt and Super;
 # - Hotaru and foot open fish, which no application choice brought.
 #
 # Its display is 2880 × 1800 at scale 2, drawn in software (pixman); the

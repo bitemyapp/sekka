@@ -238,25 +238,32 @@ with subtest("The keyboard step hears the key beside the space bar"):
     names = [k["name"] for k in keyboards]
     assert any(g.find(text=n) for n in names), f"none of {names} is shown"
     assert not g.find(text="AT Translated Set 2 keyboard"), "still the sample's keyboard"
-    assert g.find(name="super-key")["value"] == "Swap Alt and Super"
-    g.wait("the suggestion taken", text="✓ Genkan swaps them on the installed system.")
+    swap = lambda: g.find(name="swap-alt-super") or {}
+    assert swap().get("checked") is True, swap()
+    g.wait("the swap recommended", text="✓ Recommended: Genkan swaps Alt and Super on the installed system.")
     g.capture("genkan-keyboard")
     # Declined, the keys stay as they are.
-    g.choose("super-key", "As They Are")
-    g.wait("the suggestion declined", text="Kept as they are: ❖ stays where it is now.")
+    g.click(swap())
+    until("the swap declined", lambda: swap().get("checked") is False)
+    g.wait("the keys kept", text="Kept as they are: ❖ stays where it is now, not beside the space bar.")
     g.capture("genkan-keyboard-kept")
     # Esc stops waiting and leaves the question open.
     g.click(g.find(name="listen"))
     g.wait("waiting again", text="Waiting for the key… Esc stops waiting.")
     aizome.send_key("esc")
     g.wait("Esc to stop waiting", text="Genkan listens for it and suggests where ❖ should go.")
-    # Control there suggests swapping Control and Super.
+    # Control there: Genkan swaps only Alt and Super, says so, and leaves the
+    # keys as they are, even after the swap was taken.
+    g.click(swap())
+    until("the swap taken again", lambda: swap().get("checked") is True)
     g.click(g.find(name="listen"))
     g.wait("waiting for Control", text="Waiting for the key… Esc stops waiting.")
     aizome.send_key("ctrl")
     g.wait("Control beside the space bar", text="Beside the space bar: ⌃ Control")
-    until("Swap Control and Super", lambda: g.find(name="super-key")["value"] == "Swap Control and Super")
-    # Nothing else heard the keys while Genkan waited, and it's not waiting now.
+    g.wait("the keys left as they are", contains="Genkan swaps only Alt and Super, so your keys stay as they are.")
+    until("no swap for Control", lambda: swap().get("checked") is False)
+    assert not g.find(contains="Control and Super"), "Genkan offered a Control swap"
+    g.capture("genkan-keyboard-control")
     g.quit()
 
 aizome.shutdown()

@@ -1070,10 +1070,12 @@ the compositor catches the next key for Genkan with its keyboard
 (`catch-key`, as Settei's keyboard setup asks; `aizome_ipc::setup` has the
 shared catching and the wording), so no app hears it and a modifier key alone
 counts. Esc, Stop, or leaving the step gives the wait up, since every app
-loses its keys meanwhile; previews never wait unasked. Alt there suggests
-swapping Alt and Super, Control swapping Control and Super, ❖ nothing, and
-the person can keep the keys as they are. Outside Aizome the step says it
-can't hear the key and offers the choice alone.
+loses its keys meanwhile; previews never wait unasked. Its one choice is
+the common case: Alt there (most PC keyboards), and it recommends swapping
+Alt and Super, which the person can decline. ❖ there needs nothing. Any
+other key stays as it is, and the step says Genkan swaps only Alt and Super;
+Settei has the other arrangements. Outside Aizome the step says it can't
+hear the key and offers the swap alone.
 
 The request carries the answer as a closed choice (`SuperKey`, `super_key`),
 and the configuration gets `services.xserver.xkb.options` only for a swap.
@@ -1094,8 +1096,8 @@ The check boots an Aizome VM with the modules installed systems import and
 the swap Genkan writes. It presses QEMU's keys: Alt and A select all in
 Genkan's text fields, as ❖ does once the person's settings undo the swap (as
 in the live session); the keyboard step refuses the space bar, suggests the
-swap for Alt, takes it being declined, stops at Esc and suggests the Control
-swap for Control. Hotaru and foot run fish, which no application brought.
+swap for Alt, takes it being declined, stops at Esc, and leaves Control as
+it is, saying so. Hotaru and foot run fish, which no application brought.
 The fixture installs with the swap (`CALAMARES_TEST_SUPER_KEY=as-is` opts
 out) and checks it in the installed configuration and Aizome's session
 environment.

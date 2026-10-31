@@ -38,9 +38,9 @@ cover the remaining storage combinations, recording the distinction.
   show Uta downloaded, not compiled. The same selection offline must stop
   before erasure with a clear error.
 - Keyboard: the layout, and the key just left of the space bar pressed on
-  QEMU's keyboard: the space bar asks again, Alt suggests swapping Alt and
-  Super, Control swapping Control and Super, Esc stops waiting, and declining
-  keeps the keys. After installing, ❖ is beside the space bar at the console,
+  QEMU's keyboard: the space bar asks again, Alt recommends swapping Alt and
+  Super, ❖ needs nothing, any other key (Control) stays as it is, Esc stops
+  waiting, and declining keeps the keys. After installing, ❖ is beside the space bar at the console,
   the greeter and in Aizome and Tatami, or the keys are unchanged when
   declined.
 - Review: every chosen value matches; cancellation and back-navigation remain

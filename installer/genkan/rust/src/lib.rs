@@ -85,23 +85,23 @@ pub const KEYBOARDS: &[&str] = &["us", "gb", "de", "fr", "es", "it", "jp", "br"]
 
 /// What the installed system makes of the key just left of the space bar,
 /// which the keyboard step asks the person to press: the modifier keys as
-/// they are, or one swapped with Super to put ❖ there, under the thumb.
+/// they are, or, where that key is Alt (most PC keyboards), Alt and Super
+/// swapped to put ❖ there, under the thumb. Other keys there stay as they
+/// are; Aizome's Settings has the other arrangements.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SuperKey {
     #[default]
     AsIs,
     SwapAlt,
-    SwapControl,
 }
 impl SuperKey {
-    pub const ALL: [Self; 3] = [Self::AsIs, Self::SwapAlt, Self::SwapControl];
+    pub const ALL: [Self; 2] = [Self::AsIs, Self::SwapAlt];
     /// Its XKB options, as Aizome's Settings writes the same arrangement.
     pub fn xkb_options(self) -> &'static str {
         match self {
             Self::AsIs => "",
             Self::SwapAlt => "altwin:swap_alt_win",
-            Self::SwapControl => "ctrl:swap_lwin_lctl,ctrl:swap_rwin_rctl",
         }
     }
     pub fn from_xkb_options(options: &str) -> Option<Self> {
