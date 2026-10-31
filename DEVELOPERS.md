@@ -963,6 +963,19 @@ exposes the same assessment used by the GUI. The GUI has one persistent completi
 row, with reboot taking precedence over sign-out; it does not repeatedly pop up
 dialogs or require Yukimi to autostart.
 
+While a specialisation runs, the helper finds its name among the system
+profile's generations. If the target generation has a specialisation of that
+name and `plan` finds nothing against it, the helper installs the target's boot
+menu with its own `switch-to-configuration boot`, then starts the
+specialisation with `test`: `nixos-rebuild boot` followed by `nixos-rebuild test
+--specialisation`. The main entry stays the default. (`nixos-rebuild switch
+--specialisation` would make the specialisation the default: NixOS's
+systemd-boot and GRUB installers both make the system they are given the
+default.) Otherwise the target's main entry is planned and switched or prepared
+as before. A running system that two specialisation names share counts as
+none. Completion compares against the selected generation's entry that is
+running, else the one the receipt names.
+
 Tatami records its loaded component identities at session launch in
 `$XDG_RUNTIME_DIR/tatami/update-session.json`. An unprivileged frontend invokes
 `tatami update-session` after a verified live switch. Safe configuration reloads
@@ -987,7 +1000,11 @@ rejects a display-manager transition before service shutdown, switches live when
 a session is only added to the login screen's list, stages one that changes an
 entry the login screen started with, and stages a rollback with changed boot
 parameters. It boots that prepared generation through UEFI,
-verifies that the restart request disappears, and captures the GUI. Its desktop
+verifies that the restart request disappears, and captures the GUI. It then
+boots a specialisation made the default entry and switches live to the same
+specialisation of a next generation whose main entry would need a restart. It
+checks that the boot menu lists that specialisation and that a restart starts
+the main entry. Its desktop
 is IceWM; it does not reproduce physical GPU teardown or claim Hyprland hardware coverage.
 Namespace fixtures test helper transactions and Tatami reload failures without
 changing the host desktop.
