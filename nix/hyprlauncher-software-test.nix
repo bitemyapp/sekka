@@ -31,6 +31,9 @@ let
       probe
     ];
     environment.etc."hypr-test.lua".text = ''
+      -- Hyprland 0.57 filters non-KMS formats by default. Keep advertising AR24
+      -- so this fixture exercises the toolkit's alpha-buffer allocation fallback.
+      hl.config({ quirks = { skip_non_kms_dmabuf_formats = false } })
       hl.monitor({ output = "", mode = "1280x800@60", position = "auto", scale = 1 })
       hl.bind("SUPER + R", hl.dsp.exec_cmd("env AQ_TRACE=1 ${launcher}/bin/hyprlauncher --verbose >> /tmp/launcher.log 2>&1"), { description = "Launcher regression" })
     '';
