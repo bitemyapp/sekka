@@ -5,6 +5,8 @@
 //! window shows ([`model`]: folders and their entries, MIME types,
 //! places, thumbnails, watching folders). The window is [`ui`].
 
+#[cfg(feature = "gui")]
+pub mod file_manager;
 pub mod fsops;
 pub mod model;
 #[cfg(feature = "gui")]

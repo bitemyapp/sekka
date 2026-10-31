@@ -203,8 +203,10 @@ rustPlatform.buildRustPackage {
   '';
 
   # Yukimi's headless interactions and rendering run without a desktop.
-  # Session, D-Bus and GPU coverage remain in the component VMs.
+  # Hako's show-in-folder service answers on a private bus of its own.
+  # Session, GPU and other D-Bus coverage remain in the component VMs.
   doCheck = true;
+  nativeCheckInputs = [ dbus ];
   checkPhase = ''
     runHook preCheck
     export AIZOME_FONT_DIR=${fonts}
@@ -225,7 +227,9 @@ rustPlatform.buildRustPackage {
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
     # A successful spawn is not a successful application launch. Gate the
     # shipped shell on process outcomes and its failure/details interface.
-    cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell --lib
+    # One run: dependencies built once for all three packages.
+    cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell -p aizome-hako \
+      --lib --test file_manager
     runHook postCheck
   '';
 
