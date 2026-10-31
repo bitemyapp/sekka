@@ -19,7 +19,8 @@ fn fixture(name: &str) -> PathBuf {
 fn harness() -> Harness<Utsushi> {
     let mut app = Utsushi::new();
     app.null_audio = true;
-    let dir = std::env::temp_dir().join(format!("utsushi-test-{}-{:?}", std::process::id(), std::thread::current().id()));
+    let dir =
+        std::env::temp_dir().join(format!("utsushi-test-{}-{:?}", std::process::id(), std::thread::current().id()));
     let _ = std::fs::remove_dir_all(&dir);
     app.state_dir = Some(dir);
     Harness::new(app)
@@ -452,6 +453,28 @@ fn media_info_says_how_it_plays() {
     for want in ["Video decoding", "h264 in software", "Frames to the screen", "No audio output"] {
         assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
     }
+}
+
+#[test]
+fn media_info_and_file_panel_cover_video_without_subtitles() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "clip.mp4");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    assert_eq!(placed(&h).map(|p| p.1), Some(false));
+    h.command(w, 'i');
+    assert!(h.program().sheet.is_some());
+    assert_eq!(placed(&h).map(|p| p.1), Some(true), "Media Info must cover the native video surface");
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert!(h.program().sheet.is_none());
+    assert_eq!(placed(&h).map(|p| p.1), Some(false));
+    h.command(w, 'o');
+    assert_eq!(placed(&h).map(|p| p.1), Some(true), "the file panel must cover the native video surface");
+    assert!(h.click_text(w, "Cancel"));
+    assert_eq!(placed(&h).map(|p| p.1), Some(false));
 }
 
 #[test]
