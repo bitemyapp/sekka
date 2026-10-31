@@ -8,9 +8,8 @@ use std::time::Duration;
 
 use crate::{Client, Event, KeyboardInfo, Request, Response};
 
-/// The arrangement that swaps Alt and Super, putting ❖ beside the space bar
-/// on a PC keyboard.
-pub const SWAP_ALT_SUPER: &str = "altwin:swap_alt_win";
+/// Swap the left Alt and Super keys, preserving right Alt (AltGr).
+pub const SWAP_LEFT_ALT_SUPER: &str = "altwin:swap_lalt_lwin";
 /// The arrangement that swaps Control and Super, on both sides.
 pub const SWAP_CONTROL_SUPER: &str = "ctrl:swap_lwin_lctl,ctrl:swap_rwin_rctl";
 
@@ -36,8 +35,8 @@ pub fn beside_space(code: u32) -> Result<Beside, &'static str> {
         },
         56 => Beside {
             what: "⌥ Alt (Option)",
-            suggest: Some(SWAP_ALT_SUPER),
-            why: "Swap Alt and Super to put ❖ there, under your thumb, where ⌘ is on a Mac.",
+            suggest: Some(SWAP_LEFT_ALT_SUPER),
+            why: "Swap left Alt and Super to put ❖ there, under your thumb, where ⌘ is on a Mac. Right Alt (AltGr) stays as it is.",
         },
         29 => Beside {
             what: "⌃ Control",
@@ -101,7 +100,7 @@ mod tests {
     #[test]
     fn the_key_beside_the_space_bar_says_where_super_goes() {
         assert_eq!(beside_space(125).unwrap().suggest, Some(""), "a Mac's Command: nothing to swap");
-        assert_eq!(beside_space(56).unwrap().suggest, Some(SWAP_ALT_SUPER), "a PC's Alt: swap Alt and Super");
+        assert_eq!(beside_space(56).unwrap().suggest, Some(SWAP_LEFT_ALT_SUPER), "a PC's Alt: swap the left keys");
         assert_eq!(beside_space(29).unwrap().suggest, Some(SWAP_CONTROL_SUPER));
         assert_eq!(beside_space(94).unwrap().suggest, None, "無変換 can't be Super");
         assert!(beside_space(57).is_err());

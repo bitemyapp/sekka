@@ -345,8 +345,8 @@ fn alt_beside_the_space_bar_is_swapped_with_super_unless_declined() {
     // The sample's ThinkPad has Alt there: Genkan recommends the swap.
     assert_eq!(h.program().super_key, SuperKey::SwapAlt);
     assert!(says(&h, w, "AT Translated Set 2 keyboard"));
-    assert!(says(&h, w, "Swap Alt and Super to put ❖ there"));
-    assert!(says(&h, w, "Recommended: Genkan swaps Alt and Super"));
+    assert!(says(&h, w, "Swap left Alt and Super to put ❖ there"));
+    assert!(says(&h, w, "Recommended: Genkan swaps left Alt and Super"));
     // Declined, it says what stays.
     h.send(Msg::SwapAltSuper(false));
     assert_eq!(h.program().super_key, SuperKey::AsIs);
@@ -380,7 +380,7 @@ fn alt_beside_the_space_bar_is_swapped_with_super_unless_declined() {
         assert!(says(
             &h,
             w,
-            "Genkan swaps only Alt and Super, so your keys stay as they are."
+            "Genkan swaps only left Alt and Super, so your keys stay as they are."
         ));
         assert!(!says(&h, w, "Swap Control and Super"), "{code}");
     }
@@ -403,6 +403,6 @@ fn the_review_lists_the_modifier_keys() {
     assert_eq!(review.super_key, SuperKey::SwapAlt);
     assert_eq!(
         Genkan::super_key_name(review.super_key),
-        "Swap Alt and Super"
+        "Swap left Alt and Super"
     );
 }

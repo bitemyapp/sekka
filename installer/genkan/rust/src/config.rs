@@ -170,7 +170,7 @@ pub fn configuration(request: &InstallPlan, ids: &Identities) -> Result<String> 
     let super_key = match request.super_key() {
         SuperKey::AsIs => String::new(),
         SuperKey::SwapAlt => format!(
-            "  # Alt and Super swapped, so ❖ is just left of the space bar.\n  services.xserver.xkb.options = {};\n",
+            "  # Left Alt and Super swapped, so ❖ is just left of the space bar.\n  services.xserver.xkb.options = {};\n",
             q(SuperKey::SwapAlt.xkb_options())
         ),
     };
@@ -523,20 +523,20 @@ mod tests {
         let text = generate(request);
         assert!(
             text.contains(
-                "  services.xserver.xkb.layout = \"de\";\n  # Alt and Super swapped, so ❖ is just left of the space bar.\n  services.xserver.xkb.options = \"altwin:swap_alt_win\";\n  console.useXkbConfig = true;\n"
+                "  services.xserver.xkb.layout = \"de\";\n  # Left Alt and Super swapped, so ❖ is just left of the space bar.\n  services.xserver.xkb.options = \"altwin:swap_lalt_lwin\";\n  console.useXkbConfig = true;\n"
             ),
             "{text}"
         );
         assert_eq!(
-            SuperKey::from_xkb_options("altwin:swap_alt_win"),
+            SuperKey::from_xkb_options("altwin:swap_lalt_lwin"),
             Some(SuperKey::SwapAlt)
         );
         // From the wire: kebab-case, and absent in older requests. Genkan
-        // swaps Alt and Super only.
+        // swaps left Alt and Super only.
         let wire = |text: &str| serde_json::from_str::<SuperKey>(text).unwrap();
         assert_eq!(wire("\"swap-alt\""), SuperKey::SwapAlt);
         assert_eq!(wire("\"as-is\""), SuperKey::AsIs);
-        for other in ["\"altwin:swap_alt_win\"", "\"swap-control\""] {
+        for other in ["\"altwin:swap_lalt_lwin\"", "\"swap-control\""] {
             assert!(serde_json::from_str::<SuperKey>(other).is_err(), "{other}");
         }
         let mut value = serde_json::to_value(test_request()).unwrap();

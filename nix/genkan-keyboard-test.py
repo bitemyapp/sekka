@@ -184,7 +184,7 @@ for w in windows():
 
 with subtest("Aizome's session starts from the system's keyboard"):
     env = user("systemctl --user show-environment")
-    assert "XKB_DEFAULT_OPTIONS=altwin:swap_alt_win" in env, env
+    assert "XKB_DEFAULT_OPTIONS=altwin:swap_lalt_lwin" in env, env
     assert "XKB_DEFAULT_LAYOUT=us" in env, env
     # The compositor lists the keyboards that type as libinput adds them.
     aizome.send_key("shift")
@@ -193,12 +193,41 @@ with subtest("Aizome's session starts from the system's keyboard"):
 
 with subtest("Hotaru and foot open fish, which came with Aizome"):
     assert "fish" not in aizome.succeed("cat /etc/installer-applications.json"), "fish isn't an application"
-    for argv, app_id in [("aizome-hotaru", "org.aizome.Hotaru"), ("foot", "foot")]:
+    # A parent marker inherited from a different process must not disable
+    # the handoff in another terminal.
+    for argv, app_id in [("aizome-hotaru", "org.aizome.Hotaru"), ("env HOTARU_SHELL_PARENT=1 foot", "foot")]:
         w = launch(argv, app_id)
         shells = until(f"{app_id}'s shell", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")])
         print(app_id, "runs", shells)
         assert shells == ["fish"], f"{app_id} runs {shells}"
         close(w)
+
+with subtest("Hotaru's explicit shell overrides the system's fish default"):
+    user("printf 'shell = \"/run/current-system/sw/bin/bash\"\\n' > /tmp/hotaru-bash.toml")
+    # SHLVL=0 makes Bash's handoff eligible: Hotaru's parent marker must
+    # preserve the explicitly selected Bash even in a fresh desktop session.
+    w = launch("env SHLVL=0 aizome-hotaru --config-file /tmp/hotaru-bash.toml", "org.aizome.Hotaru")
+    until("the explicitly selected Bash", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")] == ["bash"])
+    aizome.send_chars("echo $BASH_VERSION:$SHLVL > /tmp/hotaru-bash-state\n")
+    aizome.wait_for_file("/tmp/hotaru-bash-state")
+    version, level = aizome.succeed("cat /tmp/hotaru-bash-state").strip().split(":")
+    assert version and level == "1", (version, level)
+    close(w)
+
+with subtest("An open Hotaru follows the system shell choice while fish stays installed"):
+    w = launch("env SHLVL=0 aizome-hotaru", "org.aizome.Hotaru")
+    until("the first Fish pane", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")] == ["fish"])
+    # Model the /etc file update performed by a system switch. Fish remains
+    # installed, and even the old Bash handoff is still in effect in this VM.
+    shell_file = "/etc/xdg/aizome/hotaru-shell"
+    original = aizome.succeed("cat " + shell_file).strip()
+    aizome.succeed("rm " + shell_file + "; printf '%s\\n' /run/current-system/sw/bin/bash > " + shell_file)
+    aizome.send_key("alt-t")
+    until("a new Bash pane in the same Hotaru", lambda: sorted(c for c in descendants(w["pid"]) if c in ("fish", "bash")) == ["bash", "fish"])
+    aizome.succeed("printf '%s\\n' " + shlex.quote(original) + " > " + shell_file)
+    aizome.send_key("alt-t")
+    until("the next pane to follow Fish again", lambda: sorted(c for c in descendants(w["pid"]) if c in ("fish", "bash")) == ["bash", "fish", "fish"])
+    close(w)
 
 with subtest("❖A selects all in Genkan's fields: QEMU's Alt, beside the space bar, is ❖"):
     g = Genkan("account")
@@ -240,7 +269,7 @@ with subtest("The keyboard step hears the key beside the space bar"):
     assert not g.find(text="AT Translated Set 2 keyboard"), "still the sample's keyboard"
     swap = lambda: g.find(name="swap-alt-super") or {}
     assert swap().get("checked") is True, swap()
-    g.wait("the swap recommended", text="✓ Recommended: Genkan swaps Alt and Super on the installed system.")
+    g.wait("the swap recommended", text="✓ Recommended: Genkan swaps left Alt and Super on the installed system.")
     g.capture("genkan-keyboard")
     # Declined, the keys stay as they are.
     g.click(swap())
@@ -252,7 +281,7 @@ with subtest("The keyboard step hears the key beside the space bar"):
     g.wait("waiting again", text="Waiting for the key… Esc stops waiting.")
     aizome.send_key("esc")
     g.wait("Esc to stop waiting", text="Genkan listens for it and suggests where ❖ should go.")
-    # Control there: Genkan swaps only Alt and Super, says so, and leaves the
+    # Control there: Genkan swaps only left Alt and Super, says so, and leaves the
     # keys as they are, even after the swap was taken.
     g.click(swap())
     until("the swap taken again", lambda: swap().get("checked") is True)
@@ -260,7 +289,7 @@ with subtest("The keyboard step hears the key beside the space bar"):
     g.wait("waiting for Control", text="Waiting for the key… Esc stops waiting.")
     aizome.send_key("ctrl")
     g.wait("Control beside the space bar", text="Beside the space bar: ⌃ Control")
-    g.wait("the keys left as they are", contains="Genkan swaps only Alt and Super, so your keys stay as they are.")
+    g.wait("the keys left as they are", contains="Genkan swaps only left Alt and Super, so your keys stay as they are.")
     until("no swap for Control", lambda: swap().get("checked") is False)
     assert not g.find(contains="Control and Super"), "Genkan offered a Control swap"
     g.capture("genkan-keyboard-control")

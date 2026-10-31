@@ -142,12 +142,12 @@ mod tests {
     fn the_key_beside_the_space_bar_says_where_super_goes() {
         let suggest = |code| suggested(&beside_space(code).unwrap());
         assert_eq!(suggest(125), Some(0), "a Mac's Command: nothing to swap");
-        assert_eq!(suggest(56), Some(1), "a PC's Alt: swap Alt and Super");
+        assert_eq!(suggest(56), Some(2), "a PC's Alt: swap the left keys, preserving AltGr");
         assert_eq!(suggest(29), Some(4));
         assert_eq!(suggest(94), None, "無変換 can't be Super");
         assert!(beside_space(57).is_err());
         assert!(beside_space(100).is_err());
-        assert_eq!(super::super::modifiers::CHOICES[1].0, "Swap Alt and Super");
+        assert_eq!(super::super::modifiers::CHOICES[2].0, "Swap left Alt and Super");
         assert_eq!(super::super::modifiers::CHOICES[4].0, "Swap Control and Super");
     }
 

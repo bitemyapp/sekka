@@ -448,9 +448,10 @@ impl Keyboard {
                     )
                     .entry("modifiers")
                     .help(
-                        "Super (❖) is the Windows or Command key. Swap Alt and Super for a Mac-style position. \
+                        "Super (❖) is the Windows or Command key. Swap left Alt and Super for a Mac-style position, \
+                         keeping Right Alt (AltGr) for accents and symbols. \
                          Applies immediately to the keyboard above; choose Default to undo. \
-                         Use a left-only swap to keep Right Alt for accents.",
+                         Both sides can also be swapped.",
                     ),
                     form::row("Caps Lock key", form::choice(&CAPS.map(|c| c.0), caps_i, Msg::Caps))
                         .entry("caps-lock")

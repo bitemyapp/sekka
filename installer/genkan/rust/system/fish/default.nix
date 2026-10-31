@@ -53,6 +53,14 @@ in
     '';
   };
   config = lib.mkMerge [
+    {
+      # A default, not a user's Hotaru override. Keep the Bash choice explicit
+      # even when fish is installed separately. Hotaru rereads this for each
+      # new pane, so switching the system also updates already-open terminals.
+      environment.etc."xdg/aizome/hotaru-shell".text = "${
+        lib.getExe (if cfg.enable then config.programs.fish.package else pkgs.bashInteractive)
+      }\n";
+    }
     # Yukimi can turn it on or off, after Sekka's desktops and login screen.
     (lib.optionalAttrs (options.programs ? yukimi) {
       programs.yukimi.choices = lib.mkAfter [
@@ -70,7 +78,7 @@ in
             {
               id = "false";
               title = "bash";
-              detail = "Terminals open in bash, the login shell.";
+              detail = "Terminals default to bash. An explicit shell in Hotaru's configuration takes precedence.";
             }
           ];
         }
@@ -94,9 +102,10 @@ in
       # Bash stays the login shell, and interactive bash hands over to fish as
       # Omarchy's omarchy-setup-fish has ~/.bashrc do: not for bash -c, shells
       # started from fish or nested shells. For people, not root, whose
-      # ~/.bashrc Omarchy leaves alone. Hotaru starts fish itself.
+      # ~/.bashrc Omarchy leaves alone. Hotaru starts its chosen shell itself;
+      # its PID marker prevents this handoff from replacing an explicit Bash.
       programs.bash.interactiveShellInit = lib.mkBefore ''
-        if [[ $EUID -ne 0 && $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} && ''${SHLVL} == 1 ]]; then
+        if [[ $EUID -ne 0 && $PPID != ''${HOTARU_SHELL_PARENT:-} && $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} && ''${SHLVL} == 1 ]]; then
           shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
           exec ${lib.getExe config.programs.fish.package} $LOGIN_OPTION
         fi

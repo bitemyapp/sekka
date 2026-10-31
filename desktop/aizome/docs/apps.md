@@ -132,8 +132,8 @@ palette. Search filters the sidebar and highlights options.
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),
   Caps Lock as (Caps Lock, Control, Escape, Compose), compose key, and the
   list of Aizome's shortcuts (from the compositor's `keys` config, editable).
-  In Typing → Keys → Modifier keys, choose **Swap Alt and Super** for a
-  Mac-style position, or the left-only swap to keep Right Alt for accents.
+  In Typing → Keys → Modifier keys, choose **Swap left Alt and Super** for a
+  Mac-style position while keeping Right Alt (AltGr) for accents and symbols.
   Changes apply immediately and persist across logins; **Default**
   restores the modifier arrangement. Until changed here, layouts and
   options are the system's (`services.xserver.xkb`, which Genkan writes). Open this control directly with
@@ -147,7 +147,7 @@ palette. Search filters the sidebar and highlights options.
   keyboard to set up. The compositor catches that key (`catch-key`: an
   app never hears a modifier key alone) with the keyboard it came from,
   so the press says which keyboard and where its ❖ should go: Alt there,
-  as on a PC, suggests **Swap Alt and Super**; ⌘ Command or the Windows
+  as on a PC, suggests **Swap left Alt and Super**; ⌘ Command or the Windows
   key, nothing; Control, **Swap Control and Super**. The space bar or a
   key right of it asks again. Its Caps Lock and Compose key start as
   other keyboards' or, when there's one, as another keyboard's own.

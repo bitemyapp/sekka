@@ -28,6 +28,26 @@ fn an_empty_option_list_drops_the_sessions_options() {
 }
 
 #[test]
+fn the_recommended_left_swap_preserves_german_altgr() {
+    let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+    let keymap = xkb::Keymap::new_from_names(
+        &context,
+        "",
+        "",
+        "de",
+        "",
+        Some(aizome_ipc::setup::SWAP_LEFT_ALT_SUPER.into()),
+        xkb::KEYMAP_COMPILE_NO_FLAGS,
+    )
+    .expect("a German keymap");
+    let mut state = xkb::State::new(&keymap);
+    assert_eq!(state.key_get_one_sym(Keycode::new(56 + 8)).raw(), keysyms::KEY_Super_L);
+    assert_eq!(state.key_get_one_sym(Keycode::new(100 + 8)).raw(), keysyms::KEY_ISO_Level3_Shift);
+    state.update_key(Keycode::new(100 + 8), xkb::KeyDirection::Down);
+    assert_eq!(state.key_get_utf8(Keycode::new(16 + 8)), "@");
+}
+
+#[test]
 #[ignore = "invoked in a subprocess by an_empty_option_list_drops_the_sessions_options"]
 fn keymap_options_child() {
     let spec = |options: &str| KeymapSpec {

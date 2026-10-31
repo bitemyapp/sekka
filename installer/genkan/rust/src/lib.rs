@@ -101,7 +101,9 @@ impl SuperKey {
     pub fn xkb_options(self) -> &'static str {
         match self {
             Self::AsIs => "",
-            Self::SwapAlt => "altwin:swap_alt_win",
+            // Only the key the installer asked about. Swapping right Alt too
+            // removes AltGr on layouts such as German and French.
+            Self::SwapAlt => "altwin:swap_lalt_lwin",
         }
     }
     pub fn from_xkb_options(options: &str) -> Option<Self> {

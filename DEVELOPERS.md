@@ -1072,8 +1072,9 @@ shared catching and the wording), so no app hears it and a modifier key alone
 counts. Esc, Stop, or leaving the step gives the wait up, since every app
 loses its keys meanwhile; previews never wait unasked. Its one choice is
 the common case: Alt there (most PC keyboards), and it recommends swapping
-Alt and Super, which the person can decline. ❖ there needs nothing. Any
-other key stays as it is, and the step says Genkan swaps only Alt and Super;
+left Alt and Super (`altwin:swap_lalt_lwin`), which the person can decline.
+Right Alt (AltGr) stays available for accents and symbols. ❖ there needs nothing. Any
+other key stays as it is, and the step says Genkan swaps only left Alt and Super;
 Settei has the other arrangements. Outside Aizome the step says it can't
 hear the key and offers the swap alone.
 
@@ -1093,11 +1094,14 @@ nix build .#checks.x86_64-linux.genkan-keyboard -L
 ```
 
 The check boots an Aizome VM with the modules installed systems import and
-the swap Genkan writes. It presses QEMU's keys: Alt and A select all in
+the left-only swap Genkan writes. It presses QEMU's keys: Alt and A select all in
 Genkan's text fields, as ❖ does once the person's settings undo the swap (as
 in the live session); the keyboard step refuses the space bar, suggests the
 swap for Alt, takes it being declined, stops at Esc, and leaves Control as
 it is, saying so. Hotaru and foot run fish, which no application brought.
+Hotaru also respects an explicit Bash override and follows changes to the
+system shell default in new tabs while Fish remains installed. The core
+keymap test checks that the recommended swap preserves German AltGr+Q (`@`).
 The fixture installs with the swap (`CALAMARES_TEST_SUPER_KEY=as-is` opts
 out) and checks it in the installed configuration and Aizome's session
 environment.
@@ -2125,13 +2129,16 @@ with omarchy-fish's history search replacing fzf.fish's. The PKGBUILD's
 dependencies (eza, mise, zoxide, starship, fzf, fd, bat) come from the
 applications' Nixpkgs. `starship.toml` beside it is
 Omarchy's prompt, unchanged; fish exports `STARSHIP_CONFIG` for it unless the
-person has a `~/.config/starship.toml`. Hotaru starts fish itself, from the
-system profile; foot starts bash, which hands over.
+person has a `~/.config/starship.toml`. The module writes an absolute shell
+path to `/etc/xdg/aizome/hotaru-shell`, including when Bash is selected.
+Hotaru reads it for each new pane; an explicit `shell` in its TOML configuration
+takes precedence. Without this system file, standalone Hotaru prefers Fish
+on PATH, then `$SHELL`, then `/bin/sh`. Foot starts bash, which hands over.
 
 Omarchy keeps bash as the login shell, and `omarchy-setup-fish` gives
 `~/.bashrc` a test that starts fish. The module puts the same test at
 the start of `/etc/bashrc`'s interactive part. It skips root, `bash -c`, bash
-started from fish, and shells with `SHLVL` above 1, so `nix develop` and
+started from fish or directly by Hotaru, and shells with `SHLVL` above 1, so `nix develop` and
 `nix-shell` stay in bash. NixOS's `ls`, `ll` and `l` aliases are removed from
 fish, where Omarchy has none and its `ls` function would be hidden. NixOS's
 fish module still generates completions from each installed package's manual
@@ -2139,19 +2146,27 @@ pages. These are small local builds, which Determinate Nix downloads instead
 when Sekka's cache has them; the media's Aizome reference systems include
 fish.
 
+Hotaru sets `HOTARU_SHELL_PARENT` to its own PID on its PTY commands. Bash
+compares this with its parent PID before handing over, preserving an explicit
+Bash choice without suppressing the handoff in other terminals launched from
+Hotaru that inherit the variable.
+
 ```sh
 nix build .#checks.x86_64-linux.fish-default .#checks.x86_64-linux.fish --no-update-lock-file
 ```
 
 `fish-default` evaluates where the setting is on: Aizome alone or beside
 Tatami, the former application with Tatami, and not Tatami or Plasma alone or
-Aizome with it turned off, with the Yukimi choice and the manifest. `fish`
+Aizome with it turned off, with the Yukimi choice and the manifest. It also
+checks the Hotaru default when Fish is independently installed and disabled
+as the terminal default. `fish`
 logs in on a disposable VM's console, on a system that chose the former
 application. It checks that bash handed over to fish, with Omarchy's
 settings, functions, fzf.fish bindings, zoxide, mise, eza and prompt, and
 that `cd` falls back to zoxide. `bash -c`, root's interactive bash, and bash
 started from fish stay in bash. `genkan-keyboard` checks that Hotaru and foot
-run fish in an Aizome session.
+run fish in an Aizome session and that Hotaru honors both the system default
+and its per-app override.
 
 To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes

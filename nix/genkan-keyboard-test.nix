@@ -3,7 +3,7 @@
 #
 # The VM is a Sekka system built from the modules installed systems import
 # (desktops and applications), with Aizome chosen and what Genkan writes
-# after the keyboard step: Alt and Super swapped, so ❖ is QEMU's Alt, just
+# after the keyboard step: Left Alt and Super swapped, so ❖ is QEMU's Alt, just
 # left of the space bar. The test checks that
 #
 # - Aizome's session starts from that system keyboard, so QEMU's Alt and A
@@ -13,7 +13,7 @@
 #   XKB_DEFAULT_OPTIONS back), as in the live session;
 # - Genkan's keyboard step (its debug build's sample pages) hears QEMU's
 #   keys through the compositor: the space bar asks again, Alt suggests
-#   swapping Alt and Super, which can be declined, Esc stops waiting, and
+#   swapping left Alt and Super, which can be declined, Esc stops waiting, and
 #   Control is left as it is, saying Genkan swaps only Alt and Super;
 # - Hotaru and foot open fish, which no application choice brought.
 #
@@ -55,7 +55,7 @@ pkgs.testers.runNixOSTest {
       # What Genkan writes when the key left of the space bar is Alt and
       # the person keeps its suggestion.
       services.xserver.xkb.layout = "us";
-      services.xserver.xkb.options = "altwin:swap_alt_win";
+      services.xserver.xkb.options = "altwin:swap_lalt_lwin";
       console.useXkbConfig = true;
       networking.hostName = "sekka-keyboard";
       users.users.demo = {

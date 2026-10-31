@@ -191,10 +191,10 @@ pub const GITHUB_HINT: &str = "Optional. Press Return or Look Up to fetch the ac
 /// How long a note stays in the bar at the bottom.
 const NOTE_FOR: Duration = Duration::from_secs(6);
 
-/// Whether the key beside the space bar is Alt, which swapping Alt and Super
+/// Whether the key beside the space bar is Alt, which swapping left Alt and Super
 /// makes ❖ (the arrangement Settei suggests for it).
 pub fn beside_alt(beside: &Beside) -> bool {
-    beside.suggest == Some(aizome_ipc::setup::SWAP_ALT_SUPER)
+    beside.suggest == Some(aizome_ipc::setup::SWAP_LEFT_ALT_SUPER)
 }
 
 /// Whether ❖ is beside the space bar already (a Mac's ⌘).
@@ -344,7 +344,7 @@ pub enum Msg {
     StopListening,
     /// Wait `n`'s key: its evdev code and keyboard, or `None` if given up on.
     KeyCaught(u64, Result<Option<(u32, Option<KeyboardInfo>)>, String>),
-    /// Swap Alt and Super, or keep the keys as they are.
+    /// Swap left Alt and Super, or keep the keys as they are.
     SwapAltSuper(bool),
     // Page cache warming.
     WarmStart(u64),
@@ -1432,7 +1432,7 @@ impl Genkan {
     }
 
     /// The key beside the space bar came. Alt there (most PC keyboards):
-    /// Genkan suggests swapping Alt and Super, to put ❖ there. ❖ there
+    /// Genkan suggests swapping left Alt and Super, to put ❖ there. ❖ there
     /// already, or any other key: the keys stay as they are; Genkan swaps
     /// nothing else. The space bar, or a key right of it, asks again.
     pub fn caught(&mut self, code: u32, keyboard: Option<KeyboardInfo>) {
@@ -1457,7 +1457,7 @@ impl Genkan {
     pub fn super_key_name(key: SuperKey) -> &'static str {
         match key {
             SuperKey::AsIs => "As they are",
-            SuperKey::SwapAlt => "Swap Alt and Super",
+            SuperKey::SwapAlt => "Swap left Alt and Super",
         }
     }
 
@@ -2343,8 +2343,8 @@ mod tests {
     fn the_keyboard_step_writes_what_settei_would() {
         // The backend can't use Aizome's crates (the helper is built from it
         // alone), so it names the arrangements itself.
-        use aizome_ipc::setup::{SWAP_ALT_SUPER, beside_space};
-        assert_eq!(SuperKey::SwapAlt.xkb_options(), SWAP_ALT_SUPER);
+        use aizome_ipc::setup::{SWAP_LEFT_ALT_SUPER, beside_space};
+        assert_eq!(SuperKey::SwapAlt.xkb_options(), SWAP_LEFT_ALT_SUPER);
         // Alt is the one Genkan swaps; ❖ needs nothing; Control and the
         // rest stay as they are.
         let key = |code| beside_space(code).unwrap();

@@ -55,6 +55,16 @@ let
     imports = [ (desktops [ "aizome" ]) ];
     calamares.fish.enable = false;
   };
+  declinedWithFish = installed (
+    { pkgs, ... }: {
+      imports = [ (desktops [ "aizome" ]) ];
+      calamares.fish.enable = false;
+      # Fish can still be useful for scripts without being the default shell.
+      environment.systemPackages = [ pkgs.fish ];
+      calamares.applications = [ "fish" ];
+    }
+  );
+  hotaruShell = c: c.environment.etc."xdg/aizome/hotaru-shell".text;
   init = c: builtins.unsafeDiscardStringContext c.programs.bash.interactiveShellInit;
   handsOver =
     c:
@@ -76,6 +86,12 @@ let
 in
 assert fish aizome && fish together && fish chosen;
 assert bash tatami && bash plasma && bash declined;
+assert bash declinedWithFish && (choice declinedWithFish).value == "false";
+assert lib.elem pkgs.fish declinedWithFish.environment.systemPackages;
+assert hotaruShell declinedWithFish == "${lib.getExe pkgs.bashInteractive}\n";
+assert hotaruShell declined == hotaruShell declinedWithFish;
+assert hotaruShell aizome == "${lib.getExe aizome.programs.fish.package}\n";
+assert hotaruShell chosen == hotaruShell aizome;
 # fish is no longer among the applications, for Genkan or Yukimi's Discover.
 assert !(lib.any (app: app.id == "fish") applicationCatalog.catalog);
 assert (manifest aizome).selected == [ ] && (manifest chosen).selected == [ "firefox" ];
@@ -105,6 +121,7 @@ pkgs.writeText "fish-default.json" (
         plasma
         chosen
         declined
+        declinedWithFish
         ;
     }
   )

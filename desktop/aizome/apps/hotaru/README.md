@@ -160,6 +160,13 @@ edits; invalid settings leave the current configuration intact. A managed
 symbolic link (a system configuration's) is read, never replaced: Settings says
 changes last until Hotaru quits.
 
+To choose a shell for Hotaru, set `shell = "zsh"` (or another executable) in
+that file. The graphical Settings window controls shell integration, but
+does not have a shell selector. Without an override, Hotaru follows Sekka's
+**Terminal shell** choice in Yukimi for each new tab or pane, including after
+a system update while Hotaru is open. Outside Sekka, it prefers fish when
+installed, then your login shell.
+
 ```toml
 font_size = 11.0 # Typographic points, before output scale.
 font_weight = 400
@@ -172,7 +179,7 @@ cursor_style = "block" # block, bar, underline; programs may choose another.
 cursor_blink = true
 scrollback = 10000 # Applies to newly created panes.
 copy_format = "mixed" # plain, vt, html, mixed
-# shell = "zsh" # Unset: fish where it's installed, else $SHELL.
+# shell = "zsh" # Unset: system default, else installed fish, else $SHELL.
 shell_integration = true # Future default-shell panes only.
 clipboard_read = "ask" # allow, ask, deny: programs reading it (OSC 52, 5522).
 clipboard_write = "allow" # allow, ask, deny: programs writing it.

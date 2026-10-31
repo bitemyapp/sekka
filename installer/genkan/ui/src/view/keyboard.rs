@@ -2,7 +2,7 @@
 //! The installed system's keyboard layout, and the key just left of the
 //! space bar: the page asks for it as it opens (Settei's keyboard setup,
 //! `aizome_ipc::setup`). Alt there, as on most PC keyboards, and Genkan
-//! recommends swapping Alt and Super to put ❖ there; ❖ there already needs
+//! recommends swapping left Alt and Super to put ❖ there; ❖ there already needs
 //! nothing; any other key stays as it is. Either way the person decides.
 use super::{group, sections};
 use crate::app::{Genkan, KEYBOARD_NAMES, KeyCheck, Msg, beside_alt, beside_super};
@@ -39,7 +39,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
                 "",
                 vec![
                     form_row(
-                        "Swap Alt and Super",
+                        "Swap left Alt and Super",
                         toggle(app.super_key == SuperKey::SwapAlt)
                             .on_toggle(Msg::SwapAltSuper)
                             .id("swap-alt-super"),
@@ -123,7 +123,7 @@ fn card(app: &Genkan) -> Element<Msg> {
                 if swapped {
                     (
                         beside.why,
-                        "✓ Recommended: Genkan swaps Alt and Super on the installed system.",
+                        "✓ Recommended: Genkan swaps left Alt and Super on the installed system.",
                         Role::Success,
                     )
                 } else {
@@ -137,7 +137,7 @@ fn card(app: &Genkan) -> Element<Msg> {
                 if swapped {
                     (
                         beside.why,
-                        "Alt and Super are swapped anyway: ❖ moves away from the space bar.",
+                        "Left Alt and Super are swapped anyway: ❖ moves away from the space bar.",
                         Role::Warning,
                     )
                 } else {
@@ -145,13 +145,13 @@ fn card(app: &Genkan) -> Element<Msg> {
                 }
             } else if swapped {
                 (
-                    "Genkan swaps only Alt and Super, which isn't this key.",
-                    "Alt and Super are swapped anyway, wherever they are on this keyboard.",
+                    "Genkan swaps only left Alt and Super, which isn't this key.",
+                    "Left Alt and Super are swapped anyway, wherever they are on this keyboard.",
                     Role::Warning,
                 )
             } else {
                 (
-                    "Genkan swaps only Alt and Super, so your keys stay as they are. Settings → Keyboard can change them after installing.",
+                    "Genkan swaps only left Alt and Super, so your keys stay as they are. Settings → Keyboard can change them after installing.",
                     "Kept as they are.",
                     Role::Text2,
                 )
@@ -171,7 +171,7 @@ fn card(app: &Genkan) -> Element<Msg> {
             column![
                 text("Genkan can't hear the key here.").weight(650.0),
                 text(format!(
-                    "If Alt is just left of your space bar, swap Alt and Super below. ({why})"
+                    "If Alt is just left of your space bar, swap left Alt and Super below. ({why})"
                 ))
                 .size(11.5)
                 .role(Role::Text3)
