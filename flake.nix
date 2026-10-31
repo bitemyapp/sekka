@@ -113,13 +113,8 @@
           ./modules/installer.nix
         ];
       };
-      googlebook = installer.extendModules { modules = [ ./modules/googlebook.nix ]; };
-      googlebookKernel = import ./nix/googlebook-kernel.nix {
-        inherit pkgs;
-        kernel = "${googlebook.config.system.build.kernel}/${googlebook.config.system.boot.loader.kernelFile}";
-        initrd = "${googlebook.config.system.build.initialRamdisk}/${googlebook.config.system.boot.loader.initrdFile}";
-        cmdline = "init=${googlebook.config.system.build.toplevel}/init ${toString googlebook.config.boot.kernelParams}";
-      };
+      # Googlebook construction is temporarily disabled. Its module, builders
+      # and fixture remain in source, without configuration/package/check outputs.
       etc = installer.config.environment.etc;
       liveConfigs = [
         installer.config
@@ -177,7 +172,6 @@
         };
       };
       nixosConfigurations.installer = installer;
-      nixosConfigurations.googlebook = googlebook;
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
@@ -204,11 +198,6 @@
         iso = import ./nix/verified-iso.nix {
           inherit pkgs;
           iso = installer.config.system.build.isoImage;
-        };
-        iso-googlebook = import ./nix/googlebook-iso.nix {
-          inherit pkgs;
-          iso = googlebook.config.system.build.isoImage;
-          kernel = googlebookKernel;
         };
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
@@ -383,9 +372,6 @@
           nixPackage = runnerNix;
         };
         iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
-        googlebook-iso = import ./nix/googlebook-iso-test.nix {
-          inherit pkgs googlebook installer;
-        };
         iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
           inherit pkgs installer;
         };

@@ -42,8 +42,14 @@ The ISO is under `result-iso/iso/`. `nix build .#installed-lock` exposes the loc
 
 ### Googlebook live media
 
-`nix build .#iso-googlebook --no-update-lock-file --out-link result-googlebook`
-builds experimental x86_64 Depthcharge USB media. `.#iso` remains the PC image.
+Googlebook image construction is temporarily disabled in the root flake.
+The `iso-googlebook` package, `nixosConfigurations.googlebook`, and
+`checks.x86_64-linux.googlebook-iso` are not exposed, so ordinary builds and
+CI no longer evaluate that system or construct its fixture ISO. The module,
+kernel and image builders and component test sources remain for re-enabling those
+outputs together later. `.#iso` remains the PC image.
+
+The retained implementation builds experimental x86_64 Depthcharge USB media.
 The Googlebook configuration reuses the live Aizome system, includes the
 coreboot table/framebuffer modules in the initramfs, and omits Genkan, prebuilt
 installed systems, the application cache and PC boot-menu specialisations.
@@ -69,9 +75,9 @@ counter), then runs Google's `vb2api_load_kernel` host test in developer mode
 against the finished image. Failure fails the build; its log is retained under
 `result-googlebook/nix-support/googlebook-vboot.log`.
 
-Run `nix build .#checks.x86_64-linux.googlebook-iso --no-update-lock-file` for
-the component check. It builds a small ISO through the same builder with a
-real Linux kernel and fixture initramfs, checks both GPT CRCs, partition
+The retained `nix/googlebook-iso-test.nix` component check builds a small ISO
+through the same builder with a real Linux kernel and fixture initramfs,
+checks both GPT CRCs, partition
 geometry, the partition-relative ISO label, embedded initramfs bytes and x86
 boot parameters. Google's loader must accept it even when the backing file is
 extended to represent a larger USB drive, and reject the ordinary ISO, a
