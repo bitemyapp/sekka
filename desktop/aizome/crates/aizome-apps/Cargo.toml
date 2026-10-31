@@ -1,0 +1,18 @@
+[package]
+name = "aizome-apps"
+description = "Aizome's view of installed applications: desktop entries, the index of them, Exec lines, icons, and the default apps and terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# The temporary-directory fixture, for aizome-sys's tests of what builds on
+# this crate.
+test-util = []
+
+[dependencies]
+log.workspace = true
+# getpwuid_r, access(2), poll(2) and inotify for the index's watcher.
+libc = "0.2"

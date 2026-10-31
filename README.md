@@ -71,7 +71,9 @@ need a terminal open in it too. Hotaru draws with the processor. It doesn't
 implement synchronized output (DEC mode 2026), in-band resize (2048), the
 Kitty graphics protocol, DEC modes 1039 and 1045, or DECSASD; foot is still
 installed for programs that want them. To use foot instead, choose it in
-Settei, under General → Default Apps → Terminal.
+Settei, under General → Default Apps → Terminal. Upgrading from a Sekka
+without Hotaru switches foot to Hotaru once; if you had chosen another
+terminal, it stays.
 
 [![Aizome with Sumi beside Files and Hotaru stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 

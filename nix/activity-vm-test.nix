@@ -208,6 +208,10 @@ pkgs.testers.runNixOSTest {
         time.sleep(12)
         window = activity()
         print(json.dumps(window, indent=1))
+        print("Activity runtime executable and SHA-256:")
+        print(machine.succeed(
+            f"readlink -f /proc/{window['pid']}/exe; "
+            f"sha256sum /proc/{window['pid']}/exe"))
         assert window["floating"], window
         machine.screenshot("activity")
 
@@ -309,7 +313,9 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("quit")
         machine.send_key("ret")  # Quit, the dialog's default
         machine.wait_until_fails("pgrep -x yes", timeout=20)
-        time.sleep(3)
+        # Removing the last selected row must also clear its inspector. GTK
+        # can change selected-item without a nonempty selection-changed range.
+        text("Nothing Selected")
         machine.screenshot("quitted")
   '';
 }

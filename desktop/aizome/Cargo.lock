@@ -43,6 +43,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-apps"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+]
+
+[[package]]
 name = "aizome-awake"
 version = "0.1.0"
 dependencies = [
@@ -75,6 +83,7 @@ dependencies = [
 name = "aizome-comp-core"
 version = "0.1.0"
 dependencies = [
+ "aizome-apps",
  "aizome-config",
  "aizome-ipc",
  "aizome-theme",
@@ -496,6 +505,7 @@ dependencies = [
 name = "aizome-sys"
 version = "0.1.0"
 dependencies = [
+ "aizome-apps",
  "async-io",
  "event-listener",
  "futures-lite",

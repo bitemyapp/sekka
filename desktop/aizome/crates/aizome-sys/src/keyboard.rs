@@ -424,7 +424,7 @@ fn newest_in_store(store: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::apps::testutil::TempDir;
+    use aizome_apps::testutil::TempDir;
 
     /// Trimmed from xkeyboard-config 2.48's evdev.xml.
     const EVDEV: &str = r#"<?xml version="1.0" encoding="UTF-8"?>

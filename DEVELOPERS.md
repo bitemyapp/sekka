@@ -1599,6 +1599,10 @@ typing from the table still searches. The test also confirms keyboard Quit
 actually ends its disposable process. These component checks do not qualify an
 ISO's Activity window.
 
+The inspector follows the selected item, including removal of the last row.
+The VM check verifies that quitting the selected process clears its inspector
+instead of leaving stale Running text and statistics after the process exits.
+
 ## Keep Awake and USB wake
 
 `tatami awake on|off|toggle|status` controls a session-owned user service with

@@ -46,7 +46,7 @@
 //! `$XDG_CONFIG_HOME/xdg-terminals.list`.
 
 use super::exec::{Exec, ExecContext};
-use super::index::AppIndex;
+use super::index::{AppIndex, file_name};
 use super::keyfile::{self, KeyFile, Line};
 use super::xdg::XdgDirs;
 use crate::{Error, Result};
@@ -57,6 +57,23 @@ const DEFAULTS: &str = "Default Applications";
 const ADDED: &str = "Added Associations";
 const REMOVED: &str = "Removed Associations";
 const TERMINALS: &str = "xdg-terminals.list";
+/// Aizome's own terminal, and the one before it.
+const HOTARU: &str = "org.aizome.Hotaru.desktop";
+const FOOT: &str = "foot.desktop";
+
+/// What [`AppIndex::move_terminal_to_hotaru`] did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TerminalMove {
+    /// Nothing needed changing: the default terminal (if any) is this one.
+    Unchanged(Option<String>),
+    /// foot was the default; Hotaru is now.
+    Hotaru,
+    /// The terminal the person chose for ❖Return is the default now.
+    Listed(String),
+    /// ❖Return ran a command no installed terminal's entry runs, so it
+    /// can't be kept; the default terminal applies.
+    Unmatched(Vec<String>),
+}
 
 /// A kind of default application, as a Settings panel shows them, with
 /// the MIME types each covers.
@@ -516,10 +533,7 @@ impl AppIndex {
 
     fn default_terminal(&self) -> Option<usize> {
         let listed = self.mime.terminals.iter().filter_map(|id| self.position(id)).find(|&i| self.is_terminal(i));
-        let aizome = ["org.aizome.Hotaru.desktop", "foot.desktop"]
-            .into_iter()
-            .filter_map(|id| self.position(id))
-            .find(|&i| self.is_terminal(i));
+        let aizome = [HOTARU, FOOT].into_iter().filter_map(|id| self.position(id)).find(|&i| self.is_terminal(i));
         listed.or(aizome).or_else(|| {
             (0..self.all().len())
                 .filter(|&i| self.is_terminal(i) && self.shown_at(i))
@@ -528,22 +542,83 @@ impl AppIndex {
         })
     }
 
+    /// What ❖Return runs: the default terminal's `Exec`, without the field
+    /// codes it takes files by. `None` when no terminal is installed. The
+    /// compositor asks this, Settei shows [`role_default`](Self::role_default)
+    /// for the terminal, and both read the same lists.
+    pub fn terminal_exec(&self) -> Option<Vec<String>> {
+        self.exec_at(self.default_terminal()?)
+    }
+
     /// The command prefix that runs a program in the default terminal:
     /// its `Exec` (without field codes) followed by its `X-TerminalArgExec`
-    /// (default `-e`), ready for [`LaunchOptions::terminal`]. `None` when
-    /// no terminal is installed.
-    ///
-    /// [`LaunchOptions::terminal`]: super::LaunchOptions::terminal
+    /// (default `-e`), ready for `aizome_sys::apps::LaunchOptions::terminal`.
+    /// `None` when no terminal is installed.
     pub fn terminal_command(&self) -> Option<Vec<String>> {
-        let entry = self.entry_at(self.default_terminal()?)?;
-        let exec = Exec::parse(entry.exec.as_deref()?).ok()?;
-        let context = ExecContext { name: &entry.name, icon: entry.icon.as_deref(), location: entry.path.as_deref() };
-        let mut argv = exec.expand(&[], &context);
-        let exec_arg = entry.get("X-TerminalArgExec").unwrap_or_else(|| "-e".to_owned());
+        let index = self.default_terminal()?;
+        let mut argv = self.exec_at(index)?;
+        let exec_arg = self.entry_at(index)?.get("X-TerminalArgExec").unwrap_or_else(|| "-e".to_owned());
         if !exec_arg.is_empty() {
             argv.push(exec_arg);
         }
         Some(argv)
+    }
+
+    fn exec_at(&self, index: usize) -> Option<Vec<String>> {
+        let entry = self.entry_at(index)?;
+        let exec = Exec::parse(entry.exec.as_deref()?).ok()?;
+        let context = ExecContext { name: &entry.name, icon: entry.icon.as_deref(), location: entry.path.as_deref() };
+        Some(exec.expand(&[], &context))
+    }
+
+    /// Once, for the Aizome that first ships Hotaru: foot, the default
+    /// terminal before it, becomes Hotaru; a terminal the person chose
+    /// stays theirs.
+    ///
+    /// `chosen` is what ❖Return ran before the default terminal had a
+    /// single home: the compositor's `[keys] terminal`, `None` if the
+    /// settings file never named one. Before Hotaru it was `["foot"]`
+    /// unless someone chose otherwise, and Aizome wrote its defaults out
+    /// whenever it saved the file, so `["foot"]` is the old default, not a
+    /// choice. With it, or with none, Hotaru is listed first in
+    /// `$XDG_CONFIG_HOME/xdg-terminals.list` if foot is still the default
+    /// (a list that names foot first is foot chosen in Settei before
+    /// Hotaru, and moves too). Any other command is the
+    /// person's: the installed terminal that runs it (the same `Exec`, or
+    /// else the same program) is listed first, so it stays what ❖Return
+    /// starts.
+    pub fn move_terminal_to_hotaru(&mut self, chosen: Option<&[String]>) -> Result<TerminalMove> {
+        let current = self.role_default(DefaultRole::Terminal);
+        let chosen = match chosen {
+            None => None,
+            Some([program]) if program == "foot" => None,
+            Some(argv) => Some(argv),
+        };
+        let Some(chosen) = chosen else {
+            if current.as_deref() == Some(FOOT) && self.is_installed(HOTARU) {
+                self.set_role_default(DefaultRole::Terminal, HOTARU)?;
+                return Ok(TerminalMove::Hotaru);
+            }
+            return Ok(TerminalMove::Unchanged(current));
+        };
+        if self.terminal_exec().as_deref() == Some(chosen) {
+            return Ok(TerminalMove::Unchanged(current));
+        }
+        let program = |argv: &[String]| argv.first().map(|p| file_name(p).to_owned());
+        let terminals: Vec<(usize, Vec<String>)> = (0..self.all().len())
+            .filter(|&i| self.is_terminal(i))
+            .filter_map(|i| Some((i, self.exec_at(i)?)))
+            .collect();
+        let same_exec = terminals.iter().find(|(_, exec)| exec == chosen);
+        let same_program =
+            || terminals.iter().find(|(_, exec)| program(exec).is_some() && program(exec) == program(chosen));
+        match same_exec.or_else(same_program).and_then(|(i, _)| self.id_at(*i)) {
+            Some(id) => {
+                self.set_role_default(DefaultRole::Terminal, &id)?;
+                Ok(TerminalMove::Listed(id))
+            }
+            None => Ok(TerminalMove::Unmatched(chosen.to_vec())),
+        }
     }
 }
 
@@ -1008,6 +1083,125 @@ mod tests {
         tmp.write("home/.config/xdg-terminals.list", "foot.desktop\n");
         assert!(index.refresh_if_changed());
         assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some("foot.desktop"));
+    }
+
+    /// Terminals as Aizome's session has them: Hotaru, listed first by the
+    /// system, foot and kitty, each with its own `Exec`.
+    fn terminals_fixture() -> TempDir {
+        let tmp = TempDir::new("terminals");
+        let terminal = |name: &str, exec: &str, extra: &str| {
+            format!(
+                "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nCategories=System;TerminalEmulator;\n{extra}"
+            )
+        };
+        let system = "usr/share/applications";
+        tmp.write(
+            &format!("{system}/org.aizome.Hotaru.desktop"),
+            &terminal("Hotaru", "aizome-hotaru", "X-TerminalArgExec=--\n"),
+        );
+        tmp.write(&format!("{system}/foot.desktop"), &terminal("Foot", "foot", ""));
+        tmp.write(&format!("{system}/footclient.desktop"), &terminal("Foot Client", "footclient", "NoDisplay=true\n"));
+        tmp.write(&format!("{system}/kitty.desktop"), &terminal("Kitty", "kitty --single-instance %U", ""));
+        tmp.write("etc/xdg/aizome-xdg-terminals.list", "org.aizome.Hotaru.desktop\nfoot.desktop\n");
+        tmp
+    }
+
+    /// [`index`], for tests whose `index` is the index already.
+    fn load(tmp: &TempDir) -> AppIndex {
+        index(tmp)
+    }
+
+    fn user_list(tmp: &TempDir) -> Option<String> {
+        std::fs::read_to_string(tmp.path().join("home/.config/xdg-terminals.list")).ok()
+    }
+
+    fn argv(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn return_runs_the_terminal_settei_shows() {
+        let tmp = terminals_fixture();
+        let mut index = load(&tmp);
+        assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some(HOTARU));
+        assert_eq!(index.terminal_exec().unwrap(), ["aizome-hotaru"]);
+        assert_eq!(index.terminal_command().unwrap(), ["aizome-hotaru", "--"]);
+        // Choosing kitty changes both; its field codes are dropped.
+        index.set_role_default(DefaultRole::Terminal, "kitty.desktop").unwrap();
+        assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some("kitty.desktop"));
+        assert_eq!(index.terminal_exec().unwrap(), ["kitty", "--single-instance"]);
+        assert_eq!(index.terminal_command().unwrap(), ["kitty", "--single-instance", "-e"]);
+    }
+
+    #[test]
+    fn the_old_default_foot_becomes_hotaru() {
+        // Never chosen, or written out as the default: the system's list
+        // already names Hotaru, so nothing is written.
+        for chosen in [None, Some(argv(&["foot"]))] {
+            let tmp = terminals_fixture();
+            let mut index = load(&tmp);
+            assert_eq!(
+                index.move_terminal_to_hotaru(chosen.as_deref()).unwrap(),
+                TerminalMove::Unchanged(Some(HOTARU.to_owned()))
+            );
+            assert_eq!(user_list(&tmp), None);
+            assert_eq!(index.terminal_exec().unwrap(), ["aizome-hotaru"]);
+        }
+        // foot chosen in Settei before Hotaru (its list and `[keys] terminal`
+        // both name it): Hotaru goes first, the rest of the list stays.
+        let tmp = terminals_fixture();
+        tmp.write("home/.config/xdg-terminals.list", "# mine\nfoot.desktop\nkitty.desktop\n");
+        let mut index = load(&tmp);
+        assert_eq!(index.move_terminal_to_hotaru(Some(&argv(&["foot"]))).unwrap(), TerminalMove::Hotaru);
+        assert_eq!(user_list(&tmp).unwrap(), "# mine\norg.aizome.Hotaru.desktop\nfoot.desktop\nkitty.desktop\n");
+        assert_eq!(index.role_default(DefaultRole::Terminal).as_deref(), Some(HOTARU));
+        assert_eq!(index.terminal_exec().unwrap(), ["aizome-hotaru"]);
+    }
+
+    #[test]
+    fn a_terminal_someone_chose_stays_theirs() {
+        // Chosen in Settei, which wrote both: already the default.
+        let tmp = terminals_fixture();
+        tmp.write("home/.config/xdg-terminals.list", "kitty.desktop\n");
+        let mut index = load(&tmp);
+        assert_eq!(
+            index.move_terminal_to_hotaru(Some(&argv(&["kitty", "--single-instance"]))).unwrap(),
+            TerminalMove::Unchanged(Some("kitty.desktop".to_owned()))
+        );
+        assert_eq!(user_list(&tmp).unwrap(), "kitty.desktop\n");
+        // Written into `[keys] terminal` by hand: the entry that runs it is
+        // listed, by its `Exec`, or else by its program.
+        for (chosen, id, exec) in [
+            (argv(&["kitty", "--single-instance"]), "kitty.desktop", argv(&["kitty", "--single-instance"])),
+            (argv(&["/run/current-system/sw/bin/kitty"]), "kitty.desktop", argv(&["kitty", "--single-instance"])),
+            (argv(&["footclient"]), "footclient.desktop", argv(&["footclient"])),
+            (argv(&["foot", "--server"]), "foot.desktop", argv(&["foot"])),
+        ] {
+            let tmp = terminals_fixture();
+            let mut index = load(&tmp);
+            assert_eq!(index.move_terminal_to_hotaru(Some(&chosen)).unwrap(), TerminalMove::Listed(id.to_owned()));
+            assert_eq!(user_list(&tmp).unwrap(), format!("{id}\n"));
+            assert_eq!(index.terminal_exec().unwrap(), exec);
+        }
+        // A command no terminal's entry runs can't be kept.
+        let tmp = terminals_fixture();
+        let mut index = load(&tmp);
+        let script = argv(&["/home/alice/bin/my-terminal"]);
+        assert_eq!(index.move_terminal_to_hotaru(Some(&script)).unwrap(), TerminalMove::Unmatched(script));
+        assert_eq!(user_list(&tmp), None);
+    }
+
+    #[test]
+    fn foot_stays_when_hotaru_is_missing() {
+        let tmp = terminals_fixture();
+        std::fs::remove_file(tmp.path().join("usr/share/applications/org.aizome.Hotaru.desktop")).unwrap();
+        tmp.write("home/.config/xdg-terminals.list", "foot.desktop\n");
+        let mut index = load(&tmp);
+        assert_eq!(
+            index.move_terminal_to_hotaru(Some(&argv(&["foot"]))).unwrap(),
+            TerminalMove::Unchanged(Some(FOOT.to_owned()))
+        );
+        assert_eq!(user_list(&tmp).unwrap(), "foot.desktop\n");
     }
 
     #[test]

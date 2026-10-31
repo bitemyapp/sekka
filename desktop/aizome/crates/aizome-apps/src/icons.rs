@@ -412,12 +412,12 @@ impl IconLookup {
 
     /// The theme looked in first.
     pub fn theme(&self) -> String {
-        crate::service::lock(&self.inner).theme.clone()
+        crate::lock(&self.inner).theme.clone()
     }
 
     /// Look in `theme` first from now on.
     pub fn set_theme(&self, theme: &str) {
-        let mut inner = crate::service::lock(&self.inner);
+        let mut inner = crate::lock(&self.inner);
         if inner.theme != theme {
             inner.theme = theme.to_owned();
             inner.chain = None;
@@ -428,7 +428,7 @@ impl IconLookup {
     /// Forget everything read, so the next lookups see installed or
     /// removed icons and themes.
     pub fn invalidate(&self) {
-        let mut inner = crate::service::lock(&self.inner);
+        let mut inner = crate::lock(&self.inner);
         inner.themes.clear();
         inner.chain = None;
         inner.loose = None;
@@ -457,7 +457,7 @@ impl IconLookup {
         let size = size.max(1);
         let scale = scale.max(1);
         let key = (names.join("\n"), size, scale);
-        let mut inner = crate::service::lock(&self.inner);
+        let mut inner = crate::lock(&self.inner);
         if let Some(found) = inner.results.get(&key) {
             return found.clone();
         }
@@ -469,7 +469,7 @@ impl IconLookup {
     /// The icon themes installed (those with an `index.theme` listing
     /// directories, so not cursor-only themes), by display name.
     pub fn installed_themes(&self) -> Vec<IconTheme> {
-        let base_dirs = crate::service::lock(&self.inner).base_dirs.clone();
+        let base_dirs = crate::lock(&self.inner).base_dirs.clone();
         let mut themes: Vec<IconTheme> = Vec::new();
         for base in &base_dirs {
             for entry in std::fs::read_dir(base).into_iter().flatten().flatten() {

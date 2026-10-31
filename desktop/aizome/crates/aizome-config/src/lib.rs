@@ -496,9 +496,11 @@ pub struct Keys {
     pub command_key_for_all_apps: bool,
     /// App IDs that get Ctrl+Shift instead of Ctrl.
     pub terminals: Vec<String>,
-    /// What ❖Return runs, in the Desk's folder: Hotaru, Aizome's terminal,
-    /// unless the person chose another.
-    pub terminal: Vec<String>,
+    /// What ❖Return ran before it started the default terminal, the one
+    /// Settei shows (`xdg-terminals.list`). Read once, when Aizome moves
+    /// the default from foot to Hotaru, and never written back.
+    #[serde(rename = "terminal", skip_serializing)]
+    pub legacy_terminal: Option<Vec<String>>,
     /// Overrides: a chord (`"Ctrl+Super+Up"`) to an action name
     /// (`"overview"`, `"spawn foot"`, `"none"` to unbind). See the
     /// compositor's documentation for the action names.
@@ -512,7 +514,7 @@ impl Default for Keys {
         Keys {
             command_key_for_all_apps: true,
             terminals: default_terminals(),
-            terminal: vec!["aizome-hotaru".into()],
+            legacy_terminal: None,
             bindings: BTreeMap::new(),
             extra: toml::Table::new(),
         }
@@ -945,6 +947,16 @@ id = "046d:c31c"
         let back = Settings::load_from(&path).unwrap();
         assert_eq!(back, s);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_old_terminal_command_is_read_but_never_written() {
+        let settings = Settings::from_toml("[keys]\nterminal = [\"foot\"]\n").unwrap();
+        assert_eq!(settings.keys.legacy_terminal, Some(vec!["foot".to_owned()]));
+        let text = toml::to_string(&settings).unwrap();
+        assert!(!text.contains("terminal = "), "{text}");
+        assert_eq!(Settings::from_toml(&text).unwrap().keys.legacy_terminal, None);
+        assert_eq!(Settings::default().keys.legacy_terminal, None);
     }
 
     #[test]
