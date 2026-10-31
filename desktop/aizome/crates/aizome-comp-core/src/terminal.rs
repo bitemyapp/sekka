@@ -18,7 +18,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use aizome_apps::{AppIndex, DESKTOP_NAME, Locale, TerminalMove, XdgDirs, parse_desktops};
+use aizome_apps::{AppIndex, DESKTOP_NAME, DefaultRole, Locale, TerminalMove, XdgDirs, parse_desktops};
 use tracing::{info, warn};
 
 use crate::session::spawn_with;
@@ -48,10 +48,40 @@ fn with_index<T>(f: impl FnOnce(&mut AppIndex) -> T) -> T {
 
 /// Start the default terminal, in `cwd` (else the home folder), with the
 /// session's environment.
-pub fn spawn(az: &Aizome, cwd: Option<PathBuf>) {
+pub fn spawn(az: &Aizome, cwd: Option<PathBuf>, hotaru: Option<(crate::WinId, i32)>) {
     let env = crate::session::session_env(az);
+    let ipc = az.ipc.path.clone();
     let started = std::thread::Builder::new().name("aizome-terminal".into()).spawn(move || {
-        let Some(argv) = with_index(|index| index.terminal_exec()) else {
+        let Some(argv) = with_index(|index| {
+            let mut argv = index.terminal_exec()?;
+            // Only Hotaru understands the per-window handoff. Keep another
+            // chosen terminal's Exec and arguments exactly as they were.
+            if index.role_default(DefaultRole::Terminal).as_deref() == Some("org.aizome.Hotaru.desktop") {
+                if let Some((id, pid)) = hotaru {
+                    // An app without keyboard focus cannot obtain an
+                    // activation token to restore its minimised window.
+                    // This explicit desktop shortcut can: use the same
+                    // Focus path as the Deskbar, on this worker.
+                    if let Some(path) = &ipc {
+                        let restored = (|| -> std::io::Result<()> {
+                            let mut client = aizome_ipc::Client::connect_to(path)?;
+                            let timeout = Some(std::time::Duration::from_secs(2));
+                            client.stream().set_read_timeout(timeout)?;
+                            client.stream().set_write_timeout(timeout)?;
+                            client.call(&aizome_ipc::Request::Focus { id })?;
+                            Ok(())
+                        })();
+                        if let Err(error) = restored {
+                            warn!("❖Return: could not restore Hotaru: {error}");
+                        }
+                    }
+                    argv.extend(["--window".into(), pid.to_string()]);
+                } else {
+                    argv.push("--new-window".into());
+                }
+            }
+            Some(argv)
+        }) else {
             warn!("❖Return: no terminal is installed");
             return;
         };
