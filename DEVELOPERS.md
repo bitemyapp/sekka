@@ -190,6 +190,22 @@ This component test does not replace playback through the exact ISO's normal UI.
 
 ### Aizome and IBus
 
+A fresh Aizome session inherits `services.xserver.xkb` through the session's
+`XKB_DEFAULT_LAYOUT`, `XKB_DEFAULT_MODEL`, `XKB_DEFAULT_VARIANT` and
+`XKB_DEFAULT_OPTIONS`. Missing settings fields use these defaults; explicit
+user settings, including empty variants/options and a saved US layout, keep
+priority. The user's Aizome environment file can override the system defaults.
+Per-keyboard profiles still replace only modifier/Compose options, preserving
+the shared layout and layout-switching options. The greeter continues to use
+its explicit system keyboard configuration.
+
+`cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-config`
+checks missing/partial settings, explicit overrides and per-keyboard options
+with isolated subprocess environments. `nix build .#checks.x86_64-linux.aizome-login`
+uses a UK keyboard for the greeter password and fresh session, comparing
+physical-key punctuation in actual Foot while background jobs saturate the
+VM's CPUs. These component checks do not replace exact-ISO keyboard testing.
+
 When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend
 inside Aizome. `installer/genkan/rust/system/input-method.nix` starts that
 frontend with `aizome-session.target`; GNOME keeps its own IBus service and

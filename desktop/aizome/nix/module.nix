@@ -120,6 +120,13 @@ let
     XDG_SESSION_DESKTOP = "aizome";
     XDG_SESSION_TYPE = "wayland";
     XDG_CONFIG_DIRS = "/etc/xdg/aizome:/etc/xdg";
+    # Match the greeter and the installer's selected keyboard until the
+    # person chooses their own in Settings. The user's environment file
+    # can override these, and explicit settings.toml fields take priority.
+    XKB_DEFAULT_LAYOUT = config.services.xserver.xkb.layout;
+    XKB_DEFAULT_MODEL = config.services.xserver.xkb.model;
+    XKB_DEFAULT_VARIANT = config.services.xserver.xkb.variant;
+    XKB_DEFAULT_OPTIONS = config.services.xserver.xkb.options;
     DCONF_PROFILE = "aizome";
     NIXOS_OZONE_WL = "1";
     MOZ_ENABLE_WAYLAND = "1";
@@ -387,7 +394,8 @@ in
     environment.etc = {
       "xdg/aizome/environment".text = lib.concatStrings (
         lib.mapAttrsToList (name: value: "${name}=${value}\n") (
-          lib.filterAttrs (_: value: value != "") environment
+          # An empty variant/options value must clear inherited XKB values.
+          lib.filterAttrs (name: value: value != "" || lib.hasPrefix "XKB_DEFAULT_" name) environment
         )
       );
       "xdg/aizome/foot/foot.ini".source = ../etc/foot/foot.ini;
