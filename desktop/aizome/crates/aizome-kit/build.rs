@@ -1,5 +1,6 @@
-//! Turns the Lucide icons in `icons/lucide/*.svg` into the `Icon` enum: one
-//! variant per file, named after it (`wifi-off.svg` is `Icon::WifiOff`),
+//! Turns the Lucide icons in `icons/lucide/*.svg`, and Aizome's own in
+//! `icons/aizome/*.svg`, into the `Icon` enum: one variant per file, named
+//! after it (`wifi-off.svg` is `Icon::WifiOff`),
 //! with the SVG's shape elements kept as text and parsed into kurbo shapes
 //! the first time an icon draws (see `src/icons.rs`).
 
@@ -7,32 +8,35 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 fn main() {
-    let dir = Path::new("icons/lucide");
-    println!("cargo:rerun-if-changed={}", dir.display());
     let mut icons: Vec<(String, Vec<String>)> = Vec::new();
-    for entry in std::fs::read_dir(dir).expect("icons/lucide") {
-        let path = entry.expect("an entry").path();
-        if path.extension().and_then(|e| e.to_str()) != Some("svg") {
-            continue;
+    for dir in ["icons/lucide", "icons/aizome"] {
+        let dir = Path::new(dir);
+        println!("cargo:rerun-if-changed={}", dir.display());
+        for entry in std::fs::read_dir(dir).expect("an icon folder") {
+            let path = entry.expect("an entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("svg") {
+                continue;
+            }
+            let name = path.file_stem().and_then(|s| s.to_str()).expect("a name").to_owned();
+            let svg = std::fs::read_to_string(&path).expect("an SVG");
+            icons.push((name, elements(&svg)));
         }
-        let name = path.file_stem().and_then(|s| s.to_str()).expect("a name").to_owned();
-        let svg = std::fs::read_to_string(&path).expect("an SVG");
-        icons.push((name, elements(&svg)));
     }
     icons.sort();
+    assert!(icons.windows(2).all(|w| w[0].0 != w[1].0), "an icon name in both folders");
     let mut out = String::new();
-    out.push_str("/// An icon from Lucide (ISC licence; see `icons/lucide/LICENSE`).\n");
+    out.push_str("/// An icon from Lucide (ISC licence; see `icons/lucide/LICENSE`), or one of\n/// Aizome's own in Lucide's manner (`icons/aizome`).\n");
     out.push_str(
         "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]\n#[non_exhaustive]\npub enum Icon {\n",
     );
     for (name, _) in &icons {
-        writeln!(out, "    /// Lucide's `{name}`.\n    {},", camel(name)).unwrap();
+        writeln!(out, "    /// `{name}`.\n    {},", camel(name)).unwrap();
     }
     out.push_str("}\n\nimpl Icon {\n    /// Every icon, by name.\n    pub const ALL: &'static [Icon] = &[\n");
     for (name, _) in &icons {
         writeln!(out, "        Icon::{},", camel(name)).unwrap();
     }
-    out.push_str("    ];\n\n    /// Lucide's name for it (`wifi-off`).\n    pub fn name(self) -> &'static str {\n        match self {\n");
+    out.push_str("    ];\n\n    /// Its file's name (`wifi-off`).\n    pub fn name(self) -> &'static str {\n        match self {\n");
     for (name, _) in &icons {
         writeln!(out, "            Icon::{} => {name:?},", camel(name)).unwrap();
     }

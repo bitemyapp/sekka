@@ -181,6 +181,8 @@ pub struct ToolchestInput<'a> {
     /// Mounted disks: (label, mount point).
     pub disks: Vec<(String, PathBuf)>,
     pub recent: Vec<PathBuf>,
+    /// The mark an app shows after its name: its toolkit.
+    pub mark: &'a dyn Fn(&App) -> Option<aizome_kit::ItemMark>,
 }
 
 /// The Toolchest: the mark in its title strip, then Applications, Places,
@@ -201,7 +203,7 @@ pub fn toolchest(input: &ToolchestInput) -> Menu {
                     if let Some(g) = &a.generic_name {
                         e = e.detail(g.clone());
                     }
-                    e
+                    e.mark((input.mark)(a))
                 })
                 .collect();
             Entry::submenu(cat, rows).glyph(catalog::category_glyph(cat))
@@ -440,12 +442,15 @@ fn push_items<Msg: Clone + Send + 'static>(
                 m.push(item);
             }
             Kind::Action => {
-                let label = match &e.detail {
-                    Some(d) => format!("{}  —  {d}", e.label),
-                    None => e.label.clone(),
-                };
-                let mut item =
-                    aizome_kit::MenuItem::new(label, wrap(e.action.clone())).enabled(e.enabled).checked(e.checked);
+                let mut item = aizome_kit::MenuItem::new(e.label.clone(), wrap(e.action.clone()))
+                    .enabled(e.enabled)
+                    .checked(e.checked);
+                if let Some(d) = &e.detail {
+                    item = item.detail(d.clone());
+                }
+                if let Some(m) = &e.mark {
+                    item = item.mark(m.clone());
+                }
                 if let Some(s) = e.shortcut.as_ref().and_then(kit_shortcut) {
                     item = item.shortcut(s);
                 }
@@ -547,8 +552,14 @@ mod tests {
 
     #[test]
     fn the_toolchest_has_its_six_submenus() {
-        let t =
-            toolchest(&ToolchestInput { apps: &[], desks: &desks(), desk_folder: None, disks: vec![], recent: vec![] });
+        let t = toolchest(&ToolchestInput {
+            apps: &[],
+            desks: &desks(),
+            desk_folder: None,
+            disks: vec![],
+            recent: vec![],
+            mark: &|_| None,
+        });
         let labels: Vec<&str> = t.items.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels, ["Applications", "Places", "Desks", "Find", "System", "Session"]);
         assert!(t.mark);

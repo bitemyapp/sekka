@@ -11,6 +11,7 @@ use sidestep_ui::{Key, KeyEvent, NamedKey};
 
 use crate::element::MsgFn;
 use crate::icons::Icon;
+use crate::mark::ItemMark;
 use crate::program::AppInfo;
 use crate::widget::EditCommand;
 
@@ -291,6 +292,11 @@ pub struct ActionSpec {
     /// A stable id for the shell protocol, if the app picks it.
     pub id: Option<u32>,
     pub icon: Option<Icon>,
+    /// Text after the label and its mark ("—  Web Browser"), which
+    /// filtering matches too.
+    pub detail: Option<String>,
+    /// A small mark after the label: an app's toolkit, in the Toolchest.
+    pub mark: Option<ItemMark>,
 }
 
 impl MenuSpec {
@@ -421,6 +427,8 @@ impl<Msg> MenuItem<Msg> {
                 role: None,
                 id: None,
                 icon: None,
+                detail: None,
+                mark: None,
             }),
             _m: PhantomData,
         }
@@ -489,6 +497,22 @@ impl<Msg> MenuItem<Msg> {
             ItemSpec::Action(a) => a.icon = Some(icon),
             ItemSpec::Submenu(m) => m.icon = Some(icon),
             _ => {}
+        }
+        self
+    }
+
+    /// Text after the label and its mark, as an app's generic name.
+    pub fn detail(mut self, detail: impl Into<String>) -> Self {
+        if let Some(a) = self.action() {
+            a.detail = Some(detail.into());
+        }
+        self
+    }
+
+    /// A small mark after the label: see [`ItemMark`].
+    pub fn mark(mut self, mark: ItemMark) -> Self {
+        if let Some(a) = self.action() {
+            a.mark = Some(mark);
         }
         self
     }

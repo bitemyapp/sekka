@@ -261,6 +261,10 @@ pub struct Shell {
     /// The palette's window between openings, hidden and drawn ahead.
     pub palette_ahead: crate::palette::Ahead,
     pub frecency: aizome_search::frecency::Frecency,
+    /// What each app (by its ID) is made with, as found so far.
+    pub toolkits: HashMap<String, crate::apps::toolkit::Toolkit>,
+    /// How the Toolchest and the palette mark apps' toolkits.
+    pub marks: crate::apps::toolkit::MarkStyle,
     pub file_index: Option<Arc<aizome_search::files::FileIndex>>,
     pub settings_list: Vec<crate::palette::model::SettingEntry>,
     /// The theme showing is Day.
@@ -420,6 +424,8 @@ impl Shell {
             palette: None,
             palette_ahead: Default::default(),
             frecency: aizome_search::frecency::Frecency::default(),
+            toolkits: HashMap::new(),
+            marks: crate::apps::toolkit::MarkStyle::default(),
             file_index: None,
             settings_list: Vec::new(),
             theme_day: false,
@@ -811,7 +817,28 @@ impl Shell {
             .into_iter()
             .filter_map(|v| Some((v.name, PathBuf::from(v.mount_point?))))
             .collect();
-        build::toolchest(&build::ToolchestInput { apps: &apps, desks: &self.wm.desks, desk_folder, disks, recent })
+        let mark = |a: &aizome_sys::apps::App| self.app_mark(a);
+        build::toolchest(&build::ToolchestInput {
+            apps: &apps,
+            desks: &self.wm.desks,
+            desk_folder,
+            disks,
+            recent,
+            mark: &mark,
+        })
+    }
+
+    /// What an app is made with, if known: Aizome's own by their IDs.
+    pub fn app_toolkit(&self, app: &aizome_sys::apps::App) -> Option<crate::apps::toolkit::Toolkit> {
+        if crate::apps::catalog::is_aizome(app) {
+            return Some(crate::apps::toolkit::Toolkit::Aizome);
+        }
+        self.toolkits.get(app.app_id()).copied()
+    }
+
+    /// The mark of an app's toolkit, as the marks show.
+    pub fn app_mark(&self, app: &aizome_sys::apps::App) -> Option<aizome_kit::ItemMark> {
+        self.app_toolkit(app).and_then(|t| t.mark(self.marks))
     }
 
     /// Tell an app one of its menus is about to show.

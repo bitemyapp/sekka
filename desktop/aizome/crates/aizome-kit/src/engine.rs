@@ -1469,6 +1469,8 @@ impl Core {
                 role: Some(MenuRole::WindowList),
                 id: Some(0x5700_0000 + win),
                 icon: None,
+                detail: None,
+                mark: None,
             }));
         }
         spec.items.splice(at..at + 1, items);
