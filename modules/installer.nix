@@ -40,6 +40,7 @@ in
   imports = [
     ./portal-fixes.nix
     ./avahi-fixes.nix
+    ./pipewire-fixes.nix
     inputs.aizome.nixosModules.default
     # Sekka's boot splash, as on installed systems.
     ../installer/genkan/rust/system/boot-splash

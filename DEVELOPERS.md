@@ -27,6 +27,18 @@ Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, up
 
 ## Build and check
 
+Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
+disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
+report a lost display more than once during logout. The fix makes removal of
+the bell module's event source idempotent, including display teardown, so
+the audio daemon survives when Xwayland exits. Applications retain the
+upstream PipeWire client libraries; this does not rebuild their dependencies.
+`checks.x86_64-linux.pipewire-x11-disconnect` exercises the real daemon with
+a private Xvfb server, including graceful server exit, abrupt server exit,
+and daemon-first shutdown. `pipewire-packages` checks service selection in
+the live and installed desktop configurations. These component checks do
+not replace testing session changes on the actual ISO.
+
 Use x86_64 Linux with Nix and flakes enabled. The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
 
 ```sh
