@@ -1,15 +1,15 @@
-# Fault injection is confined to a disposable VM's writable store. The actual
-# packaged helper must refuse even a confirmed request before touching its disk.
+# Store changes and target disks are confined to a disposable VM. Preparation
+# must skip store-wide content scans while retaining disk/configuration guards.
 {
   pkgs,
-  genkan,
+  helper,
   nixPackage,
 }:
 pkgs.testers.runNixOSTest {
-  name = "genkan-store-integrity";
+  name = "genkan-preflight";
   nodes.machine = {
     virtualisation.diskImage = null;
-    # Content verification must work offline; no inter-VM network is needed.
+    # Preparation reaches the deliberately absent template without networking.
     virtualisation.vlans = [ ];
     virtualisation.memorySize = 2048;
     virtualisation.writableStore = true;
@@ -28,7 +28,7 @@ pkgs.testers.runNixOSTest {
       "isofs"
     ];
     environment.systemPackages = [
-      genkan
+      helper
       pkgs.xorriso
     ];
     nix.package = nixPackage;
@@ -58,7 +58,7 @@ pkgs.testers.runNixOSTest {
     before = machine.succeed("sha256sum /dev/vda", timeout=180)
     password = "Disposable-VM-Only-123!"
     request = dict(disk=disk, firmware="bios", filesystem="ext4",
-                   hostname="integrity-test", username="installer", full_name="Installer Test",
+                   hostname="preflight-test", username="installer", full_name="Installer Test",
                    password=password, locale="en_US.UTF-8", timezone="Etc/UTC",
                    keyboard="us", desktops=["aizome"], default_desktop="aizome", applications=[],
                    copy_wifi=False, wifi_profiles=[], allow_unfree=True, swap=False, tuning=True,
@@ -68,43 +68,46 @@ pkgs.testers.runNixOSTest {
     path = machine.succeed("nix-store --add /run/payload").strip()
     command = "calamares-nixos-helper install < /run/request.json"
 
-    with subtest("good store reaches configuration without disk writes"):
+    def configuration_refused():
         output = machine.fail(command, timeout=180)
         assert "Checking filesystem support" in output, output
         assert "No such file or directory" in output, output
-        assert "Installation files could not be verified" not in output, output
+        assert "Checking installation files" not in output, output
+        assert "Verifying the prepared system" not in output, output
+        assert '"stage":"verify-live-store"' not in output, output
+        assert '"stage":"verify-system"' not in output, output
+        assert '"kind":"progress"' not in output, output
+        assert '"kind":"prepared"' not in output, output
+        return output
+
+    with subtest("good store reaches configuration without disk writes"):
+        configuration_refused()
         machine.succeed(f"nix copy --no-check-sigs --to 'local?root=/run/good-copy' {path}")
 
-    with subtest("old validity and read checks accept corrupted bytes; Nix copy rejects them"):
+    with subtest("Nix still detects corrupt contents when copying"):
         machine.succeed(f"chmod u+w {path}/data; echo modified > {path}/data; chmod u-w {path}/data")
         machine.succeed(f"nix build --offline --no-link {path}; cat {path}/data > /dev/null")
         error = machine.fail(f"nix copy --no-check-sigs --to 'local?root=/run/bad-copy' {path} 2>&1")
         assert "hash mismatch importing path" in error, error
 
-    with subtest("confirmed install refuses corrupt bytes before evaluation or formatting"):
+    with subtest("preparation does not scan unrelated corrupt store contents"):
+        output = configuration_refused()
+        machine.succeed("printf %s " + shlex.quote(output) + " > /run/preflight.jsonl")
+
+    with subtest("preparation does not scan unrelated missing registered paths"):
+        machine.succeed(f"rm -rf {path}")
+        configuration_refused()
+
+    with subtest("changed target identity is still refused before configuration"):
+        stale = dict(request, disk=dict(disk, serial="STALE-IDENTITY"))
+        machine.succeed("printf %s " + shlex.quote(json.dumps(stale)) + " > /run/request.json")
         output = machine.fail(command, timeout=180)
-        assert "Installation files could not be verified" in output, output
-        assert "target disk has not been changed" in output, output
-        assert path in output, output
+        assert "Disk identity changed" in output, output
         assert "Checking filesystem support" not in output, output
         assert '"kind":"progress"' not in output, output
-        assert '"kind":"prepared"' not in output, output
-        machine.succeed("printf %s " + shlex.quote(output) + " > /run/corrupt-refused.jsonl")
-
-    with subtest("missing registered files also fail closed"):
-        machine.succeed(f"rm -rf {path}")
-        output = machine.fail(command, timeout=180)
-        assert "Installation files could not be verified" in output, output
-        assert '"kind":"progress"' not in output, output
-
-    with subtest("diagnostics retain the failure without account secrets"):
-        logs = machine.succeed("cat /run/sekka-integrity-*.log")
-        assert path in logs and "was modified" in logs, logs
-        assert password not in logs
-        assert set(machine.succeed("stat -c '%a:%u' /run/sekka-integrity-*.log").split()) == {"600:0"}
 
     assert machine.succeed("sha256sum /dev/vda", timeout=180) == before, "the target disk changed"
-    machine.copy_from_machine("/run/corrupt-refused.jsonl")
+    machine.copy_from_machine("/run/preflight.jsonl")
     machine.shutdown()
   '';
 }
