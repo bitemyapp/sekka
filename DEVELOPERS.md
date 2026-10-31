@@ -271,6 +271,9 @@ Xfce keeps the legacy frontend. Only Aizome's frontend package is patched;
 the distribution daemon, engines and GTK/Qt modules remain unchanged. An
 explicit custom IBus panel remains under the user's own integration.
 Aizome's GTK/Qt input modules use Wayland only within its session environment.
+The policy check compares the global GTK input-module variable with a
+GNOME-only configuration: newer NixOS leaves it unset, and Aizome must
+preserve that upstream choice outside its own session.
 
 The Aizome dconf profile defaults `org.freedesktop.ibus.general`'s
 `use-system-keyboard-layout` to true. Its actual dconf path is
