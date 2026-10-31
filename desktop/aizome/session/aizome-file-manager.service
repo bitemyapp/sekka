@@ -1,0 +1,17 @@
+[Unit]
+Description=Hako show-in-folder service
+PartOf=aizome-session.target
+# Claim FileManager1 before autostarted browsers can activate another provider.
+After=aizome.service
+Before=xdg-desktop-autostart.target
+
+[Service]
+Slice=session.slice
+Type=dbus
+BusName=org.freedesktop.FileManager1
+ExecStart=@bindir@/aizome-hako --file-manager-service
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=aizome-session.target

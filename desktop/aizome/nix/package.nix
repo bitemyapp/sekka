@@ -226,6 +226,7 @@ rustPlatform.buildRustPackage {
     # A successful spawn is not a successful application launch. Gate the
     # shipped shell on process outcomes and its failure/details interface.
     cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell --lib
+    cargo test --offline --target ${target} --profile release-lto -p aizome-hako --lib --test file_manager
     runHook postCheck
   '';
 
