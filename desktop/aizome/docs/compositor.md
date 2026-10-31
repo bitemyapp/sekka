@@ -38,6 +38,14 @@ aizome --build-info                      # how the core was built (what a logic 
   tapped alone latches for the next key; tapped again it lets go) and
   `slow_keys` with `slow_keys_ms` (a key counts once held that long; a
   brush is dropped), and `[performance] renderer` (at the next start).
+- The system's keyboard: until `[input.keyboard]` sets them, its layouts,
+  variant, options and model are the session environment's
+  `XKB_DEFAULT_LAYOUT`, `_VARIANT`, `_OPTIONS` and `_MODEL`, which
+  Aizome's NixOS module sets from `services.xserver.xkb` (as the login
+  screen's keyboard is): the layout Genkan writes, and its swap that puts
+  ❖ beside the space bar. The keymap is always given its options, empty
+  ones included, so libxkbcommon doesn't put `XKB_DEFAULT_OPTIONS` back
+  for settings, or a keyboard of its own, that clear them.
 - Keyboards of their own: each `[[input.keyboards]]` entry (`name` and
   `id`, `vendor:product`, as libinput gives them; `options`) has its own
   modifier swaps, Caps Lock and Compose key (the `altwin:`, `ctrl:`,

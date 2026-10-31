@@ -3,7 +3,7 @@
 //! Fixed public test credentials, only inside serial/size/live-root guarded VMs.
 use anyhow::{Context, Result, ensure};
 use calamares_nixos::{
-    Desktop, Filesystem, Firmware, Hostname, Kernel, RawRequest, Settings, config, disk,
+    Desktop, Filesystem, Firmware, Hostname, Kernel, RawRequest, Settings, SuperKey, config, disk,
     filesystem::Identities, install::Event, memory, process::output, session::Confirmation,
 };
 use std::{
@@ -205,6 +205,14 @@ fn selected_desktops() -> Result<Vec<Desktop>> {
         })
         .collect()
 }
+/// The keyboard step's answer (CALAMARES_TEST_SUPER_KEY): by default what
+/// Genkan suggests for QEMU's keyboard, whose Alt is beside the space bar.
+fn selected_super_key() -> Result<SuperKey> {
+    match std::env::var("CALAMARES_TEST_SUPER_KEY") {
+        Ok(key) => Ok(serde_json::from_value(serde_json::Value::String(key))?),
+        Err(_) => Ok(SuperKey::SwapAlt),
+    }
+}
 fn flag(name: &str) -> bool {
     !matches!(std::env::var(name).as_deref(), Ok("0" | "false"))
 }
@@ -226,6 +234,7 @@ fn request() -> Result<RawRequest> {
         locale: "en_US.UTF-8".into(),
         timezone: "America/Chicago".into(),
         keyboard: "us".into(),
+        super_key: selected_super_key()?,
         default_desktop: *selected_desktops()?
             .first()
             .context("Select a test desktop")?,
@@ -444,6 +453,13 @@ fn main() -> Result<()> {
                 locale: "en_US.UTF-8".into(),
                 timezone: "America/Chicago".into(),
                 keyboard: "us".into(),
+                // The desktops, with ❖ moved beside the space bar as Genkan
+                // suggests for most PC keyboards.
+                super_key: if operation.as_deref() == Some("desktop-configurations") {
+                    SuperKey::SwapAlt
+                } else {
+                    SuperKey::AsIs
+                },
                 default_desktop: desktops[0],
                 applications,
                 desktops,
@@ -651,20 +667,37 @@ fn main() -> Result<()> {
                 selected_applications(),
                 true,
             )?;
-            // Aizome's base shell is included by applications.nix even when
-            // the user selected no optional catalog applications.
-            let mut installed_ids = expected.ids();
+            ensure!(
+                manifest["selected"] == serde_json::to_value(expected.ids())?,
+                "Installed applications differ from the reviewed selection"
+            );
             let desktops = configuration
                 .lines()
                 .find_map(|line| line.trim().strip_prefix("calamares.desktops = "))
                 .context("No desktop selection")?;
-            if desktops.contains("\"aizome\"") && !installed_ids.iter().any(|id| id == "fish") {
-                installed_ids.push("fish".into());
-            }
+            let aizome = desktops.contains("\"aizome\"");
+            // Aizome's terminals open in fish, no application chosen for it.
+            let bashrc = fs::read_to_string("/etc/bashrc")?;
             ensure!(
-                manifest["selected"] == serde_json::to_value(&installed_ids)?,
-                "Installed applications differ from the reviewed selection"
+                bashrc.contains("/bin/fish $LOGIN_OPTION") == aizome
+                    && (!aizome || Path::new("/run/current-system/sw/bin/fish").exists()),
+                "fish is the terminals' shell exactly where Aizome is installed"
             );
+            // The keyboard step's ❖, for the console, the login screen and
+            // Aizome's session alike.
+            let options = selected_super_key()?.xkb_options();
+            let line = format!("services.xserver.xkb.options = \"{options}\";");
+            ensure!(
+                configuration.contains(&line) == !options.is_empty(),
+                "The keyboard step's choice is not in configuration.nix"
+            );
+            if aizome {
+                let session = fs::read_to_string("/etc/xdg/aizome/environment")?;
+                ensure!(
+                    session.contains(&format!("XKB_DEFAULT_OPTIONS={options}\n")),
+                    "Aizome's session doesn't start from the system's keyboard"
+                );
+            }
             for package in manifest["packages"]
                 .as_array()
                 .context("Missing application package manifest")?

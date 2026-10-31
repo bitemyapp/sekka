@@ -83,6 +83,36 @@ pub const LOCALES: &[&str] = &[
 ];
 pub const KEYBOARDS: &[&str] = &["us", "gb", "de", "fr", "es", "it", "jp", "br"];
 
+/// What the installed system makes of the key just left of the space bar,
+/// which the keyboard step asks the person to press: the modifier keys as
+/// they are, or, where that key is Alt (most PC keyboards), Alt and Super
+/// swapped to put ❖ there, under the thumb. Other keys there stay as they
+/// are; Aizome's Settings has the other arrangements.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SuperKey {
+    #[default]
+    AsIs,
+    SwapAlt,
+}
+impl SuperKey {
+    pub const ALL: [Self; 2] = [Self::AsIs, Self::SwapAlt];
+    /// Its XKB options, as Aizome's Settings writes the same arrangement.
+    pub fn xkb_options(self) -> &'static str {
+        match self {
+            Self::AsIs => "",
+            // Only the key the installer asked about. Swapping right Alt too
+            // removes AltGr on layouts such as German and French.
+            Self::SwapAlt => "altwin:swap_lalt_lwin",
+        }
+    }
+    pub fn from_xkb_options(options: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|key| key.xkb_options() == options)
+    }
+}
+
 fn trusted_component(path: &Path, uid: u32, mode: u32, directory: bool) -> bool {
     // Nix's store root is root:nixbld 1775 on the live image. The sticky
     // directory prevents builders from replacing root-owned store entries.

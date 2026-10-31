@@ -1,7 +1,9 @@
-# The catalog's fish in a disposable VM: a person's TTY login hands over from
-# bash to fish, set up as Omarchy sets it up (its settings, functions, fzf.fish
+# Sekka's fish in a disposable VM: a person's TTY login hands over from bash to
+# fish, set up as Omarchy sets it up (its settings, functions, fzf.fish
 # bindings, zoxide, mise and Starship prompt), while bash -c, root and shells
-# started from fish stay bash. The packages are the catalog's own.
+# started from fish stay bash. Here it comes from the catalog's former "fish"
+# application, which systems that chose it keep; with Aizome it needs none
+# (checks.fish-default, checks.genkan-keyboard).
 {
   pkgs,
   applicationsModule,
@@ -38,7 +40,7 @@ pkgs.testers.runNixOSTest {
   name = "sekka-fish";
   nodes.machine = {
     imports = [ applicationsModule ];
-    # What the installed flake passes; only fish is chosen here.
+    # What the installed flake passes; only the former fish is chosen here.
     _module.args = {
       inherit applicationPkgs;
       aiPackages = { };

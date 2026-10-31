@@ -412,7 +412,7 @@ pub fn body(site: &Site, app: &App) -> Result<String> {
                 "native",
                 "Built with Aizome",
                 "span-2",
-                "<p>Native application menus, tab controls, search fields, the theme's colours, window activation and accessibility labels, with no GTK and no web view. ⟦❖ ↩⟧ opens Hotaru in the Desk's folder, and programs that need a terminal open in it too. foot stays installed, and Settei › General › Default Apps can choose it instead; ⟦❖ ↩⟧ then opens foot.</p>",
+                "<p>Native application menus, tab controls, search fields, the theme's colours, window activation and accessibility labels, with no GTK and no web view. ⟦❖ ↩⟧ opens Hotaru in the Desk's folder, and programs that need a terminal open in it too. foot stays installed, and Settei › General › Default Apps can choose it instead; ⟦❖ ↩⟧ then opens foot. Either opens in fish, set up as Omarchy sets it up: a Starship prompt, vi keys, and fzf searches of your history and files. Yukimi's Desktops page can switch it back to bash.</p>",
             );
             b += &win(
                 "panes",

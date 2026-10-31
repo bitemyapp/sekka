@@ -15,10 +15,11 @@
 }:
 let
   catalog = builtins.fromJSON (builtins.readFile ./applications.json);
-  # Aizome makes the catalog's fish (set up as Omarchy sets it up) the shell
-  # terminals open in, whether or not it was picked in the installer.
-  aizome = builtins.elem "aizome" (config.calamares.desktops or [ ]);
-  ids = lib.unique (config.calamares.applications ++ lib.optional aizome "fish");
+  # Choices the catalog no longer offers, which systems that chose them keep
+  # in calamares.applications: fish comes with Aizome now, and turns on
+  # calamares.fish elsewhere (../system/fish).
+  retired = [ "fish" ];
+  ids = lib.subtractLists retired config.calamares.applications;
   has = id: builtins.elem id ids;
   selected = builtins.filter (app: has app.id) catalog;
   # Where each source's packages come from; Nixpkgs' otherwise.
@@ -39,18 +40,7 @@ let
       map (
         name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
       ) app.packages;
-  # fish brings Omarchy's configuration for it (rust/system/fish), which
-  # calls the catalog entry's other packages.
-  omarchyFish = pkgs.callPackage ../system/fish/package.nix { };
-  packages = lib.unique (lib.concatMap packagesFor selected ++ lib.optional (has "fish") omarchyFish);
-  # Omarchy's Starship prompt, with its license.
-  omarchyPrompt = lib.fileset.toSource {
-    root = ../system/fish;
-    fileset = lib.fileset.unions [
-      ../system/fish/starship.toml
-      ../system/fish/LICENSE
-    ];
-  };
+  packages = lib.unique (lib.concatMap packagesFor selected);
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
   withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
@@ -108,6 +98,8 @@ in
   # enough to take catalogs). Not even an empty programs.yukimi otherwise:
   # without the module that option doesn't exist.
   imports = [
+    # The shell terminals open in, with the applications' packages.
+    ../system/fish
     {
       config = lib.optionalAttrs (options ? programs.yukimi.catalogs) {
         programs.yukimi.catalogs = [
@@ -122,7 +114,7 @@ in
   ];
   options.calamares = {
     applications = lib.mkOption {
-      type = lib.types.listOf (lib.types.enum (map (app: app.id) catalog));
+      type = lib.types.listOf (lib.types.enum (map (app: app.id) catalog ++ retired));
       default = [ "firefox" ];
       description = "Applications selected in the graphical installer.";
     };
@@ -194,31 +186,6 @@ in
         package = lib.mkDefault applicationPkgs.git-lfs;
       };
     };
-    programs.fish = lib.mkIf (has "fish") {
-      enable = true;
-      package = applicationPkgs.fish;
-      # Omarchy has no ls, ll or l aliases. NixOS's would hide its ls (eza)
-      # and fish's own ll.
-      shellAliases = lib.genAttrs [ "ls" "ll" "l" ] (_: lib.mkOverride 999 null);
-      # Omarchy's prompt, unless you have your own.
-      interactiveShellInit = ''
-        if not set -q STARSHIP_CONFIG; and not test -e ~/.config/starship.toml
-          set -gx STARSHIP_CONFIG ${omarchyPrompt}/starship.toml
-        end
-      '';
-    };
-    # Bash stays the login shell, and interactive bash hands over to fish as
-    # Omarchy's omarchy-setup-fish has ~/.bashrc do: not for bash -c, shells
-    # started from fish or nested shells. For people, not root, whose
-    # ~/.bashrc Omarchy leaves alone.
-    programs.bash.interactiveShellInit = lib.mkIf (has "fish") (
-      lib.mkBefore ''
-        if [[ $EUID -ne 0 && $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} && ''${SHLVL} == 1 ]]; then
-          shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
-          exec ${lib.getExe config.programs.fish.package} $LOGIN_OPTION
-        fi
-      ''
-    );
     virtualisation.docker = lib.mkIf (has "docker") {
       package = applicationPkgs.docker;
       rootless = {

@@ -98,7 +98,7 @@ pub fn home(site: &Site) -> Result<Page> {
   <article class="win mat mat-wide-top">
     <header class="mat-head"><h3>Genkan {genkan}</h3><p>the entrance</p></header>
     <div class="mat-body split">
-      <p>Choose your disk, account, desktops, applications and location, then review everything before anything is erased. Genkan builds and caches the system while you review, so the installation itself is short. It is an Aizome app, opened by the live session. It can bring your public SSH keys and Git identity from GitHub, carry the live session's Wi-Fi into the new system, and encrypt the disk.</p>
+      <p>Choose your disk, account, desktops, applications, location and keyboard, then review everything before anything is erased. Press the key beside your space bar and Genkan offers to put Super under your thumb. Genkan builds and caches the system while you review, so the installation itself is short. It is an Aizome app, opened by the live session. It can bring your public SSH keys and Git identity from GitHub, carry the live session's Wi-Fi into the new system, and encrypt the disk.</p>
       {genkan_shot}
     </div>
   </article>
@@ -353,7 +353,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
 <section class="tiles">
   <article class="win">
     <h2>Hotaru {hotaru}, the terminal</h2>
-    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback.</p>
+    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback. It opens in fish, set up as Omarchy sets it up: a Starship prompt, vi keys, and fzf searches of your history and files.</p>
     <p>foot is installed too: choose it in Settei, under General › Default Apps › Terminal.</p>
   </article>
   <article class="win">
@@ -453,7 +453,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
         <li>One menu, on <kbd>Super</kbd> + <kbd>Space</kbd>, for apps, settings and the system.</li>
         <li>Tokyo Night, square corners, no shadows.</li>
       </ul>
-      <p>Choose either in the installer or in Yukimi's Desktops page, or both, and pick one at the login screen.</p>
+      <p>The installer selects both; leave either out there, or change it later in Yukimi's Desktops page, and pick one at the login screen.</p>
     </div>
   </div>
 </section>

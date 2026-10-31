@@ -78,7 +78,11 @@ it keeps the whole Tatami display, including its bar and window edges.
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
 | [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
-| [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window |
+| [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window, captured before the Keyboard step was added |
+| [Genkan's keyboard step](images/sekka/genkan-keyboard.png) | 2216 × 1580 | Genkan's Keyboard step in its debug-only preview, after QEMU's Alt was pressed on the VM's Virtio keyboard and caught through the compositor: the swap of left Alt and Super recommended; the footer's caching line is sample data |
+| [Waiting for the key](images/sekka/genkan-keyboard-waiting.png) | 2216 × 1580 | The same step waiting for the key, after Press Again |
+| [The keys kept](images/sekka/genkan-keyboard-kept.png) | 2216 × 1580 | The same step after Swap left Alt and Super was turned off |
+| [Control beside the space bar](images/sekka/genkan-keyboard-control.png) | 2216 × 1580 | The same step after QEMU's Control was pressed: the keys stay as they are |
 
 The shared native Yukimi image was captured on 2026-10-28 by
 [`yukimi-tatami`](../nix/yukimi-discover.nix), a disposable component-test VM
@@ -148,4 +152,22 @@ debug build's welcome preview (`CALAMARES_UI_PREVIEW=welcome`), with the
 pointer moved off its window; its sample data are fixed, and production builds
 leave the preview out. The current captures were made on 31 October 2026 from
 commit f1bb0c7a, on a build host's KVM, with Hotaru as the stacked terminal;
-fastfetch prints a short structure so its output fits Hotaru's window.
+fastfetch prints a short structure so its output fits Hotaru's window. They predate fish becoming Aizome's shell, so the terminal runs bash.
+
+Genkan's keyboard-step images come from the `genkan-keyboard` check,
+[nix/genkan-keyboard-test.nix](../nix/genkan-keyboard-test.nix):
+
+```sh
+nix build .#checks.x86_64-linux.genkan-keyboard --out-link result-genkan-keyboard
+```
+
+It boots one disposable NixOS VM like the one above, built from the modules
+installed systems import (desktops and applications), with Aizome chosen,
+logged in automatically, and left Alt and Super swapped as Genkan writes them. The
+page is the debug build's preview (`CALAMARES_UI_PREVIEW=keyboard`), whose
+sample starts with a ThinkPad's keyboard; the test presses Press Again and
+then QEMU's own keys, through libinput, so the keyboard shown is the VM's.
+Captures are crops of the 2880 × 1800 display (scale 2, pixman) to the window
+with its tab and frame, unscaled. They were taken on 2026-10-30 on
+wx-workstation and are not screenshots of an installed release. The captures
+include the left-only recommendation, preserving right Alt (AltGr).

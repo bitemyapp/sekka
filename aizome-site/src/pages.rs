@@ -187,7 +187,7 @@ pub fn home(site: &Site) -> Result<Page> {
             "Get it with Sekka",
             "",
             &format!(
-                r#"<p>Aizome is the desktop Sekka is made for, selected by default in Genkan, its installer, which also offers Tatami, Plasma, GNOME, Hyprland and Xfce, instead or alongside. Download Sekka, start it, and the live session is Aizome with Genkan open. Installing erases the disk you choose.</p><p class="actions"><a class="button primary" href="{SEKKA_DOWNLOAD}">Download Sekka</a><a class="button" href="{SEKKA}">sekka.computer</a></p>"#
+                r#"<p>Aizome is the desktop Sekka is made for, selected by default in Genkan, its installer, with Tatami beside it; Plasma, GNOME, Hyprland and Xfce are offered too. Download Sekka, start it, and the live session is Aizome with Genkan open. Installing erases the disk you choose.</p><p class="actions"><a class="button primary" href="{SEKKA_DOWNLOAD}">Download Sekka</a><a class="button" href="{SEKKA}">sekka.computer</a></p>"#
             ),
         ),
         nixos = win(

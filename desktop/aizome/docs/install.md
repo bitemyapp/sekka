@@ -72,7 +72,10 @@ Add Sekka's flake and its Aizome module to the system's flake:
 `programs.aizome.enable` brings everything Aizome stands on: the session
 entry, portals, NetworkManager, BlueZ, PipeWire, UPower, power profiles,
 UDisks2, AccountsService, CUPS, GeoClue, GNOME Keyring, polkit, fonts, foot,
-and fish as the terminal's shell. Keep (or enable) a display manager such as
+and the system's keyboard (`services.xserver.xkb`) as the session's, until
+Settings changes it. Hotaru opens fish where it's installed; on a Sekka
+system with Aizome, Sekka's modules install it, set up as Omarchy sets it up
+(`calamares.fish`). Keep (or enable) a display manager such as
 GDM: Aizome adds itself to its session list. Then
 `sudo nixos-rebuild boot --flake .#<host>`, reboot and choose Aizome.
 

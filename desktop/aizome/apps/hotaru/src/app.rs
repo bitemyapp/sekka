@@ -344,6 +344,10 @@ impl Hotaru {
             terminal.feed(b"\x1b[1;36mHotaru\x1b[0m  \xe8\x9b\x8d\r\n\r\nA little light for your work.\r\n\r\n\x1b[32mcallen\x1b[0m \x1b[34m~/work/sekka\x1b[0m\r\n\xe2\x9d\xaf cargo test\r\n\x1b[32m   Compiling\x1b[0m hotaru-core\r\n\x1b[32m    Finished\x1b[0m test profile\r\n\r\n\x1b[1mtest result:\x1b[0m ok\r\n\r\n\xe2\x9d\xaf ");
         }
         let mut command = self.command.clone();
+        // The system's Bash-to-Fish handoff must not replace a shell Hotaru
+        // chose. The parent PID scopes this to our own PTYs, not terminals
+        // later launched from one of them which inherit the environment.
+        command.env.push(("HOTARU_SHELL_PARENT".into(), std::process::id().to_string().into()));
         // The default shell, not a command someone named: the setting's.
         if command.integrate_shell {
             command.program = self.settings.shell_program();

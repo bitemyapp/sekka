@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The time zone, on the map or from the list, and the installed system's
-//! language and keyboard layout.
+//! language.
 use super::{group, map, sections};
-use crate::app::{Genkan, KEYBOARD_NAMES, LOCALE_NAMES, Msg};
+use crate::app::{Genkan, LOCALE_NAMES, Msg};
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
-use calamares_nixos::{KEYBOARDS, LOCALES, zonemap::Place};
+use calamares_nixos::{LOCALES, zonemap::Place};
 
 /// The map's height: the world at the page's width, give or take.
 const MAP_HEIGHT: f64 = 380.0;
@@ -88,11 +88,6 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         .zip(LOCALES)
         .map(|(name, code)| format!("{name} — {code}"))
         .collect();
-    let keyboards: Vec<String> = KEYBOARD_NAMES
-        .iter()
-        .zip(KEYBOARDS)
-        .map(|(name, code)| format!("{name} — {code}"))
-        .collect();
     sections(vec![
         column![
             group(
@@ -121,12 +116,9 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         .width(Fill)
         .into(),
         group(
-            "Language and Keyboard",
-            "The live keyboard layout is unchanged; these apply to the installed system.",
-            vec![
-                form_row("System language", dropdown(locales, app.locale).on_select(Msg::Locale)).into(),
-                form_row("Keyboard layout", dropdown(keyboards, app.keyboard).on_select(Msg::Keyboard)).into(),
-            ],
+            "Language",
+            "The live session's language is unchanged; this applies to the installed system.",
+            vec![form_row("System language", dropdown(locales, app.locale).on_select(Msg::Locale)).into()],
         ),
     ])
 }
