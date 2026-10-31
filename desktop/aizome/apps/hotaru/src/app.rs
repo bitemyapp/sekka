@@ -15,6 +15,11 @@ use crate::terminal_view::{Selection, colors_for, terminal_view};
 
 #[derive(Clone)]
 pub enum Msg {
+    NewWindow,
+    WindowOpened(Result<(), String>),
+    QuitAll,
+    OtherWindowsClosed(Result<(), String>),
+    CloseWindow,
     NewTab,
     Launch(PtyCommand),
     SelectTab(u64),
@@ -173,6 +178,7 @@ pub struct Hotaru {
     command: PtyCommand,
     demo: bool,
     pub instance: Option<crate::instance::Instance>,
+    instance_directory: Option<std::path::PathBuf>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
     clipboard_cancel: Arc<AtomicBool>,
@@ -233,6 +239,7 @@ impl Hotaru {
             command,
             demo: false,
             instance: None,
+            instance_directory: None,
             clipboard: None,
             clipboard_token: 0,
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
@@ -405,6 +412,41 @@ impl Hotaru {
         self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id, zoomed: false });
         self.active = id;
         self.focus_after_rebuild(cx);
+    }
+
+    fn new_window(&mut self, cx: &mut Cx<Msg>) {
+        let cwd = self.active_pane().and_then(|pane| pane.working_directory.clone());
+        let settings = self.settings_path.clone();
+        cx.spawn(move || {
+            let result = (|| -> std::io::Result<()> {
+                let mut command = std::process::Command::new(std::env::current_exe()?);
+                command.arg("--new-window").stdin(std::process::Stdio::null());
+                if let Some(path) = settings {
+                    command.arg("--config-file").arg(path);
+                }
+                if let Some(path) = cwd {
+                    command.arg("--working-directory").arg(path);
+                }
+                // A new GUI window must survive a hangup of the terminal
+                // from which this window might originally have been started.
+                use std::os::unix::process::CommandExt;
+                unsafe {
+                    command.pre_exec(|| {
+                        // SAFETY: setsid is async-signal-safe, with no pointers.
+                        if libc::setsid() < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        Ok(())
+                    });
+                }
+                let mut child = command.spawn()?;
+                std::thread::Builder::new().name("hotaru-window-reap".into()).spawn(move || {
+                    let _ = child.wait();
+                })?;
+                Ok(())
+            })();
+            Msg::WindowOpened(result.map_err(|error| error.to_string()))
+        });
     }
 
     /// The tab at `index` (0-based), or the last for `None`.
@@ -1102,7 +1144,7 @@ impl Hotaru {
             cx.activate(window);
             return;
         }
-        let spec = WindowSpec::new("Hotaru Settings").size(720.0, 560.0).min_size(560.0, 400.0);
+        let spec = WindowSpec::new("Hotaru Settings").size(720.0, 560.0).min_size(560.0, 400.0).dialog(self.window);
         let window = cx.open_window(spec);
         if window == WindowKey::NONE {
             return;
@@ -1253,6 +1295,7 @@ impl Hotaru {
         let page = self.active_pane().map(|pane| (pane.id, pane.snapshot.rows as i32));
         let message = match action {
             Action::Ignore => return,
+            Action::NewWindow => Msg::NewWindow,
             Action::Settings => {
                 self.show_settings(cx);
                 return;
@@ -1425,14 +1468,43 @@ impl Program for Hotaru {
         }
         self.selections =
             crate::selections::Worker::new(cx.stream()).map_err(|error| log::warn!("Selection worker: {error}")).ok();
-        if let Some(instance) = self.instance.take()
-            && let Err(e) = instance.serve(cx.stream())
-        {
-            log::warn!("Could not serve application instance: {e}");
+        if let Some(instance) = self.instance.take() {
+            self.instance_directory = Some(instance.directory().to_owned());
+            if let Err(e) = instance.serve(cx.stream()) {
+                log::warn!("Could not serve application instance: {e}");
+            }
         }
     }
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
+            Msg::NewWindow => self.new_window(cx),
+            Msg::WindowOpened(result) => {
+                if let Err(error) = result
+                    && let Some(id) = self.active_pane().map(|pane| pane.id)
+                {
+                    self.notice(id, &format!("Could not open a window: {error}"));
+                }
+            }
+            Msg::QuitAll => {
+                if let Some(dir) = self.instance_directory.clone() {
+                    cx.spawn(move || {
+                        Msg::OtherWindowsClosed(crate::instance::quit_others(&dir).map_err(|error| error.to_string()))
+                    });
+                } else {
+                    self.update(Msg::CloseWindow, cx);
+                }
+            }
+            Msg::OtherWindowsClosed(result) => {
+                if let Err(error) = result {
+                    log::warn!("Could not close another Hotaru window: {error}");
+                }
+                self.update(Msg::CloseWindow, cx);
+            }
+            Msg::CloseWindow => {
+                if self.close_requested(self.window, cx) {
+                    cx.close_window(self.window);
+                }
+            }
             Msg::Action(action) => self.action(action, cx),
             Msg::SetTheme(theme) => {
                 self.settings.theme = theme;
@@ -2257,6 +2329,7 @@ impl Program for Hotaru {
                     .toolbar()
                     .selected(tab.id == self.active)
                     .on_press(Msg::SelectTab(tab.id))
+                    .id(format!("tab-{}", tab.id))
                     .max_width(240.0)
                     .key(tab.id)
                     .into()
@@ -2336,8 +2409,11 @@ impl Program for Hotaru {
             .item(self.keyed(role("Hide Hotaru", MenuRole::Hide), Some(Shortcut::cmd('H'))))
             .item(self.keyed(role("Hide Others", MenuRole::HideOthers), Some(Shortcut::cmd('H').alt())))
             .separator()
-            .item(self.keyed(role("Quit Hotaru", MenuRole::Quit), Some(Shortcut::cmd('Q'))));
+            .item(
+                self.keyed(MenuItem::new("Quit Hotaru", Msg::QuitAll).role(MenuRole::Quit), Some(Shortcut::cmd('Q'))),
+            );
         let file = Menu::new("File")
+            .item(self.item("New Window", Action::NewWindow))
             .item(self.item("New Tab", Action::NewTab))
             .item(self.item("Split Right", Action::SplitRight))
             .item(self.item("Split Down", Action::SplitDown))
@@ -2453,11 +2529,11 @@ impl Program for Hotaru {
         self.cancel_automatic();
         self.automatic_worker = None;
         self.resolver_worker = None;
+        self.close_settings(cx);
         if self.settings_pending {
             self.closing = true;
             return false;
         }
-        self.close_settings(cx);
         self.clipboard_request();
         self.clipboard = None;
         self.tabs.clear();

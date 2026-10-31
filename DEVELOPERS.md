@@ -1534,6 +1534,42 @@ last runs the real chooser under a headless compositor over a test window
 that exported itself, and checks that it is that window's dialog and takes
 the keys. Neither runs a browser or the installed session.
 
+### Hotaru windows
+
+Hotaru runs one process per terminal window. Ordinary launches and
+`--new-window` create a window; `--window PID` hands the requested command
+and directory to that process as a new tab. Super+Return takes the most
+recent main Hotaru window on the current Desk from the compositor's model
+(including hidden, minimised and sticky windows), and adds `--window` only
+when Hotaru is the selected default terminal. Other terminals keep their
+desktop-entry command. Settings is a transient of its terminal window and
+cannot become a handoff target by itself.
+
+Handoff sockets are private, per-process and scoped to the Wayland display.
+The sender verifies the peer PID and UID, bounds the request and waits for
+acknowledgement. A missing or disconnected target opens a new window;
+failure after sending is reported rather than risking duplicate command
+execution. Quit requests each window's normal close path, off the UI thread.
+Settings writes are atomic per process; open windows reload saved changes
+on request. This does not add confirmation for closing live terminal sessions.
+
+The routing and transport unit tests run with the Hotaru and compositor
+logic tests. To check actual shortcuts, windows, tabs, Desk folders, moving
+windows, window-local closing and application-wide Quit in a private headless
+session, build from the root development shell and run:
+
+```sh
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru -p aizome-comp -p aizome-ipc --bins
+nix develop .#aizome -c nix shell --inputs-from . nixpkgs#python3 -c python3 desktop/aizome/apps/hotaru/tests/wayland/windows.py \
+  --hotaru desktop/aizome/target/debug/aizome-hotaru \
+  --compositor desktop/aizome/target/debug/aizome \
+  --ctl desktop/aizome/target/debug/aizomectl --evidence .work/hotaru-windows
+```
+
+The fixture uses private home, configuration, runtime and bus addresses. It
+does not touch the running desktop and supplies component evidence, not ISO
+or physical-hardware qualification.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine

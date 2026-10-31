@@ -238,7 +238,7 @@ while True: time.sleep(1)
         # A burst of copies followed by closing their pane cannot overwrite a
         # newer foreign selection with a late formatter completion.
         original = next(e["name"] for e in inspected()["elements"] if e.get("name", "").startswith("terminal-"))
-        subprocess.run([str(binary), "--", sys.executable, "-c", "import time; print('CLOSING-PANE', flush=True); time.sleep(30)"],
+        subprocess.run([str(binary), "--window", str(app.pid), "--", sys.executable, "-c", "import time; print('CLOSING-PANE', flush=True); time.sleep(30)"],
                        env=env, check=True, timeout=3)
         wait("temporary copy pane", lambda: any(e.get("name", "").startswith("terminal-") and e["name"] != original for e in inspected()["elements"]))
         keys([(46, "super,shift")] * 16 + [(17, "super")])
