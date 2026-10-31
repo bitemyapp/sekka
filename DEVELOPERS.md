@@ -14,6 +14,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `apps/yukimi/` | Privileged helper, CLI, and store/configuration/system libraries |
 | `apps/kakehashi/` | Cross-platform USB writer: GPUI window, privileged helper, drive and image library |
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
+| `agent-skills/` | Skills installed systems give coding agents, and the command that keeps them in each home |
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
@@ -2093,6 +2094,151 @@ To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes
 (`nix flake prefetch github:omacom-io/omarchy-fish/v<version>`), then run the
 check.
+
+## Agent skills
+
+`agent-skills/skills` holds what installed systems tell coding agents, in
+the [Agent Skills](https://agentskills.io/specification) format: a folder per
+skill with a `SKILL.md`.
+
+- `sekka`: root through the desktop's polkit dialog rather than sudo, the
+  layout of `/etc/nixos`, and applying changes. Its script is
+  `scripts/apply-configuration`.
+- `yukimi`: software, generations and storage through Yukimi's helper. Its
+  script is `scripts/software`.
+- `aizome`: settings, bindings, `aizomectl`, logs and recovery.
+- `tatami`: the Lua Hyprland configuration and its overrides, the `tatami`
+  command, logs and recovery.
+
+When a command, path, option or behaviour a skill describes changes, change
+the skill in the same pull request.
+
+`agent-skills/module.nix` is imported by the installed-system modules
+(`installer/genkan/rust/system`), so the reference systems carry it too. Its
+`calamares.agentSkills.enable` defaults to on. It runs
+`sekka-agent-skills sync` from NixOS's user activation: at each login, and
+for users already logged in, at every switch. A failed sync is reported and
+never fails the activation. With the option disabled, user activation runs
+`sekka-agent-skills disable` instead: managed copies and links are removed,
+edited copies move to backups, and unrelated skills stay. The command remains
+installed. Reenabling installs copies removed by disabling, while preserving
+removals the person made beforehand.
+
+Copies go in `~/.agents/skills/<name>`. That folder is read by Codex, by
+the Codex inside the ChatGPT app, and by OpenCode, Gemini CLI, pi and
+oh-my-pi, Copilot CLI, Cursor, Amp and Goose. Claude Code reads only
+`~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills`), so it gets a symlink to
+each copy's folder, which Claude Code follows.
+
+An agent that reads both folders sees each skill once:
+
+- Codex and pi dedupe by the real path.
+- OpenCode keys skills by name.
+
+These locations come from each agent's documentation and source as of
+October 2026. They are not tested here.
+
+The skills are copies, not links into the store, for two reasons:
+
+- Codex skips a `SKILL.md` that is itself a symlink.
+- People should be able to edit them.
+
+The command keeps its records in `~/.local/state/sekka/agent-skills`:
+
+- `installed/<name>` holds a hash of the version Sekka installed: paths,
+  contents, symlink targets and executable bits.
+- `linked/<name>` marks a Claude link Sekka made.
+
+A sync acts on each skill as follows:
+
+- **Never installed:** it installs the skill.
+- **Copy still matches the record:** it replaces the copy with the new
+  version.
+- **Copy identical to Sekka's version:** it adopts the copy.
+- **Changed by someone:** it leaves the copy.
+- **Copy or link removed:** it leaves it removed.
+- **Someone else's skill with the same name:** it leaves it, and doesn't
+  link it.
+- **Dropped from Sekka:** it removes the copy only if unchanged.
+
+`restore` moves a changed copy to `backups/<time>/` before installing
+Sekka's version again.
+
+The two scripts make one root request each, through `pkexec` with
+`--disable-internal-agent` and input from `/dev/null`. The input matters
+because the helper takes a closing input pipe as Stop. Both reduce the
+helper's `internal-json` progress to its stages and messages.
+
+`apply-configuration` copies the original and edited configuration into one
+immutable Nix store snapshot and holds a GC root while building its edited
+side as the user. It calls `yukimi-helper change --configuration SNAPSHOT
+--mode auto` directly through polkit. The helper copies the bounded snapshot
+into its private operation directory before starting its independent worker,
+so the agent can exit without removing the worker's inputs.
+
+Under the existing operation lock, the worker checks that the original
+snapshot still matches the complete configuration. It rejects stale plans,
+symlinks, deletions and changes to files other than ordinary `.nix` modules
+(the flake, hardware configuration and `yukimi.nix` are protected). It saves
+the old generation before installing edits, includes every changed module in
+its failure backup, then builds and activates through the normal transaction.
+Cancellation before activation restores all edited files; after commit the
+worker finishes and reports its result. History also restores imported
+modules, preserving files changed by hand since their generation.
+
+`software` reads the current selections and checks requested names without
+root, then sends `--add-packages` / `--remove-packages` or
+`--add-applications` / `--remove-applications`. The helper changes the current
+list under its lock. Replacement-list options remain compatible with
+existing clients, but these scripts no longer submit stale whole lists.
+
+```sh
+nix build .#checks.x86_64-linux.agent-skills .#checks.x86_64-linux.agent-skills-vm --no-update-lock-file
+```
+
+`agent-skills` runs shellcheck and checks each skill's frontmatter against
+the format. It runs the packaged command in temporary homes and covers:
+
+- installing, updating, keeping changes and removals
+- restoring with a backup, disabling and reenabling
+- `CLAUDE_CONFIG_DIR`
+- dropped skills
+- refusing to act without Sekka's skills
+
+It also runs the scripts against a fake flake, pkexec and helper, with real
+Nix evaluation of their expressions. `tests/test_sekka_update.py` runs the
+packaged helper in disposable rootless namespaces and covers lock contention,
+stale prepared configurations, cancellation, pre-activation failure, committed
+failure, generation snapshots, imported-module rollback and software deltas:
+
+```sh
+nix build .#yukimi.helper --no-link --print-out-paths --no-update-lock-file
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#bubblewrap -c python3 tests/test_sekka_update.py /nix/store/…-yukimi-helper-0.1.0/bin
+```
+
+The prepared-configuration fixtures add their small snapshots to the Nix
+store; all helper writes, builds, profiles and systemd actions are confined
+to disposable namespaces, with builds and activation stubbed.
+
+`agent-skills-vm` logs into Aizome in a disposable VM and checks that:
+
+- the copies and links are made at login
+- a switch syncs again, keeping a change and a removal
+- `restore` brings back Sekka's versions
+- an agent-like process, a user service with no terminal and a pipe for its
+  input, outside the login session, installs a package with `software`
+  through Aizome's real password dialog, with a fixture helper
+- the same kind of process applies an edited `configuration.nix` with
+  `apply-configuration`: it builds as the user, then the file is installed
+  as root after one password
+- a plain `pkexec` command, as the `sekka` skill gives it, runs as root with
+  the system's programs (NixOS's PAM environment supplies `PATH`), in
+  `/root`, without the caller's variables
+- Escape in the dialog gives pkexec's 126
+
+It doesn't cover Tatami's hyprpolkitagent or the GNOME, Plasma and Xfce
+agents. It doesn't build a real system through the helper, and it doesn't
+test the agents' own discovery.
 
 ## Releases
 

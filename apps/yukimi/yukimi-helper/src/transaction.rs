@@ -52,6 +52,7 @@ pub fn client(args: &[String]) -> Result<String> {
     let unit = format!("yukimi-operation-{id}.service");
     let dir = Path::new(OPERATIONS).join(id);
     std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+    let args = configuration::capture(args, &dir)?;
     let log = dir.join("progress.log");
     std::fs::File::create(&log)?;
     let mut log = std::fs::File::open(log)?;
@@ -72,7 +73,7 @@ pub fn client(args: &[String]) -> Result<String> {
     start.arg(format!("--setenv=PATH={PATH}"));
     start.arg(format!("--property=StandardOutput=append:{}/progress.log", dir.display()));
     start.arg(format!("--property=StandardError=append:{}/progress.log", dir.display()));
-    start.arg(std::env::current_exe()?).arg("__worker").arg(&dir).args(args);
+    start.arg(std::env::current_exe()?).arg("__worker").arg(&dir).args(&args);
     let started = start.output()?;
     if !started.status.success() {
         return Err(Failure(format!(
