@@ -775,6 +775,105 @@ fn splits_have_independent_snapshots_and_close_only_the_focused_pane() {
 }
 
 #[test]
+fn split_divider_grab_band_resizes_before_terminal_selection() {
+    use aizome_kit::sidestep_ui::{Cursor, PointerButton};
+    use aizome_kit::{Point, Vec2};
+
+    let mut failures = Vec::new();
+    for axis in [Axis::Right, Axis::Down] {
+        for offset in [-3.0, -0.51, 0.0, 3.0] {
+            let mut h = Harness::new(Hotaru::preview());
+            let w = h.window();
+            let first = h.program().active_pane().unwrap().id;
+            h.send(Msg::Split(axis));
+            h.advance(Duration::ZERO);
+            let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
+            let (at, delta, cursor) = match axis {
+                Axis::Right => {
+                    (Point::new(rect.x1 + 0.5 + offset, rect.center().y), Vec2::new(70.0, 0.0), Cursor::ColResize)
+                }
+                Axis::Down => {
+                    (Point::new(rect.center().x, rect.y1 + 0.5 + offset), Vec2::new(0.0, 70.0), Cursor::RowResize)
+                }
+            };
+            h.move_to(w, at);
+            let resize_cursor = h.platform.cursors.values().any(|c| *c == cursor);
+            h.press(w, at, PointerButton::Left, 1);
+            h.move_to(w, at + delta);
+            h.release(w, at + delta, PointerButton::Left);
+            let after = h.find_id(w, &format!("terminal-{first}")).unwrap();
+            let resized = match axis {
+                Axis::Right => after.width() - rect.width(),
+                Axis::Down => after.height() - rect.height(),
+            };
+            let selected = h.program().panes.iter().any(|p| p.selection.is_some());
+            eprintln!("{axis:?} offset={offset}: cursor={resize_cursor} resized={resized} selected={selected}");
+            if !resize_cursor || (resized - 70.0).abs() > 1.0 || selected {
+                failures.push((axis, offset, resize_cursor, resized, selected));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "divider gestures reached terminals: {failures:?}");
+}
+
+#[test]
+fn dragging_outside_split_grab_band_still_selects_terminal_text() {
+    use aizome_kit::sidestep_ui::{Cursor, PointerButton};
+    use aizome_kit::{Point, Vec2};
+
+    for axis in [Axis::Right, Axis::Down] {
+        for side in [-1.0, 1.0] {
+            let mut h = Harness::new(Hotaru::preview());
+            let w = h.window();
+            let first = h.program().active_pane().unwrap().id;
+            h.send(Msg::Split(axis));
+            let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
+            let at = match axis {
+                Axis::Right => Point::new(rect.x1 + 0.5 + side * 6.0, rect.center().y),
+                Axis::Down => Point::new(rect.center().x, rect.y1 + 0.5 + side * 6.0),
+            };
+            h.move_to(w, at);
+            assert!(h.platform.cursors.values().any(|c| *c == Cursor::Text));
+            h.press(w, at, PointerButton::Left, 1);
+            h.move_to(w, at + Vec2::new(30.0, 30.0));
+            h.release(w, at + Vec2::new(30.0, 30.0), PointerButton::Left);
+            assert_eq!(h.find_id(w, &format!("terminal-{first}")), Some(rect));
+            assert!(h.program().panes.iter().any(|p| p.selection.is_some()));
+        }
+    }
+}
+
+#[test]
+fn nested_split_dividers_keep_their_local_grab_areas() {
+    use aizome_kit::sidestep_ui::PointerButton;
+    use aizome_kit::{Point, Vec2};
+
+    let mut h = Harness::new(Hotaru::preview());
+    let w = h.window();
+    let first = h.program().active_pane().unwrap().id;
+    h.send(Msg::Split(Axis::Right));
+    let second = h.program().active_pane().unwrap().id;
+    h.send(Msg::Split(Axis::Down));
+    let rect = h.find_id(w, &format!("terminal-{second}")).unwrap();
+    let at = Point::new(rect.center().x, rect.y1 - 2.0);
+    h.press(w, at, PointerButton::Left, 1);
+    h.move_to(w, at + Vec2::new(0.0, 40.0));
+    h.release(w, at + Vec2::new(0.0, 40.0), PointerButton::Left);
+    assert_eq!(h.find_id(w, &format!("terminal-{second}")).unwrap().height(), rect.height() + 40.0);
+    assert!(h.program().panes.iter().all(|p| p.selection.is_none()));
+    // Collapsing the inner split must leave the outer divider draggable.
+    h.send(Msg::FocusPane(second));
+    h.send(Msg::ClosePane);
+    let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
+    let at = Point::new(rect.x1 + 3.0, rect.center().y);
+    h.press(w, at, PointerButton::Left, 1);
+    h.move_to(w, at + Vec2::new(50.0, 0.0));
+    h.release(w, at + Vec2::new(50.0, 0.0), PointerButton::Left);
+    assert_eq!(h.find_id(w, &format!("terminal-{first}")).unwrap().width(), rect.width() + 50.0);
+    assert!(h.program().panes.iter().all(|p| p.selection.is_none()));
+}
+
+#[test]
 fn tabs_keep_independent_terminal_snapshots() {
     let mut h = Harness::new(Hotaru::preview());
     let first = h.program().active;

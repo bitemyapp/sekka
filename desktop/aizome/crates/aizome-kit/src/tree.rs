@@ -484,6 +484,9 @@ impl Tree {
     fn hit(&self, idx: usize, p: Point, path: &mut Vec<usize>, under: bool) -> bool {
         path.push(idx);
         let n = &self.nodes[idx];
+        if !n.widget.hit_children(p - n.rect.origin().to_vec2()) {
+            return n.widget.solid();
+        }
         for &k in n.children.iter().rev() {
             let c = &self.nodes[k];
             if c.dead || !c.rect.contains(p) || !c.clip.contains(p) || (under && c.widget.drags_only()) {

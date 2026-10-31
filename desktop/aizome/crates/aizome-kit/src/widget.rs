@@ -239,6 +239,14 @@ pub trait Widget: std::any::Any {
         false
     }
 
+    /// Whether children may take the pointer at this local position.
+    /// A parent can reserve an overlapping control, such as a split's
+    /// grab area, before an interactive child consumes the gesture.
+    fn hit_children(&self, pos: Point) -> bool {
+        let _ = pos;
+        true
+    }
+
     /// Whether the pointer stops at it even if it doesn't take it (a
     /// filled panel over what's behind it).
     fn solid(&self) -> bool {
