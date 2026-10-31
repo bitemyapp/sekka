@@ -11,6 +11,22 @@ Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the c
 - **For x86_64 PCs, with Secure Boot off.** There is no ARM image.
 - **Generations aren't backups.** They return you to an earlier system, not to earlier documents. Btrfs is available without automatic filesystem snapshots.
 
+An **experimental Googlebook live image** is available as a separate build,
+`nix build .#iso-googlebook --no-update-lock-file --out-link result-googlebook`.
+Write the `.iso` under `result-googlebook/iso/` to the whole USB drive with
+Kakehashi, then use your unlocked Googlebook's external-drive boot option.
+This targets x86_64 Googlebooks using Google's Depthcharge firmware; the normal
+PC ISO is not suitable for that firmware. Follow
+[Google's bootloader-unlocking instructions](https://support.google.com/googlebook/answer/17389679?hl=en)
+first (unlocking erases the device's data).
+
+The Googlebook image offers the Aizome live session **without Genkan**: installing
+to the internal disk is not supported yet. It has not been boot-tested on an
+ASUS Googlebook; display, keyboard, Wi-Fi, audio and suspend support still need
+hardware testing. It is not an Android recovery image, a firmware replacement,
+or an image for older ARM Chromebooks. See [developer notes](DEVELOPERS.md#googlebook-live-media)
+for the boot format and build checks.
+
 ## A look around
 
 Images below link to their original, full-resolution PNGs, captured with a scale of 2, at twice the density of the layout. Desktops are shown whole, and each application on its own, cropped to its window. Nothing is upscaled. They come from test VMs built from Sekka's own modules; see [screenshot provenance](docs/screenshots.md).
