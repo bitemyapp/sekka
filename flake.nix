@@ -592,6 +592,22 @@
           assert uses installer.config;
           assert uses installed;
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
+        cache-coverage =
+          pkgs.runCommand "cache-coverage-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.nix
+                pkgs.python3
+              ];
+              TEST_SHELL = "${pkgs.pkgsStatic.busybox}/bin/busybox";
+            }
+            ''
+              mkdir -p scripts tests
+              cp ${./scripts/check_cache_coverage.py} scripts/check_cache_coverage.py
+              cp ${./tests/test_cache_coverage.py} tests/test_cache_coverage.py
+              python3 -m unittest discover -s tests -p test_cache_coverage.py -v
+              touch $out
+            '';
         # Tatami's login entry starts uwsm and tatami from the system profile.
         # A store path in it would change display-manager.service with every
         # Tatami build, and Yukimi would stage each such update for the next

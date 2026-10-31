@@ -2314,7 +2314,7 @@ and only if each step succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
-2. `scripts/check_cache_coverage.py .#installed-systems` follows, from each
+2. `scripts/check_cache_coverage.py .#uta .#installed-systems` follows, from each
    desktop's installed system, the one with every desktop and the free
    catalog applications, everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
@@ -2325,6 +2325,20 @@ and only if each step succeeded:
    published, so systems that have them build them (the driver for each
    kernel, in minutes; the applications by repackaging their vendors'
    downloads).
+   Cached outputs are also checked independently: the gate follows their runtime
+   references across all four caches. A reference missing from every cache must
+   have a valid derivation for that exact output; it and its affected cached
+   ancestors are classified with their build inputs, because Nix can rebuild
+   those ancestors too. This preserves local assembly such as Determinate Nixd
+   without allowing a missing reference to hide compilation. The report counts
+   build fallbacks separately from available archives.
+   Archive probes check existence and advertised length with bounded requests;
+   they do not download the closure or verify archive contents. Nix verifies
+   signatures and hashes when a client substitutes those paths. Missing recipes,
+   missing or truncated archives, and cache query errors stop promotion.
+   `--cache URL` can override the cache list for diagnostics;
+   `checks.x86_64-linux.cache-coverage` exercises isolated file and HTTP caches,
+   cross-cache closures, and real Nix fallback in a fresh store.
 3. It pushes the revision to `main` (a fast-forward; if `main` moved during
    the build, the input update waits for the next night) and to `nightly`.
    Installed systems update to `nightly`, so they only ever reach a revision
