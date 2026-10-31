@@ -113,7 +113,7 @@ kbd {
 .ws-n { color: var(--text-secondary); }
 .ws[aria-current="page"] { color: var(--text-strong); font-weight: 800; box-shadow: inset 0 -2px var(--accent); }
 .ws[aria-current="page"] .ws-n { color: var(--accent); }
-.bar-clock { grid-column: 4; margin: 0; padding: 0 1.25em; color: var(--text); white-space: nowrap; max-width: none; }
+.bar-clock { grid-column: 3; justify-self: center; margin: 0; padding: 0 1.25em; color: var(--text); white-space: nowrap; max-width: none; }
 .bar-clock-label { color: var(--text-secondary); }
 .bar-source { grid-column: 6; padding: 0 0.25em 0 0.75em; }
 /* The theme switch, a bar module as Waybar's toggles are: it shows the theme
@@ -138,8 +138,17 @@ kbd {
 :root[data-theme="day"] .bar-night, :root:has(#site-theme:checked) .bar-night { display: none; }
 :root[data-theme="day"] .bar-day, :root:has(#site-theme:checked) .bar-day { display: inline-flex; }
 .bar-theme-icon { display: block; width: 12px; height: 12px; flex: none; }
-@media (min-width: 1100px) {
+/* Centred on the page, as Tatami's clock is, only where the workspaces end
+   well short of it; otherwise it takes the free space between them and the
+   switch, losing its label and then itself as the bar narrows. */
+@media (min-width: 1440px) {
   .bar-clock { grid-column: auto; position: absolute; left: 50%; transform: translateX(-50%); padding: 0; }
+}
+@media (max-width: 1000px) {
+  .bar-clock-label { display: none; }
+}
+@media (max-width: 900px) {
+  .bar-clock { display: none; }
 }
 
 /* Windows */
