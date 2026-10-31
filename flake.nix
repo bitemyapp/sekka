@@ -425,6 +425,7 @@
             test -f ${uta.source}/uta/vendor/rustypipe/LICENSE
             test -f ${uta.source}/aizome/crates/aizome-kit/Cargo.toml
             test -f ${uta.source}/sekka/nix/uta.nix
+            test -s ${uta.source}/sekka/nix/patches/uta-mpris-readiness.patch
             echo "$version" > $out
           '';
         application-cache = applicationCatalog.cache;
