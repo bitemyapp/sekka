@@ -1243,6 +1243,9 @@ A rejected duplicate login never installs cleanup traps. See the
 checks the launcher with isolated service stand-ins, startup/cancellation
 ordering with real systemd and a stand-in compositor in a disposable VM,
 then real logind termination and password login in the graphical greeter VM.
+The systemd fixture also uses a stand-in FileManager1 bus owner with Hako's
+shipped unit: it must be ready before autostart, stop at logout and stay
+inactive when another desktop starts a graphical session.
 The startup check gates requests both before submission and before compositor
 readiness, rejects overlapping launches and verifies subsequent login.
 The greeter VM keeps the user manager alive, checks that the old desktop
@@ -1528,6 +1531,28 @@ chooser in each mode on the kit's stand-in platform, and its goldens. The
 last runs the real chooser under a headless compositor over a test window
 that exported itself, and checks that it is that window's dialog and takes
 the keys. Neither runs a browser or the installed session.
+
+Hako's `--file-manager-service` answers `org.freedesktop.FileManager1`
+at `/org/freedesktop/FileManager1`. Chrome's Show in Folder, including the
+OpenURI portal's `OpenDirectory` route, reaches `ShowItems`; Hako opens the
+parent with the item selected. `ShowFolders` opens the folder itself. Only
+local file URIs are supported; `ShowItemProperties` returns NotSupported.
+The service starts with `aizome-session.target`, before desktop autostart,
+and stops on logout. It has no global D-Bus activation file, so installing
+Aizome does not replace another desktop's provider. A later file manager
+cannot displace it during Aizome; a pre-existing owner that refuses
+replacement causes a logged startup failure rather than a queued service.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hako --lib --test file_manager --test files
+nix build .#aizome-checks.session-launcher-systemd --no-update-lock-file
+```
+
+The package check phase includes Hako's unit and file-manager bus tests.
+They run the real executable on a private bus and hand requests to an
+isolated instance socket, including escaped filenames, folder selection,
+invalid URIs and name ownership. The UI tests check that reveal requests
+select the file. These are component checks, not browser or ISO qualification.
 
 ### Sukumo
 

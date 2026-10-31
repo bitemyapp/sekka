@@ -9,4 +9,5 @@ Wants=graphical-session-pre.target
 After=graphical-session-pre.target
 Wants=xdg-desktop-autostart.target
 Wants=aizome-network-agent.service
+Wants=aizome-file-manager.service
 Before=xdg-desktop-autostart.target

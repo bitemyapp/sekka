@@ -9,6 +9,7 @@ use std::time::Duration;
 use aizome_kit::MsgSender;
 
 use super::app::Request;
+use crate::model::uri;
 
 /// The socket.
 pub fn socket_path() -> PathBuf {
@@ -36,8 +37,8 @@ pub enum Claim {
     Alone,
 }
 
-/// One request a line: `open PATH` or `reveal PATH` (paths NUL-free, as
-/// all Unix paths are).
+/// One request a line. Keep ordinary paths compatible with an already-open
+/// older Hako; escape newlines and non-UTF-8 names as file URIs.
 fn encode(requests: &[Request]) -> String {
     let mut s = String::new();
     for r in requests {
@@ -47,7 +48,10 @@ fn encode(requests: &[Request]) -> String {
         };
         s.push_str(verb);
         s.push('\0');
-        s.push_str(&p.to_string_lossy());
+        match p.to_str().filter(|p| !p.contains(['\n', '\r'])) {
+            Some(p) => s.push_str(p),
+            None => s.push_str(&uri::file_uri(p)),
+        }
         s.push('\n');
     }
     if requests.is_empty() {
@@ -60,9 +64,10 @@ pub fn decode(text: &str) -> Vec<Request> {
     text.lines()
         .filter_map(|l| {
             let (verb, p) = l.split_once('\0').unwrap_or((l, ""));
+            let p = uri::path_of(p).unwrap_or_else(|| PathBuf::from(p));
             match verb {
-                "open" => Some(Request::Open(PathBuf::from(p))),
-                "reveal" => Some(Request::Reveal(PathBuf::from(p))),
+                "open" => Some(Request::Open(p)),
+                "reveal" => Some(Request::Reveal(p)),
                 _ => None,
             }
         })
@@ -118,8 +123,15 @@ mod tests {
 
     #[test]
     fn requests_travel_whole() {
-        let rs = vec![Request::Open(PathBuf::from("/a b/c")), Request::Reveal(PathBuf::from("/x/y.txt"))];
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        let rs = vec![
+            Request::Open(PathBuf::from("/a b/c")),
+            Request::Reveal(PathBuf::from("/x/a\nb#%.txt")),
+            Request::Reveal(PathBuf::from(OsString::from_vec(b"/x/\xff".to_vec()))),
+        ];
         assert_eq!(decode(&encode(&rs)), rs);
         assert_eq!(decode(&encode(&[])), vec![]);
+        assert_eq!(decode("reveal\0/x/old.txt\n"), vec![Request::Reveal("/x/old.txt".into())]);
     }
 }

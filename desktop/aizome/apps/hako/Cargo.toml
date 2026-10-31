@@ -19,7 +19,7 @@ path = "src/main.rs"
 default = ["gui"]
 # The window. Without it the file operations, the Trash, MIME types and
 # thumbnails build with no toolkit at all.
-gui = ["dep:aizome-kit", "dep:aizome-sys", "dep:aizome-ipc", "dep:aizome-search", "dep:aizome-config", "dep:sidestep-engine"]
+gui = ["dep:aizome-kit", "dep:aizome-sys", "dep:aizome-ipc", "dep:aizome-search", "dep:aizome-config", "dep:sidestep-engine", "dep:zbus"]
 
 [dependencies]
 aizome-kit = { workspace = true, optional = true }
@@ -36,6 +36,7 @@ toml.workspace = true
 log.workspace = true
 env_logger.workspace = true
 libc = "0.2"
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"], optional = true }
 # Thumbnails' file names (the freedesktop spec's MD5 of the URI) and their
 # PNGs' text chunks.
 md5 = "0.8"
