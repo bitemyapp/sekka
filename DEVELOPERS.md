@@ -2720,8 +2720,8 @@ nix run --inputs-from . nixpkgs#static-web-server -- --port 8790 --root result-a
 `cargo test` in `aizome-site/` runs the generator's tests, which the Nix
 build runs too.
 
-The site is the Cloudflare Pages project `aizome`, with the
-`aizome.computer` apex as its custom domain. It has no worker. To publish by
+The site is the Cloudflare Pages project `aizome` (`aizome-blz.pages.dev`),
+with the `aizome.computer` apex as its custom domain. It has no worker. To publish by
 hand, from a clean commit on GitHub's `main`:
 
 ```sh
