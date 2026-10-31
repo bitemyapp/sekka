@@ -391,7 +391,9 @@ fn build(app: &adw::Application, lens: Lens) -> Rc<Ui> {
         }
     });
     let weak = Rc::downgrade(&ui);
-    table.selection.connect_selection_changed(move |_, _, _| {
+    // Item identity also changes when the selected last row disappears.
+    // In that case GTK need not emit a nonempty selection-changed range.
+    table.selection.connect_selected_item_notify(move |_| {
         if let Some(ui) = weak.upgrade() {
             selected(&ui);
         }
