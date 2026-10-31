@@ -2,6 +2,10 @@
 
 **A NixOS desktop you can install and look after through a graphical interface.**
 
+### [Download Sekka →](https://sekka.computer/download/) · [Tour the Aizome desktop →](https://aizome.computer/desktop/)
+
+[**sekka.computer**](https://sekka.computer/) introduces Sekka and keeps its latest ISOs. [**aizome.computer**](https://aizome.computer/) shows Aizome, Sekka's own desktop, and every one of its apps.
+
 Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the compositor up. **Genkan**, a graphical installer, sets it up; **Yukimi**, an app for software and system updates, keeps it current; and **Tatami**, a keyboard-driven tiling desktop, is there for people who would rather tile. Sekka uses Determinate Nix and lets you choose Aizome, Tatami, Plasma, GNOME, vanilla Hyprland, or Xfce—or install several and switch at login. Sekka and Aizome are in daily use on many machines, their developer's and their users'.
 
 ## Before you install
