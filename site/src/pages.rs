@@ -245,6 +245,10 @@ pub fn aizome(site: &Site) -> Result<Page> {
     <p>The Toolchest, from IRIX, opens applications by category, places, Desks and the session. The Deskbar, from Haiku, lists each app with its windows and files its notifications beneath it; drag its strip to stand it at the left or right, and its edge to make it wider, slimmer or icons only. Desks keep work apart, and <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>↑</kbd> shows them all.</p>
   </article>
   <article class="win">
+    <h2>Made for the keyboard</h2>
+    <p>Aizome takes as much from modern tiling window managers as from Haiku. Fill the screen with a window or split it left or right from the keyboard, move between numbered Desks and carry windows with you, switch apps and their windows, and open any window's menu with a key for every move. Every command in every app is in the palette, which teaches you its shortcut as you go.</p>
+  </article>
+  <article class="win">
     <h2>Every keyboard, set up for you</h2>
     <p><kbd>Super</kbd> is the command key in every app: <kbd>Super</kbd> + <kbd>C</kbd> copies, in the terminal too. Each keyboard keeps its own modifier keys, Caps Lock and Compose key. Plug one in or pair it, press the key beside its space bar, and Settei suggests where Super should go, so it sits under your thumb on a Mac keyboard and a PC keyboard alike.</p>
   </article>
@@ -299,10 +303,14 @@ pub fn aizome(site: &Site) -> Result<Page> {
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Space</kbd></th><td>The command palette</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + right-click</th><td>The focused app's whole menu, at the pointer</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd></th><td>The Toolchest</td></tr>
-      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Return</kbd></th><td>A terminal</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Return</kbd></th><td>Hotaru, the terminal, in the Desk's folder</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>C</kbd> / <kbd>V</kbd> / <kbd>Z</kbd></th><td>Copy, paste and undo, in every app</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Tab</kbd></th><td>Switch apps, then that app's windows</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>←</kbd> / <kbd>→</kbd></th><td>Fill the screen, or split it left or right</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Space</kbd></th><td>The window's own menu, a key for every move</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>[</kbd> / <kbd>]</kbd></th><td>The previous or next tab in a group</td></tr>
-      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>S</kbd></th><td>Stack this window with another</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>S</kbd></th><td>Stack this window with the one behind it</td></tr>
+      <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>1</kbd>…<kbd>9</kbd></th><td>Go to a Desk; with <kbd>Shift</kbd>, take the window along</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>↑</kbd></th><td>Every Desk</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>F</kbd></th><td>Full screen</td></tr>
       <tr><th scope="row"><kbd>Super</kbd> + <kbd>H</kbd> / <kbd>M</kbd> / <kbd>Q</kbd></th><td>Hide, minimise or quit the app</td></tr>
@@ -415,9 +423,27 @@ pub fn tatami(site: &Site) -> Result<Page> {
     b.push_str(
         r#"<section class="win" aria-labelledby="which">
   <h2 id="which">Tatami or Aizome?</h2>
-  <div class="cols">
-    <p><a href="/aizome/">Aizome</a> is the desktop Sekka is made for: windows you arrange yourself, stacked into tab groups, with one menu bar, a command palette and its own apps.</p>
-    <p>Tatami tiles: every window takes its share of the screen, workspaces are numbered, and everything is a key away. Choose it in the installer or in Yukimi's Desktops page, beside Aizome or instead of it, and pick one at the login screen.</p>
+  <div class="cols which">
+    <div>
+      <h3><a href="/aizome/">Aizome</a></h3>
+      <p>The desktop Sekka is made for: windows you arrange yourself, stacked into tab groups, with one menu bar, a command palette and its own apps. It takes as much from modern tiling window managers as from Haiku, and goes out of its way to stay under your fingers. Anything not on a key is in the palette, which teaches you its shortcut, and every app can be driven from the keyboard.</p>
+      <ul class="facts">
+        <li><kbd>Super</kbd> + <kbd>Alt</kbd> and an arrow fills the screen with a window, or splits it left or right.</li>
+        <li><kbd>Super</kbd> + <kbd>Ctrl</kbd> and a number goes to a Desk; add <kbd>Shift</kbd> to take the window along.</li>
+        <li><kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>Space</kbd> opens the window's own menu, with a key for every move.</li>
+      </ul>
+      <p><a href="/aizome/#aizome-keys">All of Aizome's keys</a></p>
+    </div>
+    <div>
+      <h3>Tatami</h3>
+      <p>Tatami tiles every window, always: each takes its share of the screen, and everything is a key away. It is Hyprland as Omarchy taught it, adapted for NixOS.</p>
+      <ul class="facts">
+        <li>Workspaces 1 to 5, numbered in the bar, a key each.</li>
+        <li>One menu, on <kbd>Super</kbd> + <kbd>Space</kbd>, for apps, settings and the system.</li>
+        <li>Tokyo Night, square corners, no shadows.</li>
+      </ul>
+      <p>Choose either in the installer or in Yukimi's Desktops page, or both, and pick one at the login screen.</p>
+    </div>
   </div>
 </section>
 

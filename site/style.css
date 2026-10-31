@@ -349,6 +349,9 @@ kbd {
 .step-figure figcaption { font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 0 var(--pad); margin-bottom: 1.5em; }
 .downloads { font-size: 0.9rem; }
+.which { gap: 1.5em var(--pad); margin-bottom: 0; }
+.which > div { display: grid; gap: 1em; align-content: start; }
+.which h3, .which p, .which .facts { margin: 0; }
 
 .construction { width: min(100%, 400px); height: auto; overflow: visible; }
 .construction .guide { fill: none; stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }
