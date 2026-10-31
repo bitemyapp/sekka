@@ -1,0 +1,5 @@
+{
+  "LD_LIBRARY_PATH": "/home/callen/sekka-work/gpu-cmp/nvidia-libs:/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib:/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib",
+  "__EGL_VENDOR_LIBRARY_FILENAMES": "/usr/share/glvnd/egl_vendor.d/10_nvidia.json",
+  "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS": "/usr/share/egl/egl_external_platform.d"
+}

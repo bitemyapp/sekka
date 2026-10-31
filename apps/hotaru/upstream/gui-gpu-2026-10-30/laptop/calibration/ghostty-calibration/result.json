@@ -1,0 +1,3613 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "kind": "ghostty",
+  "purpose": "qualification",
+  "renderer": "gpu",
+  "scope": "private headless GPU (gles2) compositor screencopy completion; no physical scanout or parser timing",
+  "application_environment": {
+    "GSK_DEBUG": "renderer"
+  },
+  "gpu": {
+    "compositor": {
+      "log": [
+        "[render/egl.c:374] EGL vendor: Mesa Project",
+        "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+        "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.5",
+        "[render/gles2/renderer.c:540] GL vendor: Intel",
+        "[render/gles2/renderer.c:541] GL renderer: Mesa Intel(R) Graphics (PTL)"
+      ],
+      "process": {
+        "295818": {
+          "comm": "sway",
+          "libraries": [
+            "libEGL.so.1.1.0",
+            "libEGL_mesa.so.0.0.0",
+            "libGLESv2.so.2.1.0",
+            "libGLdispatch.so.0.0.0",
+            "libdrm.so.2.134.0",
+            "libdrm_amdgpu.so.1.134.0",
+            "libdrm_intel.so.1.134.0",
+            "libgallium-26.2.5.so",
+            "libgbm.so.1.0.0",
+            "libvulkan.so.1.4.363"
+          ],
+          "devices": [
+            "/dev/dri/renderD128"
+          ]
+        }
+      }
+    },
+    "application": {
+      "295838": {
+        "comm": ".ghostty-wrappe",
+        "libraries": [
+          "libEGL.so.1.1.0",
+          "libEGL_mesa.so.0.0.0",
+          "libGLESv2.so.2.1.0",
+          "libGLX.so.0.0.0",
+          "libGLdispatch.so.0.0.0",
+          "libdrm.so.2.134.0",
+          "libdrm_amdgpu.so.1.134.0",
+          "libdrm_intel.so.1.134.0",
+          "libgallium-26.2.5.so",
+          "libgbm.so.1.0.0",
+          "libvulkan.so.1.4.363"
+        ],
+        "devices": [
+          "/dev/dri/renderD128"
+        ]
+      },
+      "295876": {
+        "comm": "python3",
+        "libraries": [],
+        "devices": []
+      }
+    },
+    "ghostty": {
+      "lines": [
+        "Not using Vulkan: Vulkan support disabled via GDK_DISABLE",
+        "Using renderer 'GskGLRenderer' for surface 'GdkWaylandToplevel'",
+        "info(opengl): EGL vendor=Mesa Project",
+        "info(opengl): loaded OpenGL 4.6"
+      ],
+      "gpu_presentation": true,
+      "fallback": []
+    }
+  },
+  "marker_contract": "matching complete top/bottom 76-cell markers, sequence32 + CRC32(sequence,nonce); sampled opaque interiors; not a full glyph-pixel CRC",
+  "recorded_utc": "2026-10-30T21:55:02.595787+00:00",
+  "nonce": 691087746,
+  "capture_interval_us": 1000,
+  "commands": {
+    "dbus": [
+      "dbus-daemon",
+      "--nofork",
+      "--nopidfile",
+      "--config-file=/tmp/nix-shell-295683-1266626590/hotaru-frames-tvcazaai/dbus.conf"
+    ],
+    "sway": [
+      "taskset",
+      "-c",
+      "3",
+      "sway",
+      "--unsupported-gpu",
+      "--verbose",
+      "-c",
+      "/tmp/nix-shell-295683-1266626590/hotaru-frames-tvcazaai/sway.conf"
+    ],
+    "observer": [
+      "taskset",
+      "-c",
+      "4",
+      "/home/callen/work/gpu-cmp/laptop/qual-ghostty/observer-build/frame-observer"
+    ],
+    "application": [
+      "taskset",
+      "-c",
+      "0-2",
+      "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty",
+      "--config-default-files=false",
+      "--config-file=/tmp/nix-shell-295683-1266626590/hotaru-frames-tvcazaai/ghostty.conf",
+      "-e",
+      "/nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8/bin/python3",
+      "/home/callen/work/sekka/.work/hotaru-gpu-comparison/apps/hotaru/tools/frame-benchmark.py",
+      "--fixture",
+      "/tmp/nix-shell-295683-1266626590/hotaru-frames-tvcazaai/fixture.sock",
+      "691087746"
+    ]
+  },
+  "cpu_sets": {
+    "app": "0-2",
+    "compositor": "3",
+    "observer": "4",
+    "fixture": "6",
+    "controller": "5"
+  },
+  "host": "ganymede",
+  "kernel": "7.3.0",
+  "clock_ticks_per_second": 100,
+  "load_average": [
+    2.6748046875,
+    3.2763671875,
+    3.0234375
+  ],
+  "tool_sha256": "b3288ac5b4bdc0b1105c31aa1c10a1c7d31405a3475e74b7a78a9789d3c24203",
+  "binary_sha256": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+  "environment": {
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "gles2",
+    "LIBGL_ALWAYS_SOFTWARE": null,
+    "GALLIUM_DRIVER": null,
+    "LP_NUM_THREADS": null,
+    "SIDESTEP_RASTER_THREADS": "4",
+    "AIZOME_NO_PIXEL_SCROLL": "0",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": null,
+    "LIBGL_DRIVERS_PATH": null,
+    "RUST_LOG": "warn"
+  },
+  "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+  },
+  "unrelated_uta_builds": [],
+  "configuration": "gtk-single-instance = false\nshell-integration = none\nscrollback-limit-bytes = 0\nscrollback-limit-lines = 0\nfont-family = IBM Plex Mono\nfont-size = 14.0\ncursor-style-blink = false\nbackground-opacity = 1\nadjust-cell-height = -1\n",
+  "startup": {
+    "launch_ns": 65806956571883,
+    "pty_ready": {
+      "event": "ready",
+      "ready_ns": 65807463186524,
+      "pid": 295876,
+      "cols": 122,
+      "rows": 44,
+      "cpu_affinity": [
+        6
+      ],
+      "controller_received_ns": 65807463696247
+    },
+    "fixture_write": {
+      "event": "write",
+      "sequence": 0,
+      "kind": "initial",
+      "crc": 3661745565,
+      "read_ns": null,
+      "write_start_ns": 65807463380360,
+      "write_end_ns": 65807463406149,
+      "bytes": 8273,
+      "sha256": "43fd21b5b3c599fabf64071c1f4c00efdf834bd0f4cb2000221f8b626491a7b2",
+      "cols": 122,
+      "rows": 44,
+      "controller_received_ns": 65807463958897
+    },
+    "matching_frame": {
+      "event": "capture",
+      "capture": 36,
+      "request_ns": 65807525499631,
+      "ready_ns": 65807537076893,
+      "decode_done_ns": 65807537173553,
+      "valid": true,
+      "sequence": 0,
+      "compositor_sec_hi": 0,
+      "compositor_sec_lo": 65807,
+      "compositor_nsec": 533406950,
+      "flags": 0,
+      "controller_received_ns": 65807537365355
+    },
+    "geometry": {
+      "event": "geometry",
+      "time_ns": 65807537167729,
+      "x": 22,
+      "y": 22,
+      "cell_width": 11,
+      "cell_height": 24,
+      "rows": 44,
+      "bottom_y": 1054,
+      "controller_received_ns": 65807537237385
+    },
+    "launch_to_pty_ready_ns": 506614641,
+    "launch_to_matching_capture_ns": 580505010,
+    "initial_grid_matches_requested": false,
+    "qualified": false
+  },
+  "running_executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+  "running_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+  "grid": {
+    "event": "size",
+    "cols": 120,
+    "rows": 40,
+    "controller_received_ns": 65808104524820
+  },
+  "window_pixels": [
+    1334,
+    987
+  ],
+  "geometry": {
+    "event": "geometry",
+    "time_ns": 65808118860544,
+    "x": 28,
+    "y": 63,
+    "cell_width": 11,
+    "cell_height": 24,
+    "rows": 40,
+    "bottom_y": 999,
+    "controller_received_ns": 65808118951414
+  },
+  "compositor_outputs": [
+    {
+      "id": 3,
+      "type": "output",
+      "orientation": "none",
+      "percent": 1.0,
+      "urgent": false,
+      "marks": [],
+      "layout": "output",
+      "border": "none",
+      "current_border_width": 0,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1440
+      },
+      "deco_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "window_rect": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0
+      },
+      "name": "HEADLESS-1",
+      "window": null,
+      "nodes": [],
+      "floating_nodes": [],
+      "focus": [
+        4
+      ],
+      "fullscreen_mode": 0,
+      "sticky": false,
+      "floating": null,
+      "scratchpad_state": null,
+      "primary": false,
+      "make": "Unknown",
+      "model": "Unknown",
+      "serial": "Unknown",
+      "modes": [],
+      "features": {
+        "adaptive_sync": false,
+        "hdr": false
+      },
+      "non_desktop": false,
+      "active": true,
+      "dpms": true,
+      "power": true,
+      "scale": 1.0,
+      "scale_filter": "nearest",
+      "transform": "normal",
+      "adaptive_sync_status": "disabled",
+      "current_workspace": "1",
+      "current_mode": {
+        "width": 1920,
+        "height": 1440,
+        "refresh": 60000
+      },
+      "max_render_time": 0,
+      "allow_tearing": false,
+      "hdr": false,
+      "focused": true,
+      "subpixel_hinting": "unknown"
+    }
+  ],
+  "physical_geometry_qualified": true,
+  "observer_controls": [
+    {
+      "active": false,
+      "start_ns": 65808288253699,
+      "end_ns": 65811288373670,
+      "before": {
+        "application": {
+          "sample_ns": 65808288037053,
+          "cpu_ticks": 50,
+          "faults_minor": 39613,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65808288125611,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65808288192488,
+          "cpu_ticks": 14,
+          "faults_minor": 10111,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65808288251142,
+          "cpu_ticks": 17,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65811288835112,
+          "cpu_ticks": 51,
+          "faults_minor": 39619,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65811288917270,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65811288995851,
+          "cpu_ticks": 14,
+          "faults_minor": 10111,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65811289074873,
+          "cpu_ticks": 17,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 0,
+      "valid_captures": 0,
+      "decode_wall_ns": 0
+    },
+    {
+      "active": true,
+      "start_ns": 65811439759762,
+      "end_ns": 65814439856007,
+      "before": {
+        "application": {
+          "sample_ns": 65811439552376,
+          "cpu_ticks": 51,
+          "faults_minor": 39619,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65811439626069,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65811439695839,
+          "cpu_ticks": 15,
+          "faults_minor": 10281,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65811439755969,
+          "cpu_ticks": 17,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65814440118193,
+          "cpu_ticks": 51,
+          "faults_minor": 39631,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65814440189260,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65814440252470,
+          "cpu_ticks": 34,
+          "faults_minor": 10282,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65814440316547,
+          "cpu_ticks": 19,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 186,
+      "valid_captures": 186,
+      "decode_wall_ns": 1885461
+    },
+    {
+      "active": false,
+      "start_ns": 65814591159898,
+      "end_ns": 65817591248349,
+      "before": {
+        "application": {
+          "sample_ns": 65814590934170,
+          "cpu_ticks": 51,
+          "faults_minor": 39633,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65814591016262,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65814591099376,
+          "cpu_ticks": 34,
+          "faults_minor": 10282,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65814591158019,
+          "cpu_ticks": 19,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65817591680186,
+          "cpu_ticks": 52,
+          "faults_minor": 39645,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65817591756516,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65817591830195,
+          "cpu_ticks": 35,
+          "faults_minor": 10282,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65817591895747,
+          "cpu_ticks": 19,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 0,
+      "valid_captures": 0,
+      "decode_wall_ns": 0
+    },
+    {
+      "active": true,
+      "start_ns": 65817742633352,
+      "end_ns": 65820742717402,
+      "before": {
+        "application": {
+          "sample_ns": 65817742431174,
+          "cpu_ticks": 52,
+          "faults_minor": 39645,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65817742502898,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65817742571519,
+          "cpu_ticks": 36,
+          "faults_minor": 10452,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65817742631673,
+          "cpu_ticks": 19,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65820742996029,
+          "cpu_ticks": 53,
+          "faults_minor": 39656,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 205076,
+            "RssAnon": 113972,
+            "RssFile": 91088,
+            "Threads": 21
+          }
+        },
+        "fixture": {
+          "sample_ns": 65820743077108,
+          "cpu_ticks": 3,
+          "faults_minor": 4139,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28428,
+            "VmRSS": 28428,
+            "RssAnon": 13836,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65820743138494,
+          "cpu_ticks": 55,
+          "faults_minor": 10455,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65820743196895,
+          "cpu_ticks": 20,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "captures": 186,
+      "valid_captures": 186,
+      "decode_wall_ns": 1690977
+    }
+  ],
+  "keyboard": [
+    {
+      "sequence": 100,
+      "injected": {
+        "event": "key",
+        "sequence": 100,
+        "inject_ns": 65820790564357,
+        "flush_return_ns": 65820790572063,
+        "flush_complete": true,
+        "controller_received_ns": 65820790954569
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 100,
+        "kind": "keyboard",
+        "crc": 3069385744,
+        "read_ns": 65820791085521,
+        "write_start_ns": 65820791096555,
+        "write_end_ns": 65820791107598,
+        "bytes": 2830,
+        "sha256": "852e09cdda3448656dc8900305798c06d01b7b5ad091a9fa956d54bc86f5b3e4",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65820791406502
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 472,
+        "request_ns": 65820804565610,
+        "ready_ns": 65820820957448,
+        "decode_done_ns": 65820820964657,
+        "valid": true,
+        "sequence": 100,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65820,
+        "compositor_nsec": 816208585,
+        "flags": 0,
+        "controller_received_ns": 65820821178860
+      },
+      "inject_to_fixture_read_ns": 521164,
+      "fixture_write_to_capture_ns": 29849850,
+      "inject_to_capture_ns": 30393091
+    },
+    {
+      "sequence": 101,
+      "injected": {
+        "event": "key",
+        "sequence": 101,
+        "inject_ns": 65820883095162,
+        "flush_return_ns": 65820883105013,
+        "flush_complete": true,
+        "controller_received_ns": 65820883178256
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 101,
+        "kind": "keyboard",
+        "crc": 2341680544,
+        "read_ns": 65820885449523,
+        "write_start_ns": 65820885472579,
+        "write_end_ns": 65820885492497,
+        "bytes": 2830,
+        "sha256": "29a2713269e014225eddede20b692aad2fb16b1083e6765b7b85181c106e2189",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65820885904338
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 478,
+        "request_ns": 65820901504713,
+        "ready_ns": 65820917752542,
+        "decode_done_ns": 65820917762868,
+        "valid": true,
+        "sequence": 101,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65820,
+        "compositor_nsec": 913216783,
+        "flags": 0,
+        "controller_received_ns": 65820917953554
+      },
+      "inject_to_fixture_read_ns": 2354361,
+      "fixture_write_to_capture_ns": 32260045,
+      "inject_to_capture_ns": 34657380
+    },
+    {
+      "sequence": 102,
+      "injected": {
+        "event": "key",
+        "sequence": 102,
+        "inject_ns": 65820995203873,
+        "flush_return_ns": 65820995219769,
+        "flush_complete": true,
+        "controller_received_ns": 65820995325585
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 102,
+        "kind": "keyboard",
+        "crc": 3425914736,
+        "read_ns": 65820998288385,
+        "write_start_ns": 65820998307977,
+        "write_end_ns": 65820998328577,
+        "bytes": 2834,
+        "sha256": "d41dbabd90df7358fb2137e8dd9c4dea667667f62f4317d942c381c900107b40",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65820998743043
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 485,
+        "request_ns": 65821015097678,
+        "ready_ns": 65821030779505,
+        "decode_done_ns": 65821030788206,
+        "valid": true,
+        "sequence": 102,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 26401388,
+        "flags": 0,
+        "controller_received_ns": 65821030993613
+      },
+      "inject_to_fixture_read_ns": 3084512,
+      "fixture_write_to_capture_ns": 32450928,
+      "inject_to_capture_ns": 35575632
+    },
+    {
+      "sequence": 103,
+      "injected": {
+        "event": "key",
+        "sequence": 103,
+        "inject_ns": 65821100939878,
+        "flush_return_ns": 65821100947515,
+        "flush_complete": true,
+        "controller_received_ns": 65821101010487
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 103,
+        "kind": "keyboard",
+        "crc": 4048774848,
+        "read_ns": 65821101503855,
+        "write_start_ns": 65821101514525,
+        "write_end_ns": 65821101524357,
+        "bytes": 2832,
+        "sha256": "67785c3f02a47911e02e6f716f0ccd399123f395936cac90983c1ba1339e42c7",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821101827355
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 491,
+        "request_ns": 65821113564460,
+        "ready_ns": 65821127627412,
+        "decode_done_ns": 65821127635209,
+        "valid": true,
+        "sequence": 103,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 123318788,
+        "flags": 0,
+        "controller_received_ns": 65821127763833
+      },
+      "inject_to_fixture_read_ns": 563977,
+      "fixture_write_to_capture_ns": 26103055,
+      "inject_to_capture_ns": 26687534
+    },
+    {
+      "sequence": 104,
+      "injected": {
+        "event": "key",
+        "sequence": 104,
+        "inject_ns": 65821189331429,
+        "flush_return_ns": 65821189342047,
+        "flush_complete": true,
+        "controller_received_ns": 65821189449588
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 104,
+        "kind": "keyboard",
+        "crc": 1929638161,
+        "read_ns": 65821192225519,
+        "write_start_ns": 65821192243665,
+        "write_end_ns": 65821192261482,
+        "bytes": 2826,
+        "sha256": "ddf8d29153e0f7dbe1ebea92ee4b083aba38eedcd4e769e3d634a8af231a2c95",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821192620224
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 497,
+        "request_ns": 65821208327817,
+        "ready_ns": 65821224824973,
+        "decode_done_ns": 65821224841184,
+        "valid": true,
+        "sequence": 104,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 220371167,
+        "flags": 0,
+        "controller_received_ns": 65821225026888
+      },
+      "inject_to_fixture_read_ns": 2894090,
+      "fixture_write_to_capture_ns": 32563491,
+      "inject_to_capture_ns": 35493544
+    },
+    {
+      "sequence": 105,
+      "injected": {
+        "event": "key",
+        "sequence": 105,
+        "inject_ns": 65821283056394,
+        "flush_return_ns": 65821283066632,
+        "flush_complete": true,
+        "controller_received_ns": 65821283132211
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 105,
+        "kind": "keyboard",
+        "crc": 1315166369,
+        "read_ns": 65821283679938,
+        "write_start_ns": 65821283700110,
+        "write_end_ns": 65821283720105,
+        "bytes": 2831,
+        "sha256": "e0892b0c1baddeb953e56a67dee19b03d91b7107a7aa15fbc4afcbaa30bc05f4",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821284095086
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 503,
+        "request_ns": 65821305282604,
+        "ready_ns": 65821321214693,
+        "decode_done_ns": 65821321222925,
+        "valid": true,
+        "sequence": 105,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 317118203,
+        "flags": 0,
+        "controller_received_ns": 65821321403884
+      },
+      "inject_to_fixture_read_ns": 623544,
+      "fixture_write_to_capture_ns": 37494588,
+      "inject_to_capture_ns": 38158299
+    },
+    {
+      "sequence": 106,
+      "injected": {
+        "event": "key",
+        "sequence": 106,
+        "inject_ns": 65821389754302,
+        "flush_return_ns": 65821389766045,
+        "flush_complete": true,
+        "controller_received_ns": 65821389850758
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 106,
+        "kind": "keyboard",
+        "crc": 163816049,
+        "read_ns": 65821390208831,
+        "write_start_ns": 65821390222047,
+        "write_end_ns": 65821390233604,
+        "bytes": 2827,
+        "sha256": "25af9ba59532b4785422cecb066f530050ead1ebb00ab95558c0fae9904801f3",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821390555164
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 509,
+        "request_ns": 65821402198413,
+        "ready_ns": 65821418367902,
+        "decode_done_ns": 65821418377489,
+        "valid": true,
+        "sequence": 106,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 414088792,
+        "flags": 0,
+        "controller_received_ns": 65821418574641
+      },
+      "inject_to_fixture_read_ns": 454529,
+      "fixture_write_to_capture_ns": 28134298,
+      "inject_to_capture_ns": 28613600
+    },
+    {
+      "sequence": 107,
+      "injected": {
+        "event": "key",
+        "sequence": 107,
+        "inject_ns": 65821482907509,
+        "flush_return_ns": 65821482914432,
+        "flush_complete": true,
+        "controller_received_ns": 65821482981028
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 107,
+        "kind": "keyboard",
+        "crc": 883133377,
+        "read_ns": 65821483505111,
+        "write_start_ns": 65821483515700,
+        "write_end_ns": 65821483526608,
+        "bytes": 2831,
+        "sha256": "d9b30982b19dcd8dc977e4cd64fddb819697941e5650dea5253f8379070421c7",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821483828110
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 515,
+        "request_ns": 65821498485823,
+        "ready_ns": 65821515422455,
+        "decode_done_ns": 65821515427874,
+        "valid": true,
+        "sequence": 107,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 510725950,
+        "flags": 0,
+        "controller_received_ns": 65821515568848
+      },
+      "inject_to_fixture_read_ns": 597602,
+      "fixture_write_to_capture_ns": 31895847,
+      "inject_to_capture_ns": 32514946
+    },
+    {
+      "sequence": 108,
+      "injected": {
+        "event": "key",
+        "sequence": 108,
+        "inject_ns": 65821585143334,
+        "flush_return_ns": 65821585151428,
+        "flush_complete": true,
+        "controller_received_ns": 65821585202875
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 108,
+        "kind": "keyboard",
+        "crc": 2256754641,
+        "read_ns": 65821585662976,
+        "write_start_ns": 65821585673677,
+        "write_end_ns": 65821585683134,
+        "bytes": 2831,
+        "sha256": "2daf9597ff6b4f34eb59e9ecc822c76652de6fb2b4423111c74b27f265ec5a84",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821585987281
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 521,
+        "request_ns": 65821597286826,
+        "ready_ns": 65821612038351,
+        "decode_done_ns": 65821612046892,
+        "valid": true,
+        "sequence": 108,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 607689718,
+        "flags": 0,
+        "controller_received_ns": 65821612253251
+      },
+      "inject_to_fixture_read_ns": 519642,
+      "fixture_write_to_capture_ns": 26355217,
+      "inject_to_capture_ns": 26895017
+    },
+    {
+      "sequence": 109,
+      "injected": {
+        "event": "key",
+        "sequence": 109,
+        "inject_ns": 65821656545320,
+        "flush_return_ns": 65821656557407,
+        "flush_complete": true,
+        "controller_received_ns": 65821656683141
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 109,
+        "kind": "keyboard",
+        "crc": 3152248417,
+        "read_ns": 65821660257019,
+        "write_start_ns": 65821660276673,
+        "write_end_ns": 65821660297639,
+        "bytes": 2843,
+        "sha256": "fcafe6b410c16ce6ab97a6b0727d4c692777c8014f80d7a2c7a969faf8612867",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821660675323
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 526,
+        "request_ns": 65821676731521,
+        "ready_ns": 65821692091361,
+        "decode_done_ns": 65821692096905,
+        "valid": true,
+        "sequence": 109,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 688309519,
+        "flags": 0,
+        "controller_received_ns": 65821692238346
+      },
+      "inject_to_fixture_read_ns": 3711699,
+      "fixture_write_to_capture_ns": 31793722,
+      "inject_to_capture_ns": 35546041
+    },
+    {
+      "sequence": 110,
+      "injected": {
+        "event": "key",
+        "sequence": 110,
+        "inject_ns": 65821756600338,
+        "flush_return_ns": 65821756605167,
+        "flush_complete": true,
+        "controller_received_ns": 65821756669344
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 110,
+        "kind": "keyboard",
+        "crc": 4232250545,
+        "read_ns": 65821757022367,
+        "write_start_ns": 65821757033577,
+        "write_end_ns": 65821757044864,
+        "bytes": 2831,
+        "sha256": "e61df9800da901fe3b2425ce817384789b250557082170856abca56710e25eed",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821757345036
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 532,
+        "request_ns": 65821773096675,
+        "ready_ns": 65821789586731,
+        "decode_done_ns": 65821789595899,
+        "valid": true,
+        "sequence": 110,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 785161820,
+        "flags": 0,
+        "controller_received_ns": 65821789804800
+      },
+      "inject_to_fixture_read_ns": 422029,
+      "fixture_write_to_capture_ns": 32541867,
+      "inject_to_capture_ns": 32986393
+    },
+    {
+      "sequence": 111,
+      "injected": {
+        "event": "key",
+        "sequence": 111,
+        "inject_ns": 65821844344723,
+        "flush_return_ns": 65821844357734,
+        "flush_complete": true,
+        "controller_received_ns": 65821844475645
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 111,
+        "kind": "keyboard",
+        "crc": 3240307969,
+        "read_ns": 65821845112930,
+        "write_start_ns": 65821845133116,
+        "write_end_ns": 65821845152653,
+        "bytes": 2827,
+        "sha256": "13f348585338f154e71c3b0edd3acb5fba7d262cc8dbe9c6e00c4e6a39de86ff",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821845537290
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 537,
+        "request_ns": 65821857899932,
+        "ready_ns": 65821870314925,
+        "decode_done_ns": 65821870323325,
+        "valid": true,
+        "sequence": 111,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 866051619,
+        "flags": 0,
+        "controller_received_ns": 65821870549640
+      },
+      "inject_to_fixture_read_ns": 768207,
+      "fixture_write_to_capture_ns": 25162272,
+      "inject_to_capture_ns": 25970202
+    },
+    {
+      "sequence": 112,
+      "injected": {
+        "event": "key",
+        "sequence": 112,
+        "inject_ns": 65821933088582,
+        "flush_return_ns": 65821933099811,
+        "flush_complete": true,
+        "controller_received_ns": 65821933224351
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 112,
+        "kind": "keyboard",
+        "crc": 596847954,
+        "read_ns": 65821934844328,
+        "write_start_ns": 65821934864013,
+        "write_end_ns": 65821934882854,
+        "bytes": 2827,
+        "sha256": "1f261c855f9f1a3e753a9a7975ae34a538ab996cb611ada11647f7dcc843d8f3",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65821935250015
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 543,
+        "request_ns": 65821951317034,
+        "ready_ns": 65821967035772,
+        "decode_done_ns": 65821967041365,
+        "valid": true,
+        "sequence": 112,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65821,
+        "compositor_nsec": 963079109,
+        "flags": 0,
+        "controller_received_ns": 65821967181895
+      },
+      "inject_to_fixture_read_ns": 1755746,
+      "fixture_write_to_capture_ns": 32152918,
+      "inject_to_capture_ns": 33947190
+    },
+    {
+      "sequence": 113,
+      "injected": {
+        "event": "key",
+        "sequence": 113,
+        "inject_ns": 65822017040150,
+        "flush_return_ns": 65822017049833,
+        "flush_complete": true,
+        "controller_received_ns": 65822017107951
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 113,
+        "kind": "keyboard",
+        "crc": 519242978,
+        "read_ns": 65822017464451,
+        "write_start_ns": 65822017477019,
+        "write_end_ns": 65822017490991,
+        "bytes": 2831,
+        "sha256": "291df758dc8325161ac450907ecf5e6bebddc78f113aebb0aeca22a365ca0f4f",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822017806679
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 548,
+        "request_ns": 65822032752237,
+        "ready_ns": 65822048562069,
+        "decode_done_ns": 65822048569864,
+        "valid": true,
+        "sequence": 113,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 44057227,
+        "flags": 0,
+        "controller_received_ns": 65822048698294
+      },
+      "inject_to_fixture_read_ns": 424301,
+      "fixture_write_to_capture_ns": 31071078,
+      "inject_to_capture_ns": 31521919
+    },
+    {
+      "sequence": 114,
+      "injected": {
+        "event": "key",
+        "sequence": 114,
+        "inject_ns": 65822119921107,
+        "flush_return_ns": 65822119968818,
+        "flush_complete": true,
+        "controller_received_ns": 65822120084867
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 114,
+        "kind": "keyboard",
+        "crc": 1498644018,
+        "read_ns": 65822120892046,
+        "write_start_ns": 65822120912585,
+        "write_end_ns": 65822120934366,
+        "bytes": 2834,
+        "sha256": "499a1fe83a76fd776cf29a725ff318487c52f08f9f13a1414566407c2c5271a7",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822121628964
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 554,
+        "request_ns": 65822132101695,
+        "ready_ns": 65822145157933,
+        "decode_done_ns": 65822145172670,
+        "valid": true,
+        "sequence": 114,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 140856346,
+        "flags": 0,
+        "controller_received_ns": 65822145347387
+      },
+      "inject_to_fixture_read_ns": 970939,
+      "fixture_write_to_capture_ns": 24223567,
+      "inject_to_capture_ns": 25236826
+    },
+    {
+      "sequence": 115,
+      "injected": {
+        "event": "key",
+        "sequence": 115,
+        "inject_ns": 65822223355215,
+        "flush_return_ns": 65822223373023,
+        "flush_complete": true,
+        "controller_received_ns": 65822223490386
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 115,
+        "kind": "keyboard",
+        "crc": 1681086338,
+        "read_ns": 65822225572486,
+        "write_start_ns": 65822225592465,
+        "write_end_ns": 65822225610779,
+        "bytes": 2830,
+        "sha256": "bc0b7cfa8c48925cd1859ecf3c378a1bf951ddc9e34a6a16f14f854ec271974b",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822225978674
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 561,
+        "request_ns": 65822241839744,
+        "ready_ns": 65822258179018,
+        "decode_done_ns": 65822258188260,
+        "valid": true,
+        "sequence": 115,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 253547263,
+        "flags": 0,
+        "controller_received_ns": 65822258360333
+      },
+      "inject_to_fixture_read_ns": 2217271,
+      "fixture_write_to_capture_ns": 32568239,
+      "inject_to_capture_ns": 34823803
+    },
+    {
+      "sequence": 116,
+      "injected": {
+        "event": "key",
+        "sequence": 116,
+        "inject_ns": 65822304643459,
+        "flush_return_ns": 65822304665501,
+        "flush_complete": true,
+        "controller_received_ns": 65822304779626
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 116,
+        "kind": "keyboard",
+        "crc": 3591605138,
+        "read_ns": 65822306397681,
+        "write_start_ns": 65822306408248,
+        "write_end_ns": 65822306418492,
+        "bytes": 2830,
+        "sha256": "33edf5291cd80773558126d04715a3d51c3955249f47a7f7dfa7355ce79512af",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822306712994
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 566,
+        "request_ns": 65822322694529,
+        "ready_ns": 65822338889159,
+        "decode_done_ns": 65822338898791,
+        "valid": true,
+        "sequence": 116,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 334171859,
+        "flags": 0,
+        "controller_received_ns": 65822339122356
+      },
+      "inject_to_fixture_read_ns": 1754222,
+      "fixture_write_to_capture_ns": 32470667,
+      "inject_to_capture_ns": 34245700
+    },
+    {
+      "sequence": 117,
+      "injected": {
+        "event": "key",
+        "sequence": 117,
+        "inject_ns": 65822383829286,
+        "flush_return_ns": 65822383843541,
+        "flush_complete": true,
+        "controller_received_ns": 65822383943736
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 117,
+        "kind": "keyboard",
+        "crc": 3950223906,
+        "read_ns": 65822386485362,
+        "write_start_ns": 65822386506022,
+        "write_end_ns": 65822386523865,
+        "bytes": 2835,
+        "sha256": "a38495922ab7d625130581b83ff0505095926bb7c10b5da5d9f9d6ddfc53e62b",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822386890543
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 571,
+        "request_ns": 65822402998168,
+        "ready_ns": 65822419219461,
+        "decode_done_ns": 65822419230036,
+        "valid": true,
+        "sequence": 117,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 414798160,
+        "flags": 0,
+        "controller_received_ns": 65822419434996
+      },
+      "inject_to_fixture_read_ns": 2656076,
+      "fixture_write_to_capture_ns": 32695596,
+      "inject_to_capture_ns": 35390175
+    },
+    {
+      "sequence": 118,
+      "injected": {
+        "event": "key",
+        "sequence": 118,
+        "inject_ns": 65822499148401,
+        "flush_return_ns": 65822499158522,
+        "flush_complete": true,
+        "controller_received_ns": 65822499239269
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 118,
+        "kind": "keyboard",
+        "crc": 2899564786,
+        "read_ns": 65822499537272,
+        "write_start_ns": 65822499549584,
+        "write_end_ns": 65822499563152,
+        "bytes": 2839,
+        "sha256": "f710460ac72c008c7dcd02c40c1538b16ffc7d548e6639fc6b84d00e5dd388f8",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822499875419
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 578,
+        "request_ns": 65822515659861,
+        "ready_ns": 65822532437332,
+        "decode_done_ns": 65822532444046,
+        "valid": true,
+        "sequence": 118,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 527568279,
+        "flags": 0,
+        "controller_received_ns": 65822532586545
+      },
+      "inject_to_fixture_read_ns": 388871,
+      "fixture_write_to_capture_ns": 32874180,
+      "inject_to_capture_ns": 33288931
+    },
+    {
+      "sequence": 119,
+      "injected": {
+        "event": "key",
+        "sequence": 119,
+        "inject_ns": 65822588581951,
+        "flush_return_ns": 65822588596174,
+        "flush_complete": true,
+        "controller_received_ns": 65822588714750
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 119,
+        "kind": "keyboard",
+        "crc": 2444489026,
+        "read_ns": 65822589057962,
+        "write_start_ns": 65822589076338,
+        "write_end_ns": 65822589096768,
+        "bytes": 2835,
+        "sha256": "22b89bcc5016bd14f35f32831247268e1939043c0d21f0def9d932d855d71c4e",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822589464613
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 584,
+        "request_ns": 65822612879738,
+        "ready_ns": 65822628744559,
+        "decode_done_ns": 65822628753449,
+        "valid": true,
+        "sequence": 119,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 624396070,
+        "flags": 0,
+        "controller_received_ns": 65822629041364
+      },
+      "inject_to_fixture_read_ns": 476011,
+      "fixture_write_to_capture_ns": 39647791,
+      "inject_to_capture_ns": 40162608
+    },
+    {
+      "sequence": 120,
+      "injected": {
+        "event": "key",
+        "sequence": 120,
+        "inject_ns": 65822681227917,
+        "flush_return_ns": 65822681234299,
+        "flush_complete": true,
+        "controller_received_ns": 65822681294078
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 120,
+        "kind": "keyboard",
+        "crc": 333670035,
+        "read_ns": 65822681586386,
+        "write_start_ns": 65822681595614,
+        "write_end_ns": 65822681606147,
+        "bytes": 2831,
+        "sha256": "3622fe9cc4f2b4c73084bded8fe5b6542bae492f5635795653eb6fa3529068ae",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822681891758
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 589,
+        "request_ns": 65822692979230,
+        "ready_ns": 65822709282727,
+        "decode_done_ns": 65822709291306,
+        "valid": true,
+        "sequence": 120,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 705252480,
+        "flags": 0,
+        "controller_received_ns": 65822709494947
+      },
+      "inject_to_fixture_read_ns": 358469,
+      "fixture_write_to_capture_ns": 27676580,
+      "inject_to_capture_ns": 28054810
+    },
+    {
+      "sequence": 121,
+      "injected": {
+        "event": "key",
+        "sequence": 121,
+        "inject_ns": 65822785994781,
+        "flush_return_ns": 65822786010404,
+        "flush_complete": true,
+        "controller_received_ns": 65822786120911
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 121,
+        "kind": "keyboard",
+        "crc": 780357411,
+        "read_ns": 65822790884627,
+        "write_start_ns": 65822790904658,
+        "write_end_ns": 65822790925665,
+        "bytes": 2831,
+        "sha256": "aea02ce5cb2b22b3f76055a063f2f6432b7f0c7011e79e3e9947812b8256ba4c",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822791310082
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 596,
+        "request_ns": 65822807082837,
+        "ready_ns": 65822823021550,
+        "decode_done_ns": 65822823026268,
+        "valid": true,
+        "sequence": 121,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 818428675,
+        "flags": 0,
+        "controller_received_ns": 65822823152122
+      },
+      "inject_to_fixture_read_ns": 4889846,
+      "fixture_write_to_capture_ns": 32095885,
+      "inject_to_capture_ns": 37026769
+    },
+    {
+      "sequence": 122,
+      "injected": {
+        "event": "key",
+        "sequence": 122,
+        "inject_ns": 65822865609239,
+        "flush_return_ns": 65822865623326,
+        "flush_complete": true,
+        "controller_received_ns": 65822865760669
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 122,
+        "kind": "keyboard",
+        "crc": 1763915251,
+        "read_ns": 65822866239432,
+        "write_start_ns": 65822866256404,
+        "write_end_ns": 65822866277533,
+        "bytes": 2837,
+        "sha256": "10676859b1b6c2f334b585c4f8f0395d52577420df0847570a069130ac84f798",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822866639266
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 601,
+        "request_ns": 65822886958224,
+        "ready_ns": 65822903336394,
+        "decode_done_ns": 65822903358549,
+        "valid": true,
+        "sequence": 122,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 899092458,
+        "flags": 0,
+        "controller_received_ns": 65822903488282
+      },
+      "inject_to_fixture_read_ns": 630193,
+      "fixture_write_to_capture_ns": 37058861,
+      "inject_to_capture_ns": 37727155
+    },
+    {
+      "sequence": 123,
+      "injected": {
+        "event": "key",
+        "sequence": 123,
+        "inject_ns": 65822952708533,
+        "flush_return_ns": 65822952714302,
+        "flush_complete": true,
+        "controller_received_ns": 65822952779402
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 123,
+        "kind": "keyboard",
+        "crc": 1413684291,
+        "read_ns": 65822953253621,
+        "write_start_ns": 65822953263647,
+        "write_end_ns": 65822953273429,
+        "bytes": 2829,
+        "sha256": "ce8ccbd318b0c41b23a5b82d65bc7e41a17ee52a6f7b57b236e33fa4ba498030",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65822953565891
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 606,
+        "request_ns": 65822968420106,
+        "ready_ns": 65822984211273,
+        "decode_done_ns": 65822984221092,
+        "valid": true,
+        "sequence": 123,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65822,
+        "compositor_nsec": 979943437,
+        "flags": 0,
+        "controller_received_ns": 65822984374280
+      },
+      "inject_to_fixture_read_ns": 545088,
+      "fixture_write_to_capture_ns": 30937844,
+      "inject_to_capture_ns": 31502740
+    },
+    {
+      "sequence": 124,
+      "injected": {
+        "event": "key",
+        "sequence": 124,
+        "inject_ns": 65823046673625,
+        "flush_return_ns": 65823046685833,
+        "flush_complete": true,
+        "controller_received_ns": 65823046785479
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 124,
+        "kind": "keyboard",
+        "crc": 3865296979,
+        "read_ns": 65823048797598,
+        "write_start_ns": 65823048809869,
+        "write_end_ns": 65823048822848,
+        "bytes": 2833,
+        "sha256": "0bce8ad63c158bf8acd400b4556343b081341b2996f51073d5ec2f58c37c2f06",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823049155769
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 612,
+        "request_ns": 65823065111933,
+        "ready_ns": 65823081599776,
+        "decode_done_ns": 65823081609491,
+        "valid": true,
+        "sequence": 124,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 76843519,
+        "flags": 0,
+        "controller_received_ns": 65823081793072
+      },
+      "inject_to_fixture_read_ns": 2123973,
+      "fixture_write_to_capture_ns": 32776928,
+      "inject_to_capture_ns": 34926151
+    },
+    {
+      "sequence": 125,
+      "injected": {
+        "event": "key",
+        "sequence": 125,
+        "inject_ns": 65823144476347,
+        "flush_return_ns": 65823144494274,
+        "flush_complete": true,
+        "controller_received_ns": 65823144611556
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 125,
+        "kind": "keyboard",
+        "crc": 3674466787,
+        "read_ns": 65823145395308,
+        "write_start_ns": 65823145413698,
+        "write_end_ns": 65823145433134,
+        "bytes": 2841,
+        "sha256": "7b1226fc815c15fab0146d937d2a941b0902fe9b6f5ad99ad8b8b5f9fbf2ac8b",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823145819026
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 618,
+        "request_ns": 65823161681326,
+        "ready_ns": 65823177717080,
+        "decode_done_ns": 65823177725226,
+        "valid": true,
+        "sequence": 125,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 173605077,
+        "flags": 0,
+        "controller_received_ns": 65823177925035
+      },
+      "inject_to_fixture_read_ns": 918961,
+      "fixture_write_to_capture_ns": 32283946,
+      "inject_to_capture_ns": 33240733
+    },
+    {
+      "sequence": 126,
+      "injected": {
+        "event": "key",
+        "sequence": 126,
+        "inject_ns": 65823229542118,
+        "flush_return_ns": 65823229546479,
+        "flush_complete": true,
+        "controller_received_ns": 65823229606617
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 126,
+        "kind": "keyboard",
+        "crc": 2627965747,
+        "read_ns": 65823229991233,
+        "write_start_ns": 65823230005067,
+        "write_end_ns": 65823230014416,
+        "bytes": 2837,
+        "sha256": "b7b747c7930d7771e15a6f4aa20f2f45879a99c89af110906d2d54b658f82da3",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823230310179
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 623,
+        "request_ns": 65823242889699,
+        "ready_ns": 65823258515727,
+        "decode_done_ns": 65823258531534,
+        "valid": true,
+        "sequence": 126,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 254319045,
+        "flags": 0,
+        "controller_received_ns": 65823258678409
+      },
+      "inject_to_fixture_read_ns": 449115,
+      "fixture_write_to_capture_ns": 28501311,
+      "inject_to_capture_ns": 28973609
+    },
+    {
+      "sequence": 127,
+      "injected": {
+        "event": "key",
+        "sequence": 127,
+        "inject_ns": 65823318589573,
+        "flush_return_ns": 65823318597623,
+        "flush_complete": true,
+        "controller_received_ns": 65823318685875
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 127,
+        "kind": "keyboard",
+        "crc": 2713959043,
+        "read_ns": 65823319129477,
+        "write_start_ns": 65823319139463,
+        "write_end_ns": 65823319149855,
+        "bytes": 2837,
+        "sha256": "c5135c3b6e4a2ce5f9c3b151deb0c6983c2c97727fa87bfe1ee8d949cadf6446",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823319457633
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 629,
+        "request_ns": 65823340219559,
+        "ready_ns": 65823356329732,
+        "decode_done_ns": 65823356338362,
+        "valid": true,
+        "sequence": 127,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 351568753,
+        "flags": 0,
+        "controller_received_ns": 65823356497529
+      },
+      "inject_to_fixture_read_ns": 539904,
+      "fixture_write_to_capture_ns": 37179877,
+      "inject_to_capture_ns": 37740159
+    },
+    {
+      "sequence": 128,
+      "injected": {
+        "event": "key",
+        "sequence": 128,
+        "inject_ns": 65823417727909,
+        "flush_return_ns": 65823417738442,
+        "flush_complete": true,
+        "controller_received_ns": 65823417838281
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 128,
+        "kind": "keyboard",
+        "crc": 1806138639,
+        "read_ns": 65823419482950,
+        "write_start_ns": 65823419493571,
+        "write_end_ns": 65823419503852,
+        "bytes": 2835,
+        "sha256": "51f7e311815b19cb44b6e7cfa67bb2048bcd89edcce9150fdd7273fa38be12cf",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823419800839
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 635,
+        "request_ns": 65823436542324,
+        "ready_ns": 65823452635059,
+        "decode_done_ns": 65823452640885,
+        "valid": true,
+        "sequence": 128,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 448632331,
+        "flags": 0,
+        "controller_received_ns": 65823452772501
+      },
+      "inject_to_fixture_read_ns": 1755041,
+      "fixture_write_to_capture_ns": 33131207,
+      "inject_to_capture_ns": 34907150
+    },
+    {
+      "sequence": 129,
+      "injected": {
+        "event": "key",
+        "sequence": 129,
+        "inject_ns": 65823526017005,
+        "flush_return_ns": 65823526036165,
+        "flush_complete": true,
+        "controller_received_ns": 65823526146584
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 129,
+        "kind": "keyboard",
+        "crc": 1455903935,
+        "read_ns": 65823526558910,
+        "write_start_ns": 65823526577701,
+        "write_end_ns": 65823526595267,
+        "bytes": 2835,
+        "sha256": "24f9195c4c378565c2c3c180495f2569e05fb7adf3350d60b22c34fcdcfd07c6",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823526983556
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 642,
+        "request_ns": 65823549384983,
+        "ready_ns": 65823565482127,
+        "decode_done_ns": 65823565487166,
+        "valid": true,
+        "sequence": 129,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 561418918,
+        "flags": 0,
+        "controller_received_ns": 65823565611583
+      },
+      "inject_to_fixture_read_ns": 541905,
+      "fixture_write_to_capture_ns": 38886860,
+      "inject_to_capture_ns": 39465122
+    },
+    {
+      "sequence": 130,
+      "injected": {
+        "event": "key",
+        "sequence": 130,
+        "inject_ns": 65823625588599,
+        "flush_return_ns": 65823625610046,
+        "flush_complete": true,
+        "controller_received_ns": 65823625710255
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 130,
+        "kind": "keyboard",
+        "crc": 291974767,
+        "read_ns": 65823626197977,
+        "write_start_ns": 65823626217727,
+        "write_end_ns": 65823626238215,
+        "bytes": 2831,
+        "sha256": "20ee9cad2215bb67c6c3084ff65df817d2bb3235097587a8321c5c8ac762d9a4",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823626612012
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 648,
+        "request_ns": 65823646516244,
+        "ready_ns": 65823662542815,
+        "decode_done_ns": 65823662551718,
+        "valid": true,
+        "sequence": 130,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 658230493,
+        "flags": 0,
+        "controller_received_ns": 65823662739929
+      },
+      "inject_to_fixture_read_ns": 609378,
+      "fixture_write_to_capture_ns": 36304600,
+      "inject_to_capture_ns": 36954216
+    },
+    {
+      "sequence": 131,
+      "injected": {
+        "event": "key",
+        "sequence": 131,
+        "inject_ns": 65823720337405,
+        "flush_return_ns": 65823720347557,
+        "flush_complete": true,
+        "controller_received_ns": 65823720409997
+      },
+      "fixture": {
+        "event": "write",
+        "sequence": 131,
+        "kind": "keyboard",
+        "crc": 738658271,
+        "read_ns": 65823721084912,
+        "write_start_ns": 65823721104205,
+        "write_end_ns": 65823721123713,
+        "bytes": 2831,
+        "sha256": "5cbfc51342048a5e2e15a51d247e3e97f7387588e6a092802b539ed92b166541",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65823721503608
+      },
+      "frame": {
+        "event": "capture",
+        "capture": 654,
+        "request_ns": 65823743354030,
+        "ready_ns": 65823759738292,
+        "decode_done_ns": 65823759745238,
+        "valid": true,
+        "sequence": 131,
+        "compositor_sec_hi": 0,
+        "compositor_sec_lo": 65823,
+        "compositor_nsec": 755015797,
+        "flags": 0,
+        "controller_received_ns": 65823759845546
+      },
+      "inject_to_fixture_read_ns": 747507,
+      "fixture_write_to_capture_ns": 38614579,
+      "inject_to_capture_ns": 39400887
+    }
+  ],
+  "keyboard_summary_ns": {
+    "p50": 34245700,
+    "p95": 39400887,
+    "p99": 39465122,
+    "max": 40162608
+  },
+  "streams": [
+    {
+      "kind": "marker",
+      "producer_hz": 30,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        10000,
+        10001,
+        10002,
+        10003,
+        10004,
+        10005,
+        10006,
+        10007,
+        10008,
+        10009,
+        10010,
+        10011,
+        10012,
+        10013,
+        10014,
+        10015,
+        10016,
+        10017,
+        10018,
+        10019,
+        10020,
+        10021,
+        10022,
+        10023,
+        10024,
+        10025,
+        10026,
+        10027,
+        10028,
+        10029,
+        10030,
+        10031,
+        10032,
+        10033,
+        10034,
+        10035,
+        10036,
+        10037,
+        10038,
+        10039,
+        10040,
+        10041,
+        10042,
+        10043,
+        10044,
+        10045,
+        10046,
+        10047,
+        10048,
+        10049,
+        10050,
+        10051,
+        10052,
+        10053,
+        10054,
+        10055,
+        10056,
+        10057,
+        10058,
+        10059
+      ],
+      "first_write_ns": 65823764127942,
+      "last_write_ns": 65825730977157,
+      "last_capture_ns": 65825746129196,
+      "final_write_to_capture_ns": 15152039,
+      "observed_unique_per_second": 30.272432915423373,
+      "bytes": 169784,
+      "before": {
+        "application": {
+          "sample_ns": 65823760298389,
+          "cpu_ticks": 60,
+          "faults_minor": 39739,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65823760378039,
+          "cpu_ticks": 5,
+          "faults_minor": 4157,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28500,
+            "VmRSS": 28500,
+            "RssAnon": 13908,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65823760460911,
+          "cpu_ticks": 77,
+          "faults_minor": 10456,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65823760528197,
+          "cpu_ticks": 22,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65825746807536,
+          "cpu_ticks": 67,
+          "faults_minor": 39745,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65825746884271,
+          "cpu_ticks": 6,
+          "faults_minor": 4180,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28592,
+            "VmRSS": 28592,
+            "RssAnon": 14000,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65825746953690,
+          "cpu_ticks": 90,
+          "faults_minor": 10457,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65825747025382,
+          "cpu_ticks": 23,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "marker",
+      "producer_hz": 60,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        11000,
+        11001,
+        11002,
+        11003,
+        11004,
+        11005,
+        11006,
+        11007,
+        11008,
+        11009,
+        11010,
+        11011,
+        11012,
+        11013,
+        11014,
+        11015,
+        11016,
+        11017,
+        11018,
+        11019,
+        11020,
+        11021,
+        11022,
+        11023,
+        11024,
+        11025,
+        11026,
+        11027,
+        11028,
+        11029,
+        11030,
+        11031,
+        11032,
+        11033,
+        11034,
+        11035,
+        11036,
+        11037,
+        11038,
+        11039,
+        11040,
+        11041,
+        11042,
+        11043,
+        11044,
+        11045,
+        11046,
+        11047,
+        11048,
+        11049,
+        11050,
+        11051,
+        11052,
+        11053,
+        11054,
+        11055,
+        11056,
+        11057,
+        11058,
+        11059
+      ],
+      "first_write_ns": 65825751139508,
+      "last_write_ns": 65826734552429,
+      "last_capture_ns": 65826748219140,
+      "final_write_to_capture_ns": 13666711,
+      "observed_unique_per_second": 60.17573529172241,
+      "bytes": 169840,
+      "before": {
+        "application": {
+          "sample_ns": 65825747370360,
+          "cpu_ticks": 67,
+          "faults_minor": 39745,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65825747421466,
+          "cpu_ticks": 6,
+          "faults_minor": 4180,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28592,
+            "VmRSS": 28592,
+            "RssAnon": 14000,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65825747483995,
+          "cpu_ticks": 90,
+          "faults_minor": 10457,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65825747533971,
+          "cpu_ticks": 23,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65826748720380,
+          "cpu_ticks": 73,
+          "faults_minor": 39754,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65826748798384,
+          "cpu_ticks": 8,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65826748878934,
+          "cpu_ticks": 98,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65826748936179,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "marker",
+      "producer_hz": 0,
+      "produced": 60,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 58,
+      "sequences": [
+        12022,
+        12059
+      ],
+      "first_write_ns": 65826752852960,
+      "last_write_ns": 65826753610082,
+      "last_capture_ns": 65826780850041,
+      "final_write_to_capture_ns": 27239959,
+      "observed_unique_per_second": 71.43601863351397,
+      "bytes": 170096,
+      "before": {
+        "application": {
+          "sample_ns": 65826749309731,
+          "cpu_ticks": 73,
+          "faults_minor": 39754,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65826749360268,
+          "cpu_ticks": 8,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65826749409766,
+          "cpu_ticks": 98,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65826749458196,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65826781438871,
+          "cpu_ticks": 73,
+          "faults_minor": 39754,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65826781513279,
+          "cpu_ticks": 8,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65826781582479,
+          "cpu_ticks": 98,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65826781647809,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 30,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        13000,
+        13001,
+        13002,
+        13003,
+        13004,
+        13005,
+        13006,
+        13007,
+        13008,
+        13009,
+        13010,
+        13011,
+        13012,
+        13013,
+        13014,
+        13015,
+        13016,
+        13017,
+        13018,
+        13019,
+        13020,
+        13021,
+        13022,
+        13023,
+        13024,
+        13025,
+        13026,
+        13027,
+        13028,
+        13029,
+        13030,
+        13031,
+        13032,
+        13033,
+        13034,
+        13035,
+        13036,
+        13037,
+        13038,
+        13039,
+        13040,
+        13041,
+        13042,
+        13043,
+        13044,
+        13045,
+        13046,
+        13047,
+        13048,
+        13049,
+        13050,
+        13051,
+        13052,
+        13053,
+        13054,
+        13055,
+        13056,
+        13057,
+        13058,
+        13059
+      ],
+      "first_write_ns": 65826785685640,
+      "last_write_ns": 65828752468422,
+      "last_capture_ns": 65828765942280,
+      "final_write_to_capture_ns": 13473858,
+      "observed_unique_per_second": 30.299103049592603,
+      "bytes": 170510,
+      "before": {
+        "application": {
+          "sample_ns": 65826782119521,
+          "cpu_ticks": 73,
+          "faults_minor": 39754,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65826782169496,
+          "cpu_ticks": 8,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65826782217995,
+          "cpu_ticks": 98,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65826782264850,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65828766611862,
+          "cpu_ticks": 80,
+          "faults_minor": 39761,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65828766693713,
+          "cpu_ticks": 9,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65828766777615,
+          "cpu_ticks": 112,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65828766837672,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 60,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        14000,
+        14001,
+        14002,
+        14003,
+        14004,
+        14005,
+        14006,
+        14007,
+        14008,
+        14009,
+        14010,
+        14011,
+        14012,
+        14013,
+        14014,
+        14015,
+        14016,
+        14017,
+        14018,
+        14019,
+        14020,
+        14021,
+        14022,
+        14023,
+        14024,
+        14025,
+        14026,
+        14027,
+        14028,
+        14029,
+        14030,
+        14031,
+        14032,
+        14033,
+        14034,
+        14035,
+        14036,
+        14037,
+        14038,
+        14039,
+        14040,
+        14041,
+        14042,
+        14043,
+        14044,
+        14045,
+        14046,
+        14047,
+        14048,
+        14049,
+        14050,
+        14051,
+        14052,
+        14053,
+        14054,
+        14055,
+        14056,
+        14057,
+        14058,
+        14059
+      ],
+      "first_write_ns": 65828770961251,
+      "last_write_ns": 65829754413594,
+      "last_capture_ns": 65829768922630,
+      "final_write_to_capture_ns": 14509036,
+      "observed_unique_per_second": 60.12256712792089,
+      "bytes": 170578,
+      "before": {
+        "application": {
+          "sample_ns": 65828767325877,
+          "cpu_ticks": 80,
+          "faults_minor": 39761,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65828767376005,
+          "cpu_ticks": 9,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65828767427581,
+          "cpu_ticks": 112,
+          "faults_minor": 10458,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65828767478320,
+          "cpu_ticks": 24,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65829769426395,
+          "cpu_ticks": 86,
+          "faults_minor": 39768,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65829769509777,
+          "cpu_ticks": 11,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65829769590848,
+          "cpu_ticks": 121,
+          "faults_minor": 10460,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65829769657266,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "sparse",
+      "producer_hz": 0,
+      "produced": 60,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 58,
+      "sequences": [
+        15020,
+        15059
+      ],
+      "first_write_ns": 65829773882961,
+      "last_write_ns": 65829774596140,
+      "last_capture_ns": 65829801365093,
+      "final_write_to_capture_ns": 26768953,
+      "observed_unique_per_second": 72.77455766532233,
+      "bytes": 170560,
+      "before": {
+        "application": {
+          "sample_ns": 65829770289207,
+          "cpu_ticks": 86,
+          "faults_minor": 39768,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204804,
+            "RssAnon": 113700,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65829770339054,
+          "cpu_ticks": 11,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65829770387317,
+          "cpu_ticks": 121,
+          "faults_minor": 10460,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65829770439229,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65829802067205,
+          "cpu_ticks": 86,
+          "faults_minor": 39771,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204816,
+            "RssAnon": 113712,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65829802144314,
+          "cpu_ticks": 11,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65829802213624,
+          "cpu_ticks": 121,
+          "faults_minor": 10460,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65829802275352,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 30,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        16000,
+        16001,
+        16002,
+        16003,
+        16004,
+        16005,
+        16006,
+        16007,
+        16008,
+        16009,
+        16010,
+        16011,
+        16012,
+        16013,
+        16014,
+        16015,
+        16016,
+        16017,
+        16018,
+        16019,
+        16020,
+        16021,
+        16022,
+        16023,
+        16024,
+        16025,
+        16026,
+        16027,
+        16028,
+        16029,
+        16030,
+        16031,
+        16032,
+        16033,
+        16034,
+        16035,
+        16036,
+        16037,
+        16038,
+        16039,
+        16040,
+        16041,
+        16042,
+        16043,
+        16044,
+        16045,
+        16046,
+        16047,
+        16048,
+        16049,
+        16050,
+        16051,
+        16052,
+        16053,
+        16054,
+        16055,
+        16056,
+        16057,
+        16058,
+        16059
+      ],
+      "first_write_ns": 65829806713942,
+      "last_write_ns": 65831773520941,
+      "last_capture_ns": 65831787602504,
+      "final_write_to_capture_ns": 14081563,
+      "observed_unique_per_second": 30.28943735200385,
+      "bytes": 178192,
+      "before": {
+        "application": {
+          "sample_ns": 65829803074452,
+          "cpu_ticks": 86,
+          "faults_minor": 39771,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204816,
+            "RssAnon": 113712,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65829803125927,
+          "cpu_ticks": 11,
+          "faults_minor": 4224,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28768,
+            "VmRSS": 28768,
+            "RssAnon": 14176,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65829803173523,
+          "cpu_ticks": 121,
+          "faults_minor": 10460,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65829803220211,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65831788265192,
+          "cpu_ticks": 95,
+          "faults_minor": 39786,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204832,
+            "RssAnon": 113728,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65831788344828,
+          "cpu_ticks": 12,
+          "faults_minor": 4227,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28780,
+            "VmRSS": 28780,
+            "RssAnon": 14188,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65831788424931,
+          "cpu_ticks": 134,
+          "faults_minor": 10461,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65831788490217,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 60,
+      "produced": 60,
+      "observed_unique": 60,
+      "unobserved_or_coalesced": 0,
+      "sequences": [
+        17000,
+        17001,
+        17002,
+        17003,
+        17004,
+        17005,
+        17006,
+        17007,
+        17008,
+        17009,
+        17010,
+        17011,
+        17012,
+        17013,
+        17014,
+        17015,
+        17016,
+        17017,
+        17018,
+        17019,
+        17020,
+        17021,
+        17022,
+        17023,
+        17024,
+        17025,
+        17026,
+        17027,
+        17028,
+        17029,
+        17030,
+        17031,
+        17032,
+        17033,
+        17034,
+        17035,
+        17036,
+        17037,
+        17038,
+        17039,
+        17040,
+        17041,
+        17042,
+        17043,
+        17044,
+        17045,
+        17046,
+        17047,
+        17048,
+        17049,
+        17050,
+        17051,
+        17052,
+        17053,
+        17054,
+        17055,
+        17056,
+        17057,
+        17058,
+        17059
+      ],
+      "first_write_ns": 65831792898756,
+      "last_write_ns": 65832776306320,
+      "last_capture_ns": 65832790036973,
+      "final_write_to_capture_ns": 13730653,
+      "observed_unique_per_second": 60.17219977839842,
+      "bytes": 177904,
+      "before": {
+        "application": {
+          "sample_ns": 65831789215269,
+          "cpu_ticks": 95,
+          "faults_minor": 39786,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204832,
+            "RssAnon": 113728,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65831789267734,
+          "cpu_ticks": 12,
+          "faults_minor": 4227,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28780,
+            "VmRSS": 28780,
+            "RssAnon": 14188,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65831789317937,
+          "cpu_ticks": 134,
+          "faults_minor": 10461,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65831789366496,
+          "cpu_ticks": 26,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65832790477911,
+          "cpu_ticks": 102,
+          "faults_minor": 39799,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204848,
+            "RssAnon": 113744,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65832790559199,
+          "cpu_ticks": 14,
+          "faults_minor": 4227,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28780,
+            "VmRSS": 28780,
+            "RssAnon": 14188,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65832790632223,
+          "cpu_ticks": 141,
+          "faults_minor": 10462,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65832790694112,
+          "cpu_ticks": 28,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    },
+    {
+      "kind": "scroll",
+      "producer_hz": 0,
+      "produced": 60,
+      "observed_unique": 2,
+      "unobserved_or_coalesced": 58,
+      "sequences": [
+        18021,
+        18059
+      ],
+      "first_write_ns": 65832796422145,
+      "last_write_ns": 65832797178771,
+      "last_capture_ns": 65832822664444,
+      "final_write_to_capture_ns": 25485673,
+      "observed_unique_per_second": 76.21283485871417,
+      "bytes": 177888,
+      "before": {
+        "application": {
+          "sample_ns": 65832791430032,
+          "cpu_ticks": 102,
+          "faults_minor": 39799,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204848,
+            "RssAnon": 113744,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65832791491149,
+          "cpu_ticks": 14,
+          "faults_minor": 4227,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28780,
+            "VmRSS": 28780,
+            "RssAnon": 14188,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65832791545924,
+          "cpu_ticks": 141,
+          "faults_minor": 10462,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65832791599436,
+          "cpu_ticks": 28,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      },
+      "after": {
+        "application": {
+          "sample_ns": 65832823167936,
+          "cpu_ticks": 102,
+          "faults_minor": 39807,
+          "faults_major": 101,
+          "memory_kib_except_threads": {
+            "VmHWM": 206420,
+            "VmRSS": 204880,
+            "RssAnon": 113776,
+            "RssFile": 91088,
+            "Threads": 20
+          }
+        },
+        "fixture": {
+          "sample_ns": 65832823235331,
+          "cpu_ticks": 15,
+          "faults_minor": 4227,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 28780,
+            "VmRSS": 28780,
+            "RssAnon": 14188,
+            "RssFile": 14592,
+            "Threads": 1
+          }
+        },
+        "compositor": {
+          "sample_ns": 65832823298414,
+          "cpu_ticks": 141,
+          "faults_minor": 10462,
+          "faults_major": 79,
+          "memory_kib_except_threads": {
+            "VmHWM": 87844,
+            "VmRSS": 87844,
+            "RssAnon": 19756,
+            "RssFile": 57288,
+            "Threads": 10
+          }
+        },
+        "observer": {
+          "sample_ns": 65832823352980,
+          "cpu_ticks": 28,
+          "faults_minor": 488,
+          "faults_major": 0,
+          "memory_kib_except_threads": {
+            "VmHWM": 14264,
+            "VmRSS": 14264,
+            "RssAnon": 596,
+            "RssFile": 2868,
+            "Threads": 1
+          }
+        }
+      }
+    }
+  ]
+}

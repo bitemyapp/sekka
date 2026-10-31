@@ -1,0 +1,30 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cpu/cycles/P'
+# Event count (approx.): 3036171869
+#
+# Overhead  Command          Shared Object                        
+# ........  ...............  .....................................
+#
+    60.54%  hotaru-pty-1     aizome-hotaru                        
+    14.09%  hotaru-read-1    [unknown]                            
+     8.14%  python3          [unknown]                            
+     4.03%  python3          python3.12                           
+     1.94%  sidestep-raster  aizome-hotaru                        
+     1.70%  sidestep-render  aizome-hotaru                        
+     1.35%  hotaru-font-1    [unknown]                            
+     1.17%  hotaru-font-1    aizome-hotaru                        
+     1.02%  hotaru-font-1    libc.so.6                            
+     0.94%  aizome-hotaru    [unknown]                            
+     0.71%  hotaru-pty-1     libc.so.6                            
+     0.70%  sidestep-render  [unknown]                            
+     0.56%  aizome-hotaru    libfontconfig.so.1.16.1              
+     0.54%  aizome-hotaru    aizome-hotaru                        
+     0.47%  aizome-hotaru    libfreetype.so.6.20.6                
+     0.35%  python3          libc.so.6                            
+     0.29%  sidestep-compos  aizome-hotaru                        
+     0.28%  hotaru-pty-1     [unknown]                            
+     0.24%  sidestep-raster  [unknown]                            

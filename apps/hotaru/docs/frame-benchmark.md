@@ -182,6 +182,45 @@ is a first qualification slice. At least 30 alternating fresh processes,
 longer idle controls and 500 or more paced keyboard samples belong to a later
 statistical comparison, after geometry and full-controller correctness pass.
 
+## GPU and throughput runs
+
+`--renderer gpu` makes the private sway render with GLES2 on the host's GPU and
+stops forcing llvmpipe. The [GPU comparison](gpu-comparison-2026-10-30.md)
+ran this way.
+
+- **GPU evidence:** each result records the compositor's EGL vendor and GL
+  renderer. It also records the GL libraries and DRM devices each application
+  process holds after its first frame.
+- **Ghostty's checks:** GTK's chosen renderer and Ghostty's presentation are
+  read from its log. A measurement run refuses Cairo or CPU presentation.
+- **Driver environment:** `--app-env` gives one application extra environment,
+  such as a host's NVIDIA libraries. `tools/frame-matrix.py` takes it as
+  `--ghostty-env`.
+
+`--throughput CORPUS` writes whole repeats of a corpus through the terminal,
+from terminal defaults, after the streams. It records:
+
+- the bytes and the time the terminal took to consume them;
+- the time to the next captured marker frame;
+- the frames captured meanwhile;
+- application and compositor CPU.
+
+`frame-matrix.py --phase throughput --corpus …` runs it in alternating pairs.
+
+Three more tools:
+
+- **Quiet wait:** `--quiet-wait SECONDS` lets each preflight wait for a quiet
+  second, on a host in interactive use.
+- **Calibration:** `tools/frame-calibration.py` builds a calibration from one
+  qualification run of each application.
+- **Summary:** `tools/frame-summary.py` summarizes a host's startup, steady and
+  throughput matrices.
+
+On NixOS, `tools/frame-bench-shell.nix` provides sway, the observer's compiler
+and headers, and the protocol XML, passed with `--protocol-xml`. The observer
+also reads the 24-bit and 10-bit formats a GPU compositor may offer for
+screencopy.
+
 ## Alternating matrix controller
 
 `tools/frame-matrix.py` runs calibrated Hotaru/Ghostty pairs in alternating

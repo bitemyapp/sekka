@@ -1,0 +1,30 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu/cycles/P'
+# Event count (approx.): 4084603438
+#
+# Overhead  Command          Shared Object                  
+# ........  ...............  ...............................
+#
+    14.87%  .ghostty-wrappe  libnvidia-eglcore.so.580.159.04
+    11.80%  .ghostty-wrappe  [unknown]                      
+     8.45%  io-gather        [unknown]                      
+     8.30%  .ghostty-wrappe  libnvidia-gpucomp.so.580.159.04
+     7.70%  io-reader        .ghostty-wrapped               
+     7.25%  renderer         [unknown]                      
+     5.71%  python3          [unknown]                      
+     5.44%  renderer         .ghostty-wrapped               
+     5.15%  renderer         libnvidia-eglcore.so.580.159.04
+     4.02%  .ghostty-wrappe  libc.so.6                      
+     3.72%  .ghostty-wrappe  libgtk-4.so.1.2200.4           
+     2.93%  python3          python3.12                     
+     2.77%  renderer         libnvidia-gpucomp.so.580.159.04
+     2.23%  .ghostty-wrappe  libglib-2.0.so.0.8800.3        
+     1.72%  .ghostty-wrappe  ld-linux-x86-64.so.2           
+     0.82%  .ghostty-wrappe  libgobject-2.0.so.0.8800.3     
+     0.63%  renderer         [vdso]                         
+     0.58%  renderer         libc.so.6                      
+     0.51%  [pango] fontcon  libfreetype.so.6.20.6          
