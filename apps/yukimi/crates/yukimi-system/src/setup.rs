@@ -27,6 +27,8 @@ pub struct Facts {
     pub own_catalog: Option<String>,
     /// The directory the configuration is in, when it isn't `/etc/nixos`.
     pub configuration: Option<String>,
+    /// Optional evaluator thread limit; distinct from build parallelism.
+    pub evaluation_cores: Option<u32>,
     /// Applications to offer besides Yukimi's own.
     #[serde(default)]
     pub catalogs: Vec<CatalogSource>,

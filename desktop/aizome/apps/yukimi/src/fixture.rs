@@ -488,6 +488,7 @@ pub fn model() -> Model {
                 allow_unfree: Some(true),
                 own_catalog: None,
                 configuration: None,
+                evaluation_cores: None,
                 catalogs: Vec::new(),
                 choices: choices(),
             },

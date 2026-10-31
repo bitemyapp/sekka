@@ -7,3 +7,6 @@ __pycache__/
 
 **/target/
 /.wrangler/
+# Raw benchmark captures are kept in Git history; see upstream/evidence.json
+# and scripts/restore-hotaru-evidence.py. Restoring them must not enlarge flakes.
+/apps/hotaru/upstream/**/*.gz
