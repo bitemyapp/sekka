@@ -327,7 +327,7 @@ How much it shows follows the width:
 | Width | Layout |
 |---|---|
 | 200–400pt | Full: everything below |
-| 120–199pt | Slim: the same rows a size smaller; each notification a single line with a `red` mark; the unread count a badge on the app |
+| 120–199pt | Slim: the same rows a size smaller; each notification a single line with a `red` mark; the unread count a badge on the app, which opens the list as the full count does |
 | 48pt | Icons Only (the Rail): each app's icon with a `red` unread badge, a small window-shaped mark per window (the focused one filled, hidden ones dashed), Shelf items as tiles; names in tooltips |
 
 The compact layouts don't take drag-to-reorder yet (use the app's Move Up
@@ -362,7 +362,11 @@ preference; click the app control to restore it.
   the bar's strip moves it.
 - Unread notifications filed under their app: the count in `red` ("3 new"),
   the newest previewed in a `sunk` card (summary in 600, body two lines);
-  click opens it (default action), × dismisses, the count opens the list.
+  click opens it (default action), × dismisses, the count opens the list
+  (all of them), and clicking it again marks them read. An app that's
+  there only for its notifications, with no window and no app of that
+  name installed (the shell's own Screenshot and Aizome notices), shows
+  them when its row is clicked rather than trying to start it.
 - **SHELF** (mono uppercase head): parked drags — files, folders, text,
   images, links — each a row with its glyph and name; drag one out to drop
   it anywhere; right-click: Open, Copy, Remove. A dashed "Drop to park" row

@@ -327,7 +327,20 @@ impl Shell {
 
     pub fn deskbar_msg(&mut self, m: DeskbarMsg, cx: &mut Cx<Msg>) {
         match m {
-            DeskbarMsg::FocusApp(app_id) => self.run(Action::FocusApp { app_id }, cx),
+            DeskbarMsg::FocusApp(app_id) => {
+                // A row that's there for its notifications alone (no
+                // window, and no app this system knows: the shell's own
+                // "Screenshot" and "Aizome") has nothing to launch, and
+                // trying only files another notification under it. It shows
+                // them instead, as its count does.
+                let window = self.wm.app_window_to_activate(&app_id, self.apps.as_deref()).is_some();
+                let known = self.apps.as_deref().is_some_and(|i| i.match_window_identity(&app_id).is_some());
+                if !window && !known && !self.notes.unread(&app_id).is_empty() {
+                    self.deskbar_msg(DeskbarMsg::ShowNotes(app_id), cx);
+                } else {
+                    self.run(Action::FocusApp { app_id }, cx);
+                }
+            }
             DeskbarMsg::AppMenu(app_id, at) => {
                 let Some(k) = self.deskbar else { return };
                 let running = self.wm.app_window_to_activate(&app_id, self.apps.as_deref()).is_some();
@@ -889,5 +902,67 @@ mod tests {
         h.release(db, at - Vec2::new(30.0, 0.0), PointerButton::Left);
         assert_eq!(h.program().deskbar_cfg.width, crate::deskbar::WIDTH + 30.0);
         assert_eq!(focused(&requests), [] as [WindowId; 0]);
+    }
+
+    /// A Deskbar at the right, `width` wide, with a screenshot's notification
+    /// filed under "Screenshot", the shell's own sender and no app. The
+    /// shell is live from here, so launches are recorded (no activation
+    /// token comes, so nothing starts).
+    fn a_screenshot_note(width: f64) -> (aizome_kit::testing::Harness<Shell>, WindowKey) {
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(crate::shell::Options::default()));
+        h.set_outputs(vec![aizome_kit::Output {
+            id: 1,
+            name: "eDP-1".into(),
+            frame: Rect::new(0.0, 0.0, 1440.0, 900.0),
+            scale: 1.0,
+            integer_scale: 1,
+            ..Default::default()
+        }]);
+        h.program_mut().deskbar_cfg.width = width;
+        h.send(Msg::Ipc(crate::ipc::IpcEvent::Event(aizome_ipc::Event::ScreenshotTaken {
+            path: "/home/u/Pictures/Screenshot.png".into(),
+        })));
+        let db = h.program().deskbar.expect("the Deskbar");
+        h.resize(db, crate::deskbar::size(&h.program().deskbar_model()));
+        assert_eq!(h.program().notes.unread("Screenshot").len(), 1);
+        h.program_mut().opts.live = true;
+        (h, db)
+    }
+
+    /// Nothing was launched, and no launch failed.
+    fn launched_nothing(h: &aizome_kit::testing::Harness<Shell>) {
+        let launches: Vec<_> = h.program().launches.values().map(|(l, _)| l.clone()).collect();
+        assert!(launches.is_empty(), "{launches:?}");
+        assert!(h.program().notes.list.iter().all(|n| !n.summary.contains("could not open")));
+    }
+
+    #[test]
+    fn the_slim_count_shows_the_notifications_then_marks_them_read() {
+        let (mut h, db) = a_screenshot_note(150.0);
+        let count = h.find(db, "1 new").expect("the count, a target of its own");
+        h.click(db, count.center());
+        launched_nothing(&h);
+        assert_eq!(h.program().notes_open, ["Screenshot"], "its notifications show");
+        h.click(db, count.center());
+        launched_nothing(&h);
+        assert!(h.program().notes.unread("Screenshot").is_empty(), "read");
+        assert!(h.program().deskbar_model().apps.iter().all(|a| a.app_id != "Screenshot"), "and its row went");
+    }
+
+    #[test]
+    fn a_row_there_only_for_notifications_launches_nothing() {
+        for width in [150.0, crate::deskbar::WIDTH] {
+            let (mut h, db) = a_screenshot_note(width);
+            let row = h.find(db, "Screenshot").expect("the sender's row");
+            // Its name, away from the count.
+            h.click(db, Point::new(row.x0 + 40.0, row.center().y));
+            launched_nothing(&h);
+            assert_eq!(h.program().notes_open, ["Screenshot"], "{width}: its notifications show instead");
+        }
+        // An app it doesn't know, with no notifications, is still asked
+        // for: the launch says it wasn't found.
+        let (mut h, _) = a_screenshot_note(crate::deskbar::WIDTH);
+        h.send(Msg::Deskbar(DeskbarMsg::FocusApp("org.example.Gone".into())));
+        assert_eq!(h.program().launches.len(), 1);
     }
 }
