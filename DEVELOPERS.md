@@ -17,6 +17,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
+| `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
 
@@ -2563,10 +2564,11 @@ nix run --inputs-from . nixpkgs#wrangler -- pages dev /tmp/site --port 8788 \
 ```
 
 The site is the Cloudflare Pages project `sekka` (`sekka-esx.pages.dev`), with
-the `sekka.computer` apex as its custom domain. Nothing deploys it
-automatically. To publish a new version, build from a clean commit that is on
-GitHub's `main` (the pages link the revision they were built from), then
-deploy with Wrangler, logged in once with `wrangler login`:
+the `sekka.computer` apex as its custom domain. The sites workflow publishes
+it from `main` whenever its sources change ([Publishing the
+websites](#publishing-the-websites)). To publish by hand, build from a clean
+commit that is on GitHub's `main` (the pages link the revision they were
+built from), then deploy with Wrangler, logged in once with `wrangler login`:
 
 ```sh
 nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-site --project-name sekka --branch main --no-bundle
@@ -2586,6 +2588,106 @@ Web Analytics, Rocket Loader, Email Address Obfuscation and Bot Fight Mode.
 Everything the site claims comes from this repository's READMEs and docs.
 When a limitation, test or feature changes, change `site/src/pages.rs` with
 it.
+
+### aizome.computer
+
+`aizome-site/` is another Cargo workspace, whose program writes
+aizome.computer, Aizome's own site: the desktop, every app, the keys, the
+design and how to install it, with links back to sekka.computer in its menu
+bar, its footer and every "Get it with Sekka". It is built as
+sekka.computer is: static HTML and CSS, one theme script under the same
+content security policy, no cookies or analytics, hashed asset names with
+`_headers`, the revision in every page, and a build that fails on a dangling
+link or in-page anchor. It is dressed as Aizome rather than Tatami: the
+header is Aizome's menu bar, each section is a window whose Haiku tab is its
+heading, the focused one amber, and pages open in Night, take Day from the
+bar's switch (`aizome-theme` in `localStorage`) and High Contrast when the
+visitor asks for more contrast.
+
+Its colours and metrics come from Aizome's theme crate,
+`desktop/aizome/crates/aizome-theme/src/lib.rs`, read when the site is
+built: the `NIGHT`, `DAY` and `HIGH_CONTRAST` palettes, the mark's colours,
+the dye ramp, the focus colours, and the doc comments of the palette's
+fields and of `metrics` for the design page. The build fails if a colour the
+stylesheet uses has gone, or if a pair of colours the site sets text in
+falls short of its ratio (`PAIRS` in `aizome-site/src/theme.rs`). Kanji are
+outlined from Noto Serif CJK JP and the key glyphs (❖ ⇧ ⌥ ⌃ and the arrows)
+from Noto Sans Symbols 2, Noto Sans Symbols and Noto Sans Math, so no CJK or
+symbol font ships. Archivo, the file Aizome's session installs
+(`desktop/aizome/nix/fonts.nix`), is served compressed as WOFF2, and IBM
+Plex Mono as IBM's own WOFF2, each with its OFL text. Page sources write a
+shortcut as `⟦⌃ ❖ ↑⟧` and kanji as `⟪藍染⟫`; the generator draws keycaps,
+modifiers in Aizome's order and each named for screen readers, and
+outlines.
+
+Screenshots are copied byte for byte from `docs/images/sekka`,
+`desktop/aizome/docs/screenshots`, `desktop/aizome/docs/images` and
+`docs/test-results`, linked to the originals and never scaled up. `IMAGES`
+in `aizome-site/src/main.rs` lists them, and each caption repeats the
+provenance their docs record. `nix/aizome-site.nix` takes only those files,
+the app icons and the theme crate's source. Everything the site claims
+comes from Aizome's READMEs and docs, which `aizome-site/src/pages.rs` and
+`apps.rs` name; change them when what they describe changes.
+
+```sh
+nix build .#aizome-site --out-link result-aizome-site
+nix run --inputs-from . nixpkgs#static-web-server -- --port 8790 --root result-aizome-site --page404 result-aizome-site/404.html
+```
+
+`cargo test` in `aizome-site/` runs the generator's tests, which the Nix
+build runs too.
+
+The site is the Cloudflare Pages project `aizome`, with the
+`aizome.computer` apex as its custom domain. It has no worker. To publish by
+hand, from a clean commit on GitHub's `main`:
+
+```sh
+nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-aizome-site --project-name aizome --branch main
+```
+
+As for sekka.computer, leave off Web Analytics, Rocket Loader, Email
+Address Obfuscation and Bot Fight Mode.
+
+### Publishing the websites
+
+`.github/workflows/sites.yml` publishes both sites from `main`, on the
+sandboxed builder as the cache workflow runs. It starts on a push to `main`
+that touches either site's sources, and on dispatch from `main`. Each site
+is a job of its own. A push publishes a site only when its sources changed
+since the revision its live pages name: the job reads the commit linked in
+the home page's bar and compares. So a run GitHub cancelled while another
+was waiting still goes out with the next one, and a failed deploy is tried
+again by the next run. If the site names no commit of this repository, or
+can't be reached, the job publishes. A dispatch publishes both, for
+instance after a Nixpkgs update changed a font, since `flake.lock` doesn't
+start the workflow.
+
+Each job checks that its checkout is a clean commit on `main`, builds
+`.#site` or `.#aizome-site`, checks that its pages name that commit, and
+deploys with Wrangler as above: `sekka` with `--no-bundle`, `aizome`
+without. Each job lists its site's sources (`sources` in the matrix), and
+the workflow's `paths` lists them all; when a site's Nix file takes another
+file, add it to both. Without the repository secrets
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` the jobs still build and
+check the sites, then say in a notice that nothing was deployed.
+
+The one-time setup, in Cloudflare and GitHub:
+
+1. Create aizome.computer's Pages project, a Direct Upload project named
+   `aizome` with `main` as its production branch:
+   `nix run --inputs-from . nixpkgs#wrangler -- pages project create aizome --production-branch main`
+   (after `wrangler login`).
+2. In that project's Custom domains, add the apex `aizome.computer` and let
+   Cloudflare create its DNS record in the zone.
+3. Create an API token (My Profile › API Tokens › Create Token › Create
+   Custom Token) with the permission Account › Cloudflare Pages › Edit, for
+   this account alone.
+4. In GitHub, under Settings › Secrets and variables › Actions, add the
+   repository secrets `CLOUDFLARE_API_TOKEN` (the token) and
+   `CLOUDFLARE_ACCOUNT_ID` (the ID on the account's Workers & Pages
+   overview).
+5. Run the workflow from `main` once (Actions › Publish sekka.computer and
+   aizome.computer › Run workflow) to publish both.
 
 ## Screenshots and attribution
 
