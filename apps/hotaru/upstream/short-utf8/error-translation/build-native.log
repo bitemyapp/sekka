@@ -1,0 +1,19 @@
+     Removed 6 files, 1.9MiB total
+   Compiling zmij v1.0.23
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling static_assertions v1.1.0
+   Compiling cfg-if v1.0.5
+   Compiling serde_json v1.0.154
+   Compiling triomphe v0.1.17
+   Compiling lz4_flex v0.14.0
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-short-utf8-error-20261028/vendor/simdutf8)
+   Compiling unicode-width v0.2.3
+   Compiling memchr v2.8.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-short-utf8-error-20261028/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-short-utf8-error-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 4.14s
+{"metadata": "evidence/native-build.json", "source_sha256": "7f41c53e192576d238ddefdf682b69eec0a891749147a0709737a7a035b90e83", "binary_sha256": "4800fbc922b836f21bfe2df170903cbb88f8f97518ab6b15626ae107381d253d"}

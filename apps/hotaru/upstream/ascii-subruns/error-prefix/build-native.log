@@ -1,0 +1,19 @@
+     Removed 0 files
+   Compiling zmij v1.0.23
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling static_assertions v1.1.0
+   Compiling cfg-if v1.0.5
+   Compiling serde_json v1.0.154
+   Compiling lz4_flex v0.14.0
+   Compiling memchr v2.8.3
+   Compiling unicode-width v0.2.3
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-error-ascii-prefix-20261028/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-error-ascii-prefix-20261028/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-error-ascii-prefix-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 4.15s
+{"metadata": "evidence/native-build.json", "source_sha256": "ba30dfe49e8f67f199788e25dab1776081fbe19f7d63b27f4c93496daae641bd", "binary_sha256": "6cae060e0b046b627029f657c82634757ba35d34e82392ea514cb1fa9a1152f5"}

@@ -1,0 +1,28 @@
+--- a/crates/hotaru-core/src/screen.rs
++++ b/crates/hotaru-core/src/screen.rs
+@@ -884,6 +884,7 @@
+             // run; combining and wrapping retain the existing scalar behavior.
+             while let Some(&first) = chars.peek() {
+                 let mut ch = first;
++                let mut ch_is_han = unicode && han(ch);
+                 let mut width = if unicode {
+                     unicode_char_width(ch)
+                 } else {
+@@ -918,12 +919,15 @@
+                     let Some(&next) = chars.peek() else {
+                         break;
+                     };
+-                    if unicode && !unicode_scalar_boundary(ch, next) {
++                    let next_is_han = unicode && han(next);
++                    if unicode && next as u32 > 255 && !(ch_is_han && next_is_han)
++                        && !crate::unicode::grapheme_break(ch, next, &mut crate::unicode::BreakState::default()) {
+                         break;
+                     }
+                     ch = next;
++                    ch_is_han = next_is_han;
+                     width = if unicode {
+-                        unicode_char_width(ch)
++                        if ch as u32 <= 255 { 1 } else if ch_is_han { 2 } else { crate::unicode::properties(ch).width() }
+                     } else {
+                         char_width(ch)
+                     };

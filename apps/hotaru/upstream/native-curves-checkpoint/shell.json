@@ -1,0 +1,30 @@
+{
+  "binary": "/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "02031eb14d2bb5b23afba15764c37d6dbc989861a5f3c867f2ae69c1788594fe",
+  "backend": "private headless Sway, pixman",
+  "checks": {
+    "cwd_inheritance": {
+      "initial": "/tmp/hotaru-shell-wayland-xindmevk/home",
+      "after_keyboard_cd": "/tmp/hotaru-shell-wayland-xindmevk/home/space \u65e5\u672c",
+      "split_startup": "/tmp/hotaru-shell-wayland-xindmevk/home/space \u65e5\u672c",
+      "panes": 2
+    },
+    "packaged_identity": {
+      "term": "xterm-hotaru",
+      "resources": "/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0/share/hotaru",
+      "terminfo": "/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0/share/terminfo",
+      "resource_sha256": {
+        "LICENSE-MIT": "95946e45bd1e741f84890f66acd74436aace33336d990ef303dc10421f332769",
+        "hotaru.terminfo": "a9a59a9e192ac6d345107c7712ce99c7ce84e3d43ea9b01ad6a83242129a0ad4",
+        "shell-integration/bash/rc.bash": "daad4731d9e449c17b78acee798c4f1ffdd36703289786cdafda1ef453cd7125",
+        "shell-integration/bash/hotaru.bash": "510ce58d4149aaad9264789f412d1ea412cea22fc5ea0151c45f79f97a031423",
+        "shell-integration/zsh/.zshenv": "2a2c3db12410f5570bf42e0de4252fd6d6d66f735460d0410156333a14fa4821",
+        "shell-integration/zsh/hotaru.zsh": "866f9c623673a7d26bc0decbad19c18d249bd75ad359bdf13c8ed64f527c611d",
+        "shell-integration/fish/hotaru.fish": "3c40f49f509d569d83aafa862e0451260fb70e0f7f73670ec0fcd49c1f142f89"
+      },
+      "recompiled_capabilities_equal": true,
+      "tic_version": "ncurses 6.4.20240113"
+    }
+  },
+  "status": "passed"
+}

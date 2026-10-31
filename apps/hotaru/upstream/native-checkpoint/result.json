@@ -1,0 +1,38 @@
+{
+  "backend": "private headless Sway, pixman",
+  "binary": "/nix/store/2rb5g7cxkzvim485wxk93nggr8kkxs44-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "3a678cc41d97e344775a9502b6f62bbbb578907fd7792f4ea648f7a8255fb1b6",
+  "source_manifest": "source-manifest.json",
+  "checks": {
+    "copy": {
+      "bytes": 1152000,
+      "sha256": "86411a109d1ff41a1caa1f183205905cf22eed3755718d38bc62e85195787ebd",
+      "exact_trimmed_match": true
+    },
+    "stalled_reader_ui": {
+      "seconds": 0.16407121485099196
+    },
+    "paste": {
+      "bytes": 1150000,
+      "sha256": "818eb1d064987e046307887ca0c9ee127ece1f2fc596cbc9e97eb6b357556e8e",
+      "exact_match": true
+    },
+    "splits": {
+      "created_panes": 3,
+      "remaining_panes": 1
+    },
+    "native_input": {
+      "bytes": 116,
+      "sha256": "3b4ca5e0b16af486b7dcce6c957dd16c6b9567cef6a416de05f979e3a130a021",
+      "exact_match": true,
+      "cases": [
+        "Ctrl-A",
+        "US Shift-1",
+        "German Shift-Y",
+        "Control modifier",
+        "SGR mouse"
+      ]
+    }
+  },
+  "status": "passed"
+}

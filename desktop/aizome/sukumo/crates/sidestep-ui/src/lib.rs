@@ -88,18 +88,21 @@ mod window;
 pub mod testing;
 
 pub use app::{
-    ActivationRequest, App, Cx, Drag, DragId, DragSource, DropAction, DropResponse, Error, FrameStats, FrameTiming,
-    Handler, Output, Proxy, TimerId,
+    ActivationRequest, App, ClipboardRead, Cx, Drag, DragId, DragSource, DropAction, DropResponse, Error, FrameStats,
+    FrameTiming, Handler, Output, PreparedClipboard, PreparedClipboardText, Proxy, TimerId,
 };
 pub use canvas::{
     BlendMode, Canvas, ImageOptions, LineCap, LineJoin, LinearGradient, Paint, RadialGradient, Shadow, StrokeStyle,
 };
 pub use color::{Appearance, Color, SystemColor};
 pub use event::{
-    Ime, Key, KeyEvent, Modifiers, NamedKey, PointerButton, ScrollDelta, ScrollPhase, WindowEvent, WindowState,
+    Ime, Key, KeyEvent, KeyMetadata, Modifiers, NamedKey, PointerButton, ScrollDelta, ScrollPhase, WindowEvent,
+    WindowState,
 };
-pub use image::Image;
+pub use image::{GridMask, Image};
 pub use kurbo;
+/// Worker-owned terminal font resolution and renderer-independent grid layouts.
+pub use sidestep_engine::text::grid;
 pub use text::{
     Alignment, Caret, Font, FontMetrics, Hit, LineMetrics, TextAttachment, TextLayout, TextLayoutBuilder, TextStyle,
     Wrap, measure,

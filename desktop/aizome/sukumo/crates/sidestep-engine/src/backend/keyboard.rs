@@ -32,7 +32,7 @@ use kbvm::xkb::diagnostic::{Diagnostic, DiagnosticHandler};
 use kbvm::{Components, Keycode, Keysym, ModifierMask, syms};
 
 use crate::keys::{character as ch, is_function_key, modifier};
-use crate::protocol::Modifiers;
+use crate::protocol::{Modifiers, NativeKey};
 
 /// Diagnostics are for keymap authors; a client has no use for them.
 struct Quiet;
@@ -47,6 +47,7 @@ pub struct Keymap {
     /// The modifiers AppKit calls Option and Command.
     alt: ModifierMask,
     logo: ModifierMask,
+    num: ModifierMask,
 }
 
 /// A key, translated.
@@ -64,6 +65,7 @@ pub struct Translation {
     /// this key, to show while it's pending: `Some` whenever the key
     /// started, continued or ended one, empty once it's over.
     pub composing: Option<String>,
+    pub native: NativeKey,
 }
 
 /// The compose state of one keyboard.
@@ -171,6 +173,7 @@ impl Keymap {
             table: keymap.to_builder().build_lookup_table(),
             alt: or(named(&["Alt"]), ModifierMask::ALT),
             logo: or(named(&["Super"]), ModifierMask::SUPER),
+            num: or(named(&["NumLock"]), ModifierMask::NUM_LOCK),
         })
     }
 
@@ -199,13 +202,48 @@ impl Keymap {
         let key = Keycode::from_x11(code);
         let lookup = self.table.lookup(c.group, c.mods, key);
         let repeats = lookup.repeats();
+        let consumed = c.mods & !lookup.remaining_mods();
+        let mut native = NativeKey {
+            keysym: 0,
+            text: self
+                .table
+                .lookup(c.group, c.mods, key)
+                .with_ctrl_transform(false)
+                .with_ctrl_fallback(false)
+                .into_iter()
+                .filter_map(|p| p.char())
+                .filter(|c| !c.is_control() && !is_function_key(*c))
+                .collect(),
+            unshifted: {
+                let text: String = self
+                    .table
+                    .lookup(c.group, ModifierMask::NONE, key)
+                    .with_ctrl_transform(false)
+                    .with_caps_transform(false)
+                    .into_iter()
+                    .filter_map(|p| p.char())
+                    .collect();
+                let mut chars = text.chars();
+                chars.next().filter(|c| chars.next().is_none() && !c.is_control() && !is_function_key(*c))
+            },
+            consumed_modifiers: {
+                let mut state = Components::default();
+                state.mods = consumed;
+                state.mods_pressed = consumed;
+                self.flags(&state)
+            },
+            num_lock: (c.mods & self.num) != ModifierMask::NONE,
+            modifier: false,
+        };
         let props: Vec<_> = lookup.into_iter().collect();
         let Some(first) = props.first() else {
             return Translation { repeats, ..Default::default() };
         };
         let sym = first.keysym();
+        native.keysym = sym.0;
         if sym.is_modifier() {
-            return Translation { modifier: true, ..Default::default() };
+            native.modifier = true;
+            return Translation { modifier: true, native, ..Default::default() };
         }
         let mut key_flags = 0;
         if sym.is_keypad() || is_arrow(sym) {
@@ -244,7 +282,7 @@ impl Keymap {
 
         // As typed with Shift and Num Lock only: no Control characters and
         // no third level.
-        let plain = c.mods & (ModifierMask::SHIFT | ModifierMask::NUM_LOCK);
+        let plain = c.mods & (ModifierMask::SHIFT | self.num);
         let unmodified_lookup = self.table.lookup(c.group, plain, key).with_ctrl_transform(false);
         let unmodified: String = unmodified_lookup
             .into_iter()
@@ -256,7 +294,12 @@ impl Keymap {
         if characters.chars().next().is_some_and(is_function_key) {
             key_flags |= modifier::FUNCTION;
         }
-        Translation { characters, unmodified, modifier: false, repeats, key_flags, composing }
+        // A genuine compose result replaces the raw layout scalar. Pending
+        // composition supplies no terminal text and is marked by `composing`.
+        if composing.is_some() {
+            native.text = characters.chars().filter(|c| !c.is_control() && !is_function_key(*c)).collect();
+        }
+        Translation { characters, unmodified, modifier: false, repeats, key_flags, composing, native }
     }
 }
 
@@ -310,6 +353,31 @@ mod tests {
     use kbvm::xkb::rmlvo::Group;
 
     use super::*;
+
+    #[test]
+    fn native_metadata_keeps_layout_text_distinct_from_control_insertion() {
+        let Some(map) = us() else { return };
+        let key = map.translate(&state(ModifierMask::CONTROL | ModifierMask::SHIFT), xkb(evdev::A), None);
+        assert_eq!(key.native.text, "A");
+        assert_eq!(key.native.unshifted, Some('a'));
+        assert_ne!(key.native.consumed_modifiers & modifier::SHIFT, 0);
+        assert_eq!(key.native.consumed_modifiers & modifier::CONTROL, 0);
+        let digit = map.translate(&state(ModifierMask::SHIFT), xkb(evdev::_1), None);
+        assert_eq!(digit.native.text, "!");
+        assert_eq!(digit.native.unshifted, Some('1'));
+        let keypad = map.translate(&state(ModifierMask::NUM_LOCK), xkb(evdev::KP1), None);
+        assert!(keypad.native.num_lock);
+        let modifier = map.translate(&state(ModifierMask::NONE), xkb(evdev::LEFTSHIFT), None);
+        assert!(modifier.native.modifier);
+    }
+
+    #[test]
+    fn native_unshifted_scalar_follows_the_layout_instead_of_physical_us_keys() {
+        let Some(map) = layout("de", "") else { return };
+        let key = map.translate(&state(ModifierMask::SHIFT), xkb(evdev::Y), None);
+        assert_eq!(key.native.text, "Z");
+        assert_eq!(key.native.unshifted, Some('z'));
+    }
 
     /// A keymap from the system's XKB data, as a compositor would send.
     /// Without XKB data (a NixOS system whose profiles have none) there's

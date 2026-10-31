@@ -9,7 +9,7 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "aizome-terminal-shortcuts";
-  globalTimeout = 300;
+  globalTimeout = 360;
   nodes.machine = { lib, ... }: {
     imports = [ self.nixosModules.default ];
     programs.aizome.enable = true;
@@ -19,6 +19,32 @@ pkgs.testers.runNixOSTest {
       uid = 1000;
       password = "test-only";
     };
+    # Upgraded from before Hotaru: foot was chosen in Settei, which wrote it
+    # to the terminal list and, for ❖Return, to the settings file. The
+    # first session moves it to Hotaru.
+    systemd.tmpfiles.settings."10-before-hotaru" =
+      let
+        alice = {
+          user = "alice";
+          group = "users";
+        };
+      in
+      {
+        "/home/alice/.config".d = alice // {
+          mode = "0755";
+        };
+        "/home/alice/.config/aizome".d = alice // {
+          mode = "0755";
+        };
+        "/home/alice/.config/aizome/settings.toml".f = alice // {
+          mode = "0644";
+          argument = ''[keys]\nterminal = ["foot"]\n'';
+        };
+        "/home/alice/.config/xdg-terminals.list".f = alice // {
+          mode = "0644";
+          argument = ''foot.desktop\n'';
+        };
+      };
     services.greetd = {
       enable = true;
       settings.initial_session = {

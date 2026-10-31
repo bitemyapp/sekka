@@ -1,0 +1,373 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "aca410acce1038a2f1acb66a63b1c91d04c9dd976fca156bb136e0ba6d3058a9",
+  "builds": [
+    {
+      "metadata": "upstream/utf8-scanning/cache-only-build.json",
+      "sha256": "896347036ee4cc67ab741b52d611a2d1f30522547da3c4f8765c3cb7a53ae0b3",
+      "source_sha256": "aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57",
+      "binary_sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+      "revision": "current-combined-std-utf8-cached-span"
+    },
+    {
+      "metadata": "build.json",
+      "sha256": "3d402eb8086941612bfe21edd1ba6e59d3594807934ee8e1adb3c0391dfa884a",
+      "source_sha256": "63ba7b540cf0c6ac67d342c89804095a5a28579ff648288470f1f767abc02b6a",
+      "binary_sha256": "d89dafc7e57d0d00865b612be497e60469907ee0e1dd5e437193468a752eeced",
+      "revision": "9d95e9e plus REP and DEC transitions, outlined control helpers"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          1795450,
+          1786447,
+          1767999,
+          1777924,
+          1774910,
+          1777674,
+          1764203,
+          1757313,
+          1761058,
+          1774329,
+          1767288,
+          1757883,
+          1765736,
+          1786687,
+          1763482,
+          1789992,
+          1771905,
+          1773888,
+          1764995,
+          1767949
+        ],
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": [
+          1780528,
+          1808330,
+          1799086,
+          1789822,
+          1789572,
+          1815822,
+          1806017,
+          1808260,
+          1811816,
+          1802962,
+          1758054,
+          1757052,
+          1775170,
+          1761909,
+          1764774,
+          1801801,
+          1818295,
+          1800488,
+          1809371,
+          1801980
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 1769952.0,
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": 1801144.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          7970227,
+          8112914,
+          8136158,
+          8110570,
+          8122017,
+          7999251,
+          8103669,
+          8082517,
+          8113184,
+          8112883,
+          7999752,
+          8078210,
+          8041435,
+          8064810,
+          8101355,
+          8104300,
+          8174516,
+          8168968,
+          8115938,
+          8399267
+        ],
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": [
+          8653062,
+          8706243,
+          8732351,
+          8745011,
+          8693062,
+          8600873,
+          8664538,
+          8692401,
+          8659432,
+          8649346,
+          8606831,
+          8711951,
+          8729588,
+          8681535,
+          8711040,
+          8578698,
+          8639341,
+          8624718,
+          8649406,
+          8642776
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 8107435.0,
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": 8661985.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          2917671,
+          2894005,
+          2923851,
+          2936619,
+          2934196,
+          2868436,
+          2870569,
+          2911071,
+          2881086,
+          2874666,
+          2994878,
+          2991132,
+          2981267,
+          2953755,
+          2959524,
+          2840554,
+          2887495,
+          2837079,
+          2845782,
+          2854376
+        ],
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": [
+          2969400,
+          2982069,
+          2974017,
+          2974387,
+          2971142,
+          2986295,
+          3000567,
+          3016961,
+          2992064,
+          2993566,
+          3022270,
+          3024543,
+          3009150,
+          3043923,
+          3013957,
+          3065876,
+          3039716,
+          3049080,
+          3056782,
+          3046577
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 2902538.0,
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": 3011553.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "styled",
+      "input_bytes": 2097152,
+      "sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          6108957,
+          6164631,
+          6108256,
+          6107305,
+          6080814,
+          6135787,
+          6161597,
+          6173674,
+          6143048,
+          6192052,
+          6269650,
+          6323112,
+          6313517,
+          6298784,
+          6276261,
+          6134015,
+          6227707,
+          6180515,
+          6152332,
+          6183800
+        ],
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": [
+          5842583,
+          5826589,
+          5824856,
+          5844125,
+          5853559,
+          5888773,
+          5903936,
+          5915994,
+          5893179,
+          5933691,
+          6077108,
+          6060142,
+          6110469,
+          6074524,
+          6056928,
+          6068886,
+          6154936,
+          6110049,
+          6128517,
+          6158772
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 6169152.5,
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": 5995309.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span"
+      ]
+    },
+    {
+      "name": "cursor",
+      "input_bytes": 2097120,
+      "sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          9555679,
+          9690323,
+          9901794,
+          9569250,
+          9547537,
+          9538333,
+          9592876,
+          9576280,
+          9810886,
+          9563951,
+          9478453,
+          9541268,
+          9508749,
+          9490921,
+          9470200,
+          9619035,
+          9687458,
+          9634800,
+          9583341,
+          9558003
+        ],
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": [
+          9795683,
+          9701731,
+          9618965,
+          9599806,
+          9614449,
+          9692217,
+          9702722,
+          9706157,
+          9690423,
+          9695922,
+          9768753,
+          9737775,
+          9707660,
+          9751256,
+          9706709,
+          9637934,
+          9664404,
+          9687339,
+          9648410,
+          9676192
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 9566600.5,
+        "9d95e9e plus REP and DEC transitions, outlined control helpers": 9694069.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "9d95e9e plus REP and DEC transitions, outlined control helpers",
+        "current-combined-std-utf8-cached-span"
+      ]
+    }
+  ]
+}

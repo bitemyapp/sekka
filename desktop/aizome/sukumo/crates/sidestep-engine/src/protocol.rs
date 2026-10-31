@@ -200,6 +200,13 @@ pub type Color = [f32; 4];
 /// (`raster::ops`) draws them with tiny-skia.
 #[derive(Clone, Debug)]
 pub enum Op {
+    /// Immutable Alpha8 artwork; normal source-over with a rectangular clip.
+    AlphaMask {
+        mask: Arc<AlphaMask>,
+        dst: Rect,
+        clip: Rect,
+        color: Color,
+    },
     Fill {
         rect: Rect,
         color: Color,
@@ -272,6 +279,7 @@ pub struct CompositeOp {
 }
 
 pub use crate::raster::images::ImageData;
+pub use crate::raster::masks::AlphaMask;
 use std::sync::Arc;
 
 /// How an op combines with what it's drawn over: `NSCompositingOperation`,
@@ -587,6 +595,17 @@ pub struct WindowState {
 /// Keyboard modifiers, as `NSEventModifierFlags` bits.
 pub type Modifiers = usize;
 
+/// Native terminal input metadata, kept separate from AppKit text semantics.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NativeKey {
+    pub keysym: u32,
+    pub text: String,
+    pub unshifted: Option<char>,
+    pub consumed_modifiers: Modifiers,
+    pub num_lock: bool,
+    pub modifier: bool,
+}
+
 /// A key press, repeat or release, already translated through the keymap.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Key {
@@ -600,6 +619,7 @@ pub struct Key {
     /// A compose sequence as it stands after the key, when it started,
     /// continued or ended one (empty once it's over).
     pub composing: Option<String>,
+    pub native: NativeKey,
 }
 
 /// A pointer button, by what it does rather than its Linux code.
@@ -700,6 +720,12 @@ pub enum ToRender {
         window: WindowId,
         request: WindowRequest,
     },
+    /// Use an existing xdg-activation token, rather than requesting one
+    /// from this client's last input (which may belong to an old focus).
+    ActivateWithToken {
+        window: WindowId,
+        token: String,
+    },
     /// The pointer's appearance over the window's content.
     SetCursor {
         window: WindowId,
@@ -757,6 +783,10 @@ pub enum ToRender {
     /// Offer these contents as the system selection (the clipboard), or
     /// clear it.
     SetSelection {
+        contents: Option<std::sync::Arc<crate::clipboard::Contents>>,
+    },
+    /// Offer these contents as the primary selection, or clear it.
+    SetPrimarySelection {
         contents: Option<std::sync::Arc<crate::clipboard::Contents>>,
     },
     /// Read the system selection (or drag `drag`'s offer) as `mime`; the

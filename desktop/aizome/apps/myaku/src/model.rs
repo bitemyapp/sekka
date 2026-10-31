@@ -376,6 +376,10 @@ pub struct Gpu {
     pub driver: String,
     pub pci: String,
     pub integrated: bool,
+    /// Whether its power meter is the processor package's: an AMD APU's
+    /// Radeon, not a Ryzen desktop processor's, which meters itself alone
+    /// (`aizome_sys::sysinfo::power::meters_package`).
+    pub package_meter: bool,
     pub busy: Option<f64>,
     pub video: Option<f64>,
     pub vram_used: Option<u64>,
@@ -452,8 +456,8 @@ pub fn gpu_order(gpus: &[Gpu]) -> Vec<usize> {
 /// meters add to any of them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Meter {
-    /// The processor's RAPL counters (readable: Myaku runs as root, or the
-    /// counters were opened up).
+    /// The processor's RAPL counters: read directly where Myaku may (as
+    /// root), else through Aizome's power meter service.
     Rapl,
     /// The processor package's meter as its integrated graphics report it:
     /// an AMD APU's covers the processor too, and anyone may read it.

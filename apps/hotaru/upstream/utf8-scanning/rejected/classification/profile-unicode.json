@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "scope": "Compare isolated width-cache/write-batch variants against an exact checkpoint.\n\nThis is a controlled microbenchmark experiment, not Ghostty parity acceptance.\nEach printed-only workload first matches the real reference grid/effects. No\nOSC8 or other unobserved protocol occurs in these deliberately narrow streams.\n",
+  "grapheme_width_method": "unicode",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "ddfcc8c8eea75bce3d12254bd1f4a3f746ffb9c7936c07d3c100954fd748f8d7",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-dense-baseline-build.json",
+      "sha256": "6b100ad161d3677057e740bf30e90067746eb27697386c2ed0c2658b4183c746",
+      "source_sha256": "9061bb83aa2dcd90c92e630a8ee5b89171588d2ffe60465faf8356934f9f4a23",
+      "binary_sha256": "7ecc4be8c9d4f994584157b69995548dfca65ea9edb2dfb1317c1bf2ff034209",
+      "revision": "combined-budget-wide-rowspan-osc7-control"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-dense-classification-build.json",
+      "sha256": "dc7ded5e926f3ca1577cf2a8b184463b7c0985ab659efbbeffe6281a4a215ac2",
+      "source_sha256": "77dfe567404d4398ccef1384da79cfe6574e5b010b84de6cd5357a9b85bd5943",
+      "binary_sha256": "7cdc00a5a163c8b0fdf0bc84624eb224d1123b56414a98aa0e9a5f253f3deb87",
+      "revision": "combined-hoisted-han-classification"
+    }
+  ],
+  "results": [
+    {
+      "name": "ascii",
+      "input_bytes": 2097144,
+      "sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          1801091,
+          1788422,
+          1786038,
+          1795353,
+          1804928,
+          1804106,
+          1793440,
+          1776454,
+          1791546,
+          1795152,
+          1807130,
+          1786790,
+          1794762,
+          1800761,
+          1806630,
+          1787992,
+          1780901,
+          1784436,
+          1793901,
+          1790896
+        ],
+        "combined-hoisted-han-classification": [
+          1784095,
+          1778156,
+          1776494,
+          1801743,
+          1788662,
+          1782924,
+          1776514,
+          1775963,
+          1777896,
+          1784305,
+          1772899,
+          1774862,
+          1774351,
+          1778367,
+          1786118,
+          1801543,
+          1784106,
+          1792749,
+          1801211,
+          1795863
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 1793670.5,
+        "combined-hoisted-han-classification": 1783509.5
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    },
+    {
+      "name": "unicode",
+      "input_bytes": 2097150,
+      "sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          10812969,
+          12213152,
+          12374957,
+          12416731,
+          12411253,
+          10932710,
+          10899450,
+          10907542,
+          10909045,
+          10956135,
+          10773569,
+          10841421,
+          10802673,
+          10807040,
+          10800490,
+          10829865,
+          10839559,
+          10847140,
+          10847370,
+          10852989
+        ],
+        "combined-hoisted-han-classification": [
+          12472796,
+          12570144,
+          12518776,
+          12503592,
+          12519747,
+          11421101,
+          11019702,
+          11017870,
+          11006392,
+          11011209,
+          11533521,
+          11361000,
+          11399548,
+          11440410,
+          11389653,
+          11256501,
+          11082017,
+          11377215,
+          11028986,
+          11386689
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 10850179.5,
+        "combined-hoisted-han-classification": 11388171.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    },
+    {
+      "name": "dense-wide",
+      "input_bytes": 2097150,
+      "sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "combined-budget-wide-rowspan-osc7-control": [
+          3584737,
+          3619870,
+          3633040,
+          3615953,
+          3618698,
+          3508952,
+          3520429,
+          3505426,
+          3512967,
+          3520719,
+          3540800,
+          3553368,
+          3542613,
+          3543884,
+          3545237,
+          3498896,
+          3511075,
+          3513919,
+          3517996,
+          3513659
+        ],
+        "combined-hoisted-han-classification": [
+          3195186,
+          3281557,
+          3215626,
+          3161665,
+          3203829,
+          3274286,
+          3302588,
+          3272673,
+          3269949,
+          3252142,
+          3309730,
+          3215446,
+          3231751,
+          3210018,
+          3202046,
+          3504755,
+          3528802,
+          3558907,
+          3581492,
+          3567380
+        ]
+      },
+      "median_feed_ns": {
+        "combined-budget-wide-rowspan-osc7-control": 3530759.5,
+        "combined-hoisted-han-classification": 3271311.0
+      },
+      "process_order": [
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-budget-wide-rowspan-osc7-control",
+        "combined-hoisted-han-classification",
+        "combined-hoisted-han-classification",
+        "combined-budget-wide-rowspan-osc7-control"
+      ]
+    }
+  ]
+}

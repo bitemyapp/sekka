@@ -28,6 +28,7 @@
 
 pub mod fonts;
 pub mod glyphs;
+pub mod grid;
 pub mod layout;
 pub mod lines;
 pub mod outline;

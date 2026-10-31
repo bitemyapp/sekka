@@ -1,0 +1,91 @@
+{
+  "scope": "remote offscreen actual native-scene compute correctness and diagnostic phases; no presentation or controlled CPU/GPU benchmark",
+  "command": [
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+    "--library-path",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib:/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib:/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib:/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib:/home/callen/work/hotaru-gpu-buffer-20261028/check-5/driver-libraries",
+    "/home/callen/.cache/hotaru-gpu-transport-target/release/scene-phase-probe",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1",
+    "/home/callen/work/hotaru-gpu-scene-isolated/artifacts/gpu-scene/fixtures",
+    "2",
+    "attempt"
+  ],
+  "environment": {
+    "HOME": "/home/callen/work/hotaru-gpu-profile-isolated/initial/home",
+    "XDG_CACHE_HOME": "/home/callen/work/hotaru-gpu-profile-isolated/initial/cache",
+    "__EGL_VENDOR_LIBRARY_FILENAMES": "/home/callen/work/hotaru-gpu-buffer-20261028/check-5/nvidia.json",
+    "__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS": "/home/callen/work/hotaru-gpu-buffer-20261028/check-5/external-platforms"
+  },
+  "binary_sha256": "34b5320ed7131dafbda15f450e43168e791eaa8a4e4fa4c890f07ec715decf5d",
+  "source": {
+    "Cargo.toml": "4cfcae220f34577f429683d66fb778e703f49944d0d8270aa622d20925e58a49",
+    "Cargo.lock": "ee77f03d061fa1e8dddcbd455f86ab4f437afb3e221e6de12440e247631f146a",
+    "src/compose.comp": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215",
+    "src/compose.rs": "19f9bf226898696cf21d69d38165dd6cb1ec18949c4230c5cc2c50e778f4cd55",
+    "src/egl.rs": "0aa9a8446d0c41a84b4b2423588021101492edc8bf125d59581b84e289ed5e3c",
+    "src/egl_probe.rs": "3da069403ca88112251a114c0ad00302a76b9a73c280e2679585ef3df07b3c08",
+    "src/lib.rs": "4a6a0a22b7c6d427f10fbab97afed374d139c342513112b363cafb4fd6df9680",
+    "src/phase_probe.rs": "1b5e7bcf8804fca8f6bd95c8684ca378de902ce0d667bbee57f3f100b49de591",
+    "src/scene.rs": "c49c8bc781b5fa7ff51b5dcc4cddc09b943a086d8edeef1754f042656800b755",
+    "src/scene_probe.rs": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c",
+    "src/scene_wayland_probe.rs": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c",
+    "src/wayland_probe.rs": "58d6a3c8a2d0f8386960cbf111dc9f6b239fa039a50b73c1e94df72777dd5e89"
+  },
+  "load_start": [
+    5.37353515625,
+    13.03759765625,
+    10.59326171875
+  ],
+  "export_policy": "attempt",
+  "exit": 1,
+  "events": [
+    {
+      "event": "context_destroyed",
+      "ok": true,
+      "thread": "ThreadId(2)"
+    }
+  ],
+  "mapped_files": [
+    "/home/callen/.cache/hotaru-gpu-transport-target/release/scene-phase-probe",
+    "/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm.so.2.134.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libdl.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libpthread.so.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1.1.0",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0",
+    "/usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.580.159.04",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-eglcore.so.580.159.04",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so.580.159.04",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-gpucomp.so.580.159.04"
+  ],
+  "mapped_file_sha256": {
+    "/home/callen/.cache/hotaru-gpu-transport-target/release/scene-phase-probe": "34b5320ed7131dafbda15f450e43168e791eaa8a4e4fa4c890f07ec715decf5d",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0": "f9ab290635bbc00e93862f899d60a78828fddd0594226c2e5fab60dde8d450c9",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libdl.so.2": "e0447a849c6f53e87b190ef66e8d850e44a675d88cc73203bfcfabec8ed5aa6a",
+    "/usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.580.159.04": "1f0a2302b6970a11d301abc35a150786235620924293059d3b4c2ae6ed3f3d15",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6": "caaa4691f54660960a577c5397dc38a7fef9c5c617bb4e248f00bd3c9acd3726",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-eglcore.so.580.159.04": "3c9340e2af8c764d8bd024cc895d41b5bb244103d2879501081f7677bfe3d557",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6": "1dcff2bf21bcc45bc903ba1cfe8743503b0008d7afa79ddb1df90788d62bfff3",
+    "/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1": "e80a9d87e1a0b8249700f459767b257b01969c79bee3c8fb15e35e1e9c4da055",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm.so.2.134.0": "04d1c7df837f9ab0c3794fbcd36186497008638f719200174f7ba1f4609c8d91",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2": "d2fbe26249c12dd8ac1cfb618c705fe37d625d5a4dd4035b27869766480c1244",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1": "f20583e09b52c4a475171462e954299530cc7d29942987d9ae68b53cbf99932f",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libpthread.so.0": "115bd7b1b35e7eaedecdc66ae848ff8572befe21ca035c0c5b5a79c865e94678",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so.580.159.04": "38418a7e00250b2c0c87425b4fc4766b6783b2e863d92a49d2b698536995975b",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1.1.0": "bd0f6f8516e1031da6a0a9f88b951a212b0236b2c10bc7cf5b4fe99ecf128d04",
+    "/usr/lib/x86_64-linux-gnu/libnvidia-gpucomp.so.580.159.04": "8181fb4393cd89ebf7a5ddda6361e2f3ee2e018383c6ce83e30e55ec1322166f"
+  },
+  "elapsed_s": 0.13419351214542985,
+  "load_end": [
+    5.37353515625,
+    13.03759765625,
+    10.59326171875
+  ],
+  "timed_out": false,
+  "expected_renders": 36,
+  "status": "failed"
+}

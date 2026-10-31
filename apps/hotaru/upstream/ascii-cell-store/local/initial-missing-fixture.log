@@ -1,0 +1,9 @@
+   Compiling libc v0.2.191
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-ascii-local-candidate-20261028/crates/hotaru-core)
+error: couldn't read `crates/hotaru-core/src/../../../upstream/hyperlink-fixtures.json`: No such file or directory (os error 2)
+   --> crates/hotaru-core/src/formatter.rs:624:34
+    |
+624 |             serde_json::from_str(include_str!("../../../upstream/hyperlink-fixtures.json"))
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `hotaru-core` (lib test) due to 1 previous error

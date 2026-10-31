@@ -1,0 +1,26 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/b058b68a4f4514c5/out/hotaru_core-b058b68a4f4514c5)
+
+running 6 tests
+test cells::tests::actual_vector_bounds_are_checked_before_ownership_transfer ... ok
+test cells::tests::mapped_resize_and_unwind_keep_sibling_page_alive ... ok
+test cells::tests::mapping_bounds_and_cell_layout ... ignored, large OS-mapping boundary test; owner tests use the same code on small heap pages
+test cells::tests::repeated_growth_shrink_swap_clone_and_thread_drop_match_vectors ... ok
+test cells::tests::resize_unwind_drops_local_vector_and_leaves_valid_sentinel ... ok
+test cells::tests::typed_ranges_retain_mapping_and_materialize_without_aliasing ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 27 filtered out; finished in 7.44s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/b058b68a4f4514c5/out/hotaru_core-b058b68a4f4514c5)
+
+running 6 tests
+test cells::tests::actual_vector_bounds_are_checked_before_ownership_transfer ... ok
+test cells::tests::mapped_resize_and_unwind_keep_sibling_page_alive ... ok
+test cells::tests::mapping_bounds_and_cell_layout ... ignored, large OS-mapping boundary test; owner tests use the same code on small heap pages
+test cells::tests::repeated_growth_shrink_swap_clone_and_thread_drop_match_vectors ... ok
+test cells::tests::resize_unwind_drops_local_vector_and_leaves_valid_sentinel ... ok
+test cells::tests::typed_ranges_retain_mapping_and_materialize_without_aliasing ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 27 filtered out; finished in 7.44s
+

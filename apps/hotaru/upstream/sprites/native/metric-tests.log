@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/sidestep_engine-427eee78f9e55b70)
+
+running 1 test
+test text::grid::linux_sprite_ppem_matches_freetype_126_recorded_sizes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 196 filtered out; finished in 0.00s
+

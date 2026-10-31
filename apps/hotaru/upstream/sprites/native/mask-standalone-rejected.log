@@ -1,0 +1,10 @@
+error: failed to load source for dependency `objc2`
+
+Caused by:
+  unable to update /home/callen/work/hotaru-native-sprites-20261028/vendor/sidestep/.objc2-overlay/objc2-0.6.4
+
+Caused by:
+  failed to read `/home/callen/work/hotaru-native-sprites-20261028/vendor/sidestep/.objc2-overlay/objc2-0.6.4/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)

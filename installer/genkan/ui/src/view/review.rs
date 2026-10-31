@@ -121,7 +121,7 @@ fn preparation(app: &Genkan) -> Element<Msg> {
     }
     group(
         "Preparing in the Background",
-        "Your system is evaluated, built and cached in memory now. Nothing has been written to any disk.",
+        "The installer checks its files and your configuration, then builds in memory when space allows. Otherwise, downloading and building wait until after formatting. Nothing is written to the target disk until you confirm installation.",
         rows,
     )
 }
@@ -297,6 +297,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
                 property("Language", review.locale.clone()),
                 property("Time zone", zone(app, review)),
                 property("Keyboard layout", review.keyboard.clone()),
+                property("Modifier keys", Genkan::super_key_name(review.super_key)),
             ],
         ),
         group(

@@ -1,0 +1,263 @@
+{
+ "scope": "wx-workstation, CPU 8. Feed times: the hotaru-replay bench adapter on the reviewed 8 MiB corpus, 6 alternating rounds of 20 feeds per variant, at load 2-3 with CCD 1 otherwise idle. Instruction counts: perf stat instructions:u over 10 feeds, deterministic.",
+ "variants": {
+  "parent": {
+   "description": "962add8c, before the stream parser fix (the clipboard checkpoint binary)",
+   "sha256": "36f856f6021bbca2bb7bd4eef666572266a26418a996eb010a6dedcd84e0b49c"
+  },
+  "current": {
+   "description": "88c434c9, the stream parser fix",
+   "sha256": "6c4f06ad3e839756869ed02737db134605d883d981d699e01fd702aa032630a2"
+  },
+  "ground": {
+   "description": "88c434c9 checking the history budget only when the parser is back in ground state",
+   "sha256": "0c58880305d35ddd6d44a1022c768d53395b88eabf77c53acb0e6f00d96a5de5"
+  },
+  "inline": {
+   "description": "88c434c9 with the budget signal's dirty test inline and pruning out of line (adopted)",
+   "sha256": "52ec3c4e41872b5a23cea0403b5228e45d0da29a00823308d8ed3d0656be9295"
+  }
+ },
+ "feed_ms": {
+  "styled": {
+   "parent": {
+    "median": 27.619,
+    "run_medians": [
+     28.194,
+     27.55,
+     27.66,
+     28.336,
+     27.381,
+     27.515
+    ]
+   },
+   "current": {
+    "median": 29.022,
+    "run_medians": [
+     28.575,
+     30.295,
+     28.938,
+     30.459,
+     28.891,
+     28.983
+    ]
+   },
+   "ground": {
+    "median": 23.576,
+    "run_medians": [
+     23.559,
+     23.453,
+     23.531,
+     23.957,
+     23.564,
+     23.662
+    ]
+   },
+   "inline": {
+    "median": 23.054,
+    "run_medians": [
+     23.189,
+     23.111,
+     22.921,
+     23.034,
+     23.037,
+     23.014
+    ]
+   }
+  },
+  "cursor": {
+   "parent": {
+    "median": 92.14,
+    "run_medians": [
+     91.844,
+     91.843,
+     96.468,
+     92.403,
+     92.222,
+     91.65
+    ]
+   },
+   "current": {
+    "median": 93.289,
+    "run_medians": [
+     93.602,
+     93.477,
+     93.202,
+     92.535,
+     93.381,
+     92.588
+    ]
+   },
+   "ground": {
+    "median": 88.531,
+    "run_medians": [
+     88.811,
+     88.333,
+     88.411,
+     87.918,
+     88.634,
+     88.526
+    ]
+   },
+   "inline": {
+    "median": 87.954,
+    "run_medians": [
+     88.247,
+     87.198,
+     87.2,
+     89.949,
+     88.123,
+     87.422
+    ]
+   }
+  },
+  "ascii": {
+   "parent": {
+    "median": 5.586,
+    "run_medians": [
+     5.591,
+     5.597,
+     5.582,
+     5.511,
+     6.098,
+     5.575
+    ]
+   },
+   "current": {
+    "median": 5.587,
+    "run_medians": [
+     5.481,
+     5.482,
+     5.586,
+     5.782,
+     5.492,
+     5.661
+    ]
+   },
+   "ground": {
+    "median": 5.744,
+    "run_medians": [
+     5.791,
+     5.77,
+     5.737,
+     5.732,
+     5.728,
+     5.747
+    ]
+   },
+   "inline": {
+    "median": 5.319,
+    "run_medians": [
+     5.293,
+     5.37,
+     5.285,
+     5.4,
+     5.286,
+     5.271
+    ]
+   }
+  },
+  "unicode": {
+   "parent": {
+    "median": 34.195,
+    "run_medians": [
+     34.172,
+     34.995,
+     35.473,
+     33.695,
+     33.68,
+     34.935
+    ]
+   },
+   "current": {
+    "median": 33.101,
+    "run_medians": [
+     31.824,
+     32.039,
+     33.289,
+     31.834,
+     34.218,
+     33.441
+    ]
+   },
+   "ground": {
+    "median": 31.814,
+    "run_medians": [
+     31.724,
+     31.824,
+     31.802,
+     31.957,
+     33.841,
+     31.69
+    ]
+   },
+   "inline": {
+    "median": 31.247,
+    "run_medians": [
+     31.207,
+     30.815,
+     31.315,
+     31.221,
+     31.513,
+     31.289
+    ]
+   }
+  }
+ },
+ "instructions": {
+  "sgr0": {
+   "parent": 9880279251,
+   "current": 10991767849,
+   "ground": 10257765526,
+   "inline": 10425527816
+  },
+  "cup": {
+   "parent": 8670921034,
+   "current": 9775418054,
+   "ground": 8894615814,
+   "inline": 9202188575
+  },
+  "crlf": {
+   "parent": 22064458832,
+   "current": 22483887021,
+   "ground": 23071090322,
+   "inline": 21812793428
+  },
+  "plain": {
+   "parent": 2825275789,
+   "current": 2852333794,
+   "ground": 2892926035,
+   "inline": 2806326531
+  },
+  "styled": {
+   "parent": 7121293567,
+   "current": 7517128909,
+   "ground": 7043960273,
+   "inline": 7194693399
+  },
+  "cursor": {
+   "parent": 27728100408,
+   "current": 28515971453,
+   "ground": 28002786077,
+   "inline": 28111335628
+  },
+  "ascii": {
+   "parent": 1647615751,
+   "current": 1662592280,
+   "ground": 1685064287,
+   "inline": 1637121334
+  },
+  "unicode": {
+   "parent": 9166261807,
+   "current": 8896320481,
+   "ground": 8923768900,
+   "inline": 8849024890
+  }
+ },
+ "inputs": {
+  "sgr0": "ESC[0m repeated to 8 MiB",
+  "cup": "ESC[5;7H repeated to 8 MiB",
+  "crlf": "CR LF repeated to 8 MiB",
+  "plain": "'INFO request=12345 underlined' CR LF repeated to 8 MiB"
+ }
+}

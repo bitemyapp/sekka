@@ -1,0 +1,14 @@
+--- a/apps/hotaru/crates/hotaru-core/src/screen.rs
++++ b/apps/hotaru/crates/hotaru-core/src/screen.rs
+@@ -1039,7 +1039,10 @@
+                 (existing, &event),
+                 (TerminalEvent::Bell, TerminalEvent::Bell)
+                     | (TerminalEvent::Title(_), TerminalEvent::Title(_))
+-                    | (TerminalEvent::WorkingDirectory(_), TerminalEvent::WorkingDirectory(_))
++                    | (
++                        TerminalEvent::WorkingDirectory(_),
++                        TerminalEvent::WorkingDirectory(_)
++                    )
+                     | (
+                         TerminalEvent::Clipboard { .. },
+                         TerminalEvent::Clipboard { .. }

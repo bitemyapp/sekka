@@ -425,7 +425,7 @@ fn hidden_files_show_on_asking() {
         repeat: false,
         code: hako::ui::keys::KEY_DOT,
         modifiers: Modifiers::SUPER | Modifiers::SHIFT,
-        composing: None,
+        composing: None, native: Default::default(),
     };
     assert!(matches!(hako::ui::view::window_key(&k), Some(Msg::ToggleHidden)));
 }

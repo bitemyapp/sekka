@@ -838,9 +838,15 @@ def default_apps():
     )
     assert query.strip() == "aizome-test-editor.desktop", query
 
-    # The terminal chosen is the one ❖Return starts.
+    # The terminal chosen is the one ❖Return starts: the compositor reads
+    # the list Settei writes, and nothing else.
     S.choose(S.control("general", "default-terminal", role="combobox"), "Test Terminal")
-    until("[keys] terminal", lambda: setting("keys.terminal") == ["foot", "--app-id=aizome-test-terminal"])
+    until(
+        "xdg-terminals.list to name it",
+        lambda: machine.succeed(f"head -n1 {HOME}/.config/xdg-terminals.list || true").strip()
+        == "aizome-test-terminal.desktop",
+    )
+    assert setting("keys.terminal") is None
     chord("super+return")
     term = until(
         "the chosen terminal",
@@ -1152,6 +1158,42 @@ def keyboard():
     S.click(S.beside("German", "button", label="Remove"))
     until("US alone", lambda: setting("input.keyboard.layouts") == ["us"])
     S.choose(S.control("keyboard", "caps-lock", role="combobox"), "Caps Lock")
+    S.quit()
+
+
+@part("Keyboard setup: Alt beside the VM keyboard's space bar becomes ❖ on that keyboard alone")
+def keyboard_setup():
+    # QEMU's own keys, through libinput, rather than aizomectl's (which
+    # come from no keyboard).
+    names = [k["name"] for k in ipc("keyboards")["keyboards"]]
+    print("keyboards:", names)
+    assert names, "no keyboard that types"
+    S.open("keyboard.setup")
+    S.wait(text="Waiting for the key…")
+    machine.send_key("alt")
+    S.wait(contains="Beside the space bar: ⌥ Alt")
+    typed_on = [n for n in names if S.find(text=n)]
+    assert typed_on, (names, S.texts())
+    assert S.wait(name="setup-modifiers").get("value") == "Swap Alt and Super"
+    S.press("Save")
+    S.gone("the sheet to go", text="Set Up a Keyboard")
+    own = until("keys of its own", lambda: setting("input.keyboards"))
+    print("set up:", own)
+    assert own[0]["name"] == typed_on[0] and own[0]["options"] == "altwin:swap_alt_win", own
+    assert "altwin" not in str(setting("input.keyboard.options")), "other keyboards' stay as they were"
+
+    # That keyboard's Alt is ❖ now: ❖A selects all. (aizomectl's keys
+    # come from no keyboard, so they keep the keymap it left.)
+    S.reveal(name="entry:keyboard.repeat-rate")
+    S.click(S.beside("Try it", "textinput"))
+    type_text("xy")
+    machine.send_key("alt-a")
+    type_text("z")
+    until("the VM keyboard's Alt as ❖", lambda: S.beside("Try it", "textinput").get("value") == "z")
+
+    # Forgotten, it types as the others do.
+    S.click(S.control("keyboard", "keyboards", role="button", label="Forget its own keys"))
+    until("no keyboard of its own", lambda: not setting("input.keyboards"))
     S.quit()
 
 

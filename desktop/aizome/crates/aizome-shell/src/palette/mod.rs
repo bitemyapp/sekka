@@ -372,7 +372,7 @@ impl Shell {
         if self.wm.focused_window().is_some() {
             let verbs = crate::menus::build::window_verbs(self.wm.focused_window(), &self.wm.desks);
             for f in verbs.flatten() {
-                if out.iter().any(|i| i.scope == Scope::Command && i.title == f.entry.label) {
+                if !f.entry.enabled || out.iter().any(|i| i.scope == Scope::Command && i.title == f.entry.label) {
                     continue;
                 }
                 let mut trail = vec!["Window".to_owned()];

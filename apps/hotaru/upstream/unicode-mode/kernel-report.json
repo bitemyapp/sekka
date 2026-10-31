@@ -1,0 +1,15 @@
+{
+  "reference_library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "probe_sha256": "a684d5a9e70158c2756acd084f332cccd3efab319ed7ff1b74a1c0287984f7a0",
+  "kernel_source_sha256": "693091d603aa4bf0757df0e47dbd46023f5554d3db193a597c46e9b0d0a9884b",
+  "probe_source_sha256": "fc290da14632be1bae51a22929078fe33b40f461197f63f52df4c266e13bf1e0",
+  "table_sha256": "4551adea15824f60163af841858b94d57ca66325d3f9c431b0595959b148766c",
+  "unicode_scalar_width_comparisons": 1112064,
+  "grapheme_comparisons": 56601,
+  "ucd_vectors": 630,
+  "property_representatives": 29,
+  "seed": "0x202718",
+  "request_sha256": "a92d88c0c0bde158fcb4a9721fa62d061be8f4510e7216a88d74cbf5cf70b712",
+  "response_sha256": "1c94cd80e7528214a0a448a78c1579f3c23d18bc1a9c05290f09a263a201b2db",
+  "differences": []
+}

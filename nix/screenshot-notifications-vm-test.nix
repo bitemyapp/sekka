@@ -16,7 +16,9 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "tatami-screenshot-notifications";
-  globalTimeout = 240;
+  # About a minute alone; the waits below allow for a host busy with other
+  # VM checks.
+  globalTimeout = 900;
   nodes.machine = {
     imports = [ (pkgs.path + "/nixos/tests/common/user-account.nix") ];
     virtualisation = {
@@ -65,18 +67,22 @@ pkgs.testers.runNixOSTest {
     environment = "export XDG_RUNTIME_DIR=/run/user/1000 HYPRLAND_INSTANCE_SIGNATURE=" + signature + "; "
     def run(command):
         return machine.succeed("su - alice -c " + shlex.quote(environment + command))
-    def wait(predicate, seconds=20):
+    def wait(predicate, seconds=60):
         until = time.monotonic() + seconds
         while time.monotonic() < until:
             if predicate():
                 return
             time.sleep(0.1)
         machine.screenshot("failure")
-        print(run("journalctl --user -b --no-pager; makoctl list; makoctl history; pgrep -a tatami; pgrep -a satty || true"))
+        print(run("journalctl --user -b --no-pager; makoctl list; makoctl history; pgrep -a tatami; pgrep -a satty; tail -n 40 /tmp/hyprland.log || true"))
         raise AssertionError("condition did not become true")
     def instances():
-        raw = run("hyprctl -j instances").strip()
-        return json.loads(raw) if raw else []
+        # Hyprland's socket can be there before it answers with its
+        # instances: nothing, or not yet JSON, means ask again.
+        try:
+            return json.loads(run("hyprctl -j instances"))
+        except json.JSONDecodeError:
+            return []
     wait(lambda: any(i.get("wl_socket") for i in instances()))
     instance = instances()[0]
     pid = instance["pid"]
@@ -98,14 +104,16 @@ pkgs.testers.runNixOSTest {
     for variant in ("original", "fixed"):
         with subtest(variant + ": fresh Edit opens the saved image in Satty"):
             start("screenshot-mako", "mako --config /etc/mako-" + variant, dbus=True)
-            machine.wait_until_succeeds("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 makoctl list'", timeout=timedelta(seconds=10))
+            machine.wait_until_succeeds("su - alice -c 'XDG_RUNTIME_DIR=/run/user/1000 makoctl list'", timeout=timedelta(seconds=60))
             run("notify-send -t 1000 'Ordinary history control' 'This notice can be restored'")
             wait(lambda: "Ordinary history control" in history())
             start("fresh-" + variant, "tatami screenshot-notify /home/alice/Pictures/notification-test.png")
             wait(lambda: "Screenshot saved" in visible())
             machine.screenshot(variant + "-fresh")
             machine.send_key("meta_l-alt-comma")
-            wait(editor)
+            # Satty is a GTK app drawn in software here: it takes seconds
+            # alone, and much longer on a host busy with other VM checks.
+            wait(editor, seconds=180)
             client = next(c for c in json.loads(run("hyprctl -j clients")) if "satty" in c["class"].lower())
             run("grep -zqF /home/alice/Pictures/notification-test.png /proc/" + str(client["pid"]) + "/cmdline")
             machine.screenshot(variant + "-editor")
@@ -117,7 +125,8 @@ pkgs.testers.runNixOSTest {
         with subtest(variant + ": expired one-shot screenshot actions and ordinary history"):
             start("expired-" + variant, "tatami screenshot-notify /home/alice/Pictures/notification-test.png")
             wait(lambda: "Screenshot saved" in visible())
-            wait(lambda: "Screenshot saved" not in visible(), seconds=15)
+            # Nothing dismisses it: it expires (after 10 seconds) by itself.
+            wait(lambda: "Screenshot saved" not in visible())
             wait(lambda: "inactive" in run("systemctl --user is-active expired-" + variant + " || true"))
             before = history()
             print(variant, "history after screenshot expiry:", before)

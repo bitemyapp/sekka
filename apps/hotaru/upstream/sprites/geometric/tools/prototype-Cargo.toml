@@ -1,0 +1,13 @@
+[package]
+name = "hotaru-sprite-prototype"
+version = "0.1.0"
+edition = "2024"
+license = "MIT AND MPL-2.0"
+
+[lib]
+name = "hotaru_sprites"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[workspace]

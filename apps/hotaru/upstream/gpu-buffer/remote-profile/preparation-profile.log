@@ -1,0 +1,12 @@
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/hotaru-gpu-preparation-profile/desktop/aizome/sidestep/crates/sidestep-engine)
+   Compiling sidestep-ui v0.0.1 (/home/callen/work/hotaru-gpu-preparation-profile/desktop/aizome/sidestep/crates/sidestep-ui)
+   Compiling aizome-kit v0.1.0 (/home/callen/work/hotaru-gpu-preparation-profile/desktop/aizome/crates/aizome-kit)
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-gpu-preparation-profile/desktop/aizome/apps/hotaru)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.20s
+     Running tests/scene_inventory.rs (/home/callen/.cache/hotaru-aizome-target/release/deps/scene_inventory-977903e4ad703af8)
+
+running 1 test
+test complete_native_terminal_scene_inventory ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.84s
+

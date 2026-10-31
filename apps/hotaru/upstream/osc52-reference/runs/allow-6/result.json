@@ -1,0 +1,1887 @@
+{
+  "suite": "allow",
+  "status": "observed",
+  "scope": "unchanged GTK app, private software Sway; behavioral observations, no performance claim",
+  "sources": {
+    "/home/callen/work/hotaru-osc52-reference-20261028/tools/gtk_probe.py": "edb941f6e2de3944ab6aa81c7ec47970080e025b61063e73ea759c1ab83e2d74",
+    "/home/callen/work/hotaru-region-frames-20261028/tools/frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+    "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+    "/home/callen/work/hotaru-frame-harness-20261028/build/frame-observer": "3bf2a4ba967c7526e4266b9fb48c730df205253afede449627f5bcdb83a8f1c3"
+  },
+  "cases": [
+    {
+      "name": "write-kind-",
+      "input": {
+        "length": 12,
+        "sha256": "4044f049fc5a3698000149220d33e15bd490b9bc0f5581ec2d548817452c76ac",
+        "hex": "1b5d35323b3b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250324079
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "68fc767af845c83ae5e58bfde04d33ce0577a923d690de71815d70cb467e6e32",
+        "hex": "5052494d4152592d534545442d36"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-",
+      "input": {
+        "length": 9,
+        "sha256": "5e5d5f248f9f123cda40232d0d96154ed32853176ce7ffad4d76fce681785eb1",
+        "hex": "1b5d35323b3b3f1b5c"
+      },
+      "reply": {
+        "length": 29,
+        "sha256": "8cd19fb19171c8e8b3735c616a1551c556dda458021d4365c0248225c8d9a6ae",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330341b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250296158
+      },
+      "standard": {
+        "length": 15,
+        "sha256": "86ea12ec02dd48fe639516419ab4ecd047ac9c8791256c5ad85467680717a635",
+        "hex": "5354414e444152442d534545442d38"
+      },
+      "primary": {
+        "length": 14,
+        "sha256": "9a9c6afa80a833a3e899cef6d5af4e580c3f2820599219ef0cfab9b1c976c5c8",
+        "hex": "5052494d4152592d534545442d38"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-63",
+      "input": {
+        "length": 13,
+        "sha256": "eef5ca38e55d64fd4d0f3b609cd558cd8056975959b7c2a2f51007fe252eb53d",
+        "hex": "1b5d35323b633b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250334267
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "8a4188ac7a191f6f3f36ef3189ff7768608561ec809637d6c3b48c826cff0e92",
+        "hex": "5052494d4152592d534545442d3130"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-63",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "227db4179f0ad6153ac4b6184a8ee258e3c915f228c68f442289fc89b81be2c2",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330784d673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250303911
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "3e27898be86796a786d96f410f5068361119b606951dd429aa3822953b5c83ce",
+        "hex": "5354414e444152442d534545442d3132"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c494e51adee4fe89861e84ba9eb52680ab1ac76beb382ac0e507c050efd0bc9c",
+        "hex": "5052494d4152592d534545442d3132"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-70",
+      "input": {
+        "length": 13,
+        "sha256": "b9276b7297d0a1d21db6ca30b747372fe42264fbbae463f4746fc3b9dcf32913",
+        "hex": "1b5d35323b703b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250306155
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "f90178194c2c4d0a0c8dc775d6403b3037cfef06972641ee0d27d2df4d8fec1d",
+        "hex": "5354414e444152442d534545442d3134"
+      },
+      "primary": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-70",
+      "input": {
+        "length": 10,
+        "sha256": "c22893ec035930664bab456e75f5651f5f91696447ef7006fc2f467ed1c65d3b",
+        "hex": "1b5d35323b703b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "2bfaf5b0d38ceffa9e6ae41b40314dddea01e4336600daf43b8d0f16ea5675cf",
+        "hex": "1b5d35323b703b55315242546b5242556b517455305646524330784e673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250288087
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "4e455a6852d6d944b0b282b41e0a3bfb49e6c441476fce90df2d9f29f964a4ca",
+        "hex": "5354414e444152442d534545442d3136"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d37df56eaee5efc2be9829bfa7e203b72c1e3e07d8d3f92878686cb5e55c0ea2",
+        "hex": "5052494d4152592d534545442d3136"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-73",
+      "input": {
+        "length": 13,
+        "sha256": "b7becef9057b0047615d8ba080273fc47383a5a13875e0a31c5af18ee8b74835",
+        "hex": "1b5d35323b733b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250336050
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "71e36b0c95dede3ccd8cb212529faeb54a46f5c6281c8e02b3a3a0edb51188d5",
+        "hex": "5354414e444152442d534545442d3138"
+      },
+      "primary": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-73",
+      "input": {
+        "length": 10,
+        "sha256": "29d38f960ec39d6b29b692a67bded7ea1d425f7280674ad576e1275d1aeb2417",
+        "hex": "1b5d35323b733b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "0f8378c18271d20c32755cf4bb45302e5fe94d0a946d533dd5ee2666b616dde7",
+        "hex": "1b5d35323b733b55315242546b5242556b517455305646524330794d413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250318024
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "6c7036e075f0f32215bed1f70db4f3532e8194142d23c723b22c2f7cf38af79f",
+        "hex": "5354414e444152442d534545442d3230"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "b2cdc2d2dca82a02a21ee2c66bf2417355772a2fff6e7b026ea3851c34810ee9",
+        "hex": "5052494d4152592d534545442d3230"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-78",
+      "input": {
+        "length": 13,
+        "sha256": "05d9ab808e02609f0f15926331329b683078699090b470662a71ebd3b8a0e3e1",
+        "hex": "1b5d35323b783b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250336762
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c4fbe9080cc22c518d130f7c5465c03caa68da76dcff0a84f355675a2684906d",
+        "hex": "5052494d4152592d534545442d3232"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-78",
+      "input": {
+        "length": 10,
+        "sha256": "f0e745035d7a5e84106da2136ed97b930e42ea6708452f389ea2212cb8f4f5ea",
+        "hex": "1b5d35323b783b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "e67e15b5781c15db23fe380549aee93df78c420eb52d5ebee2aa754098794101",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330794e413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250300638
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "deaa8d245e2e135c5b692c3466678d50d1b313d2273a50b8cdc61341c2a6dbde",
+        "hex": "5354414e444152442d534545442d3234"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "efb52b78f74263db3ae3f9b47a8a6e8b8597a75a6655a72e35c0eebcae297283",
+        "hex": "5052494d4152592d534545442d3234"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-30",
+      "input": {
+        "length": 13,
+        "sha256": "1fc127470599da9e0dd45a58fa519477ec7490bf3b3973c2e4e3ab81de55d550",
+        "hex": "1b5d35323b303b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250325637
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "14d0e9761ec13253192751ea86dfb157bdd052fcc7a57553c690aa8bb6a7509d",
+        "hex": "5052494d4152592d534545442d3236"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-30",
+      "input": {
+        "length": 10,
+        "sha256": "aa051741b639ded4f9b6c8ece598eb1ffce080d8e10a14b595701d1b89fac0f6",
+        "hex": "1b5d35323b303b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "5f6a4b416c0c014acd45c35403c76bc10c7a5841ec5b8bab86069eb78b0a5dcc",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330794f413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250327689
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "3af0bba2806c5b93157308c87856c821c24be602ad944a907ae4359c805101d5",
+        "hex": "5354414e444152442d534545442d3238"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "4f00f8b48e44f069441a37b11273e1dde377dbecf0573659386f3f2e93e0be85",
+        "hex": "5052494d4152592d534545442d3238"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-6370",
+      "input": {
+        "length": 14,
+        "sha256": "d376c16cc397c08d68b119f0e4480c37739df70ebd673505c2e59b5053befc83",
+        "hex": "1b5d35323b63703b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250302442
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "65547c58bf3276a1eafbf4951de4468e7d521c89233217bf51adad8e1ec0547d",
+        "hex": "5354414e444152442d534545442d3330"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "bf040133d9d9dbe3b0c4514f47097a20fe5cd6ff8f51b990ed1c0c15d733b709",
+        "hex": "5052494d4152592d534545442d3330"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-6370",
+      "input": {
+        "length": 11,
+        "sha256": "eb869579200da1c9d0459a6296aec97274d0bdf1bc02cbe8b7a9166c9c337c46",
+        "hex": "1b5d35323b63703b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250305897
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "99a435a5f50cbb91b3f108d61bcfabada280ca6e7fec51806ae8bfc2a6f4d1e9",
+        "hex": "5354414e444152442d534545442d3332"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "ca7a27f58c187c012c630ec8224cdbd96e4e7e9df1ca2c098fd9ccf017ee4d52",
+        "hex": "5052494d4152592d534545442d3332"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-7063",
+      "input": {
+        "length": 14,
+        "sha256": "48896f4f14285efddfb8c66d3946858caef6c7e075b76aa7a557e01b970a8f10",
+        "hex": "1b5d35323b70633b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250311837
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "b5ec2e61a630d291e79704333aa4368a56d511e44851a56f7f8dea33a1450a36",
+        "hex": "5354414e444152442d534545442d3334"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d71af4c2fa1a42403bb3e34d46f32ac5dbddcf9b85be7f48fc125758672805b0",
+        "hex": "5052494d4152592d534545442d3334"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-7063",
+      "input": {
+        "length": 11,
+        "sha256": "32b28d3c38dfd2e9195d60d4a15c69c6cd7e8ecb6a091cad34d1519fae2f97f4",
+        "hex": "1b5d35323b70633b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250327571
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "5a806cdcc0fa642d22e1f11e989416cdc07b2ba5dc37aef7a94acdc6261adc95",
+        "hex": "5354414e444152442d534545442d3336"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1d551dbfde9fe687dc8fc57552635f9142f3082f1265416aa3a5cfcbd16a03a6",
+        "hex": "5052494d4152592d534545442d3336"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-6363",
+      "input": {
+        "length": 14,
+        "sha256": "9c2b12ea9d88693eb3789fc581ba0b33736595ac300ff4b5ebd22db664200f42",
+        "hex": "1b5d35323b63633b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250312269
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "c668d86d392eadce8a1bce00a22a3fa6b4e3001c4b512f5319b78234fcf2bc93",
+        "hex": "5354414e444152442d534545442d3338"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "7df36d2d4b5a93d2e35b629705dbdb2759f0cc0bc05f8f2cc50a9714d4cee621",
+        "hex": "5052494d4152592d534545442d3338"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-6363",
+      "input": {
+        "length": 11,
+        "sha256": "0777f2b460d2948671cb74f855b6b6b308cf361fac47a09f26a990d6c71f7986",
+        "hex": "1b5d35323b63633b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250291297
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "8d600dc15272e5044e19608d50abbf3aacd6050339897f488c838531f767e4fc",
+        "hex": "5354414e444152442d534545442d3430"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c5f3aa57bc8e59ffbc947d22d0df65196e56e44880b84c895c4c85ab6b52146c",
+        "hex": "5052494d4152592d534545442d3430"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-ff",
+      "input": {
+        "length": 13,
+        "sha256": "8fa1069501adcc4e27f3d9c929c7d6d11a41cce769fcddbb800bc84451dba957",
+        "hex": "1b5d35323bff3b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250338629
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "hex": "616263"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "1bd9be013cf4ce5c1cc6a246d438466001e55af7c35938a14be32eebe7b8a1a6",
+        "hex": "5052494d4152592d534545442d3432"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-ff",
+      "input": {
+        "length": 10,
+        "sha256": "43869855909dd1f84be5c26e979ae8bef112f334963a3c39dafaed7f26699b11",
+        "hex": "1b5d35323bff3b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "c96937d786a186530e55e63bed22e4ed283d84db3bc24abb1932b46129ae15fb",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330304e413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250335625
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "9f19b59b6447fbdaac8d664954ea612a8d2e92146427ddc0afb7f5aaa0e761ce",
+        "hex": "5354414e444152442d534545442d3434"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "6de43ed21c272f30af2282f32838a40a971e4de613adbfd05d2a12152f8a6f6c",
+        "hex": "5052494d4152592d534545442d3434"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-kind-c3a9",
+      "input": {
+        "length": 14,
+        "sha256": "dba30960a62c6d1999093afbaece384695b37c20d76ff63426aa3c90bd39bb24",
+        "hex": "1b5d35323bc3a93b59574a6a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250331279
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "1705aa7fcf8bc2435524e2621b78094ba9ff03a9b427e4d1c9e213c70e9a3d09",
+        "hex": "5354414e444152442d534545442d3436"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "b6e85daddfe316ff535d7c98ac16ecb135ccaa7068217e486719c916853d4853",
+        "hex": "5052494d4152592d534545442d3436"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-kind-c3a9",
+      "input": {
+        "length": 11,
+        "sha256": "35666303273a726ff7514bfc997da948c80bb9d774a9de9df44184dd18c2ff36",
+        "hex": "1b5d35323bc3a93b3f1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250312381
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "1c732b1dfc5ae4741d629a79b66ab15c8df6eb245b2e18d48573971c449bf13e",
+        "hex": "5354414e444152442d534545442d3438"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "ae660f40494da0a008341e101ddfbfd3c1e676ada438f9a9cfe757bcac240476",
+        "hex": "5052494d4152592d534545442d3438"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-empty",
+      "input": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250307955
+      },
+      "standard": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "98fb48689b111c6d4ceaf7617a3747e3625f23d138a76bf801f2c5eaaea74470",
+        "hex": "5052494d4152592d534545442d3530"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-empty",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 9,
+        "sha256": "88d92754500c650827af909f36bbd6a6d591e7ad13a3d223b7c398db88df806b",
+        "hex": "1b5d35323b633b1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250272902
+      },
+      "standard": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "98fb48689b111c6d4ceaf7617a3747e3625f23d138a76bf801f2c5eaaea74470",
+        "hex": "5052494d4152592d534545442d3530"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-one-byte",
+      "input": {
+        "length": 13,
+        "sha256": "6aec596c995ce8a011f2604854893b1fb044192afb00c64a921f97b7832815d5",
+        "hex": "1b5d35323b633b65413d3d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250316548
+      },
+      "standard": {
+        "length": 1,
+        "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "hex": "78"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "fc2a8684ccc58cba2893ed0b62441edfde2b337986172f276d2c8b0ae42e0eb8",
+        "hex": "5052494d4152592d534545442d3532"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-one-byte",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "6aec596c995ce8a011f2604854893b1fb044192afb00c64a921f97b7832815d5",
+        "hex": "1b5d35323b633b65413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250320154
+      },
+      "standard": {
+        "length": 1,
+        "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "hex": "78"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "fc2a8684ccc58cba2893ed0b62441edfde2b337986172f276d2c8b0ae42e0eb8",
+        "hex": "5052494d4152592d534545442d3532"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-nul",
+      "input": {
+        "length": 13,
+        "sha256": "917e5211a1422c2b94b399b0c2c022440d2ace74db7e2bd23e9770f026021ed5",
+        "hex": "1b5d35323b633b595142691b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250318281
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138",
+        "hex": "610062"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "e7e225083d57882e5ada402a318c428f653d637c3f1de29a7d8c32e8f52ad0c1",
+        "hex": "5052494d4152592d534545442d3534"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-nul",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 13,
+        "sha256": "5cc0c7a8deca7ec6434c0497c3e594d5b402e9101a6dccc220aa5cf214276168",
+        "hex": "1b5d35323b633b59513d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250312893
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138",
+        "hex": "610062"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "e7e225083d57882e5ada402a318c428f653d637c3f1de29a7d8c32e8f52ad0c1",
+        "hex": "5052494d4152592d534545442d3534"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-invalid-utf8",
+      "input": {
+        "length": 13,
+        "sha256": "4a718eb9d32448832c257980e45d91ff79233474604f84bfedc49a7f0d05a941",
+        "hex": "1b5d35323b633b596639691b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250329520
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "01ce0241d2a0e71a4fecd5a8d71157fe2787197732fc15d889cbcf36c38e3c68",
+        "hex": "61ff62"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "59d61e043f21d25571eaf99ac0153ee38343f2db7f01669d78076608cf2fe7bb",
+        "hex": "5052494d4152592d534545442d3536"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-invalid-utf8",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "f4a00594f4a6b020668980d4f9e61bb6cedde8a8513674b8b0ea5ae7253ef462",
+        "hex": "1b5d35323b633b59567847526d493d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250304412
+      },
+      "standard": {
+        "length": 3,
+        "sha256": "01ce0241d2a0e71a4fecd5a8d71157fe2787197732fc15d889cbcf36c38e3c68",
+        "hex": "61ff62"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "59d61e043f21d25571eaf99ac0153ee38343f2db7f01669d78076608cf2fe7bb",
+        "hex": "5052494d4152592d534545442d3536"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-utf8",
+      "input": {
+        "length": 17,
+        "sha256": "a40d670a5cb2d3bc15b771748a52cd4ec407e4f7935ab8ce19c9589ac26b792c",
+        "hex": "1b5d35323b633b365a75717a72453d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250297902
+      },
+      "standard": {
+        "length": 5,
+        "sha256": "d14eff9d4590835ff4ef5ab4e9dad9ceb581f5916eeb12d57df27902d3d19143",
+        "hex": "e99baaceb1"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "763e39f310068d20683b749ac0fe404b471cd8baf8061b8c76e572d67162247a",
+        "hex": "5052494d4152592d534545442d3538"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-utf8",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "a40d670a5cb2d3bc15b771748a52cd4ec407e4f7935ab8ce19c9589ac26b792c",
+        "hex": "1b5d35323b633b365a75717a72453d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250326475
+      },
+      "standard": {
+        "length": 5,
+        "sha256": "d14eff9d4590835ff4ef5ab4e9dad9ceb581f5916eeb12d57df27902d3d19143",
+        "hex": "e99baaceb1"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "763e39f310068d20683b749ac0fe404b471cd8baf8061b8c76e572d67162247a",
+        "hex": "5052494d4152592d534545442d3538"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "write-embedded-control",
+      "input": {
+        "length": 17,
+        "sha256": "040932510d79fd7d41669bf134cf27e0760d108103987609180d4f57c4cf39aa",
+        "hex": "1b5d35323b633b59527469436d493d1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250304623
+      },
+      "standard": {
+        "length": 5,
+        "sha256": "16e761c9c8e0fd1df59a4300920d63fa8ecf64993d80256f0fb15a740046b795",
+        "hex": "611b620a62"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "25e1bf7dbcf313b6b57e2b3bdf502a4dac90621a5ddb5a9d8bfb58bf806150e7",
+        "hex": "5052494d4152592d534545442d3630"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-own-embedded-control",
+      "input": {
+        "length": 10,
+        "sha256": "e4c7cf35864f3af6e7d056973987b9d32e428bc7ad5c5789bc445df2fed5fdde",
+        "hex": "1b5d35323b633b3f1b5c"
+      },
+      "reply": {
+        "length": 17,
+        "sha256": "040932510d79fd7d41669bf134cf27e0760d108103987609180d4f57c4cf39aa",
+        "hex": "1b5d35323b633b59527469436d493d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250290051
+      },
+      "standard": {
+        "length": 5,
+        "sha256": "16e761c9c8e0fd1df59a4300920d63fa8ecf64993d80256f0fb15a740046b795",
+        "hex": "611b620a62"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "25e1bf7dbcf313b6b57e2b3bdf502a4dac90621a5ddb5a9d8bfb58bf806150e7",
+        "hex": "5052494d4152592d534545442d3630"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-3f",
+      "input": {
+        "length": 9,
+        "sha256": "bb83f0117fdf94b0869b62978b73c9311f60ff8153aa487a7eadd7abb98a4963",
+        "hex": "1b5d35323b633b3f07"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "07f8e2c9355dd4f8602672f1580099bc0c2e6e33230e491492689521435c58e4",
+        "hex": "1b5d35323b633b55315242546b5242556b517455305646524330324d673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250298243
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "1abe4e4b20a658cfe2528466294b1d09680e8119d700e6ce98da18816535d012",
+        "hex": "5354414e444152442d534545442d3632"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "483fb396f35314ff065fa264b1fb07f2436de0aa4a344d6cd4d51751b08fb841",
+        "hex": "5052494d4152592d534545442d3632"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-",
+      "input": {
+        "length": 8,
+        "sha256": "0b73889a770855432605a2edf00e79a95588b61fee99b5e0c2a2d4fc0703874a",
+        "hex": "1b5d35323b633b07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250306236
+      },
+      "standard": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "bbea8cce2454fc427537297166a91e318e40e8738686024842eec5b0cc499956",
+        "hex": "5052494d4152592d534545442d3634"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-5a673d",
+      "input": {
+        "length": 11,
+        "sha256": "8585b387899426b5c0e427dd5d10a3addf6b0bd7c54f9185af81e1334f2cb355",
+        "hex": "1b5d35323b633b5a673d07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250313017
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "5417bdfd5a73813839b04c57c54c4b682e524598d0cc8923fa92e09f5e82c691",
+        "hex": "5354414e444152442d534545442d3636"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "9b9c2c6c3cb5c25aeccb6a78a3383af3bbe0dfbf43c9a9ce43894c432d3fd0cb",
+        "hex": "5052494d4152592d534545442d3636"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-5a20673d3d",
+      "input": {
+        "length": 13,
+        "sha256": "73c4af801500b15fb839625fda2fd32b38eb367ef1ec8c6890c5680b86799f3e",
+        "hex": "1b5d35323b633b5a20673d3d07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250309973
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "5a3b48f25fae7c878004d5c03b4cc786f04c5878b54aca9df1da2a22804a9b81",
+        "hex": "5354414e444152442d534545442d3638"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "58df52e5bad097d3aef228310811715748ea5dac8376ef1953157025e07fe551",
+        "hex": "5052494d4152592d534545442d3638"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-5a673d3d3d",
+      "input": {
+        "length": 13,
+        "sha256": "50fa91d04016653da98996ec7d2bc413d71a9624084914c947d5afc72998e08b",
+        "hex": "1b5d35323b633b5a673d3d3d07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250318116
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "b545d5cd33727be43eb383d7204095f031aa55bbe92c542ca2b1d51215cf8ff8",
+        "hex": "5354414e444152442d534545442d3730"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "78b2ca66a67c9a3b712804307b05fe0e515409c50ec5d77e261f975482e775ae",
+        "hex": "5052494d4152592d534545442d3730"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-41423d3d",
+      "input": {
+        "length": 12,
+        "sha256": "54b335f0407ff63fed3542c9390a26df2f044752872c53d56bb151c9664930b0",
+        "hex": "1b5d35323b633b41423d3d07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250322592
+      },
+      "standard": {
+        "length": 1,
+        "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+        "hex": "00"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "d7872a697aece6a6f56797cf4089f3d90be6a0e8a99ae19c22fdacc37e5eb749",
+        "hex": "5052494d4152592d534545442d3732"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "payload-5f773d3d",
+      "input": {
+        "length": 12,
+        "sha256": "7a579d204c876ed753977172a872a7e977b5503a58f059a6f478155f5ee7612f",
+        "hex": "1b5d35323b633b5f773d3d07"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250307291
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "ef5f02d679473073a47ca627b68b2bc0d96965cc2f31caba9eb67fb0cfc2fb75",
+        "hex": "5354414e444152442d534545442d3734"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "6081957ca17ddc31f310512f65a8fcbf978e3c02ce32255491e3614409193128",
+        "hex": "5052494d4152592d534545442d3734"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-terminator-07",
+      "input": {
+        "length": 9,
+        "sha256": "4f125492125f591e7532f8855460b2459bba410624cbd8d47fcce1c603544d7b",
+        "hex": "1b5d35323b703b3f07"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "2bde6f95f93b2c739883c564cb0297eb73fa995483fbd175eb0e95a84bd34b60",
+        "hex": "1b5d35323b703b55315242546b5242556b517455305646524330334e673d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250340110
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "92918adb7fd9b25073897cd65d0ac59c5de3059a9e151039d8d72294c4061e73",
+        "hex": "5354414e444152442d534545442d3736"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "6a4bf4c42ff5e403d351ea3fb58f8282b4862f008049693a9efa07709433ec3b",
+        "hex": "5052494d4152592d534545442d3736"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "read-terminator-1b5c",
+      "input": {
+        "length": 10,
+        "sha256": "c22893ec035930664bab456e75f5651f5f91696447ef7006fc2f467ed1c65d3b",
+        "hex": "1b5d35323b703b3f1b5c"
+      },
+      "reply": {
+        "length": 33,
+        "sha256": "fff522997c97017be5cc697c2609cdd0408c69258d0a4c4a542947c48536e74d",
+        "hex": "1b5d35323b703b55315242546b5242556b517455305646524330334f413d3d1b5c"
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250285959
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "60f2dde641bf8e886ab59cfaefc2e0464797eefab1f32cc714e95d1ddb115c26",
+        "hex": "5354414e444152442d534545442d3738"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "edee712b8e41340c7aa4c4666a8a50edb82e5de3f0cc2e5481da7042ea5d4b11",
+        "hex": "5052494d4152592d534545442d3738"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "cancel-capture-18",
+      "input": {
+        "length": 14,
+        "sha256": "e5dc5a5f743233d1d40789bf80ee07e5f4771b762ef28ce94a1a0c1c41c28163",
+        "hex": "1b5d35323b633b59574a6a181b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250320220
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "3b0cb75d291526189e3622395443b4520e6d82f6a45e325c66df92c74f1b47f5",
+        "hex": "5354414e444152442d534545442d3830"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "c05d8e34d1f2a155f54c659ed1da413a08c409b3cc49359551d49af7123359a1",
+        "hex": "5052494d4152592d534545442d3830"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "cancel-capture-1a",
+      "input": {
+        "length": 14,
+        "sha256": "de473bae42db30addb9d3db836c67a3c8fcd9199782c14dad70d498e5bd2d2c8",
+        "hex": "1b5d35323b633b59574a6a1a1b5c"
+      },
+      "reply": {
+        "length": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hex": ""
+      },
+      "transport": {
+        "size": [
+          102,
+          36
+        ],
+        "elapsed_ns": 250306881
+      },
+      "standard": {
+        "length": 16,
+        "sha256": "fba9377c0a319768390863d13e1d8a637ffbd30bf1d3eb9bc7d9cdb92d402e63",
+        "hex": "5354414e444152442d534545442d3832"
+      },
+      "primary": {
+        "length": 15,
+        "sha256": "43daec6f50bb0a5de7638a76ee057acc07ad1fd6693eea4411370f8cee3f800f",
+        "hex": "5052494d4152592d534545442d3832"
+      },
+      "standard_status": {
+        "code": 0,
+        "stderr": ""
+      },
+      "primary_status": {
+        "code": 0,
+        "stderr": ""
+      }
+    }
+  ],
+  "private_environment": {
+    "WAYLAND_DISPLAY": "wayland-1",
+    "XDG_RUNTIME_DIR": "/tmp/osc52-3wdmloeu",
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman"
+  },
+  "keyboard_ready": "{\"event\":\"ready\",\"time_ns\":4084862678109306}\n",
+  "fixture": {
+    "ready": true,
+    "pid": 2218586
+  },
+  "focused_window": {
+    "id": 5,
+    "type": "con",
+    "orientation": "none",
+    "percent": 1.0,
+    "urgent": false,
+    "marks": [],
+    "focused": true,
+    "layout": "none",
+    "border": "none",
+    "current_border_width": 2,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "deco_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "window_rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 768
+    },
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 600
+    },
+    "name": "/usr/bin/python3",
+    "window": null,
+    "nodes": [],
+    "floating_nodes": [],
+    "focus": [],
+    "fullscreen_mode": 0,
+    "sticky": false,
+    "pid": 2218540,
+    "app_id": "com.mitchellh.ghostty",
+    "visible": true,
+    "max_render_time": 0,
+    "shell": "xdg_shell",
+    "inhibit_idle": false,
+    "idle_inhibitors": {
+      "user": "none",
+      "application": "none"
+    }
+  },
+  "primary_selection_available": true,
+  "keyboard_probe": {
+    "length": 1,
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "hex": "61"
+  },
+  "initial_external_read": {
+    "length": 29,
+    "sha256": "b20de5d5ff35ea38013613d35d53c9488d9b850cd704b9dff8a3d49e465707f5",
+    "hex": "1b5d35323b633b55315242546b5242556b51745530564652413d3d1b5c"
+  },
+  "app_alive": true,
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "process_returns": [
+    0,
+    0,
+    0,
+    -15,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -15,
+    -15
+  ]
+}

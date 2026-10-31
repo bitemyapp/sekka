@@ -58,6 +58,8 @@ pub trait Actions {
     /// Stacks `b` before the `at`th of `a`'s tabs (`None`: after them).
     fn stack_at(&mut self, a: WinId, b: WinId, at: Option<usize>) -> bool;
     fn unstack(&mut self, id: WinId, to: Option<(i32, i32)>) -> bool;
+    /// Moves a tab one place along its group, sliding the tabs there.
+    fn move_tab(&mut self, id: WinId, forward: bool) -> bool;
     fn show_group_member(&mut self, id: WinId);
     fn lower_window(&mut self, id: WinId);
     fn stack_with_behind(&mut self, id: WinId);
@@ -426,6 +428,31 @@ impl Actions for State {
         true
     }
 
+    fn move_tab(&mut self, id: WinId, forward: bool) -> bool {
+        let l = self.lg.m();
+        let before: Vec<(WinId, Rect)> =
+            l.wm.group_members(id)
+                .iter()
+                .filter_map(|m| l.decor_tab_rect(&mut self.az.labels, *m).map(|r| (*m, r)))
+                .collect();
+        if !l.wm.move_tab(id, forward) {
+            return false;
+        }
+        for m in l.wm.group_members(id) {
+            l.window_changed(m);
+        }
+        let ms = self.az.motion_ms();
+        let l = self.lg.m();
+        for (m, r0) in before {
+            if let Some(r1) = l.decor_tab_rect(&mut self.az.labels, m) {
+                let (dx, dy) = l.anims.tab_offset(m);
+                l.anims.start_tab(m, (r0.x - r1.x) as f64 + dx, (r0.y - r1.y) as f64 + dy, ms);
+            }
+        }
+        self.redraw_window(id);
+        true
+    }
+
     /// Shows one member of a group (clicking its tab).
     fn show_group_member(&mut self, id: WinId) {
         let l = self.lg.m();
@@ -446,7 +473,7 @@ impl Actions for State {
         self.apply_refocus(r);
     }
 
-    /// Stacks the focused window with the one behind it (⌥❖S).
+    /// Stacks the focused window with the one behind it (⌃❖S).
     fn stack_with_behind(&mut self, id: WinId) {
         if let Some(behind) = self.lg.r().wm.window_behind(id) {
             self.stack(behind, id);

@@ -1,0 +1,22 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-region-scroll-isolated/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-02c07fe8f6c56c45)
+
+running 1 test
+test terminal_view::scroll_retention_tests::exposed_rows_do_not_count_as_retained_pixels_in_the_work_gate ... FAILED
+
+failures:
+
+---- terminal_view::scroll_retention_tests::exposed_rows_do_not_count_as_retained_pixels_in_the_work_gate stdout ----
+
+thread 'terminal_view::scroll_retention_tests::exposed_rows_do_not_count_as_retained_pixels_in_the_work_gate' (985057) panicked at apps/hotaru/src/terminal_view.rs:1425:9:
+exposed shared rows cannot justify copying a large interval
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    terminal_view::scroll_retention_tests::exposed_rows_do_not_count_as_retained_pixels_in_the_work_gate
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 34 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p aizome-hotaru --lib`

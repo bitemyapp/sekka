@@ -1,0 +1,210 @@
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling libc v0.2.191
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling static_assertions v1.1.0
+   Compiling memchr v2.8.3
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/vendor/simdutf8)
+   Compiling unicode-width v0.2.3
+   Compiling lz4_flex v0.14.0
+   Compiling triomphe v0.1.17
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-prompts-20261028/apps/hotaru/crates/hotaru-core)
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/hyperlink-fixtures.json`: No such file or directory (os error 2)
+  --> crates/hotaru-core/tests/hyperlinks.rs:16:30
+   |
+16 |         serde_json::from_str(include_str!("../../../upstream/hyperlink-fixtures.json")).unwrap();
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/cursor-fixtures.json`: No such file or directory (os error 2)
+  --> crates/hotaru-core/tests/cursor.rs:15:30
+   |
+15 |         serde_json::from_str(include_str!("../../../upstream/cursor-fixtures.json")).unwrap();
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/vt-controls-fixtures.json`: No such file or directory (os error 2)
+  --> crates/hotaru-core/tests/vt_controls.rs:26:30
+   |
+26 |         serde_json::from_str(include_str!("../../../upstream/vt-controls-fixtures.json")).unwrap();
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/input-fixtures.json`: No such file or directory (os error 2)
+   --> crates/hotaru-core/tests/input.rs:101:26
+    |
+101 |     serde_json::from_str(include_str!("../../../upstream/input-fixtures.json")).unwrap()
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/reflow-fixtures.json`: No such file or directory (os error 2)
+  --> crates/hotaru-core/tests/reflow.rs:54:30
+   |
+54 |         serde_json::from_str(include_str!("../../../upstream/reflow-fixtures.json")).unwrap();
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/unicode-mode-fixtures.json`: No such file or directory (os error 2)
+   --> crates/hotaru-core/tests/unicode_mode.rs:146:30
+    |
+146 |         serde_json::from_str(include_str!("../../../upstream/unicode-mode-fixtures.json")).unwrap();
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: couldn't read `crates/hotaru-core/tests/../../../upstream/search-fixtures.json`: No such file or directory (os error 2)
+  --> crates/hotaru-core/tests/search.rs:20:30
+   |
+20 |         serde_json::from_str(include_str!("../../../upstream/search-fixtures.json")).unwrap();
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `hotaru-core` (test "hyperlinks") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `hotaru-core` (test "cursor") due to 1 previous error
+error: couldn't read `crates/hotaru-core/src/../../../upstream/hyperlink-fixtures.json`: No such file or directory (os error 2)
+   --> crates/hotaru-core/src/formatter.rs:624:34
+    |
+624 |             serde_json::from_str(include_str!("../../../upstream/hyperlink-fixtures.json"))
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: could not compile `hotaru-core` (test "vt_controls") due to 1 previous error
+error: could not compile `hotaru-core` (test "reflow") due to 1 previous error
+error: could not compile `hotaru-core` (test "search") due to 1 previous error
+error: could not compile `hotaru-core` (test "input") due to 1 previous error
+error: could not compile `hotaru-core` (test "unicode_mode") due to 1 previous error
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> crates/hotaru-core/src/history.rs:734:17
+    |
+734 |               row.put(
+    |  _________________^^^-
+735 | |                 col,
+736 | |                 char::from(b'a' + ((col + index) % 26) as u8),
+737 | |                 1,
+...   |
+742 | |                 col % 7 == 0,
+743 | |             );
+    | |_____________- argument #6 of type `row::SemanticContent` is missing
+    |
+note: method defined here
+   --> crates/hotaru-core/src/row.rs:460:19
+    |
+460 |     pub(crate) fn put(
+    |                   ^^^
+...
+467 |         semantic: SemanticContent,
+    |         -------------------------
+help: provide the argument
+    |
+734 |             row.put(
+...
+742 |                 col % 7 == 0,
+743 ~                 /* row::SemanticContent */,
+744 ~             );
+    |
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+    --> crates/hotaru-core/src/history.rs:1013:17
+     |
+1013 |             row.put(col, 'a', 1, Style::default(), false);
+     |                 ^^^-------------------------------------- argument #6 of type `row::SemanticContent` is missing
+     |
+note: method defined here
+    --> crates/hotaru-core/src/row.rs:460:19
+     |
+ 460 |     pub(crate) fn put(
+     |                   ^^^
+...
+ 467 |         semantic: SemanticContent,
+     |         -------------------------
+help: provide the argument
+     |
+1013 |             row.put(col, 'a', 1, Style::default(), false, /* row::SemanticContent */);
+     |                                                         ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> crates/hotaru-core/src/row/history.rs:462:13
+    |
+462 |           row.put(
+    |  _____________^^^-
+463 | |             0,
+464 | |             'e',
+465 | |             1,
+...   |
+471 | |             true,
+472 | |         );
+    | |_________- argument #6 of type `row::SemanticContent` is missing
+    |
+note: method defined here
+   --> crates/hotaru-core/src/row.rs:460:19
+    |
+460 |     pub(crate) fn put(
+    |                   ^^^
+...
+467 |         semantic: SemanticContent,
+    |         -------------------------
+help: provide the argument
+    |
+462 |         row.put(
+...
+471 |             true,
+472 ~             /* row::SemanticContent */,
+473 ~         );
+    |
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> crates/hotaru-core/src/row/history.rs:474:13
+    |
+474 |         row.put(3, '雪', 2, Style::default(), false);
+    |             ^^^------------------------------------- argument #6 of type `row::SemanticContent` is missing
+    |
+note: method defined here
+   --> crates/hotaru-core/src/row.rs:460:19
+    |
+460 |     pub(crate) fn put(
+    |                   ^^^
+...
+467 |         semantic: SemanticContent,
+    |         -------------------------
+help: provide the argument
+    |
+474 |         row.put(3, '雪', 2, Style::default(), false, /* row::SemanticContent */);
+    |                                                    ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> crates/hotaru-core/src/row/history.rs:505:13
+    |
+505 |         row.put(0, '雪', 2, Style::default(), true);
+    |             ^^^------------------------------------ argument #6 of type `row::SemanticContent` is missing
+    |
+note: method defined here
+   --> crates/hotaru-core/src/row.rs:460:19
+    |
+460 |     pub(crate) fn put(
+    |                   ^^^
+...
+467 |         semantic: SemanticContent,
+    |         -------------------------
+help: provide the argument
+    |
+505 |         row.put(0, '雪', 2, Style::default(), true, /* row::SemanticContent */);
+    |                                                   ++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 6 arguments but 5 arguments were supplied
+   --> crates/hotaru-core/src/row/history.rs:506:13
+    |
+506 |         row.put(3, 'e', 1, Style::default(), false);
+    |             ^^^------------------------------------ argument #6 of type `row::SemanticContent` is missing
+    |
+note: method defined here
+   --> crates/hotaru-core/src/row.rs:460:19
+    |
+460 |     pub(crate) fn put(
+    |                   ^^^
+...
+467 |         semantic: SemanticContent,
+    |         -------------------------
+help: provide the argument
+    |
+506 |         row.put(3, 'e', 1, Style::default(), false, /* row::SemanticContent */);
+    |                                                   ++++++++++++++++++++++++++++
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `hotaru-core` (lib test) due to 7 previous errors

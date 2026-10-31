@@ -1,0 +1,6 @@
+    Checking simdutf8 v0.1.5 (/home/callen/work/hotaru-native-geometric-20261028/apps/hotaru/vendor/simdutf8)
+    Checking hotaru-sprites v0.1.0 (/home/callen/work/hotaru-native-geometric-20261028/apps/hotaru/crates/hotaru-sprites)
+    Checking hotaru-io v0.1.0 (/home/callen/work/hotaru-native-geometric-20261028/apps/hotaru/crates/hotaru-io)
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-native-geometric-20261028/apps/hotaru/crates/hotaru-core)
+    Checking aizome-hotaru v0.1.0 (/home/callen/work/hotaru-native-geometric-20261028/desktop/aizome/apps/hotaru)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.43s

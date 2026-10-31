@@ -1,0 +1,163 @@
+name: Publish sekka.computer and aizome.computer
+
+on:
+  push:
+    branches: [main]
+    # Everything either site is built from (its generator, its Nix file and
+    # the files its content fileset takes), and this workflow. Each job below
+    # narrows this to its own site's sources.
+    paths:
+      - 'site/**'
+      - 'nix/site.nix'
+      - 'docs/brand/**'
+      - 'docs/images/sekka/**'
+      - 'aizome-site/**'
+      - 'nix/aizome-site.nix'
+      - 'desktop/aizome/crates/aizome-theme/src/lib.rs'
+      - 'desktop/aizome/icons/apps/**'
+      - 'desktop/aizome/apps/hotaru/data/**'
+      - 'desktop/aizome/docs/screenshots/**'
+      - 'desktop/aizome/docs/images/**'
+      - 'desktop/aizome/nix/fonts.nix'
+      - 'docs/test-results/application-startup/**'
+      - 'docs/test-results/luks-gui-uefi/**'
+      - '.github/workflows/sites.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time. GitHub keeps only the newest waiting run and cancels
+# older waiting ones, so each job compares with what its site is actually
+# serving, not with the push before: a cancelled run's changes still go out.
+concurrency:
+  group: sekka-sites
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Pushes to main, or by hand from main, on the sandboxed builder
+    # (nix/runner.nix and DEVELOPERS.md), with Nix through the host's daemon.
+    # A push publishes a site only when its sources changed since the
+    # revision its live pages state; a dispatch publishes both.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: ${{ matrix.site }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - site: sekka.computer
+            package: site
+            project: sekka
+            # The worker's Wasm is uploaded as built (DEVELOPERS.md, Website).
+            deploy-flags: --no-bundle
+            # site/, nix/site.nix and its content fileset: keep in step.
+            sources: >-
+              site nix/site.nix docs/brand docs/images/sekka
+              desktop/aizome/icons/apps desktop/aizome/apps/hotaru/data
+          - site: aizome.computer
+            package: aizome-site
+            project: aizome
+            deploy-flags: ''
+            # aizome-site/, nix/aizome-site.nix and its content fileset:
+            # keep in step.
+            sources: >-
+              aizome-site nix/aizome-site.nix
+              desktop/aizome/crates/aizome-theme/src/lib.rs
+              desktop/aizome/icons/apps desktop/aizome/apps/hotaru/data
+              desktop/aizome/docs/screenshots desktop/aizome/docs/images
+              desktop/aizome/nix/fonts.nix docs/images/sekka
+              docs/test-results/application-startup/koe-window-live.png
+              docs/test-results/luks-gui-uefi/75-settings-displays.png
+    env:
+      SITE: ${{ matrix.site }}
+      PACKAGE: ${{ matrix.package }}
+      PROJECT: ${{ matrix.project }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          # The whole history, to compare with the revision the site serves.
+          fetch-depth: 0
+      - name: Decide whether to publish
+        id: plan
+        shell: bash
+        env:
+          SOURCES: ${{ matrix.sources }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            echo "Publishing $SITE, as asked."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          read -ra sources <<< "$SOURCES"
+          # Every page links the commit it was built from.
+          live=$(curl -fsSL --max-time 30 "https://$SITE/" |
+            grep -oE 'github\.com/bitemyapp/sekka/commit/[0-9a-f]{7,40}' |
+            head -n 1 | sed 's|.*/||') || true
+          if [[ -z "$live" ]] || ! git rev-parse --quiet --verify "$live^{commit}" > /dev/null; then
+            echo "$SITE doesn't name a revision of this repository; publishing it."
+            publish=true
+          elif git merge-base --is-ancestor HEAD "$live"; then
+            echo "$SITE already serves $live, which includes this revision."
+            publish=false
+          elif git diff --quiet "$live" HEAD -- "${sources[@]}"; then
+            echo "Nothing $SITE is built from changed since $live, which it serves."
+            publish=false
+          else
+            echo "$SITE serves $live; since then these changed:"
+            git diff --stat "$live" HEAD -- "${sources[@]}"
+            publish=true
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - name: Check that this is a clean commit on main
+        if: ${{ steps.plan.outputs.publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Every page states the revision it was built from, and links it.
+          if [[ "$GITHUB_REF" != refs/heads/main || -n "$(git status --porcelain)" ]]; then
+            echo "::error::Sites are published only from a clean checkout of main."
+            exit 1
+          fi
+      - name: Build ${{ matrix.site }}
+        if: ${{ steps.plan.outputs.publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix build --no-update-lock-file --print-build-logs --out-link "result-$PACKAGE" ".#$PACKAGE"
+          if ! grep -q "/commit/${GITHUB_SHA:0:7}" "result-$PACKAGE/index.html"; then
+            echo "::error::$SITE's pages don't name ${GITHUB_SHA:0:7} as their revision."
+            exit 1
+          fi
+      - name: Check the Cloudflare secrets
+        id: secrets
+        if: ${{ steps.plan.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::notice title=$SITE was built, not published::The repository has no CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID secret, so nothing was deployed. DEVELOPERS.md (Website) lists the one-time setup."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish ${{ matrix.site }} to Cloudflare Pages
+        if: ${{ steps.secrets.outputs.deploy == 'true' }}
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_FLAGS: ${{ matrix.deploy-flags }}
+        run: |
+          set -euo pipefail
+          read -ra flags <<< "$DEPLOY_FLAGS"
+          nix run --inputs-from . nixpkgs#wrangler -- pages deploy "result-$PACKAGE" \
+            --project-name "$PROJECT" --branch main "${flags[@]}"

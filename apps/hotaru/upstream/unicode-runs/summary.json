@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "base_commit": "1d3c9cf4df2744e6a714d2bea18a31d90f5ddc7a",
+  "patch": "upstream/positive-width-runs.patch",
+  "patch_sha256": "7f7dbfc27d8e7a5fe759fb0bd87ff615a910b6a9d3a6597f23ad94cdde38b8b1",
+  "shared_core_modified": false,
+  "source_status": "isolated candidate; integration must preserve concurrent memory-accounting invalidation",
+  "validation": {
+    "core_tests": 71,
+    "replay_upstream_test": "pass",
+    "strict_clippy": "pass",
+    "scalar_bulk_operations": 1792,
+    "unicode_width_scalars": 1112064
+  },
+  "artifacts": {
+    "ascii.json": "85f912a20c0f02471768e6b4160e14c24f9ddceb2fcdd381ac0a2204c3fc9718",
+    "baseline-build.json": "7d5a12757d9079dc27eea90ba210075a708cf1fead2121158d207c2d1cbce685",
+    "candidate-build.json": "b90473a15b8206d7258de3c87ea07deb97e4781342a7d0b2b8241ced4316906b",
+    "cursor.json": "2972f8ee9516f42d6590830aba824a74077d3c4959d4ea5e1a15b1b9b11b8176",
+    "hotaru-perf-batch-cache.json": "7bc7d901c0ae7e1744bf90978b6e996e1ca864d703ccc53d31cac06bf7fce4a3",
+    "hotaru-perf-direct-han.json": "a27a22c237b356c1c27794b6a0095c6a2ed1a741dd61442f771d256f05c8885a",
+    "hotaru-perf-direct-stream.json": "189f7c2cc53c207bff0b48cf7fa6ccd589416fba2834ebc246635359da86189d",
+    "hotaru-perf-stream-cache.json": "0b556595304487989a4ac3896f607632176747d89ab6c4aa7c0e0c6f49bfb288",
+    "hotaru-perf-stream-han.json": "4c56f65f5ebfcff841ac230cb97d2548e771ff9b2b9905705c61553299fa556e",
+    "hotaru-perf-stream-write.json": "dc631f2f55fd83a631be38cf0ad994292438ab182b8bb2b984fbba3a6a1a5bbd",
+    "hotaru-perf-width-cache.json": "0e83225032fcc964c6999fc4fc096cc6333fcf4117a5893d856e88447a009ded",
+    "hotaru-perf-write-batch.json": "b1d4d8cc8b891b7160c804c11bd9e4a77f31d7010db362a8e2a12461ba65fd0c",
+    "links.json": "9c7fa4b4dbb3c9d9a25b0c6c1a35d93135fabc9dab1fcda54fc3de607656f88f",
+    "profile-direct.json": "d697289622e32d73146089dcc18d647f6dc3435d5bc0903a4d68583205adfeda",
+    "profile-stream.json": "d467f405e30f02717229f8b2896e96d5819751aeba12029e9239ea8ef91f7acd",
+    "profile.json": "0238f4ce8490bfb522062c80bc8cdfdc70335cd537ec9390ec9515af3f80e9e7",
+    "styled.json": "bab85cd1e9cfe9218ee288f5a52584f72142593a41440c3a5f593d4dd090d686",
+    "unicode.json": "a2395efdb70a4f62b8f08add7adcf5568eea7748983a9beaea1867e51aaa28c2",
+    "validation.log": "04701c17a97113a3789a23a77bc38a0fb8cd3056ef090a98a731c6355922d689"
+  },
+  "remaining_gaps": [
+    "Dense wide Unicode2.225x Ghostty time",
+    "ASCII1.067x on reviewed corpus,1.358x on longer-line diagnostic",
+    "No whole-app or integrated memory/search build performance acceptance"
+  ]
+}

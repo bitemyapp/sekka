@@ -10,11 +10,14 @@
 //! kebab-case, e.g. `{"request":"focus","id":7}`. `docs/ipc.md` lists
 //! every message.
 
+use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+pub mod setup;
 
 /// Bumped when a message changes incompatibly.
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -396,6 +399,22 @@ pub enum Request {
     /// The seat's grabs, pressed buttons and keys, pointer constraint and
     /// cursor. → [`Response::InputState`].
     InputState,
+    /// The keyboards that type, one entry for each (a keyboard with several
+    /// devices is one), and which typed last. → [`Response::Keyboards`].
+    Keyboards,
+    /// Swallows the next key pressed (unless the screen is locked) and
+    /// tells the connection that asked, alone, which it was and on which
+    /// keyboard, by [`Event::KeyCaught`] with this `tag`: Settei's keyboard
+    /// setup asks, as an app never hears a modifier key alone. The asking
+    /// connection must have subscribed ([`Events::request`]). It waits
+    /// while that connection stays open, until it asks again without a
+    /// tag (another connection's asking without one changes nothing) or
+    /// another connection asks for a key. Answered at once with `ok`, or
+    /// an error on a connection that hasn't subscribed.
+    CatchKey {
+        #[serde(default)]
+        tag: Option<String>,
+    },
     /// Blocks the compositor's main loop for a while (at most 60 s), to
     /// try the watchdog: nothing draws or answers meanwhile.
     DebugStall {
@@ -476,6 +495,19 @@ pub enum Synthetic {
     Chord { keys: String },
     /// Closes or opens the laptop's lid, as its switch does.
     Lid { closed: bool },
+    /// Plugs in a keyboard that types (a space bar and all): `id` is its
+    /// vendor and product (`05ac:029c`).
+    PlugKeyboard {
+        name: String,
+        id: String,
+        #[serde(default)]
+        bus: KeyboardBus,
+    },
+    /// Unplugs a keyboard [`Synthetic::PlugKeyboard`] plugged in.
+    UnplugKeyboard { name: String },
+    /// Presses or releases a key, as [`Synthetic::Key`] does, on a keyboard
+    /// [`Synthetic::PlugKeyboard`] plugged in: its own keys' settings apply.
+    KeyOn { keyboard: String, key: String, pressed: bool },
 }
 
 fn yes() -> bool {
@@ -537,6 +569,9 @@ pub enum Response {
     },
     InputState {
         state: InputState,
+    },
+    Keyboards {
+        keyboards: Vec<KeyboardInfo>,
     },
     Shares {
         shares: Vec<ShareInfo>,
@@ -662,6 +697,41 @@ impl Response {
     }
 }
 
+/// A keyboard, as `[[input.keyboards]]` names it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyboardInfo {
+    /// What it calls itself: `Apple Inc. Magic Keyboard`.
+    pub name: String,
+    /// Its vendor and product, as `lsusb` writes them: `05ac:029c`.
+    pub id: String,
+    #[serde(default)]
+    pub bus: KeyboardBus,
+    /// It typed the last key.
+    #[serde(default)]
+    pub last: bool,
+}
+
+/// How a keyboard is connected.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum KeyboardBus {
+    Usb,
+    Bluetooth,
+    /// A laptop's own keyboard (PS/2, I²C, SPI).
+    BuiltIn,
+    /// Virtual (a VM's, uinput) or unknown.
+    #[default]
+    Other,
+}
+
+impl KeyboardBus {
+    /// Plugged in or paired, rather than one the computer came with or a
+    /// virtual one.
+    pub fn plugged(self) -> bool {
+        matches!(self, KeyboardBus::Usb | KeyboardBus::Bluetooth)
+    }
+}
+
 /// One window, as the shell's Deskbar and the switcher see it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct WindowInfo {
@@ -692,8 +762,8 @@ pub struct WindowInfo {
     pub output: Option<String>,
     /// Draws its own title bar; Aizome adds only the tab.
     pub client_side_decorations: bool,
-    /// Uses Aizome's kit (app_id `org.aizome.…`): no command-key
-    /// translation.
+    /// Uses Aizome's kit (app_id `org.aizome.…`, or Genkan's): no
+    /// command-key translation.
     pub kit_app: bool,
     /// The window this one is a dialog of.
     pub parent: Option<WindowId>,
@@ -929,6 +999,20 @@ pub enum Event {
     SharesChanged {
         shares: Vec<ShareInfo>,
     },
+    /// A keyboard that types appeared, for the first time since the
+    /// compositor started: one plugged in again isn't new.
+    KeyboardAdded {
+        keyboard: KeyboardInfo,
+    },
+    /// The key a [`Request::CatchKey`] caught, sent to the connection that
+    /// asked alone: its evdev code, the same whatever the keymap makes of
+    /// the key, and the keyboard that typed it (none for a key from IPC).
+    KeyCaught {
+        tag: String,
+        code: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        keyboard: Option<KeyboardInfo>,
+    },
 }
 
 /// `$XDG_RUNTIME_DIR/aizome.$WAYLAND_DISPLAY.sock`.
@@ -1005,11 +1089,11 @@ impl Client {
         }
     }
 
-    /// Subscribes and returns the event stream. The connection carries
-    /// nothing else afterwards.
+    /// Subscribes and returns the event stream. Requests can still go on
+    /// it, answered among the events ([`Events::request`]).
     pub fn events(mut self) -> io::Result<Events> {
         match self.request(&Request::Subscribe)? {
-            Response::Ok => Ok(Events { reader: self.reader, _writer: self.writer }),
+            Response::Ok => Ok(Events { reader: self.reader, writer: self.writer, early: VecDeque::new() }),
             Response::Error { message } => Err(io::Error::other(message)),
             other => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unexpected {other:?}"))),
         }
@@ -1024,18 +1108,49 @@ impl Client {
 /// Events from a subscribed connection. Ends when the compositor closes it.
 pub struct Events {
     reader: BufReader<UnixStream>,
-    _writer: UnixStream,
+    writer: UnixStream,
+    /// Events that came while a request waited for its response.
+    early: VecDeque<Event>,
 }
 
 impl Events {
     pub fn stream(&self) -> &UnixStream {
         self.reader.get_ref()
     }
+
+    /// Sends a request on this connection and waits for its response,
+    /// keeping the events that come first for [`Iterator::next`]: what
+    /// only this connection hears (a [`Request::CatchKey`]'s key) is asked
+    /// for here. Responses come in order, after the events sent before.
+    pub fn request(&mut self, request: &Request) -> io::Result<Response> {
+        let mut line = serde_json::to_string(request).map_err(io::Error::other)?;
+        line.push('\n');
+        self.writer.write_all(line.as_bytes())?;
+        self.writer.flush()?;
+        let bad = |e: serde_json::Error| io::Error::new(io::ErrorKind::InvalidData, e);
+        loop {
+            let mut buf = String::new();
+            if self.reader.read_line(&mut buf)? == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "the compositor closed the connection"));
+            }
+            let v: serde_json::Value = serde_json::from_str(buf.trim_end()).map_err(bad)?;
+            if v.get("event").is_none() {
+                return serde_json::from_value(v).map_err(bad);
+            }
+            // One this side doesn't know (a newer compositor's) is skipped.
+            if let Ok(e) = serde_json::from_value(v) {
+                self.early.push_back(e);
+            }
+        }
+    }
 }
 
 impl Iterator for Events {
     type Item = io::Result<Event>;
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(e) = self.early.pop_front() {
+            return Some(Ok(e));
+        }
         let mut buf = String::new();
         match self.reader.read_line(&mut buf) {
             Ok(0) => None,
@@ -1050,6 +1165,28 @@ impl Iterator for Events {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboards_are_named_as_settings_name_them() {
+        let r: Request = serde_json::from_str(r#"{"request":"catch-key","tag":"setup"}"#).unwrap();
+        assert_eq!(r, Request::CatchKey { tag: Some("setup".into()) });
+        let r: Request = serde_json::from_str(r#"{"request":"catch-key"}"#).unwrap();
+        assert_eq!(r, Request::CatchKey { tag: None });
+        let k = KeyboardInfo {
+            name: "Magic Keyboard".into(),
+            id: "004c:029c".into(),
+            bus: KeyboardBus::Bluetooth,
+            last: true,
+        };
+        let e = Event::KeyCaught { tag: "setup".into(), code: 125, keyboard: Some(k) };
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            r#"{"event":"key-caught","tag":"setup","code":125,"keyboard":{"name":"Magic Keyboard","id":"004c:029c","bus":"bluetooth","last":true}}"#
+        );
+        let s: Synthetic = serde_json::from_str(r#"{"type":"plug-keyboard","name":"K120","id":"046d:c31c"}"#).unwrap();
+        assert_eq!(s, Synthetic::PlugKeyboard { name: "K120".into(), id: "046d:c31c".into(), bus: KeyboardBus::Other });
+        assert!(KeyboardBus::Usb.plugged() && !KeyboardBus::BuiltIn.plugged() && !KeyboardBus::Other.plugged());
+    }
 
     #[test]
     fn requests_are_tagged_in_kebab_case() {

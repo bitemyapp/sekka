@@ -77,7 +77,11 @@ assert builtins.all (c: !systemKeymap c) (
   ++ otherDesktops
 );
 assert builtins.all (c: !(c.environment.etc ? "xdg/aizome/environment")) otherDesktops;
-assert coexist.environment.variables.GTK_IM_MODULE == "ibus";
+# Aizome must leave other desktops' GTK policy alone, including newer
+# NixOS defaults that no longer export a global GTK_IM_MODULE.
+assert
+  (coexist.environment.variables.GTK_IM_MODULE or null)
+  == (gnome.environment.variables.GTK_IM_MODULE or null);
 assert coexist.environment.variables.QT_IM_MODULE == "ibus";
 assert lib.hasInfix "GTK_IM_MODULE=wayland" coexist.environment.etc."xdg/aizome/environment".text;
 assert lib.hasInfix "QT_IM_MODULE=wayland" coexist.environment.etc."xdg/aizome/environment".text;

@@ -1,0 +1,9 @@
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-ascii.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.9330230991896968}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-unicode.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 1.2765173256464875}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-styled.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8375325069031399}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-cursor.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.3588898277609179}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-ascii.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.9454117296797884}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-unicode.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 1.2062043635889723}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-styled.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.8487155492741351}
+{"report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-cursor.json", "state_matched": true, "performance_comparable": true, "hotaru_over_ghostty": 0.3568233903362082}
+{"status": "completed", "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/summary.json"}

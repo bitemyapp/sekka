@@ -3,6 +3,15 @@
 README and website images are original PNG captures with links to the full
 files. They are not upscaled, composited, or generated illustrations.
 
+The [application-startup review images](test-results/application-startup/README.md)
+were captured on 2026-10-29 for PR #144. Four are original 1280 × 800 `grim`
+captures of the actual shell and integrated Koe under a private headless
+Aizome compositor; the failures use deliberate test entries. Two are
+explicitly labeled 900 × 600 UI mocks rendered by the real toolkit with
+synthetic lifecycle events. They are separate from the gallery and from
+ISO qualification. The linked record contains reproduction commands,
+executable identities, observed outcomes and hashes; no pixels were edited.
+
 The validation captures in `test-results/luks-gui-uefi/` are separate from the
 README and website gallery. They are original 1280 × 800 QEMU screendumps from
 the [2026-10-21 encrypted GUI installation](test-results/luks-gui-uefi.json),
@@ -33,6 +42,20 @@ automatic login. The UEFI captures include the emergency console the initrd
 left before the fix; the BIOS run's restart and shutdown frames were
 byte-identical to the UEFI run's and aren't repeated.
 
+The captures in `desktop/aizome/docs/screenshots/nisshi/` are original
+1440 × 900 `grim` captures, at scale 1, of Nisshi's release build from
+29 October 2026. Each window ran alone under a private headless sway
+(`desktop/aizome/sukumo/scripts/headless-wayland`, pixman), drawing its own
+menu bar since no Aizome shell was running. It read through its real
+helper, but from a stand-in journalctl that answers from the made-up boot
+of `apps/nisshi/src/fixture.rs` (`cargo run -p aizome-nisshi --example
+sample`). No message of a real computer is shown. The window was moved
+between views by launching `aizome-nisshi` again with `--cursor`,
+`--search`, `--scope` and `--launch`, which hand those to the running
+window, not by pointer input. They are not cropped or scaled. The Night and Day goldens
+in `desktop/aizome/apps/nisshi/tests/snapshots/` are headless renders from
+the kit's offscreen renderer, not window captures.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of
@@ -50,12 +73,16 @@ it keeps the whole Tatami display, including its bar and window edges.
 | [Yukimi](images/sekka/yukimi.png) | 2560 × 1600 | Shared native Yukimi in Tatami, reading the test VM `sekka-demo`; whole display, scale 2 |
 | [Plasma](images/sekka/plasma.png) | 2560 × 1600 | Sekka's Plasma session with Konsole running fastfetch over Dolphin |
 | [GNOME](images/sekka/gnome.png) | 2560 × 1600 | Historical capture of Sekka's GNOME session with Files over the former GTK Yukimi |
-| [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file, Files and a terminal (running fastfetch) stacked in one tab group, a notification filed under Tenki in the Deskbar |
+| [Aizome](images/sekka/aizome-desktop.png) | 2880 × 1800 | The whole Aizome desktop: Sumi with a Markdown file beside Files and Hotaru, Aizome's terminal (running fastfetch), stacked in one tab group, a notification filed under Tenki in the Deskbar |
 | [Aizome's menu at the pointer](images/sekka/aizome-menu.png) | 2880 × 1800 | The same desktop with Super + right-click's whole menu of Sumi at the pointer |
 | [Aizome's palette](images/sekka/aizome-palette.png) | 2880 × 1800 | The same desktop with the command palette (Super + Space), "find" typed |
 | [Settei](images/sekka/aizome-settings.png) | 1896 × 1380 | Aizome's Settings at Appearance, cropped to its window with its tab, frame and shadow |
 | [Yukimi in Aizome](images/sekka/aizome-yukimi.png) | 2256 × 1580 | Aizome's native Yukimi reading the test VM `sekka-demo`, cropped to its window |
-| [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window |
+| [Genkan](images/sekka/genkan.png) | 2216 × 1580 | Genkan's window in Aizome, in its debug-only welcome preview with synthetic memory and cache data, cropped to its window, captured before the Keyboard step was added |
+| [Genkan's keyboard step](images/sekka/genkan-keyboard.png) | 2216 × 1580 | Genkan's Keyboard step in its debug-only preview, after QEMU's Alt was pressed on the VM's Virtio keyboard and caught through the compositor: the swap of left Alt and Super recommended; the footer's caching line is sample data |
+| [Waiting for the key](images/sekka/genkan-keyboard-waiting.png) | 2216 × 1580 | The same step waiting for the key, after Press Again |
+| [The keys kept](images/sekka/genkan-keyboard-kept.png) | 2216 × 1580 | The same step after Swap left Alt and Super was turned off |
+| [Control beside the space bar](images/sekka/genkan-keyboard-control.png) | 2216 × 1580 | The same step after QEMU's Control was pressed: the keys stay as they are |
 
 The shared native Yukimi image was captured on 2026-10-28 by
 [`yukimi-tatami`](../nix/yukimi-discover.nix), a disposable component-test VM
@@ -123,4 +150,24 @@ virtual display at its native resolution, and the three application images are
 crops of it to the window with its tab and shadow, unscaled. Genkan is the
 debug build's welcome preview (`CALAMARES_UI_PREVIEW=welcome`), with the
 pointer moved off its window; its sample data are fixed, and production builds
-leave the preview out.
+leave the preview out. The current captures were made on 31 October 2026 from
+commit f1bb0c7a, on a build host's KVM, with Hotaru as the stacked terminal;
+fastfetch prints a short structure so its output fits Hotaru's window. They predate fish becoming Aizome's shell, so the terminal runs bash.
+
+Genkan's keyboard-step images come from the `genkan-keyboard` check,
+[nix/genkan-keyboard-test.nix](../nix/genkan-keyboard-test.nix):
+
+```sh
+nix build .#checks.x86_64-linux.genkan-keyboard --out-link result-genkan-keyboard
+```
+
+It boots one disposable NixOS VM like the one above, built from the modules
+installed systems import (desktops and applications), with Aizome chosen,
+logged in automatically, and left Alt and Super swapped as Genkan writes them. The
+page is the debug build's preview (`CALAMARES_UI_PREVIEW=keyboard`), whose
+sample starts with a ThinkPad's keyboard; the test presses Press Again and
+then QEMU's own keys, through libinput, so the keyboard shown is the VM's.
+Captures are crops of the 2880 × 1800 display (scale 2, pixman) to the window
+with its tab and frame, unscaled. They were taken on 2026-10-30 on
+wx-workstation and are not screenshots of an installed release. The captures
+include the left-only recommendation, preserving right Alt (AltGr).

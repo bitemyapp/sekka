@@ -1,0 +1,3 @@
+# Terminal byte streams deliberately contain CR, tabs and control sequences.
+# Preserve bytes across checkouts; text merging/line-ending conversion is wrong.
+upstream/fixtures/*.vt binary

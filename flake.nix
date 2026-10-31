@@ -18,6 +18,16 @@
   inputs.superluminal.inputs.nixpkgs.follows = "applications";
   inputs.tracy.url = "github:bitemyapp/tracy-flake";
   inputs.tracy.inputs.nixpkgs.follows = "applications";
+  # Uta, the YouTube Music client, as source: Sekka builds it against
+  # Aizome's kit from this checkout (nix/uta.nix), not the Aizome its own
+  # lock names. Pinned by revision, so the nightly's input update doesn't
+  # move it: a Uta that needs a different Aizome would fail the nightly's
+  # checks and hold back every other input. Re-pin as DEVELOPERS.md (Aizome)
+  # describes: from a sekka branch of bitemyapp/uta, never its main.
+  inputs.uta = {
+    url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
+    flake = false;
+  };
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
@@ -44,7 +54,12 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
-        inherit (externalInputs) superluminal tracy;
+        inherit (externalInputs)
+          applications
+          superluminal
+          tracy
+          uta
+          ;
       };
       inputs = externalInputs // components;
       installedLock = import ./nix/installed-lock.nix { inherit self; };
@@ -55,11 +70,22 @@
       hyprlandPkgs = pkgs.extend hyprlandOverlay;
       xappOverlay = import ./nix/overlays/xapp.nix;
       xappPkgs = pkgs.extend xappOverlay;
+      avahiOverlay = import ./nix/overlays/avahi.nix;
+      avahiPkgs = pkgs.extend avahiOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
       kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
       site = import ./nix/site.nix {
+        inherit pkgs;
+        revision = self.shortRev or self.dirtyShortRev or "unknown";
+        date =
+          let
+            d = self.lastModifiedDate or "19700101000000";
+          in
+          "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
+      };
+      aizomeSite = import ./nix/aizome-site.nix {
         inherit pkgs;
         revision = self.shortRev or self.dirtyShortRev or "unknown";
         date =
@@ -87,6 +113,8 @@
           ./modules/installer.nix
         ];
       };
+      # Googlebook construction is temporarily disabled. Its module, builders
+      # and fixture remain in source, without configuration/package/check outputs.
       etc = installer.config.environment.etc;
       liveConfigs = [
         installer.config
@@ -104,6 +132,7 @@
       overlays.default = nixpkgs.lib.composeManyExtensions [
         hyprlandOverlay
         xappOverlay
+        avahiOverlay
       ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
@@ -173,14 +202,15 @@
         inherit tools calamares;
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
+        hotaru = inputs.aizome.packages.${system}.hotaru;
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
         inherit (hyprlandPkgs) aquamarine hyprland;
         genkan = calamares;
         vm-fixture = fixture;
-        # The catalog installs this same package (nix/components.nix).
-        inherit (inputs.kakehashi.packages.${system}) kakehashi;
+        # The catalog installs these same packages (nix/components.nix).
+        inherit (inputs.catalog.packages.${system}) kakehashi uta;
         # The release workflow's sandboxed runner (nix/runner.nix).
         runner = import ./nix/runner.nix {
           inherit pkgs;
@@ -255,8 +285,10 @@
             ]
           );
         application-cache = applicationCatalog.cache;
-        # sekka.computer, ready to upload; nothing publishes it.
+        # sekka.computer and aizome.computer, ready to upload; the sites
+        # workflow publishes them from main (DEVELOPERS.md).
         inherit site;
+        aizome-site = aizomeSite;
         # Exported separately for isolated Wi-Fi regression tests, not shipped
         # in the public ISO or installed as a live access-point service.
         wifi-test-tools = pkgs.symlinkJoin {
@@ -270,6 +302,19 @@
         };
       };
       checks.${system} = {
+        avahi-packages = import ./nix/avahi-packages-test.nix {
+          inherit
+            pkgs
+            inputs
+            installer
+            applicationCatalog
+            ;
+          patched = avahiPkgs.sekka-avahi-daemon;
+        };
+        avahi-startup = import ./nix/avahi-startup-test.nix {
+          inherit pkgs;
+          patched = avahiPkgs.sekka-avahi-daemon;
+        };
         plasma-login-config = import ./nix/plasma-login-config-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
@@ -287,9 +332,13 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         xapp-packages = import ./nix/xapp-packages-test.nix {
-          inherit pkgs inputs applicationCatalog;
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            installer
+            ;
           patched = xappPkgs.xdg-desktop-portal-xapp;
-          compatibility = installer.config.specialisation.compatibility.configuration;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
           inherit pkgs;
@@ -317,9 +366,9 @@
         };
         iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
-        genkan-store-integrity = import ./nix/genkan-integrity-test.nix {
+        genkan-preflight = import ./nix/genkan-preflight-test.nix {
           inherit pkgs;
-          genkan = calamares;
+          helper = calamares.helper;
           nixPackage = runnerNix;
         };
         iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
@@ -349,6 +398,35 @@
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
+        uta-installation = import ./nix/uta-installation-test.nix {
+          inherit pkgs applicationCatalog installer;
+          uta = self.packages.${system}.uta;
+        };
+        # Uta is third-party code: it runs here, in the build sandbox, not in
+        # the workflows' jobs, which go on to hold the cache's secrets.
+        uta-rustypipe =
+          let
+            inherit (self.packages.${system}) uta;
+          in
+          pkgs.runCommand "uta-rustypipe-check" { } ''
+            version=$(${uta}/bin/aizome-uta --version)
+            echo "$version"
+            grep -qF '(RustyPipe: true)' <<< "$version"
+            # The GPL-3.0-only build's notices and directions to its source,
+            # and the source push-cache publishes beside it.
+            doc=${uta}/share/doc/aizome-uta
+            for notice in LICENSE-RustyPipe LICENSE-EJS; do
+              if [[ ! -s $doc/$notice ]]; then
+                echo "$doc/$notice is missing or empty" >&2
+                exit 1
+              fi
+            done
+            grep -qF "github:bitemyapp/uta/${inputs.uta.rev or "(not a Git revision)"}" "$doc/SOURCE"
+            test -f ${uta.source}/uta/vendor/rustypipe/LICENSE
+            test -f ${uta.source}/aizome/crates/aizome-kit/Cargo.toml
+            test -f ${uta.source}/sekka/nix/uta.nix
+            echo "$version" > $out
+          '';
         application-cache = applicationCatalog.cache;
         live-profiles =
           let
@@ -565,6 +643,12 @@
           applicationsModule = inputs.calamares.nixosModules.applications;
           inherit (applicationCatalog.specialArgs) applicationPkgs;
         };
+        fish-default = import ./nix/fish-default-test.nix { inherit pkgs inputs applicationCatalog; };
+        genkan-keyboard = import ./nix/genkan-keyboard-test.nix {
+          inherit pkgs;
+          genkan = calamares;
+          sekkaModule = inputs.calamares.nixosModules.default;
+        };
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;
@@ -733,6 +817,7 @@
         };
         tools = tools;
         site = site;
+        aizome-site = aizomeSite;
         template-lock = pkgs.runCommand "template-lock-tests" { } ''
           ${tools}/bin/respin-tools check-config template ${./templates/flake.nix.in} ${
             self.packages.${system}.installed-lock

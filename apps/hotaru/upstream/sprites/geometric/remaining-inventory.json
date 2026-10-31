@@ -1,0 +1,546 @@
+{
+  "upstream_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "dispatch_source": "src/font/sprite/Face.zig compile-time draw function discovery",
+  "unicode_ranges": [
+    {
+      "path": "reference/sprite/draw/block.zig",
+      "sha256": "54494d690e3c50e05e230cac1107ce36f519047dc7f09f728ad8bfdd862898f3",
+      "draw": "draw2580_259F",
+      "first": "U+2580",
+      "last": "U+259F",
+      "count": 32,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/box.zig",
+      "sha256": "ee10346fb261a2cc104352ff235664f32204e845ff98772c48f3b6a63053a951",
+      "draw": "draw2500_257F",
+      "first": "U+2500",
+      "last": "U+257F",
+      "count": 128,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/braille.zig",
+      "sha256": "8093913ed854b6d46a8b627c465d7f1ac7b2deedd35c208603f06c05bf9a6a8c",
+      "draw": "draw2800_28FF",
+      "first": "U+2800",
+      "last": "U+28FF",
+      "count": 256,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/branch.zig",
+      "sha256": "d1d872869def9a9d7f431c16e32dd36b0183d6345911992f79313758b6418237",
+      "draw": "drawF5D0_F60D",
+      "first": "U+F5D0",
+      "last": "U+F60D",
+      "count": 62,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/geometric_shapes.zig",
+      "sha256": "e81950c543d683d394a499b1fe47e7071f1fb97db723f7b45394f207f7617d0c",
+      "draw": "draw25E2_25E5",
+      "first": "U+25E2",
+      "last": "U+25E5",
+      "count": 4,
+      "status": "all8 geometric corner triangles qualified in isolated candidate; package acceptance pending"
+    },
+    {
+      "path": "reference/sprite/draw/geometric_shapes.zig",
+      "sha256": "e81950c543d683d394a499b1fe47e7071f1fb97db723f7b45394f207f7617d0c",
+      "draw": "draw25F8_25FA",
+      "first": "U+25F8",
+      "last": "U+25FA",
+      "count": 3,
+      "status": "all8 geometric corner triangles qualified in isolated candidate; package acceptance pending"
+    },
+    {
+      "path": "reference/sprite/draw/geometric_shapes.zig",
+      "sha256": "e81950c543d683d394a499b1fe47e7071f1fb97db723f7b45394f207f7617d0c",
+      "draw": "draw25FF",
+      "first": "U+25FF",
+      "last": "U+25FF",
+      "count": 1,
+      "status": "all8 geometric corner triangles qualified in isolated candidate; package acceptance pending"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B0",
+      "first": "U+E0B0",
+      "last": "U+E0B0",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B2",
+      "first": "U+E0B2",
+      "last": "U+E0B2",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B8",
+      "first": "U+E0B8",
+      "last": "U+E0B8",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B9",
+      "first": "U+E0B9",
+      "last": "U+E0B9",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BA",
+      "first": "U+E0BA",
+      "last": "U+E0BA",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BB",
+      "first": "U+E0BB",
+      "last": "U+E0BB",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BC",
+      "first": "U+E0BC",
+      "last": "U+E0BC",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BD",
+      "first": "U+E0BD",
+      "last": "U+E0BD",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BE",
+      "first": "U+E0BE",
+      "last": "U+E0BE",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0BF",
+      "first": "U+E0BF",
+      "last": "U+E0BF",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B1",
+      "first": "U+E0B1",
+      "last": "U+E0B1",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B3",
+      "first": "U+E0B3",
+      "last": "U+E0B3",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B4",
+      "first": "U+E0B4",
+      "last": "U+E0B4",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B5",
+      "first": "U+E0B5",
+      "last": "U+E0B5",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B6",
+      "first": "U+E0B6",
+      "last": "U+E0B6",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0B7",
+      "first": "U+E0B7",
+      "last": "U+E0B7",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0D2",
+      "first": "U+E0D2",
+      "last": "U+E0D2",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/powerline.zig",
+      "sha256": "91f897300bb8324c7f05da713d453d93624c4de89a9149e386bc7ace46c2a072",
+      "draw": "drawE0D4",
+      "first": "U+E0D4",
+      "last": "U+E0D4",
+      "count": 1,
+      "status": "integrated and packaged in preceding434-sprite checkpoint"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB00_1FB3B",
+      "first": "U+1FB00",
+      "last": "U+1FB3B",
+      "count": 60,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB3C_1FB67",
+      "first": "U+1FB3C",
+      "last": "U+1FB67",
+      "count": 44,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB68_1FB6F",
+      "first": "U+1FB68",
+      "last": "U+1FB6F",
+      "count": 8,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB70_1FB75",
+      "first": "U+1FB70",
+      "last": "U+1FB75",
+      "count": 6,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB76_1FB7B",
+      "first": "U+1FB76",
+      "last": "U+1FB7B",
+      "count": 6,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB7C_1FB97",
+      "first": "U+1FB7C",
+      "last": "U+1FB97",
+      "count": 28,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB98",
+      "first": "U+1FB98",
+      "last": "U+1FB98",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB99",
+      "first": "U+1FB99",
+      "last": "U+1FB99",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FB9A_1FB9F",
+      "first": "U+1FB9A",
+      "last": "U+1FB9F",
+      "count": 6,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBA0_1FBAE",
+      "first": "U+1FBA0",
+      "last": "U+1FBAE",
+      "count": 15,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBAF",
+      "first": "U+1FBAF",
+      "last": "U+1FBAF",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBBD",
+      "first": "U+1FBBD",
+      "last": "U+1FBBD",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBBE",
+      "first": "U+1FBBE",
+      "last": "U+1FBBE",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBBF",
+      "first": "U+1FBBF",
+      "last": "U+1FBBF",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBCE",
+      "first": "U+1FBCE",
+      "last": "U+1FBCE",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBCF",
+      "first": "U+1FBCF",
+      "last": "U+1FBCF",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBD0_1FBDF",
+      "first": "U+1FBD0",
+      "last": "U+1FBDF",
+      "count": 16,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing.zig",
+      "sha256": "54ae6213ef28b5ed40ddd862ce3e4067e4cfeeb83cf0b23dac82b1b935c6ef9d",
+      "draw": "draw1FBE0_1FBEF",
+      "first": "U+1FBE0",
+      "last": "U+1FBEF",
+      "count": 16,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CD00_1CDE5",
+      "first": "U+1CD00",
+      "last": "U+1CDE5",
+      "count": 230,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CC21_1CC2F",
+      "first": "U+1CC21",
+      "last": "U+1CC2F",
+      "count": 15,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CC30_1CC3F",
+      "first": "U+1CC30",
+      "last": "U+1CC3F",
+      "count": 16,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CC1B_1CC1E",
+      "first": "U+1CC1B",
+      "last": "U+1CC1E",
+      "count": 4,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE00",
+      "first": "U+1CE00",
+      "last": "U+1CE00",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE01",
+      "first": "U+1CE01",
+      "last": "U+1CE01",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE0B",
+      "first": "U+1CE0B",
+      "last": "U+1CE0B",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE0C",
+      "first": "U+1CE0C",
+      "last": "U+1CE0C",
+      "count": 1,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE16_1CE19",
+      "first": "U+1CE16",
+      "last": "U+1CE19",
+      "count": 4,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE51_1CE8F",
+      "first": "U+1CE51",
+      "last": "U+1CE8F",
+      "count": 63,
+      "status": "pending"
+    },
+    {
+      "path": "reference/sprite/draw/symbols_for_legacy_computing_supplement.zig",
+      "sha256": "0581e69175fb1ed9e9ec611846b6ae07518a87fd2d1b0c7477cfa5c6b12edd17",
+      "draw": "draw1CE90_1CEAF",
+      "first": "U+1CE90",
+      "last": "U+1CEAF",
+      "count": 32,
+      "status": "pending"
+    }
+  ],
+  "total_unicode_scalars": 1085,
+  "special_sprites": [
+    {
+      "name": "underline",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "underline_double",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "underline_dotted",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "underline_dashed",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "underline_curly",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "strikethrough",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "overline",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "cursor_rect",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "cursor_hollow_rect",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "cursor_bar",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    },
+    {
+      "name": "cursor_underline",
+      "status": "native drawing exists; pinned special-sprite raster pending"
+    }
+  ],
+  "special_source_sha256": "5eb6fe01aef16401888891080e1574ff4374603fc15910e8659fcf7c21dbf05f",
+  "limitations": [
+    "A registered range may contain deliberately blank or unassigned slots; dispatch coverage is not visual feature coverage.",
+    "Existing native decorations and cursor painting are separate from exact Ghostty sprite raster coverage.",
+    "Stylized Powerline symbols outside the18draw functions are not rendered by pinned Ghostty sprite face."
+  ],
+  "qualification": "442 qualified character slots, including8 geometric corner triangles;643 registered slots and11 internal sprite rasters remain unqualified. Registered ranges may include intentional blanks."
+}

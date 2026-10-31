@@ -1,0 +1,73 @@
+{
+  "status": "passed",
+  "files": [
+    {
+      "path": "worker/Cargo.lock",
+      "sha256": "62272af614108713d55584f060ad3fa63199db6c81f9d3e335b9e52ccd6adecc"
+    },
+    {
+      "path": "worker/Cargo.toml",
+      "sha256": "bcf5ef3083fade38cac5a1c1021f3ce1b0b0b5585a6c9d4bb69a355a8d97c018"
+    },
+    {
+      "path": "worker/src/bridge.rs",
+      "sha256": "db3cfca6b9ea746ce8fe5ef539904e543633226c905cfa96c7ed7127d116b9a8"
+    },
+    {
+      "path": "worker/src/budget.rs",
+      "sha256": "cc7383477611b4135b9974ce6ed1c4b2893b11b91d22113b78915dbf14393d59"
+    },
+    {
+      "path": "worker/src/complete.rs",
+      "sha256": "e2170e8c36dba79adb11171f3a1cdf4dd22809076b6b192e1ab2ff83514e7f97"
+    },
+    {
+      "path": "worker/src/lib.rs",
+      "sha256": "dc0d0b8b4e1915989c56530918d242f27ecf6a0eb6ef937743161e9c028039c1"
+    },
+    {
+      "path": "worker/src/present_shm.rs",
+      "sha256": "e0385221e56de4de2faec080e13d7495635c16d7edd1c0112526eb3a359f16b0"
+    },
+    {
+      "path": "worker/src/reserved.rs",
+      "sha256": "5307d87115e7510356e28fd84cfbc73bb669e33df390edc0bc3608116d0cd0e4"
+    },
+    {
+      "path": "worker/src/scene.rs",
+      "sha256": "6646766bea42413767936f19eafec59df70e814cc9e1e7fb6dd8a798441d0ee5"
+    },
+    {
+      "path": "worker/src/shm.rs",
+      "sha256": "112f79eb7606f74a62936bbe7ecec1ee2250976cf2df9026cf3a2087f565b365"
+    },
+    {
+      "path": "desktop/aizome/Cargo.lock",
+      "sha256": "2a4d1bf3fcdfc18d2eeadc1c1ab61097266bf2002983abd7377ec9e3c97d153b"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/Cargo.toml",
+      "sha256": "9940868b06cfcdb63e0793cd7decf36486f6e2e9a271ce1408267e5d54b68472"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/admission_support.rs",
+      "sha256": "0b82b14949eff216dcbde97591f087097e8bdc07738cb348b53364e19b3be1c1"
+    },
+    {
+      "path": "desktop/aizome/apps/hotaru/tests/scene_inventory.rs",
+      "sha256": "d24b189adac63682789abdcfa761b87106b566afdb42d211e946de46bcb3564e"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs",
+      "sha256": "958d6ac5d22e9bbc3307517aca3a0f2743d915b531b3f53c6a094c7e0b63f681"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/images.rs",
+      "sha256": "d324186c0cf860d4a2a3519e7c9337a2343202b44c02433c78ec1bbe90a55856"
+    },
+    {
+      "path": "vendor/sidestep/crates/sidestep-engine/src/raster/ops.rs",
+      "sha256": "d22e178159353c3b30910e621ea0684c3207646af6a04c8ea95a5eae0500aae2"
+    }
+  ]
+}

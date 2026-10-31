@@ -1,0 +1,42 @@
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.191
+   Compiling itoa v1.0.18
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling memchr v2.8.3
+   Compiling static_assertions v1.1.0
+   Compiling unicode-width v0.2.3
+   Compiling lz4_flex v0.14.0
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-ascii-cell-store-20261028/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-ascii-cell-store-20261028/crates/hotaru-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.13s
+     Running unittests src/lib.rs (target/debug/deps/hotaru_core-7d1be8bcbdb04a4b)
+
+running 3 tests
+test row::ascii::tests::mismatched_lengths_fail_before_any_store ... ok
+test row::ascii::tests::four_byte_aligned_cells_offsets_and_tails_keep_neighbors ... ok
+test row::ascii::tests::whole_cell_store_matches_constructor_for_all_styles_and_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.02s
+
+    Checking zmij v1.0.23
+    Checking itoa v1.0.18
+    Checking cfg-if v1.0.5
+    Checking static_assertions v1.1.0
+    Checking triomphe v0.1.17
+    Checking simdutf8 v0.1.5 (/home/callen/work/hotaru-ascii-cell-store-20261028/vendor/simdutf8)
+    Checking unicode-width v0.2.3
+    Checking lz4_flex v0.14.0
+    Checking memchr v2.8.3
+    Checking castaway v0.2.4
+    Checking serde_core v1.0.229
+    Checking libc v0.2.191
+    Checking compact_str v0.10.0
+    Checking hotaru-core v0.1.0 (/home/callen/work/hotaru-ascii-cell-store-20261028/crates/hotaru-core)
+    Checking serde_json v1.0.154
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.78s

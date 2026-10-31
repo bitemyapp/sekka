@@ -1,0 +1,51 @@
+{
+  "backend": "private headless Sway, pixman",
+  "binary": "/nix/store/k8hj5hzc316icb0g64fbglrh6gpjfwh6-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774",
+  "source_manifest": "source-manifest.json",
+  "checks": {
+    "copy": {
+      "bytes": 1151999,
+      "sha256": "25e983833cef7007027221cb194315835cd04da0cf79d014659377dc36b41bde",
+      "exact_match": true
+    },
+    "copy_html": {
+      "bytes": 1152060,
+      "sha256": "4224d51adae7ecdc8499d07f48ad6f0acb72ab784397c96c0fb6575dc12df0b7",
+      "exact_match": true
+    },
+    "stalled_reader_ui": {
+      "seconds": 0.1643028617836535
+    },
+    "cancelled_readers": [
+      "text/plain",
+      "text/html"
+    ],
+    "closed_pane_copy_race": {
+      "copy_requests": 16,
+      "new_selection_preserved": true
+    },
+    "paste": {
+      "bytes": 1150000,
+      "sha256": "818eb1d064987e046307887ca0c9ee127ece1f2fc596cbc9e97eb6b357556e8e",
+      "exact_match": true
+    },
+    "splits": {
+      "created_panes": 3,
+      "remaining_panes": 1
+    },
+    "native_input": {
+      "bytes": 116,
+      "sha256": "3b4ca5e0b16af486b7dcce6c957dd16c6b9567cef6a416de05f979e3a130a021",
+      "exact_match": true,
+      "cases": [
+        "Ctrl-A",
+        "US Shift-1",
+        "German Shift-Y",
+        "Control modifier",
+        "SGR mouse"
+      ]
+    }
+  },
+  "status": "passed"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "ghostty_commit": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "generator_sha256": "b89ed00a13e29106872ab1642db00a48d49fc71e345c4c9ab2b1ca7d8f23dc51",
+  "case_count": 272,
+  "snapshot_count": 2021,
+  "candidate_sha256": "aa07c51483e45226dce684091d544d36972f44a138f9f5c3ba3be320c2735225",
+  "failures": [],
+  "expected_sha256": "3874dc3290145cbd3dcd49c4cc799b36d51fd0cc7d811ba7a26b1546a9773e3c",
+  "actual_sha256": "2dc4ec2b192650548a97fba4dd93860b11f474c07c5c77f63697982f6bc9395e"
+}

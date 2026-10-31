@@ -1,0 +1,15 @@
+{
+  "ghostty_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "uucode_revision": "ea62149739404a73c202b48a33bf6dd2af4bd9b0",
+  "unicode_version": "18.0.0",
+  "generated_props_sha256": "e0ad6b488f6b5d48a526d55d1fdd3fba9ea267a697f4a53d3ee5d4cad539febd",
+  "uucode_types_sha256": "85d995d96638d234358bbf0d5763c9ade0eb2c3c1f388afc4482c154bed60efa",
+  "uucode_grapheme_sha256": "c64f900b11430b2ea00d7b31b07a80a4d8666fb4da962f3c0d9bc3ff2cc6d88e",
+  "generator_sha256": "2f301190a9b14931428f471d1923c0c51313fff712146e0342097e39c095ba6d",
+  "rust_table_sha256": "4551adea15824f60163af841858b94d57ca66325d3f9c431b0595959b148766c",
+  "entries": {
+    "stage1": 4352,
+    "stage2": 32000,
+    "properties": 31
+  }
+}

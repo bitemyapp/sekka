@@ -1,0 +1,23 @@
+{
+  "status": "pass",
+  "cases": 529,
+  "seed": "0x84743893",
+  "host": "wx-workstation",
+  "validation": "Actual Rust formatter output parsed by Python HTMLParser; expected href from independent UTF8 surrogateescape decoding and Unicode control classification.",
+  "coverage": [
+    "existing percent escapes",
+    "HTML metacharacters",
+    "valid two/three/four-byte UTF8",
+    "invalid and truncated sequences",
+    "Unicode C1 controls",
+    "512 deterministic mixed URI sequences"
+  ],
+  "sources": {
+    "crates/hotaru-core/src/formatter.rs": "0a189cfa5ad96f27a88b2a0b2717ea81772f880a1dc802ba1719fdaefa2fadc0",
+    "crates/hotaru-core/src/screen.rs": "e8a2c9743322abf31b588f245d82e38d578cde43f6cb03fb925a872a8da754ba",
+    "tools/formatter-uri-audit.rs": "9cf0c70ca2ed270f43dc50ca0f738446c46772719acff651a4ad4ee4c7026628",
+    "tools/formatter-uri-audit.py": "73e2976092eae084e4e5592a695ad5ace6c9faf91f7537dda2cee84edf3057a4"
+  },
+  "remote_evidence": "/home/callen/work/hotaru-core-review-20261028/uri-audit.py",
+  "note": "Product source not changed by the audit. Five permanent URI fixtures cover the approved correctness exceptions to the pinned Ghostty formatter."
+}

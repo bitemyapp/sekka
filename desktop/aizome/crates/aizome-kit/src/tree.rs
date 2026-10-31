@@ -22,12 +22,12 @@ pub struct NodeId(pub(crate) u64);
 impl NodeId {
     pub(crate) const ROOT: NodeId = NodeId(0x9e37_79b9_7f4a_7c15);
 
-    pub(crate) fn keyed(self, key: u64) -> NodeId {
-        NodeId(hash_of(&(self.0, 1u8, key)))
+    pub(crate) fn keyed(self, key: u64, kind: std::any::TypeId) -> NodeId {
+        NodeId(hash_of(&(self.0, 1u8, key, kind)))
     }
 
-    pub(crate) fn indexed(self, index: usize, kind: &str) -> NodeId {
-        NodeId(hash_of(&(self.0, 2u8, index, kind)))
+    pub(crate) fn indexed(self, index: usize, kind: &str, widget_type: std::any::TypeId) -> NodeId {
+        NodeId(hash_of(&(self.0, 2u8, index, kind, widget_type)))
     }
 
     /// An id under this one for something that isn't an element (a
@@ -86,6 +86,7 @@ pub(crate) struct Tree {
     pub root: Option<usize>,
     /// Ticks widgets asked for while laid out (animations starting).
     pub ticks: Vec<(NodeId, std::time::Duration)>,
+    pub widget_timers: Vec<(NodeId, u32, Option<std::time::Duration>)>,
     /// What widgets found changed while laid out (their own coordinates):
     /// an editor's lines.
     pub local_damage: Vec<(usize, Rect)>,
@@ -144,12 +145,14 @@ impl Tree {
     fn mount_under(&mut self, el: RawElement, parent: Option<usize>, index: usize, base: NodeId) -> usize {
         let RawElement { mut widget, common, children } = el;
         let mut id = match common.key {
-            Some(k) => base.keyed(k),
-            None => base.indexed(index, widget.name()),
+            // A key preserves state across moves only for the same widget
+            // type. Replacing its concrete type ends timers and state together.
+            Some(k) => base.keyed(k, widget.as_ref().type_id()),
+            None => base.indexed(index, widget.name(), widget.as_ref().type_id()),
         };
         if self.by_id.contains_key(&id) {
             // Siblings with the same key: tell them apart by place.
-            id = id.indexed(index, "duplicate");
+            id = id.indexed(index, "duplicate", widget.as_ref().type_id());
         }
         let idx = self.nodes.len();
         if let Some(name) = &common.name {
@@ -458,25 +461,39 @@ impl Tree {
     /// the pointer or stops it. Later siblings are over earlier ones; one
     /// that doesn't stop the pointer there lets it through to what's under.
     pub fn path_at(&self, p: Point, within: Option<usize>) -> Vec<usize> {
+        self.path_through(p, within, false)
+    }
+
+    /// [`path_at`](Self::path_at) past what takes only drags
+    /// ([`Widget::drags_only`]): the nodes under it, which clicks, other
+    /// buttons, the wheel and drops reach.
+    pub fn path_under(&self, p: Point, within: Option<usize>) -> Vec<usize> {
+        self.path_through(p, within, true)
+    }
+
+    fn path_through(&self, p: Point, within: Option<usize>, under: bool) -> Vec<usize> {
         let mut path = Vec::new();
         let start = within.unwrap_or_else(|| self.root());
         if !self.nodes[start].rect.contains(p) {
             return path;
         }
-        self.hit(start, p, &mut path);
+        self.hit(start, p, &mut path, under);
         path
     }
 
-    fn hit(&self, idx: usize, p: Point, path: &mut Vec<usize>) -> bool {
+    fn hit(&self, idx: usize, p: Point, path: &mut Vec<usize>, under: bool) -> bool {
         path.push(idx);
         let n = &self.nodes[idx];
+        if !n.widget.hit_children(p - n.rect.origin().to_vec2()) {
+            return n.widget.solid();
+        }
         for &k in n.children.iter().rev() {
             let c = &self.nodes[k];
-            if c.dead || !c.rect.contains(p) || !c.clip.contains(p) {
+            if c.dead || !c.rect.contains(p) || !c.clip.contains(p) || (under && c.widget.drags_only()) {
                 continue;
             }
             let len = path.len();
-            if self.hit(k, p, path) {
+            if self.hit(k, p, path, under) {
                 return true;
             }
             path.truncate(len);
@@ -557,7 +574,7 @@ impl Tree {
                 text: env.text,
                 state: crate::widget::StateView::new(env.states, n.id),
                 size: n.size,
-                hovered: env.hot == Some(n.id),
+                hovered: env.hot == Some(n.id) || env.hot_under == Some(n.id),
                 pressed: env.active == Some(n.id) && env.hot == Some(n.id),
                 focused,
                 focus_visible: env.focus_visible,
@@ -592,6 +609,7 @@ pub(crate) struct PaintEnv<'a> {
     pub text: &'a mut crate::text::TextCache,
     pub states: &'a StateMap,
     pub hot: Option<NodeId>,
+    pub hot_under: Option<NodeId>,
     pub active: Option<NodeId>,
     pub focused: Option<NodeId>,
     pub focus_visible: bool,

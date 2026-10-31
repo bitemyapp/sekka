@@ -1,0 +1,301 @@
+{
+  "schema": 1,
+  "status": "completed",
+  "cpu": 8,
+  "observed_siblings": [
+    8,
+    72
+  ],
+  "scope": "direct native zero-history feed comparison, common reviewed4corpora; not GUI or universal parity",
+  "results": [
+    {
+      "mode": "legacy",
+      "workload": "ascii",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 1437301.5,
+          "p95": 1467827,
+          "maximum": 1476762
+        },
+        "hotaru": {
+          "median": 1341035.5,
+          "p95": 1383229,
+          "maximum": 1397731
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.9330230991896968,
+        "p95": 0.9423651424861377,
+        "maximum": 0.9464835904499168
+      },
+      "per_round_median_ratios": [
+        0.9606712935051794,
+        0.9426030559842979,
+        0.9172678253919929,
+        0.9317222909499328,
+        0.9332802275087009,
+        0.9530833696990314
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-ascii.json",
+      "report_sha256": "68b6b55ae59e4fdeef20f1777e74bf1d0e51642dd4b0d888afcb5897b2bacc3e"
+    },
+    {
+      "mode": "legacy",
+      "workload": "unicode",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 6489007.5,
+          "p95": 6860421,
+          "maximum": 6988185
+        },
+        "hotaru": {
+          "median": 8283330.5,
+          "p95": 8486339,
+          "maximum": 8708285
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 1.2765173256464875,
+        "p95": 1.2369997409779954,
+        "maximum": 1.2461440273833622
+      },
+      "per_round_median_ratios": [
+        1.2746766440481359,
+        1.3007854153582403,
+        1.2614270811628945,
+        1.2471297757945348,
+        1.3036722611229599,
+        1.27314229072893
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-unicode.json",
+      "report_sha256": "8dbbc57d7523d71004989d21a6aea5c98675b62b0e72921f2ad4411eeac97c1f"
+    },
+    {
+      "mode": "legacy",
+      "workload": "styled",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 7971191.5,
+          "p95": 8534772,
+          "maximum": 8833516
+        },
+        "hotaru": {
+          "median": 6676132.0,
+          "p95": 7138513,
+          "maximum": 7204023
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8375325069031399,
+        "p95": 0.8364034797883294,
+        "maximum": 0.8155329089798445
+      },
+      "per_round_median_ratios": [
+        0.8794271512246467,
+        0.8497619436169085,
+        0.8314630074295601,
+        0.8426836489331334,
+        0.8493070192246279,
+        0.8275184182732352
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-styled.json",
+      "report_sha256": "24618ce4d8a341fc7808b5e829f498b56500b244689c48d8097a9f09b7e9f592"
+    },
+    {
+      "mode": "legacy",
+      "workload": "cursor",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 30082197.0,
+          "p95": 31667237,
+          "maximum": 32550427
+        },
+        "hotaru": {
+          "median": 10796194.5,
+          "p95": 11352358,
+          "maximum": 11409474
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.3588898277609179,
+        "p95": 0.3584890592128388,
+        "maximum": 0.35051687647599833
+      },
+      "per_round_median_ratios": [
+        0.35547736607678115,
+        0.36008038326366393,
+        0.34882135486163657,
+        0.35780748598267326,
+        0.3780333093111139,
+        0.3577430624029491
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/legacy-cursor.json",
+      "report_sha256": "1609ed61c53b490b6013454da1c7f7dc1722e3a1a3376c141ebdb0aade19b9e1"
+    },
+    {
+      "mode": "unicode",
+      "workload": "ascii",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 1430866.0,
+          "p95": 1453616,
+          "maximum": 1470331
+        },
+        "hotaru": {
+          "median": 1352757.5,
+          "p95": 1382318,
+          "maximum": 1393574
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.9454117296797884,
+        "p95": 0.9509512828697537,
+        "maximum": 0.947796108495298
+      },
+      "per_round_median_ratios": [
+        0.9393653028762158,
+        0.936696952010941,
+        0.9452014040307118,
+        0.9391510143012456,
+        0.9455761788929605,
+        0.9676699212863341
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-ascii.json",
+      "report_sha256": "622c94e09d8566d0977da0aee13a5f74fb599273323ecc5c5f8c864b56e48629"
+    },
+    {
+      "mode": "unicode",
+      "workload": "unicode",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 9253713.0,
+          "p95": 9591115,
+          "maximum": 9967276
+        },
+        "hotaru": {
+          "median": 11161869.0,
+          "p95": 11956655,
+          "maximum": 11994904
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 1.2062043635889723,
+        "p95": 1.2466386859087812,
+        "maximum": 1.203428499421507
+      },
+      "per_round_median_ratios": [
+        1.2874991708358567,
+        1.2190564264376782,
+        1.1990619969637684,
+        1.1847897326624235,
+        1.2145618123316724,
+        1.1999971386012767
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-unicode.json",
+      "report_sha256": "4dc8914ae529120f909affbfb3318cc854dad3d5905962e281f2e6115b632dce"
+    },
+    {
+      "mode": "unicode",
+      "workload": "styled",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 7957506.5,
+          "p95": 8097369,
+          "maximum": 8263220
+        },
+        "hotaru": {
+          "median": 6753659.5,
+          "p95": 7191043,
+          "maximum": 7209942
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.8487155492741351,
+        "p95": 0.8880715452142541,
+        "maximum": 0.8725341936920474
+      },
+      "per_round_median_ratios": [
+        0.8529677120653946,
+        0.842819197832024,
+        0.817511408869495,
+        0.8489934756064269,
+        0.8722443499062443,
+        0.9061693669894283
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-styled.json",
+      "report_sha256": "9d3f1b5c926e0c1af12f3dce8e3dd2d093dabaa67172c3d7b29663b8baac1e5b"
+    },
+    {
+      "mode": "unicode",
+      "workload": "cursor",
+      "statistics_ns": {
+        "ghostty": {
+          "median": 30267508.5,
+          "p95": 32148508,
+          "maximum": 32695337
+        },
+        "hotaru": {
+          "median": 10800155.0,
+          "p95": 10995095,
+          "maximum": 11034475
+        }
+      },
+      "hotaru_over_ghostty": {
+        "median": 0.3568233903362082,
+        "p95": 0.3420094954328829,
+        "maximum": 0.33749384507032304
+      },
+      "per_round_median_ratios": [
+        0.36080259944500404,
+        0.3610966552186721,
+        0.3601172175830249,
+        0.36062773710999524,
+        0.35376492553116373,
+        0.3561841434901778
+      ],
+      "report": "/home/callen/work/hotaru-ascii-cell-store-20261028/direct-ghostty/unicode-cursor.json",
+      "report_sha256": "a1fa5fb0d65021d230b7aed314cd0f97d106573776e1706c54773edd1ab2d931"
+    }
+  ],
+  "runner_sha256": "065040d162cc3614b4dc9ba10443cc2695cbc4418fe2509b8bc6815ee0a820e3",
+  "benchmark_helper_sha256": "e458ed885787af66892ae78e8d00bff48e869eb986cc47921c33928bb8aa6244",
+  "observations": 20,
+  "observed_frequency_khz": {
+    "cpu8": [
+      4692826,
+      5046464
+    ],
+    "cpu72": [
+      1220619,
+      1220619
+    ]
+  },
+  "raw_summary": "summary.json.gz",
+  "preflight_active_percent": {
+    "cpu8": 2.912621359223301,
+    "cpu72": 0.0
+  },
+  "candidate_source_sha256": "7e36bc3139a9d6ee0617c30b602aa95f21bd732fba389c73ae176cfe49c74d6d",
+  "candidate_binary_sha256": "5755bcf3479b184ff8b05bcf68a22196d386a63258f99754caf380d90c576728",
+  "reference_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "reference_binaries": {
+    "ghostty-bench": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench",
+      "sha256": "bcdaba094ab3900bb247c445e9bf7b1038662ed886a96d68bb783b5d6f72669a"
+    },
+    "ghostty-gen": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-gen",
+      "sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362"
+    },
+    "libghostty-vt": {
+      "path": "/home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so",
+      "sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639"
+    },
+    "ghostty-reference-replay": {
+      "path": "/home/callen/work/hotaru-unicode-mode-20261028/ghostty-reference-replay",
+      "sha256": "dc687741377b3058f7b06bcdf287df9990c183eadd571a1fbe835fb3869625cd"
+    }
+  },
+  "raw_summary_sha256": "c1a30cf696c97c986c9183c960cf7add299c33bb9f283233834d53dc11bc155e",
+  "prior_protocol_note": "This 12-row / ~2 MiB workload does not update the older 80-row / ~8 MiB table; see protocol-audit.json."
+}

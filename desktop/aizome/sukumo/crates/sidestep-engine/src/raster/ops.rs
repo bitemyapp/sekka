@@ -235,6 +235,9 @@ fn draw_op(canvas: &mut Canvas, glyphs: &mut Glyphs, st: &mut State, damage: &Re
                 }
             }
         }
+        Op::AlphaMask { mask, dst, clip, color } => {
+            super::masks::draw(canvas, mask, dst, &clip.intersect(damage), *color)
+        }
         Op::Glyphs(run) => crate::text::draw_glyphs(canvas, glyphs, run, &run.clip.intersect(damage)),
         Op::FillPath { path, even_odd, paint, draw } => {
             shape(canvas, st, damage, draw, &Shape::Fill(path, *even_odd), paint)
@@ -370,6 +373,7 @@ pub fn contents(canvas: &Canvas, damage: &Rect, ops: &[Op]) -> Option<(usize, us
                 continue;
             }
             Op::Fill { rect, .. } | Op::FillWith { rect, .. } => canvas.pixels(&rect.intersect(damage)),
+            Op::AlphaMask { dst, clip, .. } => canvas.pixels(&dst.intersect(clip).intersect(damage)),
             Op::Glyphs(run) => glyph_reach(run).and_then(|r| canvas.pixels(&r.intersect(&run.clip).intersect(damage))),
             Op::FillPath { path, draw, .. } => region(canvas, damage, draw, path.bounds(), 1.0),
             Op::StrokePath { path, stroke, draw, .. } => {

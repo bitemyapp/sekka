@@ -21,6 +21,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-ipc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aizome-kit"
 version = "0.1.0"
 dependencies = [
@@ -519,6 +527,7 @@ dependencies = [
 name = "genkan"
 version = "0.1.0"
 dependencies = [
+ "aizome-ipc",
  "aizome-kit",
  "anyhow",
  "calamares-nixos",
@@ -1496,6 +1505,7 @@ name = "sidestep-engine"
 version = "0.0.1"
 dependencies = [
  "fontique",
+ "harfrust",
  "icu_properties",
  "icu_provider",
  "image",

@@ -1,0 +1,932 @@
+diff --git a/apps/hotaru/crates/hotaru-core/Cargo.toml b/apps/hotaru/crates/hotaru-core/Cargo.toml
+--- a/apps/hotaru/crates/hotaru-core/Cargo.toml
++++ b/apps/hotaru/crates/hotaru-core/Cargo.toml
+@@ -18,3 +18,6 @@
+ [dev-dependencies]
+ serde_json = "1"
+ libc = "0.2"
++
++[features]
++heap-history-decode = []
+diff --git a/apps/hotaru/crates/hotaru-core/src/cells.rs b/apps/hotaru/crates/hotaru-core/src/cells.rs
+--- a/apps/hotaru/crates/hotaru-core/src/cells.rs
++++ b/apps/hotaru/crates/hotaru-core/src/cells.rs
+@@ -21,6 +21,91 @@
+ 
+ #[derive(Debug)]
+ pub(crate) struct CellPage(PageBacking);
++#[cfg(not(miri))]
++type BuilderBacking = MmapMut;
++#[cfg(miri)]
++type BuilderBacking = Vec<Cell>;
++
++/// Private, exclusively owned writable storage. No view can outlive this
++/// builder or escape across finish, which consumes it into an immutable page.
++pub(crate) struct CellPageBuilder(BuilderBacking);
++impl CellPageBuilder {
++    pub(crate) fn new(count: usize) -> io::Result<Self> {
++        if count == 0 || count > MAX_CELLS {
++            return Err(io::ErrorKind::InvalidInput.into());
++        }
++        #[cfg(test)]
++        injected_failure(PageFailure::Map)?;
++        #[cfg(not(miri))]
++        {
++            let bytes = count
++                .checked_mul(size_of::<Cell>())
++                .ok_or(io::ErrorKind::InvalidInput)?;
++            let mut mapping = MmapMut::map_anon(bytes)?;
++            bytemuck::try_cast_slice_mut::<u8, Cell>(&mut mapping)
++                .map_err(|_| io::ErrorKind::InvalidData)?;
++            Ok(Self(mapping))
++        }
++        #[cfg(miri)]
++        {
++            Ok(Self(vec![Cell::default(); count]))
++        }
++    }
++    pub(crate) fn cells_mut(&mut self) -> &mut [Cell] {
++        #[cfg(not(miri))]
++        {
++            bytemuck::try_cast_slice_mut(&mut self.0).expect("validated cell builder alignment")
++        }
++        #[cfg(miri)]
++        {
++            &mut self.0
++        }
++    }
++    pub(crate) fn finish(self) -> io::Result<Arc<CellPage>> {
++        #[cfg(test)]
++        injected_failure(PageFailure::Protect)?;
++        #[cfg(not(miri))]
++        {
++            Ok(Arc::new(CellPage(self.0.make_read_only()?)))
++        }
++        #[cfg(miri)]
++        {
++            Ok(Arc::new(CellPage(self.0.into_boxed_slice())))
++        }
++    }
++}
++
++#[cfg(test)]
++#[derive(Clone, Copy, PartialEq, Eq)]
++pub(crate) enum PageFailure {
++    Map,
++    Protect,
++}
++#[cfg(test)]
++std::thread_local! { static PAGE_FAILURE: std::cell::Cell<Option<PageFailure>> = const { std::cell::Cell::new(None) }; }
++#[cfg(test)]
++fn injected_failure(stage: PageFailure) -> io::Result<()> {
++    PAGE_FAILURE.with(|failure| {
++        if failure.get() == Some(stage) {
++            failure.set(None);
++            Err(io::ErrorKind::OutOfMemory.into())
++        } else {
++            Ok(())
++        }
++    })
++}
++#[cfg(test)]
++pub(crate) fn with_page_failure<R>(stage: PageFailure, run: impl FnOnce() -> R) -> R {
++    struct Restore(Option<PageFailure>);
++    impl Drop for Restore {
++        fn drop(&mut self) {
++            PAGE_FAILURE.with(|f| f.set(self.0));
++        }
++    }
++    let _restore = Restore(PAGE_FAILURE.with(|f| f.replace(Some(stage))));
++    run()
++}
++
+ impl CellPage {
+     pub fn pack<'a>(rows: impl Clone + Iterator<Item = &'a [Cell]>) -> io::Result<Arc<Self>> {
+         let count = rows
+diff --git a/apps/hotaru/crates/hotaru-core/src/history.rs b/apps/hotaru/crates/hotaru-core/src/history.rs
+--- a/apps/hotaru/crates/hotaru-core/src/history.rs
++++ b/apps/hotaru/crates/hotaru-core/src/history.rs
+@@ -225,15 +225,94 @@
+     let mut input = raw.as_slice();
+     let mut budget = crate::memory::MAX_DECODE_BYTES;
+     let links = decode_links_budget(&mut input, &mut budget)?;
++    // The dictionary is already charged exactly once. A mapping/protection
++    // failure retries only the rows using the untouched input and row budget.
++    if cfg!(feature = "heap-history-decode") {
++        decode_rows_heap(input, rows, &links, budget)
++    } else {
++        decode_rows_page(input, rows, &links, budget)
++    }
++}
++fn decode_rows_heap(
++    mut input: &[u8],
++    rows: usize,
++    links: &[LinkRef],
++    mut budget: usize,
++) -> Option<Vec<RowRef>> {
+     let mut result = Vec::with_capacity(rows);
+     for _ in 0..rows {
+         result.push(RowRef::new(Row::decode_history_budget(
+             &mut input,
+-            &links,
++            links,
+             &mut budget,
+         )?));
+     }
+     input.is_empty().then_some(result)
++}
++fn decode_rows_page(
++    input: &[u8],
++    rows: usize,
++    links: &[LinkRef],
++    budget: usize,
++) -> Option<Vec<RowRef>> {
++    if rows == 0 || rows > MAX_ROWS {
++        return None;
++    }
++    let mut scan = input;
++    let mut layouts = Vec::with_capacity(rows);
++    let mut total = 0usize;
++    for _ in 0..rows {
++        let start = input.len().checked_sub(scan.len())?;
++        let cols = Row::scan_history_layout(&mut scan)?;
++        let end = input.len().checked_sub(scan.len())?;
++        let next = total.checked_add(cols)?;
++        if next > MAX_ROWS * crate::MAX_COLS {
++            return None;
++        }
++        layouts.push((start..end, total..next));
++        total = next;
++    }
++    if !scan.is_empty() {
++        return None;
++    }
++    // Every valid row has positive width, as in the original heap decoder.
++    let mut builder = match crate::cells::CellPageBuilder::new(total) {
++        Ok(builder) => builder,
++        Err(_) => return decode_rows_heap(input, rows, links, budget),
++    };
++    let mut remaining = budget;
++    let mut parts = Vec::with_capacity(rows);
++    {
++        let cells = builder.cells_mut();
++        for (encoded, range) in &layouts {
++            let mut encoded = input.get(encoded.clone())?;
++            let part = Row::decode_history_into(
++                &mut encoded,
++                links,
++                &mut remaining,
++                cells.get_mut(range.clone())?,
++            )?;
++            if !encoded.is_empty() {
++                return None;
++            }
++            parts.push(part);
++        }
++    } // All mutable builder slices end before mprotect/immutable publication.
++    let page = match builder.finish() {
++        Ok(page) => page,
++        Err(_) => {
++            // Drop partial metadata before retry, keeping peak restoration
++            // ownership bounded by one complete decoding attempt.
++            drop(parts);
++            return decode_rows_heap(input, rows, links, budget);
++        }
++    };
++    let mut result = Vec::with_capacity(rows);
++    for (part, (_, range)) in parts.into_iter().zip(layouts) {
++        let cells = crate::cells::CellBuffer::frozen(page.clone(), range, part.cells_capacity())?;
++        result.push(RowRef::new(part.finish(cells)?));
++    }
++    Some(result)
+ }
+ 
+ // A block dictionary shares long URIs across rows and runs. IDs remain raw
+@@ -792,6 +871,191 @@
+         row.encode_history(&mut bytes, &links);
+         bytes
+     }
++    fn archive_rows(rows: &[RowRef]) -> Vec<u8> {
++        let mut raw = Vec::new();
++        let links = encode_links(rows.iter().map(|row| &**row), &mut raw).unwrap();
++        for row in rows {
++            row.encode_history(&mut raw, &links);
++        }
++        raw
++    }
++    fn compare_row_decoders(input: &[u8], rows: usize, links: &[LinkRef], budget: usize) {
++        let heap = decode_rows_heap(input, rows, links, budget);
++        let page = decode_rows_page(input, rows, links, budget);
++        assert_eq!(heap.is_some(), page.is_some(), "acceptance differs");
++        if let (Some(heap), Some(page)) = (heap, page) {
++            for (heap, page) in heap.iter().zip(page) {
++                assert_eq!(encoded(heap), encoded(&page));
++                assert_eq!(heap.owned_bytes(), page.owned_bytes());
++                assert_eq!(heap.recycle_layout(), page.recycle_layout());
++                assert!(!heap.cells.is_frozen());
++                assert!(page.cells.is_frozen());
++            }
++        }
++    }
++    #[test]
++    fn direct_decode_matches_heap_capacities_links_and_exact_budgets() {
++        let link = LinkRef::new(Hyperlink {
++            id: LinkIdentity::Explicit(b"id".as_slice().into()),
++            uri: vec![b'x'; 1900].into(),
++        });
++        let mut seed = 0x2a91_752bu32;
++        let count = if cfg!(miri) { 3 } else { MAX_ROWS };
++        let rows: Vec<_> = (0..count)
++            .map(|index| {
++                seed ^= seed << 13;
++                seed ^= seed >> 17;
++                seed ^= seed << 5;
++                let cols = 8 + seed as usize % 150;
++                let mut row = Row::new(cols);
++                row.resize(cols + 17);
++                row.resize(cols);
++                row.put(
++                    0,
++                    '雪',
++                    2,
++                    Style {
++                        background: Color::Indexed(index as u8),
++                        ..Style::default()
++                    },
++                    true,
++                );
++                row.put(3, 'e', 1, Style::default(), false);
++                for _ in 0..20 {
++                    row.combine(3, '\u{301}');
++                }
++                row.set_hyperlink_range(2..5, Some(&link));
++                if index % 2 == 0 {
++                    row.set_hyperlink_range(2..5, None);
++                }
++                RowRef::new(row)
++            })
++            .collect();
++        let raw = archive_rows(&rows);
++        let mut input = raw.as_slice();
++        let mut budget = crate::memory::MAX_DECODE_BYTES;
++        let links = decode_links_budget(&mut input, &mut budget).unwrap();
++        let exact = rows.iter().map(|row| row.owned_bytes()).sum::<usize>();
++        for budget in [0, 1, exact - 1, exact, exact + 1, budget] {
++            compare_row_decoders(input, rows.len(), &links, budget);
++        }
++        let restored = decode_rows_page(input, rows.len(), &links, exact).unwrap();
++        let held = restored.last().unwrap().clone();
++        let expected = encoded(&held);
++        let mut edited = RowRef::unwrap_or_clone(restored[0].clone());
++        edited.put(0, 'q', 1, Style::default(), false);
++        assert!(!edited.cells.is_frozen());
++        drop(restored);
++        drop(rows);
++        drop(links);
++        drop(raw);
++        std::thread::spawn(move || assert_eq!(encoded(&held), expected))
++            .join()
++            .unwrap();
++    }
++    #[test]
++    fn direct_decode_failures_restart_heap_budget_once() {
++        use crate::cells::{PageFailure, with_page_failure};
++        let link = LinkRef::new(Hyperlink {
++            id: LinkIdentity::Implicit(17),
++            uri: vec![b'q'; 128].into(),
++        });
++        let mut row = Row::new(13);
++        row.set_hyperlink_range(1..8, Some(&link));
++        let rows = [RowRef::new(row)];
++        let raw = archive_rows(&rows);
++        let mut input = raw.as_slice();
++        let mut budget = crate::memory::MAX_DECODE_BYTES;
++        let links = decode_links_budget(&mut input, &mut budget).unwrap();
++        let exact = rows[0].owned_bytes();
++        for failure in [PageFailure::Map, PageFailure::Protect] {
++            let restored =
++                with_page_failure(failure, || decode_rows_page(input, 1, &links, exact)).unwrap();
++            assert!(!restored[0].cells.is_frozen());
++            assert_eq!(encoded(&rows[0]), encoded(&restored[0]));
++            assert!(
++                with_page_failure(failure, || decode_rows_page(input, 1, &links, exact - 1))
++                    .is_none()
++            );
++            let compressed = lz4_flex::block::compress(&raw);
++            let restored =
++                with_page_failure(failure, || decode_block(&compressed, raw.len(), 1)).unwrap();
++            assert!(!restored[0].cells.is_frozen());
++            assert_eq!(encoded(&rows[0]), encoded(&restored[0]));
++        }
++    }
++    #[test]
++    fn direct_decode_rejects_late_corruption_and_all_truncations_like_heap() {
++        let mut a = Row::new(7);
++        a.put(1, '雪', 2, Style::default(), false);
++        a.put(4, 'e', 1, Style::default(), false);
++        a.combine(4, '\u{301}');
++        let rows = [RowRef::new(a), RowRef::new(Row::new(9))];
++        let raw = archive_rows(&rows);
++        let mut input = raw.as_slice();
++        let links = decode_links(&mut input).unwrap();
++        let limit = crate::memory::MAX_DECODE_BYTES;
++        for end in 0..input.len() {
++            compare_row_decoders(&input[..end], 2, &links, limit);
++        }
++        let mut scan = input;
++        Row::scan_history_layout(&mut scan).unwrap();
++        let second = input.len() - scan.len();
++        let styles = usize::from(u16::from_le_bytes(scan[5..7].try_into().unwrap()));
++        let mut late = input.to_vec();
++        let scalar = second + 25 + styles * 14;
++        late[scalar..scalar + 4].copy_from_slice(&0xd800u32.to_le_bytes());
++        assert!(decode_rows_page(&late, 2, &links, limit).is_none());
++        compare_row_decoders(&late, 2, &links, limit);
++        let mut seed = 0x81ca_632du32;
++        for _ in 0..if cfg!(miri) { 16 } else { 10_000 } {
++            seed ^= seed << 13;
++            seed ^= seed >> 17;
++            seed ^= seed << 5;
++            let mut corrupt = input.to_vec();
++            let at = seed as usize % corrupt.len();
++            corrupt[at] = (seed >> 17) as u8;
++            compare_row_decoders(&corrupt, 2, &links, limit);
++        }
++        assert!(decode_block(&[], 0, 0).is_none());
++        assert!(decode_block(&lz4_flex::block::compress(&raw), raw.len(), 0).is_none());
++        assert!(decode_rows_page(&[0; 25], 1, &[], limit).is_none());
++    }
++    #[test]
++    #[cfg_attr(
++        miri,
++        ignore = "large native mapping boundary; small decode tests exercise same builder under Miri"
++    )]
++    fn direct_decode_maximum_cell_map_has_checked_disjoint_rows() {
++        let rows: Vec<_> = (0..MAX_ROWS)
++            .map(|index| {
++                let mut row = Row::new(crate::MAX_COLS);
++                row.put(
++                    crate::MAX_COLS - 1,
++                    char::from(b'a' + index as u8 % 26),
++                    1,
++                    Style::default(),
++                    false,
++                );
++                RowRef::new(row)
++            })
++            .collect();
++        let raw = archive_rows(&rows);
++        let mut input = raw.as_slice();
++        let links = decode_links(&mut input).unwrap();
++        // Row restoration accepts its independently bounded cell map. The full
++        // compressed-block API still rejects raw payloads larger than 4 MiB.
++        let decoded =
++            decode_rows_page(input, MAX_ROWS, &links, crate::memory::MAX_DECODE_BYTES).unwrap();
++        for (index, row) in decoded.iter().enumerate() {
++            assert_eq!(
++                row.cells().last().unwrap().character(),
++                char::from(b'a' + index as u8 % 26)
++            );
++            assert_eq!(encoded(row), encoded(&rows[index]));
++        }
++        assert!(decode_block(&[], raw.len(), MAX_ROWS).is_none());
++    }
+     #[test]
+     fn sealing_preserves_capacity_archive_charge_and_held_rows() {
+         let mut history = History::default();
+diff --git a/apps/hotaru/crates/hotaru-core/src/lib.rs b/apps/hotaru/crates/hotaru-core/src/lib.rs
+--- a/apps/hotaru/crates/hotaru-core/src/lib.rs
++++ b/apps/hotaru/crates/hotaru-core/src/lib.rs
+@@ -3,9 +3,9 @@
+ #![deny(unsafe_code)]
+ #![deny(unsafe_op_in_unsafe_fn)]
+ 
+-mod content;
+ #[allow(unsafe_code)]
+ mod cells;
++mod content;
+ pub mod formatter;
+ mod grapheme;
+ mod history;
+diff --git a/apps/hotaru/crates/hotaru-core/src/row/history.rs b/apps/hotaru/crates/hotaru-core/src/row/history.rs
+--- a/apps/hotaru/crates/hotaru-core/src/row/history.rs
++++ b/apps/hotaru/crates/hotaru-core/src/row/history.rs
+@@ -45,121 +45,24 @@
+         _ => None,
+     }
+ }
+-impl Row {
+-    pub(crate) fn recycle_layout(&self) -> RecycleLayout {
+-        RecycleLayout {
+-            retained_cols: self.retained_cols,
+-            cells: self.cells.capacity() as u16,
+-            styles: self.styles.capacity() as u16,
+-            graphemes: self.graphemes.capacity() as u16,
+-        }
+-    }
+-    pub(crate) fn with_recycle_layout(cols: usize, layout: RecycleLayout) -> Self {
+-        let mut row = Self::new(cols);
+-        row.cells = Vec::with_capacity(usize::from(layout.cells).max(cols)).into();
+-        row.cells.resize(cols, Cell::default());
+-        row.styles = Vec::with_capacity(usize::from(layout.styles).max(1));
+-        row.styles.push(Style::default());
+-        row.graphemes = GraphemeMap::with_capacity(usize::from(layout.graphemes));
+-        row.retained_cols = layout.retained_cols.max(cols as u16);
+-        row.dirty_end = cols as u16;
+-        row
+-    }
+-    /// Archive bound includes the full row-local link table, including entries
+-    /// retained for reuse but not currently referenced by a visible run.
+-    pub(crate) fn history_size_bound(&self) -> usize {
+-        let (links, runs) = self.links.as_ref().map_or((0, 0), |table| {
+-            let bytes = table
+-                .archive_table()
+-                .iter()
+-                .map(|link| {
+-                    let id = match &link.id {
+-                        LinkIdentity::Explicit(id) => 2 + id.len(),
+-                        LinkIdentity::Implicit(_) => 8,
+-                    };
+-                    4 + 1 + id + 2 + link.uri.len()
+-                })
+-                .sum::<usize>();
+-            (bytes, table.archive_runs().count() * 6)
+-        });
+-        25 + self.cells.len() * 8
+-            + self.styles.len() * 14
+-            + self.graphemes.len() * (crate::MAX_GRAPHEME_BYTES + 6)
+-            + links
+-            + runs
+-    }
+-    pub(crate) fn archive_links(&self) -> impl Iterator<Item = &LinkRef> {
+-        self.links.iter().flat_map(|links| links.archive_table())
+-    }
+-    pub(crate) fn encode_history(&self, bytes: &mut Vec<u8>, links: &HashMap<LinkRef, u32>) {
+-        let table = self.links.as_ref();
+-        let runs = table.map_or(0, |table| table.archive_runs().count());
+-        let count = table.map_or(0, |table| table.archive_table().len());
+-        let (run_capacity, table_capacity) =
+-            table.map_or((0, 0), |table| table.archive_capacities());
+-        bytes.extend_from_slice(&(self.cells.len() as u16).to_le_bytes());
+-        bytes.extend_from_slice(&self.retained_cols.to_le_bytes());
+-        bytes.push(
+-            u8::from(self.wrapped)
+-                | (u8::from(self.wrap_continuation) << 1)
+-                | (u8::from(table.is_some()) << 2),
+-        );
+-        for value in [
+-            self.styles.len() as u16,
+-            self.last_style,
+-            self.graphemes.len() as u16,
+-            runs as u16,
+-            self.cells.capacity() as u16,
+-            self.styles.capacity() as u16,
+-            self.graphemes.capacity() as u16,
+-            count as u16,
+-            run_capacity as u16,
+-            table_capacity as u16,
+-        ] {
+-            bytes.extend_from_slice(&value.to_le_bytes());
+-        }
+-        for style in &self.styles {
+-            color_encode(style.foreground, bytes);
+-            color_encode(style.background, bytes);
+-            color_encode(style.underline_color, bytes);
+-            bytes.extend_from_slice(&style.attrs.to_le_bytes());
+-        }
+-        for cell in &self.cells {
+-            bytes.extend_from_slice(&cell.scalar.to_le_bytes());
+-            bytes.extend_from_slice(&cell.style.to_le_bytes());
+-            bytes.push(cell.width);
+-            bytes.push(cell._reserved);
+-        }
+-        for (col, text) in self.graphemes.archive_iter() {
+-            for value in [col as u16, text.len() as u16, text.capacity() as u16] {
+-                bytes.extend_from_slice(&value.to_le_bytes());
+-            }
+-            bytes.extend_from_slice(text.as_bytes());
+-        }
+-        if let Some(table) = table {
+-            for link in table.archive_table() {
+-                bytes.extend_from_slice(&links[link].to_le_bytes());
+-            }
+-            for (start, end, index) in table.archive_runs() {
+-                for value in [start, end, index] {
+-                    bytes.extend_from_slice(&value.to_le_bytes());
+-                }
+-            }
+-        }
+-    }
+-    #[cfg(test)]
+-    pub(crate) fn decode_history(bytes: &mut &[u8], links: &[LinkRef]) -> Option<Self> {
+-        {
+-            let mut budget = crate::memory::MAX_DECODE_BYTES;
+-            Self::decode_history_budget(bytes, links, &mut budget)
+-        }
+-    }
+-    pub(crate) fn decode_history_budget(
+-        bytes: &mut &[u8],
+-        links: &[LinkRef],
+-        budget: &mut usize,
+-    ) -> Option<Self> {
+-        let mut r = Reader(bytes);
++#[derive(Clone, Copy)]
++struct Header {
++    cols: usize,
++    retained_cols: u16,
++    flags: u8,
++    styles: usize,
++    last_style: u16,
++    graphemes: usize,
++    runs: usize,
++    cells_capacity: usize,
++    styles_capacity: usize,
++    graphemes_capacity: usize,
++    table_count: usize,
++    run_capacity: usize,
++    table_capacity: usize,
++}
++impl Header {
++    fn read(r: &mut Reader<'_>) -> Option<Self> {
+         let cols = usize::from(r.u16()?);
+         let retained_cols = r.u16()?;
+         let flags = r.u8()?;
+@@ -198,41 +101,283 @@
+         if r.0.len() < styles * 14 + cols * 8 + graphemes * 6 + table_count * 4 + runs * 6 {
+             return None;
+         }
++        Some(Self {
++            cols,
++            retained_cols,
++            flags,
++            styles,
++            last_style,
++            graphemes,
++            runs,
++            cells_capacity,
++            styles_capacity,
++            graphemes_capacity,
++            table_count,
++            run_capacity,
++            table_capacity,
++        })
++    }
++    fn charge(self, budget: &mut usize) -> Option<()> {
+         let base_charge =
+             crate::memory::allocation(std::mem::size_of::<Row>() + std::mem::size_of::<usize>())
+-                + crate::memory::vector::<Cell>(cells_capacity)
+-                + crate::memory::vector::<Style>(styles_capacity)
+-                + crate::memory::vector::<(usize, CompactString)>(graphemes_capacity)
+-                + if has_links {
+-                    RowLinks::allocation_bytes(run_capacity, table_capacity)
++                + crate::memory::vector::<Cell>(self.cells_capacity)
++                + crate::memory::vector::<Style>(self.styles_capacity)
++                + crate::memory::vector::<(usize, CompactString)>(self.graphemes_capacity)
++                + if self.flags & 4 != 0 {
++                    RowLinks::allocation_bytes(self.run_capacity, self.table_capacity)
+                 } else {
+                     0
+                 };
+         *budget = budget.checked_sub(base_charge)?;
+-        let mut row = Row::with_recycle_layout(
++        Some(())
++    }
++}
++
++/// Metadata cannot become a public Row until its complete validated cell owner
++/// is installed. The page builder keeps all mutable cell slices private.
++pub(crate) struct DecodedRowParts {
++    cols: usize,
++    cells_capacity: usize,
++    styles: Vec<Style>,
++    last_style: u16,
++    graphemes: GraphemeMap,
++    retained_cols: u16,
++    wrapped: bool,
++    wrap_continuation: bool,
++    links: Option<Box<RowLinks>>,
++}
++impl DecodedRowParts {
++    pub(crate) fn finish(self, cells: crate::cells::CellBuffer) -> Option<Row> {
++        if cells.len() != self.cols || cells.capacity() != self.cells_capacity {
++            return None;
++        }
++        Some(Row {
++            cells,
++            styles: self.styles,
++            last_style: self.last_style,
++            graphemes: self.graphemes,
++            retained_cols: self.retained_cols,
++            wrapped: self.wrapped,
++            wrap_continuation: self.wrap_continuation,
++            dirty_end: self.cols as u16,
++            links: self.links,
++            memory_charge: crate::memory::Charge::default(),
++        })
++    }
++    pub(crate) fn cells_capacity(&self) -> usize {
++        self.cells_capacity
++    }
++}
++
++impl Row {
++    pub(crate) fn recycle_layout(&self) -> RecycleLayout {
++        RecycleLayout {
++            retained_cols: self.retained_cols,
++            cells: self.cells.capacity() as u16,
++            styles: self.styles.capacity() as u16,
++            graphemes: self.graphemes.capacity() as u16,
++        }
++    }
++    pub(crate) fn with_recycle_layout(cols: usize, layout: RecycleLayout) -> Self {
++        let mut row = Self::new(cols);
++        row.cells = Vec::with_capacity(usize::from(layout.cells).max(cols)).into();
++        row.cells.resize(cols, Cell::default());
++        row.styles = Vec::with_capacity(usize::from(layout.styles).max(1));
++        row.styles.push(Style::default());
++        row.graphemes = GraphemeMap::with_capacity(usize::from(layout.graphemes));
++        row.retained_cols = layout.retained_cols.max(cols as u16);
++        row.dirty_end = cols as u16;
++        row
++    }
++    /// Archive bound includes the full row-local link table, including entries
++    /// retained for reuse but not currently referenced by a visible run.
++    pub(crate) fn history_size_bound(&self) -> usize {
++        let (links, runs) = self.links.as_ref().map_or((0, 0), |table| {
++            let bytes = table
++                .archive_table()
++                .iter()
++                .map(|link| {
++                    let id = match &link.id {
++                        LinkIdentity::Explicit(id) => 2 + id.len(),
++                        LinkIdentity::Implicit(_) => 8,
++                    };
++                    4 + 1 + id + 2 + link.uri.len()
++                })
++                .sum::<usize>();
++            (bytes, table.archive_runs().count() * 6)
++        });
++        25 + self.cells.len() * 8
++            + self.styles.len() * 14
++            + self.graphemes.len() * (crate::MAX_GRAPHEME_BYTES + 6)
++            + links
++            + runs
++    }
++    pub(crate) fn archive_links(&self) -> impl Iterator<Item = &LinkRef> {
++        self.links.iter().flat_map(|links| links.archive_table())
++    }
++    pub(crate) fn encode_history(&self, bytes: &mut Vec<u8>, links: &HashMap<LinkRef, u32>) {
++        let table = self.links.as_ref();
++        let runs = table.map_or(0, |table| table.archive_runs().count());
++        let count = table.map_or(0, |table| table.archive_table().len());
++        let (run_capacity, table_capacity) =
++            table.map_or((0, 0), |table| table.archive_capacities());
++        bytes.extend_from_slice(&(self.cells.len() as u16).to_le_bytes());
++        bytes.extend_from_slice(&self.retained_cols.to_le_bytes());
++        bytes.push(
++            u8::from(self.wrapped)
++                | (u8::from(self.wrap_continuation) << 1)
++                | (u8::from(table.is_some()) << 2),
++        );
++        for value in [
++            self.styles.len() as u16,
++            self.last_style,
++            self.graphemes.len() as u16,
++            runs as u16,
++            self.cells.capacity() as u16,
++            self.styles.capacity() as u16,
++            self.graphemes.capacity() as u16,
++            count as u16,
++            run_capacity as u16,
++            table_capacity as u16,
++        ] {
++            bytes.extend_from_slice(&value.to_le_bytes());
++        }
++        for style in &self.styles {
++            color_encode(style.foreground, bytes);
++            color_encode(style.background, bytes);
++            color_encode(style.underline_color, bytes);
++            bytes.extend_from_slice(&style.attrs.to_le_bytes());
++        }
++        for cell in &self.cells {
++            bytes.extend_from_slice(&cell.scalar.to_le_bytes());
++            bytes.extend_from_slice(&cell.style.to_le_bytes());
++            bytes.push(cell.width);
++            bytes.push(cell._reserved);
++        }
++        for (col, text) in self.graphemes.archive_iter() {
++            for value in [col as u16, text.len() as u16, text.capacity() as u16] {
++                bytes.extend_from_slice(&value.to_le_bytes());
++            }
++            bytes.extend_from_slice(text.as_bytes());
++        }
++        if let Some(table) = table {
++            for link in table.archive_table() {
++                bytes.extend_from_slice(&links[link].to_le_bytes());
++            }
++            for (start, end, index) in table.archive_runs() {
++                for value in [start, end, index] {
++                    bytes.extend_from_slice(&value.to_le_bytes());
++                }
++            }
++        }
++    }
++    #[cfg(test)]
++    pub(crate) fn decode_history(bytes: &mut &[u8], links: &[LinkRef]) -> Option<Self> {
++        {
++            let mut budget = crate::memory::MAX_DECODE_BYTES;
++            Self::decode_history_budget(bytes, links, &mut budget)
++        }
++    }
++    pub(crate) fn scan_history_layout(bytes: &mut &[u8]) -> Option<usize> {
++        let mut r = Reader(bytes);
++        let h = Header::read(&mut r)?;
++        r.take(
++            h.styles
++                .checked_mul(14)?
++                .checked_add(h.cols.checked_mul(8)?)?,
++        )?;
++        for _ in 0..h.graphemes {
++            r.u16()?;
++            let len = usize::from(r.u16()?);
++            r.u16()?;
++            if len == 0 || len > crate::MAX_GRAPHEME_BYTES {
++                return None;
++            }
++            r.take(len)?;
++        }
++        r.take(
++            h.table_count
++                .checked_mul(4)?
++                .checked_add(h.runs.checked_mul(6)?)?,
++        )?;
++        *bytes = r.0;
++        Some(h.cols)
++    }
++    pub(crate) fn decode_history_budget(
++        bytes: &mut &[u8],
++        links: &[LinkRef],
++        budget: &mut usize,
++    ) -> Option<Self> {
++        let mut r = Reader(bytes);
++        let h = Header::read(&mut r)?;
++        h.charge(budget)?;
++        let mut cells = Vec::with_capacity(h.cells_capacity);
++        cells.resize(h.cols, Cell::default());
++        let parts = Self::decode_history_parts(bytes, links, budget, &mut cells, r, h)?;
++        parts.finish(cells.into())
++    }
++    pub(crate) fn decode_history_into(
++        bytes: &mut &[u8],
++        links: &[LinkRef],
++        budget: &mut usize,
++        cells: &mut [Cell],
++    ) -> Option<DecodedRowParts> {
++        let mut r = Reader(bytes);
++        let h = Header::read(&mut r)?;
++        h.charge(budget)?;
++        Self::decode_history_parts(bytes, links, budget, cells, r, h)
++    }
++    fn decode_history_parts<'a>(
++        bytes: &mut &'a [u8],
++        links: &[LinkRef],
++        budget: &mut usize,
++        cells: &mut [Cell],
++        mut r: Reader<'a>,
++        h: Header,
++    ) -> Option<DecodedRowParts> {
++        let Header {
+             cols,
+-            RecycleLayout {
+-                retained_cols,
+-                cells: cells_capacity as u16,
+-                styles: styles_capacity as u16,
+-                graphemes: graphemes_capacity as u16,
+-            },
+-        );
+-        row.dirty_end = cols as u16;
+-        row.styles.clear();
++            retained_cols,
++            flags,
++            styles,
++            last_style,
++            graphemes,
++            runs,
++            cells_capacity,
++            styles_capacity,
++            graphemes_capacity,
++            table_count,
++            run_capacity,
++            table_capacity,
++        } = h;
++        if cells.len() != cols {
++            return None;
++        }
++        let has_links = flags & 4 != 0;
++        let mut parts = DecodedRowParts {
++            cols,
++            cells_capacity,
++            styles: Vec::with_capacity(styles_capacity),
++            last_style,
++            graphemes: GraphemeMap::with_capacity(graphemes_capacity),
++            retained_cols,
++            wrapped: flags & 1 != 0,
++            wrap_continuation: flags & 2 != 0,
++            links: None,
++        };
+         for _ in 0..styles {
+-            row.styles.push(Style {
++            parts.styles.push(Style {
+                 foreground: color_decode(&mut r)?,
+                 background: color_decode(&mut r)?,
+                 underline_color: color_decode(&mut r)?,
+                 attrs: r.u16()?,
+             });
+         }
+-        row.last_style = last_style;
+-        row.retained_cols = retained_cols;
+-        row.wrapped = flags & 1 != 0;
+-        row.wrap_continuation = flags & 2 != 0;
+-        for col in 0..cols {
++        parts.last_style = last_style;
++        parts.retained_cols = retained_cols;
++        parts.wrapped = flags & 1 != 0;
++        parts.wrap_continuation = flags & 2 != 0;
++        for (col, cell) in cells.iter_mut().enumerate() {
+             let scalar = r.u32()?;
+             let style = r.u16()?;
+             let width = r.u8()?;
+@@ -245,16 +390,16 @@
+             {
+                 return None;
+             }
+-            row.cells[col] = Cell {
++            *cell = Cell {
+                 scalar,
+                 style,
+                 width,
+                 _reserved: reserved,
+             };
+         }
+-        for (col, cell) in row.cells.iter().enumerate() {
+-            if (cell.width == 0 && (col == 0 || row.cells[col - 1].width != 2))
+-                || (cell.width == 2 && (col + 1 == cols || row.cells[col + 1].width != 0))
++        for (col, cell) in cells.iter().enumerate() {
++            if (cell.width == 0 && (col == 0 || cells[col - 1].width != 2))
++                || (cell.width == 2 && (col + 1 == cols || cells[col + 1].width != 0))
+             {
+                 return None;
+             }
+@@ -273,13 +418,13 @@
+                 || (capacity > std::mem::size_of::<CompactString>()
+                     && capacity
+                         < std::mem::size_of::<CompactString>() + std::mem::size_of::<usize>())
+-                || row.cells[col].width == 0
++                || cells[col].width == 0
+             {
+                 return None;
+             }
+             let text = std::str::from_utf8(r.take(len)?).ok()?;
+             if text.chars().count() > crate::MAX_GRAPHEME_SCALARS
+-                || !text.starts_with(row.cells[col].character())
++                || !text.starts_with(cells[col].character())
+             {
+                 return None;
+             }
+@@ -288,7 +433,7 @@
+             }
+             let mut restored = CompactString::with_capacity(capacity);
+             restored.push_str(text);
+-            row.graphemes.insert(col, restored);
++            parts.graphemes.insert(col, restored);
+             previous = Some(col);
+         }
+         let mut table = Vec::with_capacity(table_capacity);
+@@ -313,7 +458,7 @@
+             previous_end = end;
+         }
+         if has_links {
+-            row.links = Some(Box::new(RowLinks::restore_archive(
++            parts.links = Some(Box::new(RowLinks::restore_archive(
+                 table,
+                 restored_runs,
+                 run_capacity,
+@@ -321,7 +466,7 @@
+             )?));
+         }
+         *bytes = r.0;
+-        Some(row)
++        Some(parts)
+     }
+ }
+ 
+diff --git a/apps/hotaru/crates/hotaru-replay/Cargo.toml b/apps/hotaru/crates/hotaru-replay/Cargo.toml
+--- a/apps/hotaru/crates/hotaru-replay/Cargo.toml
++++ b/apps/hotaru/crates/hotaru-replay/Cargo.toml
+@@ -10,3 +10,6 @@
+ [dependencies]
+ hotaru-core = { path = "../hotaru-core" }
+ serde_json = "1"
++
++[features]
++heap-history-decode = ["hotaru-core/heap-history-decode"]

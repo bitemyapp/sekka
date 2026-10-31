@@ -18,6 +18,7 @@
 pub mod bands;
 pub mod effects;
 pub mod images;
+pub mod masks;
 pub mod ops;
 pub mod pixels;
 
@@ -234,6 +235,7 @@ fn describe(op: &Op, count: usize) -> String {
             format!("group of {count} ops, alpha {alpha}{}, clip {:?}", shadow(draw), draw.clip)
         }
         Op::EndGroup => "end group".into(),
+        Op::AlphaMask { dst, .. } => format!("alpha mask into {dst:?}"),
         Op::Glyphs(run) => format!("glyphs at ({}, {})", run.x, run.y),
         Op::Composite(_) => "composite".into(),
     }

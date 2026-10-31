@@ -228,6 +228,10 @@ impl Widget for SplitWidget {
         self.resizable
     }
 
+    fn hit_children(&self, pos: Point) -> bool {
+        !self.near(pos)
+    }
+
     fn hover_paints(&self) -> bool {
         false
     }

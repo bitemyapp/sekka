@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "source_base": "73c757d6",
+  "candidate_base": "8f05f4a6",
+  "product_files_verified": 91,
+  "complete_qualified_source_files_verified": 1355,
+  "source_sha256": "ba1c370fe413c9d21bf5ab3175e8008171a2846ddf2fbe41739b441588b3639b",
+  "binary": {
+    "path": "/home/callen/.cache/hotaru-auto-links-target/debug/aizome-hotaru",
+    "sha256": "b8d982121e85d17e90bbf81629140b1637faa4f721cfad9efb2fa8525f22721a"
+  },
+  "evidence_sha256": "60deb95cae9a3c649eb6065a0b8837463280cf2e796cd708de33e1b4af89ef75",
+  "same_source_after_patch": true,
+  "verification_host": "wx-workstation",
+  "review": "Root independently reviewed FFI ABI/RAII, bounded map and worker ownership, helper lifecycle, explicit precedence and gesture/application identity gates. No concrete defect found. Existing vendor source whitespace is preserved.",
+  "scope": "Exact source integration; no new Nix package or complete application parity claim.",
+  "post_validation_documentation_only_changes": {
+    "desktop/aizome/apps/hotaru/README.md": "dac0d5232b5a97a1cf72ad9854147d87af98f3fd34339126cca4ebc4e61851e0"
+  }
+}

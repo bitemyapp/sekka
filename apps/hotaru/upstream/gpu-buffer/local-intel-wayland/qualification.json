@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "source_sha256": {
+    "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+    "wayland-transport.c": "16228d2a6e3dd4e878760992220ed964ebf349929e0eb58a8a9ced881c8f820c",
+    "run.py": "b43bb99774bba0cb1a2987709c9834a831beaafcf9a58e47d502f33c3670ca1f"
+  },
+  "binary_sha256": "3c0dd8ccdff6b23e3d8452a468f95ef3e82489795b9f470b9c448e93bd8a1b45",
+  "cleanup_helper_sha256": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+  "capture_sha256": "7e84b1174a7a2e983345dc26a6a070546cd538f07d7b748464ef40ec69c49d64",
+  "capture_rgb_bytes_checked": 3072,
+  "compositor_capture_alpha": "undefined X padding; not counted as alpha",
+  "original_egl_consumer_rgba_bytes_checked": 4096,
+  "protocol_import": "async params.created after exact advertisedformat/modifier match; transport fd closed afterward",
+  "orientation": "flags0, producerreadbackrow0 maps to surface top; unsupportedY_INVERTattempt retained",
+  "compositor": "private headless Sway1.12, wlroots0.20.2, hardwareIntelGLES, Mesa26.2.5/xe",
+  "release": "observed only after deliberate null attach and commit; no writes/reuse while committed",
+  "presentation": "headless feedback clock1/CLOCK_MONOTONIC flags0 refresh0; no physicalscanout claim",
+  "teardown": "all direct children exited; process-local subreaper/pidfd confirmed no owned descendants; private runtime removed",
+  "independent_review": "linux_io reviewed lifecycle/capture; identified innerpreparedeadline and descendantcleanup gaps, both corrected; narrow rereview found no new concrete defect",
+  "scope": "isolated Cdiagnostic only; no productionCdependency or nativeGPUrenderer added",
+  "raw_files_sha256": {
+    "producer.c": "30a9dff89dce5cdaaa337f363cfb1b723fa8d0c3d8f24d883ebbb63642f8c82e",
+    "wayland-transport.c": "16228d2a6e3dd4e878760992220ed964ebf349929e0eb58a8a9ced881c8f820c",
+    "run.py": "b43bb99774bba0cb1a2987709c9834a831beaafcf9a58e47d502f33c3670ca1f",
+    "probe.strace": "3753cb78e4065266c60fe001016aa3b6b69dfbe3b070457f353d78c3d10602aa",
+    "probe.log": "9a941181a674cff7d620a4a50713bc00bddb8ded31defa93d34c4eb71a5ea369",
+    "sway.log": "ff4a3e58a3b27185365bca954ec7a8f39ae6ffc088f9fd2c7140c7aadb2b5862",
+    "capture.raw": "7e84b1174a7a2e983345dc26a6a070546cd538f07d7b748464ef40ec69c49d64",
+    "capture.png": "037dc7921c086f8b8c1b4fc0ab95e7d4fb094e1045a680ebae78c91a3b19d293",
+    "result.json": "dcd2defae67e32dc25d1603b1338dafae1939864463118bc3e10b9fb6825f241"
+  }
+}

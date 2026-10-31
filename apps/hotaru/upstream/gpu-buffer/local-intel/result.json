@@ -1,0 +1,132 @@
+{
+  "scope": "hardware offscreen two-unshared-context DMA-BUF correctness; no Wayland, presentation, renderer integration or timing claim",
+  "source_sha256": "9ae5753f7a6d316607009c127e0e991f6c0919772328e912c523c2c2abcf4102",
+  "host": "ganymede",
+  "kernel": "7.3.0",
+  "mesa": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5",
+  "loader": "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0",
+  "device": {
+    "path": "/dev/dri/renderD128",
+    "mode": "0o666",
+    "vendor": "0x8086",
+    "device": "0xb090",
+    "driver": "/sys/bus/pci/drivers/xe"
+  },
+  "environment": {
+    "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+    "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+    "MESA_SHADER_CACHE_DISABLE": "true"
+  },
+  "build_command": [
+    "cc",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I/nix/store/risg12y850mmilsg2ikrx417mg1dj6dm-libglvnd-1.7.0-dev/include",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-capability/gpu-buffer-probe.c",
+    "-L/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib",
+    "-Wl,-rpath,/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib",
+    "-lEGL",
+    "-o",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-capability/gpu-buffer-probe"
+  ],
+  "build_returncode": 0,
+  "binary_sha256": "6cac9ffff609bcdf1f32c8d9db5f2bc022346455c1cdd0c428010f9bf1e14e60",
+  "command": [
+    "/nix/store/78jn0lxqjgz4ahjzvvh4rvan7p607xph-strace-7.2/bin/strace",
+    "-f",
+    "-yy",
+    "-e",
+    "trace=openat,ioctl,close",
+    "-o",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-capability/probe.strace",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-capability/gpu-buffer-probe",
+    "0"
+  ],
+  "returncode": 0,
+  "events": [
+    {
+      "event": "device",
+      "index": 0,
+      "enumerated": 2,
+      "name": "Mesa Intel(R) Graphics (PTL)",
+      "drm_render_node": "/dev/dri/renderD128"
+    },
+    {
+      "event": "context",
+      "vendor": "Intel",
+      "renderer": "Mesa Intel(R) Graphics (PTL)",
+      "version": "OpenGL ES 3.2 Mesa 26.2.5"
+    },
+    {
+      "event": "producer_readback",
+      "matched_rgba_bytes": 4096
+    },
+    {
+      "event": "export_query",
+      "fourcc": 875708993,
+      "planes": 1,
+      "modifier": "0x0000000000000000"
+    },
+    {
+      "event": "export",
+      "fd": 8,
+      "stride": 256,
+      "offset": 0
+    },
+    {
+      "event": "passed",
+      "matched_rgba_bytes": 4096,
+      "contexts_shared": false,
+      "synchronization": "bounded CPU fence wait",
+      "presentation": false
+    }
+  ],
+  "mapped_files": [
+    "/dev/dri/renderD128",
+    "/home/callen/work/hotaru-local-gui-20261028/gpu-capability/gpu-buffer-probe",
+    "/nix/store/0lalp8bqwbvxkrqmvsawagzx2w18w4h5-lm-sensors-3.6.2/lib/libsensors.so.5.0.0",
+    "/nix/store/3sj8msrsym648f35mk3gb3pp385hhk8r-gcc-16.2.0-libgcc/lib/libgcc_s.so.1",
+    "/nix/store/3xaspbv6nwvihmc3ybmlv0wjjksvpamq-xz-5.8.4/lib/liblzma.so.5.8.4",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libEGL_mesa.so.0.0.0",
+    "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/libgallium-26.2.5.so",
+    "/nix/store/5sw8x6gdi0gwri8pj1vm7ikyyqzh02fi-mesa-libgbm-26.1.3/lib/libgbm.so.1.0.0",
+    "/nix/store/7a2cjhcgzyym5zaz6m4fksw47qvm150w-gcc-16.2.0-lib/lib/libstdc++.so.6.0.36",
+    "/nix/store/7rx5im6jbgyfhrl0lc0kyxd9yf14rdxc-expat-2.9.0/lib/libexpat.so.1.13.0",
+    "/nix/store/anh1ib7l6ksrwr45kiwgz906vfi0vr5x-libxau-1.0.12/lib/libXau.so.6.0.0",
+    "/nix/store/bvfkqam1y3zmsb3k41iml0zwx13sknjl-elfutils-0.195/lib/libelf-0.195.so",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-dri3.so.0.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-present.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-randr.so.0.1.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-shm.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-sync.so.1.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb-xfixes.so.0.0.0",
+    "/nix/store/d5dsf0h0r0fpi48rgvi7hmnac3mzj2s8-libxcb-1.17.0/lib/libxcb.so.1.1.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm.so.2.134.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_amdgpu.so.1.134.0",
+    "/nix/store/f5bymphw4ci3j34w3iw63v32pqpkxkjf-libdrm-2.4.134/lib/libdrm_intel.so.1.134.0",
+    "/nix/store/f5r77q40xh7rj30dfkajv8y6jwbf4xh2-zstd-1.5.7/lib/libzstd.so.1.5.7",
+    "/nix/store/ff1qrwmrdkr1hg4q1afpbw8139nj2r5m-wayland-1.26.0/lib/libwayland-client.so.0.26.0",
+    "/nix/store/ji36842higmp6b06hbbpmzbd59g1c07c-zlib-1.3.2/lib/libz.so.1.3.2",
+    "/nix/store/m5s1ak7s1swmhmy64yqvya342g0603s7-libxml2-2.15.4/lib/libxml2.so.16.1.4",
+    "/nix/store/mr6cbi3rdy6w5y4cd6875gf4y0pqn0jf-llvm-21.1.8-lib/lib/libLLVM.so.21.1",
+    "/nix/store/pfds9zw10xksh0zr7qplqg1lj9avs2gz-libffi-3.8.0/lib/libffi.so.8.5.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libdl.so.2",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libm.so.6",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libpthread.so.0",
+    "/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/librt.so.1",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11-xcb.so.1.0.0",
+    "/nix/store/rck9w8gj3r2w2z1xpw15g1fvpzi8iz9h-libx11-1.8.13/lib/libX11.so.6.4.0",
+    "/nix/store/v4j317f11g4px2cc4ad7cldqkn0wdbqz-libxshmfence-1.3.3/lib/libxshmfence.so.1.0.0",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libEGL.so.1.1.0",
+    "/nix/store/ww5pckflswny9whz04k06xh233jbg5kl-libglvnd-1.7.0/lib/libGLdispatch.so.0.0.0",
+    "/nix/store/ykj1kjkdb4ahqrb29w5n3ljxia1id5qm-libpciaccess-0.19/lib/libpciaccess.so.0.11.1",
+    "/nix/store/zfls1iw1bpglz5w2lqg3b8mjay1hg7dr-libxdmcp-1.1.5/lib/libXdmcp.so.6.0.0",
+    "/nix/store/zx4ag3v11v9rl0iqvg6vzbpflzlg0dk2-bzip2-1.0.8/lib/libbz2.so.1.0.8"
+  ],
+  "status": "passed"
+}

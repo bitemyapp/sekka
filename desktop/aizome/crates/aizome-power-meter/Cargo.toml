@@ -1,0 +1,15 @@
+[package]
+name = "aizome-power-meter"
+description = "The processor's energy counters for Myaku, which only root may read: read at most once a second and answered on a socket"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "aizome-power-meter"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"

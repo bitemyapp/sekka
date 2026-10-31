@@ -1,0 +1,91 @@
+{
+  "scope": "gpu calibration from one qualification run of each application; its timings are excluded",
+  "status": "qualified_for_future_matched_measurements",
+  "renderer": "gpu",
+  "problems": [],
+  "host": "callen",
+  "compositor": [
+    "[render/egl.c:360] EGL vendor: NVIDIA",
+    "[render/gles2/renderer.c:842] Creating GLES2 renderer",
+    "[render/gles2/renderer.c:843] Using OpenGL ES 3.2 NVIDIA 580.159.04",
+    "[render/gles2/renderer.c:844] GL vendor: NVIDIA Corporation",
+    "[render/gles2/renderer.c:845] GL renderer: NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition/PCIe/SSE2"
+  ],
+  "apps": {
+    "hotaru": {
+      "run": "hotaru-calibration",
+      "binary": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/hotaru",
+      "runtime_executable": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "runtime_executable_sha256": "3de75828ccfda346eb7628b16a740513666ab496badb34b3829ab9fa0660d2ce",
+      "window_pixels": [
+        1349,
+        1077
+      ],
+      "grid": {
+        "event": "size",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 4246074582235096
+      },
+      "gpu": {
+        "1925260": {
+          "comm": ".hotaru-wrapped",
+          "libraries": [],
+          "devices": []
+        },
+        "1925271": {
+          "comm": "python3",
+          "libraries": [],
+          "devices": []
+        }
+      }
+    },
+    "ghostty": {
+      "run": "ghostty-calibration",
+      "binary": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty",
+      "runtime_executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "runtime_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "window_pixels": [
+        1331,
+        987
+      ],
+      "grid": {
+        "event": "size",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 4246100766579576
+      },
+      "gpu": {
+        "1925887": {
+          "comm": ".ghostty-wrappe",
+          "libraries": [
+            "libEGL.so.1.1.0",
+            "libEGL_nvidia.so.580.159.04",
+            "libGLESv2.so.2.1.0",
+            "libGLX.so.0.0.0",
+            "libGLdispatch.so.0.0.0",
+            "libdrm.so.2.134.0",
+            "libnvidia-allocator.so.580.159.04",
+            "libnvidia-egl-wayland.so.1.1.21",
+            "libnvidia-eglcore.so.580.159.04",
+            "libnvidia-glsi.so.580.159.04",
+            "libnvidia-gpucomp.so.580.159.04",
+            "libvulkan.so.1.4.363"
+          ],
+          "devices": [
+            "/dev/dri/card1",
+            "/dev/dri/renderD128",
+            "/dev/nvidia-modeset",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        "1925905": {
+          "comm": "python3",
+          "libraries": [],
+          "devices": []
+        }
+      }
+    }
+  }
+}

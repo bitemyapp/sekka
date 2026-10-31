@@ -170,19 +170,22 @@ pkgs.testers.runNixOSTest {
         if w.get("app_id") == "org.aizome.Annai":
             ctl(f"close {w['id']}")
 
-    # The desktop, as on the design board: Sumi, Files and a terminal
-    # stacked together, the Deskbar with a notification filed under its app.
+    # The desktop, as on the design board: Sumi beside Files and Hotaru,
+    # Aizome's own terminal, stacked together, the Deskbar with a
+    # notification filed under its app.
     launch("aizome-hako /home/demo")
     hako = wait_window("org.aizome.Hako")
-    launch("foot")
-    foot = wait_window("foot")
-    ctl(f"stack {hako['id']} {foot['id']}")
+    launch("aizome-hotaru")
+    hotaru = wait_window("org.aizome.Hotaru")
+    ctl(f"stack {hako['id']} {hotaru['id']}")
     # Content rectangles in layout points (1440 × 900, the Deskbar at the
     # right), so every tab and frame is on screen and no tab is covered.
-    ctl(f"resize {foot['id']} 600 500 580 340")
+    ctl(f"resize {hotaru['id']} 600 500 580 340")
     time.sleep(2)
-    ctl(f"focus {foot['id']}")
-    ctl("input type 'clear; fastfetch --logo nixos_small'")
+    ctl(f"focus {hotaru['id']}")
+    # Hotaru's tab and status bars leave 62 × 14 cells: a short fastfetch
+    # keeps its logo and title on screen with nothing wrapping.
+    ctl("input type 'clear; fastfetch --logo nixos_small --structure Title:Separator:OS:Kernel:Shell:Terminal:Memory:Break:Colors'")
     ctl("input key return")
     time.sleep(3)
     launch("aizome-sumi /home/demo/Documents/architecture.md")

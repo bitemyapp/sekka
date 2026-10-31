@@ -1,0 +1,93 @@
+--- a/apps/hotaru/crates/hotaru-core/src/screen.rs
++++ b/apps/hotaru/crates/hotaru-core/src/screen.rs
+@@ -698,9 +698,10 @@
+             // otherwise the budget's peak (and retained history) depends on
+             // where a PTY read happens to split an overwrite.
+             if self.scalar_metadata_writes() {
+-                self.print(bytes[0] as char);
+-                self.screen_mut().enforce_budget();
+-                bytes = &bytes[1..];
++                let mut chars = bytes.iter().copied().map(char::from).peekable();
++                let consumed = self.print_metadata_span(&mut chars);
++                debug_assert!(consumed > 0);
++                bytes = &bytes[consumed..];
+                 continue;
+             }
+             let style = self.style;
+@@ -856,8 +857,11 @@
+         let mut chars = text.chars().peekable();
+         while chars.peek().is_some() {
+             if self.scalar_metadata_writes() {
+-                self.print(chars.next().unwrap());
+-                self.screen_mut().enforce_budget();
++                self.print_metadata_span(&mut chars);
++                if let Some(ch) = chars.next() {
++                    self.print(ch);
++                    self.screen_mut().enforce_budget();
++                }
+                 continue;
+             }
+             let style = self.style;
+@@ -944,6 +948,62 @@
+                 self.print(ch);
+             }
+         }
++    }
++    /// Preserve scalar allocation/link-table order while amortizing row COW
++    /// checks over standalone positive-width scalars. Clusters and wrapping
++    /// continue through the complete scalar state machine.
++    fn print_metadata_span<I: Iterator<Item = char>>(
++        &mut self,
++        chars: &mut std::iter::Peekable<I>,
++    ) -> usize {
++        let style = self.style;
++        let protected = self.protected;
++        let unicode = self.modes.grapheme_cluster;
++        let auto = self.autowrap;
++        let screen = self.screen_mut();
++        if screen.wrap_pending {
++            return 0;
++        }
++        let link = screen.active_link.clone();
++        let mut col = screen.cursor.col;
++        let mut consumed = 0;
++        let mut clear_previous_spacer = false;
++        let row = Arc::make_mut(&mut screen.lines[screen.cursor.row]);
++        while let Some(&ch) = chars.peek() {
++            let width = if unicode {
++                unicode_char_width(ch)
++            } else {
++                char_width(ch)
++            };
++            if width == 0
++                || col + width > screen.cols
++                || (unicode && !unicode_batch_boundary(row, col, auto, ch))
++            {
++                break;
++            }
++            chars.next();
++            clear_previous_spacer |=
++                col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
++            row.put(col, ch, width, style, protected);
++            if let Some(link) = &link {
++                row.set_hyperlink_range(col..col + width, Some(link));
++            }
++            col += width;
++            consumed += 1;
++            if col == screen.cols {
++                screen.wrap_pending = true;
++                col -= 1;
++                break;
++            }
++        }
++        screen.cursor.col = col;
++        if clear_previous_spacer {
++            screen.clear_previous_spacer();
++        }
++        // No scroll/history mutation occurs inside the span. Its highest
++        // charged allocation is retained by BudgetSignal even after releases.
++        screen.enforce_budget();
++        consumed
+     }
+     fn scalar_metadata_writes(&self) -> bool {
+         let screen = self.screen();

@@ -221,9 +221,50 @@ impl Constraints {
     }
 }
 
+/// `rects` less `hole`: the pieces of each around it (above and below it
+/// whole, then beside it).
+pub fn subtract(rects: &[Rect], hole: Rect) -> Vec<Rect> {
+    let mut out = Vec::with_capacity(rects.len() + 3);
+    for &r in rects {
+        let i = r.intersect(hole);
+        if i.width() <= 0.0 || i.height() <= 0.0 {
+            out.push(r);
+            continue;
+        }
+        let pieces = [
+            Rect::new(r.x0, r.y0, r.x1, i.y0),
+            Rect::new(r.x0, i.y1, r.x1, r.y1),
+            Rect::new(r.x0, i.y0, i.x0, i.y1),
+            Rect::new(i.x1, i.y0, r.x1, i.y1),
+        ];
+        out.extend(pieces.into_iter().filter(|p| p.width() > 0.0 && p.height() > 0.0));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hole_leaves_four_pieces_around_it() {
+        let all = [Rect::new(0.0, 0.0, 100.0, 100.0)];
+        let around = subtract(&all, Rect::new(10.0, 20.0, 90.0, 70.0));
+        assert_eq!(
+            around,
+            vec![
+                Rect::new(0.0, 0.0, 100.0, 20.0),
+                Rect::new(0.0, 70.0, 100.0, 100.0),
+                Rect::new(0.0, 20.0, 10.0, 70.0),
+                Rect::new(90.0, 20.0, 100.0, 70.0),
+            ]
+        );
+        let area: f64 = around.iter().map(|r| r.area()).sum();
+        assert_eq!(area, 100.0 * 100.0 - 80.0 * 50.0);
+        // A hole as wide as the window leaves bands; one outside, all of it.
+        assert_eq!(subtract(&all, Rect::new(0.0, 0.0, 100.0, 50.0)), vec![Rect::new(0.0, 50.0, 100.0, 100.0)]);
+        assert_eq!(subtract(&all, Rect::new(200.0, 0.0, 300.0, 50.0)), all.to_vec());
+    }
 
     #[test]
     fn constraints_clamp_and_shrink() {

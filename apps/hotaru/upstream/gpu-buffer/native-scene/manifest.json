@@ -1,0 +1,206 @@
+{
+  "README.md": {
+    "sha256": "6cd2b35b23329d8222720133a949038255c5925e9a689be34c0378d691b8c04c",
+    "bytes": 3274
+  },
+  "capture.png": {
+    "sha256": "6309a729b9684b47e9cc1c52538494b43fe8c296cfb94c217b612000dd27a5e7",
+    "bytes": 34389
+  },
+  "failed-loader-teardown/coredump-info.txt": {
+    "sha256": "94f74aa011db91a279f15330de64eba57ed0756235d9c865dca2cfd0e701cd10",
+    "bytes": 8200
+  },
+  "failed-loader-teardown/wayland-result.json": {
+    "sha256": "63b96fc570a15c783cecac30d1e2a3a6a61f3c5d93447795af50badd86cbd991",
+    "bytes": 34148
+  },
+  "failed-loader-teardown/wayland.log": {
+    "sha256": "c96e4f7b8ab44609e24bed3e5ea740dfe3d377c4309ea63ecb24e8bce0213ff2",
+    "bytes": 3714
+  },
+  "preparation/BASE_REVISION": {
+    "sha256": "9908991a1e0507bfb86c569eb166af549e8d7d5c2f68f5ea15dd8babd2d076f2",
+    "bytes": 41
+  },
+  "preparation/Sidestep-LICENSE-APACHE": {
+    "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+    "bytes": 9723
+  },
+  "preparation/Sidestep-LICENSE-MIT": {
+    "sha256": "c5f260f711054f311c3dffc76975c446e2403b485640d8b8f64ba815b24b05ee",
+    "bytes": 1055
+  },
+  "preparation/final-fixture-sha256.txt": {
+    "sha256": "a2be03ba7bd5bd52e43b8ab6ec510bb8d2cacc10f2c20e69e3986e5bbbdd8dae",
+    "bytes": 2682
+  },
+  "preparation/inventory.json": {
+    "sha256": "f19a9cef932f1e8354ea3e26532ffe1e08fe7269a3f71ba8174c57cd4106017e",
+    "bytes": 30036
+  },
+  "preparation/inventory.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "preparation/inventory.sh": {
+    "sha256": "551ee48da82991327af4f14b7b0495438c9712da2c41287235b83a3acf66c3d9",
+    "bytes": 729
+  },
+  "preparation/source/desktop/aizome/apps/hotaru/src/app.rs": {
+    "sha256": "cbc389dc06739730bbcc19941cccf9a5617ddb6eeeda5c32f0da703dc0c1aa3a",
+    "bytes": 58114
+  },
+  "preparation/source/desktop/aizome/apps/hotaru/tests/scene_inventory.rs": {
+    "sha256": "e683b2d327480ac47991843801ef51a8978481d6ec6ba459c440576cafaac154",
+    "bytes": 7185
+  },
+  "preparation/source/desktop/aizome/crates/aizome-kit/src/testing.rs": {
+    "sha256": "78dd1af1faeb18a075dccfb572c1b72aec851277975732ccb9f611546067a969",
+    "bytes": 56129
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-engine/src/gpu_scene.rs": {
+    "sha256": "9f23c32f8e17cc9603ef64a8c244110f81031b6cf12665f788307ad75ab9fc74",
+    "bytes": 28964
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-engine/src/gpu_scene_samples.rs": {
+    "sha256": "8f989858c582d1383e0513c2ae728d7b6220e4b3d93c88638545b5e91394aebb",
+    "bytes": 4999
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-engine/src/lib.rs": {
+    "sha256": "eb28457f4bb3564fa46d8cb65a80f24fce2a54bff793fc3c8bd64d11430b02e6",
+    "bytes": 1638
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-engine/src/text/raster.rs": {
+    "sha256": "34f4fa3477b0bf1b3a0d97a118fac62ba8fb5b325f4699eb9fd81690063d5d77",
+    "bytes": 29187
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-engine/src/text.rs": {
+    "sha256": "145f3ef06a9a9878b9b8964a5e22ade0d4fd0d147c3816fa2c8ac90623d3aca8",
+    "bytes": 3112
+  },
+  "preparation/source/vendor/sidestep/crates/sidestep-ui/src/offscreen.rs": {
+    "sha256": "8a523de1a741b7927bdf72922c4ca37d51983803b6c19db170abb6680f83343f",
+    "bytes": 24631
+  },
+  "preparation/tiny-skia-LICENSE": {
+    "sha256": "6d41e05f1d54fe726997cb0334ec539f1dff50600b1d5d90462ec2b392770ced",
+    "bytes": 1564
+  },
+  "preparation/unit.log": {
+    "sha256": "ff3820ecac253d9c88a6fe3a252e2602b7e489c6dd68f6930a33a91bc89ecf21",
+    "bytes": 893
+  },
+  "probe.log": {
+    "sha256": "4b5b0d684a906694dfdb79a3a2af5c98b1a1e93eae996c4948e52591c7964389",
+    "bytes": 13969
+  },
+  "qualification.json": {
+    "sha256": "a388df514fd64576fe5cd776532c5c536c08234cfe5df2d5c1c9b52d13a61861",
+    "bytes": 6417
+  },
+  "remote-validation/build-identity.txt": {
+    "sha256": "4fdff2578428e9c5c08ddd7a0d3079c1a106b1cdaa46e73e46f7cd32b0fb9cad",
+    "bytes": 196
+  },
+  "remote-validation/post-hardware-lint.patch": {
+    "sha256": "35f613262a7c100bdbaf0bb45fbc25f194c02964d6cf21007ae88cc27e54163c",
+    "bytes": 2399
+  },
+  "remote-validation/scene-clippy.log": {
+    "sha256": "b00c3c9f3a9c56869cc307f6e8369daaa23ecede015b321bd74f63ff29e8e2d3",
+    "bytes": 171
+  },
+  "remote-validation/scene-tests.log": {
+    "sha256": "74a3c8b2bccab9f9658f16e712c1c754c45f3ff9ba7a430371a71b65b32a4a12",
+    "bytes": 2733
+  },
+  "repeated-wayland/1/wayland-result.json": {
+    "sha256": "fa4f5e1d7e76a977e660f6b7c5031f2c89a7751baa16473a3d6ea9582f4644e0",
+    "bytes": 34140
+  },
+  "repeated-wayland/1/wayland.log": {
+    "sha256": "a014a9be64934fe5301fdd12a54ccf42e2d22d311feba3eeeb70358253a0d88a",
+    "bytes": 3714
+  },
+  "repeated-wayland/2/wayland-result.json": {
+    "sha256": "28408e5e11cf66a9b39836c4f509afb033341cd29e0cacbef190f8478fbab759",
+    "bytes": 34248
+  },
+  "repeated-wayland/2/wayland.log": {
+    "sha256": "7e6ea0832e0e4c462e5550cd57a4ec35366a2d564bffd4bf28e511a249777b7b",
+    "bytes": 3715
+  },
+  "repeated-wayland/3/wayland-result.json": {
+    "sha256": "4a03919ce945de4876a52858fd6ff0a76c13af488e022183b0ec32d50fff9808",
+    "bytes": 34247
+  },
+  "repeated-wayland/3/wayland.log": {
+    "sha256": "99b3429afbd482698207b7af4dcf17a2f20cedf19ea56837c149d5a1344d3594",
+    "bytes": 3714
+  },
+  "result.json": {
+    "sha256": "21f986336f6ec6f2437407c1f154e636eabf177f5d84793e8e0cda1af672fd40",
+    "bytes": 32304
+  },
+  "run.py": {
+    "sha256": "3dbe0e8fc402ea3bcba2472de4f6c48739b131ff469346e505b8464a522fe110",
+    "bytes": 4864
+  },
+  "source/Cargo.lock": {
+    "sha256": "ee77f03d061fa1e8dddcbd455f86ab4f437afb3e221e6de12440e247631f146a",
+    "bytes": 15310
+  },
+  "source/Cargo.toml": {
+    "sha256": "61eb88488c8598be4a37512a0f3a3202432d47ca8b5923ce6ff730dbbec50e6a",
+    "bytes": 693
+  },
+  "source/src/compose.comp": {
+    "sha256": "3e793f8e153c76a71711d326b4415d5dfcd9bcd766f8cc12cbbd0449cc101215",
+    "bytes": 2330
+  },
+  "source/src/compose.rs": {
+    "sha256": "c01b631c1832ce820a42d181853d88cc9af3584a1b1fafbe3e31718cc5891ed6",
+    "bytes": 16102
+  },
+  "source/src/egl.rs": {
+    "sha256": "a3cd15b68d5b3016290f6a007cab554b2bb4fff3abafb364f262d222fed99b5e",
+    "bytes": 20055
+  },
+  "source/src/egl_probe.rs": {
+    "sha256": "a67c80409ee7b8850652c0257d10c820cc17fb7c5a0ed1207ac9cbfca17318d6",
+    "bytes": 1965
+  },
+  "source/src/lib.rs": {
+    "sha256": "4a6a0a22b7c6d427f10fbab97afed374d139c342513112b363cafb4fd6df9680",
+    "bytes": 40808
+  },
+  "source/src/scene.rs": {
+    "sha256": "c49c8bc781b5fa7ff51b5dcc4cddc09b943a086d8edeef1754f042656800b755",
+    "bytes": 11084
+  },
+  "source/src/scene_probe.rs": {
+    "sha256": "ada698efe11fa139f0d6ad71b459ea3803f9d36239f72aa585612252d1cb2b9c",
+    "bytes": 2499
+  },
+  "source/src/scene_wayland_probe.rs": {
+    "sha256": "da79f0a7c117a4a65b0811914f8b0bd93f6aac73ad5f0cc1ea02d5fa05fd7b4c",
+    "bytes": 19757
+  },
+  "source/src/wayland_probe.rs": {
+    "sha256": "8826ae320ce16c1a6011d04ddbc25a339791cfa37d749abca7d49f6c10cd5048",
+    "bytes": 19222
+  },
+  "wayland-result.json": {
+    "sha256": "4a03919ce945de4876a52858fd6ff0a76c13af488e022183b0ec32d50fff9808",
+    "bytes": 34247
+  },
+  "wayland.log": {
+    "sha256": "99b3429afbd482698207b7af4dcf17a2f20cedf19ea56837c149d5a1344d3594",
+    "bytes": 3714
+  },
+  "wayland.py": {
+    "sha256": "bef79ae91f43d8544d1cd2405e6eadaefb6fa15998855fcf57f8c4c1bb158230",
+    "bytes": 7409
+  }
+}

@@ -118,7 +118,7 @@ fn bandable(ops: &[Op]) -> bool {
     let plain = |d: &Draw| d.shadow.is_none() && d.mask.iter().flat_map(|m| m.iter()).all(|c| c.image.is_none());
     let small = |i: &ImageData| matches!(i.pixels, Pixels::Rgba(_)) && i.width.saturating_mul(i.height) <= SMALL_IMAGE;
     ops.iter().all(|op| match op {
-        Op::Fill { .. } | Op::FillWith { .. } | Op::Glyphs(_) | Op::EndGroup => true,
+        Op::Fill { .. } | Op::FillWith { .. } | Op::Glyphs(_) | Op::AlphaMask { .. } | Op::EndGroup => true,
         Op::FillPath { draw, .. } | Op::StrokePath { draw, .. } | Op::BeginGroup { draw, .. } => plain(draw),
         Op::Image { image, draw, .. } => plain(draw) && small(image),
         Op::Composite(_) => false,

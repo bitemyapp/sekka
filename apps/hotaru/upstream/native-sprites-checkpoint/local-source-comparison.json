@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "entries": 226,
+  "differences": [],
+  "frozen_product_commit": "73ea25d",
+  "comparison_scope": "Exact file bytes in current worktree against package runtime source manifest; tracked Sidestep gitlink unchanged"
+}

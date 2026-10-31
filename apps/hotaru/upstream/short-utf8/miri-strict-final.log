@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-short-text-miri-target/miri/x86_64-unknown-linux-gnu/debug/build/hotaru-core/e00a26febd56cfb9/out/hotaru_core-e00a26febd56cfb9)
+
+running 1 test
+test short_utf8_tests::thresholds_nuls_and_all_truncated_suffix_offsets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 4.42s
+

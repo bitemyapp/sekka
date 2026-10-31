@@ -1,0 +1,27 @@
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-core)
+    Finished `release` profile [optimized] target(s) in 4.53s
+     Running tests/decaln.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/release/deps/decaln-db28afcfd59cf3a7)
+
+running 3 tests
+test alignment_is_local_to_active_screen_and_exact_escape_sequence ... ok
+test alignment_resets_origin_margins_and_pending_wrap_but_not_rep ... ok
+test alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/semantic.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/release/deps/semantic-14d40020b10b0445)
+
+running 2 tests
+test retained_semantic_rows_survive_overwrite_reflow_compression_and_drop ... ok
+test semantic_cells_rows_and_clear_behavior_match_pinned_library ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/semantic_fastgate.rs (/home/callen/.cache/hotaru-semantic-fastgate-target/release/deps/semantic_fastgate-b9a8a571d60479ad)
+
+running 2 tests
+test ended_input_keeps_existing_prompt_row_but_ris_clears_it ... ok
+test prompt_erasure_remains_enabled_after_soft_reset_alternate_use_and_reflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,22 @@
+{
+  "scope": "Unicode kernel and named terminal behavior; partial module coverage, performance parity unmet",
+  "reference_revision": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "fixture_sha256": "59945c18e25f059645c43440fe4a0c0f79660f9235f4fc9a9bf175ad5a68dff9",
+  "terminal_cases": 484,
+  "reference_chunk_comparisons": 968,
+  "rust_two_part_split_comparisons": 11866,
+  "combined_core_tests": 97,
+  "combined_io_tests": 20,
+  "combined_replay_tests": 1,
+  "strict_workspace_clippy": "passed",
+  "unicode_kernel_scalar_comparisons": 1112064,
+  "unicode_kernel_grapheme_comparisons": 56601,
+  "independent_review": "linux_io: read-only ownership/budget/codec review; no concrete defect found",
+  "integration_patch": "integration.patch",
+  "performance_source_sha256": "77861d288ea746bcdb410fbedf019f1bfad547ab3599c00687aa187fa95dd5aa",
+  "limitations": [
+    "Horizontal-margin and graphics-specific cluster interactions not implemented",
+    "Legacy width policy beyond named fixtures not exhaustively matched",
+    "Performance slower than Ghostty on ASCII,styled,mixed Unicode,dense-wide measured cases"
+  ]
+}

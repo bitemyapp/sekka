@@ -1,0 +1,19 @@
+     Removed 0 files
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling itoa v1.0.18
+   Compiling serde_core v1.0.229
+   Compiling static_assertions v1.1.0
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling lz4_flex v0.14.0
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-ascii-subruns-20261028/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling unicode-width v0.2.3
+   Compiling memchr v2.8.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-ascii-subruns-20261028/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-ascii-subruns-20261028/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 4.18s
+{"metadata": "evidence/native-build.json", "source_sha256": "9077006c6fbbd5c40e26ea113f6f8ce16ba9cc38dd84c284f95f1fb3d451017f", "binary_sha256": "0e41fc82400b360c2898aedd0072e30cdac27d0aa33fdea95a9a4d384d95b1c2"}

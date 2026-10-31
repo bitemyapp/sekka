@@ -376,6 +376,7 @@ impl<P: Program> Runtime<P> {
 /// The kit's windows and timers as Sidestep knows them.
 #[derive(Default)]
 struct Maps {
+    urls: Option<crate::urls::Launcher>,
     to_side: HashMap<WinId, WindowId>,
     to_kit: HashMap<WindowId, WinId>,
     timers: HashMap<TimerId, (u64, bool)>,
@@ -412,6 +413,19 @@ struct SidestepPlatform<'a> {
 }
 
 impl Platform for SidestepPlatform<'_> {
+    fn open_url(
+        &mut self,
+        url: &str,
+        completion: crate::urls::OpenUrlCompletion,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        if !crate::urls::valid_target(url) {
+            return Err(crate::urls::OpenUrlError::InvalidTarget);
+        }
+        if self.maps.urls.is_none() {
+            self.maps.urls = Some(crate::urls::Launcher::new().map_err(|_| crate::urls::OpenUrlError::Unavailable)?);
+        }
+        self.maps.urls.as_ref().expect("URL worker initialized").open(url, completion)
+    }
     fn open_window(&mut self, id: WinId, spec: &OpenSpec) {
         let background = spec.background.map_or(Background::Transparent, Background::Color);
         let options = match &spec.kind {
@@ -536,6 +550,12 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
+    fn activate_with_token(&mut self, id: WinId, token: &str) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.activate_with_token(token);
+        }
+    }
+
     fn begin_move(&mut self, id: WinId) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
             w.begin_move();
@@ -548,6 +568,26 @@ impl Platform for SidestepPlatform<'_> {
 
     fn set_clipboard_text(&mut self, text: &str) {
         self.sx.set_clipboard_text(text);
+    }
+
+    fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead {
+        self.sx.clipboard_read()
+    }
+
+    fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText) {
+        self.sx.set_prepared_clipboard_text(text);
+    }
+
+    fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.sx.set_prepared_clipboard(data);
+    }
+
+    fn primary_read(&mut self) -> sidestep_ui::ClipboardRead {
+        self.sx.primary_read()
+    }
+
+    fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard) {
+        self.sx.set_prepared_primary(data);
     }
 
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64 {
@@ -614,6 +654,26 @@ impl Platform for SidestepPlatform<'_> {
                 self.maps.pictures.remove(&id);
             }
         }
+    }
+
+    fn place_video(
+        &mut self,
+        id: WinId,
+        video: sidestep_ui::video::VideoId,
+        place: Option<sidestep_ui::video::VideoPlace>,
+    ) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.place_video(video, place);
+        }
+    }
+
+    fn hide_cursor_until_moved(&mut self) {
+        self.sx.hide_cursor(true);
+    }
+
+    fn video_sink(&mut self, id: WinId, video: sidestep_ui::video::VideoId) -> Option<sidestep_ui::video::VideoSink> {
+        let w = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s))?;
+        Some(w.video_sink(video))
     }
 
     fn set_input_region(&mut self, id: WinId, region: Option<Vec<Rect>>) {
@@ -719,6 +779,7 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
         let core = &mut rt.core;
         match event {
             WindowEvent::Resized(size) => core.resized(win, size),
+            WindowEvent::ScaleChanged(scale) => core.scale_changed(win, scale),
             WindowEvent::Focused(on) => core.window_focus(win, on, &mut p),
             WindowEvent::Key(k) => core.key(win, k, &mut p),
             WindowEvent::ModifiersChanged(m) => core.mods = m,
@@ -751,7 +812,8 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
                 core.pinch(win, position, 1.0 + magnification, phase, &mut p);
             }
             WindowEvent::StateChanged(s) => {
-                let state = crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized };
+                let state =
+                    crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized, suspended: s.suspended };
                 rt.window_state(win, state, &mut p);
                 return;
             }

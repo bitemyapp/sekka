@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "binary": "/home/callen/.cache/hotaru-aizome-target/debug/aizome-hotaru",
+  "binary_sha256": "5164a0e31d9d2400736e53ba10d5594e9de788f965a668324536ce645c8e9ebb",
+  "oracle_library": "/home/callen/work/hotaru-sprites-20261028/oracle/libsprites.so",
+  "oracle_sha256": "0408e508e1082e1a4218c1ccfb8e7e77c47085558345d170a561e624997f76db",
+  "upstream_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "scope": "exact actual private Wayland software capture of 153 qualified sprites; no GPU or timing claim",
+  "fixture_sha256": "f5dec7d858bde1f1eef1a02ebd18f7627829ed349d2d618647255db18d3bb941",
+  "scales": [
+    {
+      "scale": 1.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 11,
+      "cell_height_px": 24,
+      "box_thickness_px": 2,
+      "thickness_estimated": false,
+      "rows": 74,
+      "cols": 172,
+      "pty_width_px": 1892,
+      "pty_height_px": 1776,
+      "glyphs": 153,
+      "compared_rgb_bytes": 247860,
+      "origin_px": [
+        12,
+        89
+      ],
+      "capture_sha256": "66818f81b8b6d735dfdf54ccdda568c91593f33f5b998affb5aa0f319df4b9df",
+      "size_px": [
+        1920,
+        1900
+      ]
+    }
+  ],
+  "status": "failed",
+  "error": "AssertionError(('anchor area', 406, 420))"
+}

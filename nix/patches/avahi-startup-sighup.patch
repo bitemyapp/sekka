@@ -1,0 +1,14 @@
+diff --git a/avahi-daemon/main.c b/avahi-daemon/main.c
+--- a/avahi-daemon/main.c
++++ b/avahi-daemon/main.c
+@@ -1658,5 +1658,10 @@ int main(int argc, char *argv[]) {
+ #endif
+         }
+ 
++        /* Publishing the PID lets resolvconf send SIGHUP immediately.
++         * run_server installs the real handler before reading the initial
++         * resolver, host and service state, so no reload is needed yet. */
++        ignore_signal(SIGHUP);
++
+         if (daemon_pid_file_create() < 0) {
+             avahi_log_error("Failed to create PID file: %s", strerror(errno));

@@ -17,6 +17,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
 | `site/` | The sekka.computer website generator |
+| `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
 | `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
 
@@ -38,6 +39,64 @@ nix build .#iso --no-update-lock-file --out-link result-iso
 ```
 
 The ISO is under `result-iso/iso/`. `nix build .#installed-lock` exposes the lock shipped to the installed machine. `nix fmt` formats Nix files supplied to it.
+
+### Googlebook live media
+
+Googlebook image construction is temporarily disabled in the root flake.
+The `iso-googlebook` package, `nixosConfigurations.googlebook`, and
+`checks.x86_64-linux.googlebook-iso` are not exposed, so ordinary builds and
+CI no longer evaluate that system or construct its fixture ISO. The module,
+kernel and image builders and component test sources remain for re-enabling those
+outputs together later. `.#iso` remains the PC image.
+
+The retained implementation builds experimental x86_64 Depthcharge USB media.
+The Googlebook configuration reuses the live Aizome system, includes the
+coreboot table/framebuffer modules in the initramfs, and omits Genkan, prebuilt
+installed systems, the application cache and PC boot-menu specialisations.
+Genkan only installs UEFI/BIOS systems; adding Googlebook installation is
+separate work and must not be inferred from live-media support.
+
+`nix/googlebook-kernel.nix` uses the locked Nixpkgs `mkdepthcharge` to package
+the live kernel, its exact initramfs and `init=`/kernel parameters as an x86
+vboot zImage. Its public developer-key signature requires unlocked firmware
+that permits external developer boot. It does not bypass firmware policy.
+The initramfs address and decompression reservation are set by mkdepthcharge;
+KASLR remains enabled. Builds reject payloads exceeding the modern x86
+Depthcharge 512 MiB kernel buffer.
+
+`nix/googlebook-iso.nix` retains the mandatory compressed-store verification,
+then appends a ChromeOS-kernel-type GPT partition to the ISO9660 filesystem.
+The type name comes from vboot's format, not the operating system being booted:
+current Googlebook Depthcharge supports this alongside Android boot images.
+Unlike the PC isohybrid layout, the partitions do not overlap. The builder
+normalizes xorriso's 248-entry GPT to the 128 entries vboot requires, sets the
+kernel's priority to 15 and successful bit (so live boots never exhaust a retry
+counter), then runs Google's `vb2api_load_kernel` host test in developer mode
+against the finished image. Failure fails the build; its log is retained under
+`result-googlebook/nix-support/googlebook-vboot.log`.
+
+The retained `nix/googlebook-iso-test.nix` component check builds a small ISO
+through the same builder with a real Linux kernel and fixture initramfs,
+checks both GPT CRCs, partition
+geometry, the partition-relative ISO label, embedded initramfs bytes and x86
+boot parameters. Google's loader must accept it even when the backing file is
+extended to represent a larger USB drive, and reject the ordinary ISO, a
+disabled kernel partition and a corrupted signed payload. Locked mode must
+reject the developer-signed image. It also checks that
+the Googlebook configuration excludes Genkan while PC media retain it.
+
+These are format and signature checks, not a firmware boot or desktop test.
+ASUS Googlebook hardware validation remains outstanding. Before claiming
+support, record the exact model/firmware, image hash, external-boot result,
+initramfs/store mount, Aizome session and device functionality. Generic QEMU
+UEFI/BIOS boot cannot validate the Depthcharge path. This target does not
+change nightly publication or certify an installable release.
+
+Format references: Google's [Depthcharge x86 boot path](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/arch/x86/boot.c),
+[kernel buffer limits](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/image/Kconfig),
+and [vboot GPT validation](https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/72043688a9842a31a92e4829fe71ee94c4939fc8/firmware/lib/cgptlib/cgptlib_internal.c).
+
+### Component development
 
 The [migration record](docs/migration.md) explains retained work, exclusions,
 compatibility tags and the limits of the migration validation. To exercise the
@@ -94,20 +153,15 @@ exercises discovery and revalidation on disposable 4Kn and 512e disks.
 
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
-Genkan verifies the live store's contents before evaluating the installation,
-including paths needed by the low-memory, deferred-build route. After a normal
-build it verifies the complete prepared runtime closure again. Nix's validity
-records, successful builds and page-cache warming do not verify existing bytes:
-without this check, a readable but corrupt package passes preparation, and
-`nix copy` discovers its hash mismatch only after the target has been erased.
-All nonzero verification results (including read errors) stop preparation.
-Progress remains cancellable, and failures retain Nix's expected/actual hashes
-plus kernel warnings in a root-only `/run/sekka-integrity-*.log`.
-`--no-trust` skips signatures for locally built/ISO-registered paths; it does
-not disable content hashing. Never use `--no-contents` or rewrite the expected
-hash to make a damaged path pass.
+Genkan no longer hashes the entire live store before evaluation or the prepared
+system's runtime closure after building. Those mandatory scans made preparation
+too slow; content verification may return later as an optional feature. Live
+media, disk identity, filesystem support, configuration, pinned-lock and size
+checks remain, as do the existing build and page-cache warming steps. Nix still
+checks copied contents: corruption can now be detected during copying after
+the target has been erased, rather than during preparation.
 
-The public `iso` package also verifies the actual compressed store before
+The public `iso` package verifies the actual compressed store before
 packing it into the ISO. `nix/verified-iso.nix` extends the upstream builder's
 squashfs command; `nix/verify-squashfs.nix` extracts it into a disposable local
 store, compares its registration with the build's closure manifest and checks
@@ -117,22 +171,22 @@ additional unpacked store. The upstream raw `nixosConfigurations.installer`
 image is an implementation input; build and publish `.#iso`.
 
 ```sh
-nix build .#genkan .#checks.x86_64-linux.genkan-store-integrity \
+nix build .#genkan.helper .#checks.x86_64-linux.genkan-preflight \
   .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
 ```
 
-The installer regression uses the packaged helper and Determinate Nix in a
-disposable VM. Its negative control shows an existing-path build and ordinary
-read accepting corrupt bytes, followed by a real Nix copy reporting a hash
-mismatch. The helper must reject confirmed installs with corrupt or missing
-paths, preserve the entire 40 GiB target byte-for-byte and save private,
-secret-free diagnostics. The image regression builds a small ISO through the
-same mandatory gate and rejects changed contents, executable bits, symlinks,
+The preflight regression uses the packaged helper and Determinate Nix in a
+disposable VM. Unrelated corrupt or missing registered paths must not prevent
+preparation from reaching configuration. The missing-template and changed-disk
+guards still refuse confirmed requests and preserve the entire 40 GiB target
+byte-for-byte. A real Nix copy still rejects the corrupted contents. The image
+regression builds a small ISO through the same mandatory gate and rejects
+changed contents, executable bits, symlinks,
 missing directories/paths and altered registration. Neither check certifies
 a complete release image or physical hardware.
 
-Checks cannot guarantee against RAM faults, media changes or I/O failures
-after verification. Keep Nix's copy-time checks enabled; deferred installations
+Build-time verification cannot guarantee against RAM faults, media changes or
+later I/O failures. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
 or build failures at that point. The deferred route builds the system on the
 target, so the complete system need not fit in physical RAM, but it does not
@@ -190,6 +244,32 @@ This component test does not replace playback through the exact ISO's normal UI.
 
 ### Aizome and IBus
 
+A fresh Aizome session inherits `services.xserver.xkb` through the session's
+`XKB_DEFAULT_LAYOUT`, `XKB_DEFAULT_MODEL`, `XKB_DEFAULT_VARIANT` and
+`XKB_DEFAULT_OPTIONS`. Missing settings fields use these defaults; explicit
+user settings, including empty variants/options and a saved US layout, keep
+priority. The user's Aizome environment file can override the system defaults.
+Per-keyboard profiles still replace only modifier/Compose options, preserving
+the shared layout and layout-switching options. The greeter continues to use
+its explicit system keyboard configuration.
+
+Per-keyboard customization is opt-in through Settei's Keyboard → Set Up…;
+connecting a keyboard or receiver does not post a setup notification. The
+shell drops the retired offers from carried notification history, including
+the previous shell's final handoff during replacement. New devices inherit
+the shared settings. Profile lookup prefers exact name and vendor/product
+ID, then a single profile for that ID, so composite devices such as the
+Topre REALFORCE R4H and its “Keyboard” interface use the same saved keys.
+Missing/zero IDs and ambiguous IDs have no fallback. Existing name-specific
+profiles retain priority, and Settei edits the same profile typing resolves.
+
+`cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-config`
+checks missing/partial settings, explicit overrides and per-keyboard options
+with isolated subprocess environments. `nix build .#checks.x86_64-linux.aizome-login`
+uses a UK keyboard for the greeter password and fresh session, comparing
+physical-key punctuation in actual Foot while background jobs saturate the
+VM's CPUs. These component checks do not replace exact-ISO keyboard testing.
+
 When GNOME is coinstalled, its IBus dependency also needs a Wayland frontend
 inside Aizome. `installer/genkan/rust/system/input-method.nix` starts that
 frontend with `aizome-session.target`; GNOME keeps its own IBus service and
@@ -197,6 +277,9 @@ Xfce keeps the legacy frontend. Only Aizome's frontend package is patched;
 the distribution daemon, engines and GTK/Qt modules remain unchanged. An
 explicit custom IBus panel remains under the user's own integration.
 Aizome's GTK/Qt input modules use Wayland only within its session environment.
+The policy check compares the global GTK input-module variable with a
+GNOME-only configuration: newer NixOS leaves it unset, and Aizome must
+preserve that upstream choice outside its own session.
 
 The Aizome dconf profile defaults `org.freedesktop.ibus.general`'s
 `use-system-keyboard-layout` to true. Its actual dconf path is
@@ -372,9 +455,11 @@ copies left by the old package, preserving executable bits and leaving symlink
 targets alone. It serializes overlapping copies and leaves `.mcp.json` for the
 caller to generate, so another refresh cannot make that file read-only during
 a write. The ASAR patch preserves byte offsets and fails unless exactly
-one expected copy call matches. The upstream package already repairs the
-separate marketplace plugin copy; this covers the executor's copy. Review the
-patch when updating the app, and remove it when upstream fixes that path.
+one expected copy call matches. It recognizes both the original executor copy
+and the refreshed upstream package's directory/chmod repair, replacing either
+with Sekka's serialized, manifest-preserving helper. Upstream's repair alone
+still copies the read-only manifest during overlapping refreshes. Review the
+patch when updating the app, and remove it when upstream covers these cases.
 
 ```sh
 nix build .#chatgpt .#checks.x86_64-linux.chatgpt-plugins --no-update-lock-file
@@ -397,16 +482,42 @@ the new font invalidates that context before GTK has initialized its CSS node.
 `nix/overlays/xapp.nix` carries a local source patch that coalesces the theme
 notification at GLib idle priority, after the pending settings events. It
 preserves Settings reads and change signals, without delaying portal startup.
-`modules/portal-fixes.nix` applies it to installed desktops and the live
-compatibility session. Review the patch when updating XApp; remove it when
-upstream handles this case correctly.
+`modules/portal-fixes.nix` applies it to installed desktops and to the live
+media. Every live boot entry runs Aizome, the software one included, so the
+media carry Xfce and the portal only in their prebuilt installed systems.
+Review the patch when updating XApp; remove it when upstream handles this case
+correctly.
 
 `nix build .#checks.x86_64-linux.xapp-settings .#checks.x86_64-linux.xapp-packages`
 checks the real backend under private X and D-Bus sessions. The original
 package must crash for the same theme/font batch; the patched package must
 read two distinct accent colors and emit their change notifications. Package
-selection assertions cover installed Xfce, its ISO reference and the live
-compatibility configuration. This is component evidence, not ISO qualification.
+selection assertions cover installed Xfce and the media's prebuilt Xfce and
+every-desktop systems, which must select the patched portal and no other XApp
+package, and every live boot entry, where any XApp portal must be the patched
+one. This is component evidence, not ISO qualification.
+
+Avahi's PID file is visible before its normal SIGHUP handler is installed.
+An openresolv notification in that interval kills the daemon and leaves a PID
+file that can also prevent the next activation. `nix/overlays/avahi.nix` applies
+`nix/patches/avahi-startup-sighup.patch`: ignore HUP during that interval. The
+real handler is installed before the initial resolver, host and service reads,
+and later HUPs retain their normal reload behavior. `modules/avahi-fixes.nix`
+selects the patched service package for live media and installed desktop choices;
+clients retain the unchanged upstream libraries.
+
+`nix build .#checks.x86_64-linux.avahi-startup .#checks.x86_64-linux.avahi-packages`
+checks the actual original and patched packages. The startup check uses private
+user, mount, PID and network namespaces and requires unprivileged user namespaces.
+GDB pauses at the real PID-file creation return, then injects HUP: the original
+must die and retain its PID file; the patched daemon must start, reload on a
+later HUP, and shut down cleanly. An original-package control without early HUP
+must also work. There are no sleeps, host services or injected signal handlers.
+The namespace harness disables D-Bus and privilege dropping; the full
+`session-environment` VM still checks real service activation. The package
+check covers live boot configurations and prebuilt installed systems.
+These are component checks, not ISO qualification. When upstream fixes this
+window, review and remove the patch and its failing control together.
 
 Sekka backports Aquamarine's upstream null-connector teardown fix
 [`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
@@ -727,7 +838,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal` and `tracy` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
@@ -918,7 +1029,8 @@ hand, from a clean checkout of reviewed `main`:
 nix run .#push-cache
 ```
 
-It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`,
+It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
+`uta.source` (Uta's GPL-3.0-only build's sources, published beside it),
 `aquamarine`, `hyprland`, `tools` and `installed-systems`, and signs their
 complete runtime closures into a temporary local cache: Nix only adds a path to
 a binary cache that already holds its references. `installed-systems` is an
@@ -1008,11 +1120,60 @@ while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
 Aizome's type and `TZDIR` for the map; the package's check phase sets both.
 `GENKAN_PICTURES=dir` also writes each page in Night and Day.
 
-In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|review|ready|prepfail|install|done|failed`
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
 opens the window on that page with sample data, touching no disks, network or
 helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
 neither. Outside the live media only previews are useful: reviewing reads the
 media's root-owned settings and starts the helper through Polkit.
+
+Genkan's window has the app ID of the GTK interface it replaced,
+`org.calamares.NixOSRust`, so Aizome's compositor names it alongside its own
+`org.aizome.…` apps in `aizome-comp-logic/src/cmdkey.rs`: kit apps take ❖ as
+is. Without that, the compositor turned ❖A into Ctrl+A for Genkan, and the
+kit's text fields, which select all with ❖A, selected nothing.
+
+### The keyboard step
+
+The Keyboard step asks for the key just left of the space bar as it opens:
+the compositor catches the next key for Genkan with its keyboard
+(`catch-key`, as Settei's keyboard setup asks; `aizome_ipc::setup` has the
+shared catching and the wording), so no app hears it and a modifier key alone
+counts. Esc, Stop, or leaving the step gives the wait up, since every app
+loses its keys meanwhile; previews never wait unasked. Its one choice is
+the common case: Alt there (most PC keyboards), and it recommends swapping
+left Alt and Super (`altwin:swap_lalt_lwin`), which the person can decline.
+Right Alt (AltGr) stays available for accents and symbols. ❖ there needs nothing. Any
+other key stays as it is, and the step says Genkan swaps only left Alt and Super;
+Settei has the other arrangements. Outside Aizome the step says it can't
+hear the key and offers the swap alone.
+
+The request carries the answer as a closed choice (`SuperKey`, `super_key`),
+and the configuration gets `services.xserver.xkb.options` only for a swap.
+That one setting reaches every keyboard: the console, the login screen,
+Tatami's Hyprland, X11 sessions, and Aizome's session, which starts from the
+system's keyboard (`XKB_DEFAULT_*`, see [Aizome and IBus](#aizome-and-ibus))
+until Settings changes it. Keyboards plugged in later inherit those settings;
+Settei can optionally give them keys of their own. The compositor gives
+libxkbcommon every keymap's options, empty ones included: given none, it reads
+`XKB_DEFAULT_OPTIONS`, and the system's swap came back for settings that
+cleared it and for a Mac keyboard set up to keep its ⌘.
+
+```sh
+nix build .#checks.x86_64-linux.genkan-keyboard -L
+```
+
+The check boots an Aizome VM with the modules installed systems import and
+the left-only swap Genkan writes. It presses QEMU's keys: Alt and A select all in
+Genkan's text fields, as ❖ does once the person's settings undo the swap (as
+in the live session); the keyboard step refuses the space bar, suggests the
+swap for Alt, takes it being declined, stops at Esc, and leaves Control as
+it is, saying so. Hotaru and foot run fish, which no application brought.
+Hotaru also respects an explicit Bash override and follows changes to the
+system shell default in new tabs while Fish remains installed. The core
+keymap test checks that the recommended swap preserves German AltGr+Q (`@`).
+The fixture installs with the swap (`CALAMARES_TEST_SUPER_KEY=as-is` opts
+out) and checks it in the installed configuration and Aizome's session
+environment.
 
 ## Aizome
 
@@ -1032,6 +1193,50 @@ nix build .#aizome .#aizome-fonts
 nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
+
+The shell observes application launch attempts through `aizome-sys`:
+process creation and exit are separate events, and only a compositor window
+event confirms that a window opened. D-Bus acceptance and successful
+single-instance handoffs keep their narrower meaning. Desktop-entry launches
+and commands launched by the shell share this path. Raw compositor `spawn`
+bindings and processes started from terminals remain outside it.
+Toolchest ▸ System ▸ Application Launches shows the last 64 attempts; early
+failures and unconfirmed graphical launches offer Show Details. The shell
+also exposes outcomes through `aizome-shell msg state`; `aizome-shell msg
+'{"request":"open","what":"launches"}'` opens the same details window.
+
+Each observed launch writes directly to journald with a unique
+`SYSLOG_IDENTIFIER=aizome-launch-…`. The details window queries that exact
+identifier on a worker, capped at 200 entries and 64 KiB with a five-second
+deadline. Its **Open in Logs** runs `aizome-nisshi --launch` with
+that identifier, through the same observed launch path. It never displays other attempts' output, captures the user's
+environment, or pipes application output through the shell. The latter
+preserves application lifetime when the shell is replaced. Accepted D-Bus
+activation may have no output here because the bus owns that process.
+History is bounded in memory and resets with the shell; the journal keeps
+output according to its own retention. Failure details are local to the
+user and are copied only on request.
+
+The Aizome package's mandatory check phase runs the shell and system-library
+unit tests, including delayed process failure, literal command arguments,
+notification actions, details rendering and handoffs. For focused checks:
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-sys -p aizome-shell --lib
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell --lib journal_output_is_isolated -- --ignored
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#grim -c python3 desktop/aizome/scripts/test-startup.py \
+  --shell desktop/aizome/target/debug/aizome-shell --evidence .work/startup-evidence
+```
+
+The journal check writes only uniquely identified fixture output. The last
+command uses the named shell with installed Aizome and Koe (override
+`--compositor`, `--ctl`, `--koe` for other binaries), private home and runtime
+directories, and disconnected session/system buses. It launches a delayed
+failure and a missing program through the real palette, checks that stderr
+is visible in Details, then opens a real Koe window without enabling
+dictation. Its screenshots and JSON identify component evidence, not an ISO
+or physical-hardware qualification.
 
 Aizome's session launcher owns desktop cleanup even when logind terminates
 only the login scope, as Yukimi's Sign Out does. The compositor runs in the
@@ -1069,6 +1274,80 @@ would rebuild Aizome. The source hash already tells the builds apart.
 
 The workspace builds against Sukumo, Aizome's toolkit, in
 `desktop/aizome/sukumo` ([Sukumo](#sukumo)).
+
+The catalog's Uta, from [bitemyapp/uta](https://github.com/bitemyapp/uta),
+depends on `aizome-kit` by path, and Sekka builds it against the kit here
+and Sukumo (`nix/uta.nix`), with Uta's own `Cargo.lock`. A change to the
+interface or dependencies of the kit or Sukumo must keep
+`nix build .#uta` building; the `applications` check builds it too. Uta's
+source holds only the kit's and Sukumo's crates, so a crate the kit comes to
+depend on joins the list in `nix/uta.nix`.
+
+That `Cargo.lock` lives in bitemyapp/uta, at the revision `flake.nix` pins,
+and Nix vendors exactly the crates it names. A kit or Sukumo change that adds
+or bumps a crates.io dependency, or gives the kit a new path crate, therefore
+breaks `.#uta` until Uta's lock is regenerated and re-pinned, even though
+nothing in Sekka's own locks is wrong. `.#uta` is built by the cache
+workflow's and the nightly's first step, by `nix flake check` and by
+`push-cache`, so a broken Uta stops publication for that push to `main` and
+holds `nightly`, with every other input update, until it is fixed. Build
+`.#uta` before merging a kit or Sukumo change. When it fails, re-pin Uta in the
+same pull request.
+
+Re-pin from a `sekka` branch of bitemyapp/uta, never from its `main`. Uta's
+own flake builds against Aizome's former repository with the same
+`Cargo.lock`, and a lock regenerated against the kit here need not build
+there. The first time, create `sekka` from the revision `flake.nix` pins.
+
+1. In a scratch directory, put a checkout of bitemyapp/uta's `sekka` branch at
+   `uta/` and this worktree's `desktop/aizome` at `aizome/` beside it (a
+   symlink works), which is the layout Uta's path dependency
+   `../aizome/crates/aizome-kit` and its `nix/package.nix` expect.
+2. In `uta/`, inside this worktree's `nix develop .#aizome` shell, run
+   `cargo update --workspace`, which adds what the kit and Sukumo now need
+   and leaves the other locked versions alone, check that
+   `cargo build --locked` works, and commit and push `Cargo.lock` (with any
+   source change Uta needs) to `sekka`. Cargo applies only the `[patch]`
+   sections of the workspace it builds, Uta's: a patch the kit or Sukumo
+   relies on in `desktop/aizome/Cargo.toml` must be repeated in Uta's
+   `Cargo.toml`.
+3. Put the new `sekka` revision in `inputs.uta.url` in `flake.nix`, run
+   `nix flake update uta`, update the pin in `docs/applications.md`, and build
+   `.#uta`, `.#checks.x86_64-linux.uta-rustypipe` and
+   `.#checks.x86_64-linux.uta-installation`.
+
+To move to a newer Uta, merge its revision into `sekka` and run steps 2 and 3.
+Sekka's lock reaches Uta's `main` only together with a change to Uta's flake
+that builds it against the same kit, made and built in Uta.
+
+With RustyPipe, Uta's build is GPL-3.0-only. `share/doc/aizome-uta` holds
+RustyPipe's and EJS's notices and a `SOURCE` note naming Uta's repository,
+revision and narHash, and where Sekka's recipe lives. The note leaves out
+Sekka's own revision, which would rebuild Uta on every Sekka commit; it points
+to the `sekka` input of an installed system's `/etc/nixos/flake.lock`
+instead. `uta.source` links the exact sources it was built from: the pinned
+Uta source (with its vendored, patched RustyPipe), the kit and Sukumo fileset
+from `nix/uta.nix`, and that recipe.
+`push-cache` publishes `uta.source` beside `uta`, so the cache that serves the
+binary also serves its source; the crates.io sources are named, by checksum, in
+Uta's `Cargo.lock`. `checks.x86_64-linux.uta-rustypipe` runs
+`aizome-uta --version` in the build sandbox to confirm RustyPipe is enabled,
+and checks the notices, the note and the source links. The workflows only
+build Uta: no Uta code runs in a job that holds the cache's secrets.
+
+Uta is an optional download in Genkan and Yukimi, with RustyPipe enabled. Its
+catalog `preload: false` excludes it from `application-cache` and the ISO's
+application closure lists; it remains in the free-application systems published
+to the binary cache. New catalog entries preload by default. Keep the two
+policies separate: catalog availability does not require offline media inclusion.
+Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation`
+after changing the pin or preload policy. This checks the package, package
+selection and evaluated ISO contents; it does not certify an ISO boot or
+installation. Because the ISO doesn't carry Uta, installing it from that ISO
+needs the network and a cache.sekka.computer entry for the exact Uta that
+ISO's revision builds; otherwise Genkan compiles it in the live session. ISO
+qualification checks that entry first
+(`.agents/skills/sekka-iso-qualification/references/prepare.md`).
 
 Aizome's `just` recipes and `aizome-dev` enter the worktree's
 `nix develop .#aizome` shell, including when called from a different Nix
@@ -1137,6 +1416,74 @@ session inspection without helper privileges; the helper's system-only check
 never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
+
+Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
+reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
+PDF renderer in Rust, from [bitemyapp/hayro](https://github.com/bitemyapp/hayro)'s
+`aizome-perf` branch. The fork is about twice as fast as PDFium over the
+pdf.js corpus and gives an encrypted document's permissions
+([record](docs/test-results/hayro-fork-2026-10-28.json)). Shiori's
+`Cargo.toml` pins it by revision; it brings bitemyapp/zune-image's
+`scaled-idct` zune-jpeg (pinned by `Cargo.lock`), and Aizome's workspace
+patches moxcms to bitemyapp/moxcms's `gamma-table-cache-0.8`
+(awxkee/moxcms#209). Each git dependency has a hash in `cargoLock.outputHashes`
+in `desktop/aizome/nix/package.nix`. To move the fork, push it, change both
+revisions in Shiori's `Cargo.toml`, run `cargo update -p hayro`, and put the
+new `nix-prefetch-git --url https://github.com/bitemyapp/hayro --rev REV
+--fetch-submodules` hash in `outputHashes`.
+
+The zune-core and moxcms entries in the `[patch.crates-io]` of
+`desktop/aizome/Cargo.toml` aren't Shiori's alone: Cargo applies a patch to
+the whole workspace. Everything that reaches `image` builds it against the
+forks: the compositor (`aizome-comp`, `aizome-comp-core` and
+`aizome-comp-logic`, through Sukumo's `sidestep-ui` and `sidestep-engine`),
+`aizome-kit` the same way, and so the shell and every app (Hako and Shashin
+use `sidestep-engine` directly too, and Shashin `image`). `image` still
+decodes JPEGs with crates.io's zune-jpeg, compiled against the forked
+zune-core, and manages colour with the forked moxcms. Sukumo's own
+workspace has its own `Cargo.lock` and no patch. A change to either fork
+can change how wallpapers, icons and thumbnails decode, so moving one needs
+Shashin's tests, the `aizome` package's check phase and a look at a
+session, not only Shiori's tests:
+
+- zune-core is named by its branch, `scaled-idct`, as hayro names its
+  zune-jpeg, so a plain `cargo update` moves both (one repository) to the
+  branch's head. Choose the commit with `cargo update -p zune-core
+  --precise REV`, and replace the zune-image hash in `outputHashes`.
+- moxcms is pinned by `rev`: change it, run `cargo update -p moxcms`, and
+  replace its hash.
+- The moxcms patch only saves work (its tables are the same), so dropping
+  it with its hash costs Shiori time on ICC-based and Lab colour, nothing
+  else; it can go once awxkee/moxcms#209 is released.
+- The zune-core patch can go only once hayro's zune-jpeg and `image`'s
+  agree on a zune-core Nix can vendor, as it can't hold two crates of one
+  name and version: the fork's work released and hayro's fork moved to
+  it, or the fork's zune-core given a version of its own.
+
+Only the worker process, `aizome-shiori --worker`, one for each open
+document, runs hayro: a document can panic it or keep it busy, and the
+SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs
+`unsafe` code on the document's bytes. A panic costs the job it was on (a page it was drawing shows as
+unreadable at that size; one whose text it was reading has none); the
+reader restarts a worker that dies or spends too long on a page, and
+refuses a drawing it couldn't have asked for (too large, or of a page the document hasn't). Fonts a document names but doesn't carry come from hayro's built-in
+Foxit fonts, except Chinese, Japanese and Korean ones, which the worker asks
+fontconfig for. Its tests start real workers over generated documents and a
+qpdf-encrypted fixture:
+
+```sh
+cargo test -p aizome-shiori
+cargo test -p aizome-shiori --release --test budget -- --nocapture
+cargo run --release -p aizome-shiori --example corpus -- DIR
+nix build .#aizome-checks.shiori -L
+```
+
+The last runs the packaged reader in an Aizome VM, including a worker
+killed and replaced.
+
+The engine evaluation (PDFium against hayro over the pdf.js corpus, and
+why MuPDF and Poppler were ruled out by licence), the fork's work, and the
+reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
@@ -1226,6 +1573,41 @@ Sidestep stays a separate product for objc2 programs. It is not kept in
 step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the
 same.
+
+Nisshi (`desktop/aizome/apps/nisshi`), Aizome's log viewer, reads the
+journal and /var/log through `aizome-nisshi-helper`, a second binary of the
+same crate that uses only the library's `query` and `protocol` modules.
+The window runs it as the user. **Unlock** runs another copy through
+`/run/wrappers/bin/pkexec --disable-internal-agent` under
+`org.aizome.Nisshi.read-system-logs`, whose policy the package writes to
+`share/polkit-1/actions` naming `$out/libexec/aizome-nisshi-helper`, the
+path the window finds beside itself. Keep that boundary: the window sends
+data, never arguments. The helper checks each query and builds journalctl's
+arguments itself from options that only read. It reads files only under
+/var/log, honours `NISSHI_JOURNALCTL` and `NISSHI_LOG_DIR` only when it
+isn't root, and ends when its input closes. The Aizome module turns on
+NixOS's pkexec wrapper (`security.polkit.enablePkexecWrapper`, where the
+option exists).
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi
+nix develop .#aizome -c cargo test --release --manifest-path desktop/aizome/Cargo.toml -p aizome-nisshi --test perf -- --nocapture
+nix build .#aizome-checks.nisshi -L
+```
+
+The first runs the real helper over a stand-in journalctl and pkexec
+(`tests/reader.rs`), besides the headless window and its pictures. The
+last boots a disposable VM to check the installed policy, the setuid
+wrapper and the helper as root through real polkit. Neither types a
+password into a desktop's dialog.
+
+Whole-boot search pages through older journal entries and uses the same
+matcher as the visible messages, including friendly source names and text
+with terminal styling removed. Raw `FIELD=value` terms are sent to the
+helper as journal matches. Opening a second instance replaces the current
+query and passes its `XDG_ACTIVATION_TOKEN` to the existing window; it does
+not request a fresh token from that background window's old input.
+
 
 ## Tatami Bluetooth
 
@@ -1334,6 +1716,10 @@ Search-field Delete, cut, copy and its context menu keep their editing behavior;
 typing from the table still searches. The test also confirms keyboard Quit
 actually ends its disposable process. These component checks do not qualify an
 ISO's Activity window.
+
+The inspector follows the selected item, including removal of the last row.
+The VM check verifies that quitting the selected process clears its inspector
+instead of leaving stale Running text and statistics after the process exits.
 
 ## Keep Awake and USB wake
 
@@ -1838,34 +2224,64 @@ start the patched wpa_supplicant over D-Bus.
 
 ## Omarchy's fish configuration
 
-The catalog's fish choice builds Omarchy's `omarchy-fish` package
+Terminals open in fish, set up as Omarchy sets it up, wherever Aizome is
+installed: `calamares.fish.enable` (`installer/genkan/rust/system/fish`,
+imported with the application catalog) defaults on when `calamares.desktops`
+has Aizome. It was a catalog application; it isn't one any more. Other
+desktops keep bash, as Omarchy does (its fish is the opt-in `omarchy-fish`),
+and Tatami follows Omarchy; GNOME, Plasma, Xfce and Hyprland stay stock. The
+handover is system-wide, so with Aizome beside another desktop, that one's
+terminals open fish too. Yukimi offers the setting (Terminal shell) to turn
+it off with Aizome or on without. `calamares.applications` still accepts
+`"fish"`, which a system that chose it keeps and which turns the setting on;
+the manifest and Yukimi's Discover no longer list it.
+
+The setting builds Omarchy's `omarchy-fish` package
 (`installer/genkan/rust/system/fish/package.nix`) as omarchy-pkgs'
 `pkgbuilds/omarchy-fish/PKGBUILD` does: the omarchy-fish and fzf.fish releases
 it names, whose tarballs match its SHA-256 sums, in fish's vendor directories,
 with omarchy-fish's history search replacing fzf.fish's. The PKGBUILD's
-dependencies are the catalog entry's packages. `starship.toml` beside it is
+dependencies (eza, mise, zoxide, starship, fzf, fd, bat) come from the
+applications' Nixpkgs. `starship.toml` beside it is
 Omarchy's prompt, unchanged; fish exports `STARSHIP_CONFIG` for it unless the
-person has a `~/.config/starship.toml`.
+person has a `~/.config/starship.toml`. The module writes an absolute shell
+path to `/etc/xdg/aizome/hotaru-shell`, including when Bash is selected.
+Hotaru reads it for each new pane; an explicit `shell` in its TOML configuration
+takes precedence. Without this system file, standalone Hotaru prefers Fish
+on PATH, then `$SHELL`, then `/bin/sh`. Foot starts bash, which hands over.
 
 Omarchy keeps bash as the login shell, and `omarchy-setup-fish` gives
-`~/.bashrc` a test that starts fish. `applications.nix` puts the same test at
+`~/.bashrc` a test that starts fish. The module puts the same test at
 the start of `/etc/bashrc`'s interactive part. It skips root, `bash -c`, bash
-started from fish, and shells with `SHLVL` above 1, so `nix develop` and
+started from fish or directly by Hotaru, and shells with `SHLVL` above 1, so `nix develop` and
 `nix-shell` stay in bash. NixOS's `ls`, `ll` and `l` aliases are removed from
 fish, where Omarchy has none and its `ls` function would be hidden. NixOS's
 fish module still generates completions from each installed package's manual
 pages. These are small local builds, which Determinate Nix downloads instead
-when Sekka's cache has them; the all-applications reference system includes
+when Sekka's cache has them; the media's Aizome reference systems include
 fish.
 
+Hotaru sets `HOTARU_SHELL_PARENT` to its own PID on its PTY commands. Bash
+compares this with its parent PID before handing over, preserving an explicit
+Bash choice without suppressing the handoff in other terminals launched from
+Hotaru that inherit the variable.
+
 ```sh
-nix build .#checks.x86_64-linux.fish --no-update-lock-file
+nix build .#checks.x86_64-linux.fish-default .#checks.x86_64-linux.fish --no-update-lock-file
 ```
 
-The check logs in on a disposable VM's console. It checks that bash handed
-over to fish, with Omarchy's settings, functions, fzf.fish bindings, zoxide,
-mise, eza and prompt, and that `cd` falls back to zoxide. `bash -c`, root's
-interactive bash, and bash started from fish stay in bash.
+`fish-default` evaluates where the setting is on: Aizome alone or beside
+Tatami, the former application with Tatami, and not Tatami or Plasma alone or
+Aizome with it turned off, with the Yukimi choice and the manifest. It also
+checks the Hotaru default when Fish is independently installed and disabled
+as the terminal default. `fish`
+logs in on a disposable VM's console, on a system that chose the former
+application. It checks that bash handed over to fish, with Omarchy's
+settings, functions, fzf.fish bindings, zoxide, mise, eza and prompt, and
+that `cd` falls back to zoxide. `bash -c`, root's interactive bash, and bash
+started from fish stay in bash. `genkan-keyboard` checks that Hotaru and foot
+run fish in an Aizome session and that Hotaru honors both the system default
+and its per-app override.
 
 To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes
@@ -2010,9 +2426,17 @@ on. One run builds at a time; while it does, GitHub keeps only the newest
 waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
-It runs `nix flake check` on the revision as merged, without updating inputs,
-then `nix run .#push-cache` and `scripts/check_cache_coverage.py`, as the
-nightly does. A failed check publishes nothing. It builds no ISO, moves no
+It builds `.#uta` first, so a kit or Sukumo change that breaks Uta fails by
+name (see [Aizome](#aizome)), then runs `nix flake check` on the revision as
+merged, without updating inputs; its `uta-rustypipe` check confirms, in the
+build sandbox, that RustyPipe is enabled. Nothing of Uta runs in the job
+itself, which goes on to hold the cache's secrets.
+`nix run .#push-cache` signs and uploads the packages, including Uta and its
+source, to the `sekka-cache` R2 bucket. `scripts/check_cache_coverage.py .#uta .#installed-systems`
+then verifies that a fresh store can download Uta and the installed systems
+without compiling them. The nightly uses the same build, upload and coverage
+checks. Uta remains excluded from the ISO preload list. A failed build or check
+stops the job. It builds no ISO, moves no
 branch and publishes no download; machines following `main` substitute its
 packages instead of building them, and the next nightly finds them already
 built. It uses the `nightly` environment's three cache secrets, and fails
@@ -2055,6 +2479,17 @@ from its client: the job image sets 32 builds at a time with 16 cores each.
 Nix's default, one at a time, made the first nightly build its 3,400
 derivations in sequence, an hour and a half where most of them could run
 together.
+
+The nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=17179869184`
+(16 GiB) for the Nix client's Boehm garbage collector. Nix's default initial
+heap is 4 GiB; the large NixOS configuration checks repeatedly collected it,
+spending most of their CPU time in collector workers before builds began.
+The larger initial heap trades memory for fewer collections within the job
+container's 64 GiB allowance. It leaves collector/evaluator threads, build
+jobs, build cores and check coverage unchanged. This job environment setting
+takes effect on the next run without redeploying the runner or restarting
+the host's daemon.
+
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
@@ -2333,10 +2768,11 @@ nix run --inputs-from . nixpkgs#wrangler -- pages dev /tmp/site --port 8788 \
 ```
 
 The site is the Cloudflare Pages project `sekka` (`sekka-esx.pages.dev`), with
-the `sekka.computer` apex as its custom domain. Nothing deploys it
-automatically. To publish a new version, build from a clean commit that is on
-GitHub's `main` (the pages link the revision they were built from), then
-deploy with Wrangler, logged in once with `wrangler login`:
+the `sekka.computer` apex as its custom domain. The sites workflow publishes
+it from `main` whenever its sources change ([Publishing the
+websites](#publishing-the-websites)). To publish by hand, build from a clean
+commit that is on GitHub's `main` (the pages link the revision they were
+built from), then deploy with Wrangler, logged in once with `wrangler login`:
 
 ```sh
 nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-site --project-name sekka --branch main --no-bundle
@@ -2356,6 +2792,106 @@ Web Analytics, Rocket Loader, Email Address Obfuscation and Bot Fight Mode.
 Everything the site claims comes from this repository's READMEs and docs.
 When a limitation, test or feature changes, change `site/src/pages.rs` with
 it.
+
+### aizome.computer
+
+`aizome-site/` is another Cargo workspace, whose program writes
+aizome.computer, Aizome's own site: the desktop, every app, the keys, the
+design and how to install it, with links back to sekka.computer in its menu
+bar, its footer and every "Get it with Sekka". It is built as
+sekka.computer is: static HTML and CSS, one theme script under the same
+content security policy, no cookies or analytics, hashed asset names with
+`_headers`, the revision in every page, and a build that fails on a dangling
+link or in-page anchor. It is dressed as Aizome rather than Tatami: the
+header is Aizome's menu bar, each section is a window whose Haiku tab is its
+heading, the focused one amber, and pages open in Night, take Day from the
+bar's switch (`aizome-theme` in `localStorage`) and High Contrast when the
+visitor asks for more contrast.
+
+Its colours and metrics come from Aizome's theme crate,
+`desktop/aizome/crates/aizome-theme/src/lib.rs`, read when the site is
+built: the `NIGHT`, `DAY` and `HIGH_CONTRAST` palettes, the mark's colours,
+the dye ramp, the focus colours, and the doc comments of the palette's
+fields and of `metrics` for the design page. The build fails if a colour the
+stylesheet uses has gone, or if a pair of colours the site sets text in
+falls short of its ratio (`PAIRS` in `aizome-site/src/theme.rs`). Kanji are
+outlined from Noto Serif CJK JP and the key glyphs (❖ ⇧ ⌥ ⌃ and the arrows)
+from Noto Sans Symbols 2, Noto Sans Symbols and Noto Sans Math, so no CJK or
+symbol font ships. Archivo, the file Aizome's session installs
+(`desktop/aizome/nix/fonts.nix`), is served compressed as WOFF2, and IBM
+Plex Mono as IBM's own WOFF2, each with its OFL text. Page sources write a
+shortcut as `⟦⌃ ❖ ↑⟧` and kanji as `⟪藍染⟫`; the generator draws keycaps,
+modifiers in Aizome's order and each named for screen readers, and
+outlines.
+
+Screenshots are copied byte for byte from `docs/images/sekka`,
+`desktop/aizome/docs/screenshots`, `desktop/aizome/docs/images` and
+`docs/test-results`, linked to the originals and never scaled up. `IMAGES`
+in `aizome-site/src/main.rs` lists them, and each caption repeats the
+provenance their docs record. `nix/aizome-site.nix` takes only those files,
+the app icons and the theme crate's source. Everything the site claims
+comes from Aizome's READMEs and docs, which `aizome-site/src/pages.rs` and
+`apps.rs` name; change them when what they describe changes.
+
+```sh
+nix build .#aizome-site --out-link result-aizome-site
+nix run --inputs-from . nixpkgs#static-web-server -- --port 8790 --root result-aizome-site --page404 result-aizome-site/404.html
+```
+
+`cargo test` in `aizome-site/` runs the generator's tests, which the Nix
+build runs too.
+
+The site is the Cloudflare Pages project `aizome` (`aizome-blz.pages.dev`),
+with the `aizome.computer` apex as its custom domain. It has no worker. To publish by
+hand, from a clean commit on GitHub's `main`:
+
+```sh
+nix run --inputs-from . nixpkgs#wrangler -- pages deploy result-aizome-site --project-name aizome --branch main
+```
+
+As for sekka.computer, leave off Web Analytics, Rocket Loader, Email
+Address Obfuscation and Bot Fight Mode.
+
+### Publishing the websites
+
+`.github/workflows/sites.yml` publishes both sites from `main`, on the
+sandboxed builder as the cache workflow runs. It starts on a push to `main`
+that touches either site's sources, and on dispatch from `main`. Each site
+is a job of its own. A push publishes a site only when its sources changed
+since the revision its live pages name: the job reads the commit linked in
+the home page's bar and compares. So a run GitHub cancelled while another
+was waiting still goes out with the next one, and a failed deploy is tried
+again by the next run. If the site names no commit of this repository, or
+can't be reached, the job publishes. A dispatch publishes both, for
+instance after a Nixpkgs update changed a font, since `flake.lock` doesn't
+start the workflow.
+
+Each job checks that its checkout is a clean commit on `main`, builds
+`.#site` or `.#aizome-site`, checks that its pages name that commit, and
+deploys with Wrangler as above: `sekka` with `--no-bundle`, `aizome`
+without. Each job lists its site's sources (`sources` in the matrix), and
+the workflow's `paths` lists them all; when a site's Nix file takes another
+file, add it to both. Without the repository secrets
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` the jobs still build and
+check the sites, then say in a notice that nothing was deployed.
+
+The one-time setup, in Cloudflare and GitHub:
+
+1. Create aizome.computer's Pages project, a Direct Upload project named
+   `aizome` with `main` as its production branch:
+   `nix run --inputs-from . nixpkgs#wrangler -- pages project create aizome --production-branch main`
+   (after `wrangler login`).
+2. In that project's Custom domains, add the apex `aizome.computer` and let
+   Cloudflare create its DNS record in the zone.
+3. Create an API token (My Profile › API Tokens › Create Token › Create
+   Custom Token) with the permission Account › Cloudflare Pages › Edit, for
+   this account alone.
+4. In GitHub, under Settings › Secrets and variables › Actions, add the
+   repository secrets `CLOUDFLARE_API_TOKEN` (the token) and
+   `CLOUDFLARE_ACCOUNT_ID` (the ID on the account's Workers & Pages
+   overview).
+5. Run the workflow from `main` once (Actions › Publish sekka.computer and
+   aizome.computer › Run workflow) to publish both.
 
 ## Screenshots and attribution
 

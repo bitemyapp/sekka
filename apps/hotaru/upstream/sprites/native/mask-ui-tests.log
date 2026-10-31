@@ -1,0 +1,45 @@
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/sidestep/crates/sidestep-engine)
+   Compiling sidestep-ui v0.0.1 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/sidestep/crates/sidestep-ui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.06s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/sidestep_ui-1b04e66163fe8ac0)
+
+running 1 test
+test canvas::tests::grid_masks_reuse_alpha_and_preserve_generic_draw_states ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.00s
+
+     Running tests/desktop.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/desktop-fb69a9b524942bd1)
+  FrameStats { window: WindowId(1), period: 21.986205ms, frames: 12, record: FrameTiming { p50: 2µs, p95: 4µs, max: 4µs }, rasterize: FrameTiming { p50: 2µs, p95: 4µs, max: 4µs }, present: FrameTiming { p50: 0ns, p95: 0ns, max: 0ns }, total: FrameTiming { p50: 5µs, p95: 9µs, max: 9µs }, damage: 1.0 }
+desktop: ok
+     Running tests/drag_out.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/drag_out-17e00429e14b9f2c)
+drag_out: ok
+     Running tests/frame_budget.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/frame_budget-4f6861a7e1d1062a)
+skipped: needs the headless sway (run it under scripts/headless-wayland)
+     Running tests/headless.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/headless-c73d3038baf5f556)
+headless: ok
+     Running tests/image_budget.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/image_budget-d2be1e28b3eb484f)
+nothing drawn                              0.04 ms
+a solid fill                               0.10 ms
+one to one, nearest                        0.15 ms
+one to one, nearest, copy                  0.58 ms
+one to one, translucent                    0.49 ms
+one to one, smooth                         0.21 ms
+one to one, quarter point off, smooth     15.39 ms
+2x up, nearest                             1.05 ms
+3x up, nearest                             0.35 ms
+0.9x down, nearest                         0.51 ms
+6000 x 4000 to fit, nearest                0.62 ms
+2x up, smooth                             89.89 ms
+0.9x down, smooth                         69.89 ms
+6000 x 4000 to fit, smooth                87.78 ms
+image_budget: ok
+     Running tests/offscreen.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/offscreen-52d018333c2be6b4)
+offscreen: ok
+     Running tests/scrolling.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/scrolling-b5aff70af99a65af)
+  scale 1: 12 passes, at 691
+  scale 2: 12 passes, at 691
+scrolling: ok
+     Running tests/wayland_desktop.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/wayland_desktop-9dc9c94699f50bed)
+skipped: needs the headless sway (run it under scripts/headless-wayland)
+     Running tests/wayland_system.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/wayland_system-ee847ecee5c356c0)
+skipped: needs the headless sway (run it under scripts/headless-wayland)

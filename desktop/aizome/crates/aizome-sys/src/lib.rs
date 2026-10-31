@@ -44,7 +44,7 @@
 //! | [`statusnotifier`] | apps' status icons and their menus (the watcher, for the shell) | `org.kde.StatusNotifierWatcher`, `com.canonical.dbusmenu` | — |
 //! | [`polkit`] | the authentication agent | polkit's helper | `security.polkit.enable` |
 //! | [`sysinfo`] | CPU, memory, processes, I/O, sensors, hardware | `/proc`, `/sys` | `pkgs.hwdata` for GPU names |
-//! | [`apps`] | desktop entries, launching, icons, default apps | XDG files, `systemd-run` | — |
+//! | [`apps`] | desktop entries, icons, default apps (`aizome-apps`), and launching | XDG files, `systemd-run` | — |
 //! | [`keyboard`] | layouts, variants, XKB options | xkeyboard-config's `evdev.xml` | — |
 //! | [`location`] | where the computer is, for sunrise and sunset | GeoClue 2 | `services.geoclue2.enable` |
 //!

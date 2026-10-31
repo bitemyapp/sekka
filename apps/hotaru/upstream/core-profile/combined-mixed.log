@@ -1,0 +1,33 @@
+==3172496== Callgrind, a call-graph generating cache profiler
+==3172496== Copyright (C) 2002-2017, and GNU GPL'd, by Josef Weidendorfer et al.
+==3172496== Using Valgrind-3.27.1 and LibVEX; rerun with -h for copyright info
+==3172496== Command: /home/callen/work/hotaru-combined-vt-20261028/target/release/hotaru-replay --data /home/callen/work/hotaru-rep-last-cell-20261028/measurements/unicode.vt --rows 12 --cols 120 --chunk 65536 --grapheme-width unicode --bench-json --iterations 1
+==3172496== 
+==3172496== For interactive control, run 'callgrind_control -h'.
+vex amd64->IR: unhandled instruction bytes: 0x62 0xF1 0x7C 0x48 0x11 0x85 0x58 0xFF 0xFF 0xFF
+vex amd64->IR:   REX=0 REX.W=0 REX.R=0 REX.X=0 REX.B=0
+vex amd64->IR:   VEX=0 VEX.L=0 VEX.nVVVV=0x0 ESC=NONE
+vex amd64->IR:   PFX.66=0 PFX.F2=0 PFX.F3=0
+==3172496== valgrind: Unrecognised instruction at address 0x40937d4.
+==3172496==    at 0x40937D4: std::rt::lang_start_internal (in /home/callen/work/hotaru-combined-vt-20261028/target/release/hotaru-replay)
+==3172496==    by 0x4063474: main (in /home/callen/work/hotaru-combined-vt-20261028/target/release/hotaru-replay)
+==3172496== Your program just tried to execute an instruction that Valgrind
+==3172496== did not recognise.  There are two possible reasons for this.
+==3172496== 1. Your program has a bug and erroneously jumped to a non-code
+==3172496==    location.  If you are running Memcheck and you just saw a
+==3172496==    warning about a bad jump, it's probably your program's fault.
+==3172496== 2. The instruction is legitimate but Valgrind doesn't handle it,
+==3172496==    i.e. it's Valgrind's fault.  If you think this is the case or
+==3172496==    you are not sure, please let us know and we'll try to fix it.
+==3172496== Either way, Valgrind will now raise a SIGILL signal which will
+==3172496== probably kill your program.
+==3172496== 
+==3172496== Process terminating with default action of signal 4 (SIGILL)
+==3172496==  Illegal opcode at address 0x40937D4
+==3172496==    at 0x40937D4: std::rt::lang_start_internal (in /home/callen/work/hotaru-combined-vt-20261028/target/release/hotaru-replay)
+==3172496==    by 0x4063474: main (in /home/callen/work/hotaru-combined-vt-20261028/target/release/hotaru-replay)
+==3172496== 
+==3172496== Events    : Ir
+==3172496== Collected : 298912
+==3172496== 
+==3172496== I   refs:      298,912

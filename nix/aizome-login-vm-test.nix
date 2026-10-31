@@ -29,13 +29,17 @@ pkgs.testers.runNixOSTest {
       calamares.desktops = [ "aizome" ];
       calamares.defaultDesktop = "aizome";
       calamares.tuning.enable = true;
+      # A fresh session must inherit the installer's system keyboard, as
+      # the greeter does. US letters alone cannot detect a US fallback.
+      services.xserver.xkb.layout = "gb";
       # The test driver needs console logging, which tuning reduces.
       boot.consoleLogLevel = lib.mkForce 7;
       users.users.demo = {
         isNormalUser = true;
         uid = 1000;
         description = "Demo";
-        password = "demo";
+        password = "demo@#";
+        linger = true;
       };
       virtualisation = {
         memorySize = 4096;
@@ -59,6 +63,30 @@ pkgs.testers.runNixOSTest {
             "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus sh -c "
             + shlex.quote(command))
 
+    def type_uk(text):
+        # Physical keys, independent of the test driver's US text mapping.
+        plain = {" ": "spc", "\n": "ret", ".": "dot", ",": "comma",
+                 "-": "minus", "#": "backslash", "\\": "less"}
+        shifted = {"@": "apostrophe", '"': "2", "|": "less", "~": "backslash"}
+        def key(code, down):
+            event: Any = {"events": [{
+                "type": "key", "data": {"down": down, "key": {
+                    "type": "qcode", "data": code
+                }}
+            }]}
+            assert machine.qmp_client is not None
+            machine.qmp_client.send("input-send-event", event)
+            time.sleep(0.01)
+        for character in text:
+            shift = character in shifted
+            if shift:
+                key("shift", True)
+            code = shifted.get(character, plain.get(character, character))
+            key(code, True)
+            key(code, False)
+            if shift:
+                key("shift", False)
+
     machine.start()
     with subtest("the login screen is Aizome's own, on greetd"):
         machine.wait_for_unit("display-manager.service")
@@ -72,7 +100,7 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("login-screen")
 
     with subtest("the password starts an Aizome session"):
-        machine.send_chars("demo\n")
+        type_uk("demo@#\n")
         machine.wait_until_succeeds("ls /run/user/1000/aizome.*.sock", timeout=180)
         machine.wait_until_succeeds("pgrep -u demo -x aizome-shell", timeout=60)
         machine.wait_until_fails("pgrep -u greeter -x aizome-greeter", timeout=60)
@@ -80,6 +108,10 @@ pkgs.testers.runNixOSTest {
         env = machine.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ")
         assert "XDG_CURRENT_DESKTOP=Aizome" in env, env
         assert "AIZOME_SESSION=1" in env, env
+        print(machine.succeed(f"readlink -f /proc/{pid}/exe; sha256sum /proc/{pid}/exe"))
+        compositor = machine.succeed("pgrep -u demo -x aizome").strip()
+        print(machine.succeed(f"readlink -f /proc/{compositor}/exe; sha256sum /proc/{compositor}/exe"))
+        machine.fail("test -e /home/demo/.config/aizome/settings.toml")
         machine.sleep(10)
         machine.screenshot("aizome-session")
 
@@ -111,25 +143,39 @@ pkgs.testers.runNixOSTest {
             machine.wait_until_succeeds(f"grep -q '/app-background.slice/' /proc/{worker}/cgroup")
         # QEMU's emulated keyboard -> Aizome -> actual Foot -> raw TUI input.
         # Include repetitions, spaces and punctuation; compare every byte.
-        expected = "codex input 0123456789 abcdefghijklmnopqrstuvwxyz .,- " * 10
+        expected = 'codex input 0123456789 abcdefghijklmnopqrstuvwxyz .,- layout @ # " | ~ \\ ' * 10
         machine.screenshot("foot-ready-under-agent-load")
         # Explicit releases avoid send_chars/sendkey's virtual-time hold
         # overlapping later keys when the loaded guest lags wall time.
-        qcodes = {" ": "spc", ".": "dot", ",": "comma", "-": "minus"}
-        assert machine.qmp_client is not None
-        for character in expected:
-            for down in (True, False):
-                # QMPSession annotates values as str, but QMP accepts JSON.
-                event: Any = {"events": [{
-                    "type": "key", "data": {"down": down, "key": {
-                        "type": "qcode", "data": qcodes.get(character, character)
-                    }}
-                }]}
-                machine.qmp_client.send("input-send-event", event)
-                time.sleep(0.01)
+        type_uk(expected)
         machine.sleep(3)
         actual = machine.succeed("cat /tmp/sekka-keyboard-input")
         machine.screenshot("foot-input-under-agent-load")
         assert actual == expected, (len(expected), len(actual), expected, actual)
+        assert "XKB_DEFAULT_LAYOUT=gb" in env.splitlines(), env
+        assert "XKB_DEFAULT_MODEL=pc104" in env.splitlines(), env
+        assert "XKB_DEFAULT_VARIANT=" in env.splitlines(), env
+        assert "XKB_DEFAULT_OPTIONS=terminate:ctrl_alt_bksp" in env.splitlines(), env
+
+    with subtest("keyboard defaults belong to this session and leave the lingering manager on logout"):
+        keys = ("XKB_DEFAULT_LAYOUT", "XKB_DEFAULT_MODEL", "XKB_DEFAULT_VARIANT", "XKB_DEFAULT_OPTIONS")
+        snapshot = dict(line.split("=", 1) for line in env.splitlines() if "=" in line)
+        managed = snapshot["AIZOME_ENVIRONMENT_KEYS"].split()
+        manager = user("systemctl --user show-environment").splitlines()
+        for name in keys:
+            assert name in managed, managed
+            assert name + "=" + snapshot[name] in manager, manager
+        print({name: snapshot[name] for name in keys})
+        session = machine.succeed("loginctl show-user demo -p Display --value").strip()
+        assert session, "demo has no display session"
+        machine.succeed("loginctl terminate-session " + shlex.quote(session))
+        machine.wait_until_fails("pgrep -u demo -x aizome", timeout=60)
+        machine.wait_until_fails("loginctl show-session " + shlex.quote(session), timeout=60)
+        assert user("systemctl --user is-active default.target").strip() == "active"
+        machine.wait_until_succeeds("pgrep -u greeter -x aizome-greeter", timeout=60)
+        manager = user("systemctl --user show-environment").splitlines()
+        for name in (*keys, "AIZOME_ENVIRONMENT_KEYS"):
+            assert not any(line.startswith(name + "=") for line in manager), manager
+        machine.screenshot("keyboard-environment-cleared-at-logout")
   '';
 }

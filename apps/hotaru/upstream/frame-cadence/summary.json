@@ -1,0 +1,1272 @@
+{
+  "schema": 1,
+  "status": "diagnostic-complete-no-product-change",
+  "host": "wx-workstation",
+  "scope": "Exact434Hotaru package with unchangedGhostty reference. PrivateSway1.9/wlroots0.17.1 pixman/headless output. Application-only protocol/frame logging. No hardware scanout or uninstrumented throughput claim.",
+  "raw_root": "/home/callen/work/hotaru-frame-cadence-20261028",
+  "clock_ticks_per_second": 100,
+  "experiments": [
+    {
+      "name": "trace-434",
+      "controller_status": "failed",
+      "error": "AssertionError()",
+      "calibrations": {},
+      "trials": []
+    },
+    {
+      "name": "trace-434-v2",
+      "controller_status": "failed",
+      "error": "RuntimeError('trial rejected: redraw')",
+      "calibrations": {
+        "copy": true,
+        "redraw": true,
+        "ghostty": true
+      },
+      "trials": [
+        {
+          "label": "00-copy",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.527999999932945,
+                "median": 16.12200000009034,
+                "p95": 16.26500000001397,
+                "max": 32.20400000002701,
+                "mean": 16.678504347825506
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.527999999932945,
+                "median": 16.668999999994412,
+                "p95": 16.724999999976717,
+                "max": 16.798000000067987,
+                "mean": 16.666443478261403
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.29399999999441206,
+                "median": 8.239000000001397,
+                "p95": 15.46799999999348,
+                "max": 16.268000000040047,
+                "mean": 8.226301724140347
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 0.0,
+                "compositor": 40.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.402000000001863,
+                "median": 16.17399999999907,
+                "p95": 16.235999999917112,
+                "max": 32.535000000032596,
+                "mean": 16.591269565217765
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 16.256000000052154,
+                "median": 16.667000000015832,
+                "p95": 16.721000000019558,
+                "max": 17.193000000086613,
+                "mean": 16.6670172413789
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.22699999995529652,
+                "median": 8.920499999949243,
+                "p95": 15.462999999988824,
+                "max": 16.42099999997299,
+                "mean": 8.595706896550336
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 60.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 114,
+              "callback_intervals_ms": {
+                "n": 109,
+                "min": 17.442999999970198,
+                "median": 17.70899999991525,
+                "p95": 17.86199999996461,
+                "max": 17.949999999953434,
+                "mean": 17.68963302752225
+              },
+              "commit_intervals_ms": {
+                "n": 110,
+                "min": 16.364000000059605,
+                "median": 17.70199999999022,
+                "p95": 17.85600000002887,
+                "max": 17.989999999990687,
+                "mean": 17.656018181818283
+              },
+              "previous_callback_to_request_ms": {
+                "n": 110,
+                "min": 0.23900000005960464,
+                "median": 0.2999999999301508,
+                "p95": 0.3350000000791624,
+                "max": 4.21999999997206,
+                "mean": 0.3728909090933898
+              },
+              "cpu_ms": {
+                "application": 90.0,
+                "fixture": 10.0,
+                "compositor": 230.0,
+                "observer": 10.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            875709016
+          ]
+        },
+        {
+          "label": "00-redraw",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "1",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 16.0,
+                "median": 16.121999999973923,
+                "p95": 16.179999999934807,
+                "max": 32.17399999999907,
+                "mean": 16.676660869565143
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 15.828999999910593,
+                "median": 16.667000000015832,
+                "p95": 16.756999999983236,
+                "max": 17.55600000009872,
+                "mean": 16.66626956521675
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.2970000000204891,
+                "median": 8.215499999991152,
+                "p95": 15.5580000000773,
+                "max": 16.126000000047497,
+                "mean": 8.181000000001372
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.768000000040047,
+                "median": 16.17299999995157,
+                "p95": 16.23699999996461,
+                "max": 32.20200000004843,
+                "mean": 16.587113043477597
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 15.866000000038184,
+                "median": 16.667999999946915,
+                "p95": 16.70699999993667,
+                "max": 17.434000000008382,
+                "mean": 16.666422413792542
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.19100000010803342,
+                "median": 8.757500000006985,
+                "p95": 15.302000000025146,
+                "max": 16.003000000026077,
+                "mean": 8.52969827586263
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 60.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 114,
+              "callback_intervals_ms": {
+                "n": 109,
+                "min": 17.44900000002235,
+                "median": 17.70299999997951,
+                "p95": 17.875,
+                "max": 17.938000000081956,
+                "mean": 17.682266055046657
+              },
+              "commit_intervals_ms": {
+                "n": 110,
+                "min": 16.60600000002887,
+                "median": 17.68949999997858,
+                "p95": 17.885000000009313,
+                "max": 17.97399999992922,
+                "mean": 17.650563636363948
+              },
+              "previous_callback_to_request_ms": {
+                "n": 110,
+                "min": 0.48199999995995313,
+                "median": 0.5659999999916181,
+                "p95": 0.5939999999245629,
+                "max": 4.144999999902211,
+                "mean": 0.634100000004665
+              },
+              "cpu_ms": {
+                "application": 220.0,
+                "fixture": 10.0,
+                "compositor": 230.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            875709016
+          ]
+        },
+        {
+          "label": "00-ghostty",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 119,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 12.870999991893768,
+                "median": 16.58899998664856,
+                "p95": 17.997000008821487,
+                "max": 32.59800000488758,
+                "mean": 16.86813913039539
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 12.990000009536743,
+                "median": 16.606000006198883,
+                "p95": 19.221000015735626,
+                "max": 27.90199999511242,
+                "mean": 16.830139130483502
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.8589999973773956,
+                "median": 1.045499987900257,
+                "p95": 5.1289999932050705,
+                "max": 7.882999986410141,
+                "mean": 1.865181034238174
+              },
+              "cpu_ms": {
+                "application": 4670.0,
+                "fixture": 10.0,
+                "compositor": 130.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 14.145999997854233,
+                "median": 16.576499983668327,
+                "p95": 17.337999984622,
+                "max": 32.57100000977516,
+                "mean": 16.712112069001485
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 7.565999999642372,
+                "median": 16.683999992907047,
+                "p95": 20.08500000834465,
+                "max": 29.38899999856949,
+                "mean": 16.69624999987668
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.8540000021457672,
+                "median": 5.383000001311302,
+                "p95": 11.017000004649162,
+                "max": 13.222000002861023,
+                "mean": 5.70403418632654
+              },
+              "cpu_ms": {
+                "application": 4530.0,
+                "fixture": 10.0,
+                "compositor": 120.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 13.528999984264374,
+                "median": 16.573500007390976,
+                "p95": 17.417999997735023,
+                "max": 19.606000006198883,
+                "mean": 16.5741034481546
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 13.212999984622002,
+                "median": 16.74949999898672,
+                "p95": 19.40300001204014,
+                "max": 20.64699999988079,
+                "mean": 16.67537931044554
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.8769999891519547,
+                "median": 4.745999991893768,
+                "p95": 10.780000001192093,
+                "max": 12.967999994754791,
+                "mean": 5.349615383861411
+              },
+              "cpu_ms": {
+                "application": 4600.0,
+                "fixture": 10.0,
+                "compositor": 130.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0
+          ]
+        },
+        {
+          "label": "01-ghostty",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 13.703000009059906,
+                "median": 16.582000002264977,
+                "p95": 17.686000004410744,
+                "max": 19.469999998807907,
+                "mean": 16.57932758613907
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 13.967999994754791,
+                "median": 16.532499998807907,
+                "p95": 18.6700000166893,
+                "max": 19.14699999988079,
+                "mean": 16.656077586242866
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.8390000015497208,
+                "median": 4.21000000834465,
+                "p95": 9.466999992728233,
+                "max": 10.010000005364418,
+                "mean": 4.359897436876582
+              },
+              "cpu_ms": {
+                "application": 4410.0,
+                "fixture": 10.0,
+                "compositor": 130.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 13.019000008702278,
+                "median": 16.58049999177456,
+                "p95": 17.69200001657009,
+                "max": 20.145999997854233,
+                "mean": 16.578586206996235
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 14.015000015497208,
+                "median": 16.617500007152557,
+                "p95": 18.886000007390976,
+                "max": 19.25499999523163,
+                "mean": 16.65665517233569
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.8630000054836273,
+                "median": 4.471999987959862,
+                "p95": 9.937000006437302,
+                "max": 10.612999990582466,
+                "mean": 4.599521367086305
+              },
+              "cpu_ms": {
+                "application": 4430.0,
+                "fixture": 0.0,
+                "compositor": 130.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 13.733000010251999,
+                "median": 16.58000000566244,
+                "p95": 17.73199999332428,
+                "max": 19.417999997735023,
+                "mean": 16.575922413761244
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 13.983000010251999,
+                "median": 16.479000002145767,
+                "p95": 18.729000002145767,
+                "max": 19.47000001370907,
+                "mean": 16.658086206892442
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.8509999811649323,
+                "median": 4.831000000238419,
+                "p95": 10.235000014305115,
+                "max": 10.834000006318092,
+                "mean": 4.962675213941142
+              },
+              "cpu_ms": {
+                "application": 4500.0,
+                "fixture": 10.0,
+                "compositor": 130.0,
+                "observer": 10.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0
+          ]
+        },
+        {
+          "label": "01-redraw",
+          "accepted": false,
+          "rejection_reasons": [
+            "observed compiler overlap"
+          ],
+          "compiler_overlap_samples": 7,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "1",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.520000000018626,
+                "median": 16.121999999973923,
+                "p95": 16.76500000001397,
+                "max": 32.6579999999376,
+                "mean": 16.694669565217286
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.020000000018626,
+                "median": 16.667000000015832,
+                "p95": 16.81899999990128,
+                "max": 17.38299999991432,
+                "mean": 16.666234782608427
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.32200000004377216,
+                "median": 8.365500000014435,
+                "p95": 15.472999999998137,
+                "max": 16.06400000001304,
+                "mean": 8.149258620688764
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 0.0,
+                "compositor": 60.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.767999999923632,
+                "median": 16.179999999934807,
+                "p95": 16.332999999984168,
+                "max": 32.771999999997206,
+                "mean": 16.605460869565444
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 15.732000000076368,
+                "median": 16.663999999989755,
+                "p95": 17.005000000004657,
+                "max": 17.6589999999851,
+                "mean": 16.658799999999896
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.17300000006798655,
+                "median": 8.701999999990221,
+                "p95": 15.327999999979511,
+                "max": 16.030999999959022,
+                "mean": 8.266689655174309
+              },
+              "cpu_ms": {
+                "application": 70.0,
+                "fixture": 10.0,
+                "compositor": 60.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 114,
+              "callback_intervals_ms": {
+                "n": 109,
+                "min": 17.15100000007078,
+                "median": 17.686999999918044,
+                "p95": 17.864999999990687,
+                "max": 18.13299999991432,
+                "mean": 17.669935779816925
+              },
+              "commit_intervals_ms": {
+                "n": 110,
+                "min": 16.53200000000652,
+                "median": 17.662500000093132,
+                "p95": 18.07600000000093,
+                "max": 18.543999999994412,
+                "mean": 17.641536363636526
+              },
+              "previous_callback_to_request_ms": {
+                "n": 110,
+                "min": 0.45900000003166497,
+                "median": 0.5709999999962747,
+                "p95": 1.1539999999804422,
+                "max": 4.173999999999069,
+                "mean": 0.6916181818190539
+              },
+              "cpu_ms": {
+                "application": 220.0,
+                "fixture": 10.0,
+                "compositor": 230.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            875709016
+          ]
+        }
+      ]
+    },
+    {
+      "name": "trace-format-434",
+      "controller_status": "failed",
+      "error": "RuntimeError('trial rejected: native')",
+      "calibrations": {
+        "native": true,
+        "xrgb": true
+      },
+      "trials": [
+        {
+          "label": "00-native",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "SIDESTEP_SHM_FORMAT": null,
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.435999999986961,
+                "median": 16.121999999973923,
+                "p95": 16.20200000004843,
+                "max": 32.16700000013225,
+                "mean": 16.677382608695442
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.51799999992363,
+                "median": 16.665999999968335,
+                "p95": 16.721000000135973,
+                "max": 16.809000000124797,
+                "mean": 16.666356521739583
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.40600000019185245,
+                "median": 8.461500000092201,
+                "p95": 15.674999999813735,
+                "max": 16.273000000044703,
+                "mean": 8.36322413793171
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 116,
+                "min": 16.02200000011362,
+                "median": 16.174000000115484,
+                "p95": 16.233999999938533,
+                "max": 32.23699999996461,
+                "mean": 16.58639655172311
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 15.787999999942258,
+                "median": 16.665999999968335,
+                "p95": 16.731999999843538,
+                "max": 17.54700000002049,
+                "mean": 16.666474137930923
+              },
+              "previous_callback_to_request_ms": {
+                "n": 117,
+                "min": 0.18599999998696148,
+                "median": 8.718999999808148,
+                "p95": 15.277000000001863,
+                "max": 15.959000000031665,
+                "mean": 8.474000000004839
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 114,
+              "callback_intervals_ms": {
+                "n": 109,
+                "min": 17.418999999994412,
+                "median": 17.709000000031665,
+                "p95": 17.899000000208616,
+                "max": 17.923000000184402,
+                "mean": 17.694321100916202
+              },
+              "commit_intervals_ms": {
+                "n": 110,
+                "min": 16.51699999999255,
+                "median": 17.69549999991432,
+                "p95": 17.908000000054017,
+                "max": 18.252000000094995,
+                "mean": 17.664845454546793
+              },
+              "previous_callback_to_request_ms": {
+                "n": 110,
+                "min": 0.1980000000912696,
+                "median": 0.299000000115484,
+                "p95": 0.40499999979510903,
+                "max": 3.470000000204891,
+                "mean": 0.363009090912105
+              },
+              "cpu_ms": {
+                "application": 100.0,
+                "fixture": 0.0,
+                "compositor": 230.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            875709016
+          ]
+        },
+        {
+          "label": "00-xrgb",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "SIDESTEP_SHM_FORMAT": "xrgb8888",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 119,
+              "callback_intervals_ms": {
+                "n": 114,
+                "min": 15.548999999882653,
+                "median": 16.062999999849126,
+                "p95": 16.331000000005588,
+                "max": 48.127000000094995,
+                "mean": 16.765105263158482
+              },
+              "commit_intervals_ms": {
+                "n": 114,
+                "min": 4.394000000087544,
+                "median": 16.6579999999376,
+                "p95": 16.790000000037253,
+                "max": 50.07899999991059,
+                "mean": 16.812657894738216
+              },
+              "previous_callback_to_request_ms": {
+                "n": 115,
+                "min": 0.11999999987892807,
+                "median": 7.373000000137836,
+                "p95": 15.392999999923632,
+                "max": 43.85200000018813,
+                "mean": 7.606982608704382
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 10.0,
+                "compositor": 40.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.986000000033528,
+                "median": 16.084999999962747,
+                "p95": 16.152999999932945,
+                "max": 32.11999999987893,
+                "mean": 16.641234782607416
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.213999999919906,
+                "median": 16.665000000037253,
+                "p95": 16.743000000016764,
+                "max": 17.156999999890104,
+                "mean": 16.666382608694306
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.4930000000167638,
+                "median": 8.305000000051223,
+                "p95": 15.584000000031665,
+                "max": 16.248999999836087,
+                "mean": 8.31649999999931
+              },
+              "cpu_ms": {
+                "application": 60.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 119,
+              "callback_intervals_ms": {
+                "n": 114,
+                "min": 16.68999999994412,
+                "median": 16.87300000002142,
+                "p95": 16.924000000115484,
+                "max": 16.97399999992922,
+                "mean": 16.860578947369696
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.45299999997951,
+                "median": 16.854999999981374,
+                "p95": 16.955000000074506,
+                "max": 16.99600000004284,
+                "mean": 16.814860869563468
+              },
+              "previous_callback_to_request_ms": {
+                "n": 115,
+                "min": 0.5709999999962747,
+                "median": 0.7190000000409782,
+                "p95": 4.706000000005588,
+                "max": 5.86199999996461,
+                "mean": 1.2796434782546662
+              },
+              "cpu_ms": {
+                "application": 140.0,
+                "fixture": 0.0,
+                "compositor": 150.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            1
+          ]
+        },
+        {
+          "label": "01-xrgb",
+          "accepted": true,
+          "rejection_reasons": [],
+          "compiler_overlap_samples": 0,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "SIDESTEP_SHM_FORMAT": "xrgb8888",
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.964000000152737,
+                "median": 16.063000000081956,
+                "p95": 16.128000000026077,
+                "max": 32.09400000004098,
+                "mean": 16.619486956521058
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 15.72899999981746,
+                "median": 16.66800000006333,
+                "p95": 16.730000000214204,
+                "max": 17.674000000115484,
+                "mean": 16.666426086956232
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.3130000000819564,
+                "median": 8.330500000040047,
+                "p95": 15.517999999923632,
+                "max": 16.09499999997206,
+                "mean": 8.278232758611859
+              },
+              "cpu_ms": {
+                "application": 50.0,
+                "fixture": 0.0,
+                "compositor": 40.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.98300000000745,
+                "median": 16.084999999962747,
+                "p95": 16.144000000087544,
+                "max": 32.12000000011176,
+                "mean": 16.640808695651916
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.023999999975786,
+                "median": 16.665999999968335,
+                "p95": 16.743999999947846,
+                "max": 17.346000000135973,
+                "mean": 16.666417391304655
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.4439999999012798,
+                "median": 8.28649999992922,
+                "p95": 15.62100000004284,
+                "max": 16.252000000094995,
+                "mean": 8.293258620682975
+              },
+              "cpu_ms": {
+                "application": 60.0,
+                "fixture": 10.0,
+                "compositor": 40.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 119,
+              "callback_intervals_ms": {
+                "n": 114,
+                "min": 16.26799999992363,
+                "median": 16.87100000004284,
+                "p95": 16.92200000002049,
+                "max": 17.591999999945983,
+                "mean": 16.857763157894002
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.429000000003725,
+                "median": 16.86599999992177,
+                "p95": 16.96500000008382,
+                "max": 16.984000000171363,
+                "mean": 16.81273913043551
+              },
+              "previous_callback_to_request_ms": {
+                "n": 115,
+                "min": 0.5800000000745058,
+                "median": 0.7169999999459833,
+                "p95": 4.952000000048429,
+                "max": 5.925000000046566,
+                "mean": 1.2710260869651708
+              },
+              "cpu_ms": {
+                "application": 140.0,
+                "fixture": 10.0,
+                "compositor": 140.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            1
+          ]
+        },
+        {
+          "label": "01-native",
+          "accepted": false,
+          "rejection_reasons": [
+            "observed compiler overlap"
+          ],
+          "compiler_overlap_samples": 1,
+          "running_executable_sha256": "1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262",
+          "environment": {
+            "WLR_BACKENDS": "headless",
+            "WLR_RENDERER": "pixman",
+            "LIBGL_ALWAYS_SOFTWARE": "1",
+            "GALLIUM_DRIVER": "llvmpipe",
+            "LP_NUM_THREADS": "4",
+            "SIDESTEP_RASTER_THREADS": "4",
+            "AIZOME_NO_PIXEL_SCROLL": "0",
+            "SIDESTEP_SHM_FORMAT": null,
+            "__EGL_VENDOR_LIBRARY_FILENAMES": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/share/glvnd/egl_vendor.d/50_mesa.json",
+            "LIBGL_DRIVERS_PATH": "/nix/store/457mqa9dsvw9cnmi6pr06zjy1ib0iic4-mesa-26.2.5/lib/dri",
+            "RUST_LOG": "warn"
+          },
+          "streams": [
+            {
+              "kind": "marker",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 16.0,
+                "median": 16.121999999973923,
+                "p95": 16.18999999994412,
+                "max": 32.17100000008941,
+                "mean": 16.676460869563744
+              },
+              "commit_intervals_ms": {
+                "n": 115,
+                "min": 16.52099999994971,
+                "median": 16.66400000010617,
+                "p95": 16.73200000007637,
+                "max": 16.794999999925494,
+                "mean": 16.666330434782836
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.3159999998752028,
+                "median": 8.205499999923632,
+                "p95": 15.425000000046566,
+                "max": 16.088000000221655,
+                "mean": 8.153293103437292
+              },
+              "cpu_ms": {
+                "application": 40.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 0.0
+              }
+            },
+            {
+              "kind": "sparse",
+              "produced": 120,
+              "observed_unique": 120,
+              "callback_intervals_ms": {
+                "n": 115,
+                "min": 15.65100000007078,
+                "median": 16.174000000115484,
+                "p95": 16.256000000052154,
+                "max": 32.20999999996275,
+                "mean": 16.72821739130532
+              },
+              "commit_intervals_ms": {
+                "n": 116,
+                "min": 16.140999999828637,
+                "median": 16.66600000008475,
+                "p95": 16.731999999843538,
+                "max": 17.171000000089407,
+                "mean": 16.666594827585804
+              },
+              "previous_callback_to_request_ms": {
+                "n": 116,
+                "min": 0.2210000001359731,
+                "median": 8.878000000026077,
+                "p95": 15.41800000006333,
+                "max": 16.08699999982491,
+                "mean": 8.62187931033911
+              },
+              "cpu_ms": {
+                "application": 70.0,
+                "fixture": 10.0,
+                "compositor": 50.0,
+                "observer": 10.0
+              }
+            },
+            {
+              "kind": "scroll",
+              "produced": 120,
+              "observed_unique": 114,
+              "callback_intervals_ms": {
+                "n": 110,
+                "min": 17.398000000044703,
+                "median": 17.708000000100583,
+                "p95": 17.864000000059605,
+                "max": 17.92599999997765,
+                "mean": 17.68537272727117
+              },
+              "commit_intervals_ms": {
+                "n": 110,
+                "min": 16.51300000003539,
+                "median": 17.708500000066124,
+                "p95": 17.868999999947846,
+                "max": 17.932000000029802,
+                "mean": 17.65782727272546
+              },
+              "previous_callback_to_request_ms": {
+                "n": 111,
+                "min": 0.23999999999068677,
+                "median": 0.30099999997764826,
+                "p95": 0.39000000013038516,
+                "max": 4.585999999893829,
+                "mean": 0.39781081081821107
+              },
+              "cpu_ms": {
+                "application": 90.0,
+                "fixture": 10.0,
+                "compositor": 230.0,
+                "observer": 0.0
+              }
+            }
+          ],
+          "submitted_shm_format_values": [
+            0,
+            875709016
+          ]
+        }
+      ]
+    }
+  ],
+  "pixels": {
+    "scope": "Full1920x1440 final screenshot RGBA byte equality, same fixture final sequence and nonce; protocol traces identify SHM formats.",
+    "comparisons": [
+      {
+        "trial": "00-native",
+        "size": [
+          1920,
+          1440
+        ],
+        "rgba_sha256": "ecdc7fca54a6156146ea1785a90de47aa3ae98a985021c9f76429fc7183645fe",
+        "equal_rgba": true,
+        "different_bytes": 0,
+        "bbox": null
+      },
+      {
+        "trial": "00-xrgb",
+        "size": [
+          1920,
+          1440
+        ],
+        "rgba_sha256": "ecdc7fca54a6156146ea1785a90de47aa3ae98a985021c9f76429fc7183645fe",
+        "equal_rgba": true,
+        "different_bytes": 0,
+        "bbox": null
+      },
+      {
+        "trial": "01-native",
+        "size": [
+          1920,
+          1440
+        ],
+        "rgba_sha256": "ecdc7fca54a6156146ea1785a90de47aa3ae98a985021c9f76429fc7183645fe",
+        "equal_rgba": true,
+        "different_bytes": 0,
+        "bbox": null
+      },
+      {
+        "trial": "01-xrgb",
+        "size": [
+          1920,
+          1440
+        ],
+        "rgba_sha256": "ecdc7fca54a6156146ea1785a90de47aa3ae98a985021c9f76429fc7183645fe",
+        "equal_rgba": true,
+        "different_bytes": 0,
+        "bbox": null
+      }
+    ]
+  },
+  "interpretation": [
+    "Accepted traced scroll callback medians: HotaruXBGRcopy17.709ms, redraw17.703ms; Ghostty16.574/16.580ms.",
+    "Samebinary format control changes accepted Hotaru scroll114/120 to119/120 with16.873/16.871ms callbacks. AppCPU100ms\u2192140ms whilecompositor230ms\u2192150/140ms;10ms quantization and tracing apply.",
+    "All4format final1920x1440RGBA screenshots byte-identical.",
+    "wlroots headless resets16ms output timer atcommit; Swayrepaints before sendingcallbacks. Format-related compositorwork contributes toobserved cadence; remaining119/120 andhardwarepolicy remainopen.",
+    "No scheduling,defaultformat,orproductsourceschanged. Externalcompiler-overlappedtrialsremainrejected."
+  ]
+}

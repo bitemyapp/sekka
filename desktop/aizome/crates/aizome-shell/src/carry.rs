@@ -34,6 +34,27 @@ pub struct Carried {
     pub notes_open: Vec<String>,
 }
 
+impl Carried {
+    /// Retire the old automatic keyboard offers, including a previous
+    /// shell's final handoff. They aren't actionable history: setup is
+    /// optional, and their shell-local actions weren't carried with them.
+    pub fn for_restore(mut self) -> Self {
+        self.notes.retain(|n| {
+            !(n.app_name == "Settei"
+                && n.summary.starts_with("Set up ")
+                && n.summary.ends_with('?')
+                && n.body == "Press the key beside its space bar, and Settei suggests where ❖ goes on it."
+                && n.actions
+                    == [
+                        ("default".into(), "Set Up…".into()),
+                        ("set-up".into(), "Set Up…".into()),
+                        ("same".into(), "Same as Others".into()),
+                    ])
+        });
+        self
+    }
+}
+
 /// Where it's kept: per session, in the runtime directory.
 pub fn path() -> PathBuf {
     if let Some(p) = std::env::var_os("AIZOME_SHELL_STATE").filter(|p| !p.is_empty()) {
@@ -117,6 +138,34 @@ pub fn mark(notes: &[Notification], folded: &[(String, bool)], open: &[String]) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restoring_retires_only_the_old_keyboard_offers() {
+        let offer = Notification {
+            app_name: "Settei".into(),
+            summary: "Set up Topre REALFORCE R4H Keyboard?".into(),
+            body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
+            actions: vec![
+                ("default".into(), "Set Up…".into()),
+                ("set-up".into(), "Set Up…".into()),
+                ("same".into(), "Same as Others".into()),
+            ],
+            ..Default::default()
+        };
+        let mut notes = vec![offer.clone(), offer.clone()];
+        notes.push(Notification { app_name: "Another app".into(), ..offer.clone() });
+        notes.push(Notification { body: "Other settings advice".into(), ..offer.clone() });
+        notes.push(Notification { actions: vec![], ..offer.clone() });
+        notes.push(Notification { summary: "Settings saved".into(), ..offer });
+        for (i, n) in notes.iter_mut().enumerate() {
+            n.id = i as u32 + 1;
+        }
+        let c = Carried { notes, next_id: 10, ..Default::default() };
+        let restored = serde_json::from_str::<Carried>(&serde_json::to_string(&c).unwrap()).unwrap().for_restore();
+        assert_eq!(restored.notes, c.notes[2..], "unrelated notifications keep their content and IDs");
+        assert_eq!(restored.next_id, 10, "retired IDs must not be reused");
+        assert_eq!(restored.clone().for_restore(), restored, "migration is idempotent");
+    }
 
     #[test]
     fn a_big_image_kept_whole_before_is_made_small_when_read() {

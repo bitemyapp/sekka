@@ -128,9 +128,9 @@ in
             environment.FONTCONFIG_FILE = fontsConf;
           });
       # Kernel and udev messages only for errors, so the splash isn't drawn
-      # over text, and the initrd says nothing on the way.
+      # over text. The systemd initrd also honors quiet; boot.initrd.verbose
+      # belonged to scripted stage 1, which NixOS has removed.
       boot.consoleLogLevel = lib.mkDefault 3;
-      boot.initrd.verbose = false;
       boot.kernelParams = [
         "quiet"
         "udev.log_level=3"

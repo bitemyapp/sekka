@@ -1,0 +1,535 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -39,3 +39,7 @@
+ [[bin]]
+ name="scene-wayland-probe"
+ path="src/scene_wayland_probe.rs"
++
++[[bin]]
++name = "scene-phase-probe"
++path = "src/phase_probe.rs"
+--- a/src/compose.rs
++++ b/src/compose.rs
+@@ -5,13 +5,15 @@
+ use std::{collections::HashMap, sync::Arc};
+ const SSBO: u32 = 0x90d2;
+ const ATLAS: usize = 32 << 20;
++const MAX_CACHED_ASSETS: usize = 8192;
++type CachedAsset = (usize, Arc<[u8]>, u32, u32, u32);
+ pub struct SceneDriver {
+     context: Rc<Context>,
+     program: u32,
+     buffers: [u32; 4],
+     extent: i32,
+     used: usize,
+-    cache: HashMap<u64, (usize, Arc<[u8]>, u32, u32, u32)>,
++    cache: HashMap<u64, CachedAsset>,
+ }
+ impl Drop for SceneDriver {
+     fn drop(&mut self) {
+@@ -126,21 +128,36 @@
+         }
+         Ok(out)
+     }
+-    fn asset(&mut self, a: &Asset) -> Result<(u32, usize), String> {
++    fn asset(
++        &mut self,
++        a: &Asset,
++        cancelled: &impl Fn() -> bool,
++    ) -> Result<(u32, usize), RenderError> {
++        if cancelled() {
++            return Err(RenderError::Cancelled);
++        }
+         if let Some((offset, bytes, w, h, format)) = self.cache.get(&a.id) {
+             require(
+-                *w == a.width && *h == a.height && *format == a.format && &**bytes == &*a.data,
++                *w == a.width && *h == a.height && *format == a.format && **bytes == *a.data,
+                 "asset identity collision",
+             )?;
+             return Ok((*offset as u32, 0));
+         }
+-        let len = a.data.len().checked_add(3).ok_or("asset padding")? & !3;
++        let len = a
++            .data
++            .len()
++            .checked_add(3)
++            .ok_or_else(|| "asset padding".to_owned())?
++            & !3;
+         require(
+             self.used.checked_add(len).is_some_and(|n| n <= ATLAS),
+             "atlas admission",
+         )?;
+         let mut words = Vec::with_capacity(len / 4);
+-        for bytes in a.data.chunks(4) {
++        for (i, bytes) in a.data.chunks(4).enumerate() {
++            if i % 4096 == 0 && cancelled() {
++                return Err(RenderError::Cancelled);
++            }
+             let mut word = [0u8; 4];
+             word[..bytes.len()].copy_from_slice(bytes);
+             words.push(u32::from_le_bytes(word));
+@@ -162,14 +179,45 @@
+             .insert(a.id, (offset, a.data.clone(), a.width, a.height, a.format));
+         Ok((offset as u32, len))
+     }
+-    fn commands(&mut self, scene: &Scene) -> Result<(Vec<u32>, usize), String> {
++    fn commands(
++        &mut self,
++        scene: &Scene,
++        cancelled: &impl Fn() -> bool,
++    ) -> Result<(Vec<u32>, usize), RenderError> {
++        let full = scene
++            .assets()
++            .iter()
++            .try_fold(0usize, |n, a| n.checked_add((a.data.len() + 3) & !3))
++            .ok_or_else(|| "asset total".to_owned())?;
++        require(
++            scene.assets().len() <= MAX_CACHED_ASSETS && full <= ATLAS,
++            "complete atlas admission",
++        )?;
++        // Validate every retained identity before issuing any upload. A collision
++        // fails the whole job without publishing a partially composed scene.
++        for a in scene.assets() {
++            if cancelled() {
++                return Err(RenderError::Cancelled);
++            }
++            if let Some((_, bytes, w, h, format)) = self.cache.get(&a.id) {
++                require(
++                    *w == a.width && *h == a.height && *format == a.format && **bytes == *a.data,
++                    "asset identity collision",
++                )?;
++            }
++        }
+         let required = scene
+             .assets()
+             .iter()
+             .filter(|a| !self.cache.contains_key(&a.id))
+             .try_fold(0usize, |n, a| n.checked_add((a.data.len() + 3) & !3))
+-            .ok_or("asset total")?;
+-        if self.used.checked_add(required).is_none_or(|n| n > ATLAS) {
++            .ok_or_else(|| "asset total".to_owned())?;
++        let missing = scene
++            .assets()
++            .iter()
++            .filter(|a| !self.cache.contains_key(&a.id))
++            .count();
++        if reset_atlas(self.used, self.cache.len(), required, missing) {
+             // Every preceding render waited for its producer fence on this worker.
+             // Committed exported textures no longer depend on atlas contents.
+             self.cache.clear();
+@@ -178,12 +226,15 @@
+         let mut offsets = Vec::with_capacity(scene.assets().len());
+         let mut uploaded = 0;
+         for a in scene.assets() {
+-            let (offset, n) = self.asset(a)?;
++            let (offset, n) = self.asset(a, cancelled)?;
+             offsets.push(offset);
+             uploaded += n;
+         }
+         let mut out = Vec::with_capacity(scene.commands().len() * 12);
+-        for c in scene.commands() {
++        for (i, c) in scene.commands().iter().enumerate() {
++            if i % 256 == 0 && cancelled() {
++                return Err(RenderError::Cancelled);
++            }
+             out.extend_from_slice(&c[..7]);
+             out.push(if c[7] == u32::MAX {
+                 0
+@@ -201,16 +252,31 @@
+         Ok((out, uploaded))
+     }
+ }
+-impl Driver<Scene> for SceneDriver {
+-    type Resource = EglResource;
+-    fn render(
++impl SceneDriver {
++    /// Diagnostic only: no descriptor is admitted to a Wayland/event owner.
++    pub fn profile_offscreen(
+         &mut self,
+-        frame: &Frame<Scene>,
+-        cancelled: &Cancellation,
+-    ) -> Result<(EglResource, Descriptor), RenderError> {
+-        let scene = &frame.source;
++        scene: &Scene,
++        attempt_export: bool,
++    ) -> Result<(), RenderError> {
++        let (resource, _) = self.render_scene(scene, None, false, attempt_export)?;
++        drop(resource);
++        Ok(())
++    }
++    fn render_scene(
++        &mut self,
++        scene: &Scene,
++        cancellation: Option<&Cancellation>,
++        require_export: bool,
++        attempt_export: bool,
++    ) -> Result<(EglResource, Option<Descriptor>), RenderError> {
++        let cancelled = || cancellation.is_some_and(Cancellation::is_cancelled);
++        if cancelled() {
++            return Err(RenderError::Cancelled);
++        }
+         let started = Instant::now();
+-        let (commands, uploaded) = self.commands(scene)?;
++        let (commands, uploaded) = self.commands(scene, &cancelled)?;
++        let assets_done = Instant::now();
+         let tiles: Vec<u32> = scene.tiles().iter().flatten().copied().collect();
+         let c = self.context.clone();
+         let mut r = EglResource {
+@@ -224,7 +290,7 @@
+             // SAFETY: complete scene validates dimensions, all asset ranges,
+             // metadata lengths and tile coverage before admission. Every pointer
+             // refers to a live exact-length array during this synchronous upload.
+-            for (i, words) in [&commands[..], &tiles[..], &scene.indices()[..]]
++            for (i, words) in [&commands[..], &tiles[..], scene.indices()]
+                 .into_iter()
+                 .enumerate()
+             {
+@@ -244,6 +310,7 @@
+             for (i, buffer) in self.buffers.iter().enumerate() {
+                 (c.api.glBindBufferBase)(SSBO, i as u32, *buffer);
+             }
++            let metadata_done = Instant::now();
+             (c.api.glGenTextures)(1, &mut r.texture);
+             (c.api.glBindTexture)(TEX, r.texture);
+             (c.api.glTexParameteri)(TEX, 0x2801, 0x2600);
+@@ -259,7 +326,7 @@
+             (c.api.glUseProgram)(self.program);
+             (c.api.glUniform2ui)(self.extent, scene.width(), scene.height());
+             (c.api.glBindImageTexture)(0, r.texture, 0, 0, 0, 0x88b9, 0x8058);
+-            if cancelled.is_cancelled() {
++            if cancelled() {
+                 return Err(RenderError::Cancelled);
+             }
+             let submitted = Instant::now();
+@@ -268,54 +335,75 @@
+             // access. EGL fence then orders producer completion before handoff.
+             (c.api.glMemoryBarrier)(0x20 | 0x8 | 0x400);
+             require((c.api.glGetError)() == 0, "scene dispatch/barrier")?;
+-            r.image = (c.api.eglCreateImageKHR)(
+-                c.display,
+-                c.context,
+-                0x30b1,
+-                r.texture as usize as Handle,
+-                [0x30bc, 0, 0x30d2, 1, NONE].as_ptr(),
+-            );
+-            require(!r.image.is_null(), "scene EGLimage")?;
++            let dispatch_done = Instant::now();
+             let (mut fourcc, mut planes) = (0, 0);
+             let mut modifiers = [0u64; 4];
+-            require(
+-                (c.api.eglExportDMABUFImageQueryMESA)(
++            let (mut fd, mut stride, mut offset) = (-1, 0, 0);
++            let mut export_error = None;
++            let mut image_done = dispatch_done;
++            if attempt_export {
++                r.image = (c.api.eglCreateImageKHR)(
+                     c.display,
+-                    r.image,
+-                    &mut fourcc,
+-                    &mut planes,
+-                    modifiers.as_mut_ptr(),
+-                ) != 0,
+-                "scene export query",
+-            )?;
+-            require(
+-                planes == 1 && fourcc as u32 == u32::from_le_bytes(*b"AB24") && modifiers[0] == 0,
+-                "scene export AB24 linear",
+-            )?;
+-            let (mut fd, mut stride, mut offset) = (-1, 0, 0);
+-            let exported = (c.api.eglExportDMABUFImageMESA)(
+-                c.display,
+-                r.image,
+-                &mut fd,
+-                &mut stride,
+-                &mut offset,
+-            );
+-            if fd >= 0 {
+-                r.original = Some(OwnedFd::from_raw_fd(fd));
+-            }
+-            require(
+-                exported != 0 && r.original.is_some() && stride > 0 && offset >= 0,
+-                "scene descriptor",
+-            )?;
++                    c.context,
++                    0x30b1,
++                    r.texture as usize as Handle,
++                    [0x30bc, 0, 0x30d2, 1, NONE].as_ptr(),
++                );
++                image_done = Instant::now();
++                let export_result = (|| -> Result<(), String> {
++                    require(!r.image.is_null(), "scene EGLimage")?;
++                    require(
++                        (c.api.eglExportDMABUFImageQueryMESA)(
++                            c.display,
++                            r.image,
++                            &mut fourcc,
++                            &mut planes,
++                            modifiers.as_mut_ptr(),
++                        ) != 0,
++                        "scene export query",
++                    )?;
++                    require(
++                        planes == 1
++                            && (!require_export
++                                || (fourcc as u32 == u32::from_le_bytes(*b"AB24")
++                                    && modifiers[0] == 0)),
++                        "scene export AB24 linear",
++                    )?;
++                    let exported = (c.api.eglExportDMABUFImageMESA)(
++                        c.display,
++                        r.image,
++                        &mut fd,
++                        &mut stride,
++                        &mut offset,
++                    );
++                    if fd >= 0 {
++                        r.original = Some(OwnedFd::from_raw_fd(fd));
++                    }
++                    require(
++                        exported != 0 && r.original.is_some() && stride > 0 && offset >= 0,
++                        "scene descriptor",
++                    )?;
++                    Ok(())
++                })();
++                if let Err(error) = export_result {
++                    let code = (c.api.eglGetError)();
++                    if require_export {
++                        return Err(format!("{error}: EGL{code:#x}").into());
++                    }
++                    export_error = Some(format!("{error}: EGL{code:#x}"));
++                }
++            }
++            let export_done = Instant::now();
+             let sync = (c.api.eglCreateSyncKHR)(c.display, 0x30f9, ptr::null());
+             require(!sync.is_null(), "scene fence")?;
+             let fence = Fence {
+                 context: c.clone(),
+                 sync,
+             };
++            let fence_created = Instant::now();
+             let deadline = Instant::now() + Duration::from_secs(5);
+             loop {
+-                if cancelled.is_cancelled() {
++                if cancelled() {
+                     return Err(RenderError::Cancelled);
+                 }
+                 require(Instant::now() < deadline, "scene fence deadline")?;
+@@ -338,6 +426,7 @@
+                 pixels.as_mut_ptr().cast(),
+             );
+             require((c.api.glGetError)() == 0, "scene readback")?;
++            let readback_done = Instant::now();
+             require(
+                 pixels.len() == scene.expected().len(),
+                 "exact reference length",
+@@ -365,6 +454,24 @@
+                 )
+                 .into());
+             }
++            println!(
++                "{}",
++                serde_json::json!({"event":"scene_phases", "scene":scene.name(), "offscreen_only":!require_export, "export_attempted":attempt_export, "export_error":export_error,
++                "asset_staging_upload_ns":assets_done.duration_since(started).as_nanos(),
++                "metadata_staging_upload_ns":metadata_done.duration_since(assets_done).as_nanos(),
++                "texture_allocate_bind_ns":submitted.duration_since(metadata_done).as_nanos(),
++                "dispatch_submit_ns":dispatch_done.duration_since(submitted).as_nanos(),
++                "egl_image_ns":image_done.duration_since(dispatch_done).as_nanos(),
++                "export_ns":export_done.duration_since(image_done).as_nanos(),
++                "fence_create_ns":fence_created.duration_since(export_done).as_nanos(),
++                "fence_wait_destroy_ns":finished.duration_since(fence_created).as_nanos(),
++                "readback_ns":readback_done.duration_since(finished).as_nanos(),
++                "verify_ns":Instant::now().duration_since(readback_done).as_nanos(),
++                "format":fourcc,"modifier":modifiers[0],"descriptor_exported":r.original.is_some()})
++            );
++            if !require_export {
++                return Ok((r, None));
++            }
+             let desc = Descriptor {
+                 fd: r
+                     .original
+@@ -379,7 +486,40 @@
+                 fourcc: fourcc as u32,
+                 modifier: modifiers[0],
+             };
+-            Ok((r, desc))
+-        }
+-    }
+-}
++            Ok((r, Some(desc)))
++        }
++    }
++}
++
++impl Driver<Scene> for SceneDriver {
++    type Resource = EglResource;
++    fn render(
++        &mut self,
++        frame: &Frame<Scene>,
++        cancelled: &Cancellation,
++    ) -> Result<(EglResource, Descriptor), RenderError> {
++        let (resource, descriptor) =
++            self.render_scene(&frame.source, Some(cancelled), true, true)?;
++        Ok((resource, descriptor.expect("required export checked")))
++    }
++}
++
++fn reset_atlas(used: usize, entries: usize, additional: usize, new_entries: usize) -> bool {
++    used.checked_add(additional).is_none_or(|n| n > ATLAS)
++        || entries
++            .checked_add(new_entries)
++            .is_none_or(|n| n > MAX_CACHED_ASSETS)
++}
++#[cfg(test)]
++mod atlas_tests {
++    use super::*;
++    #[test]
++    fn tiny_assets_cannot_accumulate_unbounded_metadata() {
++        assert!(!reset_atlas(32768, 8192, 0, 0));
++        assert!(reset_atlas(32768, 8192, 4, 1));
++        assert!(reset_atlas(0, usize::MAX, 0, 1));
++        assert!(reset_atlas(usize::MAX, 0, 4, 0));
++        assert!(!reset_atlas(ATLAS - 4, 1, 4, 1));
++        assert!(reset_atlas(ATLAS - 4, 1, 8, 1));
++    }
++}
+--- a/src/egl.rs
++++ b/src/egl.rs
+@@ -40,8 +40,10 @@
+         #[allow(non_snake_case)]
+         impl Api {
+             fn load(path: &str) -> Result<Self, String> {
+-                // SAFETY: caller selects an EGL ABI library. The library stays
+-                // owned beside all copied function pointers until all objects die.
++                // SAFETY: caller selects an EGL ABI library. OnceLock pins its
++                // mapping for process lifetime, including late driver callbacks.
++                // The first load result is cached even on failure; a different
++                // library path cannot be selected later in this process.
+                 let library = library(path)?;
+                 // EGL 1.4 specifies this exact ABI; it is exported by libEGL.
+                 let get: GetProc = unsafe { *library.get::<GetProc>(b"eglGetProcAddress\0").map_err(|e| e.to_string())? };
+@@ -261,13 +263,23 @@
+                 "query devices",
+             )?;
+             require((0..=16).contains(&count), "device count")?;
+-            let device = devices[..count as usize]
+-                .iter()
+-                .copied()
+-                .find(|&device| {
+-                    string((c.api.eglQueryDeviceStringEXT)(device, 0x3377)) == render_node
+-                })
+-                .ok_or("requested render device absent")?;
++            let device = if let Some(index) = render_node.strip_prefix("egl-device-index:") {
++                // Explicit diagnostic selection when the vendor exposes a device
++                // platform but no DRM render-node string. This grants no FD access
++                // and makes no export/presentation capability claim.
++                let index: usize = index.parse().map_err(|_| "device index")?;
++                *devices[..count as usize]
++                    .get(index)
++                    .ok_or("device index absent")?
++            } else {
++                devices[..count as usize]
++                    .iter()
++                    .copied()
++                    .find(|&device| {
++                        string((c.api.eglQueryDeviceStringEXT)(device, 0x3377)) == render_node
++                    })
++                    .ok_or("requested render device absent")?
++            };
+             // Unknown optional device strings can set an EGL error; clear it.
+             (c.api.eglGetError)();
+             c.display = (c.api.eglGetPlatformDisplayEXT)(0x313f, device, ptr::null());
+--- a/src/egl_probe.rs
++++ b/src/egl_probe.rs
+@@ -1,5 +1,5 @@
++mod egl;
+ mod scene;
+-mod egl;
+ use hotaru_gpu_transport_prototype::{Limits, spawn};
+ use std::{
+     sync::Arc,
+--- /dev/null
++++ b/src/phase_probe.rs
+@@ -0,0 +1,49 @@
++mod egl;
++mod scene;
++use std::{path::Path, time::Instant};
++fn main() -> Result<(), String> {
++    let args: Vec<_> = std::env::args().collect();
++    if args.len() != 5 {
++        return Err(
++            "usage: scene-phase-probe LIBEGL SCENE_OR_DIRECTORY REPEATS attempt|skip".into(),
++        );
++    }
++    let repeats: usize = args[3].parse().map_err(|_| "repeats")?;
++    if repeats == 0 || repeats > 100 {
++        return Err("repeats bounds".into());
++    }
++    let attempt = match args[4].as_str() {
++        "attempt" => true,
++        "skip" => false,
++        _ => return Err("export policy".into()),
++    };
++    let lib = args[1].clone();
++    let path = Path::new(&args[2]);
++    let mut paths = if path.is_dir() {
++        std::fs::read_dir(path)
++            .map_err(|e| e.to_string())?
++            .filter_map(Result::ok)
++            .map(|p| p.path())
++            .filter(|p| p.extension().is_some_and(|e| e == "scene"))
++            .collect::<Vec<_>>()
++    } else {
++        vec![path.to_owned()]
++    };
++    paths.sort();
++    if paths.is_empty() || paths.len() > 64 {
++        return Err("fixture count".into());
++    }
++    // This standalone diagnostic has no UI or Wayland event owner. Driver and
++    // all resources are constructed/destroyed within this dedicated worker;
++    // joining it here is diagnostic process completion, not a product API.
++    std::thread::spawn(move || ->Result<(),String>{
++        let start=Instant::now();
++        let mut driver=egl::SceneDriver::new(&lib,"egl-device-index:0",None)?;
++        println!("{}",serde_json::json!({"event":"profile_driver_ready","setup_ns":start.elapsed().as_nanos(),"export_policy":if attempt{"attempt"}else{"skip"}}));
++        for path in paths {let scene=scene::Scene::load(&path)?;for iteration in 0..repeats{
++            println!("{}",serde_json::json!({"event":"profile_iteration","scene":scene.name(),"iteration":iteration,"source_bytes":scene.bytes()}));
++            driver.profile_offscreen(&scene,attempt).map_err(|e|format!("{e:?}"))?;
++        }}
++        drop(driver);println!("{}",serde_json::json!({"event":"profile_complete","offscreen_only":true}));Ok(())
++    }).join().map_err(|_|"worker panic".to_owned())?
++}
+--- a/src/scene.rs
++++ b/src/scene.rs
+@@ -95,7 +95,7 @@
+             || width > 8192
+             || height > 8192
+             || nc > 131072
+-            || na > 131072
++            || na > 8192
+             || ni > 4 << 20
+             || nt != width.div_ceil(16) as usize * height.div_ceil(16) as usize
+         {
+@@ -111,8 +111,12 @@
+         }
+         let mut assets = Vec::with_capacity(na);
+         let mut asset_bytes = 0usize;
++        let mut asset_ids = std::collections::HashSet::with_capacity(na);
+         for _ in 0..na {
+             let id = r.u64()?;
++            if !asset_ids.insert(id) {
++                return Err("duplicate asset identity".into());
++            }
+             let w = r.u32()?;
+             let h = r.u32()?;
+             let format = r.u32()?;
+--- a/src/wayland_probe.rs
++++ b/src/wayland_probe.rs
+@@ -1,6 +1,6 @@
+ //! Private compositor diagnostic; no desktop discovery and no scene renderer.
++mod egl;
+ mod scene;
+-mod egl;
+ use hotaru_gpu_transport_prototype::{
+     Committed, EventOwner, Import, Limits, WindowId, spawn_with_wake,
+ };

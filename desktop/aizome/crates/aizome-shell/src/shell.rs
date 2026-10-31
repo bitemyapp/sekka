@@ -53,6 +53,8 @@ pub enum Msg {
     /// The settings file changed.
     SettingsChanged,
     Run(Action),
+    Startup(crate::startup::Event),
+    ActivationExpired(ActivationRequest),
     Bar(WindowKey, BarMsg),
     Deskbar(crate::deskbar::DeskbarMsg),
     Palette(crate::palette::PaletteEvent),
@@ -144,6 +146,10 @@ pub enum Surface {
         output: u32,
     },
     Deskbar,
+    /// The width an edge drag would give the Deskbar, over it.
+    DeskbarPreview,
+    /// Where a drag of its grip would put the Deskbar, at the other edge.
+    DeskbarLanding,
     Palette,
     Panel,
     Osd,
@@ -154,6 +160,7 @@ pub enum Surface {
     TearOff(usize),
     Confirm,
     Cards,
+    Startup,
     /// The bell's flash.
     Flash,
 }
@@ -299,8 +306,9 @@ pub struct Shell {
     pub confirm: Option<crate::confirm::Confirm>,
     /// The session verb last carried out (tests: nothing happens).
     pub session_done: Option<SessionVerb>,
-    /// The critical notifications' cards, and how many.
-    pub cards: Option<(WindowKey, usize)>,
+    /// The critical notifications' cards, how many, and their margin at the
+    /// right.
+    pub cards: Option<(WindowKey, usize, f64)>,
     /// What the shell's own notifications' actions do.
     pub note_actions: HashMap<(u32, String), Action>,
     /// Actions to carry out once the update in hand is done.
@@ -312,6 +320,16 @@ pub struct Shell {
     /// The output the Deskbar was opened on: it opens again on the main
     /// display when that changes.
     pub(crate) deskbar_output: Option<u32>,
+    /// The edge the open Deskbar was anchored to.
+    pub(crate) deskbar_side: aizome_config::DeskbarSide,
+    /// An edge drag under way: the width at the press, and the pointer's x
+    /// then.
+    pub(crate) deskbar_resize: Option<(f64, f64)>,
+    /// The surface showing the width that drag would give, and the width.
+    pub(crate) deskbar_preview: Option<(WindowKey, f64)>,
+    /// A drag of the grip under way: the surface showing where the Deskbar
+    /// would land, and whether letting go now moves it there.
+    pub(crate) deskbar_landing: Option<(WindowKey, bool)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -353,7 +371,8 @@ pub struct Shell {
     /// What's shared (screen and window sharing), as the compositor says.
     pub(crate) shares: Vec<crate::sharing::Share>,
     pub text: aizome_kit::text::TextCache,
-    launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
+    pub(crate) launches: HashMap<ActivationRequest, (Launch, Option<PathBuf>)>,
+    pub(crate) startup: crate::startup::Startup,
     stream: Option<MsgSender<Msg>>,
     _settings_watch: Option<aizome_config::Watcher>,
     _apps_watch: Option<aizome_sys::apps::Watcher>,
@@ -440,6 +459,10 @@ impl Shell {
             deskbar_visibility: Default::default(),
             deskbar_transient: false,
             deskbar_output: None,
+            deskbar_side: aizome_config::DeskbarSide::Right,
+            deskbar_resize: None,
+            deskbar_preview: None,
+            deskbar_landing: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -464,6 +487,7 @@ impl Shell {
             shares: Vec::new(),
             text: aizome_kit::text::TextCache::default(),
             launches: HashMap::new(),
+            startup: Default::default(),
             stream: None,
             _settings_watch: None,
             _apps_watch: None,
@@ -644,6 +668,8 @@ impl Shell {
             output: screen.name(),
             recording: if primary { self.record_badge() } else { None },
             sharing: if primary { self.share_badge() } else { None },
+            header: self.header_width(),
+            deskbar_left: self.deskbar_cfg.side == aizome_config::DeskbarSide::Left,
         }
     }
 
@@ -834,6 +860,7 @@ impl Shell {
             }
             Action::NewWindow { app_id } => self.launch(Launch::App { app_id, targets: vec![] }, cx),
             Action::Spawn { argv } => self.launch(Launch::Argv(argv), cx),
+            Action::LaunchDetails { id } => self.show_startup(id, cx),
             Action::Open { path } => {
                 let l = crate::launch::open_path(self.apps.as_deref(), &path);
                 self.launch(l, cx);
@@ -849,6 +876,10 @@ impl Shell {
                 // input serial with which to raise itself across Desks.
                 self.focus_app_window(crate::launch::SETTEI);
                 self.launch(crate::launch::settings(&pane, anchor.as_deref()), cx);
+            }
+            Action::SetUpKeyboard { name, id } => {
+                self.focus_app_window(crate::launch::SETTEI);
+                self.launch(crate::launch::keyboard_setup(&name, &id), cx);
             }
             Action::Copy { text } => cx.set_clipboard_text(&text),
             Action::StatusMenuItem { key, id } => self.status_menu_item(&key, id),
@@ -880,6 +911,15 @@ impl Shell {
                 self.save_section("deskbar");
             }
             Action::MoveDeskbarApp { app_id, down } => self.move_deskbar_app(&app_id, down),
+            Action::PlaceDeskbar { side, width } => {
+                if let Some(s) = side {
+                    self.deskbar_cfg.side = s;
+                }
+                if let Some(w) = width {
+                    self.deskbar_cfg.width = crate::deskbar::clamp_width(w);
+                }
+                self.save_section("deskbar");
+            }
             Action::EmptyTrash => crate::launch::empty_trash(),
             Action::MoveToTrash { path } => {
                 if let Err(e) = crate::launch::move_to_trash(&path) {
@@ -957,6 +997,8 @@ impl Shell {
         }
         let req = cx.request_activation_token(l.app_id());
         self.launches.insert(req, (l, cwd));
+        // An unavailable activation-token protocol must not swallow a launch.
+        cx.after(Duration::from_secs(5), Msg::ActivationExpired(req));
     }
 
     pub(crate) fn save_section(&mut self, section: &str) {
@@ -1010,6 +1052,7 @@ impl Shell {
             // In a restart, ids go on well past the last the old shell gave,
             // as it may give a few more meanwhile.
             let skip = if previous.is_some() { 1000 } else { 0 };
+            let c = c.for_restore();
             self.notes.restore(c.notes, c.next_id + skip);
             self.folded = c.folded.into_iter().collect();
             self.notes_open = c.notes_open;
@@ -1143,12 +1186,14 @@ impl Shell {
                 self.wm.apply(&e);
                 match e {
                     Event::WindowOpened { window } => {
+                        self.startup_window(&window);
                         // Foot starts with its configured default palette.
                         // Once mapped, its signal handlers are ready and it
                         // can follow the current theme without a restart.
                         self.follow_foot(window.pid);
                     }
                     Event::ConfigChanged => self.reload_settings(),
+                    Event::WindowChanged { window } => self.startup_window(&window),
                     Event::Binding { action, pointer, output } => self.binding(&action, pointer, output, cx),
                     Event::Idle { kind } if kind == "lock" => self.lock(cx),
                     // The monitors went off for idleness: lock, unless the
@@ -1310,6 +1355,10 @@ impl Shell {
                 (true, String::new())
             }
             proto::ShellRequest::Open { what } => {
+                if what == "launches" {
+                    self.show_startup(None, cx);
+                    return (true, String::new());
+                }
                 let Some(screen) = self.primary().cloned() else { return (false, "no output".into()) };
                 let Some(bar) = screen.bar else { return (false, "no bar".into()) };
                 if let Some(w) = TrayWidget::named(&what) {
@@ -1403,6 +1452,10 @@ impl Shell {
             "pid": std::process::id(),
             // The notifications it keeps (summaries).
             "notes": self.notes.list.iter().map(|n| n.summary.clone()).collect::<Vec<_>>(),
+            "launches": self.startup.attempts.iter().map(|(id, a)| serde_json::json!({
+                "id": id, "name": a.name, "outcome": a.outcome, "window_observed": a.ready,
+                "journal_id": a.journal_id,
+            })).collect::<Vec<_>>(),
             "recording": self.recording_json(),
             "sharing": self.sharing_json(),
         })
@@ -1497,6 +1550,12 @@ impl Program for Shell {
             Msg::Located(found) => self.located(found),
             Msg::VolumeFeedback => self.play_feedback(),
             Msg::Run(a) => self.run(a, cx),
+            Msg::Startup(e) => self.startup_event(e, cx),
+            Msg::ActivationExpired(request) => {
+                if let Some((launch, cwd)) = self.launches.remove(&request) {
+                    self.startup_event(crate::startup::Event::Begin { launch, token: None, cwd }, cx);
+                }
+            }
             Msg::Bar(w, m) => self.bar(w, m, cx),
             Msg::Deskbar(m) => self.deskbar_msg(m, cx),
             Msg::Palette(e) => self.palette_event(e, cx),
@@ -1530,6 +1589,7 @@ impl Program for Shell {
             }
             Msg::Note(e) => self.take_note(e, cx),
             Msg::Carried(c) => {
+                let c = c.for_restore();
                 let added = self.notes.merge(c.notes);
                 if added > 0 {
                     log::info!("took in {added} notifications the old shell got meanwhile");
@@ -1584,6 +1644,8 @@ impl Program for Shell {
             }
             Some(Surface::Desktop { output }) => self.desktop_view(*output),
             Some(Surface::Deskbar) => crate::deskbar::view(&self.deskbar_model()).map(Msg::Deskbar),
+            Some(Surface::DeskbarPreview) => self.deskbar_preview_view(),
+            Some(Surface::DeskbarLanding) => self.deskbar_landing_view(),
             Some(Surface::Palette) => match self.palette_in(window) {
                 Some(p) => {
                     let inner = crate::palette::view::view(&self.palette_view_of(p), p.scroll)
@@ -1601,6 +1663,7 @@ impl Program for Shell {
             }
             Some(Surface::TearOff(i)) => self.tear_view(*i),
             Some(Surface::Cards) => crate::notifications::cards::view(&self.card_views()).map(Msg::Card),
+            Some(Surface::Startup) => self.startup_view(),
             Some(Surface::Flash) => crate::bell::view(),
             Some(Surface::Confirm) => match &self.confirm {
                 Some(c) => crate::confirm::view(c.verb, c.left, c.power).map(Msg::Confirm),
@@ -1638,6 +1701,9 @@ impl Program for Shell {
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if self.startup.window == Some(window) {
+            self.startup.window = None;
+        }
         if self.panel.as_ref().is_some_and(|p| p.window == window) {
             self.panel = None;
         }
@@ -1660,6 +1726,14 @@ impl Program for Shell {
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // A drag of its edge or grip can't end now.
+                self.end_deskbar_drags(cx);
+            }
+            if s == Surface::DeskbarPreview {
+                self.deskbar_preview = None;
+            }
+            if s == Surface::DeskbarLanding {
+                self.deskbar_landing = None;
             }
         }
         true
@@ -1672,6 +1746,12 @@ impl Program for Shell {
 
     fn pointer_presence(&mut self, window: WindowKey, inside: bool, cx: &mut Cx<Msg>) {
         if self.deskbar == Some(window) {
+            // While the button's down the pointer stays the Deskbar's: gone
+            // mid-drag, the compositor took it, and the release won't come.
+            // The edge or grip drag is over, its width or edge not taken.
+            if !inside {
+                self.end_deskbar_drags(cx);
+            }
             self.deskbar_hover(false, inside, cx);
             self.after_update(cx);
         }
@@ -1693,9 +1773,9 @@ impl Program for Shell {
         }
     }
 
-    fn activation_token(&mut self, request: ActivationRequest, token: Option<String>, _cx: &mut Cx<Msg>) {
+    fn activation_token(&mut self, request: ActivationRequest, token: Option<String>, cx: &mut Cx<Msg>) {
         if let Some((l, cwd)) = self.launches.remove(&request) {
-            crate::launch::start(self.apps.as_deref(), &l, token, cwd);
+            self.startup_event(crate::startup::Event::Begin { launch: l, token, cwd }, cx);
         }
     }
 
@@ -2046,6 +2126,16 @@ mod tests {
                 .values()
                 .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("keyboard.caps")) })
         );
+    }
+
+    #[test]
+    fn setting_up_a_keyboard_opens_settei_with_it_chosen() {
+        let (mut h, requests) = running_settings();
+        let (name, id) = ("Yubico YubiKey OTP+FIDO+CCID", "1050:0407");
+        h.send(Msg::Run(Action::SetUpKeyboard { name: name.into(), id: id.into() }));
+        assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 42 });
+        let want = crate::launch::keyboard_setup(name, id);
+        assert!(h.program().launches.values().any(|(launch, _)| *launch == want), "{:?}", h.program().launches);
     }
 
     #[test]

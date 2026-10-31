@@ -1,0 +1,58 @@
+{
+  "binary": "/nix/store/dkqws66ci8la92b6k2zsvkjy20a1yr71-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "dd780e65784fa7c85f9d2839c6d57f76e2ec36d4c25ef5f6f32e79c659e7bfb6",
+  "backend": "private headless Sway, pixman",
+  "scales": [
+    {
+      "scale": 1.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 11,
+      "cell_height_px": 24,
+      "rows": 28,
+      "cols": 114,
+      "pty_width_px": 1254,
+      "pty_height_px": 672
+    },
+    {
+      "scale": 1.25,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 14,
+      "cell_height_px": 30,
+      "rows": 21,
+      "cols": 89,
+      "pty_width_px": 1246,
+      "pty_height_px": 630
+    },
+    {
+      "scale": 2.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 22,
+      "cell_height_px": 49,
+      "rows": 11,
+      "cols": 56,
+      "pty_width_px": 1232,
+      "pty_height_px": 539
+    },
+    {
+      "scale": 1.0,
+      "family": "IBM Plex Mono",
+      "cell_width_px": 11,
+      "cell_height_px": 24,
+      "rows": 28,
+      "cols": 114,
+      "pty_width_px": 1254,
+      "pty_height_px": 672
+    }
+  ],
+  "fonts": {
+    "NotoColorEmoji.ttf": {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf",
+      "sha256": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d"
+    },
+    "NotoSansCJK-Regular.ttc": {
+      "path": "/nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc",
+      "sha256": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+    }
+  },
+  "status": "passed"
+}

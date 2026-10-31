@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Hotaru (Terminal)">
+  <title>Hotaru (Terminal)</title>
+  <rect x="4" y="4" width="60" height="60" fill="#0b0c12"/>
+  <rect width="60" height="60" fill="#24283b"/>
+  <rect x="1" y="1" width="58" height="1" fill="#ffffff" fill-opacity=".08"/>
+  <rect x=".5" y=".5" width="59" height="59" fill="none" stroke="#0b0c12"/>
+  <path d="M13 19l10 10-10 10" fill="none" stroke="#7aa2f7" stroke-width="4"/>
+  <path d="M27 42h17" stroke="#e0af68" stroke-width="3"/>
+  <path d="M41 24c-9-12-17-2-5 4m5-4c9-12 17-2 5 4" fill="none" stroke="#9aa5ce" stroke-width="2"/>
+  <path d="M39 18l-3-4m7 4l3-4" stroke="#c0caf5" stroke-width="2"/>
+  <ellipse cx="41" cy="27" rx="4" ry="9" fill="#c0caf5"/>
+  <path d="M37 29h8v3a4 4 0 01-8 0z" fill="#e0af68"/>
+</svg>

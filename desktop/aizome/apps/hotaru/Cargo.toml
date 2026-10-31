@@ -1,0 +1,30 @@
+[package]
+name = "aizome-hotaru"
+description = "Hotaru 蛍, Aizome's native terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+hotaru-link-regex = { path = "../../crates/hotaru-link-regex" }
+aizome-kit.workspace = true
+hotaru-sprites = { path = "../../../../apps/hotaru/crates/hotaru-sprites" }
+hotaru-core = { path = "../../../../apps/hotaru/crates/hotaru-core" }
+hotaru-io = { path = "../../../../apps/hotaru/crates/hotaru-io" }
+base64 = "0.22"
+libc = "0.2"
+log.workspace = true
+env_logger.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[[bin]]
+name = "aizome-hotaru"
+path = "src/main.rs"
+
+[features]
+# Isolated diagnostic: test-thread allocation counts; no production allocator change.
+shape-allocation-probe = []

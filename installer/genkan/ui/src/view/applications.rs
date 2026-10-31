@@ -19,7 +19,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         n => format!("{n} applications selected · Rustup also selects Development build tools"),
     };
     let intro = column![
-        text("Choose applications to have ready after installation. Any combination works, and you can sign in to your accounts later. Everything listed is already on this installation media.")
+        text("Choose applications to have ready after installation. The installer reuses software on the media and downloads anything missing. Applications marked “Internet required” are not included on the media.")
             .role(Role::Text2)
             .wrap(),
         search_field(&app.app_query)
@@ -47,6 +47,9 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         let needed = required.contains(&item.id);
         let blocked = item.unfree && !app.unfree;
         let mut control: Vec<Element<Msg>> = Vec::new();
+        if !item.preload {
+            control.push(badge("Internet required").role(Role::Cyan).into());
+        }
         if item.terminal.is_some() {
             control.push(badge("Terminal").role(Role::Cyan).into());
         }

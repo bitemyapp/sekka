@@ -69,6 +69,8 @@ pub enum Event {
     WindowFocus(bool),
     /// A tick the widget asked for came due ([`EventCx::request_tick`]).
     Tick,
+    /// A keyed, one-shot timer set by this widget. Keys are scoped to its node.
+    Timer(u32),
     /// Files or text dropped on the widget.
     Drop {
         pos: Point,
@@ -194,7 +196,7 @@ pub enum SemanticAction {
 
 /// A piece of interface that lays out, draws and answers input. See the
 /// module's documentation.
-pub trait Widget: 'static {
+pub trait Widget: std::any::Any {
     /// Its kind, for identity among unkeyed siblings and for debugging.
     fn name(&self) -> &'static str;
 
@@ -237,10 +239,29 @@ pub trait Widget: 'static {
         false
     }
 
+    /// Whether children may take the pointer at this local position.
+    /// A parent can reserve an overlapping control, such as a split's
+    /// grab area, before an interactive child consumes the gesture.
+    fn hit_children(&self, pos: Point) -> bool {
+        let _ = pos;
+        true
+    }
+
     /// Whether the pointer stops at it even if it doesn't take it (a
     /// filled panel over what's behind it).
     fn solid(&self) -> bool {
         self.hit()
+    }
+
+    /// Whether it takes only drags with the left button (an edge to resize
+    /// by, over rows that take clicks). A left press that ends without a
+    /// drag reaches what's under it as a click, once released. Other
+    /// buttons, the wheel and drops go straight there. It still shows its
+    /// cursor and hover, and what's under it shows its hover and tooltip
+    /// too. Its press ends if the pointer leaves the window meanwhile (the
+    /// compositor took it: the release won't come).
+    fn drags_only(&self) -> bool {
+        false
     }
 
     /// Whether hovering it changes how it draws.
@@ -275,6 +296,19 @@ pub trait Widget: 'static {
 
     fn semantics(&self) -> Option<Semantics> {
         None
+    }
+
+    /// The video it shows, if it's a video's place (see
+    /// [`widgets::video`](crate::widgets::video)), as last laid out: the
+    /// kit places the window's video there.
+    fn video(&self) -> Option<crate::widgets::video::VideoSpec> {
+        None
+    }
+
+    /// Whether it's drawn over the window's videos ([`over_video`](crate::widgets::video::over_video)):
+    /// a video it overlaps goes under the window's drawing.
+    fn over_video(&self) -> bool {
+        false
     }
 
     /// Carry out an Edit menu command (it has the focus): whether it did.
@@ -401,6 +435,7 @@ impl<'a> StateView<'a> {
 
 /// What layout, painting and events share.
 pub(crate) struct Env<'a> {
+    pub scale: f64,
     pub theme: &'a Theme,
     pub text: &'a mut TextCache,
     pub states: &'a mut StateMap,
@@ -426,6 +461,10 @@ pub struct LayoutCx<'a, 'e> {
 }
 
 impl LayoutCx<'_, '_> {
+    /// Device pixels per logical layout unit for this window.
+    pub fn scale(&self) -> f64 {
+        self.env.scale
+    }
     pub fn child_count(&self) -> usize {
         self.tree.nodes[self.node].children.len()
     }
@@ -531,6 +570,18 @@ impl LayoutCx<'_, '_> {
     pub fn request_tick(&mut self, after: Duration) {
         let id = self.id();
         self.tree.ticks.push((id, after));
+    }
+
+    pub fn is_focused(&self) -> bool {
+        self.env.focus == Some(self.id())
+    }
+
+    /// Replace this widget's timer at `key`. Independent of layout ticks.
+    pub fn set_timer(&mut self, key: u32, after: Duration) {
+        self.tree.widget_timers.push((self.id(), key, Some(after)));
+    }
+    pub fn cancel_timer(&mut self, key: u32) {
+        self.tree.widget_timers.push((self.id(), key, None));
     }
 
     /// Redraw `rect` (its own coordinates): what a widget whose drawing
@@ -664,6 +715,7 @@ pub(crate) struct Out {
     pub cursor: Option<Cursor>,
     pub ime: Option<(bool, Option<Rect>)>,
     pub ticks: Vec<(NodeId, Duration)>,
+    pub widget_timers: Vec<(NodeId, u32, Option<Duration>)>,
     pub menus: Vec<MenuRequest>,
     pub close_popup: bool,
     pub reveal: Option<(usize, Rect)>,
@@ -777,6 +829,11 @@ impl EventCx<'_, '_> {
         self.focused
     }
 
+    /// This widget owns keyboard focus in the active window.
+    pub fn has_keyboard_focus(&self) -> bool {
+        self.env.focus == Some(self.id())
+    }
+
     /// Whether nothing in the window has the focus (keys then go to what's
     /// under the pointer).
     pub fn nothing_focused(&self) -> bool {
@@ -828,6 +885,15 @@ impl EventCx<'_, '_> {
     pub fn request_tick(&mut self, after: Duration) {
         let id = self.id();
         self.out.ticks.push((id, after));
+    }
+
+    /// Replace this widget's one-shot timer at `key`. Only one is pending per
+    /// key; it is suspended when hidden and cancelled if the widget disappears.
+    pub fn set_timer(&mut self, key: u32, after: Duration) {
+        self.out.widget_timers.push((self.id(), key, Some(after)));
+    }
+    pub fn cancel_timer(&mut self, key: u32) {
+        self.out.widget_timers.push((self.id(), key, None));
     }
 
     pub fn clipboard_text(&mut self) -> Option<String> {

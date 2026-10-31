@@ -1007,7 +1007,6 @@ fn key_event(state: &mut State, name: u32, code: u32, down: bool) {
     let t = keymap.translate(&k.mods, code, compose);
     if t.modifier {
         k.modifier_key = code as u16;
-        return;
     }
     let key = Key {
         down,
@@ -1017,9 +1016,13 @@ fn key_event(state: &mut State, name: u32, code: u32, down: bool) {
         unmodified: t.unmodified,
         modifiers: k.flags | t.key_flags,
         composing: t.composing,
+        native: t.native,
     };
     let repeating = k.repeating.as_ref().map(|(c, _)| *c);
     state.send(FromRender::Key { window, key });
+    if t.modifier {
+        return;
+    }
     if down {
         if t.repeats {
             start_repeat(state, name, code);
@@ -1076,6 +1079,7 @@ fn repeat(state: &mut State, name: u32, code: u32) -> bool {
         unmodified: t.unmodified,
         modifiers: k.flags | t.key_flags,
         composing: None,
+        native: t.native,
     };
     state.send(FromRender::Key { window, key });
     true

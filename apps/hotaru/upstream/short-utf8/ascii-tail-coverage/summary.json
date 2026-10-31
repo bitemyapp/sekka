@@ -1,0 +1,18 @@
+{
+  "status": "coverage-only; not native-timed, not integrated",
+  "coverage": [
+    {
+      "calls": 38175,
+      "eligible": 1,
+      "rows": 12,
+      "bytes": 2097150
+    },
+    {
+      "calls": 152694,
+      "eligible": 3,
+      "rows": 80,
+      "bytes": 8388600
+    }
+  ],
+  "validation_scope": "Focused real Terminal.feed coverage test only; no full qualification claimed. Complete-tail successor has a separate full qualification."
+}

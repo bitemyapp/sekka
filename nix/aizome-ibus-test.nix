@@ -61,6 +61,12 @@ pkgs.testers.runNixOSTest {
       fi
     '';
     i18n.inputMethod.ibus.engines = [ pkgs.ibus-engines.hangul ];
+    # A daemon PID can appear while its unit is still activating. Exercise
+    # that readiness window deterministically, including under a quiet runner.
+    systemd.user.services."org.freedesktop.IBus.session.GNOME" = {
+      overrideStrategy = "asDropin";
+      serviceConfig.ExecStartPost = "${pkgs.coreutils}/bin/sleep 3";
+    };
     environment.systemPackages = [
       (chromeProbe pkgs)
       gtkProbe

@@ -12,6 +12,7 @@ use common::*;
 const SHIFT: u32 = 1;
 const CTRL: u32 = 4;
 const LOGO: u32 = 64;
+const KEY_A: u32 = 30;
 const KEY_C: u32 = 46;
 
 fn chord(c: &Compositor, keys: &str) {
@@ -20,16 +21,18 @@ fn chord(c: &Compositor, keys: &str) {
 
 #[test]
 fn super_becomes_ctrl_for_other_apps() {
-    let c = Compositor::start(Options::default());
-    let a = c.client(Spec::new("org.example.editor", 0x2222cc));
-    c.wait_window("org.example.editor");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "super+c");
-    let s = a.wait_seen("❖C as Ctrl+C", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
-    let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
-    assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL, "the app saw Ctrl, not Super: {mods:#x}");
-    // After the chord, nothing stays held.
-    a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+    for app_id in ["org.example.editor", "org.calamares.Other", "org.calamares.NixOSRust.Other"] {
+        let c = Compositor::start(Options::default());
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        chord(&c, "super+c");
+        let s = a.wait_seen("❖C as Ctrl+C", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
+        let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
+        assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL, "{app_id}: the app saw Ctrl, not Super: {mods:#x}");
+        // After the chord, nothing stays held.
+        a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+    }
 }
 
 #[test]
@@ -46,14 +49,20 @@ fn terminals_get_ctrl_shift() {
 
 #[test]
 fn kit_apps_keep_super() {
-    let c = Compositor::start(Options::default());
-    let a = c.client(Spec::new("org.aizome.Soroban", 0x2222cc));
-    c.wait_window("org.aizome.Soroban");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "super+c");
-    let s = a.wait_seen("❖C as is", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
-    let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
-    assert_eq!(*mods & (CTRL | LOGO), LOGO, "{mods:#x}");
+    // Genkan uses the kit while preserving its pre-kit desktop identity.
+    for app_id in ["org.aizome.Soroban", "org.calamares.NixOSRust"] {
+        let c = Compositor::start(Options::default());
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        for (keys, code) in [("super+a", KEY_A), ("super+c", KEY_C)] {
+            chord(&c, keys);
+            let s = a.wait_seen("command key unchanged", |s| s.keys.iter().any(|(k, _)| *k == code));
+            let (_, mods) = s.keys.iter().find(|(k, _)| *k == code).unwrap();
+            assert_eq!(*mods & (CTRL | LOGO | SHIFT), LOGO, "{app_id}: {keys}: {mods:#x}");
+            a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+        }
+    }
 }
 
 #[test]
@@ -119,7 +128,7 @@ fn system_chords_stay_with_the_system_and_shell_ones_go_to_subscribers() {
 }
 
 #[test]
-fn alt_super_brackets_switch_a_groups_tabs() {
+fn super_shift_brackets_switch_a_groups_tabs_and_ctrl_carries_them() {
     let c = Compositor::start(Options::default());
     let a = c.client(Spec::new("org.example.a", 0x2222cc));
     let wa = c.wait_window("org.example.a");
@@ -128,14 +137,28 @@ fn alt_super_brackets_switch_a_groups_tabs() {
     c.ok(Request::Stack { a: wa.id, b: wb.id });
     let shows = |id| move |ws: &[aizome_ipc::WindowInfo]| ws.iter().any(|w| w.id == id && w.group_active && w.focused);
     c.wait_windows("b shows", shows(wb.id));
-    // ⌥❖] from the last tab wraps round to the first; ⌥❖[ goes back.
-    chord(&c, "alt+super+]");
-    c.wait_windows("⌥❖] shows a", shows(wa.id));
-    chord(&c, "alt+super+[");
-    c.wait_windows("⌥❖[ shows b", shows(wb.id));
-    // The brackets stayed with the system (not Ctrl+Alt+[ for the apps).
+    // ❖⇧] from the last tab wraps round to the first; ❖⇧[ goes back.
+    chord(&c, "shift+super+]");
+    c.wait_windows("❖⇧] shows a", shows(wa.id));
+    chord(&c, "shift+super+[");
+    c.wait_windows("❖⇧[ shows b", shows(wb.id));
+    // ⌃⇧❖[ moves the showing tab left, stopping first; ⌃⇧❖] takes it back.
+    let order = |want: Vec<u64>| move |ws: &[aizome_ipc::WindowInfo]| ws.iter().all(|w| w.group_members == want);
+    chord(&c, "ctrl+shift+super+[");
+    c.wait_windows("b first", order(vec![wb.id, wa.id]));
+    c.settle();
+    keep(&c.screenshot(), "tab-moved-by-keys");
+    chord(&c, "ctrl+shift+super+[");
+    chord(&c, "ctrl+shift+super+]");
+    c.wait_windows("b last again, still showing", |ws| order(vec![wa.id, wb.id])(ws) && shows(wb.id)(ws));
+    // ⌃⇧❖S takes it out of the group; ⌃❖S stacks it with the one behind.
+    chord(&c, "ctrl+shift+super+s");
+    c.wait_windows("unstacked", |ws| ws.iter().all(|w| w.group.is_none()));
+    chord(&c, "ctrl+super+s");
+    c.wait_windows("stacked again", |ws| ws.iter().all(|w| w.group.is_some()) && shows(wb.id)(ws));
+    // The chords stayed with the system (not Ctrl+[ or Ctrl+S for the apps).
     for s in [a.seen(), b.seen()] {
-        assert!(!s.keys.iter().any(|(k, _)| *k == 26 || *k == 27), "a bracket reached an app: {:?}", s.keys);
+        assert!(!s.keys.iter().any(|(k, _)| [26, 27, 31].contains(k)), "a chord reached an app: {:?}", s.keys);
     }
 }
 
@@ -153,13 +176,15 @@ fn f10_opens_the_menu_bar_over_aizomes_apps_and_the_desktop() {
     // Nothing focused: the desktop.
     chord(&c, "f10");
     assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"));
-    // An Aizome app.
-    let a = c.client(Spec::new("org.aizome.Soroban", 0x2222cc));
-    c.wait_window("org.aizome.Soroban");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "f10");
-    assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"));
-    assert!(!a.seen().keys.iter().any(|(k, _)| *k == 68));
+    // Kit apps, including Genkan's preserved desktop identity.
+    for app_id in ["org.aizome.Soroban", "org.calamares.NixOSRust"] {
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        chord(&c, "f10");
+        assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"), "{app_id}");
+        assert!(!a.seen().keys.iter().any(|(k, _)| *k == 68), "{app_id}");
+    }
 }
 
 #[test]

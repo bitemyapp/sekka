@@ -1,0 +1,73 @@
+--- a/crates/hotaru-core/src/grapheme.rs
++++ b/crates/hotaru-core/src/grapheme.rs
+@@ -61,7 +61,10 @@
+         col: usize,
+         create: impl FnOnce() -> CompactString,
+         change: impl FnOnce(&mut CompactString),
+-    ) {
++    ) -> bool {
++        // Only changes to retained allocations affect the row's logical charge.
++        let capacity = self.0.capacity();
++        let owned_heap = self.1;
+         let index = match self.position(col) {
+             Ok(i) => i,
+             Err(i) => {
+@@ -75,6 +78,7 @@
+         let before = heap(text);
+         change(text);
+         self.1 = self.1 - before + heap(text);
++        capacity != self.0.capacity() || owned_heap != self.1
+     }
+     pub fn insert(&mut self, col: usize, text: CompactString) {
+         let charge = heap(&text);
+@@ -92,7 +96,7 @@
+             self.1 -= heap(&self.0.remove(i).1);
+         }
+     }
+-    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) {
++    pub fn retain(&mut self, mut keep: impl FnMut(&usize, &CompactString) -> bool) -> bool {
+         let mut removed = 0;
+         self.0.retain(|(col, text)| {
+             let yes = keep(col, text);
+@@ -102,6 +106,7 @@
+             yes
+         });
+         self.1 -= removed;
++        removed != 0
+     }
+     pub fn shift_right(&mut self, col: usize, count: usize, len: usize) {
+         let mut removed = 0;
+--- a/crates/hotaru-core/src/row.rs
++++ b/crates/hotaru-core/src/row.rs
+@@ -372,8 +372,9 @@
+         if !self.graphemes.is_empty() {
+             let first = if left { start - 1 } else { start };
+             let last = end + usize::from(right);
+-            self.graphemes.retain(|&col, _| col < first || col >= last);
+-            self.refresh_memory_charge();
++            if self.graphemes.retain(|&col, _| col < first || col >= last) {
++                self.refresh_memory_charge();
++            }
+         }
+         if self.links.is_some() {
+             self.set_hyperlink_range(
+@@ -423,7 +424,7 @@
+             col
+         };
+         let first = self.cells[col].character();
+-        self.graphemes.modify(
++        let allocation_changed = self.graphemes.modify(
+             col,
+             || {
+                 let mut text = CompactString::default();
+@@ -437,7 +438,9 @@
+                 }
+             },
+         );
+-        self.refresh_memory_charge();
++        if allocation_changed {
++            self.refresh_memory_charge();
++        }
+     }
+     /// Change the retained base cell's width while writing a new tail with the
+     /// current style/link. The base keeps its original style and cluster text.

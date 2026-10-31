@@ -1,0 +1,26 @@
+{
+  "status": "passed",
+  "decoder": "passed 656 synthetic marker checks",
+  "fixture": {
+    "status": "passed",
+    "writes": 30,
+    "startup_resize_repaint": true,
+    "real_pty_key_read": true,
+    "captured_bytes": 92932
+  },
+  "protocol": {
+    "status": "passed",
+    "scope": "empty private 640x480 pixman compositor, no application benchmark",
+    "captures": 7,
+    "start_stop_restart": true,
+    "virtual_keyboard_transport": true,
+    "no_host_configuration_changes": true
+  },
+  "startup_geometry_cases": 8,
+  "sources": {
+    "frame-benchmark.py": "a6ad849512939b5552be8ff103013bd0e84601c8a05f3f646cf27055d9bc978e",
+    "frame-observer.c": "15984ecdf70637b108ef255371da0539f3d141a6b2421c42f1c90c6adec311da",
+    "frame-observer-test.c": "a6748cc0f0b40e2ec9d8b152a020317fac17c05bf7f47fb7c1ce0dcce1a80744",
+    "frame-harness-check.py": "fcc3dbd6acb0a404eeb9ae56175a79928cabc963eb43946c0b750dd6cbd674a2"
+  }
+}

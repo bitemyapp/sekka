@@ -1,0 +1,84 @@
+{
+  "scope": "Exact software u32 framebuffer. Rasterized pixels count unique physical damage pixels, not glyph/blend operations. No timing claim.",
+  "frames": [
+    {
+      "offset": 1,
+      "differing_pixels": 0,
+      "copied_pixels": 401280,
+      "rasterized_pixels": 69120,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 3,
+      "differing_pixels": 0,
+      "copied_pixels": 380160,
+      "rasterized_pixels": 92160,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 2,
+      "differing_pixels": 0,
+      "copied_pixels": 401280,
+      "rasterized_pixels": 69120,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 4,
+      "differing_pixels": 0,
+      "copied_pixels": 380160,
+      "rasterized_pixels": 92160,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 0,
+      "differing_pixels": 0,
+      "copied_pixels": 337920,
+      "rasterized_pixels": 115200,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 5,
+      "differing_pixels": 0,
+      "copied_pixels": 316800,
+      "rasterized_pixels": 161280,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 7,
+      "differing_pixels": 0,
+      "copied_pixels": 380160,
+      "rasterized_pixels": 69120,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 6,
+      "differing_pixels": 0,
+      "copied_pixels": 401280,
+      "rasterized_pixels": 23040,
+      "total_pixels": 614400,
+      "moves": 1
+    },
+    {
+      "offset": 0,
+      "differing_pixels": 0,
+      "copied_pixels": 295680,
+      "rasterized_pixels": 138240,
+      "total_pixels": 614400,
+      "moves": 1
+    }
+  ],
+  "totals": {
+    "differing_pixels": 0,
+    "copied_pixels": 3294720,
+    "rasterized_pixels": 829440,
+    "total_pixels": 5529600,
+    "moves": 9
+  }
+}

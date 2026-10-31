@@ -92,6 +92,8 @@ recovery (what Ctrl+Alt+Del opens)
   recovery reset-input | restart-shell | reload-compositor | lock | log-out
            | text-console      the overlay's other actions
   input-state                   grabs, pressed buttons and keys, constraint
+  keyboards                     the keyboards that type (name, vendor:product,
+                                connection), the one that typed last marked *
   debug-stall SECONDS           block the compositor's main loop (at most
                                 60 s) to try the watchdog
 
@@ -439,6 +441,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
         "lock" => Request::Lock,
         "quit" => Request::Quit,
         "input-state" => Request::InputState,
+        "keyboards" => Request::Keyboards,
         "debug-stall" => {
             need(&args, 1, "how many seconds")?;
             Request::DebugStall { seconds: args[0].parse().map_err(|_| format!("not a number: {}", args[0]))? }
@@ -699,6 +702,13 @@ fn print_response(r: &Response) -> ExitCode {
             println!("cursor hidden: {}", state.cursor_hidden);
             println!("pointer focus: {}", state.pointer_focus.as_deref().unwrap_or("none"));
             println!("keyboard focus: {}", state.keyboard_focus.as_deref().unwrap_or("none"));
+        }
+        Response::Keyboards { keyboards } => {
+            for k in keyboards {
+                let bus =
+                    serde_json::to_value(k.bus).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
+                println!("{} {}  {}  {bus}", if k.last { "*" } else { " " }, k.id, k.name);
+            }
         }
         Response::Spawned { pid } => println!("{pid}"),
         Response::Shares { shares } => {
@@ -1040,6 +1050,11 @@ fn describe_event(e: &Event) -> String {
         Event::SharesChanged { shares } => match shares.len() {
             0 => "shares none".into(),
             n => format!("shares {n}: {}", shares.iter().map(|s| s.id.to_string()).collect::<Vec<_>>().join(" ")),
+        },
+        Event::KeyboardAdded { keyboard } => format!("keyboard-added {} {}", keyboard.id, keyboard.name),
+        Event::KeyCaught { tag, code, keyboard } => match keyboard {
+            Some(k) => format!("key-caught {tag} {code} on {} {}", k.id, k.name),
+            None => format!("key-caught {tag} {code}"),
         },
     }
 }

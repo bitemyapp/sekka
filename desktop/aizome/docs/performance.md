@@ -128,11 +128,21 @@ table. Sekka's DEVELOPERS.md ("Intel page flips") describes the fix.
 | Myaku | A new reading (600 processes) | 2.61 | 2.99 | within |
 | | A click on a row | 0.20 | 0.30 | within |
 | | Scrolling the table | 0.29 | 0.34 | within |
+| Nisshi | Messages arriving live (108,000 read) | 2.4–2.7 | 3.0–6.3 | within |
+| | A click on a row | 0.72–0.76 | 1.2–1.6 | within |
+| | Scrolling the table | 0.16–0.17 | 0.19–0.21 | within |
+| | A character typed in search (4,000 messages, filtered at once) | 2.2 | 3.5–3.8 | within |
+| | Search applied to 108,000 messages, once typing pauses | 5.9–6.9 | | over (see Nisshi) |
 | Shashin | Showing a fitted 3000 × 2000 photo | 3.30 | 3.68 | within (10) |
 | | Panning at 100% | 3.25 | 3.56 | within (10) |
 | | Pinching † | 2.81–2.84 | 3.22–3.65 | within (10) |
 | | A zoom step, ❖+ ❖− (live, 6000 × 4000 JPEG) | 1.2–1.5 | 1.6–2.2 | within (10) |
 | | The next picture † | 2.48–3.25 | 2.70–3.73 | within |
+| Shiori ‡ | Scrolling a wheel's notch | 0.09 | 0.11–0.15 | within |
+| | Moving the pointer over text | 0.00 | 0.00 | within |
+| | Page Down, a window of new tiles | 1.22–1.38 | 1.68–1.73 | within (11) |
+| | A zoom step, ❖+, to a zoom not drawn yet | 4.25–4.43 | 4.38–4.60 | **at** (12) |
+| | Pinching, a step from pages drawn sharp | 3.46–3.49 | 3.96–4.02 | within (12) |
 | Annai | A frame of a scene | 0.43 | 0.57 | within |
 | | Turning a page | 1.00 | 1.09 | within |
 | Greeter (login screen) | Typing a password | 0.06 | 0.07 | within |
@@ -217,6 +227,39 @@ summary of six or seven frames is in effect its largest frame.
     photo used to free its 24 MB of pixels on the window's thread). One
     frame of forty, the first pinch step below 100%, takes about 22 ms, not
     yet explained.
+11. **Nisshi's search over a large boot**: applying a search to 108,000
+    messages takes 5.9–6.9 ms (3.4 ms of it filtering, the rest drawing
+    every row anew). *Accepted*: past 30,000 messages it runs once, 80 ms
+    after typing pauses, while each character typed costs 0.1 ms. Below
+    that, where it runs at each character, a desktop's 4,000 messages take
+    2.2 ms (p95 3.5–3.8).
+
+11. **Shiori's Page Down** (measured 28 October 2026, not with the rest:
+    release, not thin LTO, `apps/shiori/tests/budget.rs`): p50 3.19 ms,
+    p95 3.77 ms at load average 2 to 3; at load average 10.5 it was 5.74 and
+    7.96 ms, over the budget. It shows a 2880 × 1800 window of tiles never
+    drawn before, so all of it is drawn: Shiori's own part is 0.04 ms, the
+    rest the toolkit copying 21 MB of new pixels one to one, which the
+    load slows. The test measures the window with the drawings already
+    made, so the engine drawing them (PDFium then, hayro now) isn't in it.
+    Scrolling, which moves what was drawn, is 0.17 ms; a canvas that drew
+    everything took 9.9 ms a notch. See `docs/shiori.md`.
+    Measured again on 29 October 2026 at load average 1 to 2 (two runs):
+    Page Down p50 1.22–1.38, p95 1.68–1.73 ms; a notch 0.09 ms.
+12. **Shiori's zooms** (29 October 2026, as (11), load average 1 to 2,
+    two runs): a zoom step p50 4.25–4.43, p95 4.38–4.60 ms, *at* the
+    budget; pinching p50 3.46–3.49, p95 3.96–4.02 ms. Every pixel of the
+    window changes: Shiori makes what stands in for the tiles not drawn at
+    the new zoom from those it has (2.2–2.7 ms of it, on up to 16 threads,
+    into buffers it uses again), and the toolkit copies it one to one.
+    When the window scaled the drawings itself as it drew, bicubic and on
+    one thread, the same test took 382 ms at p50 and 508 ms at p95 for a
+    step, and 357 and 474–479 ms for pinching. The worker's new drawings
+    replace the stand-ins as they come: on a 4K window of A4 pages, the
+    tiles in view were sharp 35–53 ms after the key. See `docs/shiori.md`.
+
+‡ Measured on 29 October 2026 under the conditions of (11) and (12), not
+in the 18 October run.
 
 Within the budget now, though written up below as exceptions earlier:
 Hako's preview column (↓ p95 2.44 ms), Tenki's choosing a place (p95
@@ -867,6 +910,68 @@ row change each second). Resident memory 36.6 MB.
 
 No exceptions.
 
+## Nisshi (Logs)
+
+Measured on 29 October 2026 on runnymede (AMD Ryzen 9 9950X3D, 16 cores),
+release builds of the `aizome-logs` branch, with Aizome's fonts. Another
+session's Aizome build shared the machine: the one-minute load average was
+14–19 throughout. The harness rows print the time taken and the processor
+time the frame's thread used beside it. At this load the two can differ,
+when the scheduler pauses a frame, and the test holds the processor time to
+the budget. In these runs they agreed to within a few per cent.
+
+The window with 108,110 messages (`apps/nisshi/tests/perf.rs`, the made-up
+boot 190 times over, 2×, rasterising each damaged rectangle), three runs:
+
+| | p50 | p95 | |
+|---|---|---|---|
+| Ten messages arriving live | 2.4–2.7 ms | 3.0–6.3 ms | n=60 |
+| A click on a row | 0.72–0.76 ms | 1.2–1.6 ms | n=30 |
+| Scrolling the table (44pt steps) | 0.16–0.17 ms | 0.19–0.21 ms | n=30 |
+| A character typed in search (the field alone) | 0.10–0.11 ms | 0.14–0.20 ms | n=16 |
+| The search applied once typing pauses (filtering and drawing) | 5.9–6.9 ms | | n=3 |
+| Filtering alone (no drawing) | 3.35–3.38 ms | 3.4–3.6 ms | n=7 |
+
+Measured again once the other session's build had finished (load 0.7),
+after terminal colours were added: every row within the ranges above.
+
+With 3,983 messages, a desktop's boot (this one's had 3,629), search
+filters at each character: 2.2 ms at the median and 3.5–3.8 ms at the
+95th percentile, most of it drawing the rows that changed (n=24, two runs).
+Taking in all 107,510 messages at once and making the first view took
+32 ms.
+
+What keeps it there:
+
+- journalctl's JSON is parsed on the reader's thread, with only the
+  fields the list uses (a message's others are read when it's selected),
+  and sources, units and boots shared between messages. Each message is
+  classified once there (a crash, a login).
+- A cursor is kept in parts (its sequence and boot are shared): about a
+  third of the text's size.
+- Live messages are added to the view rather than the view made again.
+  The messages shown are kept in chunks of 4,096 shared with the table, so
+  an arrival copies at most one chunk the last frame still holds, not
+  every row. The timeline is counted from a compact list of times.
+- The overview's suggestions (errors by source, failed units, crashes,
+  out-of-memory kills) are tallied as the view is made. The message so
+  frequent it hides the rest is found in a sample of 4,000 rows and then
+  counted.
+- Search finds plain words with a substring search (memchr's, or
+  aho-corasick's ignoring ASCII case) rather than a regular expression.
+  What a word decides of a source's or a unit's name is remembered for
+  the view, since names are shared.
+- A selection's topics, which run patterns over everything its source
+  wrote, are counted 30 ms after the selection shows.
+- Past 30,000 messages search waits 80 ms after the last character before
+  it filters.
+
+### Exceptions
+
+- Applying a search to 108,000 messages takes 5.9–6.9 ms, over the 4 ms
+  budget. It runs once, when typing pauses, not at each character. Below
+  30,000 messages, where it does run at each character, it's within.
+
 ## Shashin (Images)
 
 Headlessly, `apps/shashin/tests/budget.rs` (`cargo test --release -p
@@ -924,6 +1029,57 @@ five-second summary (24.7/30.8 ms before), damage 93%. Pinching, at 4.6 ms
 p95 in the harness (not measured live), is the one interaction left above
 the budget.
 
+
+## Utsushi (Media Player)
+
+A player's budget is power more than frame time: what wakes the machine,
+how often, and what the GPU and the compositor do per frame. Utsushi's
+answers (`docs/apps.md`, Utsushi) are frames shown as decoded, nothing
+decoded out of sight, long audio cycles and a window that redraws a
+digit a second; these are the measurements.
+
+On 28 October, on the X1 Carbon (Intel Core Ultra 7 365, Xe graphics,
+the iHD VA-API driver 26.3.5), the installed Aizome compositor running
+headless at 1920 × 1080 on its GPU (GLES), each player in turn, release
+builds, CPU time and context switches (the sum over the process's
+threads) over 30 seconds after six of settling, sound off (Utsushi's null
+output, mpv's `--ao=null`). A 1080p24 H.264 file at 6 Mbit/s:
+
+| Player | Player CPU | Switches/s | Compositor CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi (VA-API, dmabufs) | 1.2% | 115 | 1.5% | 92 |
+| mpv `--hwdec=vaapi --vo=dmabuf-wayland` | 2.2% | 405 | 1.1% | 79 |
+| mpv `--hwdec=vaapi --vo=gpu-next` | 3.5% | 376 | 1.7% | 127 |
+| mpv with Sekka's `mpv.conf` | 11.3% | 401 | 1.2% | 79 |
+
+Utsushi's switches per thread: the render thread 61 a second (each frame
+is a message in, then its presentation feedback and release back), the
+video thread 34, the null output's 50 ms cycles 20 (PipeWire's in normal
+use), the interface 9.5 (ticks were four a second then; now one). The
+same headless setup over 10 seconds for other codecs, 1080p24 at
+3–4 Mbit/s: HEVC Main 10 (P010 dmabufs) 1.3% and 89 switches a second,
+VP9 1.0% and 86, AV1 1.0% and 86, all with every frame presented and
+none dropped. AV1 was 9.1% before Utsushi chose FFmpeg's own AV1 decoder
+(which uses VA-API) over libdav1d (which can't).
+
+Music, a 3-minute 192 kbit/s MP3 at 44.1 kHz, muted, PipeWire otherwise
+idle, the daemon's switches counted too:
+
+| Player | Player CPU | Switches/s | PipeWire CPU | Switches/s |
+|---|---|---|---|---|
+| Utsushi | 0.4% | 46 | 0.2% | 50 |
+| mpv `--no-video` | 1.0% | 246 | 0.3% | 99 |
+
+Utsushi's stream asked for 8192-frame cycles but got PipeWire's cap,
+2048 at 48 kHz (`clock.max-quantum`, before Aizome's module raised it to
+8192); its data thread woke 91 times a second, about four per cycle.
+
+Headless, the compositor composes every frame for every player: these
+numbers don't include display planes, which only a KMS backend has, and
+which only lower the compositor's share for a player whose video is the
+topmost surface (Utsushi's, while nothing covers the picture). Not yet
+measured: whole-system power on battery (`/sys/class/power_supply`
+over minutes, screen on, live session), which is the number that matters.
 
 ## Annai (Welcome)
 

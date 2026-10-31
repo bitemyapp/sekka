@@ -1,0 +1,47 @@
+437: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3318) = 0
+524: 2311678 +++ exited with 0 +++
+534: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33f8) = 0
+842: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2928) = 0
+976: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2ef0) = 0
+987: 2311663 close(8<anon_inode:sync_file>)  = 0
+991: 2311663 close(8<anon_inode:sync_file>)  = 0
+992: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac1e00) = 0
+997: 2311663 close(8<anon_inode:sync_file>)  = 0
+999: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2ef0) = 0
+1037: 2311663 close(9<UNIX-STREAM:[15392152->15389397]>) = 0
+1039: 2311663 close(8</dmabuf:>)              = 0
+1046: 2311663 close(8<anon_inode:sync_file>)  = 0
+1048: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2e70) = 0
+1058: 2311663 close(8<anon_inode:sync_file>)  = 0
+1062: 2311663 close(8<anon_inode:sync_file>)  = 0
+1063: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2ef0) = 0
+1064: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac2ef0) = 0
+1069: 2311663 close(8</proc/2311663/maps>)    = 0
+1072: 2311663 close(8<anon_inode:sync_file>)  = 0
+1075: 2311699 +++ exited with 0 +++
+1076: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1080: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1082: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1086: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1088: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1092: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1094: 2311692 +++ exited with 0 +++
+1098: 2311663 close(8<anon_inode:sync_file>)  = 0
+1100: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac1d60) = 0
+1104: 2311691 +++ exited with 0 +++
+1105: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1109: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1111: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1115: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1117: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33c0) = 0
+1121: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac3378) = 0
+1123: 2311687 +++ exited with 0 +++
+1124: 2311686 +++ exited with 0 +++
+1131: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1141: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1145: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1180: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1198: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1202: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac32d0) = 0
+1210: 2311663 ioctl(5</dev/dri/renderD128<char 226:128>>, DRM_IOCTL_SYNCOBJ_DESTROY, 0x7ffcd5ac33f8) = 0
+1216: 2311663 +++ exited with 0 +++

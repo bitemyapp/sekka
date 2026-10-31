@@ -1,0 +1,2 @@
+00:00:00.001 [ERROR] [sway/main.c:62] !!! Proprietary Nvidia drivers are in use !!!
+00:00:00.014 [ERROR] [wlr] [xwayland/sockets.c:63] Failed to bind socket @/tmp/.X11-unix/X0: Address already in use

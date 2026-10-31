@@ -413,11 +413,26 @@ impl InputExt for State {
                     self.stack_with_behind(id);
                 }
             }
+            Action::Unstack => {
+                if let Some(id) = focused {
+                    self.unstack(id, None);
+                }
+            }
             Action::PrevTab | Action::NextTab => {
                 if let Some(id) = focused
                     && let Some(tab) = self.lg.r().wm.neighbour_tab(id, action == Action::NextTab)
                 {
                     self.show_group_member(tab);
+                }
+            }
+            Action::MoveTabLeft | Action::MoveTabRight => {
+                if let Some(id) = focused {
+                    self.move_tab(id, action == Action::MoveTabRight);
+                }
+            }
+            Action::WindowMenu => {
+                if let Some(id) = focused {
+                    crate::overlays::marking::open_from_keys(self, id);
                 }
             }
             Action::Fullscreen => {
@@ -426,11 +441,8 @@ impl InputExt for State {
                 }
             }
             Action::Terminal => {
-                let argv = self.az.settings.keys.terminal.clone();
                 let cwd = self.desk_folder();
-                if let Err(e) = self.spawn(&argv, cwd) {
-                    tracing::warn!("{e}");
-                }
+                aizome_comp_core::terminal::spawn(&self.az, cwd);
             }
             Action::TerminalClose | Action::TerminalQuit => {
                 // Match the shell's fallback Close/Quit: a polite close

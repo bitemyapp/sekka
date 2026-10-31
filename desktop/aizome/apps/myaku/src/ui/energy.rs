@@ -34,8 +34,8 @@ fn sources(f: &Frame) -> Vec<Element<Msg>> {
         if rapl { "Shared among applications by processor use." } else { "No RAPL reading is available to Myaku." },
         rapl,
     )];
-    // Match the sampler's first readable AMD integrated package meter.
-    let package = f.gpus.iter().position(|g| g.integrated && g.driver == "amdgpu" && g.power.is_some());
+    // Match the sampler's first readable package meter (an AMD APU's).
+    let package = f.gpus.iter().position(|g| g.package_meter && g.power.is_some());
     let names = model::gpu_names(&f.gpus);
     for i in model::gpu_order(&f.gpus) {
         let g = &f.gpus[i];
@@ -49,8 +49,10 @@ fn sources(f: &Frame) -> Vec<Element<Msg>> {
             }
         } else if p.meter == Meter::Package && package == Some(i) {
             ("Counting", "Includes the processor package; shared by processor use.", true)
-        } else if g.driver == "amdgpu" && rapl {
+        } else if g.package_meter && rapl {
             ("Not counted", "RAPL already measures the processor package.", false)
+        } else if g.driver == "amdgpu" {
+            ("Not counted", "Measures these integrated graphics alone, not the processor package.", false)
         } else {
             ("Not counted", "Integrated graphics are not counted as a separate energy meter.", false)
         };

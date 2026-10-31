@@ -1,0 +1,462 @@
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-pixel-scroll-isolated/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-a1c90e2d28c0fa28)
+
+running 25 tests
+test font::tests::benchmark_row_preparation ... ignored, serial worker preparation diagnostic; run only under shared workstation lock
+test font::tests::frame_retention_charge_saturates_instead_of_admitting_wrapped_sizes ... ok
+test clipboard::tests::cancelled_copy_never_prepares_or_publishes_mime_data ... ok
+test input::tests::fractional_cell_coordinates_do_not_drift ... ok
+test input::tests::paste_cannot_terminate_its_bracket ... ok
+test input::tests::native_layout_identity_is_kept_distinct_from_physical_identity ... ok
+test links::tests::changed_frames_movement_or_cell_cancel_the_owned_gesture ... ok
+test links::tests::targets_are_validated_without_rewriting_or_shell_interpretation ... ok
+test panes::tests::closing_nested_pane_preserves_sibling_identity_and_order ... ok
+test session::tests::resize_control_child ... ignored
+test session::tests::search_capture_and_navigation_coalesce_independently_under_input_saturation ... ok
+test settings::tests::rejects_invalid_settings_and_typographical_errors ... ok
+test terminal_view::cursor_tests::cursor_priority_matches_ghostty_renderer ... ok
+test settings::tests::configured_binding_replaces_a_default_without_stealing_control_c ... ok
+test settings::tests::saving_is_atomic_and_preserves_managed_symlinks ... ok
+test session::tests::latest_resize_and_colors_survive_a_full_input_queue ... ok
+test font::tests::whole_content_search_projects_wide_and_soft_wrapped_highlights_on_worker ... ok
+test font::tests::row_cache_reuses_moved_rows_and_preserves_frame_and_link_ownership ... ok
+test search::tests::newer_capture_keeps_logical_selection_until_its_frame_arrives ... ok
+test search::tests::late_refresh_cannot_restore_expired_active_copy_and_fatal_actor_cancels_capture ... ok
+test search::tests::refresh_started_before_navigation_cannot_overwrite_its_selection ... ok
+test terminal_view::scroll_retention_tests::prior_frame_admission_is_bounded_and_preserves_snapshot_identity ... ok
+test font::tests::row_cache_context_limits_cancellation_and_metadata_are_complete ... ok
+test terminal_view::scroll_retention_tests::hidden_window_retains_only_its_last_admitted_view_and_releases_it_on_show ... ok
+test font::tests::row_cache_matches_uncached_seeded_snapshot_transitions ... ok
+
+test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running unittests src/main.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-260c09b761b64a03)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cursor.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/cursor-3e8e9bdc3adf27a6)
+
+running 2 tests
+test wide_cursor_ime_and_physical_scale_remain_cell_aligned ... ok
+test cursor_shapes_blink_focus_input_and_damage_are_native ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/native.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/native-57905fbb9e481480)
+
+running 27 tests
+test input_protocol_child ... ignored
+test osc8_mouse_child ... ignored
+test packaged_color_emoji_rasterizes_in_the_terminal_grid ... ignored, requires pinned HOTARU_FONT_DIR; run font fixture suite explicitly
+test reply_flood_child ... ignored
+test search_history_child ... ignored
+test newer_copies_win_and_closed_panes_cannot_publish_results ... ok
+test find_navigates_owned_history_and_wraps_in_both_directions ... ok
+test tabs_keep_independent_terminal_snapshots ... ok
+test native_settings_changes_are_saved_and_invalid_reload_preserves_current_configuration ... ok
+test splits_have_independent_snapshots_and_close_only_the_focused_pane ... ok
+test pty_worker_publishes_final_output_before_exit ... ok
+test native_sessions_choose_unicode_grapheme_width_before_output ... ok
+test pty_worker_encodes_keyboard_and_mouse_using_negotiated_modes ... ok
+test osc8_gesture_consumes_both_mouse_edges_and_preserves_other_clicks ... ok
+test html_only_copy_has_no_stale_plain_text_fallback ... ok
+test actor_accepts_local_cwd_without_overwriting_an_explicit_title ... ok
+test obsolete_searches_and_closed_panes_cannot_replace_the_active_query ... ok
+test explicit_terminal_background_is_rendered_even_when_it_matches_the_builtin_default ... ok
+test internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory ... ok
+test large_copy_finishes_off_thread_and_stale_reply_is_ignored ... ok
+test night_and_day_views_render_with_native_chrome ... ok
+test output_scale_recomputes_physical_grid_without_logical_resize ... ok
+test semantic_underlines_use_their_own_color_and_overline_is_visible ... ok
+test reply_flood_resumes_without_losing_responses ... ok
+test osc8_super_click_uses_displayed_cell_and_recorded_desktop_opener ... ok
+test find_soft_wrap_wide_text_and_copy_use_complete_owned_match ... ok
+test find_retains_historical_anchors_through_append_and_recovers_after_alternate_and_reflow ... ok
+
+test result: ok. 22 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+     Running tests/pixel_scroll.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/pixel_scroll-a44adb0226254ac7)
+
+running 4 tests
+offset=1: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+offset=3: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 92160, total_pixels: 614400, moves: 1 }
+offset=2: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+offset=4: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 92160, total_pixels: 614400, moves: 1 }
+offset=0: ExactFrameCheck { differing_pixels: 0, copied_pixels: 337920, rasterized_pixels: 115200, total_pixels: 614400, moves: 1 }
+offset=5: ExactFrameCheck { differing_pixels: 0, copied_pixels: 316800, rasterized_pixels: 161280, total_pixels: 614400, moves: 1 }
+test selection_find_and_link_hover_never_leave_copied_overlays ... ok
+offset=7: ExactFrameCheck { differing_pixels: 0, copied_pixels: 380160, rasterized_pixels: 69120, total_pixels: 614400, moves: 1 }
+offset=6: ExactFrameCheck { differing_pixels: 0, copied_pixels: 401280, rasterized_pixels: 23040, total_pixels: 614400, moves: 1 }
+offset=0: ExactFrameCheck { differing_pixels: 0, copied_pixels: 295680, rasterized_pixels: 138240, total_pixels: 614400, moves: 1 }
+test clipped_negative_origins_and_covering_siblings_are_exact ... ok
+test row_scroll_preserves_exact_pixels_and_reduces_raster_work ... ok
+test scale_resize_palette_and_ime_choose_safe_repaint_paths ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.43s
+
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_kit-a3539505de315a03)
+
+running 32 tests
+test ahead::tests::bands_cover_the_window_on_whole_device_pixels ... ok
+test ahead::tests::what_changed_stays_a_few_rectangles_or_is_all_of_it ... ok
+test editing::tests::characters_are_graphemes ... ok
+test editing::tests::words_skip_spaces_and_punctuation ... ok
+test editor::tests::find_and_replace ... ok
+test editor::tests::lines_indent_and_outdent ... ok
+test editor::tests::positions_are_lines_and_columns ... ok
+test hash::tests::hashes_are_stable_and_spread ... ok
+test editor::tests::newlines_keep_the_indent_and_deletions_take_words ... ok
+test icons::tests::attributes_are_found_by_whole_name ... ok
+test editor::tests::typing_and_undo_in_bursts ... ok
+test icons::tests::strokes_follow_size ... ok
+test layout::tests::alignment_rounds_to_points ... ok
+test layout::tests::constraints_clamp_and_shrink ... ok
+test menu::tests::labels_print_modifiers_in_aizome_order ... ok
+test menu::tests::shortcuts_match_keys_and_modifiers ... ok
+test menu::tests::control_commands_match_and_label_nested_menus ... ok
+test menu::tests::standard_menus_do_not_offer_unimplemented_settings ... ok
+test menu::tests::the_standard_bar_has_the_standard_menus ... ok
+test shell::tests::app_owned_settings_and_help_keep_their_declared_states ... ok
+test shell::tests::published_menus_keep_their_ids ... ok
+test theme::tests::sizes_scale_metrics_but_keep_targets ... ok
+test shell::tests::unsupported_standard_roles_are_unavailable_in_native_and_published_menus ... ok
+test theme::tests::auto_follows_the_sun_where_it_is_asked_to ... ok
+test theme::tests::appearance_parses_what_it_knows ... ok
+test widgets::menus::tests::title_strips_are_drawn_as_the_menus_board_draws_them ... ok
+test urls::tests::bounded_admission_recovers_after_spawn_errors ... ok
+
+thread 'aizome-open-url' (605927) panicked at crates/aizome-kit/src/urls.rs:303:21:
+fixture completion panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test icons::tests::every_icon_parses_inside_its_grid ... ok
+test urls::tests::dropping_launcher_cancels_queued_requests_without_waiting ... ok
+test urls::tests::completion_releases_capacity_and_panic_does_not_kill_worker ... ok
+test text::tests::a_paragraph_cut_at_its_line_limit_ends_in_an_ellipsis ... ok
+test urls::tests::child_exit_is_reaped_and_reported_without_shell_evaluation ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/alert_layout.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/alert_layout-e171ccefbe3ca602)
+
+running 4 tests
+test compact_actions_stay_in_a_row_until_the_window_needs_a_stack ... ok
+test short_windows_scroll_actions_into_view_for_keyboard_and_pointer ... ok
+test long_labels_wrap_even_with_only_two_actions_and_after_resize ... ok
+test four_actions_keep_complete_labels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/canvas.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/canvas-00392ab8e356db5d)
+
+running 1 test
+test only_parts_that_change_are_drawn_again ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/collections.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/collections-0979a893c4f58c9f)
+
+running 3 tests
+test column_edges_drag ... ok
+test outlines_open_by_their_triangles_and_keys ... ok
+test tables_build_only_rows_in_sight_and_sort_by_their_headers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/core.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/core-c4aeaa1afddc4ddb)
+
+running 13 tests
+test a_changed_text_redraws_its_old_and_new_place ... ok
+test columns_stretch_across_and_align ... ok
+test text_limited_to_lines_wraps_up_to_them ... ok
+test tab_walks_the_focus_chain_skipping_what_cant_be_used ... ok
+test a_picture_drawn_smaller_is_scaled_once_and_looks_the_same ... ok
+test menu_shortcuts_send_their_messages ... ok
+test rows_share_leftover_room_by_portion ... ok
+test toggling_redraws_the_switch_and_nothing_else ... ok
+test hovering_redraws_only_what_it_touches ... ok
+test window_sizes_are_the_contents_under_an_in_window_menu_bar ... ok
+test keys_find_their_widget_after_a_rebuild ... ok
+test focus_after_opening_a_window_goes_to_that_window ... ok
+test containers_pad_and_place_their_child ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/dialogs.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/dialogs-b3d633b5a38a39d0)
+
+running 9 tests
+test save_panels_take_a_name_and_escape_cancels ... ok
+test multiple_open_rejects_mixed_or_multiple_folders_and_recovers ... ok
+test single_open_still_selects_one_and_multiple_cancel_returns_nothing ... ok
+test return_uses_selection_after_command_click_toggles_the_cursor_off ... ok
+test multiple_open_navigates_one_folder_and_can_choose_several_folders ... ok
+test alerts_answer_return_and_escape_and_block_what_is_behind ... ok
+test sheets_show_the_programs_view_and_close ... ok
+test multiple_open_keeps_the_range_when_confirming_or_pressing_return ... ok
+test open_panels_list_navigate_and_choose ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/drag_out.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/drag_out-cd166f9a3bfe7b6f)
+
+running 4 tests
+test a_mouse_area_drags_out_past_a_few_points ... ok
+test list_rows_drag_out_as_the_selection_or_the_row ... ok
+test rejected_native_drags_do_not_report_a_start ... ok
+test program_started_drags_report_their_source_and_id ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/editor.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/editor-cba31051a5b2ef8f)
+
+running 13 tests
+test clicks_select_words_and_lines_and_the_clipboard_works ... ok
+test clicks_the_program_takes_leave_the_caret ... ok
+test find_items_reach_the_program ... ok
+test typing_redraws_its_line_not_the_editor ... ok
+test an_editor_as_the_board ... ok
+test typing_newlines_and_undo ... ok
+test moving_by_words_lines_and_the_document ... ok
+test offscreen_search_mark_changes_do_not_redraw_visible_lines ... ok
+test the_programs_jumps_are_shown_with_what_comes_before ... ok
+test search_marks_add_move_and_clear_without_changing_text_or_selection ... ok
+test input_methods_compose_in_place ... ok
+test current_search_mark_repaints_without_moving_the_selection ... ok
+test long_documents_lay_out_only_what_shows ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests/field_blur.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/field_blur-ca665be515a24308)
+
+running 1 test
+test clicking_elsewhere_ends_editing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/goldens.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/goldens-9d099f3c626fd1d0)
+
+running 7 tests
+test a_menu_from_the_in_window_bar ... ok
+test lists_tables_and_outlines ... ok
+test controls_hovered_pressed_and_focused ... ok
+test a_settings_pane_in_day ... ok
+test fields_and_text ... ok
+test an_editor_at_scale_two ... ok
+test controls_in_night_and_day ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/hidden.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/hidden-3f64195ece970c02)
+
+running 1 test
+test a_window_drawn_ahead_shows_its_picture_and_draws_only_what_changed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/inspect.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/inspect-db1dd3cda40daadf)
+
+running 3 tests
+test elements_carry_their_names_texts_places_and_states ... ok
+test an_icon_button_is_named_by_its_tooltip_and_a_text_button_by_its_text ... ok
+test a_segmented_control_names_its_segments_where_they_are ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/lists.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/lists-06c273908f6aebb2)
+
+running 8 tests
+test scrolling_moves_rows_without_viewing_again ... ok
+test a_selection_without_the_focus_keeps_its_text_readable ... ok
+test shift_and_command_clicks_select_several ... ok
+test scroll_bars_drag ... ok
+test clicks_and_keys_select ... ok
+test a_program_reveals_a_row_when_it_names_another ... ok
+test tabbing_into_a_hidden_control_scrolls_it_into_view ... ok
+test only_the_rows_that_show_are_built ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/menu_hooks.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/menu_hooks-073485f689d0530a)
+
+running 5 tests
+test a_launchers_menu_hands_typing_over ... ok
+test submenus_tear_off_with_their_place ... ok
+test menus_are_frosted_where_the_effects_are_full ... ok
+test a_menu_says_when_it_closes_however_it_closes ... ok
+test a_bars_menus_follow_the_arrows_across_its_titles ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/modal_commands.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/modal_commands-681341987334997d)
+
+running 5 tests
+test commands_are_scoped_to_the_target_window ... ok
+test opening_a_modal_dismisses_armed_background_menus ... ok
+test modal_text_editing_and_its_dropdown_still_work ... ok
+test alert_blocks_app_shortcuts_native_close_and_undo_fallback ... ok
+test shell_activation_rechecks_scope_and_publishes_dismissal ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/nested_modals.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/nested_modals-a306e0cee8bbaea5)
+
+running 4 tests
+test stacked_alerts_restore_only_the_uncovered_layer ... ok
+test top_alert_receives_pointer_and_blocks_editor ... ok
+test covered_focus_cannot_receive_text_or_ime_and_is_restored ... ok
+test top_alert_owns_default_cancel_and_tab ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/panes.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/panes-3bdbd0cd64de2147)
+
+running 5 tests
+test mouse_areas_hover_and_take_drops ... ok
+test an_editor_toolbar_as_the_board ... ok
+test popovers_open_with_their_state_and_dismiss ... ok
+test day_and_large_rethemes_everything ... ok
+test a_settings_pane_draws_and_answers ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/perf.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/perf-8841dfc0ffe549c4)
+
+running 1 test
+test interactions_stay_within_four_milliseconds ... ignored, a measurement for docs/kit.md, run in a release build
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/popups.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/popups-0fc6f80d3a007800)
+
+running 1 test
+test a_popover_follows_its_anchor ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/program_popups.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/program_popups-770714fce590e11d)
+
+running 1 test
+test a_program_popup_opens_over_its_parent_and_shows_its_view ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/scroll_growth.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/scroll_growth-4693f1d0656c585a)
+
+running 1 test
+test rows_added_after_showing_can_be_scrolled_to ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/scrolling.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/scrolling-b0f6a6158cde758d)
+
+running 6 tests
+test something_drawn_over_a_list_has_it_drawn_whole ... ok
+test an_outline_moves_its_rows ... ok
+test a_table_moves_its_rows_and_its_header_sideways ... ok
+test a_scroll_view_moves_its_content ... ok
+test a_list_moves_its_rows_and_draws_the_strip ... ok
+test an_editor_moves_its_lines ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/shell_api.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/shell_api-a9c1f3e29a1f37df)
+
+running 6 tests
+test locking_opens_a_surface_per_output_and_unlocking_closes_them ... ok
+test layer_surfaces_open_move_and_draw_see_through ... ok
+test menus_draw_as_the_boards ... ok
+test menus_from_a_surface_answer_the_keyboard ... ok
+test menus_follow_the_pointer_and_clicks ... ok
+test typing_in_a_menu_filters_it_through_its_submenus ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/shell_link.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/shell_link-aff8166ef98c4743)
+
+running 4 tests
+test drops_reach_mouse_areas_that_take_them ... ok
+test menus_go_to_the_shell_and_its_choices_come_back ... ok
+test without_a_shell_the_menu_bar_is_in_the_window ... ok
+test a_shell_that_comes_late_gets_the_menus_and_one_that_goes_gives_them_back ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/smoke.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/smoke-820fdaf5cf669899)
+
+running 1 test
+wrote /home/callen/.cache/hotaru-aizome-target/tmp/smoke.png
+test controls_draw_and_answer ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/text_drag.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/text_drag-402b9d4baa8e6c99)
+
+running 2 tests
+test a_fields_selection_drags_out_but_a_passwords_never ... ok
+test the_editors_selection_drags_out_as_text ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/text_field.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/text_field-e7b8d3f989f76083)
+
+running 8 tests
+test undo_takes_back_a_burst_of_typing_at_once ... ok
+test typing_moving_and_deleting ... ok
+test clicks_place_the_caret_and_double_clicks_select_words ... ok
+test selecting_copying_and_pasting ... ok
+test a_starting_selection_is_typed_over_once ... ok
+test passwords_show_dots_and_dont_copy ... ok
+test search_fields_clear ... ok
+test input_methods_compose_then_commit ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/tooltip_refresh.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/tooltip_refresh-d116fc8d3405ed17)
+
+running 8 tests
+test removed_pending_tooltip_cannot_appear_later ... ok
+test removed_shown_tooltip_closes_without_rehover ... ok
+test ancestor_text_and_nearest_source_changes_refresh_same_hot_child ... ok
+old (95, 22), stationary (132, 22), expected (132, 22); pixels unchanged=false
+test shown_tooltip_tracks_async_state_change_with_stationary_pointer ... ok
+test added_tooltip_starts_delay_without_pointer_movement ... ok
+test pending_text_change_preserves_original_deadline_and_uses_current_text ... ok
+test unchanged_rebuilds_and_pointer_moves_do_not_restart_or_reopen_tooltips ... ok
+test pending_source_change_restarts_delay_and_moving_off_closes_it ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/widget_timers.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/widget_timers-aa320dbb82e849a3)
+
+running 2 tests
+test unkeyed_same_name_type_replacement_ends_state_and_timer_lifetime ... ok
+test keyed_timers_are_bounded_suspend_and_reject_stale_node_callbacks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/window_state.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/window_state-62a118b7c9e2bd21)
+
+running 2 tests
+test full_screen_is_asked_for_and_told_once_per_change ... ok
+test pinches_reach_the_widget_under_them ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests aizome_hotaru
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aizome_kit
+
+running 3 tests
+test crates/aizome-kit/src/lib.rs - (line 10) - compile ... ok
+test crates/aizome-kit/src/program.rs - program::Program (line 26) - compile ... ok
+test crates/aizome-kit/src/testing.rs - testing (line 7) - compile ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.50s; merged doctests compilation took 0.50s

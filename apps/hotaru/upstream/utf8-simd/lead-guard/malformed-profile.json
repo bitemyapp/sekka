@@ -1,0 +1,700 @@
+{
+  "schema": 1,
+  "scope": "Diagnose malformed UTF-8 scaling; this is not general performance acceptance.\n\nCompare state and replies to pinned Ghostty, then time exact frozen Rust builds\nserially on one CPU. Input sizes deliberately grow by four to distinguish a\nlinear decode from repeated suffix scanning. No rendering/history is measured.\n",
+  "grapheme_width_method": "legacy",
+  "cpu_affinity": [
+    0
+  ],
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "tool_sha256": "64aa29f0d3dd5fd4f01a63ac773c23911a41d7e978b33b854294eb67574c50e0",
+  "builds": [
+    {
+      "metadata": "/home/callen/work/hotaru-utf8-cache-only-build.json",
+      "sha256": "896347036ee4cc67ab741b52d611a2d1f30522547da3c4f8765c3cb7a53ae0b3",
+      "source_sha256": "aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57",
+      "binary_sha256": "cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e",
+      "revision": "current-combined-std-utf8-cached-span"
+    },
+    {
+      "metadata": "/home/callen/work/hotaru-simdutf8-leading-byte-build.json",
+      "sha256": "151a0c68650ac4e46140d74344bdeb3c5375ef416b758a036c0451114af532ae",
+      "source_sha256": "b31be3e6b31cc0bef1e8d4c160e528875297f38a1594e1e29f1073a403f30923",
+      "binary_sha256": "4883799dc540aae9366abf2b467f48ffcfed15555c98e9c4a1c81c99868574e6",
+      "revision": "current-combined-vendored-simdutf8-leading-byte-guard"
+    }
+  ],
+  "results": [
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "3613fe38ee97a2e4ad813b646bcac9122f9e76704c273a50479d6726cb3d8888",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          88564,
+          70497,
+          70176,
+          73572,
+          76555,
+          70747,
+          77167,
+          74593,
+          74102,
+          72199,
+          70847,
+          70517
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          64287,
+          60421,
+          59219,
+          63906,
+          60311,
+          60752,
+          62915,
+          59910,
+          60251,
+          63536,
+          60993,
+          60742
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 72885.5,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 60747.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "a7250f2625d4252dadcf8d45ce4a56f8b61f9bc484cb4854cbb2e3646d624443",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          246163,
+          245932,
+          246203,
+          279453,
+          287686,
+          280444,
+          251551,
+          248967,
+          247825,
+          249638,
+          244851,
+          243278
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          212081,
+          210419,
+          209887,
+          213013,
+          237730,
+          247214,
+          219783,
+          210248,
+          211330,
+          215276,
+          208795,
+          207904
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 248396.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 211705.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-lead",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "e9fd102a3a29df3b5541ece2297ac0b5078267d60611afe0e4b1636b9bd091a2",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          988776,
+          994194,
+          1001446,
+          1027194,
+          1019012,
+          1017129,
+          1053955,
+          1038412,
+          1042217,
+          1023749,
+          1018021,
+          1014845
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          858019,
+          841012,
+          851579,
+          855395,
+          856005,
+          852971,
+          910358,
+          863858,
+          843897,
+          862956,
+          854873,
+          880062
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 1018516.5,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 855700.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "6d30f96d1f913862947a9b414c496cf6294f88215ea8250a2b0ebbae452e44d7",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          57146,
+          54212,
+          54463,
+          55614,
+          53441,
+          58869,
+          56655,
+          54492,
+          54282,
+          59910,
+          56425,
+          57537
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          66451,
+          61973,
+          62094,
+          67041,
+          62795,
+          62415,
+          65329,
+          67602,
+          61744,
+          66330,
+          62795,
+          62605
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 56019.5,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 62795.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "375c0e271af90cbe483e7b7c43a1a7ece24e1290608fb22e7f976f1734f00827",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          215446,
+          217860,
+          219352,
+          219882,
+          226382,
+          220974,
+          214544,
+          219171,
+          212011,
+          227304,
+          226322,
+          223989
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          250559,
+          247325,
+          253704,
+          254135,
+          249528,
+          254955,
+          252202,
+          263589,
+          247355,
+          265992,
+          256868,
+          256288
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 219617.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 253919.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-two-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "bc62f9612305dc9f4c7059af0d0ab990d3a6cf50c97c4932d06e73f10880918b",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          860722,
+          871438,
+          898269,
+          898739,
+          927964,
+          908194,
+          896707,
+          897108,
+          935396,
+          896757,
+          878138,
+          871589
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          1016388,
+          1014876,
+          1020033,
+          1030219,
+          1023569,
+          1033684,
+          1016057,
+          1017770,
+          1008776,
+          1011010,
+          1005552,
+          1008986
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 896932.5,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 1016222.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4099,
+      "sha256": "97cca00e52f3e787d677bc17e5692cd97a66d8e4d9223d7a16a54c9cd9143360",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          67702,
+          59109,
+          58499,
+          63677,
+          58879,
+          58659,
+          65118,
+          66721,
+          60451,
+          61413,
+          58629,
+          57978
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          65409,
+          57507,
+          57307,
+          63185,
+          58829,
+          58729,
+          64247,
+          58509,
+          58298,
+          63686,
+          59660,
+          59359
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 59780.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 59094.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16387,
+      "sha256": "a648742d416fd36eba90e2580cdc6190b2b33ed50190184d1982d8346e7cb77e",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          245411,
+          232762,
+          231681,
+          230629,
+          226102,
+          225732,
+          234806,
+          231821,
+          231821,
+          231300,
+          238391,
+          230950
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          242978,
+          233934,
+          233303,
+          237780,
+          235136,
+          235406,
+          241605,
+          238651,
+          244770,
+          239182,
+          233884,
+          241486
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 231751.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 238215.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-three-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65539,
+      "sha256": "91e14be0bb1a177161bee3693f985922b73d30bf1acdc8945c518bd9b90ac6eb",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          957659,
+          941184,
+          942646,
+          963418,
+          958090,
+          946923,
+          994905,
+          993453,
+          1021626,
+          952822,
+          922336,
+          928325
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          967514,
+          993944,
+          1027114,
+          1006302,
+          1076810,
+          1049469,
+          959291,
+          968605,
+          963779,
+          957018,
+          959302,
+          962847
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 955240.5,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 968059.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 4096,
+      "input_bytes": 4100,
+      "sha256": "af7d04fd0ebc7de4aeeb9dfbbd203b7f09e6f1d70eb83e36d073a6055c7f4619",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          62654,
+          59019,
+          58559,
+          60642,
+          58328,
+          58429,
+          62244,
+          65379,
+          58488,
+          61483,
+          58819,
+          58749
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          60712,
+          56515,
+          55685,
+          61162,
+          56836,
+          55995,
+          60802,
+          58268,
+          57166,
+          61213,
+          56856,
+          56365
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 58919.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 57011.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 16384,
+      "input_bytes": 16388,
+      "sha256": "cce5d5bc8e6d47616f50215fea987e116dc40ce2fde950d367f4682d73216746",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          240083,
+          232632,
+          233313,
+          232372,
+          229927,
+          233804,
+          234906,
+          230990,
+          231971,
+          232502,
+          232131,
+          236979
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          236087,
+          225862,
+          225111,
+          229828,
+          223668,
+          224260,
+          234736,
+          226723,
+          225862,
+          231891,
+          226793,
+          231269
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 232567.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 226758.0
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    },
+    {
+      "name": "invalid-four-byte",
+      "requested_invalid_bytes": 65536,
+      "input_bytes": 65540,
+      "sha256": "fea3aa4b8a551162c0efdaf74150b51f76a3e2a0d1722cccf36708ba7c9e2b83",
+      "rows": 12,
+      "cols": 120,
+      "chunk_bytes": 65536,
+      "history": 0,
+      "samples_ns": {
+        "current-combined-std-utf8-cached-span": [
+          965691,
+          964650,
+          985571,
+          970468,
+          960894,
+          957408,
+          980814,
+          995997,
+          979532,
+          1007885,
+          999934,
+          1003559
+        ],
+        "current-combined-vendored-simdutf8-leading-byte-guard": [
+          961345,
+          947134,
+          965481,
+          994535,
+          945210,
+          950458,
+          931299,
+          915805,
+          919442,
+          925410,
+          915715,
+          914835
+        ]
+      },
+      "median_feed_ns": {
+        "current-combined-std-utf8-cached-span": 980173.0,
+        "current-combined-vendored-simdutf8-leading-byte-guard": 938254.5
+      },
+      "process_order": [
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-std-utf8-cached-span",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-vendored-simdutf8-leading-byte-guard",
+        "current-combined-std-utf8-cached-span"
+      ],
+      "state_matched": true,
+      "response_bytes": 8
+    }
+  ]
+}

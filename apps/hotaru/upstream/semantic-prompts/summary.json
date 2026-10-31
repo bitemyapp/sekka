@@ -1,0 +1,27 @@
+{
+  "status": "qualified-core-slice",
+  "product_parent_revision": "e9c6581b95c189040704664aba1486287c4bba85",
+  "native_source_sha256": "54ceb66cb7fde4d5edcccfd66b32c588f7af4a02cf381b7846d5c5036ed05267",
+  "native_binary_sha256": "23967d024171bc0403d6280c53e4692e203e981371d7a57b0d0fefc0a4cea2d5",
+  "verified_product_source_files": 116,
+  "fixture_sha256": "4dff8cf96a2c69477a5a1e81d5ac2f5a8095aab07e6e65b2309fe89bc45f2fc2",
+  "fixture_expectations": 610,
+  "fixture_chunk_replays": 1830,
+  "final_adversarial_actual_library_comparisons": 3120,
+  "decaln_common_state_comparisons": 54,
+  "workspace_debug": {
+    "passed": 160,
+    "failed": 0,
+    "ignored": 2
+  },
+  "workspace_release": {
+    "passed": 160,
+    "failed": 0,
+    "ignored": 2
+  },
+  "clippy": "strict workspace all-targets passed",
+  "miri": "four strict-provenance ASCII-store tests; unchanged store implementation, before later DECALN/guard changes",
+  "native_benchmark_cases": 40,
+  "native_gui_or_nix_package_qualified": false,
+  "remaining": "Full shell integration, semantic selection/navigation, feature/performance parity and final combined native package remain open."
+}

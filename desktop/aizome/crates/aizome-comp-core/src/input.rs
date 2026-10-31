@@ -68,6 +68,7 @@ impl State {
     pub fn process_input<B: InputBackend>(&mut self, event: InputEvent<B>) {
         match event {
             InputEvent::Keyboard { event } => {
+                self.key_from(Some(&event.device().id()));
                 let pressed = event.state() == KeyState::Pressed;
                 self.keyboard_key(event.key_code().raw().saturating_sub(8), pressed, event.time_msec());
             }
@@ -345,6 +346,24 @@ impl State {
         if crate::recovery::pointer_button(self, button, pressed) {
             return;
         }
+        // A surface may have opened or moved under a stationary pointer
+        // (the Deskbar reopens at the other edge after its grip is let go).
+        // A fresh press needs that surface's enter and local coordinates,
+        // not the last motion's now-stale target. Existing grabs and active
+        // constraints keep their target, including on additional presses.
+        if pressed
+            && let Some(pointer) = self.az.seat.get_pointer()
+            && !pointer.is_grabbed()
+        {
+            let constrained = pointer.current_focus().is_some_and(|f| {
+                let mut active = false;
+                with_pointer_constraint(&f.0, &pointer, |c| active = c.is_some_and(|c| c.is_active()));
+                active
+            });
+            if !constrained {
+                self.pointer_motion_absolute(self.az.pointer_pos, time);
+            }
+        }
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.pointer_button)(st, button, pressed, time));
         } else {
@@ -449,6 +468,19 @@ impl State {
         }
         // A swallowed press swallows its release.
         if !pressed && self.az.suppressed_keys.remove(&keycode) {
+            return Decision::Swallow;
+        }
+        // A key someone asked for (Settei's keyboard setup): which it was,
+        // and on which keyboard, for the asker alone; the app hears nothing
+        // of it.
+        if pressed
+            && !self.az.lock.is_locked()
+            && let Some((tag, conn)) = self.az.keyboards.catch.take()
+            && self.az.ipc.is_subscribed(conn)
+        {
+            self.az.suppressed_keys.insert(keycode);
+            let keyboard = self.az.keyboards.sending();
+            self.az.ipc.emit_to(conn, &aizome_ipc::Event::KeyCaught { tag, code: keycode.raw() - 8, keyboard });
             return Decision::Swallow;
         }
         if pressed && let Some(a) = core_binding(mods, &syms, self.az.lock.is_locked()) {

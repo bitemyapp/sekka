@@ -58,6 +58,9 @@ pub enum AppMsg {
 pub struct Start {
     pub pane: Option<String>,
     pub entry: Option<String>,
+    /// The keyboard to choose in the setup sheet (`--keyboard`):
+    /// “Name (vendor:product)”, or either.
+    pub keyboard: Option<String>,
 }
 
 impl Start {
@@ -67,22 +70,26 @@ impl Start {
             Some((p, e)) if !e.is_empty() => (p, Some(e.to_owned())),
             _ => (target.trim_end_matches(['.', '/', ':']), None),
         };
-        Start { pane: Some(pane.to_owned()), entry }
+        Start { pane: Some(pane.to_owned()), entry, keyboard: None }
     }
 
-    /// From command-line arguments: `--pane ID` or `--pane=ID`.
+    /// From command-line arguments: `--pane ID` or `--pane=ID`, and
+    /// `--keyboard NAME` or `--keyboard=NAME` (the first of each).
     pub fn from_args(args: &[String]) -> Start {
-        let mut it = args.iter();
-        while let Some(a) = it.next() {
-            if a == "--pane" {
-                if let Some(v) = it.next() {
-                    return Start::parse(v);
+        let value = |flag: &str| {
+            let mut it = args.iter();
+            while let Some(a) = it.next() {
+                if a == flag {
+                    return it.next().cloned();
                 }
-            } else if let Some(v) = a.strip_prefix("--pane=") {
-                return Start::parse(v);
+                if let Some(v) = a.strip_prefix(flag).and_then(|v| v.strip_prefix('=')) {
+                    return Some(v.to_owned());
+                }
             }
-        }
-        Start::default()
+            None
+        };
+        let start = value("--pane").map_or_else(Start::default, |p| Start::parse(&p));
+        Start { keyboard: value("--keyboard"), ..start }
     }
 }
 
@@ -503,7 +510,9 @@ impl Program for Settei {
             self.shared.say(format!("There's no pane called “{p}”"), true, cx);
         }
         if let Some((i, Some(e))) = target {
+            self.shared.keyboard = start.keyboard;
             self.reveal(i, &e, cx);
+            self.shared.keyboard = None;
         }
     }
 
@@ -584,7 +593,9 @@ impl Program for Settei {
             AppMsg::Launched(args) => {
                 let start = Start::from_args(&args);
                 if let Some(p) = &start.pane {
+                    self.shared.keyboard = start.keyboard.clone();
                     self.open(&p.clone(), start.entry.as_deref(), cx);
+                    self.shared.keyboard = None;
                 }
                 cx.activate(self.shared.window);
             }

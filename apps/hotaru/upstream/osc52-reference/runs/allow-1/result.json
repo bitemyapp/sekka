@@ -1,0 +1,26 @@
+{
+  "suite": "allow",
+  "status": "failed",
+  "scope": "unchanged GTK app, private software Sway; behavioral observations, no performance claim",
+  "sources": {
+    "/home/callen/work/hotaru-osc52-reference-20261028/tools/gtk_probe.py": "d532700e7e9df55dfef39a7228639d1ec053a5acf060750ae93a6ce2360fb662",
+    "/home/callen/work/hotaru-region-frames-20261028/tools/frame-matrix.py": "889c1151f0640ff66eca02de4404093bcdbd47436f3676b53fe1da4cdd95bc93",
+    "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty": "b77ea354bacb7bf7bd8ca617c9ac7ed733988a0975b8cd11781215295096387a",
+    "/home/callen/work/hotaru-frame-harness-20261028/build/frame-observer": "3bf2a4ba967c7526e4266b9fb48c730df205253afede449627f5bcdb83a8f1c3"
+  },
+  "cases": [],
+  "private_environment": {
+    "WAYLAND_DISPLAY": "wayland-1",
+    "XDG_RUNTIME_DIR": "/tmp/osc52-shssfknb",
+    "WLR_BACKENDS": "headless",
+    "WLR_RENDERER": "pixman"
+  },
+  "error": "TimeoutError('timed out')",
+  "forced_descendant_cleanup": [],
+  "all_owned_processes_exited": true,
+  "process_returns": [
+    0,
+    0,
+    0
+  ]
+}

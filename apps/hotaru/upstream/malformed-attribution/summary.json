@@ -1,0 +1,543 @@
+{
+  "schema": 1,
+  "status": "diagnostic attribution complete; no product change or native speed claim",
+  "source_sha256": "7e36bc3139a9d6ee0617c30b602aa95f21bd732fba389c73ae176cfe49c74d6d",
+  "hotaru_diagnostic_binary_sha256": "656bcff55d5135de4a416322fb84b7b161e0052070596727f158bf377271f8ac",
+  "reference_v3_library_sha256": "bdc3fb782b629c4030337216169a6323f33e56ff073ae9b36dfcb9287a85cfe7",
+  "reference_v3_binary_sha256": "dfa169308d6b4286e47266f0c5e68bce7fe2893518487ee242a606399d64dd77",
+  "reference_native_failure": "Callgrind unsupported instruction/SIGILL during PageList.MemoryPool.init; all four attempted failures retained separately, never treated as full profiles.",
+  "reference_v3_all4_native_reference_state_gates_passed": true,
+  "function_attribution": {
+    "hotaru-legacy-short-invalid-suffix.inclusive-no.txt": {
+      "total_instructions": 21602675,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "hotaru_core::screen::State::print_utf8",
+          "instructions": 12312342,
+          "percent_of_process": 56.99452498359578
+        },
+        {
+          "name": "core::str::converts::from_utf8",
+          "instructions": 2110492,
+          "percent_of_process": 9.769586405387296
+        },
+        {
+          "name": "hotaru_core::Terminal::feed_inner",
+          "instructions": 2007216,
+          "percent_of_process": 9.291515981238435
+        },
+        {
+          "name": "hotaru_core::row::Row::reset",
+          "instructions": 504136,
+          "percent_of_process": 2.3336739547301435
+        },
+        {
+          "name": "hotaru_core::screen::Screen::scroll_up",
+          "instructions": 456576,
+          "percent_of_process": 2.1135160344725827
+        },
+        {
+          "name": "<hotaru_core::screen::State as hotaru_core::parser::Handler>::print",
+          "instructions": 448098,
+          "percent_of_process": 2.0742708946924395
+        },
+        {
+          "name": "hotaru_core::row::Row::prepare_write_with_left",
+          "instructions": 429210,
+          "percent_of_process": 1.9868372782537347
+        },
+        {
+          "name": "hotaru_core::validate_utf8_run",
+          "instructions": 333662,
+          "percent_of_process": 1.5445402016185497
+        },
+        {
+          "name": "hotaru_core::row::Row::style_id",
+          "instructions": 295678,
+          "percent_of_process": 1.3687101250192395
+        },
+        {
+          "name": "hotaru_core::screen::Screen::enforce_budget",
+          "instructions": 262209,
+          "percent_of_process": 1.2137802378640608
+        },
+        {
+          "name": "hotaru_core::row::Row::refresh_memory_charge",
+          "instructions": 256824,
+          "percent_of_process": 1.1888527693908277
+        },
+        {
+          "name": "hotaru_core::screen::State::scalar_metadata_writes",
+          "instructions": 252863,
+          "percent_of_process": 1.1705170771675266
+        }
+      ]
+    },
+    "hotaru-legacy-short-interior-error.inclusive-no.txt": {
+      "total_instructions": 21219246,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "hotaru_core::screen::State::print_utf8",
+          "instructions": 6243349,
+          "percent_of_process": 29.423048302470313
+        },
+        {
+          "name": "hotaru_core::Terminal::feed_inner",
+          "instructions": 2822304,
+          "percent_of_process": 13.30067995818513
+        },
+        {
+          "name": "core::str::converts::from_utf8",
+          "instructions": 2032598,
+          "percent_of_process": 9.579030282225862
+        },
+        {
+          "name": "<hotaru_core::screen::State as hotaru_core::parser::Handler>::print",
+          "instructions": 1372896,
+          "percent_of_process": 6.470050820844436
+        },
+        {
+          "name": "hotaru_core::row::Row::prepare_write_with_left",
+          "instructions": 1072755,
+          "percent_of_process": 5.055575490288392
+        },
+        {
+          "name": "hotaru_core::screen::State::print_ascii",
+          "instructions": 901638,
+          "percent_of_process": 4.249151925567949
+        },
+        {
+          "name": "hotaru_core::row::Row::style_id",
+          "instructions": 739009,
+          "percent_of_process": 3.48272978219867
+        },
+        {
+          "name": "hotaru_core::row::Row::put",
+          "instructions": 700749,
+          "percent_of_process": 3.302421773139347
+        },
+        {
+          "name": "hotaru_core::screen::char_width",
+          "instructions": 624477,
+          "percent_of_process": 2.9429745053146563
+        },
+        {
+          "name": "hotaru_core::screen::Screen::row",
+          "instructions": 572160,
+          "percent_of_process": 2.696420033020966
+        },
+        {
+          "name": "hotaru_core::screen::State::scalar_metadata_writes",
+          "instructions": 524590,
+          "percent_of_process": 2.472236760910355
+        },
+        {
+          "name": "hotaru_core::validate_utf8_run",
+          "instructions": 500521,
+          "percent_of_process": 2.3588067172603586
+        }
+      ]
+    },
+    "hotaru-unicode-short-invalid-suffix.inclusive-no.txt": {
+      "total_instructions": 22012646,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "hotaru_core::screen::State::print_utf8",
+          "instructions": 12398148,
+          "percent_of_process": 56.32284278773211
+        },
+        {
+          "name": "core::str::converts::from_utf8",
+          "instructions": 2110497,
+          "percent_of_process": 9.58765702224076
+        },
+        {
+          "name": "hotaru_core::Terminal::feed_inner",
+          "instructions": 2007216,
+          "percent_of_process": 9.118467629925089
+        },
+        {
+          "name": "<hotaru_core::screen::State as hotaru_core::parser::Handler>::print",
+          "instructions": 948633,
+          "percent_of_process": 4.309491008032383
+        },
+        {
+          "name": "hotaru_core::row::Row::reset",
+          "instructions": 513648,
+          "percent_of_process": 2.3334223427751484
+        },
+        {
+          "name": "hotaru_core::screen::Screen::scroll_up",
+          "instructions": 456576,
+          "percent_of_process": 2.0741531935779096
+        },
+        {
+          "name": "hotaru_core::row::Row::prepare_write_with_left",
+          "instructions": 429210,
+          "percent_of_process": 1.9498337455660715
+        },
+        {
+          "name": "hotaru_core::validate_utf8_run",
+          "instructions": 333662,
+          "percent_of_process": 1.515774159998757
+        },
+        {
+          "name": "hotaru_core::row::Row::style_id",
+          "instructions": 295678,
+          "percent_of_process": 1.3432188025010714
+        },
+        {
+          "name": "hotaru_core::screen::Screen::enforce_budget",
+          "instructions": 262209,
+          "percent_of_process": 1.1911743822164769
+        },
+        {
+          "name": "hotaru_core::row::Row::refresh_memory_charge",
+          "instructions": 256824,
+          "percent_of_process": 1.1667111713875742
+        },
+        {
+          "name": "hotaru_core::screen::State::scalar_metadata_writes",
+          "instructions": 252863,
+          "percent_of_process": 1.14871696932754
+        }
+      ]
+    },
+    "hotaru-unicode-short-interior-error.inclusive-no.txt": {
+      "total_instructions": 22277529,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "hotaru_core::screen::State::print_utf8",
+          "instructions": 6329155,
+          "percent_of_process": 28.41048933209783
+        },
+        {
+          "name": "<hotaru_core::screen::State as hotaru_core::parser::Handler>::print",
+          "instructions": 2917404,
+          "percent_of_process": 13.095725293411132
+        },
+        {
+          "name": "hotaru_core::Terminal::feed_inner",
+          "instructions": 2822304,
+          "percent_of_process": 12.668837733305162
+        },
+        {
+          "name": "core::str::converts::from_utf8",
+          "instructions": 2032603,
+          "percent_of_process": 9.124005629170094
+        },
+        {
+          "name": "hotaru_core::row::Row::prepare_write_with_left",
+          "instructions": 1072755,
+          "percent_of_process": 4.81541287635626
+        },
+        {
+          "name": "hotaru_core::screen::State::print_ascii",
+          "instructions": 901638,
+          "percent_of_process": 4.0472980643409775
+        },
+        {
+          "name": "hotaru_core::row::Row::style_id",
+          "instructions": 739009,
+          "percent_of_process": 3.3172844259343126
+        },
+        {
+          "name": "hotaru_core::row::Row::put",
+          "instructions": 700749,
+          "percent_of_process": 3.1455418596918894
+        },
+        {
+          "name": "hotaru_core::screen::Screen::row",
+          "instructions": 572160,
+          "percent_of_process": 2.5683279325997064
+        },
+        {
+          "name": "hotaru_core::screen::State::scalar_metadata_writes",
+          "instructions": 524590,
+          "percent_of_process": 2.3547943759830816
+        },
+        {
+          "name": "hotaru_core::validate_utf8_run",
+          "instructions": 500521,
+          "percent_of_process": 2.2467527704710877
+        },
+        {
+          "name": "<hotaru_core::style::Style as core::cmp::PartialEq>::eq",
+          "instructions": 476780,
+          "percent_of_process": 2.1401835006027823
+        }
+      ]
+    },
+    "ghostty-unicode-short-invalid-suffix.inclusive-no.txt": {
+      "total_instructions": 10221088,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "terminal.Terminal.printSliceFill__func_509",
+          "instructions": 2267019,
+          "percent_of_process": 22.17982077837506
+        },
+        {
+          "name": "simdutf::scalar::(anonymous namespace)::utf8_to_utf32::rewind_and_convert_with_errors(unsigned long, char const*, unsigned long, char32_t*)",
+          "instructions": 1456901,
+          "percent_of_process": 14.253873951579322
+        },
+        {
+          "name": "terminal.Terminal.printSlice",
+          "instructions": 1349117,
+          "percent_of_process": 13.199348249423153
+        },
+        {
+          "name": "simdutf::haswell::implementation::convert_utf8_to_utf32_with_errors(char const*, unsigned long, char32_t*) const",
+          "instructions": 927849,
+          "percent_of_process": 9.07779093575948
+        },
+        {
+          "name": "simdutf::haswell::implementation::count_utf8(char const*, unsigned long) const",
+          "instructions": 702348,
+          "percent_of_process": 6.871558096359213
+        },
+        {
+          "name": "terminal.Screen.cursorScrollRegionUp",
+          "instructions": 613524,
+          "percent_of_process": 6.002531237379034
+        },
+        {
+          "name": "ghostty_terminal_vt_write",
+          "instructions": 559310,
+          "percent_of_process": 5.472118036749121
+        },
+        {
+          "name": "memset",
+          "instructions": 504144,
+          "percent_of_process": 4.932390759183367
+        },
+        {
+          "name": "terminal.Terminal.index",
+          "instructions": 238075,
+          "percent_of_process": 2.3292530110297456
+        },
+        {
+          "name": "unsigned long ghostty::N_AVX2::DecodeNonAsciiUntilControlSeq<hwy::N_AVX2::Simd<unsigned char, 32ul, 0> >(hwy::N_AVX2::Simd<unsigned char, 32ul, 0>, unsigned char const*, unsigned long, unsigned long, char32_t*, unsigned long*)",
+          "instructions": 234971,
+          "percent_of_process": 2.298884424045659
+        },
+        {
+          "name": "ghostty::N_AVX2::MaximalSubpart(unsigned char const*, unsigned long)",
+          "instructions": 205001,
+          "percent_of_process": 2.0056671070633576
+        },
+        {
+          "name": "terminal.stream_terminal.Handler.vt__func_443",
+          "instructions": 181146,
+          "percent_of_process": 1.772277080483017
+        }
+      ]
+    },
+    "ghostty-legacy-short-interior-error.inclusive-no.txt": {
+      "total_instructions": 14881582,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "terminal.Terminal.printSliceFill__func_509",
+          "instructions": 3328726,
+          "percent_of_process": 22.36809231706683
+        },
+        {
+          "name": "simdutf::haswell::implementation::convert_utf8_to_utf32_with_errors(char const*, unsigned long, char32_t*) const",
+          "instructions": 2747037,
+          "percent_of_process": 18.459307619310906
+        },
+        {
+          "name": "simdutf::scalar::(anonymous namespace)::utf8_to_utf32::rewind_and_convert_with_errors(unsigned long, char const*, unsigned long, char32_t*)",
+          "instructions": 2651449,
+          "percent_of_process": 17.816983436304017
+        },
+        {
+          "name": "terminal.Terminal.printSlice",
+          "instructions": 1306199,
+          "percent_of_process": 8.777285909522254
+        },
+        {
+          "name": "simdutf::haswell::implementation::count_utf8(char const*, unsigned long) const",
+          "instructions": 886689,
+          "percent_of_process": 5.958297982029062
+        },
+        {
+          "name": "terminal.Screen.cursorScrollRegionUp",
+          "instructions": 604012,
+          "percent_of_process": 4.058788911017659
+        },
+        {
+          "name": "ghostty_terminal_vt_write",
+          "instructions": 559513,
+          "percent_of_process": 3.7597682827000516
+        },
+        {
+          "name": "memset",
+          "instructions": 504144,
+          "percent_of_process": 3.3877043448740864
+        },
+        {
+          "name": "unsigned long ghostty::N_AVX2::DecodeNonAsciiUntilControlSeq<hwy::N_AVX2::Simd<unsigned char, 32ul, 0> >(hwy::N_AVX2::Simd<unsigned char, 32ul, 0>, unsigned char const*, unsigned long, unsigned long, char32_t*, unsigned long*)",
+          "instructions": 502587,
+          "percent_of_process": 3.3772417475507646
+        },
+        {
+          "name": "terminal.Terminal.index",
+          "instructions": 238075,
+          "percent_of_process": 1.5997963119781218
+        },
+        {
+          "name": "ghostty::N_AVX2::MaximalSubpart(unsigned char const*, unsigned long)",
+          "instructions": 219333,
+          "percent_of_process": 1.473855400588459
+        },
+        {
+          "name": "terminal.stream_terminal.Handler.vt__func_443",
+          "instructions": 171612,
+          "percent_of_process": 1.1531838483301036
+        }
+      ]
+    },
+    "ghostty-unicode-short-interior-error.inclusive-no.txt": {
+      "total_instructions": 15168415,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "terminal.Terminal.printSliceFill__func_509",
+          "instructions": 3571871,
+          "percent_of_process": 23.548083303364262
+        },
+        {
+          "name": "simdutf::haswell::implementation::convert_utf8_to_utf32_with_errors(char const*, unsigned long, char32_t*) const",
+          "instructions": 2747037,
+          "percent_of_process": 18.11024421470536
+        },
+        {
+          "name": "simdutf::scalar::(anonymous namespace)::utf8_to_utf32::rewind_and_convert_with_errors(unsigned long, char const*, unsigned long, char32_t*)",
+          "instructions": 2651449,
+          "percent_of_process": 17.480066308839785
+        },
+        {
+          "name": "terminal.Terminal.printSlice",
+          "instructions": 1349476,
+          "percent_of_process": 8.896618400801929
+        },
+        {
+          "name": "simdutf::haswell::implementation::count_utf8(char const*, unsigned long) const",
+          "instructions": 886689,
+          "percent_of_process": 5.845627245826278
+        },
+        {
+          "name": "terminal.Screen.cursorScrollRegionUp",
+          "instructions": 604012,
+          "percent_of_process": 3.9820376749976845
+        },
+        {
+          "name": "ghostty_terminal_vt_write",
+          "instructions": 559513,
+          "percent_of_process": 3.688671492703753
+        },
+        {
+          "name": "memset",
+          "instructions": 504144,
+          "percent_of_process": 3.323643241564791
+        },
+        {
+          "name": "unsigned long ghostty::N_AVX2::DecodeNonAsciiUntilControlSeq<hwy::N_AVX2::Simd<unsigned char, 32ul, 0> >(hwy::N_AVX2::Simd<unsigned char, 32ul, 0>, unsigned char const*, unsigned long, unsigned long, char32_t*, unsigned long*)",
+          "instructions": 502587,
+          "percent_of_process": 3.3133784907651855
+        },
+        {
+          "name": "terminal.Terminal.index",
+          "instructions": 238075,
+          "percent_of_process": 1.5695443459319909
+        },
+        {
+          "name": "ghostty::N_AVX2::MaximalSubpart(unsigned char const*, unsigned long)",
+          "instructions": 219333,
+          "percent_of_process": 1.4459849628323065
+        },
+        {
+          "name": "terminal.stream_terminal.Handler.vt__func_443",
+          "instructions": 171612,
+          "percent_of_process": 1.1313772731033533
+        }
+      ]
+    },
+    "ghostty-legacy-short-invalid-suffix.inclusive-no.txt": {
+      "total_instructions": 10087040,
+      "scope": "Aggregation of displayed99%-threshold exclusive attribution; omitted tiny entries are not estimated.",
+      "top_functions": [
+        {
+          "name": "terminal.Terminal.printSliceFill__func_509",
+          "instructions": 2176357,
+          "percent_of_process": 21.575774459107926
+        },
+        {
+          "name": "simdutf::scalar::(anonymous namespace)::utf8_to_utf32::rewind_and_convert_with_errors(unsigned long, char const*, unsigned long, char32_t*)",
+          "instructions": 1456901,
+          "percent_of_process": 14.443295555485058
+        },
+        {
+          "name": "terminal.Terminal.printSlice",
+          "instructions": 1305959,
+          "percent_of_process": 12.94690018082609
+        },
+        {
+          "name": "simdutf::haswell::implementation::convert_utf8_to_utf32_with_errors(char const*, unsigned long, char32_t*) const",
+          "instructions": 927849,
+          "percent_of_process": 9.198426892329167
+        },
+        {
+          "name": "simdutf::haswell::implementation::count_utf8(char const*, unsigned long) const",
+          "instructions": 702348,
+          "percent_of_process": 6.96287513482647
+        },
+        {
+          "name": "terminal.Screen.cursorScrollRegionUp",
+          "instructions": 613524,
+          "percent_of_process": 6.082299663726921
+        },
+        {
+          "name": "ghostty_terminal_vt_write",
+          "instructions": 559310,
+          "percent_of_process": 5.544837732377387
+        },
+        {
+          "name": "memset",
+          "instructions": 504144,
+          "percent_of_process": 4.9979379480997395
+        },
+        {
+          "name": "terminal.Terminal.index",
+          "instructions": 238075,
+          "percent_of_process": 2.3602067603578454
+        },
+        {
+          "name": "unsigned long ghostty::N_AVX2::DecodeNonAsciiUntilControlSeq<hwy::N_AVX2::Simd<unsigned char, 32ul, 0> >(hwy::N_AVX2::Simd<unsigned char, 32ul, 0>, unsigned char const*, unsigned long, unsigned long, char32_t*, unsigned long*)",
+          "instructions": 234971,
+          "percent_of_process": 2.3294346012308864
+        },
+        {
+          "name": "ghostty::N_AVX2::MaximalSubpart(unsigned char const*, unsigned long)",
+          "instructions": 205001,
+          "percent_of_process": 2.0323206807943657
+        },
+        {
+          "name": "terminal.stream_terminal.Handler.vt__func_443",
+          "instructions": 181146,
+          "percent_of_process": 1.7958291034832816
+        }
+      ]
+    }
+  },
+  "inputs": "../short-utf8/complete-tail/direct-ghostty/input-manifest.json; generator there reconstructs exact inputs outside Git.",
+  "raw_local_and_wx_root": "/home/callen/work/hotaru-malformed-profile-20261028",
+  "interpretation": "Hotaru print_utf8 is the leading truncated-suffix instruction cost (~56\u201357%); validation ~10% plus wrapper. Interior errors spread work across printing/parser/metadata. Reference combines SIMD decoding with bulk printSlice. This supports evaluating an existing-ASCII-path subrun handoff, not another padded validation guard."
+}

@@ -1,0 +1,19 @@
+     Removed 0 files
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling static_assertions v1.1.0
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/vendor/simdutf8)
+   Compiling triomphe v0.1.17
+   Compiling unicode-width v0.2.3
+   Compiling lz4_flex v0.14.0
+   Compiling memchr v2.8.3
+   Compiling castaway v0.2.4
+   Compiling compact_str v0.10.0
+   Compiling hotaru-core v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-core)
+   Compiling hotaru-replay v0.1.0 (/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/crates/hotaru-replay)
+    Finished `release` profile [optimized] target(s) in 4.23s
+{"metadata": "/home/callen/work/hotaru-semantic-fastgate-20261028/apps/hotaru/evidence/native-build.json", "source_sha256": "54ceb66cb7fde4d5edcccfd66b32c588f7af4a02cf381b7846d5c5036ed05267", "binary_sha256": "23967d024171bc0403d6280c53e4692e203e981371d7a57b0d0fefc0a4cea2d5"}

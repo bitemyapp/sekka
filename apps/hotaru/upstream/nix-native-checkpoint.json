@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T15:11:43.907761+00:00",
+  "host": "callen",
+  "status": "passed",
+  "scope": "Native Nix package with splits, settings, keyboard/mouse metadata, extended styles, compressed-history recycle fix and lossless latest resize/colors controls",
+  "derivation": "/nix/store/gf0lwcc96mmv2h6pvpmvmh14a12ca5ai-hotaru-0.1.0.drv",
+  "output": "/nix/store/2rb5g7cxkzvim485wxk93nggr8kkxs44-hotaru-0.1.0",
+  "source": "/nix/store/nlhqg7vrpb3xczbxibrn17931z5g4050-hotaru-source",
+  "source_nar_hash": "sha256-LjP0O7hw50Z7ufxdujnA55cLl0kiiqbACfU9HxO7qvk=",
+  "binary_sha256": "27b62cc38cdb4b8f7d79a22446fb5bea2bc9a222aea5802f77f93fce46ea1917",
+  "wrapper_sha256": "3a678cc41d97e344775a9502b6f62bbbb578907fd7792f4ea648f7a8255fb1b6",
+  "build_log_sha256": "3d26910a3e96a20333924ef9e9f7ab94c9f35ca36f02748e806c9ae351c0f67a",
+  "test_summaries": [
+    "test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "build_type": "release",
+  "cargo_test_flags": "-p aizome-hotaru",
+  "help": "Hotaru \u86cd \u2014 Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG\u2026]]",
+  "installed_files": [
+    "bin/.hotaru-wrapped",
+    "bin/aizome-hotaru",
+    "bin/hotaru",
+    "share/applications/org.aizome.Hotaru.desktop",
+    "share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg"
+  ],
+  "limitations": [
+    "No Aizome VM or physical desktop qualification",
+    "Full Ghostty feature and performance parity remain incomplete"
+  ]
+}

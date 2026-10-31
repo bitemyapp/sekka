@@ -1,0 +1,111 @@
+--- a/apps/hotaru/crates/hotaru-core/src/row.rs
++++ b/apps/hotaru/crates/hotaru-core/src/row.rs
+@@ -204,6 +204,19 @@
+     pub(crate) fn has_dynamic_metadata(&self) -> bool {
+         !self.graphemes.is_empty() || self.links.is_some()
+     }
++    pub(crate) fn needs_scalar_write_order(&self, range: Range<usize>, style: Style) -> bool {
++        if self.has_dynamic_metadata()
++            || self.styles.len() >= (self.cells.len() * 2 + 1).min(u16::MAX as usize)
++        {
++            return true;
++        }
++        // Scalar replacement of an interior wide glyph briefly erases its
++        // other half. A batched replacement can skip that cell write, but must
++        // not skip allocating the erased style. The base style slot makes the
++        // common default-background path constant-time; it cannot disappear
++        // through compaction because the threshold above selects scalar order.
++        self.styles[0] != style.erased() && self.cells[range].iter().any(|cell| cell.width() != 1)
++    }
+     fn uncached_owned_bytes(&self) -> usize {
+         crate::memory::allocation(std::mem::size_of::<Self>() + std::mem::size_of::<usize>())
+             + crate::memory::vector::<Cell>(self.cells.capacity())
+--- a/apps/hotaru/crates/hotaru-core/src/screen.rs
++++ b/apps/hotaru/crates/hotaru-core/src/screen.rs
+@@ -697,7 +697,7 @@
+             // Metadata allocations and releases must occur in scalar order:
+             // otherwise the budget's peak (and retained history) depends on
+             // where a PTY read happens to split an overwrite.
+-            if self.scalar_metadata_writes() {
++            if self.scalar_metadata_writes(bytes.len()) {
+                 self.print(bytes[0] as char);
+                 self.screen_mut().enforce_budget();
+                 bytes = &bytes[1..];
+@@ -855,7 +855,7 @@
+         }
+         let mut chars = text.chars().peekable();
+         while chars.peek().is_some() {
+-            if self.scalar_metadata_writes() {
++            if self.scalar_metadata_writes(usize::MAX) {
+                 self.print(chars.next().unwrap());
+                 self.screen_mut().enforce_budget();
+                 continue;
+@@ -945,9 +945,12 @@
+             }
+         }
+     }
+-    fn scalar_metadata_writes(&self) -> bool {
++    fn scalar_metadata_writes(&self, count: usize) -> bool {
+         let screen = self.screen();
+-        screen.active_link.is_some() || screen.lines[screen.cursor.row].has_dynamic_metadata()
++        let start = screen.cursor.col;
++        let end = start + count.min(screen.cols - start);
++        screen.active_link.is_some()
++            || screen.lines[screen.cursor.row].needs_scalar_write_order(start..end, self.style)
+     }
+     fn move_to(&mut self, row: usize, col: usize) {
+         let origin = self.origin;
+--- a/apps/hotaru/crates/hotaru-core/tests/history_budget.rs
++++ b/apps/hotaru/crates/hotaru-core/tests/history_budget.rs
+@@ -288,3 +288,51 @@
+         }
+     }
+ }
++
++#[test]
++fn interior_wide_overwrites_preserve_erased_style_allocation_and_compaction_order() {
++    let seed = "雪雪\x1b[31;44mA\x1b[32mB\x1b[33mC\r\x1b[31m";
++    let mut compacting = seed.to_owned();
++    for color in 100..113 {
++        compacting.push_str(&format!("\x1b[8G\x1b[38;5;{color}mX"));
++    }
++    compacting.push_str("\r\x1b[31m");
++    for seed in [seed, compacting.as_str()] {
++        for overwrite in ["abcdefgh", "αβγδεζηθ"] {
++            let mut initial = b"old\r\n".repeat(80);
++            initial.extend_from_slice(seed.as_bytes());
++            let make =
++                |bytes| Terminal::with_history_limits(8, 3, HistoryLimits { rows: 1000, bytes });
++            let mut unlimited = make(None);
++            unlimited.feed(&initial);
++            let before = unlimited.history_memory();
++            for limit in [None, Some(before.active_bytes + before.logical_bytes)] {
++                let mut expected = None;
++                for cold in [false, true] {
++                    for chunk in [1, 7, 65536] {
++                        let mut t = make(limit);
++                        t.feed(&initial);
++                        let held = t.content_snapshot();
++                        if cold {
++                            compress(&mut t);
++                        }
++                        for part in overwrite.as_bytes().chunks(chunk) {
++                            t.feed(part);
++                        }
++                        let memory = t.history_memory();
++                        let charge = (memory.rows, memory.active_bytes, memory.logical_bytes);
++                        let actual = t.content_snapshot();
++                        if let Some((snapshot, prior_charge)) = &expected {
++                            same(snapshot, &actual);
++                            assert_eq!(*prior_charge, charge, "chunk={chunk} limit={limit:?}");
++                        } else {
++                            expected = Some((actual, charge));
++                        }
++                        // The original wide cells remain owned by the capture.
++                        assert_eq!(held.rows().last().unwrap().cells()[0].character(), '雪');
++                    }
++                }
++            }
++        }
++    }
++}

@@ -1,0 +1,86 @@
+{
+  "scope": "gpu calibration from one qualification run of each application; its timings are excluded",
+  "status": "qualified_for_future_matched_measurements",
+  "renderer": "gpu",
+  "problems": [],
+  "host": "ganymede",
+  "compositor": [
+    "[render/egl.c:374] EGL vendor: Mesa Project",
+    "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+    "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.5",
+    "[render/gles2/renderer.c:540] GL vendor: Intel",
+    "[render/gles2/renderer.c:541] GL renderer: Mesa Intel(R) Graphics (PTL)"
+  ],
+  "apps": {
+    "hotaru": {
+      "run": "hotaru-calibration",
+      "binary": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/hotaru",
+      "runtime_executable": "/nix/store/pyy32rwyrpgnnpwlc5fmw5r88px0jrs6-hotaru-0.1.0/bin/.hotaru-wrapped",
+      "runtime_executable_sha256": "3de75828ccfda346eb7628b16a740513666ab496badb34b3829ab9fa0660d2ce",
+      "window_pixels": [
+        1349,
+        1077
+      ],
+      "grid": {
+        "event": "size",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65849129594531
+      },
+      "gpu": {
+        "296232": {
+          "comm": ".hotaru-wrapped",
+          "libraries": [],
+          "devices": []
+        },
+        "296245": {
+          "comm": "python3",
+          "libraries": [],
+          "devices": []
+        }
+      }
+    },
+    "ghostty": {
+      "run": "ghostty-calibration",
+      "binary": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/ghostty",
+      "runtime_executable": "/nix/store/rvbnq9b2j16127m46g7ia1vv9zw5cy03-ghostty-1.4.1-dev+6ba144158577d033ccb6ed4b574e4013957c9161-nix/bin/.ghostty-wrapped",
+      "runtime_executable_sha256": "ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f",
+      "window_pixels": [
+        1334,
+        987
+      ],
+      "grid": {
+        "event": "size",
+        "cols": 120,
+        "rows": 40,
+        "controller_received_ns": 65808104524820
+      },
+      "gpu": {
+        "295838": {
+          "comm": ".ghostty-wrappe",
+          "libraries": [
+            "libEGL.so.1.1.0",
+            "libEGL_mesa.so.0.0.0",
+            "libGLESv2.so.2.1.0",
+            "libGLX.so.0.0.0",
+            "libGLdispatch.so.0.0.0",
+            "libdrm.so.2.134.0",
+            "libdrm_amdgpu.so.1.134.0",
+            "libdrm_intel.so.1.134.0",
+            "libgallium-26.2.5.so",
+            "libgbm.so.1.0.0",
+            "libvulkan.so.1.4.363"
+          ],
+          "devices": [
+            "/dev/dri/renderD128"
+          ]
+        },
+        "295876": {
+          "comm": "python3",
+          "libraries": [],
+          "devices": []
+        }
+      }
+    }
+  }
+}

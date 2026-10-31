@@ -1,0 +1,14 @@
+{"event":"ready","time_ns":4066655034637709,"controller_received_ns":4066655034700454}
+{"event":"command","time_ns":4066655034774366,"running":true,"controller_received_ns":4066655034845314}
+{"event":"capture","capture":1,"request_ns":4066655034777952,"ready_ns":4066655038453980,"decode_done_ns":4066655038828108,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":38026381,"flags":0,"controller_received_ns":4066655038933708}
+{"event":"capture","capture":2,"request_ns":4066655050886226,"ready_ns":4066655054080353,"decode_done_ns":4066655054425967,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":54032740,"flags":0,"controller_received_ns":4066655054525779}
+{"event":"capture","capture":3,"request_ns":4066655067481438,"ready_ns":4066655070083878,"decode_done_ns":4066655070429122,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":70037467,"flags":0,"controller_received_ns":4066655070527090}
+{"event":"capture","capture":4,"request_ns":4066655084484029,"ready_ns":4066655086071819,"decode_done_ns":4066655086425045,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":86040281,"flags":0,"controller_received_ns":4066655086522323}
+{"event":"command","time_ns":4066655086550405,"running":false,"controller_received_ns":4066655086577366}
+{"event":"key","sequence":42,"inject_ns":4066655286716573,"flush_return_ns":4066655286719637,"flush_complete":true,"controller_received_ns":4066655286817977}
+{"event":"command","time_ns":4066655286720789,"running":false,"controller_received_ns":4066655286929275}
+{"event":"command","time_ns":4066655286904498,"running":true,"controller_received_ns":4066655286983378}
+{"event":"capture","capture":5,"request_ns":4066655286904808,"ready_ns":4066655287041366,"decode_done_ns":4066655287387250,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":286947663,"flags":0,"controller_received_ns":4066655287479701}
+{"event":"capture","capture":6,"request_ns":4066655303440891,"ready_ns":4066655303527783,"decode_done_ns":4066655303879797,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":303476465,"flags":0,"controller_received_ns":4066655303984747}
+{"event":"capture","capture":7,"request_ns":4066655319934069,"ready_ns":4066655320058478,"decode_done_ns":4066655320415860,"valid":false,"sequence":0,"compositor_sec_hi":0,"compositor_sec_lo":4066655,"compositor_nsec":319993359,"flags":0,"controller_received_ns":4066655320538607}
+{"event":"command","time_ns":4066655320620010,"running":true,"controller_received_ns":4066655320664117}

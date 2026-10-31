@@ -21,6 +21,7 @@
   runCommand,
   pkg-config,
   makeWrapper,
+  ncurses,
   jq,
   wayland,
   libxkbcommon,
@@ -37,6 +38,8 @@
   dbus,
   libpulseaudio,
   libsecret,
+  ffmpeg,
+  pipewire,
   pam,
   systemd,
   util-linux,
@@ -47,7 +50,12 @@
   vulkan-loader,
   src,
   yukimiSrc,
+  hotaruSrc,
+  ghosttyLicense,
+  uucodeLicense,
+  unicodeLicense,
   fonts,
+  hotaruFonts,
   bash,
   weston,
   tzdata,
@@ -61,10 +69,13 @@ let
     mkdir -p $out/desktop $out/apps
     cp -r ${src} $out/desktop/aizome
     cp -r ${yukimiSrc} $out/apps/yukimi
+    cp -r ${hotaruSrc} $out/apps/hotaru
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
-  # fontconfig for the text engine, and xkbcommon for smithay's keymaps.
+  # fontconfig for the text engine (and for the fonts Shiori's worker finds
+  # for documents: apps/shiori/src/fonts.rs), and xkbcommon for smithay's
+  # keymaps.
   runtimeLibs = [
     libglvnd
     libpulseaudio
@@ -112,11 +123,15 @@ rustPlatform.buildRustPackage {
   ];
   src = source;
   sourceRoot = "aizome-source/desktop/aizome";
-  cargoLock.lockFile = "${src}/Cargo.lock";
+  cargoLock = {
+    lockFile = "${src}/Cargo.lock";
+    outputHashes = import ./cargo-output-hashes.nix;
+  };
 
   nativeBuildInputs = [
     pkg-config
     makeWrapper
+    ncurses
     jq
     rustPlatform.bindgenHook
     # Koe's whisper.cpp (built by whisper-rs-sys through CMake) and its
@@ -141,6 +156,9 @@ rustPlatform.buildRustPackage {
     pam
     libpulseaudio
     libsecret
+    # aizome-media: FFmpeg (mpv's) and PipeWire.
+    ffmpeg
+    pipewire
     openblas
     vulkan-headers
     vulkan-loader
@@ -190,6 +208,7 @@ rustPlatform.buildRustPackage {
   checkPhase = ''
     runHook preCheck
     export AIZOME_FONT_DIR=${fonts}
+    export HOTARU_FONT_DIR=${hotaruFonts}
     # Tests run before postFixup adds the libraries opened with dlopen.
     export LD_LIBRARY_PATH=${lib.makeLibraryPath runtimeLibs}
     # The brand's Japanese glyphs use the same fallback as the desktops.
@@ -204,6 +223,9 @@ rustPlatform.buildRustPackage {
     }
     export TZDIR=${tzdata}/share/zoneinfo
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
+    # A successful spawn is not a successful application launch. Gate the
+    # shipped shell on process outcomes and its failure/details interface.
+    cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell --lib
     runHook postCheck
   '';
 
@@ -252,6 +274,28 @@ rustPlatform.buildRustPackage {
     for icon in icons/apps/*.svg; do
       install -Dm644 "$icon" "$out/share/icons/hicolor/scalable/apps/$(basename "$icon")"
     done
+    # Nisshi's reader, run as root only through pkexec under its own
+    # polkit action, which names it by this path.
+    mkdir -p $out/libexec $out/share/polkit-1/actions
+    mv $out/bin/aizome-nisshi-helper $out/libexec/
+    substitute apps/nisshi/data/org.aizome.Nisshi.policy.in $out/share/polkit-1/actions/org.aizome.Nisshi.policy \
+      --subst-var-by helper $out/libexec/aizome-nisshi-helper
+    install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
+    install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
+    install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt
+    install -Dm644 ${uucodeLicense} $out/share/licenses/hotaru/uucode-MIT.txt
+    install -Dm644 ${unicodeLicense} $out/share/licenses/hotaru/Unicode-3.0.txt
+    install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.MPL-2.0 $out/share/licenses/hotaru/z2d-MPL-2.0.txt
+    install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.z2d $out/share/licenses/hotaru/z2d-NOTICES.txt
+    install -m644 ../../apps/hotaru/crates/hotaru-sprites/LICENSE.zig $out/share/licenses/hotaru/Zig-MIT.txt
+    install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-MIT $out/share/licenses/hotaru/simdutf8-MIT.txt
+    install -m644 ../../apps/hotaru/vendor/simdutf8/LICENSE-Apache $out/share/licenses/hotaru/simdutf8-Apache.txt
+    mkdir -p $out/share/hotaru $out/share/terminfo
+    cp -r ../../apps/hotaru/resources/shell-integration $out/share/hotaru/
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/hotaru/LICENSE-MIT
+    install -m644 ../../apps/hotaru/resources/LICENSE-MIT $out/share/licenses/hotaru/Shell-integration-MIT.txt
+    install -m644 ../../apps/hotaru/resources/hotaru.terminfo $out/share/hotaru/hotaru.terminfo
+    tic -x -o $out/share/terminfo $out/share/hotaru/hotaru.terminfo
     # The Toolchest's mark, for the shell and the login screen.
     install -Dm644 icons/apps/org.aizome.Toolchest.svg $out/share/aizome/mark.svg
     mkdir -p $yukimi/bin $yukimi/libexec $yukimi/share/applications $yukimi/share/icons/hicolor/scalable/apps
@@ -277,6 +321,11 @@ rustPlatform.buildRustPackage {
       fi
     done
     wrapProgram $yukimi/libexec/aizome-yukimi --set-default AIZOME_FONT_DIR ${fonts}
+    wrapProgram $out/bin/aizome-hotaru \
+      --set-default AIZOME_FONT_DIR ${fonts} \
+      --set-default HOTARU_FONT_DIR ${hotaruFonts} \
+      --set-default HOTARU_RESOURCES_DIR $out/share/hotaru \
+      --set-default HOTARU_TERMINFO_DIR $out/share/terminfo
     # The compositor finds its core and std beside it (its own rpath says
     # $ORIGIN/../lib/aizome); they and the logic find each other there.
     for so in $out/lib/aizome/*.so; do
@@ -299,6 +348,8 @@ rustPlatform.buildRustPackage {
     description = "Aizome, Sekka's desktop environment, on Sukumo, its native Rust toolkit";
     homepage = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
     license = with lib.licenses; [
+      mpl20
+      bsd2
       mit
       asl20
     ];

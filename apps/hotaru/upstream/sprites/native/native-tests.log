@@ -1,0 +1,102 @@
+   Compiling hotaru-sprites v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/apps/hotaru/crates/hotaru-sprites)
+   Compiling aizome-hotaru v0.1.0 (/home/callen/work/hotaru-native-sprites-20261028/desktop/aizome/apps/hotaru)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.95s
+     Running unittests src/lib.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-860bef11a0eacdba)
+
+running 30 tests
+test font::tests::benchmark_row_preparation ... ignored, serial worker preparation diagnostic; run only under shared workstation lock
+test font::tests::frame_retention_charge_saturates_instead_of_admitting_wrapped_sizes ... ok
+test clipboard::tests::cancelled_copy_never_prepares_or_publishes_mime_data ... ok
+test input::tests::fractional_cell_coordinates_do_not_drift ... ok
+test input::tests::paste_cannot_terminate_its_bracket ... ok
+test input::tests::native_layout_identity_is_kept_distinct_from_physical_identity ... ok
+test links::tests::targets_are_validated_without_rewriting_or_shell_interpretation ... ok
+test panes::tests::closing_nested_pane_preserves_sibling_identity_and_order ... ok
+test links::tests::changed_frames_movement_or_cell_cancel_the_owned_gesture ... ok
+test session::tests::resize_control_child ... ignored
+test session::tests::search_capture_and_navigation_coalesce_independently_under_input_saturation ... ok
+test settings::tests::rejects_invalid_settings_and_typographical_errors ... ok
+test settings::tests::configured_binding_replaces_a_default_without_stealing_control_c ... ok
+test terminal_view::cursor_tests::cursor_priority_matches_ghostty_renderer ... ok
+test settings::tests::saving_is_atomic_and_preserves_managed_symlinks ... ok
+test font::tests::whole_content_search_projects_wide_and_soft_wrapped_highlights_on_worker ... ok
+test session::tests::latest_resize_and_colors_survive_a_full_input_queue ... ok
+test terminal_view::sprite_paint_tests::block_background_precedes_neighbor_ink_and_tints_only_cursor_source_cell ... ok
+test font::sprite_tests::unsupported_sprite_metrics_fall_back_without_discarding_surrounding_text ... ok
+test font::sprite_tests::qualified_sprites_split_shaping_and_retain_styles_links_and_snapshots ... ok
+test font::tests::row_cache_reuses_moved_rows_and_preserves_frame_and_link_ownership ... ok
+test search::tests::newer_capture_keeps_logical_selection_until_its_frame_arrives ... ok
+test search::tests::late_refresh_cannot_restore_expired_active_copy_and_fatal_actor_cancels_capture ... ok
+test terminal_view::sprite_paint_tests::padded_ink_survives_neighbor_backgrounds_and_transition_damage ... ok
+test search::tests::refresh_started_before_navigation_cannot_overwrite_its_selection ... ok
+test font::tests::row_cache_context_limits_cancellation_and_metadata_are_complete ... ok
+test terminal_view::scroll_retention_tests::prior_frame_admission_is_bounded_and_preserves_snapshot_identity ... ok
+test terminal_view::scroll_retention_tests::hidden_window_retains_only_its_last_admitted_view_and_releases_it_on_show ... ok
+test sprites::tests::exact_key_reuse_bounded_admission_and_owned_eviction ... ok
+test font::tests::row_cache_matches_uncached_seeded_snapshot_transitions ... ok
+
+test result: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running unittests src/main.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/aizome_hotaru-a7e705089556e1c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cursor.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/cursor-3e9ab38c1ae127fc)
+
+running 2 tests
+test cursor_shapes_blink_focus_input_and_damage_are_native ... ok
+test wide_cursor_ime_and_physical_scale_remain_cell_aligned ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/native.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/native-f737e1fe46146cb2)
+
+running 27 tests
+test input_protocol_child ... ignored
+test osc8_mouse_child ... ignored
+test packaged_color_emoji_rasterizes_in_the_terminal_grid ... ignored, requires pinned HOTARU_FONT_DIR; run font fixture suite explicitly
+test reply_flood_child ... ignored
+test search_history_child ... ignored
+test obsolete_searches_and_closed_panes_cannot_replace_the_active_query ... ok
+test native_settings_changes_are_saved_and_invalid_reload_preserves_current_configuration ... ok
+test explicit_terminal_background_is_rendered_even_when_it_matches_the_builtin_default ... ok
+test html_only_copy_has_no_stale_plain_text_fallback ... ok
+test native_sessions_choose_unicode_grapheme_width_before_output ... ok
+test pty_worker_publishes_final_output_before_exit ... ok
+test semantic_underlines_use_their_own_color_and_overline_is_visible ... ok
+test osc8_gesture_consumes_both_mouse_edges_and_preserves_other_clicks ... ok
+test pty_worker_encodes_keyboard_and_mouse_using_negotiated_modes ... ok
+test tabs_keep_independent_terminal_snapshots ... ok
+test actor_accepts_local_cwd_without_overwriting_an_explicit_title ... ok
+test internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory ... ok
+test splits_have_independent_snapshots_and_close_only_the_focused_pane ... ok
+test find_navigates_owned_history_and_wraps_in_both_directions ... ok
+test night_and_day_views_render_with_native_chrome ... ok
+test large_copy_finishes_off_thread_and_stale_reply_is_ignored ... ok
+test newer_copies_win_and_closed_panes_cannot_publish_results ... ok
+test output_scale_recomputes_physical_grid_without_logical_resize ... ok
+test reply_flood_resumes_without_losing_responses ... ok
+test osc8_super_click_uses_displayed_cell_and_recorded_desktop_opener ... ok
+test find_soft_wrap_wide_text_and_copy_use_complete_owned_match ... ok
+test find_retains_historical_anchors_through_append_and_recovers_after_alternate_and_reflow ... ok
+
+test result: ok. 22 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+     Running tests/pixel_scroll.rs (/home/callen/.cache/hotaru-aizome-target/debug/deps/pixel_scroll-2fb3e9aa32342267)
+
+running 4 tests
+test selection_find_and_link_hover_never_leave_copied_overlays ... ok
+test clipped_negative_origins_and_covering_siblings_are_exact ... ok
+test row_scroll_preserves_exact_pixels_and_reduces_raster_work ... ok
+test scale_resize_palette_and_ime_choose_safe_repaint_paths ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+
+   Doc-tests aizome_hotaru
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

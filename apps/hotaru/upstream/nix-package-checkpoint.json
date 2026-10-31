@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T13:54:18.486021+00:00",
+  "host": "callen",
+  "status": "passed",
+  "scope": "Native Nix package checkpoint after configured colors and clipboard fixes; before splits, settings, reflow, input protocols and SIMD changes",
+  "derivation": "/nix/store/pbhx89mwxx3p9q1pj8iwz1w9k1v3i50k-hotaru-0.1.0.drv",
+  "output": "/nix/store/waqlh0vk681cynnlsjq3j12irfcbi1az-hotaru-0.1.0",
+  "source": "/nix/store/ci2cw2rk9xa5acnz4pcmapdnnwdn2mzv-hotaru-source",
+  "source_nar_hash": "sha256-D7r1fziJEJ48Xg5wPH0Ji+RjfcFhVurl7Ova/tzB+ic=",
+  "binary_sha256": "f5f2bc7efbea32a78052ae92a48c1fc8e6462e859a5a8b00536eec48b2787c4d",
+  "checks": [
+    "Nix sandbox build and native application package tests",
+    "Installed hotaru --help exited successfully"
+  ],
+  "help": "Hotaru \u86cd \u2014 Aizome's terminal\n\nUsage: aizome-hotaru [--working-directory DIR] [-- COMMAND [ARG\u2026]]",
+  "installed_files": [
+    "bin/.hotaru-wrapped",
+    "bin/aizome-hotaru",
+    "bin/hotaru",
+    "share/applications/org.aizome.Hotaru.desktop",
+    "share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg"
+  ],
+  "limitations": [
+    "No Aizome VM or physical desktop qualification",
+    "Not a build of later split/settings/reflow/input changes"
+  ]
+}

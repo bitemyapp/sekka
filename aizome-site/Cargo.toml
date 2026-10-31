@@ -1,0 +1,15 @@
+[package]
+name = "aizome-site"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Static generator for the aizome.computer website"
+
+[dependencies]
+anyhow = "=1.0.100"
+ttf-parser = "=0.25.1"
+
+[[bin]]
+name = "aizome-site"
+path = "src/main.rs"

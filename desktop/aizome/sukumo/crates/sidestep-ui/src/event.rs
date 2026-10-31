@@ -128,6 +128,8 @@ impl Modifiers {
     pub const SUPER: Modifiers = Modifiers(1 << 3);
     /// Caps Lock is on.
     pub const CAPS_LOCK: Modifiers = Modifiers(1 << 4);
+    /// Num Lock is on. This is distinct from a key being on the numeric pad.
+    pub const NUM_LOCK: Modifiers = Modifiers(1 << 5);
 
     pub fn contains(self, other: Modifiers) -> bool {
         self.0 & other.0 == other.0
@@ -186,6 +188,19 @@ impl std::ops::BitOrAssign for Modifiers {
     }
 }
 
+/// Layout metadata for terminal protocols, independent of text-widget input.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct KeyMetadata {
+    /// Actual XKB keysym, including remapped modifier and keypad identities.
+    pub keysym: u32,
+    /// Layout/compose text with no Control transformation, including shortcuts.
+    pub text: String,
+    /// Current layout group's unshifted scalar, with lock modifiers removed.
+    pub unshifted: Option<char>,
+    /// Held modifiers consumed to produce the layout's keysym.
+    pub consumed_modifiers: Modifiers,
+}
+
 /// A key pressed, repeated or released, through the keyboard's layout.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyEvent {
@@ -207,6 +222,7 @@ pub struct KeyEvent {
     /// started, continued or ended one (empty once it's over): what a text
     /// field shows as being composed.
     pub composing: Option<String>,
+    pub native: KeyMetadata,
 }
 
 /// What a key is, through the keyboard's layout.
@@ -301,7 +317,10 @@ impl NamedKey {
 
 impl KeyEvent {
     pub(crate) fn from_protocol(key: protocol::Key) -> KeyEvent {
-        let modifiers = Modifiers::from_flags(key.modifiers);
+        let mut modifiers = Modifiers::from_flags(key.modifiers);
+        if key.native.num_lock {
+            modifiers |= Modifiers::NUM_LOCK;
+        }
         let named = key.unmodified.chars().next().or_else(|| key.characters.chars().next()).and_then(NamedKey::of);
         let key_of = match named {
             Some(n) => Key::Named(n),
@@ -320,6 +339,12 @@ impl KeyEvent {
             code: u32::from(key.code).saturating_sub(8),
             modifiers,
             composing: key.composing,
+            native: KeyMetadata {
+                keysym: key.native.keysym,
+                text: key.native.text,
+                unshifted: key.native.unshifted,
+                consumed_modifiers: Modifiers::from_flags(key.native.consumed_modifiers),
+            },
         }
     }
 }
@@ -408,6 +433,32 @@ impl Ime {
 mod tests {
     use super::*;
 
+    #[test]
+    fn terminal_metadata_survives_without_becoming_text_widget_input() {
+        let event = KeyEvent::from_protocol(protocol::Key {
+            down: true,
+            repeat: false,
+            code: 38,
+            characters: "\u{1}".into(),
+            unmodified: "A".into(),
+            modifiers: modifier::CONTROL | modifier::SHIFT,
+            composing: None,
+            native: protocol::NativeKey {
+                keysym: 0x41,
+                text: "A".into(),
+                unshifted: Some('a'),
+                consumed_modifiers: modifier::SHIFT,
+                num_lock: true,
+                modifier: false,
+            },
+        });
+        assert_eq!(event.text, None);
+        assert_eq!(event.native.text, "A");
+        assert_eq!(event.native.unshifted, Some('a'));
+        assert_eq!(event.native.consumed_modifiers, Modifiers::SHIFT);
+        assert!(event.modifiers.contains(Modifiers::NUM_LOCK));
+    }
+
     fn key(characters: &str, unmodified: &str, modifiers: usize) -> KeyEvent {
         KeyEvent::from_protocol(protocol::Key {
             down: true,
@@ -417,6 +468,7 @@ mod tests {
             unmodified: unmodified.into(),
             modifiers,
             composing: None,
+            native: Default::default(),
         })
     }
 

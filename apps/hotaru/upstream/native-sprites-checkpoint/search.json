@@ -1,0 +1,22 @@
+{
+  "binary": "/nix/store/k8hj5hzc316icb0g64fbglrh6gpjfwh6-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774",
+  "backend": "private headless Sway, pixman",
+  "checks": {
+    "history_navigation": {
+      "matches": 120,
+      "order": [
+        1,
+        2,
+        1,
+        120
+      ],
+      "copied_match": "Needle"
+    },
+    "query_replacement": {
+      "query": "none",
+      "matches": 0
+    }
+  },
+  "status": "passed"
+}

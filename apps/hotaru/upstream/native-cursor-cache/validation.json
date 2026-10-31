@@ -1,0 +1,395 @@
+{
+  "schema": 1,
+  "isolated_source_scope": "cb91125 plus final cursor and widget timer changes; exact hashes in isolated-cursor-report.json",
+  "isolated_native_tests": {
+    "aizome-hako": {
+      "passed": 97,
+      "failed": 0,
+      "ignored": 0,
+      "doctests_passed": 0
+    },
+    "aizome-hotaru": {
+      "passed": 41,
+      "failed": 0,
+      "ignored": 6,
+      "doctests_passed": 0
+    },
+    "aizome-kit": {
+      "passed": 160,
+      "failed": 0,
+      "ignored": 1,
+      "doctests_passed": 3
+    }
+  },
+  "isolated_suite_details": [
+    {
+      "package": "aizome-hako",
+      "suite": "unittests src/lib.rs",
+      "passed": 68,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "unittests src/main.rs",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "tests/files.rs",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "tests/goldens.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "tests/perf.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "tests/window.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hotaru",
+      "suite": "unittests src/lib.rs",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "package": "aizome-hotaru",
+      "suite": "unittests src/main.rs",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hotaru",
+      "suite": "tests/cursor.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hotaru",
+      "suite": "tests/native.rs",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 5
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "unittests src/lib.rs",
+      "passed": 32,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/alert_layout.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/canvas.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/collections.rs",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/core.rs",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/dialogs.rs",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/drag_out.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/editor.rs",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/field_blur.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/goldens.rs",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/hidden.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/inspect.rs",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/lists.rs",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/menu_hooks.rs",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/modal_commands.rs",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/nested_modals.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/panes.rs",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/perf.rs",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/popups.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/program_popups.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/scroll_growth.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/scrolling.rs",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/shell_api.rs",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/shell_link.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/smoke.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/text_drag.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/text_field.rs",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/tooltip_refresh.rs",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/widget_timers.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "tests/window_state.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hako",
+      "suite": "doctests",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-hotaru",
+      "suite": "doctests",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "package": "aizome-kit",
+      "suite": "doctests",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "direct_kit_consumers": {
+    "status": "passed",
+    "all_targets": true,
+    "packages": [
+      "aizome-face",
+      "aizome-greeter",
+      "aizome-network-agent",
+      "aizome-portal",
+      "aizome-hako",
+      "aizome-shell",
+      "aizome-yukimi",
+      "aizome-kura",
+      "aizome-soroban",
+      "aizome-settei",
+      "aizome-koyomi",
+      "aizome-tenki",
+      "aizome-tokei",
+      "aizome-tansu",
+      "aizome-myaku",
+      "aizome-sumi",
+      "aizome-shashin",
+      "aizome-annai",
+      "aizome-fusen",
+      "aizome-koe",
+      "aizome-hotaru"
+    ],
+    "count": 21
+  },
+  "combined_package": {
+    "passed": 44,
+    "ignored": 7,
+    "failed": 0,
+    "detail": "20 library + 2 cursor + 22 native tests; ignored tests are 2 timing diagnostics and 5 environment-sensitive integrations"
+  },
+  "combined_shape_allocation_probe": {
+    "feature": "shape-allocation-probe",
+    "correctness_tests_passed": 4,
+    "strict_clippy_all_targets": "passed",
+    "ignored_timing_benchmark_run": false
+  },
+  "independent_reviews": [
+    "linux_io: core cursor semantics, timer lifecycle, typed node identity",
+    "upstream_clipboard: native eligibility, paint coherence, wide cells, preedit and invalidation"
+  ],
+  "logs": {
+    "native_kit_hako": {
+      "path": "/home/callen/work/hotaru-cursor-isolated/artifacts/cursor/unkeyed-after.log",
+      "sha256": "8980fd4859aff0e83d8b56c7b9f6ed138c65a8ac2739c415c4af43fcdddb31b5"
+    },
+    "consumer_check": {
+      "path": "/home/callen/work/hotaru-cursor-isolated/artifacts/cursor/consumer-check-pinned.log",
+      "sha256": "6c924614dc4be4bad0ee1444c69bb1db7bef1e60e46dd779fdbcf432305557bc"
+    },
+    "unkeyed_before": {
+      "path": "/home/callen/work/hotaru-cursor-isolated/artifacts/cursor/unkeyed-before.log",
+      "sha256": "b8fe17034946a73d245d3ede3fca800eb294f3c7c9d91e9cda34e925cf296f28"
+    },
+    "combined_probe": {
+      "path": "/home/callen/work/sekka-hotaru/artifacts/hotaru-cursor-cache-qualification/allocation-probe-check.log",
+      "sha256": "5dfb7a8e07a23ab410cbf9b5397de01aa1a928cd8c3ad238182b99870dcd3295"
+    }
+  },
+  "raw_evidence": {
+    "local": "/home/callen/work/sekka-hotaru/artifacts/hotaru-cursor-cache-qualification",
+    "workstation": "/home/callen/work/hotaru-cursor-cache-qualification-20261028",
+    "isolated_local": "/home/callen/work/hotaru-cursor-isolated/artifacts/cursor",
+    "isolated_workstation": "/home/callen/work/hotaru-cursor-isolated/artifacts/cursor"
+  }
+}

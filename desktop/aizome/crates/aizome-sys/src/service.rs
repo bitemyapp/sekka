@@ -27,39 +27,9 @@ use std::time::Duration;
 /// Services call it whenever their model changes and whenever an action
 /// finishes. It must be cheap and must not block: post an event to the main
 /// loop (a `sidestep_ui::Proxy`, an eventfd, a channel) and return. It runs
-/// on whichever service thread noticed the change.
-#[derive(Clone)]
-pub struct Wake(Arc<dyn Fn() + Send + Sync>);
-
-impl Wake {
-    /// A wake that calls `wake`.
-    pub fn new(wake: impl Fn() + Send + Sync + 'static) -> Wake {
-        Wake(Arc::new(wake))
-    }
-
-    /// A wake that does nothing, for callers that poll the services'
-    /// `generation()` counters or wait on [`Task`]s instead.
-    pub fn none() -> Wake {
-        Wake(Arc::new(|| {}))
-    }
-
-    /// Wake the main loop.
-    pub fn wake(&self) {
-        (self.0)()
-    }
-}
-
-impl std::fmt::Debug for Wake {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Wake")
-    }
-}
-
-impl Default for Wake {
-    fn default() -> Wake {
-        Wake::none()
-    }
-}
+/// on whichever service thread noticed the change. The type is
+/// `aizome-apps`'s, so the application index's watcher takes it too.
+pub use aizome_apps::Wake;
 
 /// An action running off the UI thread, and its result once it is done.
 ///

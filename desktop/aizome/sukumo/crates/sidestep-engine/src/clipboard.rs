@@ -19,7 +19,9 @@
 //! are read when asked for, waiting for as long as data keeps coming and
 //! until [`READ_TIMEOUT`] passes without any: a large image that streams in
 //! is read whole, and a client that never answers costs [`READ_TIMEOUT`],
-//! once. That bound is documented on `NSPasteboard`.
+//! once. Every request also has an absolute [`TRANSFER_TIMEOUT`] cap, even
+//! while bytes continue arriving. Native UI callers use [`TextRead`] on a
+//! worker with a potentially shorter deadline and an explicit size bound.
 //!
 //! A counter shared by both threads plays `changeCount`: the main thread
 //! bumps it when the program clears the pasteboard, and the render thread
@@ -62,6 +64,85 @@ pub const READ_AHEAD_LIMIT: usize = 1 << 20;
 /// The most a read takes: a longer selection reads as nothing.
 pub const READ_LIMIT: usize = 256 << 20;
 
+/// A transfer cannot keep a render-loop pipe alive forever by trickling bytes.
+/// Worker callers may impose a shorter absolute deadline.
+pub const TRANSFER_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Selection identity changes immediately on a new offer or a local write.
+/// The pasteboard generation alone changes only after read-ahead completes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClipboardIdentity {
+    offer: u64,
+    local_write: u64,
+}
+
+/// A small, Send snapshot. `read` belongs on a worker; snapshot creation and
+/// cancellation never wait for a clipboard peer or copy the selected text.
+#[derive(Clone)]
+pub struct TextRead {
+    source: Source,
+    identity: ClipboardIdentity,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl TextRead {
+    pub fn identity(&self) -> ClipboardIdentity {
+        self.identity
+    }
+
+    pub fn is_current(&self) -> bool {
+        !self.cancelled.load(Ordering::Relaxed) && shared_for(self.source).identity() == self.identity
+    }
+
+    pub fn cancel(&self) {
+        shared_for(self.source).cancel_read(&self.cancelled);
+    }
+
+    pub fn read(&self, timeout: Duration, maximum: usize) -> Option<Arc<str>> {
+        let deadline = Instant::now().checked_add(timeout.min(TRANSFER_TIMEOUT))?;
+        shared_for(self.source).read_text_snapshot(
+            self.identity,
+            self.cancelled.clone(),
+            deadline,
+            maximum.min(READ_LIMIT),
+        )
+    }
+
+    /// The text as offered, byte for byte, whether or not it is UTF-8 (a
+    /// terminal program reading the clipboard wants it unchanged). Belongs
+    /// on a worker, as [`read`](Self::read) does.
+    pub fn read_bytes(&self, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        let deadline = Instant::now().checked_add(timeout.min(TRANSFER_TIMEOUT))?;
+        shared_for(self.source).read_bytes_snapshot(
+            self.identity,
+            None,
+            self.cancelled.clone(),
+            deadline,
+            maximum.min(READ_LIMIT),
+        )
+    }
+
+    /// The types the selection offers (this program's own internal ones
+    /// left out), while it is still the one this read was taken of: what a
+    /// terminal program asking for the clipboard's types is told.
+    pub fn mimes(&self) -> Option<Vec<String>> {
+        shared_for(self.source).mimes_snapshot(self.identity, &self.cancelled)
+    }
+
+    /// The selection as `mime`, byte for byte, if it offers that type.
+    /// Belongs on a worker, as [`read`](Self::read) does.
+    pub fn read_type(&self, mime: &str, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        let deadline = Instant::now().checked_add(timeout.min(TRANSFER_TIMEOUT))?;
+        shared_for(self.source).read_bytes_snapshot(
+            self.identity,
+            Some(mime),
+            self.cancelled.clone(),
+            deadline,
+            maximum.min(READ_LIMIT),
+        )
+    }
+}
+
 /// Types' data by MIME type, as offered to other clients. `None` is data
 /// the program promised: the main thread makes it when a client asks.
 pub struct Contents {
@@ -82,6 +163,9 @@ pub enum Source {
     Selection,
     /// The drag and drop offer under the pointer: the drag pasteboard.
     Drag,
+    /// What was last selected, which a middle click pastes: the primary
+    /// selection, where the compositor offers one.
+    Primary,
 }
 
 /// The MIME types that mark this process's own selections and drags.
@@ -119,9 +203,9 @@ enum Text {
     /// On its way, for readers to wait for until `deadline`. `before` is
     /// the last selection's text when the types are the same, to tell
     /// whether this one is news.
-    Reading { offer: u64, deadline: Instant, before: Option<Option<String>> },
+    Reading { offer: u64, deadline: Instant, before: Option<Option<Arc<str>>> },
     /// Read: `None` if there's none, or it couldn't be read.
-    Read(Option<String>),
+    Read(Option<Arc<str>>),
 }
 
 /// What reading the text ahead came to.
@@ -135,6 +219,7 @@ pub enum ReadAhead {
 struct Foreign {
     /// Counts other clients' selections; a read ahead answers for one.
     offer: u64,
+    local_write: u64,
     /// For the drag pasteboard, the render thread's name for the drag, which
     /// reads are served from.
     drag: u64,
@@ -155,6 +240,23 @@ struct Reading {
     active: Instant,
     /// The answer, once it comes: the data, or `None` if there's none.
     answer: Option<Option<Vec<u8>>>,
+    bounds: ReadBounds,
+}
+
+#[derive(Clone)]
+struct ReadBounds {
+    identity: ClipboardIdentity,
+    deadline: Instant,
+    maximum: usize,
+    cancelled: Option<Arc<AtomicBool>>,
+}
+
+impl ReadBounds {
+    fn valid(&self, identity: ClipboardIdentity) -> bool {
+        self.identity == identity
+            && Instant::now() < self.deadline
+            && !self.cancelled.as_ref().is_some_and(|flag| flag.load(Ordering::Relaxed))
+    }
 }
 
 impl Foreign {
@@ -162,6 +264,7 @@ impl Foreign {
         // Until the compositor tells us of a selection, there is no text.
         Foreign {
             offer: 0,
+            local_write: 0,
             drag: 0,
             mimes: Vec::new(),
             text: Text::Read(None),
@@ -169,6 +272,10 @@ impl Foreign {
             cache: Vec::new(),
             cached_for: 0,
         }
+    }
+
+    fn identity(&self) -> ClipboardIdentity {
+        ClipboardIdentity { offer: self.offer, local_write: self.local_write }
     }
 
     /// The cache, emptied first if it's for another change than `generation`.
@@ -201,9 +308,11 @@ pub fn shared() -> &'static Shared {
 pub fn shared_for(source: Source) -> &'static Shared {
     static SELECTION: OnceLock<Shared> = OnceLock::new();
     static DRAG: OnceLock<Shared> = OnceLock::new();
+    static PRIMARY: OnceLock<Shared> = OnceLock::new();
     let cell = match source {
         Source::Selection => &SELECTION,
         Source::Drag => &DRAG,
+        Source::Primary => &PRIMARY,
     };
     cell.get_or_init(|| Shared::new(source))
 }
@@ -233,11 +342,40 @@ impl Shared {
 
     /// The program cleared the pasteboard: a new generation, its own.
     pub fn bump(&self) -> isize {
-        self.generation.fetch_add(1, Ordering::AcqRel) + 1
+        self.bump_identity().0
+    }
+
+    /// Stamp a local write atomically with the offer identity it replaces.
+    pub fn bump_identity(&self) -> (isize, ClipboardIdentity) {
+        let mut f = self.lock();
+        f.local_write = f.local_write.wrapping_add(1);
+        let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let identity = f.identity();
+        drop(f);
+        self.arrived.notify_all();
+        (generation, identity)
+    }
+
+    pub fn identity(&self) -> ClipboardIdentity {
+        self.lock().identity()
+    }
+
+    pub fn text_read(&self) -> TextRead {
+        self.used.store(true, Ordering::Relaxed);
+        TextRead { source: self.source, identity: self.identity(), cancelled: Arc::new(AtomicBool::new(false)) }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Foreign> {
         self.foreign.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn cancel_read(&self, cancelled: &AtomicBool) {
+        // Synchronize with the waiter's check-and-wait sequence. A bare atomic
+        // store plus notify can lose the notification just before Condvar wait.
+        let guard = self.lock();
+        cancelled.store(true, Ordering::Relaxed);
+        drop(guard);
+        self.arrived.notify_all();
     }
 
     // The render thread's side.
@@ -292,19 +430,25 @@ impl Shared {
 
     /// The text of `offer` was read ahead, or couldn't be.
     pub fn text_arrived(&self, offer: u64, outcome: ReadAhead) {
+        // The potentially large allocation is outside the shared-state lock.
+        let (text, failed) = match outcome {
+            ReadAhead::Text(text) => (Some(text.map(Arc::<str>::from)), false),
+            ReadAhead::TooLong => (None, false),
+            ReadAhead::Failed => (None, true),
+        };
         let mut f = self.lock();
         let Text::Reading { offer: reading, before, .. } = &mut f.text else { return };
         if *reading != offer {
             return;
         }
         let before = before.take();
-        let (text, news) = match outcome {
-            ReadAhead::Text(text) => {
+        let (text, news) = match (text, failed) {
+            (Some(text), _) => {
                 let news = before.as_ref() != Some(&text);
                 (Text::Read(text), news)
             }
-            ReadAhead::TooLong => (Text::Unread, true),
-            ReadAhead::Failed => (Text::Read(None), true),
+            (None, false) => (Text::Unread, true),
+            (None, true) => (Text::Read(None), true),
         };
         f.text = text;
         if news {
@@ -323,17 +467,38 @@ impl Shared {
 
     /// The answer to the main thread's read `token`.
     pub fn read_arrived(&self, token: u64, data: Option<Vec<u8>>) {
-        if let Some(reading) = self.lock().reads.get_mut(&token) {
-            reading.answer = Some(data);
+        let mut f = self.lock();
+        let identity = f.identity();
+        if let Some(reading) = f.reads.get_mut(&token) {
+            reading.answer =
+                Some(data.filter(|bytes| reading.bounds.valid(identity) && bytes.len() <= reading.bounds.maximum));
         }
+        drop(f);
         self.arrived.notify_all();
+    }
+
+    /// The render thread validates the token before opening a foreign pipe and
+    /// while its timer runs, so a cancelled worker cannot leave a stalled fd.
+    pub fn read_options(&self, token: u64) -> Option<(usize, Instant)> {
+        let f = self.lock();
+        let bounds = &f.reads.get(&token)?.bounds;
+        bounds.valid(f.identity()).then_some((bounds.maximum, bounds.deadline))
     }
 
     // The main thread's side.
 
     /// Offer `contents` as the selection, or clear it.
     pub fn offer(&self, contents: Option<Contents>) {
-        crate::backend::send_if_running(ToRender::SetSelection { contents: contents.map(Arc::new) });
+        self.offer_prepared(contents.map(Arc::new));
+    }
+
+    pub fn offer_prepared(&self, contents: Option<Arc<Contents>>) {
+        match self.source {
+            Source::Selection => crate::backend::send_if_running(ToRender::SetSelection { contents }),
+            Source::Primary => crate::backend::send_if_running(ToRender::SetPrimarySelection { contents }),
+            // A drag offers what its source holds.
+            Source::Drag => {}
+        }
     }
 
     /// The MIME types the foreign selection offers.
@@ -349,7 +514,7 @@ impl Shared {
         let mut f = self.lock();
         loop {
             match &f.text {
-                Text::Read(text) => return text.clone(),
+                Text::Read(text) => return text.as_ref().map(|text| text.to_string()),
                 Text::Reading { deadline, .. } => {
                     let left = deadline.saturating_duration_since(Instant::now());
                     if left.is_zero() {
@@ -365,7 +530,7 @@ impl Shared {
                     // read failed: asking again would only wait again.
                     let mut f = self.lock();
                     if f.offer == offer && matches!(f.text, Text::Unread) {
-                        f.text = Text::Read(text.clone());
+                        f.text = Text::Read(text.as_deref().map(Arc::from));
                     }
                     return text;
                 }
@@ -387,39 +552,142 @@ impl Shared {
     /// Read `mime` for the contents of change `from` (none: the current
     /// ones), or nothing if the pasteboard has changed since. Waits while
     /// data keeps coming, and gives up after [`READ_TIMEOUT`] without any.
+    /// The absolute [`TRANSFER_TIMEOUT`] still applies while data arrives.
     /// Each type is read once per change: what came, or that nothing came
     /// in time, is kept, so a client that never answers costs one wait.
     pub fn read_offer(&self, mime: &str, from: Option<isize>) -> Option<Arc<[u8]>> {
+        let bounds = ReadBounds {
+            identity: self.identity(),
+            deadline: Instant::now() + TRANSFER_TIMEOUT,
+            maximum: READ_LIMIT,
+            cancelled: None,
+        };
+        self.read_offer_bounded(mime, from, bounds)
+    }
+
+    fn read_text_snapshot(
+        &self,
+        identity: ClipboardIdentity,
+        cancelled: Arc<AtomicBool>,
+        deadline: Instant,
+        maximum: usize,
+    ) -> Option<Arc<str>> {
+        let bounds = ReadBounds { identity, deadline, maximum, cancelled: Some(cancelled) };
+        let mut f = self.lock();
+        loop {
+            if !bounds.valid(f.identity()) {
+                return None;
+            }
+            match &f.text {
+                Text::Read(text) => return text.clone().filter(|text| text.len() <= maximum),
+                Text::Reading { .. } => {
+                    let left = deadline.saturating_duration_since(Instant::now());
+                    f = self.arrived.wait_timeout(f, left).unwrap_or_else(|e| e.into_inner()).0;
+                }
+                Text::Unread => {
+                    let mime = text_mime(&f.mimes)?;
+                    drop(f);
+                    let data = self.read_offer_bounded(&mime, None, bounds.clone())?;
+                    let text: Arc<str> = String::from_utf8_lossy(&data).into_owned().into();
+                    // A replacement-character expansion also obeys the limit.
+                    if text.len() > maximum || !bounds.valid(self.identity()) {
+                        return None;
+                    }
+                    return Some(text);
+                }
+            }
+        }
+    }
+
+    fn mimes_snapshot(&self, identity: ClipboardIdentity, cancelled: &AtomicBool) -> Option<Vec<String>> {
+        self.used.store(true, Ordering::Relaxed);
+        let f = self.lock();
+        if f.identity() != identity || cancelled.load(Ordering::Relaxed) {
+            return None;
+        }
+        Some(f.mimes.iter().filter(|mime| !mime.starts_with(OWNER_PREFIX)).cloned().collect())
+    }
+
+    /// The bytes of `mime`, or of the text when none is named.
+    fn read_bytes_snapshot(
+        &self,
+        identity: ClipboardIdentity,
+        mime: Option<&str>,
+        cancelled: Arc<AtomicBool>,
+        deadline: Instant,
+        maximum: usize,
+    ) -> Option<Arc<[u8]>> {
+        let bounds = ReadBounds { identity, deadline, maximum, cancelled: Some(cancelled) };
+        let mime = {
+            let mut f = self.lock();
+            loop {
+                if !bounds.valid(f.identity()) {
+                    return None;
+                }
+                // Until a new offer's read ahead shows whether it's news, the
+                // change count, and the cache it keys, are still the last
+                // offer's: its bytes mustn't answer for this one.
+                if !matches!(f.text, Text::Reading { .. }) {
+                    break match mime {
+                        Some(mime) => f.mimes.iter().find(|offered| *offered == mime)?.clone(),
+                        None => text_mime(&f.mimes)?,
+                    };
+                }
+                let left = deadline.saturating_duration_since(Instant::now());
+                f = self.arrived.wait_timeout(f, left).unwrap_or_else(|e| e.into_inner()).0;
+            }
+        };
+        // Read ahead text was made UTF-8; these come from the pipe as sent.
+        self.read_offer_bounded(&mime, None, bounds)
+    }
+
+    fn read_offer_bounded(&self, mime: &str, from: Option<isize>, bounds: ReadBounds) -> Option<Arc<[u8]>> {
         self.used.store(true, Ordering::Relaxed);
         let token = self.next_token.fetch_add(1, Ordering::Relaxed);
         let (generation, drag) = {
             let mut f = self.lock();
             let generation = self.current();
-            if from.is_some_and(|g| g != generation) {
+            if from.is_some_and(|g| g != generation) || !bounds.valid(f.identity()) {
                 return None;
             }
             if let Some((_, data)) = f.cache_for(generation).iter().find(|(m, _)| m == mime) {
-                return data.clone();
+                return data.clone().filter(|bytes| bytes.len() <= bounds.maximum);
             }
-            f.reads.insert(token, Reading { active: Instant::now(), answer: None });
+            f.reads.insert(token, Reading { active: Instant::now(), answer: None, bounds: bounds.clone() });
             (generation, f.drag)
         };
         let source = self.source;
         crate::backend::send_if_running(ToRender::ReadSelection { mime: mime.to_owned(), token, source, drag });
         let mut f = self.lock();
         loop {
+            if !bounds.valid(f.identity()) {
+                f.reads.remove(&token);
+                return None;
+            }
             let reading = f.reads.get(&token)?;
             if reading.answer.is_some() {
-                let data: Option<Arc<[u8]>> = f.reads.remove(&token).and_then(|r| r.answer).flatten().map(Into::into);
-                self.remember(&mut f, generation, mime, data.clone());
+                let data = f.reads.remove(&token).and_then(|r| r.answer).flatten();
+                drop(f);
+                // Moving a Vec into an Arc may copy many MiB. The UI's small
+                // snapshot must not wait on that allocation under this lock.
+                let data: Option<Arc<[u8]>> = data.map(Into::into);
+                let mut f = self.lock();
+                if !bounds.valid(f.identity()) {
+                    return None;
+                }
+                if data.is_some() || bounds.cancelled.is_none() {
+                    self.remember(&mut f, generation, mime, data.clone());
+                }
                 return data;
             }
-            let left = (reading.active + READ_TIMEOUT).saturating_duration_since(Instant::now());
+            let left = (reading.active + READ_TIMEOUT).min(bounds.deadline).saturating_duration_since(Instant::now());
             if left.is_zero() {
                 // A late answer has nowhere to go, and asking again would
                 // only wait again.
                 f.reads.remove(&token);
-                self.remember(&mut f, generation, mime, None);
+                if bounds.cancelled.is_none() {
+                    self.remember(&mut f, generation, mime, None);
+                }
                 return None;
             }
             f = self.arrived.wait_timeout(f, left).unwrap_or_else(|e| e.into_inner()).0;
@@ -530,6 +798,134 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_identity_changes_before_read_ahead_finishes() {
+        let s = fresh();
+        let first = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(first, ReadAhead::Text(Some("first".into())));
+        let generation = s.change_count();
+        let identity = s.identity();
+        s.foreign_offered(text(), true).unwrap();
+        assert_eq!(s.change_count(), generation, "read-ahead has not classified the new text yet");
+        assert_ne!(s.identity(), identity, "an old paste must already be stale");
+        let before_write = s.identity();
+        s.bump();
+        assert_ne!(s.identity(), before_write, "local copy also invalidates pending paste");
+    }
+
+    #[test]
+    fn worker_read_has_absolute_deadline_even_while_bytes_trickle() {
+        let s = Arc::new(fresh());
+        let offer = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::TooLong);
+        let token = s.next_token.load(Ordering::Relaxed);
+        let producer = {
+            let s = s.clone();
+            std::thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(1);
+                while !s.lock().reads.contains_key(&token) {
+                    assert!(Instant::now() < deadline);
+                    std::thread::yield_now();
+                }
+                for _ in 0..20 {
+                    s.read_progressed(token);
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                s.read_arrived(token, Some(b"too late".to_vec()));
+            })
+        };
+        let start = Instant::now();
+        let answer = s.read_text_snapshot(
+            s.identity(),
+            Arc::new(AtomicBool::new(false)),
+            start + Duration::from_millis(40),
+            1024,
+        );
+        assert!(answer.is_none());
+        assert!(start.elapsed() < Duration::from_millis(200));
+        assert!(s.read_options(token).is_none(), "native pipe must see its token cancelled");
+        producer.join().unwrap();
+    }
+
+    #[test]
+    fn worker_cancellation_wakes_a_read_ahead_waiter() {
+        let s = Arc::new(fresh());
+        s.foreign_offered(text(), true).unwrap();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let other = {
+            let s = s.clone();
+            let cancelled = cancelled.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(10));
+                s.cancel_read(&cancelled);
+            })
+        };
+        let start = Instant::now();
+        assert!(s.read_text_snapshot(s.identity(), cancelled, start + Duration::from_secs(5), 1024).is_none());
+        assert!(start.elapsed() < Duration::from_millis(200));
+        other.join().unwrap();
+    }
+
+    #[test]
+    fn replaced_offer_cannot_deliver_old_worker_result() {
+        let s = Arc::new(fresh());
+        let offer = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::TooLong);
+        let identity = s.identity();
+        let token = s.next_token.load(Ordering::Relaxed);
+        let producer = {
+            let s = s.clone();
+            std::thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(1);
+                while !s.lock().reads.contains_key(&token) {
+                    assert!(Instant::now() < deadline);
+                    std::thread::yield_now();
+                }
+                s.foreign_offered(text(), true);
+                s.read_arrived(token, Some(b"obsolete".to_vec()));
+            })
+        };
+        assert!(
+            s.read_text_snapshot(
+                identity,
+                Arc::new(AtomicBool::new(false)),
+                Instant::now() + Duration::from_secs(1),
+                1024
+            )
+            .is_none()
+        );
+        producer.join().unwrap();
+        assert!(s.read_options(token).is_none());
+    }
+
+    #[test]
+    fn worker_read_limit_does_not_poison_the_shared_cache() {
+        let s = Arc::new(fresh());
+        let offer = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::TooLong);
+        let identity = s.identity();
+        let producer = answer_next(&s, b"larger than limit");
+        assert!(
+            s.read_text_snapshot(
+                identity,
+                Arc::new(AtomicBool::new(false)),
+                Instant::now() + Duration::from_secs(1),
+                2
+            )
+            .is_none()
+        );
+        producer.join().unwrap();
+        let producer = answer_next(&s, b"larger than limit");
+        let answer = s.read_text_snapshot(
+            identity,
+            Arc::new(AtomicBool::new(false)),
+            Instant::now() + Duration::from_secs(1),
+            1024,
+        );
+        producer.join().unwrap();
+        assert_eq!(answer.as_deref(), Some("larger than limit"));
+    }
+
+    #[test]
     fn a_repeated_offer_isnt_news() {
         let s = fresh();
         let offer = s.foreign_offered(text(), true).expect("read ahead");
@@ -592,6 +988,66 @@ mod tests {
             }
             s.read_arrived(token, Some(data.to_vec()));
         })
+    }
+
+    #[test]
+    fn byte_reads_never_answer_a_new_offer_with_the_last_ones_bytes() {
+        let s = std::sync::Arc::new(fresh());
+        let offer = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::Text(Some("old".into())));
+        let feeder = answer_next(&s, b"old");
+        let read = |s: &Shared, wait| {
+            s.read_bytes_snapshot(s.identity(), None, Arc::new(AtomicBool::new(false)), Instant::now() + wait, 16)
+        };
+        assert_eq!(read(&s, Duration::from_secs(1)).as_deref(), Some(&b"old"[..]));
+        feeder.join().unwrap();
+        // A new owner whose text never comes: the read waits out its own
+        // deadline rather than answering from the last owner's cache.
+        s.foreign_offered(text(), true).unwrap();
+        let start = Instant::now();
+        assert!(read(&s, Duration::from_millis(60)).is_none());
+        assert!(start.elapsed() >= Duration::from_millis(60));
+        // Once its text comes, the new owner's bytes are read.
+        let newer = s.foreign_offered(text(), true).unwrap();
+        s.text_arrived(newer, ReadAhead::Text(Some("new".into())));
+        let feeder = answer_next(&s, b"new");
+        assert_eq!(read(&s, Duration::from_secs(1)).as_deref(), Some(&b"new"[..]));
+        feeder.join().unwrap();
+    }
+
+    #[test]
+    fn type_reads_name_offered_types_and_wait_out_a_new_offers_read_ahead() {
+        let s = std::sync::Arc::new(fresh());
+        let owner = format!("{OWNER_PREFIX}-1");
+        let mimes = vec!["text/plain;charset=utf-8".to_string(), "image/png".to_string(), owner];
+        let offer = s.foreign_offered(mimes.clone(), true).unwrap();
+        s.text_arrived(offer, ReadAhead::Text(Some("hi".into())));
+        let read = TextRead { source: Source::Selection, identity: s.identity(), cancelled: Arc::default() };
+        let snapshot = |s: &Shared, mime, wait| {
+            s.read_bytes_snapshot(
+                read.identity,
+                Some(mime),
+                Arc::new(AtomicBool::new(false)),
+                Instant::now() + wait,
+                16,
+            )
+        };
+        assert_eq!(
+            s.mimes_snapshot(read.identity, &AtomicBool::new(false)).unwrap(),
+            ["text/plain;charset=utf-8", "image/png"],
+            "without the internal owner type"
+        );
+        let feeder = answer_next(&s, b"\x89PNG");
+        assert_eq!(snapshot(&s, "image/png", Duration::from_secs(1)).as_deref(), Some(&b"\x89PNG"[..]));
+        feeder.join().unwrap();
+        let start = Instant::now();
+        assert_eq!(snapshot(&s, "text/html", Duration::from_secs(1)), None, "not offered");
+        assert!(start.elapsed() < READ_TIMEOUT / 4);
+        // Another owner: the old read is stale, its types and data with it.
+        let newer = s.foreign_offered(mimes, true).unwrap();
+        assert_eq!(s.mimes_snapshot(read.identity, &AtomicBool::new(false)), None);
+        assert_eq!(snapshot(&s, "image/png", Duration::from_millis(20)), None);
+        s.text_arrived(newer, ReadAhead::Text(Some("ho".into())));
     }
 
     #[test]

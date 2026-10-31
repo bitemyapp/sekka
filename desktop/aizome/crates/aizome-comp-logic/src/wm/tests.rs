@@ -270,6 +270,26 @@ fn neighbour_tabs_wrap_round_the_group() {
 }
 
 #[test]
+fn a_moved_tab_stops_at_the_ends_and_keeps_showing() {
+    let mut m = model();
+    let a = add(&mut m, "a");
+    let b = add(&mut m, "b");
+    let c = add(&mut m, "c");
+    assert!(!m.move_tab(a, true), "a window on its own has no tabs");
+    m.stack(a, b);
+    m.stack(a, c);
+    assert!(m.move_tab(c, false));
+    assert_eq!(m.group_of(a).unwrap().members, vec![a, c, b]);
+    assert!(m.move_tab(c, false));
+    assert_eq!(m.group_of(a).unwrap().members, vec![c, a, b]);
+    assert!(!m.move_tab(c, false), "the first stays first");
+    assert!(m.move_tab(a, true));
+    assert_eq!(m.group_of(a).unwrap().members, vec![c, b, a]);
+    assert!(!m.move_tab(a, true), "the last stays last");
+    assert_eq!(m.group_of(a).unwrap().active, c, "moving a tab doesn't change which shows");
+}
+
+#[test]
 fn stacking_a_group_into_another_merges_them() {
     let mut m = model();
     let a = add(&mut m, "a");

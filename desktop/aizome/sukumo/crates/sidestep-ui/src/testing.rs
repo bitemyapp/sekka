@@ -113,6 +113,12 @@ pub fn inject_key(
         unmodified: unmodified.into(),
         modifiers: flags(modifiers),
         composing: None,
+        native: protocol::NativeKey {
+            text: characters.into(),
+            unshifted: unmodified.chars().next(),
+            num_lock: modifiers.contains(Modifiers::NUM_LOCK),
+            ..Default::default()
+        },
     };
     cx.inject(FromRender::Key { window: showing(cx, window), key });
 }

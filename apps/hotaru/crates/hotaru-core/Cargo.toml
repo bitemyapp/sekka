@@ -1,0 +1,18 @@
+[package]
+name = "hotaru-core"
+description = "Hotaru's Rust terminal state machine and owned screen snapshots"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+simdutf8 = { version = "0.1.5", path = "../../vendor/simdutf8" }
+compact_str = "0.10"
+lz4_flex = { version = "0.14", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
+triomphe = { version = "0.1.17", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+serde_json = "1"
+libc = "0.2"

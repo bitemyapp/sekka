@@ -31,6 +31,10 @@ jobs:
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     environment: nightly
+    env:
+      # Avoid repeated full-heap GC in the large NixOS evaluations. The job
+      # container has 64 GiB; start Nix's heap at 16 GiB (DEVELOPERS.md).
+      GC_INITIAL_HEAP_SIZE: "17179869184"
     permissions:
       contents: write
     steps:
@@ -86,6 +90,15 @@ jobs:
             echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
             exit 1
           }
+      - name: Build Uta
+        shell: bash
+        run: |
+          set -euo pipefail
+          # First, so a kit or Sukumo change that breaks Uta (see DEVELOPERS.md)
+          # fails here by name. Nothing of Uta runs in this job, which goes on
+          # to hold the cache's secrets: the flake check's uta-rustypipe runs
+          # it in the build sandbox.
+          nix build --no-update-lock-file --print-build-logs --no-link .#uta
       - name: Check components
         shell: bash
         run: |
@@ -122,7 +135,7 @@ jobs:
           # A fresh installed system, with any desktop and any free catalog
           # application, must find everything it needs in a cache: nothing
           # upstream publishes may make users compile.
-          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#installed-systems
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#installed-systems
       - name: Move main and nightly to this revision
         shell: bash
         env:

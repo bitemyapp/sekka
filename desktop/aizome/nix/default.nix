@@ -37,6 +37,10 @@ let
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
       libsecret
+      # aizome-media: FFmpeg demuxes and decodes (VA-API through its
+      # hwcontext), PipeWire plays. The same FFmpeg as mpv's.
+      ffmpeg
+      pipewire
     ];
   # Only what the build reads: the workspace and the files the package
   # installs.
@@ -66,6 +70,18 @@ let
       ../../../apps/yukimi/crates
     ];
   };
+  hotaruSrc = lib.fileset.toSource {
+    root = ../../../apps/hotaru;
+    fileset = lib.fileset.unions [
+      ../../../apps/hotaru/Cargo.toml
+      ../../../apps/hotaru/crates
+      ../../../apps/hotaru/resources
+      ../../../apps/hotaru/vendor/simdutf8
+    ];
+  };
+  ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
+  uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
+  unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
@@ -76,9 +92,27 @@ let
         inherit
           src
           yukimiSrc
+          hotaruSrc
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
           version
           rev
           fonts
+          hotaruFonts
+          ;
+      };
+      hotaru = pkgs.callPackage ./hotaru.nix {
+        inherit
+          src
+          yukimiSrc
+          hotaruSrc
+          ghosttyLicense
+          uucodeLicense
+          unicodeLicense
+          fonts
+          hotaruFonts
+          version
           ;
       };
       archivo = pkgs.callPackage ./fonts.nix { };
@@ -86,6 +120,7 @@ let
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
       # (docs/kit.md).
       fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
+      hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
       default = aizome;
     });
 
@@ -109,13 +144,22 @@ let
       koyomi-session = import ./vm-koyomi-session-test.nix { inherit pkgs self; };
       koyomi-modal = import ./vm-koyomi-modal-test.nix { inherit pkgs self; };
       shashin-modal = import ./vm-shashin-modal-test.nix { inherit pkgs self; };
+      # Packaged Shiori: a document opened, drawn and found through its
+      # worker, the worker killed and replaced (vm-shiori-test.nix).
+      shiori = import ./vm-shiori-test.nix { inherit pkgs self; };
       file-panel-multiple = import ./vm-file-panel-multiple-test.nix { inherit pkgs self; };
       terminal-shortcuts = import ./vm-terminal-shortcuts-test.nix { inherit pkgs self; };
       shashin-wallpaper = import ./vm-shashin-wallpaper-test.nix { inherit pkgs self; };
+      # Utsushi playing a video opened as the desktop opens one, and a song
+      # paused and resumed, through PipeWire (vm-utsushi-test.nix).
+      utsushi = import ./vm-utsushi-test.nix { inherit pkgs self; };
       standard-menu = import ./vm-standard-menu-test.nix { inherit pkgs self; };
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };
       myaku-grouping = import ./vm-myaku-grouping-test.nix { inherit pkgs self; };
+      # The processor's power meter: root's, asked by Myaku as a user
+      # (vm-power-meter-test.nix).
+      power-meter = import ./vm-power-meter-test.nix { inherit pkgs self; };
       tansu-size = import ./vm-tansu-size-test.nix { inherit pkgs self; };
       tansu-resize = import ./vm-tansu-resize-test.nix { inherit pkgs self; };
       sumi-search = import ./vm-sumi-search-test.nix { inherit pkgs self; };
@@ -124,6 +168,9 @@ let
       wallpaper-choice = import ./vm-wallpaper-choice-test.nix { inherit pkgs self; };
       network-auth = import ./vm-network-auth-test.nix { inherit pkgs self; };
       polkit-recovery = import ./vm-polkit-recovery-test.nix { inherit pkgs self; };
+      # Nisshi's reader through real polkit and pkexec: your own journal,
+      # the system's once polkit says yes, refused without (vm-nisshi-test.nix).
+      nisshi = import ./vm-nisshi-test.nix { inherit pkgs self; };
       # Koe set up from its window, and its service on, off and at the
       # next start (vm-koe-test.nix).
       koe = import ./vm-koe-test.nix { inherit pkgs self; };
@@ -143,6 +190,8 @@ let
           mold
           # Koe's whisper.cpp, built by whisper-rs-sys.
           cmake
+          # Bindings generated from C headers: FFmpeg's and PipeWire's.
+          rustPlatform.bindgenHook
         ];
         buildInputs = buildInputs pkgs;
         # dlopen'd at run time: EGL/GL drivers, fontconfig, xkbcommon.
@@ -152,6 +201,14 @@ let
         WHISPER_DONT_GENERATE_BINDINGS = "1";
         AIZOME_DEV_SHELL = "1";
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
+        HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
+        HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
+        HOTARU_TERMINFO_DIR = "${
+          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+            mkdir -p $out
+            tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
+          ''
+        }";
         RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         # The compositor's core is a Rust dylib that needs -C prefer-dynamic
         # (docs/reload.md); the wrapper adds it for that crate alone.

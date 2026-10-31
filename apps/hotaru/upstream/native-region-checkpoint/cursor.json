@@ -1,0 +1,30 @@
+{
+  "binary": "/nix/store/dkqws66ci8la92b6k2zsvkjy20a1yr71-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "dd780e65784fa7c85f9d2839c6d57f76e2ec36d4c25ef5f6f32e79c659e7bfb6",
+  "backend": "private headless Sway/pixman",
+  "checks": {
+    "steady_distinct_and_stable": {
+      "2": "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+      "4": "ca1fdf3231d2b62b2057e102ab2cf0f62d2859e522ee2754e455997c56e6fc3c",
+      "6": "4a027439dba916b87fb3f3ba2645c9db45df66d16bcfc396011de749867df4d5"
+    },
+    "blink-1": [
+      "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+      "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+    ],
+    "blink-3": [
+      "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da",
+      "ca1fdf3231d2b62b2057e102ab2cf0f62d2859e522ee2754e455997c56e6fc3c"
+    ],
+    "blink-5": [
+      "4a027439dba916b87fb3f3ba2645c9db45df66d16bcfc396011de749867df4d5",
+      "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+    ],
+    "blink-0": [
+      "23feb2f424da70327d2d0fc3e81fae2a4ae4fe6094cd3e78af8524a55bec9656",
+      "942690e9d62601c783022d50c951c0c53d6b9e2ed4d2fe99a122ac8cf52b63da"
+    ],
+    "inactive_hollow_and_refocus": true
+  },
+  "status": "passed"
+}

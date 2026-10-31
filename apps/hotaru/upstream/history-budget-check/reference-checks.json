@@ -1,0 +1,72 @@
+{
+ "scope": "Reference checks of the history-budget-check candidate against the pinned libghostty-vt, recorded on wx-workstation 2026-10-30. Scripts: tools/stream-parser-oracle.py and upstream/stream-parser/{sweep,suite-recheck,fuzz}.py.",
+ "candidate_sha256": "52ec3c4e41872b5a23cea0403b5228e45d0da29a00823308d8ed3d0656be9295",
+ "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+ "oracle": {
+  "cases": 855,
+  "chunk_sizes": [
+   1,
+   7,
+   65536
+  ],
+  "comparisons": 2565,
+  "matched": 2565
+ },
+ "sweep": {
+  "differing_commands": [
+   "$p",
+   "$}",
+   ">q",
+   "?$p"
+  ],
+  "identical_to_recorded_stream_parser_sweep": true
+ },
+ "suite_recheck": "suite-recheck.json",
+ "fuzz": {
+  "seeds": [
+   301,
+   302,
+   303,
+   304,
+   305,
+   306
+  ],
+  "cases": 60000,
+  "distinct_minimized_differences": 1,
+  "differences": {
+   "301": [],
+   "302": [
+    {
+     "case": "242886319f6d284a99b88071988063b8805b58611b9b364a5e",
+     "differences": [
+      {
+       "path": "/cursor/col",
+       "expected": 1,
+       "actual": 19
+      },
+      {
+       "path": "/cursor/row",
+       "expected": 1,
+       "actual": 0
+      },
+      {
+       "path": "/lines/0/cells/19/text",
+       "expected": "a",
+       "actual": "^"
+      },
+      {
+       "path": "/lines/0/text",
+       "expected": "$(\ufffd1\ufffdm(J\ufffd\ufffd\ufffdq\ufffd\ufffdc\ufffd\ufffd[Xa",
+       "actual": "$(\ufffd1\ufffdm(J\ufffd\ufffd\ufffdq\ufffd\ufffdc\ufffd\ufffd[X^"
+      }
+     ]
+    }
+   ],
+   "303": [],
+   "304": [],
+   "305": [],
+   "306": []
+  },
+  "note": "The seed-302 case is older than this change: 88c434c9's build (6c4f06ad) gives the same screen. Narrowed, ED and EL with a parameter other than 0-2 (3, 4, 6, 9, 22, ? forms) clear a pending wrap in Hotaru but not in the reference, and the reference implements ED 22; the sweep's probes never start with a wrap pending."
+ }
+}

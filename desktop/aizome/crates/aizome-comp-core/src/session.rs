@@ -89,6 +89,12 @@ pub fn session_env(az: &Aizome) -> Vec<(String, String)> {
 /// Runs a program detached from the compositor, with the session's
 /// environment, optionally in a folder.
 pub fn spawn(az: &Aizome, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, String> {
+    spawn_with(session_env(az), argv, cwd)
+}
+
+/// [`spawn`] with the session's environment taken already, for a thread
+/// that can't reach the compositor's state.
+pub fn spawn_with(env: Vec<(String, String)>, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, String> {
     let Some((prog, args)) = argv.split_first() else { return Err("nothing to run".into()) };
     // Keybindings and IPC launches must leave the compositor's service,
     // just as desktop-entry launches already do. In a nested/headless
@@ -105,7 +111,7 @@ pub fn spawn(az: &Aizome, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, 
     } else {
         Command::new(prog)
     };
-    cmd.args(args).stdin(Stdio::null()).envs(session_env(az));
+    cmd.args(args).stdin(Stdio::null()).envs(env);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     } else {
@@ -164,6 +170,11 @@ pub fn start(state: &mut State) {
 
     let real = real_session(&opts);
     state.az.children.env.push(("AIZOME_SESSION".into(), if real { "1" } else { "0" }.into()));
+    // Only someone's own session moves their terminal to Hotaru: a test or
+    // nested run must not rewrite the person's lists.
+    if real {
+        crate::terminal::move_to_hotaru_once(state.az.settings.keys.legacy_terminal.clone());
+    }
 
     if !opts.no_xwayland {
         if let Some(bin) = which("xwayland-satellite") {

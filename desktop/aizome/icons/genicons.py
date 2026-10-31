@@ -159,6 +159,22 @@ def myaku():
     return g
 
 
+@icon("org.aizome.Nisshi", "Nisshi (Logs)")
+def nisshi():
+    # A log book open on its page, bound in the deepest dye: each line a
+    # time and the message written then, one of them marked in amber, the
+    # one looked for.
+    g = R(10, 8, 40, 46, PAPER) + R(10, 8, 4, 46, AI)
+    for i, w in enumerate((18, 12, 20, 16, 10, 18)):
+        y = 14 + i * 6
+        marked = i == 3
+        if marked:
+            g += R(16, y - 2, 32, 6, AMBER)
+        g += R(18, y, 6, 2, INK if marked else MID)
+        g += R(26, y, w, 2, INK if marked else DEEP)
+    return g
+
+
 @icon("org.aizome.Yukimi", "Yukimi (Software)")
 def yukimi():
     # A yukimi-shōji: paper and lattice above, a pane of glass set low,
@@ -188,6 +204,31 @@ def shashin():
         g += R(x, y, w, 41 - y, AI)
     g += R(33, 33, 14, 8, DEEP) + R(37, 30, 6, 3, DEEP)
     g += R(13, 44, 12, 2, LINE2)
+    return g
+
+
+@icon("org.aizome.Shiori", "Shiori (Documents)")
+def shiori():
+    # A page bound in the deepest dye, its lines of text, and the 栞 the
+    # name means: an amber ribbon laid over the page and hanging below,
+    # cut in a notch.
+    g = R(12, 10, 4, 38, AI) + R(16, 10, 30, 38, PAPER)
+    for y, w in ((16, 22), (20, 22), (24, 18), (30, 22), (34, 22), (38, 14)):
+        g += R(20, y, w, 2, MID)
+    g += f'<path d="M34 8 H42 V52 L38 48 L34 52 Z" fill="{AMBER}"/>'
+    return g
+
+
+@icon("org.aizome.Utsushi", "Utsushi (Media Player)")
+def utsushi():
+    # A frame of film: sprockets along the strip, the picture deep in it,
+    # and amber light playing through it.
+    g = R(10, 12, 40, 36, MID)
+    for x in range(13, 48, 6):
+        g += R(x, 14, 3, 3, KON) + R(x, 43, 3, 3, KON)
+    g += R(12, 19, 36, 22, AI)
+    for i, (y, h) in enumerate(((22, 16), (24, 12), (26, 8), (28, 4))):
+        g += R(28 + 2 * i, y, 2, h, AMBER)
     return g
 
 

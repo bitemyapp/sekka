@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use kurbo::{Point, Rect, Size, Vec2};
 use sidestep_engine::backend::{self, Backend};
-use sidestep_engine::clipboard::{self, Contents, Source};
+use sidestep_engine::clipboard::{self, ClipboardIdentity, Contents, Source};
 use sidestep_engine::protocol::{DragIcon, FromRender, Target, TitleText, ToRender};
 use sidestep_engine::{momentum, outputs, settings, stats};
 
@@ -28,6 +28,238 @@ use crate::event::{Ime, KeyEvent, Modifiers, PointerButton, ScrollDelta, ScrollP
 use crate::image::Image;
 use crate::text::{Font, TextStyle};
 use crate::window::{Background, Window, WindowData, WindowId, WindowOptions, send};
+
+/// Text and its native MIME offers, prepared on a worker. Cloning or committing
+/// this value copies only Arcs, regardless of the number of selected bytes.
+#[derive(Clone)]
+pub struct PreparedClipboardText {
+    text: Arc<str>,
+    contents: Arc<Contents>,
+}
+
+impl PreparedClipboardText {
+    pub fn new(text: String) -> Self {
+        let text: Arc<str> = text.into();
+        let bytes: Arc<[u8]> = text.clone().into();
+        let items = clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))).collect();
+        Self { text, contents: Arc::new(Contents { items }) }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+/// Immutable MIME representations prepared on a worker and published together.
+/// Preparing validates MIME names and allocates text aliases; cloning and
+/// publication only copy Arcs. The backend retains its bounded nonblocking pipes.
+#[derive(Clone)]
+pub struct PreparedClipboard {
+    text: Option<Arc<str>>,
+    contents: Arc<Contents>,
+}
+
+impl PreparedClipboard {
+    /// `plain` supplies the standard UTF-8 text aliases. Additional MIME entries
+    /// share their provided allocations. At most 16 additional types are allowed;
+    /// names must be distinct, printable ASCII, and no longer than 255 bytes.
+    pub fn new(plain: Option<String>, representations: Vec<(String, Arc<[u8]>)>) -> std::io::Result<Self> {
+        let invalid = || std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid clipboard MIME bundle");
+        if representations.len() > 16 || (plain.is_none() && representations.is_empty()) {
+            return Err(invalid());
+        }
+        let mut items = Vec::with_capacity(clipboard::TEXT_MIMES.len() + representations.len());
+        let text = plain.map(|text| {
+            let text: Arc<str> = text.into();
+            let bytes: Arc<[u8]> = text.clone().into();
+            items.extend(clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))));
+            text
+        });
+        for (mime, bytes) in representations {
+            if mime.is_empty()
+                || mime.len() > 255
+                || !mime.bytes().all(|byte| (0x20..=0x7e).contains(&byte))
+                || clipboard::TEXT_MIMES.contains(&mime.as_str())
+                || items.iter().any(|(existing, _)| existing == &mime)
+            {
+                return Err(invalid());
+            }
+            items.push((mime, Some(bytes)));
+        }
+        Ok(Self { text, contents: Arc::new(Contents { items }) })
+    }
+
+    /// Text whose exact bytes are offered, UTF-8 or not, as a terminal
+    /// program writing the clipboard sent them. This program's own text
+    /// reads see them made valid UTF-8; byte reads get them unchanged.
+    pub fn from_text_bytes(bytes: Arc<[u8]>) -> Self {
+        let text: Arc<str> = Arc::from(String::from_utf8_lossy(&bytes).as_ref());
+        let items = clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))).collect();
+        Self { text: Some(text), contents: Arc::new(Contents { items }) }
+    }
+
+    /// A terminal program's own types, byte for byte, in its order (at most
+    /// 128; names distinct, printable ASCII, no longer than 255 bytes).
+    /// Text types it left out are offered with its first text type's bytes.
+    pub fn from_representations(representations: Vec<(String, Arc<[u8]>)>) -> std::io::Result<Self> {
+        let invalid = || std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid clipboard MIME bundle");
+        if representations.is_empty() || representations.len() > 128 {
+            return Err(invalid());
+        }
+        let mut items: Vec<(String, Option<Arc<[u8]>>)> = Vec::with_capacity(representations.len() + 4);
+        for (mime, bytes) in representations {
+            if mime.is_empty()
+                || mime.len() > 255
+                || !mime.bytes().all(|byte| (0x20..=0x7e).contains(&byte))
+                || items.iter().any(|(existing, _)| existing == &mime)
+            {
+                return Err(invalid());
+            }
+            items.push((mime, Some(bytes)));
+        }
+        let text_bytes = items
+            .iter()
+            .find(|(mime, _)| clipboard::TEXT_MIMES.contains(&mime.as_str()))
+            .and_then(|(_, bytes)| bytes.clone());
+        let text = text_bytes.as_ref().map(|bytes| Arc::from(String::from_utf8_lossy(bytes).as_ref()));
+        if let Some(bytes) = text_bytes {
+            for mime in clipboard::TEXT_MIMES {
+                if !items.iter().any(|(existing, _)| existing == mime) {
+                    items.push(((*mime).to_owned(), Some(bytes.clone())));
+                }
+            }
+        }
+        Ok(Self { text, contents: Arc::new(Contents { items }) })
+    }
+
+    pub fn text(&self) -> Option<&str> {
+        self.text.as_deref()
+    }
+
+    /// The bytes offered as text, as other programs receive them.
+    pub fn text_bytes(&self) -> Option<Arc<[u8]>> {
+        self.contents.data(clipboard::TEXT_MIMES[0]).flatten()
+    }
+
+    pub fn data(&self, mime: &str) -> Option<&[u8]> {
+        self.contents.items.iter().find(|(name, _)| name == mime).and_then(|(_, bytes)| bytes.as_deref())
+    }
+}
+
+impl From<PreparedClipboardText> for PreparedClipboard {
+    fn from(text: PreparedClipboardText) -> Self {
+        Self { text: Some(text.text), contents: text.contents }
+    }
+}
+
+/// Owned clipboard snapshot for a worker. Creating one never reads a pipe or
+/// clones selected bytes. Completion must be discarded if `is_current` is false.
+#[derive(Clone)]
+pub struct ClipboardRead {
+    foreign: Option<clipboard::TextRead>,
+    local: Option<Arc<str>>,
+    local_bytes: Option<Arc<[u8]>>,
+    local_contents: Option<Arc<Contents>>,
+    local_selection: bool,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl ClipboardRead {
+    /// A fixed headless/test clipboard; current until explicitly cancelled.
+    pub fn from_text(text: Option<Arc<str>>) -> Self {
+        let local_bytes = text.clone().map(Arc::<[u8]>::from);
+        let local_contents = local_bytes.as_ref().map(|bytes| {
+            let items = clipboard::TEXT_MIMES.iter().map(|mime| ((*mime).to_owned(), Some(bytes.clone()))).collect();
+            Arc::new(Contents { items })
+        });
+        Self {
+            foreign: None,
+            local: text,
+            local_bytes,
+            local_contents,
+            local_selection: true,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// A fixed headless/test clipboard holding `data`, every type of it.
+    pub fn from_prepared(data: &PreparedClipboard) -> Self {
+        Self {
+            foreign: None,
+            local: data.text.clone(),
+            local_bytes: data.text_bytes(),
+            local_contents: Some(data.contents.clone()),
+            local_selection: true,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn is_current(&self) -> bool {
+        !self.cancelled.load(Ordering::Relaxed) && self.foreign.as_ref().is_none_or(|read| read.is_current())
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+        if let Some(read) = &self.foreign {
+            read.cancel();
+        }
+    }
+
+    /// Run on a worker: waits at most the absolute timeout, regardless of a
+    /// peer's trickle rate, and never accepts more than `maximum` UTF-8 bytes.
+    pub fn read(&self, timeout: Duration, maximum: usize) -> Option<Arc<str>> {
+        if !self.is_current() || timeout.is_zero() {
+            return None;
+        }
+        let text = if self.local_selection {
+            self.local.clone()
+        } else {
+            self.foreign.as_ref().and_then(|read| read.read(timeout, maximum))
+        };
+        text.filter(|text| text.len() <= maximum && self.is_current())
+    }
+
+    /// As [`read`](Self::read), but the text's bytes as offered, which need
+    /// not be UTF-8: what a terminal program reading the clipboard is sent.
+    pub fn read_bytes(&self, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        if !self.is_current() || timeout.is_zero() {
+            return None;
+        }
+        let bytes = if self.local_selection {
+            self.local_bytes.clone()
+        } else {
+            self.foreign.as_ref().and_then(|read| read.read_bytes(timeout, maximum))
+        };
+        bytes.filter(|bytes| bytes.len() <= maximum && self.is_current())
+    }
+
+    /// The types the snapshot's selection offers, none once it isn't
+    /// current. Never waits.
+    pub fn types(&self) -> Vec<String> {
+        if !self.is_current() {
+            return Vec::new();
+        }
+        if self.local_selection {
+            let items = self.local_contents.as_ref().map(|contents| contents.items.as_slice()).unwrap_or_default();
+            return items.iter().filter(|(_, bytes)| bytes.is_some()).map(|(mime, _)| mime.clone()).collect();
+        }
+        self.foreign.as_ref().and_then(clipboard::TextRead::mimes).unwrap_or_default()
+    }
+
+    /// As [`read_bytes`](Self::read_bytes), but the selection as `mime`
+    /// (one of [`types`](Self::types)), byte for byte.
+    pub fn read_type(&self, mime: &str, timeout: Duration, maximum: usize) -> Option<Arc<[u8]>> {
+        if !self.is_current() || timeout.is_zero() {
+            return None;
+        }
+        let bytes = if self.local_selection {
+            self.local_contents.as_ref().and_then(|contents| contents.data(mime)).flatten()
+        } else {
+            self.foreign.as_ref().and_then(|read| read.read_type(mime, timeout, maximum))
+        };
+        bytes.filter(|bytes| bytes.len() <= maximum && self.is_current())
+    }
+}
 
 /// What a program does with its application's events. Every method but
 /// [`draw`](Handler::draw) has a default that does nothing.
@@ -492,6 +724,7 @@ impl App {
             coast: None,
             opened_any: false,
             clipboard: None,
+            primary: None,
             drags: HashMap::new(),
             looks: (Appearance::system(), Appearance::system().color(SystemColor::Accent)),
             locking: Locking::Unlocked,
@@ -555,7 +788,9 @@ pub struct Cx {
     opened_any: bool,
     /// The text the program last put on the clipboard, with the change it
     /// made.
-    clipboard: Option<(isize, String)>,
+    clipboard: Option<(ClipboardIdentity, PreparedClipboard)>,
+    /// What it last made the primary selection, likewise.
+    primary: Option<(ClipboardIdentity, PreparedClipboard)>,
     drags: HashMap<u64, DragState>,
     /// The appearance and accent windows last drew in.
     looks: (Appearance, Color),
@@ -856,12 +1091,57 @@ impl Cx {
     /// Put `text` on the clipboard, for this program and others. It takes
     /// once one of the windows has had input (Wayland's rule).
     pub fn set_clipboard_text(&mut self, text: &str) {
+        self.set_prepared_clipboard_text(PreparedClipboardText::new(text.to_owned()));
+    }
+
+    /// Commit a worker-prepared selection without copying its text on the UI
+    /// thread. Native writing remains readiness-driven on the render thread.
+    pub fn set_prepared_clipboard_text(&mut self, text: PreparedClipboardText) {
+        self.set_prepared_clipboard(text.into());
+    }
+
+    /// Publish all worker-prepared MIME representations as one selection without
+    /// iterating over or copying their bytes on the interface thread.
+    pub fn set_prepared_clipboard(&mut self, data: PreparedClipboard) {
         let shared = clipboard::shared();
-        let generation = shared.bump();
-        self.clipboard = Some((generation, text.to_owned()));
-        let bytes: Arc<[u8]> = Arc::from(text.as_bytes());
-        let items = clipboard::TEXT_MIMES.iter().map(|m| ((*m).to_owned(), Some(bytes.clone()))).collect();
-        shared.offer(Some(Contents { items }));
+        let (_, identity) = shared.bump_identity();
+        shared.offer_prepared(Some(data.contents.clone()));
+        self.clipboard = Some((identity, data));
+    }
+
+    /// Capture an O(1) snapshot for a worker. No pipe read or condition-variable
+    /// wait happens here, including for foreign multi-MiB selections.
+    pub fn clipboard_read(&self) -> ClipboardRead {
+        Self::read_of(Source::Selection, self.clipboard.as_ref())
+    }
+
+    /// Make worker-prepared contents the primary selection, which a middle
+    /// click pastes, as [`set_prepared_clipboard`](Cx::set_prepared_clipboard)
+    /// does the clipboard. Nothing happens where the compositor has none.
+    pub fn set_prepared_primary(&mut self, data: PreparedClipboard) {
+        let shared = clipboard::shared_for(Source::Primary);
+        let (_, identity) = shared.bump_identity();
+        shared.offer_prepared(Some(data.contents.clone()));
+        self.primary = Some((identity, data));
+    }
+
+    /// A snapshot of the primary selection for a worker, as
+    /// [`clipboard_read`](Cx::clipboard_read) takes of the clipboard.
+    pub fn primary_read(&self) -> ClipboardRead {
+        Self::read_of(Source::Primary, self.primary.as_ref())
+    }
+
+    fn read_of(source: Source, ours: Option<&(ClipboardIdentity, PreparedClipboard)>) -> ClipboardRead {
+        let foreign = clipboard::shared_for(source).text_read();
+        let cached = ours.filter(|(identity, _)| *identity == foreign.identity());
+        ClipboardRead {
+            local: cached.and_then(|(_, data)| data.text.clone()),
+            local_bytes: cached.and_then(|(_, data)| data.text_bytes()),
+            local_contents: cached.map(|(_, data)| data.contents.clone()),
+            local_selection: cached.is_some(),
+            foreign: Some(foreign),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     /// The clipboard's text: this program's, or another's, which may take
@@ -870,7 +1150,7 @@ impl Cx {
     pub fn clipboard_text(&self) -> Option<String> {
         let shared = clipboard::shared();
         match &self.clipboard {
-            Some((generation, text)) if shared.change_count() == *generation => Some(text.clone()),
+            Some((identity, data)) if shared.identity() == *identity => data.text().map(str::to_owned),
             _ => shared.foreign_text(),
         }
     }
@@ -881,8 +1161,8 @@ impl Cx {
     pub fn clipboard_types(&self) -> Vec<String> {
         let shared = clipboard::shared();
         match &self.clipboard {
-            Some((generation, _)) if shared.change_count() == *generation => {
-                clipboard::TEXT_MIMES.iter().map(|m| (*m).to_owned()).collect()
+            Some((identity, data)) if shared.identity() == *identity => {
+                data.contents.items.iter().map(|(mime, _)| mime.clone()).collect()
             }
             _ => shared.foreign_mimes(),
         }
@@ -903,9 +1183,7 @@ impl Cx {
         move |mime| {
             let shared = clipboard::shared();
             match &own {
-                Some((generation, text)) if shared.change_count() == *generation => {
-                    clipboard::TEXT_MIMES.contains(&mime).then(|| text.clone().into_bytes())
-                }
+                Some((identity, data)) if shared.identity() == *identity => data.data(mime).map(<[u8]>::to_vec),
                 _ => shared.read_foreign(mime),
             }
         }
@@ -1644,6 +1922,122 @@ impl Output {
 mod tests {
     use super::*;
     use sidestep_engine::protocol::Op;
+
+    #[test]
+    fn prepared_clipboard_clones_share_large_allocations() {
+        let prepared = PreparedClipboardText::new("a".repeat(4 * 1024 * 1024));
+        let other = prepared.clone();
+        assert!(Arc::ptr_eq(&prepared.text, &other.text));
+        assert!(Arc::ptr_eq(&prepared.contents, &other.contents));
+        let bytes = prepared.contents.items[0].1.as_ref().unwrap();
+        assert_eq!(bytes.as_ptr(), prepared.text.as_ptr());
+        assert!(prepared.contents.items.iter().all(|(_, item)| Arc::ptr_eq(bytes, item.as_ref().unwrap())));
+    }
+
+    #[test]
+    fn prepared_mime_bundle_shares_bytes_and_preserves_representations() {
+        let html: Arc<[u8]> = Arc::from(b"<b>different rich text</b>".as_slice());
+        let prepared =
+            PreparedClipboard::new(Some("plain text".into()), vec![("text/html".into(), html.clone())]).unwrap();
+        let other = prepared.clone();
+        assert!(Arc::ptr_eq(&prepared.contents, &other.contents));
+        assert!(Arc::ptr_eq(prepared.text.as_ref().unwrap(), other.text.as_ref().unwrap()));
+        assert_eq!(prepared.text(), Some("plain text"));
+        assert_eq!(prepared.data("text/plain").unwrap().as_ptr(), prepared.text().unwrap().as_ptr());
+        for mime in clipboard::TEXT_MIMES {
+            assert_eq!(prepared.data(mime), Some(b"plain text".as_slice()));
+        }
+        let stored = prepared.contents.items.iter().find(|(mime, _)| mime == "text/html").unwrap().1.as_ref().unwrap();
+        assert!(Arc::ptr_eq(stored, &html));
+        assert_eq!(prepared.data("text/html"), Some(b"<b>different rich text</b>".as_slice()));
+        let html_only = PreparedClipboard::new(None, vec![("text/html".into(), html)]).unwrap();
+        assert_eq!(html_only.text(), None);
+        assert_eq!(html_only.data("text/plain"), None);
+    }
+
+    #[test]
+    fn prepared_mime_bundle_rejects_ambiguous_or_unbounded_metadata() {
+        let bytes: Arc<[u8]> = Arc::from(b"x".as_slice());
+        for mime in ["", "text/plain", "UTF8_STRING", "text/html\0bad", "text/html\n"] {
+            assert!(PreparedClipboard::new(None, vec![(mime.into(), bytes.clone())]).is_err());
+        }
+        assert!(PreparedClipboard::new(None, vec![]).is_err());
+        assert!(PreparedClipboard::new(None, vec![("text/html".into(), bytes.clone()); 2]).is_err());
+        assert!(
+            PreparedClipboard::new(None, (0..17).map(|i| (format!("x/type{i}"), bytes.clone())).collect()).is_err()
+        );
+        assert!(PreparedClipboard::new(Some(String::new()), vec![]).is_ok());
+    }
+
+    #[test]
+    fn a_programs_own_types_are_offered_as_sent_with_its_text_under_every_text_name() {
+        let plain: Arc<[u8]> = Arc::from(&b"hi\xff"[..]);
+        let png: Arc<[u8]> = Arc::from(&b"\x89PNG"[..]);
+        let prepared = PreparedClipboard::from_representations(vec![
+            ("image/png".into(), png.clone()),
+            ("text/plain".into(), plain.clone()),
+            ("TEXT".into(), Arc::from(&b"other"[..])),
+        ])
+        .unwrap();
+        let types: Vec<&str> = prepared.contents.items.iter().map(|(mime, _)| mime.as_str()).collect();
+        assert_eq!(types, ["image/png", "text/plain", "TEXT", "text/plain;charset=utf-8", "UTF8_STRING", "STRING"]);
+        assert_eq!(prepared.text(), Some("hi\u{fffd}"));
+        assert_eq!(prepared.data("TEXT"), Some(&b"other"[..]), "the program's own text names keep their bytes");
+        assert_eq!(prepared.data("UTF8_STRING"), Some(&*plain));
+        assert!(Arc::ptr_eq(prepared.contents.items[0].1.as_ref().unwrap(), &png));
+        let png_only = PreparedClipboard::from_representations(vec![("image/png".into(), png.clone())]).unwrap();
+        assert_eq!((png_only.text(), png_only.contents.items.len()), (None, 1));
+        for bad in [vec![], vec![("".into(), png.clone())], vec![("a/b".into(), png.clone()); 2]] {
+            assert!(PreparedClipboard::from_representations(bad).is_err());
+        }
+        assert!(PreparedClipboard::from_representations(vec![("text/x\u{e9}".into(), png.clone())]).is_err());
+        let many = (0..129).map(|i| (format!("x/type{i}"), png.clone())).collect();
+        assert!(PreparedClipboard::from_representations(many).is_err());
+    }
+
+    #[test]
+    fn a_snapshot_lists_and_reads_each_type() {
+        let prepared = PreparedClipboard::new(Some("hi".into()), vec![("text/html".into(), Arc::from(&b"<b>"[..]))]);
+        let read = ClipboardRead::from_prepared(&prepared.unwrap());
+        assert_eq!(read.types().len(), clipboard::TEXT_MIMES.len() + 1);
+        assert!(read.types().iter().any(|mime| mime == "text/html"));
+        assert_eq!(read.read_type("text/html", Duration::from_secs(1), 16).as_deref(), Some(&b"<b>"[..]));
+        assert_eq!(read.read_type("text/html", Duration::from_secs(1), 2), None, "past the limit");
+        assert_eq!(read.read_type("image/png", Duration::from_secs(1), 16), None);
+        assert_eq!(read.read_bytes(Duration::from_secs(1), 16).as_deref(), Some(&b"hi"[..]));
+        let text = ClipboardRead::from_text(Some(Arc::from("x")));
+        assert_eq!(text.read_type("UTF8_STRING", Duration::from_secs(1), 16).as_deref(), Some(&b"x"[..]));
+        assert!(ClipboardRead::from_text(None).types().is_empty());
+        read.cancel();
+        assert!(read.types().is_empty() && read.read_type("text/html", Duration::from_secs(1), 16).is_none());
+    }
+
+    #[test]
+    fn clipboard_worker_handle_honors_size_and_cancellation() {
+        fn assert_send<T: Send>() {}
+        assert_send::<ClipboardRead>();
+        let read = ClipboardRead::from_text(Some(Arc::from("clipboard")));
+        assert!(read.read(Duration::from_secs(1), 2).is_none());
+        assert_eq!(read.read(Duration::from_secs(1), 1024).as_deref(), Some("clipboard"));
+        read.clone().cancel();
+        assert!(!read.is_current());
+        assert!(read.read(Duration::from_secs(1), 1024).is_none());
+    }
+
+    #[test]
+    fn text_bytes_are_offered_and_read_as_sent() {
+        let sent: Arc<[u8]> = Arc::from(&b"a\0b\xff"[..]);
+        let prepared = PreparedClipboard::from_text_bytes(sent.clone());
+        // Other programs get the bytes; this one's text reads, valid UTF-8.
+        assert_eq!(prepared.text(), Some("a\0b\u{fffd}"));
+        assert_eq!(prepared.text_bytes().as_deref(), Some(&*sent));
+        assert!(clipboard::TEXT_MIMES.iter().all(|mime| prepared.data(mime) == Some(&*sent)));
+        let read = ClipboardRead::from_text(Some(Arc::from("plain")));
+        assert_eq!(read.read_bytes(Duration::from_secs(1), 5).as_deref(), Some(&b"plain"[..]));
+        assert!(read.read_bytes(Duration::from_secs(1), 4).is_none());
+        read.cancel();
+        assert!(read.read_bytes(Duration::from_secs(1), 5).is_none());
+    }
 
     #[test]
     fn titles_are_white_glyphs_from_the_top_left() {

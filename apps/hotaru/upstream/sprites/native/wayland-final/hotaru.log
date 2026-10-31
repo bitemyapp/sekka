@@ -1,0 +1,19 @@
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed Archivo from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed Archivo from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed IBM Plex Mono from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_kit::fonts] installed Noto Sans Symbols 2 from /nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::font] terminal fallback families ["Noto Color Emoji"] from /nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoColorEmoji.ttf
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::font] terminal fallback families ["Noto Sans CJK KR", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK HK", "Noto Sans Mono CJK JP", "Noto Sans CJK JP", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans Mono CJK HK"] from /nix/store/1rv68ixfzh8ki0jmanx7y846h2qdvzbg-hotaru-fonts/NotoSansCJK-Regular.ttc
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1, grid 11x24 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1, grid 11x24 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1, grid 11x24 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1.25, grid 14x30 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:07Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1.25, grid 14x30 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:08Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 2, grid 22x49 px, unavailable families [], sprite thickness 3 px (estimated false)
+[2026-10-28T21:55:08Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 2, grid 22x49 px, unavailable families [], sprite thickness 3 px (estimated false)
+[2026-10-28T21:55:08Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1, grid 11x24 px, unavailable families [], sprite thickness 2 px (estimated false)
+[2026-10-28T21:55:08Z DEBUG aizome_hotaru::app] terminal font "IBM Plex Mono", scale 1, grid 11x24 px, unavailable families [], sprite thickness 2 px (estimated false)

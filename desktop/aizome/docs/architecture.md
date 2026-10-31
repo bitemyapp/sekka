@@ -19,6 +19,7 @@ boards' exact CSS. This document is the contract between the parts.
 | Config | `crates/aizome-config` | — | `~/.config/aizome/settings.toml`: schema, defaults, load/save, change notification |
 | Kit | `crates/aizome-kit` | — | Widget kit on sidestep-ui in Aizome's look: layout, controls, lists, text fields, menus (published to the global menu bar), sidebars, sheets, icons |
 | System | `crates/aizome-sys` | — | System services over D-Bus and the kernel: NetworkManager, BlueZ, PipeWire volume, UPower, brightness, power profiles, timedate/locale/hostname, AccountsService, CUPS, logind, MPRIS, disks (UDisks2) |
+| Apps index | `crates/aizome-apps` | — | Installed applications without D-Bus: desktop entries, the index of them, `Exec` lines, icons, default apps and the default terminal (Settei shows it, ❖Return starts it); `aizome-sys` re-exports it as `apps` and adds launching |
 | Search | `crates/aizome-search` | — | Fuzzy matching and the file index behind the palette and Find |
 | Portal | `crates/aizome-portal` | `aizome-portal` | The xdg-desktop-portal backend `org.freedesktop.impl.portal.desktop.aizome`: file choosers (Open and Save) for every app that asks the portal, each a window of its own over the app that asked (`docs/apps.md`, "The file chooser") |
 | Apps | `apps/*` | one each | Settei (Settings), Yukimi, Soroban, Koyomi, Tokei, Fusen, Sumi, Tenki, Tansu, Kura, Hako, Myaku |
@@ -97,10 +98,12 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ⌃❖←, ⌃❖→ | Previous, next Desk on this display (past those other displays show); with ⇧, take the window along |
 | ⌃❖↑ | Desks overview |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | Fill, park (minimise), split left, split right: the marking menu's verbs |
-| ⌥❖S | Stack with the window behind |
-| ⌥❖[, ⌥❖] | Previous, next tab of the window's group |
+| ⌃❖Space | The marking menu of the focused window, from the keyboard |
+| ⌃❖S; with ⇧ | Stack with the window behind; take the tab out of its group |
+| ❖⇧[, ❖⇧] | Previous, next tab of the window's group (⌘⇧[ ⌘⇧] on a Mac) |
+| ⌃⇧❖[, ⌃⇧❖] | Move the tab left, right in its group |
 | ⌃❖F | Full screen |
-| ❖Return | Terminal (foot) in the Desk's folder |
+| ❖Return | Terminal (Hotaru, or the one chosen in Settei) in the Desk's folder |
 | ⌃❖Q | Lock |
 | ⌃⌥Del | Recovery: force quit stuck apps, reset input, restart the shell (`docs/recovery.md`) |
 | ⌃❖R | Reload what changed: the compositor's logic, the shell, the settings (`docs/reload.md`) |
@@ -111,8 +114,15 @@ apps, as ⌘ does on a Mac. The system takes only:
 | media keys | Volume, mute, brightness, players, with the OSD |
 
 Right-click on a tab opens the marking menu of window verbs (fill, park,
-split ←/→, close, stack, float, to desk ▸). Right-click on empty desktop opens
-the NeXT menu.
+split ←/→, close, stack, float, to desk ▸). ⌃❖Space opens it around the
+focused window's tab with its keys showing: an arrow picks the verb that
+way and the first letter one of the others (S, C, F); D opens the Desks,
+where a digit picks one. Esc or ⌃❖Space again closes it.
+Right-click on empty desktop opens the NeXT menu.
+
+⌃❖ is the window manager's layer and ⇧ added to it carries something:
+the window to a Desk, the tab along its group or out of it. Switching tabs
+is Mac's ⌘⇧[ ⌘⇧], since ❖[ ❖] are Back and Forward in Aizome's apps.
 
 For apps that don't use Aizome's kit, the compositor translates ❖ shortcuts
 into the Ctrl ones they expect (❖C → Ctrl+C; in terminals Ctrl+Shift+C), so
@@ -123,6 +133,12 @@ or every window of that terminal app. Other terminal keys keep their normal
 translation; native and GTK apps keep their own Close/Quit handling. The
 `terminal-close` / `terminal-quit` bindings can be overridden or unbound in
 `keys.bindings`, and shortcut inhibitors still take precedence.
+
+The system's chords in the table come before the translation, so other apps
+don't get those either. ❖⇧[ and ❖⇧] switch tabs, so apps that don't use the
+kit no longer receive them as Ctrl+Shift+[ and Ctrl+Shift+] (VS Code's Fold
+and Unfold, for one). `"Super+Shift+bracketleft" = "none"` and
+`"Super+Shift+bracketright" = "none"` in `keys.bindings` give them back.
 
 ## IPC
 
@@ -196,7 +212,7 @@ sunrise and sunset: the shell writes what GeoClue says).
   ext-image-copy-capture, for outputs and windows, chosen with
   `aizome-share-picker`); xdg-desktop-portal-gtk for the rest
   (`aizome-portals.conf`).
-- Terminal: foot. Shell: Sekka's fish (set up as Omarchy sets it up).
+- Terminal: Hotaru, Aizome's own; foot stays installed as a choice. Shell: Sekka's fish (set up as Omarchy sets it up).
 - The lock screen uses PAM service `aizome`.
 
 ## Repository layout

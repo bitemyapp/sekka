@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "source_manifest_entries_matching_tested_candidate": 221,
+  "differences": [],
+  "expected_missing_patch_files": [
+    "apps/hotaru/upstream/sidestep-clipboard.patch",
+    "apps/hotaru/upstream/sidestep-grid-font.patch",
+    "apps/hotaru/upstream/sidestep-input.patch",
+    "apps/hotaru/upstream/sidestep-mime.patch",
+    "apps/hotaru/upstream/sidestep-sprites.patch"
+  ],
+  "missing_scope": "The isolated candidate has exact applied vendor source; patch inputs are not compiled and are absent from its mirror",
+  "term_view_sha256": "63e11655cc55dfef2e4a991721017a34742489ba69edf566cda29a0841804f6f",
+  "native_tests": 57,
+  "scope": "same source as isolated native tests and strict Clippy; previously frozen Nix package remains distinct"
+}

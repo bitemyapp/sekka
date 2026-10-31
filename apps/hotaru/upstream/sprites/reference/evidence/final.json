@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-28T20:57:28.478440+00:00",
+  "scope": "padded Alpha8 raster only; no application, metrics derivation, atlas upload or presentation claim",
+  "upstream_pin": "6ba144158577d033ccb6ed4b574e4013957c9161",
+  "glyphs": 153,
+  "metrics": 2032,
+  "fractional_scale_cases": [
+    {
+      "scale": 1,
+      "physical_metrics": [
+        11,
+        24,
+        1
+      ]
+    },
+    {
+      "scale": 1.25,
+      "physical_metrics": [
+        14,
+        30,
+        2
+      ]
+    },
+    {
+      "scale": 1.5,
+      "physical_metrics": [
+        17,
+        36,
+        2
+      ]
+    },
+    {
+      "scale": 1.75,
+      "physical_metrics": [
+        20,
+        42,
+        2
+      ]
+    },
+    {
+      "scale": 2,
+      "physical_metrics": [
+        22,
+        48,
+        2
+      ]
+    },
+    {
+      "scale": 2.25,
+      "physical_metrics": [
+        25,
+        54,
+        3
+      ]
+    },
+    {
+      "scale": 2.5,
+      "physical_metrics": [
+        28,
+        60,
+        3
+      ]
+    },
+    {
+      "scale": 3,
+      "physical_metrics": [
+        33,
+        72,
+        3
+      ]
+    }
+  ],
+  "candidate_sha256": "25fb2ddd09322cf8da6a6b5fa73730cb8da63a6f210806d2eb09fb0f703cd6f9",
+  "oracle_sha256": "0408e508e1082e1a4218c1ccfb8e7e77c47085558345d170a561e624997f76db",
+  "failures": [],
+  "matches": 310896,
+  "compared_bytes": 627591618,
+  "png_matches": 612,
+  "metadata_matches": 310896,
+  "png_sha256": {
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-9x17+1.png": "c52a982f7eca5280f2f9a5319d1513137e8d330ee4078eed36f8bce947025b06",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-11x21+2.png": "ab44bfd98b656185f540260079c1896c28ab13fa428d2fb43947d7e836774b59",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-12x24+3.png": "18ad45f8c64cf03ce7c866d359d20c4c2a869f041f4c96040cd5d3928b81c8fb",
+    "/home/callen/work/ghostty-reference-20261028/src/font/sprite/testdata/U+2500...U+25FF-18x36+4.png": "db4bf9d4cdc505c564073ff670a97810357c7c00cd3f4eef615ca5a264b1820e"
+  },
+  "load_average": [
+    4.8251953125,
+    10.419921875,
+    15.046875
+  ],
+  "sources": {
+    "rust/src/lib.rs": "9dc0fead542c6d56b8dd0e772302b58f260b0d7eb6bde27dd63e7c3894b11eb4",
+    "rust/src/main.rs": "361213da1ebea5fe1483b0b0515c29f75bf8b4c3dab9ae84f23a8afb72227657",
+    "rust/src/lines_map.rs": "91083cb7244e87b79213d9740664cd39d4e45de87e9dbf5b405c9ca63cc3eba5",
+    "rust/src/lines.rs": "a59abe67313e6ec36444552f1bdc53b69693b9049ca8d5cec1252592ea493b8f",
+    "rust/tests/raster.rs": "8fd4c6d80491498ce2166ff77f563dacef86c7c0240b4d08124248e535c52181",
+    "oracle/src/global.zig": "38b7ecc08a83107a661ad52804adfc5f7798d20c0bd6c8f60ad6162e44cdfa78",
+    "oracle/src/quirks.zig": "5ea281e568af715ba394738992f71f4c30f6b0b19dbc005dfebc677c10b77682",
+    "oracle/src/font/main.zig": "deb4bbb6a290a11a36abec492df2b985de285e44b3f2914130bc43a6efc881e5",
+    "oracle/src/font/sprite/canvas.zig": "7c17cec4fb41b9dfc6eb2ec8b371cb7a45b5fe468523f042931cf65c25053f6a",
+    "oracle/src/font/sprite/draw/box.zig": "ee10346fb261a2cc104352ff235664f32204e845ff98772c48f3b6a63053a951",
+    "oracle/src/font/sprite/draw/common.zig": "e9715d969a60c109a4eea7f081ca8b6114e6d8126896ae13e9cbbcddba704319",
+    "oracle/src/font/sprite/draw/block.zig": "54494d690e3c50e05e230cac1107ce36f519047dc7f09f728ad8bfdd862898f3",
+    "oracle/oracle.zig": "bc9d7fa3bafe1f3ba79ffddff4358a5ae880e0fada8024b907ae11f2f60fdfb3"
+  },
+  "status": "passed"
+}

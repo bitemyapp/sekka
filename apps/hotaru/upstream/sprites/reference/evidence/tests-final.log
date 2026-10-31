@@ -1,0 +1,78 @@
+   Compiling hotaru-sprite-prototype v0.1.0 (/home/callen/work/hotaru-sprites-20261028/rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/hotaru_sprites-ed6dc4afaa3d8a8e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/hotaru_sprite_prototype-2135289f1f08bbfb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden.rs (target/debug/deps/golden-254abbbd42f8734f)
+
+running 1 test
+test every_supported_sprite_matches_four_committed_upstream_atlases ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/raster.rs (target/debug/deps/raster-a23a52d12c6003b3)
+
+running 5 tests
+test allocation_is_bounded_before_reservation ... ok
+test tiny_heavy_dash_uses_upstream_light_fallback ... ok
+test odd_quadrants_overlap_and_shades_are_alpha_not_dither ... ok
+test complete_explicit_ranges_and_exclusions ... ok
+test ink_bounds_reconstruct_every_nonzero_pixel ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+   Doc-tests hotaru_sprites
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling hotaru-sprite-prototype v0.1.0 (/home/callen/work/hotaru-sprites-20261028/rust)
+    Finished `release` profile [optimized] target(s) in 0.33s
+     Running unittests src/lib.rs (target/release/deps/hotaru_sprites-180a399620f565ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/hotaru_sprite_prototype-fc3bc04efce62ec1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden.rs (target/release/deps/golden-84b812769b064678)
+
+running 1 test
+test every_supported_sprite_matches_four_committed_upstream_atlases ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/raster.rs (target/release/deps/raster-1e04695a3de6efb0)
+
+running 5 tests
+test allocation_is_bounded_before_reservation ... ok
+test odd_quadrants_overlap_and_shades_are_alpha_not_dither ... ok
+test tiny_heavy_dash_uses_upstream_light_fallback ... ok
+test complete_explicit_ranges_and_exclusions ... ok
+test ink_bounds_reconstruct_every_nonzero_pixel ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests hotaru_sprites
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking hotaru-sprite-prototype v0.1.0 (/home/callen/work/hotaru-sprites-20261028/rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s

@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-28T20:23:42.544390+00:00",
+  "status": "passed",
+  "source_sha256": "b9fcaa0ced20a2212e21685002a6da7b1fda89d3443394fe9afe82507c66ec3b",
+  "source_scope": "Cargo files, crates, .cargo and vendor; all recorded files unchanged before/after the qualification.",
+  "binary_sha256": "82d9762f258059c84b78b71b62f67977055b29f3e94c544361d3d56f50b2a933",
+  "base_revision": "b947d24ebab87886d8c2f03122d2dfd6cd6c1c92",
+  "workspace": "/home/callen/work/hotaru-core-qualified-cursor-20261028",
+  "commands": [
+    "cargo +1.95.0 clean -p hotaru-core -p hotaru-io -p hotaru-replay",
+    "cargo +1.95.0 test --workspace --locked",
+    "cargo +1.95.0 clippy --workspace --all-targets --locked -- -D warnings",
+    "RUSTFLAGS=\"-C target-cpu=native\" CARGO_PROFILE_RELEASE_OPT_LEVEL=3 CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_DEBUG=0 CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=false CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=false cargo +1.95.0 test --workspace --locked --release",
+    "python3 tools/build-candidate.py --workspace \"$PWD\" --revision <recorded in release-build.json> --metadata artifacts/qualification/release-build.json",
+    "python3 tools/differential.py --library /home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so --replay target/release/hotaru-replay --report artifacts/qualification/previous-reference.json",
+    "python3 tools/vt-controls-oracle.py --library /home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so --replay target/release/hotaru-replay --report artifacts/qualification/vt-controls-reference.json",
+    "python3 tools/cursor-oracle.py --root /home/callen/work/ghostty-reference-20261028 --output artifacts/qualification/cursor-reference.json"
+  ],
+  "tests": {
+    "debug-clippy.log": {
+      "passed": 136,
+      "failed": 0,
+      "ignored": 2,
+      "sha256": "e03fa8c68ed26d7b1252d20b9f17f783d015328ac4f769b6f5416015156aac7f"
+    },
+    "release-tests.log": {
+      "passed": 136,
+      "failed": 0,
+      "ignored": 2,
+      "sha256": "8202ef0c330bc661d3ff976b9ad175ef880ce3dadb10ad2d1437910e8d08df0b"
+    }
+  },
+  "ignored_tests": [
+    {
+      "test": "hotaru-io::shell::actual_shell_startup",
+      "reason": "Requires explicit Bash/Zsh/Fish/ncurses disposable-home run; not executed in this core qualification."
+    },
+    {
+      "test": "hotaru-io::shell::shell_child",
+      "reason": "Isolated subprocess helper, intentionally not run directly."
+    }
+  ],
+  "references": {
+    "previous-reference.json": {
+      "comparisons": 444,
+      "matched": 444,
+      "sha256": "a1b2c8c1e69cbdb3928160a2628cb0ba72e8de5a16230993cf6ddfd4d6f147b0",
+      "scope": [
+        "active cell text/graphemes",
+        "width",
+        "symbolic fg/bg/underline color",
+        "style bits including underline variants and overline",
+        "row wrap",
+        "cursor position/visibility",
+        "PTY replies",
+        "application cursor/focus/bracketed-paste modes",
+        "active screen identity",
+        "palette/effective foreground/background"
+      ],
+      "excluded": [
+        "empty cell versus explicit space",
+        "wide spacer-head representation",
+        "hyperlinks",
+        "other terminal modes",
+        "pending wrap",
+        "scrollback",
+        "other effects",
+        "graphics",
+        "rendering",
+        "clipboard transfers"
+      ]
+    },
+    "vt-controls-reference.json": {
+      "comparisons": 3462,
+      "matched": 3462,
+      "sha256": "d8da6a131b5542787cdbfe0f0b73250be3708eda1c9a0a1106837fa20e76f4d4",
+      "scope": [
+        "active cell text/graphemes",
+        "width",
+        "symbolic fg/bg/underline color",
+        "style bits including underline variants and overline",
+        "row wrap",
+        "cursor position/visibility",
+        "PTY replies",
+        "application cursor/focus/bracketed-paste modes",
+        "active screen identity",
+        "palette/effective foreground/background"
+      ],
+      "excluded": [
+        "empty cell versus explicit space",
+        "wide spacer-head representation",
+        "hyperlinks",
+        "other terminal modes",
+        "pending wrap",
+        "scrollback",
+        "other effects",
+        "graphics",
+        "rendering",
+        "clipboard transfers"
+      ]
+    },
+    "cursor-reference.json": {
+      "fresh_cases": 756,
+      "chunks": [
+        1,
+        7,
+        65536
+      ],
+      "comparisons": 2268,
+      "matched": 2268,
+      "method": "Fresh unchanged-library case objects equal bundled fixture case objects exactly; debug and release cursor integration tests replay all cases at each chunk size.",
+      "scope": "actual library cursor state and replies; GUI default and timer policy tested separately",
+      "sha256": "c2a97cc43872869680e412d051a337b0c1bc48331c33053f0b03615aea23be1c"
+    }
+  },
+  "performance": "Not measured: unrelated external compiler activity. Native application, Kit, packaged tests and Wayland behavior are separate qualifications.",
+  "tools_sha256": {
+    "tools/build-candidate.py": "73931ce11957f348d0200edbb063cc6d88e1ca1cfe619d7843b5b73304a3d339",
+    "tools/differential.py": "0c141bd2951158dbba6d63902103ad7a4df3d46d6391daa3e64581ee0d38dc5a",
+    "tools/vt-controls-oracle.py": "1e21a28085c529f657088311ed252cce0a01e1843fda1c27eaacc4dbb9ee57b3",
+    "tools/vt-controls-review.py": "7129f11c4194b255f6c7b949604f3b16b1181a3b4d2bdfcce9c5b6fc2039bdbb",
+    "tools/cursor-oracle.py": "d26da364925f837373244381f3fe7ebff29bd8f26e635d4dcc14199f69c9b9e4",
+    "artifacts/qualification/summarize.py": "58cd19d578908eff628e7ca366df6832ae3b47d3303d2f38ccb4aeac17031a2d"
+  },
+  "artifacts": {
+    "cursor-reference.json": "c2a97cc43872869680e412d051a337b0c1bc48331c33053f0b03615aea23be1c",
+    "debug-clippy.log": "e03fa8c68ed26d7b1252d20b9f17f783d015328ac4f769b6f5416015156aac7f",
+    "previous-reference.json": "a1b2c8c1e69cbdb3928160a2628cb0ba72e8de5a16230993cf6ddfd4d6f147b0",
+    "reference.log": "f5b8bfbac6448649846bcc87823d82dd394eae80b637f3a5fe201fcafaba19f8",
+    "release-build.json": "771b9d5ec69037014eb69bda4564249a0f1f84c56cd65fed527b883423a4aec0",
+    "release-build.log": "22a655444f6dac8292a03c540c87a5179e3ec483431bf6c31fd8330af3f5ad6e",
+    "release-tests.log": "8202ef0c330bc661d3ff976b9ad175ef880ce3dadb10ad2d1437910e8d08df0b",
+    "snapshot.json": "a0975c7aa7fad694691b834aa5053c682823c3c7a434bed620e31938820495fb",
+    "summarize.py": "58cd19d578908eff628e7ca366df6832ae3b47d3303d2f38ccb4aeac17031a2d",
+    "vt-controls-reference.json": "d8da6a131b5542787cdbfe0f0b73250be3708eda1c9a0a1106837fa20e76f4d4"
+  }
+}

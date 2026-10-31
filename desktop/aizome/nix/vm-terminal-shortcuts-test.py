@@ -25,6 +25,10 @@ def feet():
     return [w for w in windows() if w["app_id"] == "foot"]
 
 
+def hotarus():
+    return [w for w in windows() if w["app_id"] == "org.aizome.Hotaru"]
+
+
 def until(description, check):
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
@@ -60,24 +64,49 @@ def focus(w):
 machine.start()
 machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
 
+with subtest("foot, chosen before Hotaru, becomes Hotaru once"):
+    until(
+        "the move to Hotaru",
+        lambda: machine.execute("test -e /home/alice/.local/state/aizome/terminal-moved-to-hotaru")[0] == 0,
+    )
+    listed = machine.succeed("cat /home/alice/.config/xdg-terminals.list").split()
+    assert listed == ["org.aizome.Hotaru.desktop", "foot.desktop"], listed
+
+with subtest("❖Return opens Hotaru, the default terminal, and typing reaches its shell"):
+    chord("super+Return")
+    until("Hotaru", hotarus)
+
+    def typed():
+        # Retried: the shell may not have started when the window appears.
+        type_text("printf typed-into-hotaru > /tmp/hotaru-typed")
+        user("aizomectl input key Return")
+        status, _ = machine.execute('test "$(cat /tmp/hotaru-typed)" = typed-into-hotaru')
+        return status == 0
+
+    until("a command typed into Hotaru runs", typed)
+    machine.screenshot("00-hotaru-default")
+    chord("super+q")
+    until("Quit closes Hotaru", lambda: not hotarus())
+
+# foot, a terminal outside Aizome's kit, gets its ❖ shortcuts translated.
 with subtest("Close affects one terminal; Quit affects that terminal app"):
-    chord("super+Return")
+    user("aizomectl spawn foot")
     first = until("first terminal", lambda: feet() and feet()[0])
-    chord("super+Return")
+    user("aizomectl spawn foot")
     until("two terminals", lambda: len(feet()) == 2)
     machine.screenshot("01-two-terminals")
     chord("super+w")
     until("Close removes only current terminal", lambda: len(feet()) == 1)
     assert feet()[0]["id"] == first["id"]
     machine.screenshot("02-one-terminal")
-    chord("super+Return")
+    user("aizomectl spawn foot")
     until("two again", lambda: len(feet()) == 2)
     chord("super+q")
     until("Quit closes both terminals", lambda: not feet())
     machine.screenshot("03-terminal-quit")
 
 with subtest("terminal paste and copy still use Ctrl+Shift"):
-    chord("super+Return")
+    user("aizomectl spawn foot")
     current = until("clipboard terminal", lambda: feet() and feet()[0])
     # Set a test clipboard, then exercise the real terminal's paste shortcut.
     user("printf 'clipboard-roundtrip' | wl-copy")
@@ -152,3 +181,4 @@ machine.succeed("journalctl _UID=1000 --no-pager > /tmp/terminal-shortcuts.log")
 machine.copy_from_machine("/tmp/terminal-shortcuts.log")
 machine.copy_from_machine("/tmp/gtk-keys")
 machine.fail("coredumpctl --no-pager list foot")
+machine.fail("coredumpctl --no-pager list | grep -i hotaru")

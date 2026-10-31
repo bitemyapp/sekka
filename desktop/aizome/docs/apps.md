@@ -19,14 +19,18 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Tansu 箪笥 | Disks | `apps/tansu` | `aizome-tansu` | `org.aizome.Tansu` | chest of drawers (partitions as drawers) |
 | Kura 蔵 | Disk Usage | `apps/kura` | `aizome-kura` | `org.aizome.Kura` | storehouse |
 | Myaku 脈 | Activity | `apps/myaku` | `aizome-myaku` | `org.aizome.Myaku` | pulse |
+| Nisshi 日誌 | Logs | `apps/nisshi` | `aizome-nisshi` | `org.aizome.Nisshi` | log book, a day's record (a ship keeps a 航海日誌) |
 | Shashin 写真 | Images | `apps/shashin` | `aizome-shashin` | `org.aizome.Shashin` | photograph |
+| Shiori 栞 | Documents | `apps/shiori` | `aizome-shiori` | `org.aizome.Shiori` | bookmark (the slip that keeps your place in a book) |
+| Utsushi 映し | Media Player | `apps/utsushi` | `aizome-utsushi` | `org.aizome.Utsushi` | projecting, as onto a screen (the 映 of 映画, film) |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
 
 Also part of the session, not separate apps: the Toolchest, the command
 palette, notifications, the lock screen and the polkit dialog (all in
 `aizome-shell`), and the file chooser other apps open and save with
-(`aizome-portal`, below). The terminal is foot, themed by Aizome's module.
+(`aizome-portal`, below). The terminal is Hotaru (`apps/hotaru`); foot stays
+installed, themed by Aizome's module, as a choice in Settei's Default Apps.
 
 ## Conventions
 
@@ -128,11 +132,35 @@ palette. Search filters the sidebar and highlights options.
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),
   Caps Lock as (Caps Lock, Control, Escape, Compose), compose key, and the
   list of Aizome's shortcuts (from the compositor's `keys` config, editable).
-  In Typing → Keys → Modifier keys, choose **Swap Alt and Super** for a
-  Mac-style position, or the left-only swap to keep Right Alt for accents.
-  Changes apply immediately to all keyboards and persist across logins;
-  **Default** restores the modifier arrangement. Open this control directly
-  with `aizome-settei --pane keyboard.modifiers`.
+  In Typing → Keys → Modifier keys, choose **Swap left Alt and Super** for a
+  Mac-style position while keeping Right Alt (AltGr) for accents and symbols.
+  Changes apply immediately and persist across logins; **Default**
+  restores the modifier arrangement. Until changed here, layouts and
+  options are the system's (`services.xserver.xkb`, which Genkan writes). Open this control directly with
+  `aizome-settei --pane keyboard.modifiers`.
+  The modifier keys, Caps Lock and Compose key can differ from keyboard to
+  keyboard: Keys → Keyboard chooses whose they are, every keyboard's
+  without its own (`[input.keyboard]`) or one keyboard's
+  (`[[input.keyboards]]`, by the name and vendor:product it gives), and −
+  forgets a keyboard's own. **Set Up…** (`aizome-settei --pane
+  keyboard.setup`) asks for the key just left of the space bar on the
+  keyboard to set up. The compositor catches that key (`catch-key`: an
+  app never hears a modifier key alone) with the keyboard it came from,
+  so the press says which keyboard and where its ❖ should go: Alt there,
+  as on a PC, suggests **Swap left Alt and Super**; ⌘ Command or the Windows
+  key, nothing; Control, **Swap Control and Super**. The space bar or a
+  key right of it asks again. Its Caps Lock and Compose key start as
+  other keyboards' or, when there's one, as another keyboard's own.
+  **Same as Other Keyboards** keeps it typing as the others do;
+  while no key has come, it applies to the keyboard
+  chosen from those plugged in or paired and not set up, for one with no
+  space bar to press beside (a security key, a mouse's receiver). Layouts,
+  repeat, Num Lock and shortcuts are every keyboard's. Setup is optional:
+  new keyboards inherit the shared settings without notifications.
+  A saved profile also covers other interface names with the same
+  vendor/product ID when only one profile has that ID; exact name matches
+  keep priority. `--keyboard "Name (vendor:product)"` opens the setup sheet
+  with that keyboard chosen.
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
   typing, scroll speed.
@@ -177,8 +205,11 @@ As built, beyond the above:
 - **Date & Time** shows automatic time as set by the system configuration
   where NixOS keeps systemd's units in the store (timedated can't switch
   it there): change `services.timesyncd.enable`.
-- **Default Apps**: the terminal chosen is also `[keys] terminal`, what
-  ❖Return starts.
+- **Default Apps**: the terminal chosen is what ❖Return starts: the
+  compositor reads the same `xdg-terminals.list`, so the two can't
+  disagree. The first session of an Aizome with Hotaru moves foot, the
+  default before it, to Hotaru; a terminal chosen before stays
+  (`AppIndex::move_terminal_to_hotaru`).
 - **Printers & Scanners**: Add Printer leaves out printers already set
   up, cups-browsed's queues among them.
 - **Trackpad** says when no trackpad is connected; its settings are kept
@@ -596,17 +627,44 @@ package reading is not added on top of RAPL. Unavailable readings are
 labelled without assuming why access failed. This optional window uses
 the sampler's existing readings and closes independently of the main view.
 
-The processor's meter is its RAPL counters, readable only by root, or else
-the meter an AMD integrated Radeon reports: amdgpu's is the whole package's
-on an APU, the processor included, and anyone may read it. Without either,
-the battery's draw counts while it discharges. Each discrete card's own
-meter adds to any of these: NVML's energy counter, or the card's hwmon
-meter. A desktop with no battery and RAPL kept for root (the integrated
-Radeon and RTX 5090 one) measures through these. Each meter is shared by
-use of what it measures: the processor's (or the battery's draw less the
-cards') by processor time, a card's by its clients' time on that card,
-and what is left is the devices idling. With only the cards' meters,
-what uses no card shows a dash.
+The processor's meter is its RAPL counters. Only root may read them, as
+quick samples can leak secrets (CVE-2020-8694), so Myaku, running as you,
+asks Aizome's power meter for them. `aizome-power-meter` runs as root when
+something connects to `/run/aizome/power.sock` (the module's
+`aizome-power-meter.socket`), with no capabilities, network or writable
+files. It reads the package domains at most once a second, as Tatami's
+meter does, answers every connection with "NAME ENERGY_UJ RANGE_UJ
+READ_US" lines, and exits after a minute without one. `READ_US` is when
+it read them, in microseconds of `CLOCK_BOOTTIME`: Myaku's rates are over
+the time between two readings, whoever asked for them, and a repeated
+answer leaves its last rate standing: at Myaku's one-second frames, the
+processor's figure changes every second or two. The package domains are
+the `intel-rapl:N` named `package…`: a laptop's `psys` (Intel's platform
+domain, `intel-rapl:1` on the X1 Carbon Gen 14) measures the whole
+computer, the package included, and is left out. After the computer
+sleeps, the first interval is not measured: RAPL's counters went on
+through the night while Myaku's clock stopped, so its rate starts over
+(the processor shows a dash for a second or two) and no one's energy
+grows by it.
+`nix build .#aizome-checks.power-meter` boots a disposable VM: the socket
+must start the meter as root with no capabilities, and a user may ask it.
+A VM has no RAPL counters, so a stand-in then answers on the socket with
+a package drawing 20 W, which `aizome-myaku --print`, run as a user, must
+report. Reading real RAPL counters as root needs physical hardware.
+
+Without RAPL, an AMD APU's integrated Radeon reports the whole package
+(amdgpu's `PPT`, the processor included), and anyone may read it. A Ryzen
+7000 or 9000 desktop processor's Radeon (Raphael, Granite Ridge) doesn't:
+it sits on the I/O die beside separate core dies, and its `PPT` measures
+the graphics alone, about a tenth of a watt with every core busy. Myaku
+never takes it for the processor's. Without either, the battery's draw
+counts while it discharges. Each discrete card's own meter adds to any of
+these: NVML's energy counter, or the card's hwmon meter. A desktop with no
+battery (the Granite Ridge and RTX 5090 one) measures through RAPL and the
+card's meter. Each meter is shared by use of what it measures: the
+processor's (or the battery's draw less the cards') by processor time, a
+card's by its clients' time on that card, and what is left is the devices
+idling. With only the cards' meters, what uses no card shows a dash.
 
 `cargo test -p aizome-myaku --test gpu` drives the choice from the toolbar,
 the strip and the menu on a made-up desktop with both cards
@@ -618,6 +676,139 @@ smallest window; `--test look` holds its pictures in Night and Day, and
 test -p aizome-myaku --test gpu live_ -- --ignored --nocapture` compares the
 sampler with `nvidia-smi` (allowing allocations to change between readings)
 and checks that idle amdgpu clients read as idle.
+
+### Nisshi (Logs)
+
+The system journal and the text logs under /var/log, filtered as you type,
+with filters suggested by what wrote each message. Console's model in
+Aizome's look: places in a sidebar, search with tokens, a message's
+details below the list.
+
+- **Places**: All Messages, Errors & Warnings, My Session (your own
+  units and processes), Kernel, Crashes (core dumps, segfaults, traps,
+  Rust panics), Logins & Security (the auth facilities, sudo, polkit, ssh,
+  logind and the login screens), each counted; then the **Sources** that
+  wrote the most, counted with the rest of the filter (one with errors
+  has a warning glyph), and the **Log Files** under /var/log.
+- **Search** matches a message, what wrote it and its unit, in any case
+  unless a capital letter is typed. `-word` leaves out, `"a phrase"`,
+  `/regex/` (Rust's syntax, over the message), and keys: `app:`, `unit:`
+  (`.service` may be left out, `*` matches anything), `pid:`, `level:`
+  (that level or worse), `since:` and `until:` (`10m`, `2h`, `14:30`,
+  `yesterday`, `2026-10-28T14:30`), `id:` (the catalog id) and
+  `FIELD=value`, which the journal itself matches (the boot is read again).
+  Words found are drawn in the focus colour. While a key's value is being
+  typed, the strip offers the values there are, counted, and Return takes
+  the first.
+- **Suggestions**: the strip under the toolbar. With nothing selected it
+  says what stands out (errors and who wrote most of them, units that
+  failed, what crashed, out-of-memory kills, a burst of errors, a message
+  so frequent it's a fifth of what shows). With a message selected, it
+  offers what fits that message: only its source, its source's
+  problems, the topics Nisshi knows its program writes about
+  (`src/known.rs`, 21 kinds of program: NetworkManager's Wi-Fi and DHCP,
+  the kernel's USB, storage and graphics, sshd's failed logins,
+  systemd's failed units, Aizome's displays and input, and more), this
+  message's own topics first. Then messages like it and hiding them
+  (a message's *shape* is its first line with numbers, addresses, ids and
+  quoted names taken out: `src/shape.rs`), its process where its source
+  ran as several, its unit, and for a program Nisshi doesn't know, the
+  words it uses often and the rest of the journal rarely. Each is counted
+  on what's read and offered only when it would narrow what shows.
+  Applied, a suggestion is a chip; × removes it.
+- **The timeline**: messages over the boot, errors and warnings at the
+  foot of each bar, on a square-root scale so a few errors show beside
+  thousands of messages. Dragging across it shows that stretch of time;
+  a press selects the message nearest that moment.
+- **Terminal colours**: what programs write with escape sequences (Aizome's
+  compositor through `tracing`, test runners, build tools) shows in the
+  theme's colours, red, yellow, green and the rest as Night and Day draw
+  them, with bold, dim, italic and underline. Search, shapes, copying and
+  export see the plain text; cursor movement, titles and other control
+  characters are left out (`src/ansi.rs`). A service's output, which
+  journald files at Info, takes the level its line was written with
+  (`2026-…Z  WARN target: …`, `ERROR: …`, `[warn]`), and the details say so.
+- **Launched apps**: the shell starts an app in a scope named for it
+  (`app-aizome-<app ID>-<random>.scope`) and gives its output to the
+  journal itself, under the app's ID or a launch's own identifier
+  (`aizome-launch-…`, where the shell watches the launch). journald credits
+  that output to whatever opened the stream (`cat`, `sh`). Nisshi names it
+  after the app, from the scope and the app's desktop entry, so every
+  launch of Koe is under Koe. Where an app was launched more than once,
+  **This launch** narrows to one attempt (`src/launch.rs`).
+- **Details**: the message whole (a core dump's stack trace included),
+  when, how long ago, and every field the journal keeps with it, each
+  with a button that filters by it. **Around This Time** clears every
+  filter and shows a minute either side; **Activity** opens Myaku on its
+  process while it runs.
+- **Newest first**: the newest message is at the top, as the toolbar's
+  **Newest First** says and the Time column's arrow shows; either turns the
+  list round (**Oldest First**, the newest at the bottom), and Nisshi keeps
+  the choice in `$XDG_CONFIG_HOME/aizome/nisshi.toml`.
+- **Live**: new messages of the running boot come in as they're
+  written, and the list follows the newest until a message is selected
+  (the status line then counts what's new, and goes to it). The toolbar
+  picks the boot (this one, the ones before, all of them) and the level.
+  A boot with more than 50,000 messages is read newest first; **Read
+  Earlier** reads 50,000 more, and **Search the Whole Boot** (Return in
+  search) continues through older pages using the same search, including
+  source names and text with terminal styling removed.
+- **Copy** (❖C) copies the selected messages as journal lines; **Export**
+  (⇧❖E) writes what shows as text, or JSON lines for a `.json` file.
+- `aizome-nisshi --search TEXT --source NAME --unit NAME --level LEVEL
+  --scope problems|mine|kernel|crashes|security --boot N --file PATH
+  --cursor CURSOR --launch ID` opens on that, in the running window if
+  there is one; `--launch` shows one launch's output, by its identifier;
+  `--cursor` selects one message, by the cursor `journalctl --show-cursor`
+  prints (another app's "show this in Logs").
+
+As built: the window reads through `aizome-nisshi-helper`, which it runs
+as you, and which runs `journalctl --output=json` (only the fields the
+list uses; a message's others when it's selected, by its cursor) and
+reads /var/log. Each request is data (`src/query.rs`, `src/protocol.rs`):
+the helper checks it and builds every argument itself from options that
+only read, with journal fields and cursors checked, the environment
+cleared and journalctl taken from the system profile. Files are read only
+when their real path is under /var/log, opened without following links,
+the last 8 MiB of them.
+
+Someone who isn't in `wheel`, `adm` or `systemd-journal` can read only
+their own session's journal. The banner says so and offers **Unlock…**:
+the window starts a second helper through
+`/run/wrappers/bin/pkexec --disable-internal-agent` under the
+`org.aizome.Nisshi.read-system-logs` action (`auth_admin_keep`), whose
+policy names the helper by its store path in `libexec`. Aizome's polkit
+dialog asks for an administrator's password once. That helper reads as
+root until **Lock** or the window closes (closing its input ends it and
+its reads), and a root-only file (`/var/log/boot.log`) asks the same
+way. Cancelling, a refusal and an unavailable dialog are told apart
+from pkexec's exit status and its whole message, as Yukimi does. The
+Aizome module turns on NixOS's pkexec wrapper for it.
+
+A large boot stays quick: messages are parsed on the reader's thread,
+each is classified once as it's read, live arrivals add to the view
+rather than making it again, and the overview's suggestions are tallied
+as the view is made. A selection's topics are counted a moment after it
+shows, and past 30,000 messages search waits for typing to pause before
+it filters them all (the field shows each character at once).
+`docs/performance.md` has the numbers.
+
+`cargo test -p aizome-nisshi` covers the parser, search, shapes, the
+helper's checks and the suggestions on a made-up boot
+(`src/fixture.rs`: no message on the machine running the tests is shown),
+the window headlessly (`--test ui`), its pictures in Night and Day
+(`--test look`), and the real helper over a stand-in journalctl and a
+stand-in pkexec (`--test reader`: reading, following, fields, a log
+file, and unlocking cancelled, refused and given).
+`cargo run -p aizome-nisshi --example sample -- DIR` makes that stand-in
+and prints the line to open Nisshi on it. `nix build
+.#aizome-checks.nisshi` boots a disposable VM: a user who isn't an
+administrator reads only their own journal; with polkit's yes the
+installed reader runs as root through the real pkexec wrapper and reads
+the system's; another user, with no agent to ask, is refused before it
+runs; and as root the reader refuses options, cursors and paths that
+aren't reads under /var/log. Real polkit dialogs, and a person typing a
+password, are the `polkit-recovery` check's and a desktop's.
 
 ### Shashin (Images)
 
@@ -660,6 +851,191 @@ reads with, and SVG through resvg, rendered at the zoom.
   to one (see `docs/performance.md` for what that costs).
 - One instance: a second launch hands its files over
   (`aizome-app.shashin.sock`).
+
+### Shiori (Documents)
+
+The PDF reader the desktop opens documents with. hayro (a PDF renderer
+in Rust, Apache-2.0 OR MIT; bitemyapp's fork of it) reads and draws them,
+in a process of its own for each document; why hayro, and how the reader
+is put together, is in `docs/shiori.md`.
+
+- **The window**: the pages in one column on `sunk`, each on a hard
+  shadow, fitted to the window's width at first. Zoom with ❖+/❖−,
+  ❖-scroll and pinches about the pointer, ❖0 for 100% (a page point to a
+  screen point), ❖8 to fit the width, ❖9 the page. The toolbar has the
+  sidebar, the previous and next page, the zoom and Find, with
+  `Page 12 of 340 · 125%` at its right, which asks which page to go to
+  when pressed. Full Screen (⌃❖F) shows the pages alone, and Find while
+  it's open; Escape leaves it.
+- **Moving about**: scrolling, Space and ⇧Space, Page Up and Down, the
+  arrows (← and → turn pages when the page fits across), Home and End;
+  dragging with the middle button, for pages zoomed wider than the
+  window; Go ▸ First, Last, Previous and Next Page, and Go to Page…
+  (⌥❖G). Scroll bars show along the right and, for wide pages, the
+  bottom, while scrolling. The sidebar (⌥❖S) shows each page small, or
+  the document's contents (its outline), which it opens with when it has
+  one; the entry being read is marked as you go.
+- **Text**: drag to select (across pages, scrolling on while held past
+  the window's edge), double-click a word, triple-click a line, ⇧-click
+  to extend; ❖C copies (unless the author forbade it), reading first the
+  text of pages passed over, ❖A selects the page's text, and Escape lets
+  the selection go. Find (❖F) searches the whole document from the page
+  being read, case-sensitively if asked, and shows each hit in yellow and
+  the current one in orange; ❖G and ⇧❖G go through them, and Escape
+  empties the field, then closes it.
+- **Links** within the document go to their place; web and mail links
+  open in their apps (no others: a document can't start programs). The
+  toolbar says where the link under the pointer goes. A click follows
+  it; a drag from it selects its text.
+- **Locked documents** ask for their password; Get Info (❖I) shows the
+  title, author, pages, page size, PDF version, what made it, when it was
+  made and changed, and whether it's encrypted.
+- **Your place**: each document opens where you left it, at the zoom
+  and with the sidebar you left it with
+  (`$XDG_STATE_HOME/aizome/shiori/places.json`, the newest 400). A file
+  that changes while open (a LaTeX build, a download finishing) is read
+  again where you are; one that's half written leaves the last version
+  showing, and still drawn as you zoom and move about, until it's whole.
+- **Robustness**: a page that makes hayro panic, keeps it busy over 20
+  seconds, or brings its worker down costs that drawing of that page
+  ("This page couldn't be drawn"), not the window; it's tried again at
+  another zoom, unless it's failed at two already. When a worker goes,
+  Shiori starts another, says so in the toolbar for a few seconds, and
+  carries on; if it gives up, Find says the search stopped.
+- **Speed**: tiles of 1024 device pixels, drawn for exactly the zoom and
+  the screen's scale and copied one to one; the page above and the page
+  below drawn ahead and kept; scrolling moves what was drawn and draws
+  the strip that came into view. A zoom shows in the next frame, the last
+  zoom's drawings scaled to it, and sharpens as the new ones come.
+- One instance: a second launch hands its files over
+  (`aizome-app.shiori.sock`); each document has its window.
+- Not yet: printing, filling in forms (they're drawn), making
+  annotations, two pages side by side, and turning pages.
+
+### Utsushi (Media Player)
+
+Films, clips and music, played with as little work as the machine can
+do them with. It opens what FFmpeg reads (MP4, Matroska, WebM, QuickTime,
+AVI, MPEG transport streams, MP3, AAC, FLAC, Ogg, Opus, WAV and the
+rest); folders play their files in Hako's natural order.
+
+- **The window**: the picture fitted in it (letterboxed in black) over a
+  bar of controls: previous and next (or chapters), play, the time, the
+  timeline (chapters part it; under the pointer it says the time there
+  and its chapter), what's left (or the length: click it), volume,
+  Subtitles and Audio, speed (while it isn't 1×), full screen. Opening a
+  video sizes the window to its picture, up to most of the screen. In
+  full screen the bar floats over the picture's foot until the pointer
+  rests for 2.5 seconds off it (or leaves the window), and the pointer
+  hides with it; it stays while paused and while its Subtitles and Audio
+  or speed menu is open, and goes 2.5 seconds after playing resumes, the
+  menu closes, or the window comes back from another Desk. A song
+  shows its cover (its own, or a tile in the dye), its title, and who
+  made it on what album when; with several queued, the queue beside it.
+- **Keys**: Space or K plays and pauses; ←/→ five seconds (⇧ one, ⌥ a
+  minute), J/L ten; ↑/↓ volume, M mute; Home the start; Page Up/Down
+  chapters; , and . a frame (paused); [ and ] slower and faster (½× to
+  2×, the pitch kept); 0–9 a tenth of the way along per digit; C the next
+  subtitles, Z and X them a tenth of a second earlier and later; F full
+  screen; ⇧N and ⇧P the next and previous item; S the picture to
+  Pictures/Screenshots, ❖C to the clipboard. A click
+  on the picture plays and pauses, a double click is full screen, the
+  wheel is volume. The keys stay with the picture after a click in the
+  bar (Tab moves them into it). Files dropped on the window play.
+- **Subtitles**: embedded text (SubRip, ASS/SSA, WebVTT, MP4's) and
+  pictures (Blu-ray PGS, DVD, DVB), and files beside the video with its
+  name (`Film.srt`, `Film.en.srt`), which show by themselves, as do
+  tracks marked default or forced; Add Subtitle File… for others. Text
+  is set in Archivo on a dark box, sized to the picture; ASS styling is
+  reduced to italics and top placement. Subtitles ▸ Show Earlier and
+  Show Later move them for a file timed to another cut, until Original
+  Timing or the next item.
+- **Where it was**: a film over five minutes long opens where it was
+  left (with Start Over for a few seconds), unless that was in its first
+  or last thirty seconds. Open Recent keeps twenty items.
+- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`) for the menu
+  bar's media widget and the media keys; one instance, later launches
+  handing their files over; Media Info (❖I) says what the file is and how
+  it's being played.
+
+**Why it's light.** The engine is `crates/aizome-media` (FFmpeg through
+`ffmpeg-sys-next`, PipeWire through `pipewire-rs`); the window shows its
+frames through the kit's video element (`docs/kit.md`, Video).
+
+- Video decodes on the GPU through VA-API where the codec and driver
+  allow (H.264, HEVC, VP9 and AV1 on recent Intel and AMD), on the
+  compositor's own GPU, and each frame goes to the compositor as the
+  decoder left it: a dmabuf on a subsurface of the window, imported once
+  per decoder surface. Nothing copies or converts a frame. While nothing
+  covers the picture, the video is the window's topmost surface, which
+  a compositor scanning out on KMS planes (Aizome's on its DRM backend)
+  can show without composing it. Subtitles set in a letterbox's bar
+  leave it so; only what really overlaps the picture (subtitles over
+  it, the full-screen controls) puts it under the window's drawing.
+  Frames carry their time (wp_commit_timing_v1) and are shown half a
+  refresh early, so each lands on the nearest refresh.
+- Out of sight, nothing decodes: a run of frames the compositor didn't
+  show (minimised, another Desk, covered by a full-screen window), or
+  the window saying it's suspended, stops the video and drops its
+  packets; audio plays on. Back in sight, it goes back to the keyframe
+  before now and catches up before showing (a moment's still frame).
+- Audio decodes ahead in bursts into a four-second ring, and the
+  demuxer sleeps until the ring is down to a second: about one wakeup a
+  second. PipeWire takes it in long graph cycles (170 ms for music,
+  40 ms with a picture). Pausing drops what the graph held and steps the
+  ring back to what was being heard, so pause and seek are immediate
+  whatever the cycle. Aizome's module raises PipeWire's cycle limit to
+  8192 frames so the long cycles are granted (`default.clock.max-quantum`).
+  Streams asking for short cycles still get theirs, and while one plays
+  the whole graph runs at its cycle: the shell's sounds, and Settei's
+  preview of the alert, ask `pw-play` for 20 ms, so the graph runs at
+  1024 frames while one plays and goes back to music's 8192 after. With
+  nothing on long cycles, such a sound starts within a short one. Over
+  music it waits for the sound card to play out what it already holds,
+  one to two of music's cycles (170 to 340 ms; PipeWire doesn't drop
+  them), where with PipeWire's usual limit of 2048 frames it would wait
+  40 to 85 ms. The limit is the whole system's:
+  other streams asking for more than 2048 frames get longer cycles too
+  (`pw-play` left at its default 100 ms gets 4096 frames), and those
+  asking for nothing run at the graph's cycle, which is long while music
+  plays.
+- The window redraws a digit a second, and nothing in full screen with
+  the controls gone, or while paused, except for subtitles.
+- Software decoding (no VA-API, or a codec the GPU lacks) runs on
+  several threads and converts each frame once, with swscale, into
+  shared memory; so does a compositor without dmabufs (pixman).
+
+Measured on an Intel Core Ultra 7 365 laptop with Aizome's compositor
+running headless on its GPU (GLES; headless can't use planes, so the
+compositor composes every frame for every player), a 1080p24 H.264 file,
+over 30 seconds with sound off: Utsushi 1.2% CPU and 115 context switches
+a second; mpv `--hwdec=vaapi --vo=dmabuf-wayland` 2.2% and 405; mpv
+`--hwdec=vaapi --vo=gpu-next` 3.5% and 376; mpv with Sekka's `mpv.conf`
+11.3% and 401. Music (a 3-minute MP3, muted): Utsushi 0.4% and 46, with
+PipeWire's daemon at 50 a second; `mpv --no-video` 1.0% and 246, the
+daemon at 99. That machine's PipeWire was capped at 2048-frame cycles
+(before the module's change); see `docs/performance.md`.
+
+As built, the limits: no gapless playback between songs; colours are
+the compositor's YUV conversion, which Aizome doesn't yet tell BT.709
+from BT.601 (no wp_color_representation), so HD video's colours can be
+slightly off; HDR shows as standard range; no playlists or streaming
+services; ASS subtitles lose their styling. Addresses
+FFmpeg reads (http, https, rtsp) open from the command line and through
+MPRIS, but the window has no Open Location yet, and a stream that can't
+seek plays without stopping its video out of sight.
+
+`cargo test -p aizome-media` plays the fixtures in
+`crates/aizome-media/tests/fixtures` (made by `make.sh` there) in
+software with no sound server and no window: opening, playing to the
+end, pausing, seeking, subtitles, chapters, tags and covers, speed, and
+video stopping out of sight while audio plays on. `cargo test -p
+aizome-utsushi` drives the window through the kit's harness with the
+real engine: the picture's place, subtitles in the letterbox or over the
+picture, full screen's controls (hiding again after a pause, a Desk
+switch, or the pointer leaving a control), keys and where they go, seeks
+in a row, a song, Media Info, and folders.
+`UTSUSHI_STATS=1` logs the pipeline and frame counts every five seconds.
 
 ### Annai (Welcome)
 

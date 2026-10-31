@@ -1,0 +1,150 @@
+{
+  "scope": "Narrow dense-wide diagnostic in separately configured legacy/Unicode modes.\n\nThis does not extend the four reviewed acceptance patterns in benchmark.py.\nOnly one exact generated Han/newline pattern is measured after full grid/effect\nagreement. It is not whole-application or all-Unicode performance certification.\n",
+  "recorded_at": "2026-10-28T17:42:59.823489+00:00",
+  "candidate_source_sha256": "77861d288ea746bcdb410fbedf019f1bfad547ab3599c00687aa187fa95dd5aa",
+  "candidate_sha256": "f9633cbeae2073d217cdc0932a870dc2c724f0fdef77fd3815f9e02e32b81ccc",
+  "reference_sha256": "dc687741377b3058f7b06bcdf287df9990c183eadd571a1fbe835fb3869625cd",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "data_bytes": 2097150,
+  "data_sha256": "07c843219d5481194e10f7f6844b9808cbedcda34134230ecdb7399b9a5bc011",
+  "pattern": "36 U+96EA then CR LF",
+  "rows": 12,
+  "cols": 120,
+  "scrollback": 0,
+  "chunk_bytes": 65536,
+  "cpu_affinity": [
+    0
+  ],
+  "configurations": [
+    {
+      "grapheme_width_method": "legacy",
+      "state_matched": true,
+      "samples_ns": {
+        "ghostty": [
+          1274856,
+          1249758,
+          1246973,
+          1261666,
+          1256168,
+          1284210,
+          1265162,
+          1261296,
+          1250820,
+          1253553,
+          1268786,
+          1252912,
+          1266053,
+          1256749,
+          1249167,
+          1293615,
+          1260745,
+          1272673,
+          1264761,
+          1261786
+        ],
+        "hotaru": [
+          3139538,
+          3141882,
+          3109262,
+          3115992,
+          3121039,
+          3002569,
+          3025154,
+          2986125,
+          2993385,
+          3011423,
+          3002970,
+          3016671,
+          2994577,
+          3061679,
+          3041078,
+          3023552,
+          3033136,
+          3009110,
+          3047598,
+          3041538
+        ]
+      },
+      "median_feed_ns": {
+        "ghostty": 1261481.0,
+        "hotaru": 3029145.0
+      },
+      "hotaru_over_ghostty": 2.4012608988958215,
+      "process_order": [
+        "ghostty",
+        "hotaru",
+        "hotaru",
+        "ghostty",
+        "ghostty",
+        "hotaru",
+        "hotaru",
+        "ghostty"
+      ]
+    },
+    {
+      "grapheme_width_method": "unicode",
+      "state_matched": true,
+      "samples_ns": {
+        "ghostty": [
+          1892734,
+          1844972,
+          1848206,
+          1845663,
+          1850480,
+          1902029,
+          1851743,
+          1855337,
+          1841727,
+          1853915,
+          1885303,
+          1869609,
+          1848107,
+          1851842,
+          1843830,
+          1672760,
+          1624527,
+          1617236,
+          1628764,
+          1629094
+        ],
+        "hotaru": [
+          4341643,
+          4329204,
+          4338799,
+          4331137,
+          4347762,
+          4159287,
+          4146106,
+          4151805,
+          4166177,
+          4228661,
+          4185406,
+          4180238,
+          4159887,
+          4202362,
+          4186548,
+          4149251,
+          4192426,
+          3882275,
+          3620488,
+          3631244
+        ]
+      },
+      "median_feed_ns": {
+        "ghostty": 1848156.5,
+        "hotaru": 4182822.0
+      },
+      "hotaru_over_ghostty": 2.2632401530930957,
+      "process_order": [
+        "ghostty",
+        "hotaru",
+        "hotaru",
+        "ghostty",
+        "ghostty",
+        "hotaru",
+        "hotaru",
+        "ghostty"
+      ]
+    }
+  ]
+}

@@ -48,6 +48,7 @@ pub(crate) fn fixture() -> (tempfile::TempDir, Settings, RawRequest) {
         locale: "en_US.UTF-8".into(),
         timezone: "Etc/UTC".into(),
         keyboard: "us".into(),
+        super_key: Default::default(),
         desktops: vec![Desktop::Plasma],
         default_desktop: Desktop::Plasma,
         applications: applications::default_selection(),

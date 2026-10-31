@@ -1,0 +1,14 @@
+{
+  "scope": "isolated full native CPU-worker SHM fallback; simulated GPU unavailability; private headless Sway pixman",
+  "binary": "/home/callen/.cache/hotaru-aizome-target/debug/deps/scene_inventory-1ce38e1c3238d658",
+  "binary_sha256": "092b648cf731df39ecea62ca95ca13188b98d6c81ed0ede1727abd08eb7ad491",
+  "runner_sha256": "1e2a10a5440a54b8ced5759b7e185641554ce25debd0b90bb0c66d01e1acbba0",
+  "status": "failed",
+  "error": "RuntimeError('bounded phase timeout')",
+  "forced_kill": [],
+  "all_owned_leaders_reaped": true,
+  "tools": {
+    "sway": "sway version 1.9",
+    "grim": ""
+  }
+}

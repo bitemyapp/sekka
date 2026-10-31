@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "scope": "Legacy mode only; whole-process Callgrind instruction counts, including setup/teardown; no wall-time or native-ISA parity claim. Input sizes bounded for attribution, not identical to every native timing case.",
+  "cases": [
+    {
+      "input": "short-invalid-leads",
+      "whole_process": {
+        "baseline": 132589505,
+        "candidate": 132603929
+      },
+      "exclusive_by_function": {
+        "core::str::converts::from_utf8": {
+          "baseline": 14654786,
+          "candidate": 14654801
+        },
+        "hotaru_core::Terminal::feed_inner": {
+          "baseline": 25194153,
+          "candidate": 25208456
+        },
+        "hotaru_core::validate_utf8_run": {
+          "baseline": 8842785,
+          "candidate": 8842785
+        }
+      }
+    },
+    {
+      "input": "unicode",
+      "whole_process": {
+        "baseline": 28923435,
+        "candidate": 28928318
+      },
+      "exclusive_by_function": {
+        "core::str::converts::from_utf8": {
+          "baseline": 2666430,
+          "candidate": 2666445
+        },
+        "hotaru_core::Terminal::feed_inner": {
+          "baseline": 1196896,
+          "candidate": 1201658
+        },
+        "hotaru_core::screen::State::print_utf8": {
+          "baseline": 8236052,
+          "candidate": 8236052
+        },
+        "hotaru_core::validate_utf8_run": {
+          "baseline": 133532,
+          "candidate": 133532
+        }
+      }
+    },
+    {
+      "input": "long-dense-error-prefix",
+      "whole_process": {
+        "baseline": 2530149,
+        "candidate": 2874369
+      },
+      "exclusive_by_function": {
+        "core::str::converts::from_utf8": {
+          "baseline": 509049,
+          "candidate": 509064
+        },
+        "hotaru_core::Terminal::feed_inner": {
+          "baseline": 43444,
+          "candidate": 43444
+        },
+        "hotaru_core::print_prefix_before_error": {
+          "baseline": 0,
+          "candidate": 344099
+        },
+        "hotaru_core::screen::State::print_utf8": {
+          "baseline": 1283020,
+          "candidate": 1283020
+        },
+        "hotaru_core::validate_utf8_run": {
+          "baseline": 61,
+          "candidate": 61
+        }
+      }
+    }
+  ]
+}

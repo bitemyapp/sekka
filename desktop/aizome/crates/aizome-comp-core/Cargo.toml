@@ -19,6 +19,8 @@ crate-type = ["dylib"]
 aizome-theme.workspace = true
 aizome-config.workspace = true
 aizome-ipc.workspace = true
+# The default terminal, for ❖Return (terminal.rs).
+aizome-apps.workspace = true
 sidestep-ui.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "aizome-media"
+description = "Aizome's playback engine: FFmpeg demuxing and decoding (VA-API to dmabufs), PipeWire audio, and the clock that keeps them together"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sidestep-ui.workspace = true
+log.workspace = true
+ffmpeg-sys-next = { version = "9.0.1", default-features = false, features = ["avcodec", "avformat", "swresample", "swscale", "avfilter"] }
+pipewire = { version = "0.10.1", features = ["v1_2_0"] }
+libc = "0.2"

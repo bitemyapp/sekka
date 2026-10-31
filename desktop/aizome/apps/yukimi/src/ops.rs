@@ -387,11 +387,12 @@ fn helper() -> Result<Command, String> {
 }
 
 /// Open a terminal running `command`, with whichever terminal is installed:
-/// the desktop's choice, or foot, Aizome's.
+/// the desktop's choice, else Hotaru, Aizome's, else foot.
 pub fn open_terminal(command: &[String]) -> Result<(), String> {
     // (program, arguments before the command)
-    let terminals: [(&str, &[&str]); 11] = [
+    let terminals: [(&str, &[&str]); 12] = [
         ("xdg-terminal-exec", &[]),
+        ("aizome-hotaru", &["--"]),
         ("foot", &[]),
         ("kgx", &["--"]),
         ("ptyxis", &["--"]),

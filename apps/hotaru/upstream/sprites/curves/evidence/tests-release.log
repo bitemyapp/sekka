@@ -1,0 +1,39 @@
+   Compiling hotaru-sprite-prototype v0.1.0 (/home/callen/work/hotaru-sprites-curves-20261028/rust)
+    Finished `release` profile [optimized] target(s) in 0.17s
+     Running unittests src/lib.rs (work/hotaru-sprites-curves-20261028/rust/target/release/deps/hotaru_sprites-180a399620f565ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (work/hotaru-sprites-curves-20261028/rust/target/release/deps/hotaru_sprite_prototype-fc3bc04efce62ec1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden.rs (work/hotaru-sprites-curves-20261028/rust/target/release/deps/golden-84b812769b064678)
+
+running 2 tests
+test existing_rectilinear_sprites_match_four_committed_upstream_atlases ... ok
+test curves_powerline_match_upstream_pngs_and_translation_regressions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/raster.rs (work/hotaru-sprites-curves-20261028/rust/target/release/deps/raster-1e04695a3de6efb0)
+
+running 5 tests
+test allocation_is_bounded_before_reservation ... ok
+test tiny_heavy_dash_uses_upstream_light_fallback ... ok
+test odd_quadrants_overlap_and_shades_are_alpha_not_dither ... ok
+test complete_explicit_ranges_and_exclusions ... ok
+test ink_bounds_reconstruct_every_nonzero_pixel ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests hotaru_sprites
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

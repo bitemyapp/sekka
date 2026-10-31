@@ -1,0 +1,281 @@
+--- a/crates/hotaru-core/src/lib.rs
++++ b/crates/hotaru-core/src/lib.rs
+@@ -267,9 +267,73 @@
+     }
+ }
+ 
+-// Keep validation's dispatch/error paths out of the parser's ASCII/control
+-// loop. This call is reached only for candidate non-ASCII text runs.
++// Private validation metadata keeps the dependency's error fields encapsulated.
++// Feed consumes the offset; tests also require exact original-slice error length.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Utf8RunError {
++    valid_up_to: usize,
++    #[cfg_attr(not(test), allow(dead_code))]
++    error_len: Option<u8>,
++}
++
++impl Utf8RunError {
++    fn valid_up_to(&self) -> usize {
++        self.valid_up_to
++    }
++
++    #[cfg(test)]
++    fn error_len(&self) -> Option<usize> {
++        self.error_len.map(usize::from)
++    }
++
++    fn original(error: simdutf8::compat::Utf8Error) -> Self {
++        Self {
++            valid_up_to: error.valid_up_to(),
++            // UTF-8 errors contain at most three bytes before the invalid
++            // continuation. The dependency stores this in Option<u8> too.
++            error_len: error.error_len().map(|length| length as u8),
++        }
++    }
++
++    fn padded(error: simdutf8::compat::Utf8Error, bytes: &[u8]) -> Self {
++        let mut result = Self::original(error);
++        // Padding preserves the first invalid sequence's start. A valid
++        // multibyte lead is truncated iff its acceptable prefix reaches the
++        // original end and the first NUL is the invalid continuation. Invalid
++        // leads consume one byte even at EOF, so they must not become None.
++        if result.error_len.is_some_and(|length| {
++            result.valid_up_to.checked_add(usize::from(length)) == Some(bytes.len())
++        }) && bytes
++            .get(result.valid_up_to)
++            .is_some_and(|byte| (0xc2..=0xf4).contains(byte))
++        {
++            result.error_len = None;
++        }
++        result
++    }
++}
++
++// Keep bounded SIMD dispatch/error translation out of the ASCII/control loop.
+ #[inline(never)]
+-fn validate_utf8_run(bytes: &[u8]) -> Result<&str, simdutf8::compat::Utf8Error> {
+-    simdutf8::compat::from_utf8(bytes)
+-}
++#[allow(unsafe_code)] // Only the validated original-prefix conversion below.
++fn validate_utf8_run(bytes: &[u8]) -> Result<&str, Utf8RunError> {
++    if (32..64).contains(&bytes.len()) && (0xc2..=0xf4).contains(&bytes[0]) {
++        let mut block = [0u8; 64];
++        block[..bytes.len()].copy_from_slice(bytes);
++        match simdutf8::compat::from_utf8(&block) {
++            Ok(_) => {
++                // SAFETY: block contains exactly bytes followed by ASCII NULs.
++                // NUL cannot complete a truncated multibyte scalar or repair
++                // earlier invalid input. Validation therefore proves bytes is
++                // valid UTF-8 and ends on a scalar boundary. The result borrows
++                // the original input, never the temporary padded block.
++                return Ok(unsafe { std::str::from_utf8_unchecked(bytes) });
++            }
++            Err(error) => return Err(Utf8RunError::padded(error, bytes)),
++        }
++    }
++    simdutf8::compat::from_utf8(bytes).map_err(Utf8RunError::original)
++}
++
++#[cfg(test)]
++mod short_utf8_tests;
+--- /dev/null
++++ b/crates/hotaru-core/src/short_utf8_tests.rs
+@@ -0,0 +1,197 @@
++use super::validate_utf8_run;
++
++#[test]
++#[cfg(not(miri))]
++fn exhaustive_three_byte_suffixes_at_both_padding_boundaries() {
++    // Every possible incomplete UTF-8 prefix has at most three bytes. These
++    // suffixes include invalid leads and restricted second continuations,
++    // where translating Some(1) to None would be wrong.
++    for len in [32, 63] {
++        let mut bytes = vec![b'x'; len];
++        bytes[..2].copy_from_slice("é".as_bytes());
++        for value in 0..=0x00ff_ffffu32 {
++            bytes[len - 3..].copy_from_slice(&value.to_le_bytes()[..3]);
++            compare(&bytes);
++        }
++    }
++}
++
++#[test]
++#[cfg(not(miri))]
++fn every_unicode_scalar_and_truncated_prefix() {
++    for scalar in (0..=0x10ffff).filter_map(char::from_u32) {
++        let mut storage = [0; 4];
++        let encoded = scalar.encode_utf8(&mut storage).as_bytes();
++        for len in [31, 32, 63, 64] {
++            let mut bytes = [b'x'; 64];
++            bytes[..2].copy_from_slice("é".as_bytes());
++            for take in 1..=encoded.len() {
++                bytes[len - 4..len].fill(b'x');
++                bytes[len - take..len].copy_from_slice(&encoded[..take]);
++                compare(&bytes[..len]);
++            }
++        }
++    }
++}
++
++#[test]
++fn final_valid_lead_and_invalid_lead_have_different_error_lengths() {
++    let mut bytes = [b'x'; 32];
++    bytes[..2].copy_from_slice("é".as_bytes());
++    for last in 0..=u8::MAX {
++        bytes[31] = last;
++        compare(&bytes);
++        if (0xc2..=0xf4).contains(&last) {
++            assert_eq!(validate_utf8_run(&bytes).unwrap_err().error_len(), None);
++        } else if last >= 0x80 {
++            assert_eq!(validate_utf8_run(&bytes).unwrap_err().error_len(), Some(1));
++        }
++    }
++}
++
++fn compare(bytes: &[u8]) {
++    let standard = std::str::from_utf8(bytes).map_err(|e| (e.valid_up_to(), e.error_len()));
++    let actual = validate_utf8_run(bytes).map_err(|e| (e.valid_up_to(), e.error_len()));
++    assert_eq!(actual, standard, "input={bytes:02x?}");
++    if let Ok(text) = actual {
++        // A successful result must borrow the original input, not stack padding.
++        assert_eq!(text.as_ptr(), bytes.as_ptr());
++        assert_eq!(text.len(), bytes.len());
++    }
++}
++
++#[test]
++fn thresholds_nuls_and_all_truncated_suffix_offsets() {
++    for len in [
++        0, 1, 2, 3, 4, 15, 16, 30, 31, 32, 33, 47, 62, 63, 64, 65, 127,
++    ] {
++        let mut bytes = vec![b'x'; len];
++        compare(&bytes);
++        bytes.fill(0);
++        compare(&bytes);
++        for scalar in [
++            '\0',
++            'a',
++            '\u{80}',
++            'é',
++            '\u{7ff}',
++            '\u{800}',
++            '雪',
++            '\u{ffff}',
++            '\u{10000}',
++            '👩',
++            '\u{10ffff}',
++        ] {
++            let mut encoded = [0; 4];
++            let encoded = scalar.encode_utf8(&mut encoded).as_bytes();
++            for prefix in 1..=encoded.len().min(len) {
++                bytes.fill(b'x');
++                if len >= 2 {
++                    bytes[..2].copy_from_slice("é".as_bytes());
++                }
++                bytes[len - prefix..].copy_from_slice(&encoded[..prefix]);
++                compare(&bytes);
++                // All possible suffix cuts and adjacent ASCII NULs exercise
++                // the premise used by the unchecked conversion.
++                if len > prefix {
++                    bytes[len - prefix - 1] = 0;
++                    compare(&bytes);
++                }
++            }
++        }
++        for value in [0x80, 0xbf, 0xc0, 0xc1, 0xf5, 0xff] {
++            if let Some(last) = bytes.last_mut() {
++                *last = value;
++                compare(&bytes);
++            }
++        }
++    }
++}
++
++#[test]
++#[cfg(not(miri))]
++fn exhaustive_pair_values_at_short_run_edges() {
++    for len in [31, 32, 33, 47, 63, 64] {
++        let mut bytes = vec![b'x'; len];
++        for at in [0, len - 2] {
++            bytes[..2].copy_from_slice("é".as_bytes());
++            for value in 0..=u16::MAX {
++                bytes[at..at + 2].copy_from_slice(&value.to_le_bytes());
++                compare(&bytes);
++            }
++            bytes[at..at + 2].fill(b'x');
++        }
++    }
++}
++
++#[test]
++#[cfg(not(miri))]
++fn seeded_unaligned_short_runs_and_mutations() {
++    let text = "é\0ASCII 雪 👩🏽‍💻 e\u{301}".as_bytes();
++    let mut seed = 0x2931_92b7u32;
++    for case in 0..65_536 {
++        seed ^= seed << 13;
++        seed ^= seed >> 17;
++        seed ^= seed << 5;
++        let len = case % 129;
++        let offset = (case >> 7) % 32;
++        let mut storage = vec![0; offset + len];
++        let bytes = &mut storage[offset..];
++        for (at, byte) in bytes.iter_mut().enumerate() {
++            *byte = text[at % text.len()];
++        }
++        compare(bytes);
++        if len != 0 {
++            bytes[seed as usize % len] = (seed >> 24) as u8;
++            compare(bytes);
++        }
++    }
++}
++
++#[test]
++#[cfg(all(target_os = "linux", not(miri)))]
++#[allow(unsafe_code)] // Test-only OS guard page, owned by the Mapping guard.
++fn original_slice_can_end_at_unreadable_guard_page() {
++    // SAFETY: sysconf takes no pointers; mmap result is checked before use.
++    let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
++    assert!(page > 512 && page <= isize::MAX as usize / 2);
++    let raw = unsafe {
++        libc::mmap(
++            std::ptr::null_mut(),
++            page * 2,
++            libc::PROT_READ | libc::PROT_WRITE,
++            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
++            -1,
++            0,
++        )
++    };
++    assert_ne!(raw, libc::MAP_FAILED);
++    struct Mapping(*mut libc::c_void, usize);
++    impl Drop for Mapping {
++        fn drop(&mut self) {
++            // SAFETY: this guard owns the original mapping and extent.
++            assert_eq!(unsafe { libc::munmap(self.0, self.1) }, 0);
++        }
++    }
++    let _mapping = Mapping(raw, page * 2);
++    // SAFETY: second page is a page-aligned subrange of this mapping.
++    assert_eq!(
++        unsafe { libc::mprotect(raw.cast::<u8>().add(page).cast(), page, libc::PROT_NONE) },
++        0
++    );
++    // SAFETY: first page remains exclusive and writable; initialize before read.
++    let memory = unsafe { std::slice::from_raw_parts_mut(raw.cast::<u8>(), page) };
++    memory.fill(0);
++    let pattern = "é雪👩".as_bytes();
++    for len in 0..=128 {
++        let bytes = &mut memory[page - len..];
++        for (at, byte) in bytes.iter_mut().enumerate() {
++            *byte = pattern[at % pattern.len()];
++        }
++        compare(bytes);
++        if let Some(last) = bytes.last_mut() {
++            *last = 0xff;
++            compare(bytes);
++        }
++    }
++}

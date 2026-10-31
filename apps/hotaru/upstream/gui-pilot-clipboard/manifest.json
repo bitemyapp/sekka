@@ -1,0 +1,15 @@
+{
+  "calibration/hotaru-calibration/application.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "calibration/hotaru-calibration/dbus.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "calibration/hotaru-calibration/final.png": "793f430f24d39a04edba8f85d3f55b22e0dfcc4d6d6334a14402cb8fff8dafb8",
+  "calibration/hotaru-calibration/fixture.jsonl": "0ca466c7859ce62fb67f568e81a52d7963047266ba15c991fadbd4da196e6f01",
+  "calibration/hotaru-calibration/observer.jsonl": "1b47dd515d189e67a12310aee499755f9bbd0d89bc4847f92a928d3fac002b90",
+  "calibration/hotaru-calibration/observer.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "calibration/hotaru-calibration/result.json": "f44c403c4b50e49e34ee0f61bd08690a81446067535d3b64708e54034988bf68",
+  "calibration/hotaru-calibration/sway.log": "58068a0156eb7925aae5c2ccd681d30ae76b8c0290f1bc530749f9a66b2a45de",
+  "calibration/summary.json": "4271178ed432c79399a8c962a3b9b4a603638cff40d20caba66f6d98df4e8ace",
+  "startup.tar.gz": "8025dcde9bf109ba21ac96adab3a4605fe2d42a4228c4303d4ab9fc88734d1d2",
+  "steady.tar.gz": "007fc45525947ad8bb39a7ad27678134140e0f6b42e377d6f7bb1999b97c8d52",
+  "summarize.py": "37010176dc532df97fb64e57f2517a7401437f11e31f24ef960c1c43801f305f",
+  "summary.json": "f1947393cef570b9a5b842d98351b504c53a64de7b435d60bf264693b8c0ef04"
+}

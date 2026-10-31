@@ -1,0 +1,6 @@
+[package]
+name = "hotaru-simdutf8-miri-stock"
+version = "0.0.0"
+edition = "2021"
+[dependencies]
+simdutf8 = "=0.1.5"

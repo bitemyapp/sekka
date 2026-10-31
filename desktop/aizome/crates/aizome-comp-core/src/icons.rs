@@ -174,6 +174,7 @@ fn line_glyph(app_id: &str) -> Option<&'static str> {
         "kura" => lucide!("chart-pie"),
         "myaku" => lucide!("activity"),
         "shashin" | "imv" | "eog" | "loupe" => lucide!("image"),
+        "nisshi" => lucide!("notepad-text"),
         "annai" => lucide!("compass"),
         "foot" | "footclient" | "alacritty" | "kitty" | "wezterm" | "ghostty" | "konsole" | "terminal" | "xterm" => {
             lucide!("square-terminal")
@@ -182,7 +183,7 @@ fn line_glyph(app_id: &str) -> Option<&'static str> {
             lucide!("globe")
         }
         "thunderbird" | "evolution" | "geary" | "mail" => lucide!("mail"),
-        "mpv" | "vlc" | "totem" => lucide!("film"),
+        "utsushi" | "mpv" | "vlc" | "totem" => lucide!("film"),
         "gimp" | "inkscape" | "krita" => lucide!("paintbrush"),
         _ => return None,
     })
@@ -402,7 +403,8 @@ mod tests {
     fn tabs_draw_line_glyphs_not_silhouettes() {
         // Aizome's apps and foot get Lucide's glyphs, drawn as lines: an
         // icon tile's silhouette would be a solid square.
-        for id in ["org.aizome.Sumi", "org.aizome.Tokei", "foot", "org.mozilla.firefox"] {
+        let apps = ["org.aizome.Sumi", "org.aizome.Tokei", "org.aizome.Utsushi", "org.aizome.Nisshi"];
+        for id in apps.into_iter().chain(["foot", "org.mozilla.firefox"]) {
             let svg = line_glyph(id).unwrap_or_else(|| panic!("a glyph for {id}"));
             let (w, h, rgba) = crate::svg::rasterize_data(svg.as_bytes(), 26).expect("it rasterizes");
             let covered = rgba.as_chunks::<4>().0.iter().filter(|p| p[3] > 128).count();

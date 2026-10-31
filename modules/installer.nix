@@ -39,6 +39,7 @@ in
 {
   imports = [
     ./portal-fixes.nix
+    ./avahi-fixes.nix
     inputs.aizome.nixosModules.default
     # Sekka's boot splash, as on installed systems.
     ../installer/genkan/rust/system/boot-splash
@@ -48,6 +49,11 @@ in
     ../installer/genkan/rust/system/wpa-supplicant
   ];
   options.respin = {
+    enableInstaller = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Include and start Genkan. Disable for live media whose installed boot format Genkan does not support.";
+    };
     referenceDesktops = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
@@ -63,7 +69,7 @@ in
     cacheApplications = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Store every optional application on the media. Development images may omit it.";
+      description = "Store optional applications marked for preload on the media. Development images may omit them.";
     };
   };
   config = {
@@ -123,12 +129,14 @@ in
     environment.systemPackages = [
       pkgs.file
       inputs.fh.packages.${pkgs.stdenv.hostPlatform.system}.default
-      calamares
       diagnostics
       # Small interactive diagnostics, also used to prove real GUI event delivery
       # in our disposable VM tests (not merely successful QMP commands).
       pkgs.xev
       pkgs.xwininfo
+    ]
+    ++ lib.optionals config.respin.enableInstaller [
+      calamares
       (pkgs.makeAutostartItem {
         name = "org.calamares.NixOSRust";
         package = calamares;
@@ -141,7 +149,7 @@ in
     security.polkit.enablePkexecWrapper = true;
     security.polkit.extraConfig = lib.mkForce ''
       polkit.addRule(function(action, subject) {
-        if (action.id == "org.calamares.nixos.install" &&
+        if (${lib.boolToString config.respin.enableInstaller} && action.id == "org.calamares.nixos.install" &&
             subject.user == "nixos" && subject.local && subject.active) {
           return polkit.Result.YES;
         }
@@ -275,7 +283,7 @@ in
       '';
     };
     isoImage.squashfsCompression = "zstd -Xcompression-level 6";
-    # Keep optional packages and a prebuilt installed system for every desktop
+    # Keep preload-eligible packages and a prebuilt installed system for every desktop
     # in the read-only store, without adding them to the live session. An
     # installation then copies from the media instead of downloading into RAM.
     isoImage.storeContents =

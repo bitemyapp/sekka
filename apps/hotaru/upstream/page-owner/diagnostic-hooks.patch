@@ -1,0 +1,214 @@
+diff --git a/apps/hotaru/crates/hotaru-core/Cargo.toml b/apps/hotaru/crates/hotaru-core/Cargo.toml
+--- a/apps/hotaru/crates/hotaru-core/Cargo.toml
++++ b/apps/hotaru/crates/hotaru-core/Cargo.toml
+@@ -6,6 +6,9 @@
+ rust-version.workspace = true
+ license.workspace = true
+ repository.workspace = true
++
++[features]
++page-diagnostics = []
+ 
+ [dependencies]
+ bytemuck = { version = "=1.25.2", features = ["derive"] }
+diff --git a/apps/hotaru/crates/hotaru-core/src/cells.rs b/apps/hotaru/crates/hotaru-core/src/cells.rs
+--- a/apps/hotaru/crates/hotaru-core/src/cells.rs
++++ b/apps/hotaru/crates/hotaru-core/src/cells.rs
+@@ -33,7 +33,13 @@
+             let bytes = count
+                 .checked_mul(size_of::<Cell>())
+                 .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
++            #[cfg(feature = "page-diagnostics")]
++            let phase = std::time::Instant::now();
+             let mut mapping = MmapMut::map_anon(bytes)?;
++            #[cfg(feature = "page-diagnostics")]
++            crate::page_diagnostics::elapsed(2, phase);
++            #[cfg(feature = "page-diagnostics")]
++            let phase = std::time::Instant::now();
+             let target = bytemuck::try_cast_slice_mut::<u8, Cell>(&mut mapping)
+                 .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?;
+             let mut start = 0;
+@@ -42,7 +48,17 @@
+                 start += row.len();
+             }
+             debug_assert_eq!(start, count);
+-            Ok(Arc::new(Self(mapping.make_read_only()?)))
++            #[cfg(feature = "page-diagnostics")]
++            crate::page_diagnostics::elapsed(3, phase);
++            #[cfg(feature = "page-diagnostics")]
++            let phase = std::time::Instant::now();
++            let mapping = mapping.make_read_only()?;
++            #[cfg(feature = "page-diagnostics")]
++            {
++                crate::page_diagnostics::elapsed(4, phase);
++                crate::page_diagnostics::add(1, bytes as u64);
++            }
++            Ok(Arc::new(Self(mapping)))
+         }
+         #[cfg(miri)]
+         {
+diff --git a/apps/hotaru/crates/hotaru-core/src/history.rs b/apps/hotaru/crates/hotaru-core/src/history.rs
+--- a/apps/hotaru/crates/hotaru-core/src/history.rs
++++ b/apps/hotaru/crates/hotaru-core/src/history.rs
+@@ -103,6 +103,8 @@
+         let Storage::Resident(rows) = &mut self.storage else {
+             return Ok(());
+         };
++        #[cfg(feature = "page-diagnostics")]
++        let started = std::time::Instant::now();
+         let page = crate::cells::CellPage::pack(rows.iter().flatten().map(|row| row.cells()))?;
+         let mut offset = 0;
+         for row in rows.iter_mut().flatten() {
+@@ -114,6 +116,11 @@
+             offset = end;
+         }
+         self.resident_retained_bytes = self.logical_bytes;
++        #[cfg(feature = "page-diagnostics")]
++        {
++            crate::page_diagnostics::add(0, 1);
++            crate::page_diagnostics::elapsed(5, started);
++        }
+         Ok(())
+     }
+     fn retained_bytes(&self) -> usize {
+@@ -216,15 +223,27 @@
+     if raw_len == 0 || raw_len > MAX_RAW_BYTES || rows == 0 || rows > MAX_ROWS {
+         return None;
+     }
++    #[cfg(feature = "page-diagnostics")]
++    let started = std::time::Instant::now();
++    #[cfg(feature = "page-diagnostics")]
++    let phase = std::time::Instant::now();
+     let mut raw = Vec::new();
+     raw.try_reserve_exact(raw_len).ok()?;
+     raw.resize(raw_len, 0);
+     if lz4_flex::block::decompress_into(encoded, &mut raw).ok()? != raw_len {
+         return None;
+     }
++    #[cfg(feature = "page-diagnostics")]
++    crate::page_diagnostics::elapsed(8, phase);
++    #[cfg(feature = "page-diagnostics")]
++    let phase = std::time::Instant::now();
+     let mut input = raw.as_slice();
+     let mut budget = crate::memory::MAX_DECODE_BYTES;
+     let links = decode_links_budget(&mut input, &mut budget)?;
++    #[cfg(feature = "page-diagnostics")]
++    crate::page_diagnostics::elapsed(9, phase);
++    #[cfg(feature = "page-diagnostics")]
++    let phase = std::time::Instant::now();
+     let mut result = Vec::with_capacity(rows);
+     for _ in 0..rows {
+         result.push(RowRef::new(Row::decode_history_budget(
+@@ -232,6 +251,13 @@
+             &links,
+             &mut budget,
+         )?));
++    }
++    #[cfg(feature = "page-diagnostics")]
++    {
++        crate::page_diagnostics::elapsed(10, phase);
++        crate::page_diagnostics::elapsed(11, started);
++        crate::page_diagnostics::add(6, 1);
++        crate::page_diagnostics::add(7, raw_len as u64);
+     }
+     input.is_empty().then_some(result)
+ }
+@@ -407,7 +433,12 @@
+             if let Some(previous) = self.blocks.back_mut() {
+                 // A mapping failure leaves valid resident rows in place.
+                 // It does not drop data or relax the history byte budget.
+-                let _ = Arc::make_mut(&mut previous.block).freeze_cells();
++                let result = Arc::make_mut(&mut previous.block).freeze_cells();
++                #[cfg(feature = "page-diagnostics")]
++                if result.is_err() {
++                    crate::page_diagnostics::add(12, 1);
++                }
++                let _ = result;
+             }
+             self.blocks.push_back(Entry {
+                 block: Arc::new(Block {
+diff --git a/apps/hotaru/crates/hotaru-core/src/lib.rs b/apps/hotaru/crates/hotaru-core/src/lib.rs
+--- a/apps/hotaru/crates/hotaru-core/src/lib.rs
++++ b/apps/hotaru/crates/hotaru-core/src/lib.rs
+@@ -14,6 +14,10 @@
+ mod memory;
+ mod parser;
+ mod position;
++#[cfg(feature = "page-diagnostics")]
++mod page_diagnostics;
++#[cfg(feature = "page-diagnostics")]
++pub use page_diagnostics::take_page_diagnostics;
+ mod row;
+ #[allow(unsafe_code)]
+ mod scan;
+diff --git a/apps/hotaru/crates/hotaru-core/src/page_diagnostics.rs b/apps/hotaru/crates/hotaru-core/src/page_diagnostics.rs
+--- /dev/null
++++ b/apps/hotaru/crates/hotaru-core/src/page_diagnostics.rs
+@@ -0,0 +1,17 @@
++//! Development-only counters. Clock/atomic overhead makes these diagnostic,
++//! not acceptance timings. Normal builds compile every hook away.
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::time::Instant;
++static COUNTERS: [AtomicU64; 13] = [const { AtomicU64::new(0) }; 13];
++pub(crate) fn add(index: usize, value: u64) {
++    COUNTERS[index].fetch_add(value, Ordering::Relaxed);
++}
++pub(crate) fn elapsed(index: usize, start: Instant) {
++    add(index, start.elapsed().as_nanos() as u64);
++}
++/// Counters: sealed blocks, mapped bytes, map/copy/protect/seal nanoseconds,
++/// decoded blocks, raw decoded bytes, LZ4/links/rows/total decode nanoseconds,
++/// and failed sealing attempts. Only for isolated single-process experiments.
++pub fn take_page_diagnostics() -> [u64; 13] {
++    std::array::from_fn(|index| COUNTERS[index].swap(0, Ordering::Relaxed))
++}
+diff --git a/apps/hotaru/crates/hotaru-replay/Cargo.toml b/apps/hotaru/crates/hotaru-replay/Cargo.toml
+--- a/apps/hotaru/crates/hotaru-replay/Cargo.toml
++++ b/apps/hotaru/crates/hotaru-replay/Cargo.toml
+@@ -10,3 +10,6 @@
+ [dependencies]
+ hotaru-core = { path = "../hotaru-core" }
+ serde_json = "1"
++
++[features]
++page-diagnostics = ["hotaru-core/page-diagnostics"]
+diff --git a/apps/hotaru/crates/hotaru-replay/examples/history_budget.rs b/apps/hotaru/crates/hotaru-replay/examples/history_budget.rs
+--- a/apps/hotaru/crates/hotaru-replay/examples/history_budget.rs
++++ b/apps/hotaru/crates/hotaru-replay/examples/history_budget.rs
+@@ -108,6 +108,8 @@
+         terminal.feed(part);
+     }
+     let feed_ns = start.elapsed().as_nanos() as u64;
++    #[cfg(feature = "page-diagnostics")]
++    let feed_diagnostics = hotaru_core::take_page_diagnostics();
+     drop(data);
+     let populated_rss = rss();
+     let populated = terminal.history_memory();
+@@ -148,11 +150,15 @@
+     }
+     let owner_release_rss = rss();
+     let start = Instant::now();
++    #[cfg(feature = "page-diagnostics")]
++    let _ = hotaru_core::take_page_diagnostics();
+     let mut checksum = 0u64;
+     for row in snapshot.rows() {
+         checksum = checksum.wrapping_add(row.cells()[0].character() as u64);
+     }
+     let read_ns = start.elapsed().as_nanos() as u64;
++    #[cfg(feature = "page-diagnostics")]
++    let read_diagnostics = hotaru_core::take_page_diagnostics();
+     black_box(checksum);
+     let read_rss = rss();
+     assert_eq!(
+@@ -163,6 +169,11 @@
+     drop(snapshot);
+     drop(terminal);
+     let released_rss = rss();
++    #[cfg(feature = "page-diagnostics")]
++    eprintln!(
++        "{}",
++        json!({"feed_diagnostics":feed_diagnostics,"read_diagnostics":read_diagnostics})
++    );
+     println!(
+         "{}",
+         json!({"engine":"hotaru","row_header_bytes":std::mem::size_of::<hotaru_core::Row>(),"input_bytes":input_bytes,"cols":cols,"rows":rows,"row_limit":row_limit,"byte_limit":byte_limit,"hold":hold,"mutated_before_read":mutation,

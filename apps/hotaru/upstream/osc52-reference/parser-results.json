@@ -1,0 +1,887 @@
+{
+  "scope": "actual C API Parser.next/end; no stream C0 filter, GTK dispatch or base64 decoder",
+  "library": "/home/callen/work/ghostty-reference-20261028/zig-out/lib/libghostty-vt.so.0.1.0",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "adapter_sha256": "220ee6aff448a161976bf7955fb5f5784c42b32a643bf6cdbc6d9c63c008c4d7",
+  "tool_sha256": "940b14bbe615e17109c80d95af20cbe1a54dc972c618f53f4efe689bb2072103",
+  "source_sha256": "d48cba61af3d00f763dc6a4c8302df721199a2b94e9bc73c1d3e67ee46b3e655",
+  "clipboard_command_type": 4,
+  "cases": [
+    {
+      "name": "numeric-3532",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "numeric-303532",
+      "input_length": 7,
+      "input_sha256": "a2b7e8a486cfd3934070336d83e5f76eea35f9b3788f4d897b9c4fe0cf222b4c",
+      "input_hex": "3035323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-30303532",
+      "input_length": 8,
+      "input_sha256": "13aa977f75d515a93450df000fb1e019f099179348c3eb11b1a4e0acff4635ca",
+      "input_hex": "303035323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-3030303030303030303030303532",
+      "input_length": 18,
+      "input_sha256": "594cffaf6d103fbffefb8e6a292048af6fb761154fda5e0109448f6ceb491a1f",
+      "input_hex": "30303030303030303030303035323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-2b3532",
+      "input_length": 7,
+      "input_sha256": "5d68c485375a79ec978234d89af05c7dd916d358710c08743725504864459f36",
+      "input_hex": "2b35323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-203532",
+      "input_length": 7,
+      "input_sha256": "9f48e1f6d878ba92a02cd4ce66d3c74c23008afc50363d9e48fd212f2e17dbd7",
+      "input_hex": "2035323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-353220",
+      "input_length": 7,
+      "input_sha256": "ceb7a6f98331b4867a6d6bd3047390c7ae795fa3fa49fd0824410af79503b304",
+      "input_hex": "3532203b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-353200",
+      "input_length": 7,
+      "input_sha256": "d4b8046403d133aac61ec1a58cbf9946d80a38eb436cad45b36da7d0d7a958ec",
+      "input_hex": "3532003b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-353207",
+      "input_length": 7,
+      "input_sha256": "977769a3a8fb63a46948a4a6e917966d76179113ad6d2497407c0e6664142cf0",
+      "input_hex": "3532073b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "numeric-35321b",
+      "input_length": 7,
+      "input_sha256": "f150c3b44c2d8cf470b29fe1c79e2956bfada4b4bb3ba78affb6105960a95202",
+      "input_hex": "35321b3b633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload--",
+      "input_length": 4,
+      "input_sha256": "5a113d7ac28aa10e71d7d21af6567003f58843c594032de24c294b2ec3a1c686",
+      "input_hex": "35323b3b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--3f",
+      "input_length": 5,
+      "input_sha256": "e9219349c834b9553774112e0f2a8260f589de44567c1bcd20af9d6825724656",
+      "input_hex": "35323b3b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--3f3f",
+      "input_length": 6,
+      "input_sha256": "7f9fb0ba2f8c9775d4522f1fc5f87bca1d161ae72b6e8ab91fa03c8e2a2c18be",
+      "input_hex": "35323b3b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--59513d3d",
+      "input_length": 8,
+      "input_sha256": "f4b21e75364f5a3537a399791e92231d09cb885276ba0547935eefcdd827c54b",
+      "input_hex": "35323b3b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--610062",
+      "input_length": 7,
+      "input_sha256": "95b3d86edc6c79bbaba2a86a4031c488f6841aff0fe251f08a484acc527e8014",
+      "input_hex": "35323b3b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--ff",
+      "input_length": 5,
+      "input_sha256": "cf3b4fc7066d09a146e6da295579e9dc1bd0f7c9bd736476e0e16324209de3b8",
+      "input_hex": "35323b3bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload--613b62",
+      "input_length": 7,
+      "input_sha256": "f1face9e49d0348f87edc97bd2d118a998785cee26123791953e992cff17ec63",
+      "input_hex": "35323b3b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-",
+      "input_length": 5,
+      "input_sha256": "6c8941c46beebf9dd5ce43c9b2b1480ccd03ab8714a5b15dceb5a7e5cb9f78bf",
+      "input_hex": "35323b633b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-3f",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-3f3f",
+      "input_length": 7,
+      "input_sha256": "d59aed0da9f31bae054b2d1f1097c0fd9aff594d54bb6275395d574f54a5e7b9",
+      "input_hex": "35323b633b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-59513d3d",
+      "input_length": 9,
+      "input_sha256": "fef0f85e81e5b9f8439c3a11f8bb7dad888c84575ec4ad7f7dda2974b760d0aa",
+      "input_hex": "35323b633b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-610062",
+      "input_length": 8,
+      "input_sha256": "e4ed03107a9d5d0ee8f02205d1f3565d6700f6db7c98971cade2a695b09c3dc6",
+      "input_hex": "35323b633b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-ff",
+      "input_length": 6,
+      "input_sha256": "84b794b05452e6208224ce84654cf1f9dbef3b2bb728849da1ac7fe8990a6c6c",
+      "input_hex": "35323b633bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-63-613b62",
+      "input_length": 8,
+      "input_sha256": "b08d2ae9138e7460443670463bfcfb176fb824bb3b1639742ec5c61e40761bd6",
+      "input_hex": "35323b633b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-",
+      "input_length": 5,
+      "input_sha256": "39a7ceb58eb993434671ed5fcba57dbebb16ed68f81569cf70cd357dfecbfb73",
+      "input_hex": "35323b703b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-3f",
+      "input_length": 6,
+      "input_sha256": "9aa1aa53dab0f3e43a0f0bb29baab47ef8119e19511f2496c7525c308e221166",
+      "input_hex": "35323b703b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-3f3f",
+      "input_length": 7,
+      "input_sha256": "dfdbd4b095602c3564e71463e004462e5ff5bd3feb2826c6dd5361fe805d2d27",
+      "input_hex": "35323b703b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-59513d3d",
+      "input_length": 9,
+      "input_sha256": "2c156f5f214ebbf6b2f2bd45241ef124dfb362883e5f0522c5ba3213d0826ad7",
+      "input_hex": "35323b703b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-610062",
+      "input_length": 8,
+      "input_sha256": "582f93cfffc86b7c49a218cf8b6c5c8d418cd09c6dc0f17a561e4db52309628c",
+      "input_hex": "35323b703b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-ff",
+      "input_length": 6,
+      "input_sha256": "56a2e6e4c3b80610c20bc1026fdd39f5675995d0829762d07e21ee11fbfd84dd",
+      "input_hex": "35323b703bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-70-613b62",
+      "input_length": 8,
+      "input_sha256": "bd01d9e07fcc65d35d551cf0f6f25dbf47802a803058507880ac4103e4e2beee",
+      "input_hex": "35323b703b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-",
+      "input_length": 5,
+      "input_sha256": "9e792b364d0c927d4b8f6db4bb68f7cbf5605c96006e48febcfa8125176cd812",
+      "input_hex": "35323b733b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-3f",
+      "input_length": 6,
+      "input_sha256": "d633413a4fd37118655d495bbc180f4a96f50c418b5c6fd71081e3fd8fef9531",
+      "input_hex": "35323b733b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-3f3f",
+      "input_length": 7,
+      "input_sha256": "a0a964db2e199e85f6324f61915829268aa987ae5895ef5e9e9f865f706f9952",
+      "input_hex": "35323b733b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-59513d3d",
+      "input_length": 9,
+      "input_sha256": "c7914a8bee9a67599c3c6fee7657e0aa2d85b8b05c096413bba7af4f72ea55b8",
+      "input_hex": "35323b733b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-610062",
+      "input_length": 8,
+      "input_sha256": "add751e310a8fcd7223abc266eced7c0a94a50960fd8f29e38c0215ade66ac4a",
+      "input_hex": "35323b733b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-ff",
+      "input_length": 6,
+      "input_sha256": "53195f7dd5282c5bc1aa00ae6708c47226562f8eb8b6b9663e62a6b19c085e85",
+      "input_hex": "35323b733bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-73-613b62",
+      "input_length": 8,
+      "input_sha256": "383ecb3a32e9df6e97f295a2a1ac05d993246f302fdc1ee42fe6cb271a45a8af",
+      "input_hex": "35323b733b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-",
+      "input_length": 5,
+      "input_sha256": "63dc1eb1feb3f1279ce3090331da6a0ee28c96bd7872b1d5a894def7dce43848",
+      "input_hex": "35323b783b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-3f",
+      "input_length": 6,
+      "input_sha256": "fa3e5f8b53f6a16ea912510160b3ef13fc4743aa4d7aa33c22c62d1af7bc4bd9",
+      "input_hex": "35323b783b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-3f3f",
+      "input_length": 7,
+      "input_sha256": "08c327855fba7a27c57d7ad68cc0657d1cefc5dc4a1251fe1198090b6e379070",
+      "input_hex": "35323b783b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-59513d3d",
+      "input_length": 9,
+      "input_sha256": "d485d27a6d3438e2b37d53f1dcba2de5247e2041a6c2522bc4fb8b7b2023da4f",
+      "input_hex": "35323b783b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-610062",
+      "input_length": 8,
+      "input_sha256": "f1914ba988c7a5bf9708bdc7db8563fdb1a3e664be7272a8c77499971bdd3d69",
+      "input_hex": "35323b783b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-ff",
+      "input_length": 6,
+      "input_sha256": "ebf71c51a370517597591696450cbf367ad9f1316b0c518403f94eec9b09ff28",
+      "input_hex": "35323b783bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-78-613b62",
+      "input_length": 8,
+      "input_sha256": "b4bcb31cf48e2a7e0361f4d930a6ab11373d5f340f197857d380c166e39b25ca",
+      "input_hex": "35323b783b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-",
+      "input_length": 5,
+      "input_sha256": "59fce0df5c092509cfcbe0743186ca61a11be58685cbd1509ebe1fd99368149c",
+      "input_hex": "35323b303b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-3f",
+      "input_length": 6,
+      "input_sha256": "3fc747ac946bea0a56027944ae04bb2ef237333696817c73726c80c43699edc4",
+      "input_hex": "35323b303b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-3f3f",
+      "input_length": 7,
+      "input_sha256": "9b094ac5344a625139140823e291fe450c2eecab2f31d7467389d0c92b3f15da",
+      "input_hex": "35323b303b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-59513d3d",
+      "input_length": 9,
+      "input_sha256": "3925bfc589937e7dda06b4ac34963d4b9ae2fcd50d80317f4fbafac930e18ba2",
+      "input_hex": "35323b303b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-610062",
+      "input_length": 8,
+      "input_sha256": "671deb0b380a4478ec688f3a3ba38b58d9a06e90c769d55cfb80985164c71abc",
+      "input_hex": "35323b303b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-ff",
+      "input_length": 6,
+      "input_sha256": "9e4c7264704cf0debd181e958ca14ec397c5738da365513ecbaea3cdc4aed8ec",
+      "input_hex": "35323b303bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-30-613b62",
+      "input_length": 8,
+      "input_sha256": "ae02982bd5eb8c83e59afa21c63a663279b0e9e616be2826bef5e5f120e4b8b7",
+      "input_hex": "35323b303b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-6370-",
+      "input_length": 6,
+      "input_sha256": "3afc87846a85859dbde6c8594f01d05ac2a8481a369ac2ecd614a37b81b638b4",
+      "input_hex": "35323b63703b",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-3f",
+      "input_length": 7,
+      "input_sha256": "6a6b88404bf7c72715801df773108bf753f375c088ac6e345bbbbc2ab904c4b8",
+      "input_hex": "35323b63703b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-3f3f",
+      "input_length": 8,
+      "input_sha256": "93622079d968b264626ea952b044fea11154bb81762137a3974b2fe77e46a544",
+      "input_hex": "35323b63703b3f3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-59513d3d",
+      "input_length": 10,
+      "input_sha256": "1e038c7b2f330129dd92effed4b50c030296055d129e84f3ce85bdf513cedc6b",
+      "input_hex": "35323b63703b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-610062",
+      "input_length": 9,
+      "input_sha256": "a68ed6e1057cf62a990f057646cec4c9c13d4d2f4a59373da091b52e1214346e",
+      "input_hex": "35323b63703b610062",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-ff",
+      "input_length": 7,
+      "input_sha256": "484b279101fbb16e788115893eef7d7857341bf222429a596ee9f14e6c9fa450",
+      "input_hex": "35323b63703bff",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6370-613b62",
+      "input_length": 9,
+      "input_sha256": "330d2252794b6c2a8f1609af026a0d160194730807e4598844d1390ceab22b3f",
+      "input_hex": "35323b63703b613b62",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-",
+      "input_length": 6,
+      "input_sha256": "5c5f730e49e3efbb666dad06b7d892af78cfc7f7921ad74b25703953be73e596",
+      "input_hex": "35323b63633b",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-3f",
+      "input_length": 7,
+      "input_sha256": "173631c153bf63de23d5ed65d9813ed3669483be33182986073490eed789f3af",
+      "input_hex": "35323b63633b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-3f3f",
+      "input_length": 8,
+      "input_sha256": "0aa9cb9bda777de393db827f661da77ac1f4961a25e866ed6d5dbc4e724851c7",
+      "input_hex": "35323b63633b3f3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-59513d3d",
+      "input_length": 10,
+      "input_sha256": "717d5eaee98e6ca99daf9982d235925ed821b6abbc66a4befc8622ded518d6ae",
+      "input_hex": "35323b63633b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-610062",
+      "input_length": 9,
+      "input_sha256": "b163b1ec1d7f758953670ef490ebdf15d650db34730ef8c330642f18b7f8efd4",
+      "input_hex": "35323b63633b610062",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-ff",
+      "input_length": 7,
+      "input_sha256": "4b2f9362a9906c4ef8536b922e99b49f6c837fd1fbc661caa9c6d8be3b3724e0",
+      "input_hex": "35323b63633bff",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-6363-613b62",
+      "input_length": 9,
+      "input_sha256": "d48bac29358b1b09e80cb39e439637b825afd1d6fb873d6f3cb90482b0e96b42",
+      "input_hex": "35323b63633b613b62",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-ff-",
+      "input_length": 5,
+      "input_sha256": "b59cd9bee7b821c4dfdb91a7b8e7a05f1cd845d09ebfb7afc5a61cd711868e6c",
+      "input_hex": "35323bff3b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-3f",
+      "input_length": 6,
+      "input_sha256": "b0d27c0fc12d7f5be5fd9f5de16d8cc6621c9bd4951785e8b334bdcfeeef807c",
+      "input_hex": "35323bff3b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-3f3f",
+      "input_length": 7,
+      "input_sha256": "adaa8aa7025412ce7c4c4028a67ba0fd7f3bf075a5f5ab696c70313822dbb40c",
+      "input_hex": "35323bff3b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-59513d3d",
+      "input_length": 9,
+      "input_sha256": "1d7f57d627aaaf3050856b87f4554e6c7448d5e4c37598cc10f7d4df9b3d9479",
+      "input_hex": "35323bff3b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-610062",
+      "input_length": 8,
+      "input_sha256": "cc355369682402798f15fba2394cac5f035ada5f21a462be3c0bd45937cc8430",
+      "input_hex": "35323bff3b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-ff",
+      "input_length": 6,
+      "input_sha256": "1bcd96477bd424abc5192471ac5f599c5ebb12e7847c553b678a5370200533c5",
+      "input_hex": "35323bff3bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-ff-613b62",
+      "input_length": 8,
+      "input_sha256": "5af1b42c9cffa072d5569aaac521f1fba7b16da284d9829ee900d0a563d4716b",
+      "input_hex": "35323bff3b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-",
+      "input_length": 5,
+      "input_sha256": "7ac7ce4c8da0f0b1ed19049890825c9bc71de44c7b46ed72b4f3ef5d91fbd50f",
+      "input_hex": "35323b003b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-3f",
+      "input_length": 6,
+      "input_sha256": "233d8fc8badd2bc3fe50c7c633a4e285cc5f4a6ec492ef1f1dc1adc80f4fc1ea",
+      "input_hex": "35323b003b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-3f3f",
+      "input_length": 7,
+      "input_sha256": "fbaaebaee4ab18f9d6091c3e244464efb11c57548ab40b538722464653e1aa17",
+      "input_hex": "35323b003b3f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-59513d3d",
+      "input_length": 9,
+      "input_sha256": "a4f3ec02f5c46ec285da8bf29942490f093d355dfde9142090582b949071a7af",
+      "input_hex": "35323b003b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-610062",
+      "input_length": 8,
+      "input_sha256": "4158e1a3a42005cedb1f225638c2ed3411adfd60ed4cb3397739a1f7c88b8227",
+      "input_hex": "35323b003b610062",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-ff",
+      "input_length": 6,
+      "input_sha256": "469eae46f554fa2946d6ea920d21d8bf831996e2e7d9937effa21ebba4c85634",
+      "input_hex": "35323b003bff",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-00-613b62",
+      "input_length": 8,
+      "input_sha256": "6a09c864922b7ba7cafc7a22ff74a305583ef9e3272d17659ba2558c5864d06f",
+      "input_hex": "35323b003b613b62",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "kind-payload-c3a9-",
+      "input_length": 6,
+      "input_sha256": "478cec2b0a3593ff2edf7d3e6f308c171ef156b7cf8da66fcac8a7209765c6b7",
+      "input_hex": "35323bc3a93b",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-3f",
+      "input_length": 7,
+      "input_sha256": "2d0503f6198bc3e7eaa3ee8c0f537fe47aa3de138962b00f72e3eeb2867e1a18",
+      "input_hex": "35323bc3a93b3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-3f3f",
+      "input_length": 8,
+      "input_sha256": "319281c7539b00ab2055ff6bb053468ea60e46851b46df94eedf075ca07dad4e",
+      "input_hex": "35323bc3a93b3f3f",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-59513d3d",
+      "input_length": 10,
+      "input_sha256": "1fa484b3bc0d7d6d326d2ac81840fea57539ffd5ad375657e4a5744f2e076a28",
+      "input_hex": "35323bc3a93b59513d3d",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-610062",
+      "input_length": 9,
+      "input_sha256": "ce9985237ddb3db02852346044fe13466a3fc0cf21ba02c43a1397823600712c",
+      "input_hex": "35323bc3a93b610062",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-ff",
+      "input_length": 7,
+      "input_sha256": "9d7a67167f9f8dfa586489793c70a3edc2f495ec74d4c5bbb52ddfc89245c313",
+      "input_hex": "35323bc3a93bff",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "kind-payload-c3a9-613b62",
+      "input_length": 9,
+      "input_sha256": "e4c2e7eee367962cf0cc67d81bcd51071edb5e7bb3195947df13a8df2aaf6552",
+      "input_hex": "35323bc3a93b613b62",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "embedded-control-0",
+      "input_length": 7,
+      "input_sha256": "4f323a83011f39b0fdf3311844220da655729df95d4631ee9265a5db5275ff37",
+      "input_hex": "35323b633b003f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-0",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 0,
+      "actual_command_type": 4
+    },
+    {
+      "name": "embedded-control-7",
+      "input_length": 7,
+      "input_sha256": "05ac62a349fb6cec40b6834b353d20088f5f3db963c956ea5eeb8de2f507bb64",
+      "input_hex": "35323b633b073f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-7",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "embedded-control-24",
+      "input_length": 7,
+      "input_sha256": "9daf754d4870e7d22a5184bd892cb0ffc09ef232666579359326f6a1374ac45d",
+      "input_hex": "35323b633b183f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-24",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 24,
+      "actual_command_type": 0
+    },
+    {
+      "name": "embedded-control-26",
+      "input_length": 7,
+      "input_sha256": "990fe9ff147133cd22ea283fa0fc84f7b48ae3a9589b1ed74a2a5d494f275c87",
+      "input_hex": "35323b633b1a3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-26",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 26,
+      "actual_command_type": 0
+    },
+    {
+      "name": "embedded-control-27",
+      "input_length": 7,
+      "input_sha256": "8ed2a9f7e1c6ec14d995cfc759412fc2ce5a2ac93439636a06032f3b6fb9ffc4",
+      "input_hex": "35323b633b1b3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-27",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 27,
+      "actual_command_type": 4
+    },
+    {
+      "name": "embedded-control-127",
+      "input_length": 7,
+      "input_sha256": "55048e82f7870ba47c61f77d5e1efe0bfdabcbcc43dffe95090a04beb6137be7",
+      "input_hex": "35323b633b7f3f",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "terminator-127",
+      "input_length": 6,
+      "input_sha256": "75aaf429eda860dbcec9f2b9c15372372baf439f2286779ac2ef5f3b68263d75",
+      "input_hex": "35323b633b3f",
+      "terminator": 127,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture--8388604",
+      "input_length": 8388608,
+      "input_sha256": "cbaaec315bd7c4b109f10cdde26d162d8dd746da2d6568edb95ee589a4dc4298",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture--8388605",
+      "input_length": 8388609,
+      "input_sha256": "6978a4dac6eb69759b83ccb611e2df6a76dd9a54d26da9893c42e2a36a12007b",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture--8388606",
+      "input_length": 8388610,
+      "input_sha256": "7fdec23de69fb027bcb38f626524b3e53dd69af4fe5cab6c04f50dca3a0d87bb",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture--8388607",
+      "input_length": 8388611,
+      "input_sha256": "16dcd0f4e24f8c7f86c0a76d2bff8fce94a2d4bc946f93c46022b709ab2d5ac2",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture--8388608",
+      "input_length": 8388612,
+      "input_sha256": "df9f539cef3835692481b69167c176d3f133b122d8815894f01332dcade6c305",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture--8388609",
+      "input_length": 8388613,
+      "input_sha256": "6dad57712e9b30b865608f3be8e8527189f7a6c66ba9a511c33ac974d72ea789",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture-63-8388604",
+      "input_length": 8388609,
+      "input_sha256": "b5bbdc3d413941157f49640a03c7fb33dd97c1c5277795aa37ba0fdbca41eaa2",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture-63-8388605",
+      "input_length": 8388610,
+      "input_sha256": "e6d7874f4f1d5c064283aa712186cf22273bb8395912d914e31a62a5d8b07096",
+      "terminator": 7,
+      "actual_command_type": 4
+    },
+    {
+      "name": "capture-63-8388606",
+      "input_length": 8388611,
+      "input_sha256": "4ab5dcee49f4b10a4c06169097e717e1840c5c9dd216f354361e4f497bbeac7b",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture-63-8388607",
+      "input_length": 8388612,
+      "input_sha256": "57d2ad9b18811c2803909a4adb8178efe85824ea4e6e93c52162987632093a86",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture-63-8388608",
+      "input_length": 8388613,
+      "input_sha256": "0d9da84ea36be8598e6d5d8237b838cd1992a435fcc9a7bb13bd9f54b227e15b",
+      "terminator": 7,
+      "actual_command_type": 0
+    },
+    {
+      "name": "capture-63-8388609",
+      "input_length": 8388614,
+      "input_sha256": "df06b98047706b8da9279e6fb45d589645488d5ebe0d2261776ed496fbd9de5a",
+      "terminator": 7,
+      "actual_command_type": 0
+    }
+  ]
+}

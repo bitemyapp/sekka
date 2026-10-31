@@ -1,0 +1,17 @@
+     Locking 1 package to latest compatible version
+   Compiling simdutf8 v0.1.5 (/home/callen/work/hotaru-simdutf8-patched/vendor/simdutf8)
+   Compiling hotaru-simdutf8-miri-fixed v0.0.0 (/home/callen/work/hotaru-simdutf8-miri-20261028/fixed)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (target/miri/x86_64-unknown-linux-gnu/debug/deps/hotaru_simdutf8_miri_fixed-e2ae39e590e59881)
+
+running 1 test
+test non_ascii_final_block_prefetch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+   Doc-tests hotaru_simdutf8_miri_fixed
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,67 @@
+--- a/crates/hotaru-core/src/screen.rs
++++ b/crates/hotaru-core/src/screen.rs
+@@ -921,7 +921,6 @@
+             let link = s.active_link.clone();
+             let mut pending = s.wrap_pending;
+             let mut clear_previous_spacer = false;
+-            let mut previous = None;
+             // One ownership check/copy per row, rather than an atomic Arc check
+             // for every scalar. Controls cannot occur in a validated text run.
+             let row = Arc::make_mut(&mut s.lines[s.cursor.row]);
+@@ -949,7 +948,6 @@
+                 let id = row.style_id(style);
+                 loop {
+                     chars.next();
+-                    previous = Some(ch);
+                     clear_previous_spacer |=
+                         col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
+                     row.cells[col] = Cell::new(ch, id, width as u8).protected(protected);
+@@ -986,6 +984,17 @@
+                     link.as_ref(),
+                 );
+             }
++            // These runs write only independent positive-width scalars with
++            // the unmodified charset. Read REP's scalar once per row span;
++            // a full-width glyph leaves the final cell as its spacer tail.
++            let previous = if col != s.cursor.col || (pending && !s.wrap_pending) {
++                let end = if pending { s.cols } else { col };
++                let last = end - 1;
++                let base = last - usize::from(row.cells[last].width() == 0);
++                Some(row.cells[base].character())
++            } else {
++                None
++            };
+             s.cursor.col = col;
+             s.wrap_pending = pending;
+             if clear_previous_spacer {
+@@ -1020,7 +1029,6 @@
+         let link = screen.active_link.clone();
+         let mut col = screen.cursor.col;
+         let mut consumed = 0;
+-        let mut previous = None;
+         let mut clear_previous_spacer = false;
+         let row = Arc::make_mut(&mut screen.lines[screen.cursor.row]);
+         while let Some(&ch) = chars.peek() {
+@@ -1036,7 +1044,6 @@
+                 break;
+             }
+             chars.next();
+-            previous = Some(ch);
+             clear_previous_spacer |=
+                 col <= 1 && row.cells[col].width() != width && row.cells[col].width() != 1;
+             row.put(col, ch, width, style, protected);
+@@ -1051,6 +1058,14 @@
+                 break;
+             }
+         }
++        let previous = if consumed != 0 {
++            let end = if screen.wrap_pending { screen.cols } else { col };
++            let last = end - 1;
++            let base = last - usize::from(row.cells[last].width() == 0);
++            Some(row.cells[base].character())
++        } else {
++            None
++        };
+         screen.cursor.col = col;
+         if clear_previous_spacer {
+             screen.clear_previous_spacer();

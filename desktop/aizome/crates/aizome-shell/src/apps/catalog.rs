@@ -97,7 +97,10 @@ pub fn glyph_for(app_id: &str) -> Option<(Icon, Hue)> {
         "tansu" => (Icon::HardDrive, Hue::Text2),
         "kura" => (Icon::ChartPie, Hue::Violet),
         "myaku" => (Icon::Activity, Hue::Red),
+        "nisshi" => (Icon::NotepadText, Hue::Cyan),
         "shashin" => (Icon::Image, Hue::Violet),
+        "shiori" => (Icon::BookOpen, Hue::Amber),
+        "utsushi" => (Icon::Film, Hue::Red),
         "annai" => (Icon::Compass, Hue::Amber),
         "foot" | "footclient" | "alacritty" | "kitty" | "wezterm" | "ghostty" | "konsole" | "terminal" | "xterm" => {
             (Icon::SquareTerminal, Hue::Green)
@@ -194,6 +197,7 @@ mod tests {
         assert_eq!(glyph_for("org.aizome.Sumi").map(|g| g.0), Some(Icon::Code));
         assert_eq!(glyph_for("foot").map(|g| g.0), Some(Icon::SquareTerminal));
         assert_eq!(glyph_for("firefox.desktop").map(|g| g.0), Some(Icon::Globe));
+        assert_eq!(glyph_for("org.aizome.Utsushi"), Some((Icon::Film, Hue::Red)));
         assert!(glyph_for("com.example.Unknown").is_none());
     }
 }

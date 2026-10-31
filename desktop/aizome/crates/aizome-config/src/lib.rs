@@ -26,9 +26,9 @@ pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleCl
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
 pub use shell::{
-    ClockFormat, DeskbarSettings, DesktopSettings, LockSettings, MenubarSettings, NotificationSettings, PALETTE_SCOPES,
-    PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat, RecordingQuality, RecordingSettings,
-    SYSTRAY_WIDGETS, SoundSettings, names_app,
+    ClockFormat, DESKBAR_SIZES, DeskbarSettings, DeskbarSide, DesktopSettings, LockSettings, MenubarSettings,
+    NotificationSettings, PALETTE_SCOPES, PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat,
+    RecordingQuality, RecordingSettings, SYSTRAY_WIDGETS, SoundSettings, names_app,
 };
 
 /// Everything in `settings.toml`.
@@ -202,10 +202,101 @@ impl Appearance {
 #[serde(default)]
 pub struct Input {
     pub keyboard: Keyboard,
+    /// Keyboards with keys of their own (`[[input.keyboards]]`); every
+    /// other keyboard types with `keyboard`'s.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub keyboards: Vec<KeyboardProfile>,
     pub pointer: Pointer,
     pub touchpad: Touchpad,
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+impl Input {
+    /// A keyboard's own entry, if it has one. Prefer its exact name and ID;
+    /// otherwise a single profile for that model also covers differently
+    /// named interfaces (for example, "Topre REALFORCE R4H Keyboard").
+    pub fn keyboard_profile(&self, name: &str, id: &str) -> Option<&KeyboardProfile> {
+        self.keyboard_profile_index(name, id).map(|i| &self.keyboards[i])
+    }
+
+    /// The same profile resolution as typing uses, for editing in Settings.
+    pub fn keyboard_profile_mut(&mut self, name: &str, id: &str) -> Option<&mut KeyboardProfile> {
+        self.keyboard_profile_index(name, id).map(|i| &mut self.keyboards[i])
+    }
+
+    fn keyboard_profile_index(&self, name: &str, id: &str) -> Option<usize> {
+        if let Some(i) = self.keyboards.iter().position(|k| k.matches(name, id)) {
+            return Some(i);
+        }
+        // Unknown IDs don't identify a model. Multiple explicit profiles
+        // for an ID retain their name-specific behavior; don't guess.
+        if id.is_empty() || id == "0000:0000" {
+            return None;
+        }
+        let mut matches = self.keyboards.iter().enumerate().filter(|(_, k)| k.id.eq_ignore_ascii_case(id));
+        let (i, _) = matches.next()?;
+        matches.next().is_none().then_some(i)
+    }
+
+    /// The XKB options a keyboard types with: `[input.keyboard]`'s, with
+    /// its own keys' in place of theirs when it has its own.
+    pub fn options_for(&self, name: &str, id: &str) -> String {
+        match self.keyboard_profile(name, id).and_then(|k| k.options.as_deref()) {
+            Some(own) => with_key_options(&self.keyboard.options, own),
+            None => self.keyboard.options.clone(),
+        }
+    }
+}
+
+/// One keyboard's own keys: its modifier swaps, Caps Lock and Compose key
+/// (the options [`is_key_option`] covers), in place of `[input.keyboard]`'s.
+/// Exact name and ID matches take priority; a sole profile for an ID also
+/// applies to its other interface names. Layouts, repeat and Num Lock are
+/// every keyboard's.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KeyboardProfile {
+    /// What the keyboard calls itself: `Apple Inc. Magic Keyboard`.
+    pub name: String,
+    /// Its USB or Bluetooth vendor and product, as `lsusb` writes them:
+    /// `05ac:029c`.
+    pub id: String,
+    /// Its keys' options. Unset, it types as other keyboards do.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<String>,
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+impl KeyboardProfile {
+    pub fn matches(&self, name: &str, id: &str) -> bool {
+        self.name == name && self.id.eq_ignore_ascii_case(id)
+    }
+}
+
+/// Whether an XKB option is about a keyboard's keys rather than its
+/// layouts: modifier swaps (`altwin:`, `ctrl:`), Caps Lock (`caps:`) and
+/// Compose (`compose:`). These are what a keyboard can have of its own.
+pub fn is_key_option(o: &str) -> bool {
+    ["altwin:", "ctrl:", "caps:", "compose:"].iter().any(|p| o.starts_with(p))
+}
+
+fn split_options(s: &str) -> impl Iterator<Item = &str> {
+    s.split(',').map(str::trim).filter(|o| !o.is_empty())
+}
+
+/// The keys' options in `options`, without the rest.
+pub fn key_options(options: &str) -> String {
+    split_options(options).filter(|o| is_key_option(o)).collect::<Vec<_>>().join(",")
+}
+
+/// `general` with `own`'s keys' options in place of its: layout switching
+/// and the rest stay `general`'s, and anything else in `own` is ignored.
+pub fn with_key_options(general: &str, own: &str) -> String {
+    let mut v: Vec<&str> = split_options(general).filter(|o| !is_key_option(o)).collect();
+    v.extend(split_options(own).filter(|o| is_key_option(o)));
+    v.join(",")
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -229,11 +320,14 @@ pub struct Keyboard {
 
 impl Default for Keyboard {
     fn default() -> Self {
+        // The session supplies the system keyboard. Serde uses these only
+        // for missing fields; a person's saved choices still win.
+        let layout = std::env::var("XKB_DEFAULT_LAYOUT").unwrap_or_default();
         Keyboard {
-            layouts: vec!["us".into()],
-            variant: String::new(),
-            options: String::new(),
-            model: String::new(),
+            layouts: if layout.is_empty() { vec!["us".into()] } else { layout.split(',').map(String::from).collect() },
+            variant: std::env::var("XKB_DEFAULT_VARIANT").unwrap_or_default(),
+            options: std::env::var("XKB_DEFAULT_OPTIONS").unwrap_or_default(),
+            model: std::env::var("XKB_DEFAULT_MODEL").unwrap_or_default(),
             repeat_delay: 600,
             repeat_rate: 25,
             numlock: false,
@@ -423,8 +517,11 @@ pub struct Keys {
     pub command_key_for_all_apps: bool,
     /// App IDs that get Ctrl+Shift instead of Ctrl.
     pub terminals: Vec<String>,
-    /// What ❖Return runs, in the Desk's folder.
-    pub terminal: Vec<String>,
+    /// What ❖Return ran before it started the default terminal, the one
+    /// Settei shows (`xdg-terminals.list`). Read once, when Aizome moves
+    /// the default from foot to Hotaru, and never written back.
+    #[serde(rename = "terminal", skip_serializing)]
+    pub legacy_terminal: Option<Vec<String>>,
     /// Overrides: a chord (`"Ctrl+Super+Up"`) to an action name
     /// (`"overview"`, `"spawn foot"`, `"none"` to unbind). See the
     /// compositor's documentation for the action names.
@@ -438,7 +535,7 @@ impl Default for Keys {
         Keys {
             command_key_for_all_apps: true,
             terminals: default_terminals(),
-            terminal: vec!["foot".into()],
+            legacy_terminal: None,
             bindings: BTreeMap::new(),
             extra: toml::Table::new(),
         }
@@ -819,6 +916,95 @@ a = 1
     }
 
     #[test]
+    fn keyboards_of_their_own_change_only_their_keys() {
+        let text = r#"
+[input.keyboard]
+options = "grp:alt_shift_toggle, altwin:swap_alt_win,ctrl:nocaps,lv3:ralt_switch"
+[[input.keyboards]]
+name = "Apple Inc. Magic Keyboard"
+id = "05ac:029c"
+options = "compose:rwin,grp:ctrl_shift_toggle"
+backlight = "dim"
+[[input.keyboards]]
+name = "Logitech K120"
+id = "046d:c31c"
+"#;
+        let s = Settings::from_toml(text).unwrap();
+        let input = &s.input;
+        assert_eq!(
+            input.options_for("Apple Inc. Magic Keyboard", "05AC:029C"),
+            "grp:alt_shift_toggle,lv3:ralt_switch,compose:rwin",
+            "its own keys in place of the others', its layout switching ignored"
+        );
+        assert_eq!(input.options_for("Logitech K120", "046d:c31c"), input.keyboard.options, "unset: as the others");
+        assert_eq!(
+            input.options_for("Apple Inc. Magic Keyboard", "05ac:0250"),
+            input.keyboard.options,
+            "another model"
+        );
+        assert_eq!(input.options_for("Unknown", "0000:0000"), input.keyboard.options);
+        assert_eq!(key_options(&input.keyboard.options), "altwin:swap_alt_win,ctrl:nocaps");
+        assert_eq!(with_key_options("grp:shifts_toggle,caps:escape", ""), "grp:shifts_toggle");
+
+        let again = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
+        assert_eq!(again, s);
+        assert_eq!(again.input.keyboards[0].extra.get("backlight").and_then(|v| v.as_str()), Some("dim"));
+        assert_eq!(again.input.keyboards[1].options, None);
+        // No keyboards of their own, nothing written.
+        assert!(!Settings::default().to_toml().unwrap().contains("keyboards"));
+    }
+
+    #[test]
+    fn keyboard_interfaces_share_an_unambiguous_model_profile() {
+        let mut s = Settings::from_toml(
+            r#"
+[input.keyboard]
+options = "grp:alt_shift_toggle,altwin:swap_alt_win"
+[[input.keyboards]]
+name = "Topre REALFORCE R4H"
+id = "0853:0321"
+options = "altwin:swap_lalt_lwin,compose:ralt"
+backlight = "dim"
+"#,
+        )
+        .unwrap();
+        let alias = "Topre REALFORCE R4H Keyboard";
+        assert_eq!(s.input.options_for(alias, "0853:0321"), "grp:alt_shift_toggle,altwin:swap_lalt_lwin,compose:ralt");
+        assert_eq!(s.input.options_for(alias, "0853:0322"), s.input.keyboard.options, "a different model");
+        s.input.keyboard_profile_mut(alias, "0853:0321").unwrap().options = None;
+        let saved = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
+        assert_eq!(saved.input.keyboards.len(), 1);
+        let profile = saved.input.keyboard_profile(alias, "0853:0321").unwrap();
+        assert_eq!(profile.name, "Topre REALFORCE R4H");
+        assert_eq!(profile.extra["backlight"].as_str(), Some("dim"));
+        assert_eq!(saved.input.options_for(alias, "0853:0321"), saved.input.keyboard.options);
+    }
+
+    #[test]
+    fn exact_keyboard_profiles_win_and_ambiguous_or_unknown_ids_do_not_guess() {
+        let mut input = Input::default();
+        input.keyboard.options.clear();
+        let profile = |name: &str, id: &str, options: &str| KeyboardProfile {
+            name: name.into(),
+            id: id.into(),
+            options: Some(options.into()),
+            ..Default::default()
+        };
+        input.keyboards.push(profile("First", "ABCD:0123", "compose:ralt"));
+        assert_eq!(input.options_for("Alias", "abcd:0123"), "compose:ralt", "IDs are case-insensitive");
+        input.keyboards.push(profile("Second", "abcd:0123", "caps:escape"));
+        assert_eq!(input.options_for("First", "abcd:0123"), "compose:ralt");
+        assert_eq!(input.options_for("Second", "ABCD:0123"), "caps:escape");
+        assert!(input.keyboard_profile("Alias", "abcd:0123").is_none());
+        assert!(input.keyboard_profile_mut("Alias", "abcd:0123").is_none());
+        for id in ["", "0000:0000"] {
+            input.keyboards.push(profile("Unknown", id, "caps:escape"));
+            assert!(input.keyboard_profile("Other", id).is_none());
+            assert_eq!(input.options_for("Unknown", id), "caps:escape", "exact legacy entries still work");
+        }
+    }
+
+    #[test]
     fn save_and_load() {
         let dir = std::env::temp_dir().join(format!("aizome-config-test-{}", std::process::id()));
         let path = dir.join("settings.toml");
@@ -832,6 +1018,16 @@ a = 1
         let back = Settings::load_from(&path).unwrap();
         assert_eq!(back, s);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_old_terminal_command_is_read_but_never_written() {
+        let settings = Settings::from_toml("[keys]\nterminal = [\"foot\"]\n").unwrap();
+        assert_eq!(settings.keys.legacy_terminal, Some(vec!["foot".to_owned()]));
+        let text = toml::to_string(&settings).unwrap();
+        assert!(!text.contains("terminal = "), "{text}");
+        assert_eq!(Settings::from_toml(&text).unwrap().keys.legacy_terminal, None);
+        assert_eq!(Settings::default().keys.legacy_terminal, None);
     }
 
     #[test]

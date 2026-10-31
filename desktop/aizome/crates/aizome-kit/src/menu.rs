@@ -658,7 +658,16 @@ mod tests {
     use sidestep_ui::Modifiers;
 
     fn press(key: Key, mods: Modifiers) -> KeyEvent {
-        KeyEvent { key, text: None, pressed: true, repeat: false, code: 0, modifiers: mods, composing: None }
+        KeyEvent {
+            key,
+            text: None,
+            pressed: true,
+            repeat: false,
+            code: 0,
+            modifiers: mods,
+            composing: None,
+            native: Default::default(),
+        }
     }
 
     fn ch(s: &str) -> Key {

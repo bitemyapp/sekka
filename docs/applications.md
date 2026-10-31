@@ -1,9 +1,11 @@
 # Optional applications
 
 The installer presents 36 choices with checkboxes, categories, search and short
-descriptions. Firefox starts selected. Empty selection is supported. The review
-screen lists the normalized selection, and the privileged helper validates it
-again. Unknown IDs, duplicate requests and proprietary selections without
+descriptions. fish is no longer one of them: it comes with Aizome
+(`calamares.fish`; see DEVELOPERS.md), and systems that chose it keep it.
+Firefox starts selected. Empty selection is supported. The review screen lists
+the normalized selection, and the privileged helper validates it again.
+Unknown IDs, duplicate requests and proprietary selections without
 unfree-software consent are rejected before disk writes.
 
 The catalog lives in the pinned installer's `applications.json`, shared by its
@@ -24,6 +26,7 @@ pins were selected on 2026-10-04:
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
+| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `a70e8f6fda8f4744ee8bfc27d93657176d9860ff`, updated 2026-10-28 | Uta for YouTube Music, with RustyPipe |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
@@ -85,6 +88,44 @@ built with the same Tracy client version as the installed profiler; Nixpkgs
 keeps older versions as `tracy_0_13` and the like. Tracy is free and compiled
 from source, so `push-cache` publishes it.
 
+Uta, a YouTube Music client from [bitemyapp/uta](https://github.com/bitemyapp/uta),
+draws its windows with Aizome's widget kit. Sekka takes Uta's source and
+builds it with Uta's own package definition and the applications' Nixpkgs, but
+with the kit and Sukumo from `desktop/aizome` rather than the
+Aizome repository Uta's flake names (`nix/uta.nix`). `flake.nix` names Uta's
+revision, so the nightly's input update doesn't move it: a Uta built for a
+different Aizome would fail the nightly's checks and hold back every other
+input. New pins come from a `sekka` branch of bitemyapp/uta whose
+`Cargo.lock` matches the kit and Sukumo here, so Uta's own flake on its
+`main` is unaffected; DEVELOPERS.md describes moving the pin and re-pinning
+when a kit or Sukumo change needs a new Uta `Cargo.lock`. RustyPipe handles
+public browsing and anonymous or Premium playback; ytmusicapi and yt-dlp from
+the applications' Nixpkgs handle account operations and playback fallback.
+Uta's windows are Wayland only, so it runs in every Sekka desktop but Xfce,
+whose session is X11. Connecting an account saves its session in the desktop
+keyring, which every Sekka desktop runs.
+
+Uta appears in Genkan and Yukimi's Discover but is not selected by default.
+Its catalog entry has `preload: false`: neither its package nor its precache
+path list is added to the ISO. Selecting it requires a download, so installing
+it, from the ISO too, needs a network connection; if the binary cache lacks the
+build, Nix builds it from the pinned sources. The free-application binary cache
+still includes Uta independently of the ISO's preload list.
+
+The RustyPipe build is GPL-3.0-only, with its notices included in the package;
+it is free software and does not require proprietary-software consent.
+Listing a separate application does not link its code into Genkan or Yukimi.
+Optional downloads still require the corresponding source and notices when
+distributing binaries; excluding the package from an ISO does not waive those
+requirements. See [GPLv3 section 6](https://www.gnu.org/licenses/gpl-3.0.html#section6).
+The package's `share/doc/aizome-uta/SOURCE` names Uta's repository and
+revision and Sekka's recipe, `nix/uta.nix`, and points to the `sekka` input of
+`/etc/nixos/flake.lock` for the Sekka revision. Sekka's binary cache publishes
+the exact sources beside every Uta build it serves: the Uta pin with its
+vendored RustyPipe, the Aizome kit and Sukumo it was built with, and that recipe
+(`nix build .#uta.source` collects them). Uta's `Cargo.lock` names its
+crates.io sources by checksum.
+
 Docker runs as the installed user's rootless service, with a persistent user
 manager and its socket selected in the user environment. The user is not added
 to the privileged `docker` group. Compose is installed with the engine.
@@ -112,15 +153,19 @@ and logins, and what they sealed with the fixed key still opens.
 
 ## Preparation and regression checks
 
-The ISO includes a read-only store closure of all offered application packages.
+The ISO includes a read-only store closure of application packages whose catalog
+entries permit preloading (the default when `preload` is absent).
 They become installed applications only when selected. Before changing the
 target disk, the helper resolves the selected closure against the immutable
 lock, keeps it rooted, and checks target capacity against that closure plus a
 24 GiB reserve for the base system and installation workspace. Package-resolution
 failures stop before erasure.
 
-`nix flake check` evaluates all choices and none, and builds the complete package
-cache. The rootless builder's additional configuration matrix evaluates
+`nix flake check` evaluates all choices and none, builds the offline package
+cache, and checks that Uta is selectable while absent from that cache, the live
+session and ISO precache lists (`uta-installation`), and that its build has
+RustyPipe, its notices and its source note (`uta-rustypipe`). The rootless
+builder's additional configuration matrix evaluates
 actual Rust-generated configurations for every choice, all, none and free-only,
 including dependency normalization, rootless Docker, Firefox/Steam integration
 and freshly probed filesystem UUID overrides. It can also be run separately:

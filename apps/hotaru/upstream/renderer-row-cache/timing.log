@@ -1,0 +1,8 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/home/callen/work/hotaru-shaped-row-20261028/target/release/deps/aizome_hotaru-bb974cfa9e3943af)
+
+running 1 test
+test font::tests::benchmark_row_preparation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 16.25s
+

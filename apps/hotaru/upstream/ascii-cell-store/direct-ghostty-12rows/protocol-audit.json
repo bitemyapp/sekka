@@ -1,0 +1,167 @@
+{
+  "same_reference_adapter_library": true,
+  "timing_boundary": "Rust replay source is identical: SHA-256 1c85a7f722d19ee87cd48499da392f7306bbdb1ef7ae8dd829b6c49ef302d308. Input reads, setup, width configuration and teardown are outside feed timing; both adapters create fresh zero-history terminals per iteration.",
+  "changed_protocol": {
+    "rows": [
+      80,
+      12
+    ],
+    "approx_bytes": [
+      8388608,
+      2097152
+    ],
+    "samples_per_engine": [
+      20,
+      60
+    ]
+  },
+  "same_protocol": [
+    "120 columns",
+    "zero history",
+    "64 KiB feed chunks",
+    "CPU 8",
+    "three warmups",
+    "native release Rust 1.95 flags",
+    "matching width mode for each case"
+  ],
+  "causality": "Raw old/new ratio differences cannot establish a code regression: grid and data sizes differ, and the older run had unrelated build activity. The follow-up uses the exact older data and 80 rows.",
+  "cases": [
+    {
+      "case": "legacy-ascii",
+      "old_report_sha256": "384b0055b8dc209233f26d06a7e20d1b10ff9e6db16a72a8ecac65a836e08caf",
+      "new_report_sha256": "68b6b55ae59e4fdeef20f1777e74bf1d0e51642dd4b0d888afcb5897b2bacc3e",
+      "old_data_sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "new_data_sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "old_ratio": 1.198893499627742,
+      "new_ratio": 0.9330230991896968,
+      "old_median_feed_ns": {
+        "ghostty": 6497512.5,
+        "hotaru": 7789825.5
+      },
+      "new_median_feed_ns": {
+        "ghostty": 1437301.5,
+        "hotaru": 1341035.5
+      }
+    },
+    {
+      "case": "legacy-unicode",
+      "old_report_sha256": "4565f8322546b4544de675946b7a40998fdb2f19cba49ebfaefda24ef46b6c89",
+      "new_report_sha256": "8dbbc57d7523d71004989d21a6aea5c98675b62b0e72921f2ad4411eeac97c1f",
+      "old_data_sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "new_data_sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "old_ratio": 1.0639110644826861,
+      "new_ratio": 1.2765173256464875,
+      "old_median_feed_ns": {
+        "ghostty": 31220822.5,
+        "hotaru": 33216178.5
+      },
+      "new_median_feed_ns": {
+        "ghostty": 6489007.5,
+        "hotaru": 8283330.5
+      }
+    },
+    {
+      "case": "legacy-styled",
+      "old_report_sha256": "b20f972f2b23ce3566a6f76b0ea7a6a10432813fee312de969ee06087191d32a",
+      "new_report_sha256": "24618ce4d8a341fc7808b5e829f498b56500b244689c48d8097a9f09b7e9f592",
+      "old_data_sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "new_data_sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "old_ratio": 0.848057587374288,
+      "new_ratio": 0.8375325069031399,
+      "old_median_feed_ns": {
+        "ghostty": 32150519.5,
+        "hotaru": 27265492.0
+      },
+      "new_median_feed_ns": {
+        "ghostty": 7971191.5,
+        "hotaru": 6676132.0
+      }
+    },
+    {
+      "case": "legacy-cursor",
+      "old_report_sha256": "78bbe9203b301f4fd2214bbd056a6318142842b5243c41c8111051736ff590a0",
+      "new_report_sha256": "1609ed61c53b490b6013454da1c7f7dc1722e3a1a3376c141ebdb0aade19b9e1",
+      "old_data_sha256": "29f1b479c32f187c63d7e044aab7d8a2b61169c15022e03c4cafc720c237b954",
+      "new_data_sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "old_ratio": 0.11844134429030291,
+      "new_ratio": 0.3588898277609179,
+      "old_median_feed_ns": {
+        "ghostty": 760403194.0,
+        "hotaru": 90063176.5
+      },
+      "new_median_feed_ns": {
+        "ghostty": 30082197.0,
+        "hotaru": 10796194.5
+      }
+    },
+    {
+      "case": "unicode-ascii",
+      "old_report_sha256": "1ed0181a74a2261da94fdce51e56d92b9e703d043bb03c9c12a97b33d4f71cd5",
+      "new_report_sha256": "622c94e09d8566d0977da0aee13a5f74fb599273323ecc5c5f8c864b56e48629",
+      "old_data_sha256": "4b2a21e137a4818fb333773c98582164c3fb6171ca5313be559b976c612bca08",
+      "new_data_sha256": "4c33a97af72a47eb17711f8003610893e0b553e15a82f5486bd8a7d2e6a4d4dd",
+      "old_ratio": 1.2149195598014757,
+      "new_ratio": 0.9454117296797884,
+      "old_median_feed_ns": {
+        "ghostty": 7089210.5,
+        "hotaru": 8612820.5
+      },
+      "new_median_feed_ns": {
+        "ghostty": 1430866.0,
+        "hotaru": 1352757.5
+      }
+    },
+    {
+      "case": "unicode-unicode",
+      "old_report_sha256": "14e922ee9d21c84b4b2b30955b5210559ec43c3267d3ecb91a3e2f600777dbc7",
+      "new_report_sha256": "4dc8914ae529120f909affbfb3318cc854dad3d5905962e281f2e6115b632dce",
+      "old_data_sha256": "1a803e94350d64c9e0a45c99038ec94f6064323820694453a65ab5cd09a61600",
+      "new_data_sha256": "be56a994fec748dfe31e5853f3499b1af05904a9737118b13561b832665533d3",
+      "old_ratio": 1.0654560632732892,
+      "new_ratio": 1.2062043635889723,
+      "old_median_feed_ns": {
+        "ghostty": 41974110.0,
+        "hotaru": 44721570.0
+      },
+      "new_median_feed_ns": {
+        "ghostty": 9253713.0,
+        "hotaru": 11161869.0
+      }
+    },
+    {
+      "case": "unicode-styled",
+      "old_report_sha256": "bd5f288dc7c197655cfb945b4e3aee30bddcc822d2ed6ca6ca081ebe7a000838",
+      "new_report_sha256": "9d3f1b5c926e0c1af12f3dce8e3dd2d093dabaa67172c3d7b29663b8baac1e5b",
+      "old_data_sha256": "5f5af2aa42112e74c5f8556c289b6bf13f1ffd060b79147a0ecf2d227ca7cbff",
+      "new_data_sha256": "46da0d550bd76b87d2f4503be479cd60556db0e8abd534f005c16ccd16b9bc0e",
+      "old_ratio": 0.8322458599358652,
+      "new_ratio": 0.8487155492741351,
+      "old_median_feed_ns": {
+        "ghostty": 32474587.5,
+        "hotaru": 27026841.0
+      },
+      "new_median_feed_ns": {
+        "ghostty": 7957506.5,
+        "hotaru": 6753659.5
+      }
+    },
+    {
+      "case": "unicode-cursor",
+      "old_report_sha256": "1226b51aa48c5c0fcbabdb996bf34171771158634f1e908d5cd63d06eaf36569",
+      "new_report_sha256": "a1fa5fb0d65021d230b7aed314cd0f97d106573776e1706c54773edd1ab2d931",
+      "old_data_sha256": "29f1b479c32f187c63d7e044aab7d8a2b61169c15022e03c4cafc720c237b954",
+      "new_data_sha256": "aa7ce6eaa5e168ee16f368a63b3b8aa242db2ef6ec5c9eaace1e548981901e28",
+      "old_ratio": 0.12291492339542623,
+      "new_ratio": 0.3568233903362082,
+      "old_median_feed_ns": {
+        "ghostty": 875261217.5,
+        "hotaru": 107582665.5
+      },
+      "new_median_feed_ns": {
+        "ghostty": 30267508.5,
+        "hotaru": 10800155.0
+      }
+    }
+  ],
+  "schema": 1
+}

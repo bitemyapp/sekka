@@ -1,0 +1,361 @@
+{
+  "scope": "Hotaru through Ghostty's own benchmark suite (src/benchmark/AGENTS.md).\n\nghostty-gen makes each input once; ghostty-bench +terminal-stream and\nhotaru-replay --bench then read the same files, timed by hyperfine as whole\ncommands with warmups, pinned to one CPU, under the workstation lock. Before\ntiming, each file's final screen state is compared between the pinned\nlibghostty-vt and hotaru-replay (zero history), so a ratio only stands for\nequivalent visible work. An empty file measures each process's fixed cost.\n\nGhostty's stream benchmark keeps its terminal's default history (10,000\nbytes, at least one page); Hotaru is timed with zero and with 1,000 rows of\nhistory to bracket it.\n",
+  "ghostty_bench_sha256": "bcdaba094ab3900bb247c445e9bf7b1038662ed886a96d68bb783b5d6f72669a",
+  "ghostty_gen_sha256": "8a482e3ef8f5d434a3f67aa888a10cd30e10e77d20f0527bc6f99f8960464362",
+  "library_sha256": "70e1bdcf62801b735bb268c38c1e65fa727debff73d89ef1d3ed9fb5e23e7639",
+  "replay_sha256": "36f856f6021bbca2bb7bd4eef666572266a26418a996eb010a6dedcd84e0b49c",
+  "rows": 80,
+  "cols": 120,
+  "cpu": "8",
+  "input_bytes": 67108864,
+  "inputs": {
+    "empty": {
+      "generator": [],
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 0.88,
+        "hotaru-history-0": 0.65,
+        "hotaru-history-1000": 0.65
+      },
+      "min_ms": {
+        "ghostty": 0.8,
+        "hotaru-history-0": 0.63,
+        "hotaru-history-1000": 0.62
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/empty.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/empty.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/empty.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        0.576171875,
+        0.46044921875,
+        1.05029296875
+      ]
+    },
+    "ascii": {
+      "generator": [
+        "+ascii"
+      ],
+      "sha256": "c7caa9e6a1c05a66aff175b6861838edd6f4ef47f8e82432d910a9aaa262cd20",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 30.57,
+        "hotaru-history-0": 40.35,
+        "hotaru-history-1000": 48.01
+      },
+      "min_ms": {
+        "ghostty": 29.27,
+        "hotaru-history-0": 38.91,
+        "hotaru-history-1000": 47.63
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/ascii.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/ascii.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/ascii.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        0.6103515625,
+        0.4697265625,
+        1.0498046875
+      ]
+    },
+    "styled-plain": {
+      "generator": [
+        "+styled",
+        "--seed=42"
+      ],
+      "sha256": "e4f29faaf568e9a787d0f9331f823e979a15a9181fd6bc81ba779e11cefd749e",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 63.97,
+        "hotaru-history-0": 88.22,
+        "hotaru-history-1000": 102.94
+      },
+      "min_ms": {
+        "ghostty": 62.98,
+        "hotaru-history-0": 87.65,
+        "hotaru-history-1000": 102.12
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/styled-plain.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-plain.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-plain.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        0.9619140625,
+        0.54541015625,
+        1.0712890625
+      ]
+    },
+    "styled-heavy": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--style-rate=0.8"
+      ],
+      "sha256": "84e6bc2bb07bf5e1b019fa8aca1933b6dde22c5d67b096f1fdfc652ede945753",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 474.39,
+        "hotaru-history-0": 374.2,
+        "hotaru-history-1000": 388.12
+      },
+      "min_ms": {
+        "ghostty": 467.45,
+        "hotaru-history-0": 368.54,
+        "hotaru-history-1000": 384.14
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/styled-heavy.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-heavy.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-heavy.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        1.05126953125,
+        0.6064453125,
+        1.07421875
+      ]
+    },
+    "styled-unicode": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--weight-two=1",
+        "--weight-three=1",
+        "--weight-four=0.5",
+        "--grapheme-rate=0.1"
+      ],
+      "sha256": "4affe6eea4d1b1ab432fa56932a99127524933de6941d98428fd7382260a1e14",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 570.52,
+        "hotaru-history-0": 613.08,
+        "hotaru-history-1000": 625.81
+      },
+      "min_ms": {
+        "ghostty": 567.42,
+        "hotaru-history-0": 603.56,
+        "hotaru-history-1000": 619.84
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/styled-unicode.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-unicode.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-unicode.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        1.1376953125,
+        0.6943359375,
+        1.0810546875
+      ]
+    },
+    "styled-mixed": {
+      "generator": [
+        "+styled",
+        "--seed=42",
+        "--style-rate=0.3",
+        "--weight-two=0.5",
+        "--weight-three=0.25",
+        "--weight-four=0.1",
+        "--grapheme-rate=0.05",
+        "--osc8-rate=0.1"
+      ],
+      "sha256": "7b9f5611ecc21cbf14275a90a4482eaf4045a8ea9cdef73fadf058924c4adffe",
+      "bytes": 67108864,
+      "state_matched": true,
+      "state_differences": [],
+      "median_ms": {
+        "ghostty": 3116.68,
+        "hotaru-history-0": 952.08,
+        "hotaru-history-1000": 982.73
+      },
+      "min_ms": {
+        "ghostty": 3096.95,
+        "hotaru-history-0": 942.85,
+        "hotaru-history-1000": 972.87
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/styled-mixed.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-mixed.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/styled-mixed.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        1.10595703125,
+        0.82666015625,
+        1.08154296875
+      ]
+    },
+    "utf8": {
+      "generator": [
+        "+utf8",
+        "--seed=42"
+      ],
+      "sha256": "58db6da6222608e9d77d7d6e01d821f80c9bcbc28e238bafd63a635f74db564e",
+      "bytes": 67108864,
+      "state_matched": false,
+      "state_differences": [
+        {
+          "path": "/cursor/row",
+          "expected": 79,
+          "actual": 65
+        },
+        {
+          "path": "/lines/0/cells/0/text",
+          "expected": "\u07d4",
+          "actual": "\u0674\u06e2"
+        },
+        {
+          "path": "/lines/0/cells/1/text",
+          "expected": "\u0138",
+          "actual": "\udad7\udd38"
+        },
+        {
+          "path": "/lines/0/cells/2/text",
+          "expected": "\ud938\udd0b",
+          "actual": "\u019d"
+        },
+        {
+          "path": "/lines/0/cells/3/text",
+          "expected": "f",
+          "actual": "\udaf9\udfd0"
+        },
+        {
+          "path": "/lines/0/cells/4/text",
+          "expected": "c",
+          "actual": "\u0567"
+        },
+        {
+          "path": "/lines/0/cells/5/text",
+          "expected": "\u04dd",
+          "actual": "\u115c"
+        },
+        {
+          "path": "/lines/0/cells/5/width",
+          "expected": 1,
+          "actual": 2
+        },
+        {
+          "path": "/lines/0/cells/6/text",
+          "expected": "\u50f4",
+          "actual": " "
+        },
+        {
+          "path": "/lines/0/cells/6/width",
+          "expected": 2,
+          "actual": 0
+        }
+      ],
+      "median_ms": {
+        "ghostty": 555.31,
+        "hotaru-history-0": 678.15,
+        "hotaru-history-1000": 724.98
+      },
+      "min_ms": {
+        "ghostty": 551.08,
+        "hotaru-history-0": 674.89,
+        "hotaru-history-1000": 721.09
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/utf8.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/utf8.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/utf8.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        1.1181640625,
+        0.8720703125,
+        1.08251953125
+      ]
+    },
+    "osc": {
+      "generator": [
+        "+osc"
+      ],
+      "sha256": "fbea79da1429eec54fff1a4fbba1b65392df8d74088151d2ca32a261833efed3",
+      "bytes": 67108864,
+      "state_matched": false,
+      "state_differences": [
+        {
+          "path": "/cursor/col",
+          "expected": 114,
+          "actual": 112
+        },
+        {
+          "path": "/lines/0/cells/0/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        },
+        {
+          "path": "/lines/0/cells/1/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        },
+        {
+          "path": "/lines/0/cells/2/text",
+          "expected": " ",
+          "actual": "d"
+        },
+        {
+          "path": "/lines/0/cells/3/text",
+          "expected": " ",
+          "actual": ")"
+        },
+        {
+          "path": "/lines/0/cells/4/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        },
+        {
+          "path": "/lines/0/cells/5/text",
+          "expected": " ",
+          "actual": "+"
+        },
+        {
+          "path": "/lines/0/cells/6/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        },
+        {
+          "path": "/lines/0/cells/7/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        },
+        {
+          "path": "/lines/0/cells/8/text",
+          "expected": " ",
+          "actual": "\ufffd"
+        }
+      ],
+      "median_ms": {
+        "ghostty": 3762.69,
+        "hotaru-history-0": 1553.35,
+        "hotaru-history-1000": 1586.28
+      },
+      "min_ms": {
+        "ghostty": 3742.27,
+        "hotaru-history-0": 1541.84,
+        "hotaru-history-1000": 1571.34
+      },
+      "commands": {
+        "ghostty": "taskset -c 8 /home/callen/work/ghostty-reference-20261028/zig-out/bin/ghostty-bench +terminal-stream --data=/dev/shm/hotaru-ghostty-suite/osc.vt --terminal-rows=80 --terminal-cols=120",
+        "hotaru-history-0": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/osc.vt --rows 80 --cols 120 --scrollback 0",
+        "hotaru-history-1000": "taskset -c 8 /home/callen/work/sekka-hotaru-settings/apps/hotaru/target/release/hotaru-replay --bench --data /dev/shm/hotaru-ghostty-suite/osc.vt --rows 80 --cols 120 --scrollback 1000"
+      },
+      "load_average": [
+        1.17333984375,
+        1.013671875,
+        1.09765625
+      ]
+    }
+  }
+}

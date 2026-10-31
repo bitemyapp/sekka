@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "scope": "Generated corpora stay outside Git; reconstruct with tools/generate-malformed.py DESTINATION.",
+  "cases": [
+    {
+      "name": "short-invalid-leads",
+      "pattern_hex": "80808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080800d0a",
+      "bytes": 262185,
+      "sha256": "4bd31dfe72484d46e03822d93d2d550823504340df6eb9e058b337afe91a826d"
+    },
+    {
+      "name": "short-invalid-suffix",
+      "pattern_hex": "e99baa616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161f09f0d0a",
+      "bytes": 262185,
+      "sha256": "88554ec8a5ccdf765a26328bb87454f75bb45993929193eba2e43bd613512277"
+    }
+  ],
+  "raw_input_locations": {
+    "local": "/home/callen/work/hotaru-short-utf8-error-20261028/evidence/profiles",
+    "wx-workstation": "/home/callen/work/hotaru-short-utf8-error-20261028/evidence/profiles"
+  }
+}

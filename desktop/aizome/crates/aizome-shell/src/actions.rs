@@ -46,6 +46,10 @@ pub enum Action {
     Spawn {
         argv: Vec<String>,
     },
+    /// Outcomes and output of applications opened by the shell.
+    LaunchDetails {
+        id: Option<u64>,
+    },
     /// Open a file or folder: folders in Hako, files with their default app.
     Open {
         path: PathBuf,
@@ -123,6 +127,11 @@ pub enum Action {
         app_id: String,
         down: bool,
     },
+    /// Move the Deskbar to an edge, or make it a width (saved).
+    PlaceDeskbar {
+        side: Option<aizome_config::DeskbarSide>,
+        width: Option<f64>,
+    },
     /// Mount, unmount or eject a disk by its device path.
     Disk {
         device: String,
@@ -137,6 +146,11 @@ pub enum Action {
     /// Open the focused app's menu holding a command (its trail).
     ShowInMenu {
         trail: String,
+    },
+    /// Open Settei's keyboard setup for one keyboard, chosen in its sheet.
+    SetUpKeyboard {
+        name: String,
+        id: String,
     },
 }
 

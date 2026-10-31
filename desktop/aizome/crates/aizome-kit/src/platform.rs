@@ -64,6 +64,15 @@ pub struct OpenSpec {
 }
 
 pub trait Platform {
+    /// Queue a desktop opener. A rejected request never invokes `completion`.
+    /// Accepted requests complete after the opener exits; all process work is off the UI thread.
+    fn open_url(
+        &mut self,
+        _url: &str,
+        _completion: crate::urls::OpenUrlCompletion,
+    ) -> Result<(), crate::urls::OpenUrlError> {
+        Err(crate::urls::OpenUrlError::Unavailable)
+    }
     fn open_window(&mut self, id: WinId, spec: &OpenSpec);
     fn close_window(&mut self, id: WinId);
     fn set_title(&mut self, id: WinId, title: &str);
@@ -80,9 +89,19 @@ pub trait Platform {
         let _ = (id, on);
     }
     fn activate(&mut self, id: WinId);
+    /// Consume a token supplied by the application that initiated a launch.
+    fn activate_with_token(&mut self, id: WinId, token: &str);
     fn begin_move(&mut self, id: WinId);
     fn clipboard_text(&mut self) -> Option<String>;
     fn set_clipboard_text(&mut self, text: &str);
+    /// Capture a transferable clipboard read without waiting for another client.
+    fn clipboard_read(&mut self) -> sidestep_ui::ClipboardRead;
+    /// Publish text whose allocation and MIME preparation already ran on a worker.
+    fn set_prepared_clipboard_text(&mut self, text: sidestep_ui::PreparedClipboardText);
+    fn set_prepared_clipboard(&mut self, data: sidestep_ui::PreparedClipboard);
+    /// The primary selection (a middle click pastes it), as the clipboard.
+    fn primary_read(&mut self) -> sidestep_ui::ClipboardRead;
+    fn set_prepared_primary(&mut self, data: sidestep_ui::PreparedClipboard);
     /// A timer: the engine hears its token when it comes due.
     fn set_timer(&mut self, after: Duration, repeat: bool) -> u64;
     fn cancel_timer(&mut self, token: u64);
@@ -123,6 +142,22 @@ pub trait Platform {
     /// shows drawn over it (see [`Cx::prepare_window`](crate::Cx::prepare_window));
     /// none: drop what's kept.
     fn keep_picture(&mut self, id: WinId, picture: Option<crate::ahead::Picture>);
+    /// Show video `video` of window `id` at `place`, or take it away.
+    fn place_video(
+        &mut self,
+        id: WinId,
+        video: sidestep_ui::video::VideoId,
+        place: Option<sidestep_ui::video::VideoPlace>,
+    ) {
+        let _ = (id, video, place);
+    }
+    /// Hide the pointer until it next moves (full-screen video).
+    fn hide_cursor_until_moved(&mut self) {}
+    /// Where video `video` of window `id` takes frames from other threads.
+    fn video_sink(&mut self, id: WinId, video: sidestep_ui::video::VideoId) -> Option<sidestep_ui::video::VideoSink> {
+        let _ = (id, video);
+        None
+    }
 }
 
 /// A layer surface's placement, changed while it shows.

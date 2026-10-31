@@ -1,0 +1,21 @@
+{
+  "binary": "/nix/store/8nf099h9921x5jpgw625xvp7k72b3hns-hotaru-0.1.0/bin/hotaru",
+  "binary_sha256": "cf828e495187279001b0b2fd1734ca1f73ad67b26a469f1841531345cca5e094",
+  "backend": "private headless Sway, pixman",
+  "opener": "disposable fake xdg-open via explicit PATH",
+  "checks": {
+    "exact_target": "https://example.test/\u65e5\u672c?x=$(false)&quote='literal'",
+    "opened_argv": [
+      [
+        "https://example.test/\u65e5\u672c?x=$(false)&quote='literal'"
+      ],
+      [
+        "https://example.test/\u65e5\u672c?x=$(false)&quote='literal'"
+      ]
+    ],
+    "wide_tail": true,
+    "plain_click_drag_changed_frame_invalid_utf8_cancelled": true,
+    "failed_opener_reported_with_stationary_pointer": true
+  },
+  "status": "passed"
+}
