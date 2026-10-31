@@ -442,7 +442,13 @@ impl InputExt for State {
             }
             Action::Terminal => {
                 let cwd = self.desk_folder();
-                aizome_comp_core::terminal::spawn(&self.az, cwd);
+                let hotaru = self
+                    .lg
+                    .r()
+                    .wm
+                    .app_window_on_current_desk("org.aizome.Hotaru")
+                    .and_then(|w| w.pid.map(|pid| (w.id, pid)));
+                aizome_comp_core::terminal::spawn(&self.az, cwd, hotaru);
             }
             Action::TerminalClose | Action::TerminalQuit => {
                 // Match the shell's fallback Close/Quit: a polite close
