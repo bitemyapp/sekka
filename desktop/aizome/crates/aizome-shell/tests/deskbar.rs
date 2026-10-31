@@ -847,11 +847,127 @@ fn a_revealed_deskbar_moved_by_its_grip_still_hides() {
     h.enter(db, Point::new(116.0, 5.0));
     // Let go over the left half: it opens again there, away from the
     // pointer, and the surface it left can't say the pointer went.
+    h.send(Msg::Deskbar(DeskbarMsg::Grip(DragPhase::Start(Point::new(116.0, 5.0)))));
     h.send(Msg::Deskbar(DeskbarMsg::Grip(DragPhase::End(Point::new(-900.0, 5.0)))));
     assert_eq!(h.program().deskbar_cfg.side, aizome_config::DeskbarSide::Left);
     assert!(h.program().deskbar.is_some(), "still revealed");
     h.advance(Duration::from_secs(1));
     assert!(h.program().deskbar.is_none(), "hidden again");
+}
+
+/// The surface showing where a grip drag would put the Deskbar.
+fn landing(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> Option<WindowKey> {
+    h.windows().into_iter().find(|k| h.title(*k) == "Deskbar destination")
+}
+
+#[test]
+fn dragging_the_grip_shows_where_the_deskbar_would_go() {
+    use aizome_config::DeskbarSide;
+    use aizome_kit::Anchors;
+    use aizome_kit::layout::Vec2;
+    use aizome_kit::sidestep_ui::PointerButton;
+    use aizome_shell::deskbar::{Moving, SHADOW, WIDTH};
+    let moving = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| h.program().deskbar_model().moving;
+    let mut h = scene(false);
+    let db = window_titled(&h, "Deskbar");
+    let m = h.program().deskbar_model();
+    h.resize(db, aizome_shell::deskbar::size(&m));
+    // The Deskbar stands at the right: its surface starts 1440 - 235 =
+    // 1205pt into the screen, so the middle is 485pt left of it.
+    let grip = Point::new(SHADOW + WIDTH / 2.0, 5.0);
+    h.enter(db, grip);
+    h.press(db, grip, PointerButton::Left, 1);
+    assert!(landing(&h).is_none(), "a press alone drags nothing");
+    h.move_to(db, grip - Vec2::new(40.0, 0.0));
+    let k = landing(&h).expect("where it would go shows as the drag starts");
+    // At the left edge under the bar, the face's size, taking no input.
+    let w = h.platform.windows.values().find(|w| w.title == "Deskbar destination").unwrap();
+    let aizome_kit::platform::OpenKind::Layer(o) = &w.spec.kind else { panic!("a layer: {:?}", w.spec.kind) };
+    assert!(o.anchors.contains(Anchors::TOP | Anchors::LEFT) && !o.anchors.contains(Anchors::RIGHT), "{o:?}");
+    assert_eq!((o.namespace.as_str(), o.margins.top), ("aizome-deskbar-landing", 24));
+    assert_eq!(w.spec.size, Size::new(WIDTH, m.height() - SHADOW));
+    assert_eq!(moving(&h), Moving::Held, "over its own half: let go, it stays");
+
+    h.move_to(db, Point::new(-500.0, 5.0));
+    assert_eq!(moving(&h), Moving::Leaving, "over the left half: let go, it moves");
+    assert_eq!(landing(&h), Some(k), "the same surface, lit");
+    h.move_to(db, Point::new(-470.0, 5.0));
+    assert_eq!(moving(&h), Moving::Held, "back over the right half");
+    h.release(db, Point::new(-470.0, 5.0), PointerButton::Left);
+    assert_eq!(landing(&h), None, "let go: it goes");
+    assert_eq!(moving(&h), Moving::No);
+    assert_eq!(h.program().settings.deskbar_settings().side, DeskbarSide::Right, "let go on its own half");
+
+    // Let go over the left half, and it's there.
+    h.move_to(db, grip);
+    h.press(db, grip, PointerButton::Left, 1);
+    h.move_to(db, Point::new(-900.0, 5.0));
+    assert_eq!(moving(&h), Moving::Leaving);
+    h.release(db, Point::new(-900.0, 5.0), PointerButton::Left);
+    assert_eq!(h.program().settings.deskbar_settings().side, DeskbarSide::Left);
+    assert!(deskbar_layer(&h).anchors.contains(Anchors::TOP | Anchors::LEFT));
+    assert_eq!(landing(&h), None);
+    assert_eq!(moving(&h), Moving::No);
+
+    // From the left, the right edge shows.
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    let grip = Point::new(WIDTH / 2.0, 5.0);
+    h.enter(db, grip);
+    h.press(db, grip, PointerButton::Left, 1);
+    h.move_to(db, Point::new(900.0, 5.0));
+    let w = h.platform.windows.values().find(|w| w.title == "Deskbar destination").expect("the right edge shows");
+    let aizome_kit::platform::OpenKind::Layer(o) = &w.spec.kind else { panic!("a layer") };
+    assert!(o.anchors.contains(Anchors::TOP | Anchors::RIGHT) && !o.anchors.contains(Anchors::LEFT), "{o:?}");
+    assert_eq!(moving(&h), Moving::Leaving);
+}
+
+#[test]
+fn a_grip_drag_cut_short_moves_nothing() {
+    use aizome_config::DeskbarSide;
+    use aizome_kit::sidestep_ui::PointerButton;
+    use aizome_shell::actions::{Action, SessionVerb};
+    use aizome_shell::deskbar::{Moving, SHADOW, WIDTH};
+    use aizome_shell::widgets::drawn::DragPhase::{End, Move, Start};
+    let grip = |phase| Msg::Deskbar(DeskbarMsg::Grip(phase));
+    let side = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| h.program().deskbar_cfg.side;
+
+    // The pointer taken mid-drag: the release won't come.
+    let mut h = scene(false);
+    let db = window_titled(&h, "Deskbar");
+    h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
+    let at = Point::new(SHADOW + WIDTH / 2.0, 5.0);
+    h.enter(db, at);
+    h.press(db, at, PointerButton::Left, 1);
+    h.move_to(db, Point::new(-900.0, 5.0));
+    assert_eq!(h.program().deskbar_model().moving, Moving::Leaving);
+    h.leave(db);
+    assert_eq!(landing(&h), None);
+    assert_eq!(h.program().deskbar_model().moving, Moving::No);
+    h.send(grip(Move(Point::new(-900.0, 5.0))));
+    assert_eq!(landing(&h), None, "the old drag is over");
+    h.send(grip(End(Point::new(-900.0, 5.0))));
+    assert_eq!(side(&h), DeskbarSide::Right, "and its late release takes nothing");
+
+    // The screen locked mid-drag.
+    let mut h = scene(false);
+    h.send(grip(Start(Point::new(116.0, 5.0))));
+    h.send(grip(Move(Point::new(-900.0, 5.0))));
+    assert!(landing(&h).is_some());
+    h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
+    assert_eq!(landing(&h), None, "where it'd go goes with the lock");
+    h.send(grip(End(Point::new(-900.0, 5.0))));
+    assert_eq!(side(&h), DeskbarSide::Right);
+
+    // Folded away mid-drag.
+    let mut h = scene(false);
+    h.send(grip(Start(Point::new(116.0, 5.0))));
+    h.send(grip(Move(Point::new(-900.0, 5.0))));
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(true)));
+    assert_eq!(landing(&h), None);
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(false)));
+    h.send(grip(End(Point::new(-900.0, 5.0))));
+    assert_eq!(side(&h), DeskbarSide::Right);
 }
 
 #[test]

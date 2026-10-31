@@ -8,7 +8,7 @@ use aizome_kit::{Anchors, KeyboardInteractivity, Layer, LayerOptions, Margins, M
 
 use crate::actions::Action;
 use crate::apps::catalog;
-use crate::deskbar::{AppRow, DeskbarModel, DeskbarMsg, NoteCard, ShelfRow, WindowRow};
+use crate::deskbar::{AppRow, DeskbarModel, DeskbarMsg, Moving, NoteCard, ShelfRow, WindowRow};
 use crate::look::Hue;
 use crate::menus::model::{Entry, Menu as ShellMenu};
 use crate::shelf::ShelfItem;
@@ -32,6 +32,14 @@ pub(crate) struct Visibility {
 pub(crate) enum DragTarget {
     App(String),
     Window(WindowId),
+}
+
+/// The edge across the screen from `side`.
+fn other_side(side: DeskbarSide) -> DeskbarSide {
+    match side {
+        DeskbarSide::Left => DeskbarSide::Right,
+        DeskbarSide::Right => DeskbarSide::Left,
+    }
 }
 
 impl Shell {
@@ -213,6 +221,11 @@ impl Shell {
             max_height: self.primary().map(|s| (s.output.frame.height() - crate::menubar::HEIGHT).max(1.0)),
             side: self.deskbar_cfg.side,
             width: self.deskbar_width(),
+            moving: match self.deskbar_landing {
+                None => Moving::No,
+                Some((_, false)) => Moving::Held,
+                Some((_, true)) => Moving::Leaving,
+            },
         }
     }
 
@@ -245,7 +258,7 @@ impl Shell {
             cx.close_window(k);
             self.surfaces.remove(&k);
             self.deskbar_size = None;
-            self.end_deskbar_resize(cx);
+            self.end_deskbar_drags(cx);
             self.deskbar_visibility.inside = false;
             self.deskbar_visibility.dragging = None;
             self.deskbar_visibility.native_drag = None;
@@ -259,7 +272,7 @@ impl Shell {
                 self.surfaces.remove(&k);
                 self.deskbar = None;
                 self.deskbar_size = None;
-                self.end_deskbar_resize(cx);
+                self.end_deskbar_drags(cx);
                 self.deskbar_visibility.inside = false;
                 self.deskbar_visibility.menu = None;
                 self.deskbar_visibility.dragging = None;
@@ -455,14 +468,32 @@ impl Shell {
                     self.arm_deskbar_hide(cx);
                 }
             }
-            DeskbarMsg::Grip(DragPhase::End(p)) => {
+            DeskbarMsg::Grip(phase) => {
+                // Let go over the other half of the main display, the
+                // Deskbar moves to its edge. Until then, where it would go
+                // shows there, lit once letting go would take it.
+                let (DragPhase::Start(p) | DragPhase::Move(p) | DragPhase::End(p)) = phase;
                 let Some((left, screen)) = self.deskbar_left() else { return };
                 let side = if left + p.x < screen / 2.0 { DeskbarSide::Left } else { DeskbarSide::Right };
-                if side != self.deskbar_cfg.side {
-                    self.run(Action::PlaceDeskbar { side: Some(side), width: None }, cx);
+                let leaving = side != self.deskbar_cfg.side;
+                match phase {
+                    DragPhase::Start(_) => self.show_deskbar_landing(leaving, cx),
+                    // Only the drag under way: one that ended early (the
+                    // pointer went, the screen locked) takes nothing.
+                    DragPhase::Move(_) => {
+                        if let Some((_, shown)) = &mut self.deskbar_landing {
+                            *shown = leaving;
+                        }
+                    }
+                    DragPhase::End(_) => {
+                        let live = self.deskbar_landing.is_some();
+                        self.end_deskbar_move(cx);
+                        if live && leaving {
+                            self.run(Action::PlaceDeskbar { side: Some(side), width: None }, cx);
+                        }
+                    }
                 }
             }
-            DeskbarMsg::Grip(_) => {}
             DeskbarMsg::Edge(phase) => {
                 // By how far the pointer has gone since the press, in the
                 // surface's coordinates, which hold still: the Deskbar keeps
@@ -580,6 +611,60 @@ impl Shell {
                 m.width = w;
                 crate::deskbar::preview(&m)
             }
+            None => aizome_kit::space(0.0),
+        }
+    }
+
+    /// Shows where a drag of the grip would put the Deskbar: its face at the
+    /// other edge of the main display, as wide and tall as it is, on a
+    /// surface of its own that takes no input. Opened as the drag starts,
+    /// and `leaving` while letting go would move it.
+    fn show_deskbar_landing(&mut self, leaving: bool, cx: &mut Cx<Msg>) {
+        if let Some((_, shown)) = &mut self.deskbar_landing {
+            *shown = leaving;
+            return;
+        }
+        let Some(output) = self.primary().map(|s| s.output.id) else { return };
+        let m = self.deskbar_model();
+        let height = (m.height() - crate::deskbar::SHADOW).max(1.0);
+        let side = match other_side(self.deskbar_cfg.side) {
+            DeskbarSide::Right => Anchors::RIGHT,
+            DeskbarSide::Left => Anchors::LEFT,
+        };
+        // Not "aizome-deskbar": nothing is fitted beside it.
+        let opts = LayerOptions::new(Layer::Overlay, "aizome-deskbar-landing")
+            .anchors(Anchors::TOP | side)
+            .exclusive_zone(-1)
+            .margins(Margins::new(crate::menubar::HEIGHT as i32, 0, 0, 0))
+            .keyboard(KeyboardInteractivity::None)
+            .output(output);
+        let k = cx.open_window(layer(opts, m.width, height, "Deskbar destination"));
+        cx.set_input_region(k, Some(Vec::new()));
+        self.surfaces.insert(k, Surface::DeskbarLanding);
+        self.deskbar_landing = Some((k, leaving));
+    }
+
+    /// The grip's drag over (let go, or the Deskbar went): where it would
+    /// have gone stops showing.
+    fn end_deskbar_move(&mut self, cx: &mut Cx<Msg>) {
+        if let Some((k, _)) = self.deskbar_landing.take() {
+            cx.close_window(k);
+            self.surfaces.remove(&k);
+        }
+    }
+
+    /// Drags of the Deskbar's edge and grip over, nothing taken: the
+    /// Deskbar or its display went, the pointer was taken, the screen
+    /// locked.
+    pub(crate) fn end_deskbar_drags(&mut self, cx: &mut Cx<Msg>) {
+        self.end_deskbar_resize(cx);
+        self.end_deskbar_move(cx);
+    }
+
+    /// The landing's view: the face at the other edge.
+    pub fn deskbar_landing_view(&self) -> aizome_kit::element::Element<Msg> {
+        match self.deskbar_landing {
+            Some((_, leaving)) => crate::deskbar::landing(other_side(self.deskbar_cfg.side), leaving),
             None => aizome_kit::space(0.0),
         }
     }

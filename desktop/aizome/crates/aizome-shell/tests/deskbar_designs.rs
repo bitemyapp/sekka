@@ -158,6 +158,42 @@ fn pictures_of_the_deskbar_designs() {
     h.send(Msg::Deskbar(DeskbarMsg::Edge(aizome_shell::widgets::drawn::DragPhase::End(Point::new(70.0, 100.0)))));
     assert_eq!(h.program().deskbar_model().width, aizome_shell::deskbar::RAIL_WIDTH, "snapped to the Rail");
     // And the grip let go on the right half moves it there.
+    h.send(Msg::Deskbar(DeskbarMsg::Grip(aizome_shell::widgets::drawn::DragPhase::Start(Point::new(24.0, 5.0)))));
     h.send(Msg::Deskbar(DeskbarMsg::Grip(aizome_shell::widgets::drawn::DragPhase::End(Point::new(1000.0, 5.0)))));
     assert_eq!(h.program().deskbar_model().side, DeskbarSide::Right);
+}
+
+/// The grip dragged, at night and by day: over the Deskbar's own half
+/// (the other edge outlined, dashed), then over the other half (lit, the
+/// Deskbar fading); and at the Rail's width.
+#[test]
+#[ignore]
+fn pictures_of_the_grip_drag() {
+    use aizome_shell::widgets::drawn::DragPhase::{Move, Start};
+    for day in [false, true] {
+        let t = if day { "day" } else { "night" };
+        for (name, width) in [("standard", 232.0), ("rail", 48.0)] {
+            let mut h = scene_with(day, DeskbarSide::Right, width);
+            let (db, at, size) = deskbar_at(&h);
+            h.resize(db, size);
+            h.send(Msg::Deskbar(DeskbarMsg::Grip(Start(Point::new(size.width / 2.0, 5.0)))));
+            for (step, x) in [("1-held", -200.0), ("2-leaving", -900.0)] {
+                h.send(Msg::Deskbar(DeskbarMsg::Grip(Move(Point::new(x, 5.0)))));
+                let landing = window_titled(&h, "Deskbar destination");
+                h.resize(
+                    landing,
+                    h.platform.windows.values().find(|w| w.title == "Deskbar destination").unwrap().spec.size,
+                );
+                let desk = window_titled(&h, "Desktop");
+                let bar = window_titled(&h, "Menu bar");
+                let shot = compose(
+                    &mut h,
+                    &[(desk, Point::ZERO), (bar, Point::ZERO), (db, at), (landing, Point::new(0.0, 24.0))],
+                    Size::new(W, H),
+                    2.0,
+                );
+                save(&format!("9-grip-drag-{name}-{step}-{t}.png"), &shot, Rect::new(0.0, 0.0, W, H));
+            }
+        }
+    }
 }

@@ -148,6 +148,8 @@ pub enum Surface {
     Deskbar,
     /// The width an edge drag would give the Deskbar, over it.
     DeskbarPreview,
+    /// Where a drag of its grip would put the Deskbar, at the other edge.
+    DeskbarLanding,
     Palette,
     Panel,
     Osd,
@@ -325,6 +327,9 @@ pub struct Shell {
     pub(crate) deskbar_resize: Option<(f64, f64)>,
     /// The surface showing the width that drag would give, and the width.
     pub(crate) deskbar_preview: Option<(WindowKey, f64)>,
+    /// A drag of the grip under way: the surface showing where the Deskbar
+    /// would land, and whether letting go now moves it there.
+    pub(crate) deskbar_landing: Option<(WindowKey, bool)>,
     /// Apps' own icons (PNG), by app id, for apps the shell has no glyph for.
     pub(crate) icons: HashMap<String, Option<aizome_kit::Image>>,
     /// Apps' status items' icons, read once per change.
@@ -459,6 +464,7 @@ impl Shell {
             deskbar_side: aizome_config::DeskbarSide::Right,
             deskbar_resize: None,
             deskbar_preview: None,
+            deskbar_landing: None,
             icons: HashMap::new(),
             item_icons: HashMap::new(),
             item_wheel: HashMap::new(),
@@ -1649,6 +1655,7 @@ impl Program for Shell {
             Some(Surface::Desktop { output }) => self.desktop_view(*output),
             Some(Surface::Deskbar) => crate::deskbar::view(&self.deskbar_model()).map(Msg::Deskbar),
             Some(Surface::DeskbarPreview) => self.deskbar_preview_view(),
+            Some(Surface::DeskbarLanding) => self.deskbar_landing_view(),
             Some(Surface::Palette) => match self.palette_in(window) {
                 Some(p) => {
                     let inner = crate::palette::view::view(&self.palette_view_of(p), p.scroll)
@@ -1729,11 +1736,14 @@ impl Program for Shell {
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
-                // An edge drag on it can't end now.
-                self.end_deskbar_resize(cx);
+                // A drag of its edge or grip can't end now.
+                self.end_deskbar_drags(cx);
             }
             if s == Surface::DeskbarPreview {
                 self.deskbar_preview = None;
+            }
+            if s == Surface::DeskbarLanding {
+                self.deskbar_landing = None;
             }
         }
         true
@@ -1748,9 +1758,9 @@ impl Program for Shell {
         if self.deskbar == Some(window) {
             // While the button's down the pointer stays the Deskbar's: gone
             // mid-drag, the compositor took it, and the release won't come.
-            // The edge drag is over, its width not taken.
+            // The edge or grip drag is over, its width or edge not taken.
             if !inside {
-                self.end_deskbar_resize(cx);
+                self.end_deskbar_drags(cx);
             }
             self.deskbar_hover(false, inside, cx);
             self.after_update(cx);

@@ -116,6 +116,7 @@ fn sample() -> DeskbarModel {
         max_height: Some(SCREEN.1),
         side: DeskbarSide::Left,
         width: WIDTH,
+        moving: deskbar::Moving::No,
     }
 }
 

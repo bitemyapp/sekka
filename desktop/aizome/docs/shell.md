@@ -28,6 +28,7 @@ Aizome's look.
 | Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand |
 | Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top and `[deskbar] side` (right by default); `[deskbar] width` (232pt by default) plus its 3pt shadow, as tall as its content; margin-top 24 | on demand |
 | Deskbar width, while its edge is dragged | overlay | `aizome-deskbar-preview` | the main display | top and the Deskbar's side; as wide as the Deskbar can be there; no input | none |
+| Where the Deskbar would go, while its grip is dragged | overlay | `aizome-deskbar-landing` | the main display | top and the other side; the Deskbar's face, margin-top 24; no input | none |
 | Menus, systray panels | popups of the bar or Deskbar | — | — | — | grab |
 | Palette, Toolchest typed into | overlay | `aizome-palette` | the output with the focus (the focused window's, else the one showing the current Desk) | centred, 720 × up to 480pt | exclusive |
 | Menu at the pointer, torn-off palettes | overlay / top | `aizome-menu` | — | positioned with margins | on demand |
@@ -290,7 +291,17 @@ width = 232.0    # points
 - **The grip**: a 10pt strip of dots along its top, always shown, above
   the scrolling rows. Drag it and let go over the other half of the
   screen, and the Deskbar moves to that edge (it closes and opens again
-  with the other anchor). Right-click it for **At the Left** and **At the
+  with the other anchor). While it's dragged the grip stays pressed in,
+  its dots in the `focus` colour, and an outline of the Deskbar shows at
+  the other edge, on a surface of its own that takes no input: dashed,
+  with **Drag here to move**, while the pointer is over the Deskbar's
+  own half; solid in `focus`, with **Release to move here**, once letting
+  go would move it, while the Deskbar's rows fade. Narrower, the badge
+  says less (**Drag here**, **Release**), and at the Rail's width only
+  its arrow shows. The outline goes when the button is let go, or when
+  the drag ends without a release (the pointer taken, the Deskbar or its
+  display gone, the screen locked), and the Deskbar then stays where it
+  is. Right-click it for **At the Left** and **At the
   Right**, and the named sizes **Icons Only** (48), **Slim** (150),
   **Standard** (232), **Wide** (300) and **Wider** (360); ticks mark the
   current ones, and sizes wider than the display allows are off. When the
