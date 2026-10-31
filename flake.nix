@@ -85,6 +85,15 @@
           in
           "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
       };
+      aizomeSite = import ./nix/aizome-site.nix {
+        inherit pkgs;
+        revision = self.shortRev or self.dirtyShortRev or "unknown";
+        date =
+          let
+            d = self.lastModifiedDate or "19700101000000";
+          in
+          "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
+      };
       fixture = import ./nix/fixture.nix { inherit pkgs; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
@@ -274,8 +283,10 @@
             ]
           );
         application-cache = applicationCatalog.cache;
-        # sekka.computer, ready to upload; nothing publishes it.
+        # sekka.computer and aizome.computer, ready to upload; the sites
+        # workflow publishes them from main (DEVELOPERS.md).
         inherit site;
+        aizome-site = aizomeSite;
         # Exported separately for isolated Wi-Fi regression tests, not shipped
         # in the public ISO or installed as a live access-point service.
         wifi-test-tools = pkgs.symlinkJoin {
@@ -785,6 +796,7 @@
         };
         tools = tools;
         site = site;
+        aizome-site = aizomeSite;
         template-lock = pkgs.runCommand "template-lock-tests" { } ''
           ${tools}/bin/respin-tools check-config template ${./templates/flake.nix.in} ${
             self.packages.${system}.installed-lock
