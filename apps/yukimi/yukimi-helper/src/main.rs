@@ -41,6 +41,7 @@
 //! already being started, which is never interrupted.
 use std::io::{Read, Write};
 
+mod evaluation;
 mod transaction;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -82,6 +83,7 @@ enum Phase {
 /// The phase, and the program running now (to stop when asked).
 static STATE: Mutex<(Phase, Option<u32>)> = Mutex::new((Phase::Working, None));
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+static STAGES: Mutex<Vec<(u64, String, std::time::Instant)>> = Mutex::new(Vec::new());
 
 extern "C" fn interrupt(_: libc::c_int) {
     INTERRUPTED.store(true, Ordering::Relaxed);
@@ -182,6 +184,7 @@ type Result<T> = std::result::Result<T, Failure>;
 
 /// Say what is happening, as an activity Yukimi shows.
 fn stage(id: u64, text: &str) {
+    STAGES.lock().unwrap_or_else(|p| p.into_inner()).push((id, text.to_owned(), std::time::Instant::now()));
     eprintln!(
         "@nix {}",
         serde_json::json!({"action": "start", "id": id, "level": 0, "type": 0, "text": text, "fields": []})
@@ -190,6 +193,18 @@ fn stage(id: u64, text: &str) {
 
 fn stage_done(id: u64) {
     eprintln!("@nix {}", serde_json::json!({"action": "stop", "id": id}));
+    let mut stages = STAGES.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(index) = stages.iter().position(|s| s.0 == id) {
+        let (_, name, started) = stages.remove(index);
+        report(3, &format!("Yukimi phase: {name}; elapsed_ms={}", started.elapsed().as_millis()));
+    }
+}
+
+fn during<T>(id: u64, text: &str, work: impl FnOnce() -> Result<T>) -> Result<T> {
+    stage(id, text);
+    let result = work();
+    stage_done(id);
+    result
 }
 
 fn report(level: u8, message: &str) {
@@ -398,16 +413,41 @@ fn valid_user(name: &str) -> bool {
 /// Build a flake's system for `host`, with the binary caches it configures
 /// as well as the running system's: a cache the new system adds is used for
 /// the build that adds it. The daemon takes them from root.
-fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure> {
-    let system = format!("{}#nixosConfigurations.\"{host}\"", setup.flake());
-    let mut build = nix();
-    build.args(["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
-    if let Some((substituters, keys)) = caches(&system) {
-        build.args(["--option", "extra-substituters", &substituters.join(" ")]);
-        build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
-    }
-    build.arg(format!("{system}.config.system.build.toplevel"));
-    Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned())
+fn build_flake(context: &evaluation::Context, flake: &str, host: &str) -> Result<String> {
+    let system = format!("{flake}#nixosConfigurations.\"{host}\"");
+    let caches = during(12, "Reading the configured binary caches", || Ok(caches(context, &system)))?;
+    let derivation = during(13, "Evaluating your configuration", || {
+        let mut eval = context.nix();
+        // Unlike `nix eval ...drvPath`, this uses Nix's persistent derivation
+        // cache. Realizing the system happens in the following stages;
+        // a custom configuration may still do import-from-derivation here.
+        eval.args(["path-info", "--derivation", "--no-update-lock-file", "--log-format", "internal-json", "-v"]);
+        eval.arg(format!("{system}.config.system.build.toplevel"));
+        let path = output(eval, "Evaluating your configuration")?.trim().to_owned();
+        context.keep_derivation(&path)?;
+        Ok(path)
+    })?;
+    let build_command = || {
+        let mut build = nix();
+        build.args(["build", "--log-format", "internal-json", "-v", "--print-out-paths"]);
+        if let Some((substituters, keys)) = &caches {
+            build.args(["--option", "extra-substituters", &substituters.join(" ")]);
+            build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
+        }
+        // Build exactly the evaluated derivation, without evaluating again.
+        build.arg(format!("{derivation}^out"));
+        build
+    };
+    during(14, "Checking for cached packages", || {
+        let mut plan = build_command();
+        plan.args(["--dry-run", "--no-link"]);
+        output(plan, "Checking for cached packages").map(|_| ())
+    })?;
+    during(15, "Downloading and building your system", || {
+        let mut build = build_command();
+        build.arg("--out-link").arg(context.result_root());
+        Ok(output(build, "Building the new system")?.trim().to_owned())
+    })
 }
 
 /// The free space, in bytes, of the filesystem holding `path`.
@@ -474,9 +514,9 @@ fn with_room<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
 
 /// The binary caches and their keys a system's configuration names, if it
 /// names any. A configuration that doesn't evaluate is reported by the build.
-fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
-    let mut eval = nix();
-    eval.args(["eval", "--json", &format!("{system}.config.nix.settings"), "--apply"]);
+fn caches(context: &evaluation::Context, system: &str) -> Option<(Vec<String>, Vec<String>)> {
+    let mut eval = context.nix();
+    eval.args(["eval", "--json", "--no-update-lock-file", &format!("{system}.config.nix.settings"), "--apply"]);
     eval.arg(
         "s: { substituters = (s.substituters or [ ]) ++ (s.extra-substituters or [ ]); \
          keys = (s.trusted-public-keys or [ ]) ++ (s.extra-trusted-public-keys or [ ]); }",
@@ -498,7 +538,7 @@ fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
 
 /// Build the new system: a flake's configuration for this computer (or its
 /// only one), or `configuration.nix` with the channels' Nixpkgs.
-fn build(setup: &Setup) -> Result<String> {
+fn build(setup: &Setup, context: &evaluation::Context) -> Result<String> {
     if setup.kind == Kind::Channels {
         let mut build = nix();
         build.args(["build", "--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
@@ -525,16 +565,28 @@ fn build(setup: &Setup) -> Result<String> {
                 ),
             );
         }
-        return Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned());
+        return during(15, "Evaluating, downloading and building your channel system", || {
+            Ok(output(build, "Building the new system")?.trim().to_owned())
+        });
     }
     if !valid_host(&setup.host) {
         return Err(Failure(format!("Not a configuration name: {:?}", setup.host)));
     }
     // Usually the configuration is named after the computer; only when it
     // isn't, ask the flake what it has.
-    let mut names = nix();
-    names.args(["eval", "--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
-    let listed: Vec<String> = serde_json::from_str(&output(names, "Reading the configurations")?)?;
+    let flake = during(10, "Preparing the configuration for evaluation", || context.flake(setup))?;
+    let listed: Vec<String> = during(11, "Reading the configurations", || {
+        let mut names = context.nix();
+        names.args([
+            "eval",
+            "--json",
+            "--no-update-lock-file",
+            &format!("{flake}#nixosConfigurations"),
+            "--apply",
+            "builtins.attrNames",
+        ]);
+        Ok(serde_json::from_str(&output(names, "Reading the configurations")?)?)
+    })?;
     let host = if listed.contains(&setup.host) {
         setup.host.clone()
     } else {
@@ -550,7 +602,7 @@ fn build(setup: &Setup) -> Result<String> {
             }
         }
     };
-    build_flake(setup, &host)
+    build_flake(context, &flake, &host)
 }
 
 /// Make a built system the current generation and start it (`switch`) or
@@ -801,9 +853,10 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
         .ok_or_else(|| Failure(format!("{attr} isn't in {} in the configuration", path.join("."))))
 }
 
-fn change(args: &[String]) -> Result<String> {
+fn change(args: &[String], directory: &Path) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
+    let evaluation = evaluation::Context::new(directory, setup.facts.evaluation_cores);
     // Validate migration before touching any files. The GUI's detection is
     // only a convenience; the privileged helper always checks again.
     let sekka_flake = if change.sekka {
@@ -955,10 +1008,7 @@ fn change(args: &[String]) -> Result<String> {
             run(c, "Updating the channels")?;
             stage_done(2);
         }
-        stage(3, "Evaluating your configuration");
-        let system = build(&setup)?;
-        stage_done(3);
-        Ok(system)
+        with_room(|| build(&setup, &evaluation))
     };
     let (system, reasons, mode) = match attempt().and_then(|system| {
         let active = std::fs::canonicalize("/run/current-system")?;
@@ -1135,7 +1185,12 @@ fn main() -> ExitCode {
         let Ok(directory) = transaction::worker_directory(directory) else {
             return ExitCode::FAILURE;
         };
-        let result = worker(args);
+        let result = worker(args, &directory);
+        // Failed/cancelled stages also keep their elapsed time in the log.
+        let unfinished: Vec<_> = STAGES.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|s| s.0).collect();
+        for id in unfinished {
+            stage_done(id);
+        }
         let (json, success) = match result {
             Ok(json) => (json, true),
             Err(Failure(message)) => {
@@ -1186,7 +1241,7 @@ fn check_activation(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn worker(args: &[String]) -> Result<String> {
+fn worker(args: &[String], directory: &Path) -> Result<String> {
     let (command, rest) = args.split_first().ok_or_else(|| Failure("Missing operation".into()))?;
     // CLI and GUI must not edit the configuration or activate generations
     // concurrently. The kernel releases this lock even after a crash.
@@ -1202,7 +1257,7 @@ fn worker(args: &[String]) -> Result<String> {
         .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
     watch_for_stop();
     match command.as_str() {
-        "change" => change(rest),
+        "change" => change(rest, directory),
         "rollback" => rollback(rest),
         "clean" => clean(rest),
         _ => Err(Failure("Usage: yukimi-helper change|rollback|clean …".into())),
