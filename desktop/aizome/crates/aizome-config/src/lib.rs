@@ -213,9 +213,30 @@ pub struct Input {
 }
 
 impl Input {
-    /// A keyboard's own entry, if it has one.
+    /// A keyboard's own entry, if it has one. Prefer its exact name and ID;
+    /// otherwise a single profile for that model also covers differently
+    /// named interfaces (for example, "Topre REALFORCE R4H Keyboard").
     pub fn keyboard_profile(&self, name: &str, id: &str) -> Option<&KeyboardProfile> {
-        self.keyboards.iter().find(|k| k.matches(name, id))
+        self.keyboard_profile_index(name, id).map(|i| &self.keyboards[i])
+    }
+
+    /// The same profile resolution as typing uses, for editing in Settings.
+    pub fn keyboard_profile_mut(&mut self, name: &str, id: &str) -> Option<&mut KeyboardProfile> {
+        self.keyboard_profile_index(name, id).map(|i| &mut self.keyboards[i])
+    }
+
+    fn keyboard_profile_index(&self, name: &str, id: &str) -> Option<usize> {
+        if let Some(i) = self.keyboards.iter().position(|k| k.matches(name, id)) {
+            return Some(i);
+        }
+        // Unknown IDs don't identify a model. Multiple explicit profiles
+        // for an ID retain their name-specific behavior; don't guess.
+        if id.is_empty() || id == "0000:0000" {
+            return None;
+        }
+        let mut matches = self.keyboards.iter().enumerate().filter(|(_, k)| k.id.eq_ignore_ascii_case(id));
+        let (i, _) = matches.next()?;
+        matches.next().is_none().then_some(i)
     }
 
     /// The XKB options a keyboard types with: `[input.keyboard]`'s, with
@@ -230,8 +251,9 @@ impl Input {
 
 /// One keyboard's own keys: its modifier swaps, Caps Lock and Compose key
 /// (the options [`is_key_option`] covers), in place of `[input.keyboard]`'s.
-/// It applies to the keyboard giving this name and these IDs; layouts,
-/// repeat and Num Lock are every keyboard's.
+/// Exact name and ID matches take priority; a sole profile for an ID also
+/// applies to its other interface names. Layouts, repeat and Num Lock are
+/// every keyboard's.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct KeyboardProfile {
@@ -240,8 +262,7 @@ pub struct KeyboardProfile {
     /// Its USB or Bluetooth vendor and product, as `lsusb` writes them:
     /// `05ac:029c`.
     pub id: String,
-    /// Its keys' options. Unset, it types as other keyboards do (it was
-    /// set up to, and isn't asked about again).
+    /// Its keys' options. Unset, it types as other keyboards do.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<String>,
     #[serde(flatten)]
@@ -931,6 +952,56 @@ id = "046d:c31c"
         assert_eq!(again.input.keyboards[1].options, None);
         // No keyboards of their own, nothing written.
         assert!(!Settings::default().to_toml().unwrap().contains("keyboards"));
+    }
+
+    #[test]
+    fn keyboard_interfaces_share_an_unambiguous_model_profile() {
+        let mut s = Settings::from_toml(
+            r#"
+[input.keyboard]
+options = "grp:alt_shift_toggle,altwin:swap_alt_win"
+[[input.keyboards]]
+name = "Topre REALFORCE R4H"
+id = "0853:0321"
+options = "altwin:swap_lalt_lwin,compose:ralt"
+backlight = "dim"
+"#,
+        )
+        .unwrap();
+        let alias = "Topre REALFORCE R4H Keyboard";
+        assert_eq!(s.input.options_for(alias, "0853:0321"), "grp:alt_shift_toggle,altwin:swap_lalt_lwin,compose:ralt");
+        assert_eq!(s.input.options_for(alias, "0853:0322"), s.input.keyboard.options, "a different model");
+        s.input.keyboard_profile_mut(alias, "0853:0321").unwrap().options = None;
+        let saved = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
+        assert_eq!(saved.input.keyboards.len(), 1);
+        let profile = saved.input.keyboard_profile(alias, "0853:0321").unwrap();
+        assert_eq!(profile.name, "Topre REALFORCE R4H");
+        assert_eq!(profile.extra["backlight"].as_str(), Some("dim"));
+        assert_eq!(saved.input.options_for(alias, "0853:0321"), saved.input.keyboard.options);
+    }
+
+    #[test]
+    fn exact_keyboard_profiles_win_and_ambiguous_or_unknown_ids_do_not_guess() {
+        let mut input = Input::default();
+        input.keyboard.options.clear();
+        let profile = |name: &str, id: &str, options: &str| KeyboardProfile {
+            name: name.into(),
+            id: id.into(),
+            options: Some(options.into()),
+            ..Default::default()
+        };
+        input.keyboards.push(profile("First", "ABCD:0123", "compose:ralt"));
+        assert_eq!(input.options_for("Alias", "abcd:0123"), "compose:ralt", "IDs are case-insensitive");
+        input.keyboards.push(profile("Second", "abcd:0123", "caps:escape"));
+        assert_eq!(input.options_for("First", "abcd:0123"), "compose:ralt");
+        assert_eq!(input.options_for("Second", "ABCD:0123"), "caps:escape");
+        assert!(input.keyboard_profile("Alias", "abcd:0123").is_none());
+        assert!(input.keyboard_profile_mut("Alias", "abcd:0123").is_none());
+        for id in ["", "0000:0000"] {
+            input.keyboards.push(profile("Unknown", id, "caps:escape"));
+            assert!(input.keyboard_profile("Other", id).is_none());
+            assert_eq!(input.options_for("Unknown", id), "caps:escape", "exact legacy entries still work");
+        }
     }
 
     #[test]

@@ -48,10 +48,9 @@ pub fn attached() -> Vec<KeyboardInfo> {
     }
 }
 
-/// Those of `attached` plugged in or paired without an entry of their own:
-/// what the shell asks about, and what can be set to type as other
-/// keyboards do without a key pressed (a security key or a mouse's
-/// receiver has no space bar to press beside).
+/// Those of `attached` plugged in or paired without an entry of their own,
+/// available in the optional setup sheet without a key pressed (a security
+/// key or a mouse's receiver has no space bar to press beside).
 pub fn not_set_up(s: &Settings, attached: &[KeyboardInfo]) -> Vec<KeyboardInfo> {
     attached.iter().filter(|k| k.bus.plugged() && s.input.keyboard_profile(&k.name, &k.id).is_none()).cloned().collect()
 }
@@ -98,8 +97,8 @@ pub struct Setup {
     /// while no key has come.
     pub unset: Vec<KeyboardInfo>,
     pub chosen: usize,
-    /// The keyboard the sheet was opened for (`--keyboard`, from the
-    /// shell's "Set up …?"), chosen once it's among `unset`.
+    /// The keyboard the sheet was opened for (`--keyboard`), chosen once
+    /// it's among `unset`.
     pub asked: Option<String>,
 }
 
@@ -114,7 +113,7 @@ impl Setup {
 }
 
 /// Whether `asked` (`--keyboard`) is keyboard `k`: “Name (vendor:product)”,
-/// as the shell's "Set up …?" gives it, or its vendor:product or name alone.
+/// or its vendor:product or name alone.
 pub fn asks_for(asked: &str, k: &KeyboardInfo) -> bool {
     let both = asked.strip_suffix(')').and_then(|a| a.rsplit_once(" ("));
     both.is_some_and(|(name, id)| k.name == name && k.id.eq_ignore_ascii_case(id))
@@ -166,6 +165,12 @@ mod tests {
         // Those not set up: plugged in or paired, without an entry.
         let mut attached = sample_keyboards();
         attached.push(KeyboardInfo { name: "PC".into(), id: "046D:C31C".into(), bus: KeyboardBus::Usb, last: false });
+        attached.push(KeyboardInfo {
+            name: "PC Keyboard".into(),
+            id: "046d:c31c".into(),
+            bus: KeyboardBus::Usb,
+            last: false,
+        });
         let builtin =
             KeyboardInfo { name: "Built in".into(), id: "0001:0001".into(), bus: KeyboardBus::BuiltIn, last: false };
         attached.push(builtin);

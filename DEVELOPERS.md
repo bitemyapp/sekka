@@ -200,6 +200,16 @@ Per-keyboard profiles still replace only modifier/Compose options, preserving
 the shared layout and layout-switching options. The greeter continues to use
 its explicit system keyboard configuration.
 
+Per-keyboard customization is opt-in through Settei's Keyboard → Set Up…;
+connecting a keyboard or receiver does not post a setup notification. The
+shell drops the retired offers from carried notification history, including
+the previous shell's final handoff during replacement. New devices inherit
+the shared settings. Profile lookup prefers exact name and vendor/product
+ID, then a single profile for that ID, so composite devices such as the
+Topre REALFORCE R4H and its “Keyboard” interface use the same saved keys.
+Missing/zero IDs and ambiguous IDs have no fallback. Existing name-specific
+profiles retain priority, and Settei edits the same profile typing resolves.
+
 `cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-config`
 checks missing/partial settings, explicit overrides and per-keyboard options
 with isolated subprocess environments. `nix build .#checks.x86_64-linux.aizome-login`
@@ -1084,9 +1094,9 @@ and the configuration gets `services.xserver.xkb.options` only for a swap.
 That one setting reaches every keyboard: the console, the login screen,
 Tatami's Hyprland, X11 sessions, and Aizome's session, which starts from the
 system's keyboard (`XKB_DEFAULT_*`, see [Aizome and IBus](#aizome-and-ibus))
-until Settings changes it. Keyboards plugged in later still get Aizome's
-offer to set up keys of their own. The compositor gives libxkbcommon every
-keymap's options, empty ones included: given none, libxkbcommon reads
+until Settings changes it. Keyboards plugged in later inherit those settings;
+Settei can optionally give them keys of their own. The compositor gives
+libxkbcommon every keymap's options, empty ones included: given none, it reads
 `XKB_DEFAULT_OPTIONS`, and the system's swap came back for settings that
 cleared it and for a Mac keyboard set up to keep its ⌘.
 

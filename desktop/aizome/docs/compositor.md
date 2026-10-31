@@ -51,7 +51,10 @@ aizome --build-info                      # how the core was built (what a logic 
   modifier swaps, Caps Lock and Compose key (the `altwin:`, `ctrl:`,
   `caps:` and `compose:` XKB options), in place of `[input.keyboard]`'s;
   layouts, layout switching, repeat and Num Lock are every keyboard's, and
-  an entry without `options` types as other keyboards do. The seat has one
+  an entry without `options` types as other keyboards do. An exact name/ID
+  match wins; otherwise a single profile for a nonzero ID covers its other
+  interface names too. Multiple profiles for the same ID stay name-specific.
+  The seat has one
   keymap, as Wayland has: before a key from a keyboard that types (one
   with a space bar and the letters) goes anywhere, the keymap becomes that
   keyboard's if it isn't already, and the focus hears it; Caps Lock, Num

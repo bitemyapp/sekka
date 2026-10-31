@@ -369,15 +369,9 @@ ones stay as a card under the bar until acted on. Actions appear as buttons
 on the card and in the Deskbar preview. Do Not Disturb (from the palette,
 the clock panel, or a schedule in settings) files them without the line.
 Screenshots post a notification with the image's thumbnail and "Show in
-Hako". A USB or Bluetooth keyboard without keys of its own
-(`[[input.keyboards]]`), there when the shell connects or plugged in
-later (`keyboard-added`), gets "Set up …?" with **Set Up…**, which opens
-Settei's keyboard setup (`keyboard.setup`) with that keyboard chosen
-(`--keyboard`), and **Same as Others**, which writes an entry without
-`options` for it (as Settei's **Same as Other Keyboards** does), so a
-device that only says it's a keyboard (a security key, a mouse's receiver)
-isn't asked about again; each is asked about once a session
-(`keyboards.rs`).
+Hako". Keyboard setup is optional in Settei; connecting keyboards or
+receivers does not post notifications. Retired keyboard offers are removed
+when restoring history from an older shell.
 
 Opening a notification raises its application's most recent window on the
 current Desk, falling back to another Desk if necessary. It reveals minimised

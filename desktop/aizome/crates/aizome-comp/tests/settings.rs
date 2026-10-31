@@ -253,6 +253,15 @@ fn each_keyboard_types_with_its_own_modifier_keys() {
         _ => None,
     });
     assert_eq!(got.as_deref(), Some("Another"));
+
+    // Composite keyboards can expose another typing interface with the
+    // same vendor/product ID and a different name. Its keys use the saved
+    // profile too, rather than falling back to every keyboard's mapping.
+    let interface = "Apple Inc. Magic Keyboard Keyboard";
+    plug(interface, "05AC:029C");
+    assert_eq!(beside_space(interface, "125"), ALT, "the saved left-only swap applies to this interface");
+    assert_eq!(beside_space(interface, "126"), SUPER, "its right Super stays unswapped");
+    assert_eq!(beside_space(MAC, "126"), SUPER, "the original interface keeps the same profile");
 }
 
 /// Two layouts: the PC switches to the second (Alt+Shift), then the Mac,

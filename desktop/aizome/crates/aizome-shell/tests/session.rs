@@ -86,7 +86,7 @@ fn screenshots_say_where_they_went() {
 }
 
 #[test]
-fn keyboards_plugged_in_are_offered_their_setup_once() {
+fn keyboards_and_receivers_use_existing_settings_without_setup_notifications() {
     use aizome_ipc::{KeyboardBus, KeyboardInfo};
     let mut h = scene(false);
     let added = |name: &str, id: &str, bus| {
@@ -97,42 +97,62 @@ fn keyboards_plugged_in_are_offered_their_setup_once() {
     h.send(added("QEMU Virtio Keyboard", "0000:0000", KeyboardBus::Other));
     assert_eq!(h.program().banner, None, "the computer's own, or a VM's");
 
-    h.send(added("Apple Inc. Magic Keyboard", "05ac:029c", KeyboardBus::Bluetooth));
-    let id = h.program().banner.expect("shown in the bar");
-    let n = h.program().notes.get(id).unwrap().clone();
-    assert_eq!(n.summary, "Set up Apple Inc. Magic Keyboard?");
-    assert!(n.buttons().any(|(_, l)| l == "Set Up…"));
-    assert_eq!(
-        h.program().note_actions.get(&(id, "set-up".to_owned())),
-        Some(&Action::SetUpKeyboard { name: "Apple Inc. Magic Keyboard".into(), id: "05ac:029c".into() }),
-        "Settei opens with this one chosen"
-    );
-
-    let count = h.program().notes.list.len();
-    h.send(added("Apple Inc. Magic Keyboard", "05AC:029C", KeyboardBus::Bluetooth));
     h.program_mut().settings.input.keyboards.push(aizome_config::KeyboardProfile {
-        name: "Logitech K120".into(),
-        id: "046d:c31c".into(),
+        name: "Topre REALFORCE R4H".into(),
+        id: "0853:0321".into(),
+        options: Some("altwin:swap_lalt_lwin".into()),
         ..Default::default()
     });
-    h.send(added("Logitech K120", "046d:c31c", KeyboardBus::Usb));
-    assert_eq!(h.program().notes.list.len(), count, "asked once, and not about one set up");
+    let settings = h.program().settings.clone();
+    let notes = h.program().notes.list.clone();
+    for _ in 0..2 {
+        h.send(added("Apple Inc. Magic Keyboard", "05ac:029c", KeyboardBus::Bluetooth));
+        h.send(added("Topre REALFORCE R4H", "0853:0321", KeyboardBus::Usb));
+        h.send(added("Topre REALFORCE R4H Keyboard", "0853:0321", KeyboardBus::Usb));
+        h.send(added("Razer DeathAdder V4 Pro", "1532:00bf", KeyboardBus::Usb));
+        h.send(added("Razer DeathAdder V4 Pro Keyboard", "1532:00bf", KeyboardBus::Usb));
+        h.send(added("Yubico YubiKey OTP+FIDO+CCID", "1050:0407", KeyboardBus::Usb));
+        h.send(Msg::Ipc(aizome_shell::ipc::IpcEvent::Connected(Box::new(aizome_shell::ipc::SnapshotBox(snapshot())))));
+    }
+    assert_eq!(h.program().banner, None);
+    assert_eq!(h.program().notes.list, notes);
+    assert_eq!(h.program().settings, settings, "connecting a device doesn't write profiles");
+}
 
-    // One with no space bar to press beside (a security key): typing as
-    // the others do, it isn't asked about again, next session either.
-    const YUBIKEY: &str = "Yubico YubiKey OTP+FIDO+CCID";
-    h.send(added(YUBIKEY, "1050:0407", KeyboardBus::Usb));
-    let n = h.program().notes.list.iter().find(|n| n.summary == format!("Set up {YUBIKEY}?")).cloned();
-    let n = n.expect("asked about");
-    assert!(n.buttons().any(|(_, l)| l == "Same as Others"), "{:?}", n.actions);
-    h.send(Msg::Card(CardMsg::Action(n.id, "same".into())));
-    let saved = h.program().settings.input.keyboard_profile(YUBIKEY, "1050:0407").cloned();
-    assert_eq!(saved.map(|k| k.options), Some(None), "known, with no keys of its own");
-    assert!(h.program().notes.get(n.id).is_none(), "and the notification is gone");
-    h.program_mut().keyboards_asked.clear();
-    let count = h.program().notes.list.len();
-    h.send(added(YUBIKEY, "1050:0407", KeyboardBus::Usb));
-    assert_eq!(h.program().notes.list.len(), count, "not asked about again");
+#[test]
+fn a_replaced_shell_cannot_restore_retired_keyboard_offers_in_its_final_handoff() {
+    use aizome_shell::carry::Carried;
+    use aizome_shell::notifications::store::Notification;
+    let mut h = scene(false);
+    let old = Carried {
+        notes: vec![
+            Notification {
+                id: 900,
+                app_name: "Settei".into(),
+                summary: "Set up Topre REALFORCE R4H Keyboard?".into(),
+                body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
+                actions: vec![
+                    ("default".into(), "Set Up…".into()),
+                    ("set-up".into(), "Set Up…".into()),
+                    ("same".into(), "Same as Others".into()),
+                ],
+                ..Default::default()
+            },
+            Notification {
+                id: 901,
+                app_name: "Settei".into(),
+                summary: "Other settings advice".into(),
+                ..Default::default()
+            },
+        ],
+        next_id: 901,
+        ..Default::default()
+    };
+    for _ in 0..2 {
+        h.send(Msg::Carried(Box::new(old.clone())));
+        assert!(h.program().notes.get(900).is_none());
+        assert_eq!(h.program().notes.get(901), Some(&old.notes[1]));
+    }
 }
 
 #[test]

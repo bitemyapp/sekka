@@ -209,6 +209,50 @@ fn setting_up_a_pc_keyboard_swaps_and_can_start_from_another() {
 }
 
 #[test]
+fn setup_from_another_interface_edits_the_saved_profile_and_keeps_its_other_keys() {
+    let saved_name = format!("{MAC} Keyboard");
+    let (mut h, path) = sample(
+        "setup-interface",
+        &format!(
+            r#"
+[input.keyboard]
+options = "ctrl:nocaps"
+[[input.keyboards]]
+name = "{saved_name}"
+id = "05AC:029C"
+options = "compose:ralt"
+backlight = "dim"
+"#
+        ),
+        "keyboard.setup",
+    );
+    let s = h.program().sheet_window().unwrap();
+    press(&mut h, 56);
+    assert_eq!(shown_in(&h, s, "setup-from").as_deref(), Some(saved_name.as_str()));
+    assert!(h.click_text(s, "Save"));
+    h.program().shared.flush();
+    let saved = Settings::load_from(&path).unwrap();
+    assert_eq!(saved.input.keyboards.len(), 1, "another interface must not create another profile");
+    let profile = saved.input.keyboard_profile(MAC, "05ac:029c").unwrap();
+    assert_eq!(profile.name, saved_name);
+    assert_eq!(profile.options.as_deref(), Some("compose:ralt,altwin:swap_lalt_lwin"));
+    assert_eq!(profile.extra["backlight"].as_str(), Some("dim"));
+    let w = h.window();
+    assert!(h.texts(w).iter().any(|t| t == &saved_name), "the saved profile stays selected");
+    drop(h);
+
+    let mut h = Harness::new(Settei::sample(path.clone(), Start::parse("keyboard.setup")));
+    let s = h.program().sheet_window().unwrap();
+    press(&mut h, 125);
+    assert!(h.click_text(s, "Same as Other Keyboards"));
+    h.program().shared.flush();
+    let saved = Settings::load_from(&path).unwrap();
+    assert_eq!(saved.input.keyboards.len(), 1);
+    assert_eq!(saved.input.keyboard_profile(MAC, "05ac:029c").unwrap().options, None);
+    assert_eq!(saved.input.keyboard.options, "ctrl:nocaps");
+}
+
+#[test]
 fn a_keyboard_with_no_space_bar_types_as_the_others_without_a_key() {
     let (mut h, path) =
         sample("setup-receiver", "[input.keyboard]\noptions = \"altwin:swap_alt_win\"\n", "keyboard.setup");
