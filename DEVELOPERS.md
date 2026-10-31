@@ -644,6 +644,27 @@ with the same configuration is the negative control. The patch applies
 without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
 check, and review any patch failure rather than skipping it.
 
+The draft Files refresh work is unfinished; see the
+[handoff](docs/tatami-file-search-refresh-handoff.md) for failing checks and
+the next steps. This branch enables Elephant's Files watcher and carries
+`files-watch.patch` for
+Elephant 2.22.0. The default home directory and new or moved subdirectories
+are watched. A single debounced queue reconciles each path's final filesystem
+state, including atomic editor saves; subtree replacement is transactional and
+uses literal path boundaries. Initial and subsequent scans use the same `fd`
+hidden/ignore policy with NUL-delimited paths, preserving spaces and newlines.
+Failed scans retain the prior index and watches and retry; a failed parent
+refresh does not suppress pending child changes. Successful scans prune
+watches for paths that disappeared or became ignored.
+`nix build .#checks.x86_64-linux.launcher-files` checks the actual provider over
+its socket, including rename/delete boundaries, ignore changes and injected
+scan failure/recovery, with the original missing-new-save behavior as a
+negative control. `nix build .#checks.x86_64-linux.launcher-files-vm` uses the
+normal launcher, Nautilus and a test-only Mousepad to create a directory and
+document, rename both and trash the directory without restarting Elephant.
+Autologin and software graphics make this component evidence, not ISO
+qualification. Also run `launcher-search` after changing Elephant's patches.
+
 Tatami's Sound window (`desktop/tatami/sound/`, `tatami-sound`) is a separate
 GTK 4/libadwaita Cargo workspace, laid out after Aizome's Sound settings
 (Settei's `panes/sound.rs`) on one page: each device list with the default

@@ -769,6 +769,24 @@
                 ${./desktop/tatami/displays/data/org.tatami.Displays.desktop} -v
               touch $out
             '';
+        launcher-files =
+          let
+            elephant = inputs.tatami.packages.${system}.elephant;
+            original = elephant.overrideAttrs (old: {
+              patches = builtins.filter (p: baseNameOf p != "files-watch.patch") old.patches;
+            });
+          in
+          pkgs.runCommand "tatami-launcher-files-tests"
+            { nativeBuildInputs = [ pkgs.python3 pkgs.fd ]; }
+            ''
+              python3 ${./tests/test_launcher_files.py} ${elephant} ${./desktop/tatami/config/elephant/files.toml}
+              python3 ${./tests/test_launcher_files.py} ${original} /dev/null --original
+              touch $out
+            '';
+        launcher-files-vm = import ./nix/launcher-files-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         tatami-weather =
           pkgs.runCommand "tatami-weather-tests"
             {
