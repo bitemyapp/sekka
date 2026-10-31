@@ -64,6 +64,15 @@ fn searching_and_a_suggestion_taken() {
 }
 
 #[test]
+fn an_invalid_search_explains_what_to_correct() {
+    for (theme, name) in THEMES {
+        let mut h = harness(theme, Access::System);
+        h.send(Msg::Search("/[/ pid:x level:loud since:soon".into()));
+        golden(&mut h, "invalid-search", name);
+    }
+}
+
+#[test]
 fn only_your_own_messages_until_unlocked() {
     for (theme, name) in THEMES {
         // Only what the user may read: their own session's.

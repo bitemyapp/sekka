@@ -614,7 +614,11 @@ impl Nisshi {
 
     /// Whether the journal (not only what's read) could find more.
     pub fn can_search_journal(&self) -> bool {
-        !self.in_file() && !self.store.complete && self.journal_search.is_none() && !self.filter.search.is_empty()
+        !self.in_file()
+            && !self.store.complete
+            && self.journal_search.is_none()
+            && !self.filter.search.is_empty()
+            && self.filter.search.problems.is_empty()
     }
 
     /// A message as a line of text, as journalctl's short format has it.
