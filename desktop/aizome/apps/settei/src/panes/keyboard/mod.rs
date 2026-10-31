@@ -268,7 +268,7 @@ pub fn options_of(s: &Settings, who: Option<&(String, String)>) -> String {
 /// them. A keyboard that typed as the others did gets keys of its own.
 pub fn change_options(s: &mut Settings, who: Option<&(String, String)>, f: impl FnOnce(&str) -> String) {
     let now = options_of(s, who);
-    match who.and_then(|(name, id)| s.input.keyboards.iter_mut().find(|k| k.matches(name, id))) {
+    match who.and_then(|(name, id)| s.input.keyboard_profile_mut(name, id)) {
         Some(k) => k.options = Some(key_options(&f(&now))),
         None => s.input.keyboard.options = f(&now),
     }
@@ -277,7 +277,7 @@ pub fn change_options(s: &mut Settings, who: Option<&(String, String)>, f: impl 
 /// Gives a keyboard its own keys' options, or (`None`) has it type as
 /// other keyboards do.
 fn put_keyboard(s: &mut Settings, k: &KeyboardInfo, options: Option<String>) {
-    match s.input.keyboards.iter_mut().find(|p| p.matches(&k.name, &k.id)) {
+    match s.input.keyboard_profile_mut(&k.name, &k.id) {
         Some(p) => p.options = options,
         None => s.input.keyboards.push(KeyboardProfile {
             name: k.name.clone(),
@@ -769,8 +769,8 @@ impl Keyboard {
             format!("{} types as other keyboards do", k.name)
         };
         self.close_setup(cx);
-        self.keys_of = Some((k.name.clone(), k.id.clone()));
         cx.change(|s| put_keyboard(s, &k, options));
+        self.keys_of = cx.settings().input.keyboard_profile(&k.name, &k.id).map(|p| (p.name.clone(), p.id.clone()));
         cx.say(said);
     }
 
@@ -799,9 +799,10 @@ impl Keyboard {
                 let sources = setup::sources(cx.settings());
                 // A keyboard set up before keeps its own; others start as
                 // other keyboards.
+                let profile = cx.settings().input.keyboard_profile(&k.name, &k.id);
                 st.from = sources
                     .iter()
-                    .position(|s| s.who.as_ref().is_some_and(|(n, i)| k.name == *n && k.id.eq_ignore_ascii_case(i)))
+                    .position(|s| s.who.as_ref().is_some_and(|(n, i)| profile.is_some_and(|p| p.matches(n, i))))
                     .unwrap_or(0);
                 st.modifiers = setup::suggested(&b).unwrap_or_else(|| modifiers::selected(&sources[st.from].options));
                 st.keyboard = Some(k);
@@ -970,7 +971,7 @@ impl Pane for Keyboard {
 
     fn focus_entry(&mut self, entry: &str, cx: &mut PaneCx<Msg>) {
         self.tab = if entry.starts_with("shortcut") || entry == "commands" { Tab::Shortcuts } else { Tab::Typing };
-        // `keyboard.setup`: what the shell opens for a keyboard plugged in,
+        // `keyboard.setup`: the optional keyboard setup sheet,
         // with `--keyboard` naming it.
         if entry != "setup" {
             return;

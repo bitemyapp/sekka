@@ -58,8 +58,8 @@ pub enum AppMsg {
 pub struct Start {
     pub pane: Option<String>,
     pub entry: Option<String>,
-    /// The keyboard to choose in the setup sheet (`--keyboard`, as the
-    /// shell's "Set up …?" names it): “Name (vendor:product)”, or either.
+    /// The keyboard to choose in the setup sheet (`--keyboard`):
+    /// “Name (vendor:product)”, or either.
     pub keyboard: Option<String>,
 }
 

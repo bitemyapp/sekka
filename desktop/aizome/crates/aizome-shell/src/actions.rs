@@ -147,15 +147,8 @@ pub enum Action {
     ShowInMenu {
         trail: String,
     },
-    /// Open Settei's keyboard setup for one keyboard, chosen in its sheet
-    /// (`keyboards.rs`).
+    /// Open Settei's keyboard setup for one keyboard, chosen in its sheet.
     SetUpKeyboard {
-        name: String,
-        id: String,
-    },
-    /// Have a keyboard type as other keyboards do, without setting it up,
-    /// so it isn't asked about again (`keyboards.rs`).
-    KeyboardAsOthers {
         name: String,
         id: String,
     },

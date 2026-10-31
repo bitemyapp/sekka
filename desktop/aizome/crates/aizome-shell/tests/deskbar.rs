@@ -353,22 +353,22 @@ fn auto_hide_resumes_when_a_dragged_app_or_window_disappears() {
 }
 
 #[test]
-fn a_keyboard_offer_s_buttons_fit_under_its_card() {
-    use aizome_ipc::{Event, KeyboardBus, KeyboardInfo};
+fn notification_action_buttons_fit_under_their_card() {
     use aizome_kit::text::{TextCache, TextSpec};
     use aizome_kit::theme::FontSpec;
     use aizome_shell::deskbar::{SHADOW, WIDTH};
+    use aizome_shell::notifications::{server::NoteEvent, store::Incoming};
     let mut h = scene(false);
-    let keyboard = KeyboardInfo {
-        name: "Yubico YubiKey OTP+FIDO+CCID".into(),
-        id: "1050:0407".into(),
-        bus: KeyboardBus::Usb,
-        last: false,
+    let note = Incoming {
+        app_name: "Mail".into(),
+        summary: "New message".into(),
+        actions: vec![("open".into(), "Read…".into()), ("read".into(), "Mark as Read".into())],
+        ..Default::default()
     };
-    h.send(Msg::Ipc(aizome_shell::ipc::IpcEvent::Event(Event::KeyboardAdded { keyboard })));
+    h.send(Msg::Note(NoteEvent::Notify(900, Box::new(note))));
     let db = window_titled(&h, "Deskbar");
     h.resize(db, aizome_shell::deskbar::size(&h.program().deskbar_model()));
-    h.save_png(db, shots().join("deskbar-keyboard-offer.png"), 2.0);
+    h.save_png(db, shots().join("deskbar-notification-actions.png"), 2.0);
     // A compact button's label, with 6 on each side: narrower, it's cut
     // short with an ellipsis.
     let mut cache = TextCache::default();
@@ -376,7 +376,7 @@ fn a_keyboard_offer_s_buttons_fit_under_its_card() {
     font.weight = 500.0;
     let spec = TextSpec::new(font, h.theme().text());
     let mut left = 0.0;
-    for label in ["Set Up…", "Same as Others"] {
+    for label in ["Read…", "Mark as Read"] {
         let r = h.find(db, label).unwrap_or_else(|| panic!("{label} in {:?}", h.texts(db)));
         let w = cache.layout(h.theme(), label, &spec, None).size().width.ceil();
         assert!(r.width() >= w + 12.0, "“{label}” is cut short: {w} wide in {r:?}");

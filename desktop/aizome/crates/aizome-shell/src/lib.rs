@@ -21,7 +21,6 @@ mod greeter;
 pub mod gtk;
 pub mod icons;
 pub mod ipc;
-mod keyboards;
 pub mod launch;
 pub mod location;
 pub mod lock;

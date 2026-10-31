@@ -151,16 +151,16 @@ palette. Search filters the sidebar and highlights options.
   key, nothing; Control, **Swap Control and Super**. The space bar or a
   key right of it asks again. Its Caps Lock and Compose key start as
   other keyboards' or, when there's one, as another keyboard's own.
-  **Same as Other Keyboards** keeps it typing as the others do, without
-  being asked again; while no key has come, it applies to the keyboard
+  **Same as Other Keyboards** keeps it typing as the others do;
+  while no key has come, it applies to the keyboard
   chosen from those plugged in or paired and not set up, for one with no
   space bar to press beside (a security key, a mouse's receiver). Layouts,
-  repeat, Num Lock and shortcuts are every keyboard's. When a USB or
-  Bluetooth keyboard without keys of its own appears (at login, or plugged
-  in), the shell offers this setup in a notification, once a session, or
-  to have it type as the others do; a laptop's own keyboard and a VM's
-  aren't asked about. The notification's **Set Up…** opens the sheet with
-  that keyboard chosen (`--keyboard "Name (vendor:product)"`).
+  repeat, Num Lock and shortcuts are every keyboard's. Setup is optional:
+  new keyboards inherit the shared settings without notifications.
+  A saved profile also covers other interface names with the same
+  vendor/product ID when only one profile has that ID; exact name matches
+  keep priority. `--keyboard "Name (vendor:product)"` opens the setup sheet
+  with that keyboard chosen.
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
   typing, scroll speed.
