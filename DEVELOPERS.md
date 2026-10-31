@@ -2438,9 +2438,10 @@ Nix's default, one at a time, made the first nightly build its 3,400
 derivations in sequence, an hour and a half where most of them could run
 together.
 
-The nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=17179869184`
-(16 GiB) for the Nix client's Boehm garbage collector. Nix's default initial
-heap is 4 GiB; the large NixOS configuration checks repeatedly collected it,
+The nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=34359738368`
+(32 GiB) for the Nix client's Boehm garbage collector. Nix's default initial
+heap is 4 GiB. A 16 GiB heap improved individual checks, but the complete
+flake's live configurations outgrew it and resumed frequent collections,
 spending most of their CPU time in collector workers before builds began.
 The larger initial heap trades memory for fewer collections within the job
 container's 64 GiB allowance. It leaves collector/evaluator threads, build
