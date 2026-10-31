@@ -40,6 +40,58 @@ nix build .#iso --no-update-lock-file --out-link result-iso
 
 The ISO is under `result-iso/iso/`. `nix build .#installed-lock` exposes the lock shipped to the installed machine. `nix fmt` formats Nix files supplied to it.
 
+### Googlebook live media
+
+`nix build .#iso-googlebook --no-update-lock-file --out-link result-googlebook`
+builds experimental x86_64 Depthcharge USB media. `.#iso` remains the PC image.
+The Googlebook configuration reuses the live Aizome system, includes the
+coreboot table/framebuffer modules in the initramfs, and omits Genkan, prebuilt
+installed systems, the application cache and PC boot-menu specialisations.
+Genkan only installs UEFI/BIOS systems; adding Googlebook installation is
+separate work and must not be inferred from live-media support.
+
+`nix/googlebook-kernel.nix` uses the locked Nixpkgs `mkdepthcharge` to package
+the live kernel, its exact initramfs and `init=`/kernel parameters as an x86
+vboot zImage. Its public developer-key signature requires unlocked firmware
+that permits external developer boot. It does not bypass firmware policy.
+The initramfs address and decompression reservation are set by mkdepthcharge;
+KASLR remains enabled. Builds reject payloads exceeding the modern x86
+Depthcharge 512 MiB kernel buffer.
+
+`nix/googlebook-iso.nix` retains the mandatory compressed-store verification,
+then appends a ChromeOS-kernel-type GPT partition to the ISO9660 filesystem.
+The type name comes from vboot's format, not the operating system being booted:
+current Googlebook Depthcharge supports this alongside Android boot images.
+Unlike the PC isohybrid layout, the partitions do not overlap. The builder
+normalizes xorriso's 248-entry GPT to the 128 entries vboot requires, sets the
+kernel's priority to 15 and successful bit (so live boots never exhaust a retry
+counter), then runs Google's `vb2api_load_kernel` host test in developer mode
+against the finished image. Failure fails the build; its log is retained under
+`result-googlebook/nix-support/googlebook-vboot.log`.
+
+Run `nix build .#checks.x86_64-linux.googlebook-iso --no-update-lock-file` for
+the component check. It builds a small ISO through the same builder with a
+real Linux kernel and fixture initramfs, checks both GPT CRCs, partition
+geometry, the partition-relative ISO label, embedded initramfs bytes and x86
+boot parameters. Google's loader must accept it even when the backing file is
+extended to represent a larger USB drive, and reject the ordinary ISO, a
+disabled kernel partition and a corrupted signed payload. Locked mode must
+reject the developer-signed image. It also checks that
+the Googlebook configuration excludes Genkan while PC media retain it.
+
+These are format and signature checks, not a firmware boot or desktop test.
+ASUS Googlebook hardware validation remains outstanding. Before claiming
+support, record the exact model/firmware, image hash, external-boot result,
+initramfs/store mount, Aizome session and device functionality. Generic QEMU
+UEFI/BIOS boot cannot validate the Depthcharge path. This target does not
+change nightly publication or certify an installable release.
+
+Format references: Google's [Depthcharge x86 boot path](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/arch/x86/boot.c),
+[kernel buffer limits](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/image/Kconfig),
+and [vboot GPT validation](https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/72043688a9842a31a92e4829fe71ee94c4939fc8/firmware/lib/cgptlib/cgptlib_internal.c).
+
+### Component development
+
 The [migration record](docs/migration.md) explains retained work, exclusions,
 compatibility tags and the limits of the migration validation. To exercise the
 generated installed flake directly, build the fixture and run the template test:

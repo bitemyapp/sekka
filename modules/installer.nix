@@ -49,6 +49,11 @@ in
     ../installer/genkan/rust/system/wpa-supplicant
   ];
   options.respin = {
+    enableInstaller = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Include and start Genkan. Disable for live media whose installed boot format Genkan does not support.";
+    };
     referenceDesktops = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [
@@ -124,12 +129,14 @@ in
     environment.systemPackages = [
       pkgs.file
       inputs.fh.packages.${pkgs.stdenv.hostPlatform.system}.default
-      calamares
       diagnostics
       # Small interactive diagnostics, also used to prove real GUI event delivery
       # in our disposable VM tests (not merely successful QMP commands).
       pkgs.xev
       pkgs.xwininfo
+    ]
+    ++ lib.optionals config.respin.enableInstaller [
+      calamares
       (pkgs.makeAutostartItem {
         name = "org.calamares.NixOSRust";
         package = calamares;
@@ -142,7 +149,7 @@ in
     security.polkit.enablePkexecWrapper = true;
     security.polkit.extraConfig = lib.mkForce ''
       polkit.addRule(function(action, subject) {
-        if (action.id == "org.calamares.nixos.install" &&
+        if (${lib.boolToString config.respin.enableInstaller} && action.id == "org.calamares.nixos.install" &&
             subject.user == "nixos" && subject.local && subject.active) {
           return polkit.Result.YES;
         }
