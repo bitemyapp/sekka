@@ -449,9 +449,11 @@ copies left by the old package, preserving executable bits and leaving symlink
 targets alone. It serializes overlapping copies and leaves `.mcp.json` for the
 caller to generate, so another refresh cannot make that file read-only during
 a write. The ASAR patch preserves byte offsets and fails unless exactly
-one expected copy call matches. The upstream package already repairs the
-separate marketplace plugin copy; this covers the executor's copy. Review the
-patch when updating the app, and remove it when upstream fixes that path.
+one expected copy call matches. It recognizes both the original executor copy
+and the refreshed upstream package's directory/chmod repair, replacing either
+with Sekka's serialized, manifest-preserving helper. Upstream's repair alone
+still copies the read-only manifest during overlapping refreshes. Review the
+patch when updating the app, and remove it when upstream covers these cases.
 
 ```sh
 nix build .#chatgpt .#checks.x86_64-linux.chatgpt-plugins --no-update-lock-file

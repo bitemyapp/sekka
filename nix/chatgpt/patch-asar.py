@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Repair the executor's plugin copy without moving ASAR file offsets.
 
-The upstream package repairs the marketplace copy, but the executor copies
-codex-app-tools separately. Linux has no Windows command-path exception; use
-that space for a helper outside the archive. Fail when the upstream code changes
-so a package update cannot silently drop the fix.
+The executor copies codex-app-tools separately from the marketplace. Handle
+both the original copy and upstream's newer chmod-based repair: Sekka's helper
+also serializes overlapping copies and leaves the manifest writable. Fail on
+unrecognized code so a package update cannot silently drop those guarantees.
 """
 
 import re
@@ -15,10 +15,23 @@ COPY = re.compile(
     rb"await [\w$]+\.default\.cp\((?P<config>[\w$]+)\.cwd,"
     rb"(?P<dest>[\w$]+),\{recursive:!0\}\),process\.platform!==`win32`&&"
 )
+# The refreshed ai-apps package repairs the executor's directory permissions
+# before fs.cp and runs chmod afterwards. Replace that whole operation with
+# our serialized helper; retain upstream's subsequent command-path rewrite.
+COPY_UPSTREAM_WRITABLE = re.compile(
+    rb"await [\w$]+\((?P<dest>[\w$]+)\),"
+    rb"await [\w$]+\.default\.cp\((?P<config>[\w$]+)\.cwd,"
+    rb"(?P=dest),\{recursive:!0\}\),"
+    rb"await [\w$]+\(`chmod`,\[`-R`,`u\+w`,(?P=dest)\]\),"
+)
 
 
 def patch(data: bytes) -> bytes:
-    matches = list(COPY.finditer(data))
+    matches = [
+        match
+        for pattern in (COPY, COPY_UPSTREAM_WRITABLE)
+        for match in pattern.finditer(data)
+    ]
     if len(matches) != 1:
         raise ValueError(f"expected one executor plugin copy, found {len(matches)}")
     match = matches[0]
