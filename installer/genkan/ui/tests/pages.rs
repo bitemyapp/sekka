@@ -4,12 +4,13 @@
 //! draws and says what it should, and the checks between steps hold.
 //!
 //! `GENKAN_PICTURES=dir` also writes each page, in Night and Day, there.
+use aizome_ipc::{KeyboardBus, KeyboardInfo};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Point, WindowKey};
-use calamares_nixos::applications;
+use calamares_nixos::{SuperKey, applications};
 use genkan::Step;
-use genkan::app::{Field, Genkan, Msg, StepState};
+use genkan::app::{Field, Genkan, KeyCheck, Msg, StepState};
 
 fn open_in(page: &str, theme: ThemeChoice) -> (Harness<Genkan>, WindowKey) {
     let appearance = Appearance {
@@ -30,7 +31,7 @@ fn says(h: &Harness<Genkan>, w: WindowKey, what: &str) -> bool {
     h.texts(w).iter().any(|t| t.contains(what))
 }
 
-const PAGES: [(&str, &str); 13] = [
+const PAGES: [(&str, &str); 14] = [
     ("welcome", "This installer erases one whole disk"),
     ("disk", "Samsung SSD 990 PRO 1TB"),
     ("account", "Create Your Account"),
@@ -41,6 +42,7 @@ const PAGES: [(&str, &str); 13] = [
     ("desktop", "Choose Your Desktops"),
     ("applications", "application selected"),
     ("location", "Time Zone and Language"),
+    ("keyboard", "Beside the space bar: ⌥ Alt (Option)"),
     (
         "review",
         "Everything on Samsung SSD 990 PRO 1TB will be erased",
@@ -93,7 +95,7 @@ fn get_started_goes_to_the_disk() {
     let (mut h, w) = open("welcome");
     assert!(h.click_text(w, "Get Started"));
     assert_eq!(h.program().step, Step::Disk);
-    assert!(says(&h, w, "Step 1 of 8"));
+    assert!(says(&h, w, "Step 1 of 9"));
 }
 
 #[test]
@@ -301,7 +303,7 @@ fn a_finished_installation_offers_shutting_down() {
 
 #[test]
 fn the_review_goes_back_to_the_first_step_that_fails() {
-    let (mut h, w) = open("location");
+    let (mut h, w) = open("keyboard");
     h.send(Msg::Password("short".into()));
     h.send(Msg::Encrypt(true));
     h.send(Msg::Next);
@@ -318,4 +320,82 @@ fn super_a_selects_a_field_to_type_over() {
     h.command(w, 'a');
     h.type_text(w, "rust-test");
     assert_eq!(h.program().hostname, "rust-test");
+}
+
+#[test]
+fn the_location_goes_on_to_the_keyboard_and_the_keyboard_to_the_review() {
+    let (mut h, w) = open("location");
+    assert!(
+        !says(&h, w, "Keyboard layout"),
+        "the layout is the keyboard step's"
+    );
+    h.send(Msg::Next);
+    assert_eq!(h.program().step, Step::Keyboard);
+    assert!(says(&h, w, "Set Up Your Keyboard"));
+    assert!(says(&h, w, "Keyboard layout"));
+    assert_eq!(h.program().next_label(), "Review");
+    h.send(Msg::Back);
+    assert_eq!(h.program().step, Step::Location);
+    assert_eq!(h.program().next_label(), "Next");
+}
+
+#[test]
+fn the_key_beside_the_space_bar_is_suggested_as_super_and_can_be_kept() {
+    let (mut h, w) = open("keyboard");
+    // The sample's ThinkPad has Alt there: Genkan suggests the swap.
+    assert_eq!(h.program().super_key, SuperKey::SwapAlt);
+    assert!(says(&h, w, "AT Translated Set 2 keyboard"));
+    assert!(says(&h, w, "Swap Alt and Super to put ❖ there"));
+    assert!(says(&h, w, "Genkan swaps them on the installed system."));
+    // Declined, it says what stays.
+    h.send(Msg::SuperKey(0));
+    assert_eq!(h.program().super_key, SuperKey::AsIs);
+    assert!(says(&h, w, "Kept as they are"));
+    h.send(Msg::SuperKey(1));
+    assert_eq!(h.program().super_key, SuperKey::SwapAlt);
+
+    // A Mac keyboard has ❖ there already: nothing to swap.
+    h.program_mut().caught(
+        125,
+        Some(KeyboardInfo {
+            name: "Apple Inc. Magic Keyboard".into(),
+            id: "05ac:029c".into(),
+            bus: KeyboardBus::Bluetooth,
+            last: true,
+        }),
+    );
+    h.send(Msg::Dismissed);
+    assert_eq!(h.program().super_key, SuperKey::AsIs);
+    assert!(says(&h, w, "❖ is there already, as on a Mac"));
+    assert!(!says(&h, w, "Kept as they are"));
+    // A PC keyboard's Control there, from IPC (no keyboard named).
+    h.program_mut().caught(29, None);
+    h.send(Msg::Dismissed);
+    assert_eq!(h.program().super_key, SuperKey::SwapControl);
+    assert!(says(&h, w, "Your keyboard"));
+    // A key that can't be ❖ leaves the choice as it was.
+    h.program_mut().caught(94, None);
+    h.send(Msg::Dismissed);
+    assert_eq!(h.program().super_key, SuperKey::SwapControl);
+    assert_eq!(h.program().key_check.clone(), {
+        let beside = aizome_ipc::setup::beside_space(94).unwrap();
+        KeyCheck::Caught {
+            keyboard: None,
+            beside,
+        }
+    });
+    // Previews never wait for a key on their own: the compositor would hold
+    // back the next key from every app.
+    assert_ne!(h.program().key_check, KeyCheck::Waiting);
+}
+
+#[test]
+fn the_review_lists_the_modifier_keys() {
+    let (h, _) = open("ready");
+    let review = h.program().review.as_ref().expect("the sample review");
+    assert_eq!(review.super_key, SuperKey::SwapAlt);
+    assert_eq!(
+        Genkan::super_key_name(review.super_key),
+        "Swap Alt and Super"
+    );
 }

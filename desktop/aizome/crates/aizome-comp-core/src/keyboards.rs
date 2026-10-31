@@ -79,7 +79,11 @@ impl KeymapSpec {
             model: &self.model,
             layout: &self.layout,
             variant: &self.variant,
-            options: if self.options.is_empty() { None } else { Some(self.options.clone()) },
+            // Always given, even empty: libxkbcommon reads no options as
+            // the session's XKB_DEFAULT_OPTIONS (the system's swap, say),
+            // which settings without options, or a keyboard set up to keep
+            // its keys, mean to clear. Unset settings already start from it.
+            options: Some(self.options.clone()),
         }
     }
 }
@@ -237,6 +241,19 @@ mod tests {
         assert_eq!(bus(Some(0x03), 0x0627), KeyboardBus::Other, "QEMU's USB keyboard");
         assert_eq!(bus(None, 0x046d), KeyboardBus::Other);
         assert_eq!(Keyboard::new("K", 0x5ac, 0x29c, KeyboardBus::Usb).id, "05ac:029c");
+    }
+
+    #[test]
+    fn no_options_are_no_options_not_the_sessions_default() {
+        let spec = |options: &str| KeymapSpec {
+            layout: "us".into(),
+            variant: String::new(),
+            model: String::new(),
+            options: options.into(),
+        };
+        // None would let libxkbcommon put XKB_DEFAULT_OPTIONS back.
+        assert_eq!(spec("").xkb().options, Some(String::new()));
+        assert_eq!(spec("altwin:swap_alt_win").xkb().options.as_deref(), Some("altwin:swap_alt_win"));
     }
 
     #[test]

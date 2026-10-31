@@ -73,6 +73,8 @@ let
       (aizome + "/crates/aizome-theme")
       (aizome + "/crates/aizome-config")
       (aizome + "/crates/aizome-shell-proto")
+      # The compositor's IPC, for the keyboard step's key.
+      (aizome + "/crates/aizome-ipc")
       # Sukumo, which the kit draws with: its workspace manifest and crates.
       (aizome + "/sukumo/Cargo.toml")
       (aizome + "/sukumo/crates")

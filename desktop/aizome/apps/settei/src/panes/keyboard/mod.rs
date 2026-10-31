@@ -802,7 +802,7 @@ impl Keyboard {
                     .iter()
                     .position(|s| s.who.as_ref().is_some_and(|(n, i)| k.name == *n && k.id.eq_ignore_ascii_case(i)))
                     .unwrap_or(0);
-                st.modifiers = b.suggest.unwrap_or_else(|| modifiers::selected(&sources[st.from].options));
+                st.modifiers = setup::suggested(&b).unwrap_or_else(|| modifiers::selected(&sources[st.from].options));
                 st.keyboard = Some(k);
                 st.beside = Some(b);
                 st.error = None;

@@ -13,9 +13,10 @@ The new implementation is GPL-3.0-or-later. It has no upstream endorsement.
 ## Supported first-release workflow
 
 - x86_64 NixOS live ISO; network connection required. The live desktop is Aizome.
-- Multi-select installed desktops: the Wayland desktops Aizome (default),
-  Plasma, GNOME, vanilla Hyprland and Tatami (a Hyprland desktop inspired by Omarchy),
-  and Xfce as the one X11 desktop, with an explicit default login session.
+- Multi-select installed desktops: the Wayland desktops Aizome, Plasma, GNOME,
+  vanilla Hyprland and Tatami (a Hyprland desktop inspired by Omarchy), and
+  Xfce as the one X11 desktop, with an explicit default login session. Aizome
+  and Tatami start selected, with Aizome the default session.
   MATE, LXQt and Cinnamon are no longer offered; the NixOS module still
   accepts them, so systems installed with them keep working.
 - Every desktop offers Tatami's wallpapers from one copy of each image, and
@@ -37,6 +38,10 @@ The new implementation is GPL-3.0-or-later. It has no upstream endorsement.
 - Hostname, normal user with sudo, password, full name, time zone, a selection
   of eight system locales and keyboard layouts. Allowing unfree packages is
   enabled by default, with an explicit checkbox opt-out and review summary.
+- A keyboard step that asks for the key just left of the space bar, through
+  Aizome's compositor, and suggests swapping it with Super (❖) when it's Alt
+  or Control (`services.xserver.xkb.options`); the person can keep the keys
+  as they are.
 - An optional GitHub step: the public SSH keys of a GitHub account as the
   user's authorized keys, the OpenSSH server, and Git's name and email address
   (see [GitHub, SSH and Git](#github-ssh-and-git)).

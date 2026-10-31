@@ -38,6 +38,8 @@ with tempfile.TemporaryDirectory(prefix='sekka-installed-template-') as director
     for name in ['aizome', 'aizome-tatami', 'aizome-plasma-gnome-xfce-hyprland-tatami',
                  'plasma', 'tatami', 'gnome-xfce', 'encrypted-uefi', 'encrypted-bios']:
         (target / 'configuration.nix').write_text(cases[name])
+        # The desktops' cases put ❖ beside the space bar, as Genkan suggests.
+        assert ('services.xserver.xkb.options = "altwin:swap_alt_win";' in cases[name]) == (not name.startswith('encrypted-')), name
         derivation = command('nix', 'eval', '--no-update-lock-file', '--raw',
                              f'path:{target}#nixosConfigurations.sekka-test.config.system.build.toplevel.drvPath')
         assert derivation.endswith('.drv'), derivation

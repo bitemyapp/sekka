@@ -1051,11 +1051,54 @@ while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
 Aizome's type and `TZDIR` for the map; the package's check phase sets both.
 `GENKAN_PICTURES=dir` also writes each page in Night and Day.
 
-In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|review|ready|prepfail|install|done|failed`
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
 opens the window on that page with sample data, touching no disks, network or
 helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
 neither. Outside the live media only previews are useful: reviewing reads the
 media's root-owned settings and starts the helper through Polkit.
+
+Genkan's window has the app ID of the GTK interface it replaced,
+`org.calamares.NixOSRust`, so Aizome's compositor names it alongside its own
+`org.aizome.…` apps in `aizome-comp-logic/src/cmdkey.rs`: kit apps take ❖ as
+is. Without that, the compositor turned ❖A into Ctrl+A for Genkan, and the
+kit's text fields, which select all with ❖A, selected nothing.
+
+### The keyboard step
+
+The Keyboard step asks for the key just left of the space bar as it opens:
+the compositor catches the next key for Genkan with its keyboard
+(`catch-key`, as Settei's keyboard setup asks; `aizome_ipc::setup` has the
+shared catching and the wording), so no app hears it and a modifier key alone
+counts. Esc, Stop, or leaving the step gives the wait up, since every app
+loses its keys meanwhile; previews never wait unasked. Alt there suggests
+swapping Alt and Super, Control swapping Control and Super, ❖ nothing, and
+the person can keep the keys as they are. Outside Aizome the step says it
+can't hear the key and offers the choice alone.
+
+The request carries the answer as a closed choice (`SuperKey`, `super_key`),
+and the configuration gets `services.xserver.xkb.options` only for a swap.
+That one setting reaches every keyboard: the console, the login screen,
+Tatami's Hyprland, X11 sessions, and Aizome's session, which starts from the
+system's keyboard (`XKB_DEFAULT_*`, see [Aizome and IBus](#aizome-and-ibus))
+until Settings changes it. Keyboards plugged in later still get Aizome's
+offer to set up keys of their own. The compositor gives libxkbcommon every
+keymap's options, empty ones included: given none, libxkbcommon reads
+`XKB_DEFAULT_OPTIONS`, and the system's swap came back for settings that
+cleared it and for a Mac keyboard set up to keep its ⌘.
+
+```sh
+nix build .#checks.x86_64-linux.genkan-keyboard -L
+```
+
+The check boots an Aizome VM with the modules installed systems import and
+the swap Genkan writes. It presses QEMU's keys: Alt and A select all in
+Genkan's text fields, as ❖ does once the person's settings undo the swap (as
+in the live session); the keyboard step refuses the space bar, suggests the
+swap for Alt, takes it being declined, stops at Esc and suggests the Control
+swap for Control. Hotaru and foot run fish, which no application brought.
+The fixture installs with the swap (`CALAMARES_TEST_SUPER_KEY=as-is` opts
+out) and checks it in the installed configuration and Aizome's session
+environment.
 
 ## Aizome
 
@@ -2060,34 +2103,53 @@ start the patched wpa_supplicant over D-Bus.
 
 ## Omarchy's fish configuration
 
-The catalog's fish choice builds Omarchy's `omarchy-fish` package
+Terminals open in fish, set up as Omarchy sets it up, wherever Aizome is
+installed: `calamares.fish.enable` (`installer/genkan/rust/system/fish`,
+imported with the application catalog) defaults on when `calamares.desktops`
+has Aizome. It was a catalog application; it isn't one any more. Other
+desktops keep bash, as Omarchy does (its fish is the opt-in `omarchy-fish`),
+and Tatami follows Omarchy; GNOME, Plasma, Xfce and Hyprland stay stock. The
+handover is system-wide, so with Aizome beside another desktop, that one's
+terminals open fish too. Yukimi offers the setting (Terminal shell) to turn
+it off with Aizome or on without. `calamares.applications` still accepts
+`"fish"`, which a system that chose it keeps and which turns the setting on;
+the manifest and Yukimi's Discover no longer list it.
+
+The setting builds Omarchy's `omarchy-fish` package
 (`installer/genkan/rust/system/fish/package.nix`) as omarchy-pkgs'
 `pkgbuilds/omarchy-fish/PKGBUILD` does: the omarchy-fish and fzf.fish releases
 it names, whose tarballs match its SHA-256 sums, in fish's vendor directories,
 with omarchy-fish's history search replacing fzf.fish's. The PKGBUILD's
-dependencies are the catalog entry's packages. `starship.toml` beside it is
+dependencies (eza, mise, zoxide, starship, fzf, fd, bat) come from the
+applications' Nixpkgs. `starship.toml` beside it is
 Omarchy's prompt, unchanged; fish exports `STARSHIP_CONFIG` for it unless the
-person has a `~/.config/starship.toml`.
+person has a `~/.config/starship.toml`. Hotaru starts fish itself, from the
+system profile; foot starts bash, which hands over.
 
 Omarchy keeps bash as the login shell, and `omarchy-setup-fish` gives
-`~/.bashrc` a test that starts fish. `applications.nix` puts the same test at
+`~/.bashrc` a test that starts fish. The module puts the same test at
 the start of `/etc/bashrc`'s interactive part. It skips root, `bash -c`, bash
 started from fish, and shells with `SHLVL` above 1, so `nix develop` and
 `nix-shell` stay in bash. NixOS's `ls`, `ll` and `l` aliases are removed from
 fish, where Omarchy has none and its `ls` function would be hidden. NixOS's
 fish module still generates completions from each installed package's manual
 pages. These are small local builds, which Determinate Nix downloads instead
-when Sekka's cache has them; the all-applications reference system includes
+when Sekka's cache has them; the media's Aizome reference systems include
 fish.
 
 ```sh
-nix build .#checks.x86_64-linux.fish --no-update-lock-file
+nix build .#checks.x86_64-linux.fish-default .#checks.x86_64-linux.fish --no-update-lock-file
 ```
 
-The check logs in on a disposable VM's console. It checks that bash handed
-over to fish, with Omarchy's settings, functions, fzf.fish bindings, zoxide,
-mise, eza and prompt, and that `cd` falls back to zoxide. `bash -c`, root's
-interactive bash, and bash started from fish stay in bash.
+`fish-default` evaluates where the setting is on: Aizome alone or beside
+Tatami, the former application with Tatami, and not Tatami or Plasma alone or
+Aizome with it turned off, with the Yukimi choice and the manifest. `fish`
+logs in on a disposable VM's console, on a system that chose the former
+application. It checks that bash handed over to fish, with Omarchy's
+settings, functions, fzf.fish bindings, zoxide, mise, eza and prompt, and
+that `cd` falls back to zoxide. `bash -c`, root's interactive bash, and bash
+started from fish stay in bash. `genkan-keyboard` checks that Hotaru and foot
+run fish in an Aizome session.
 
 To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
 with these files. Update the tags and hashes

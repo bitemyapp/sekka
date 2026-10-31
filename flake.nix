@@ -617,6 +617,12 @@
           applicationsModule = inputs.calamares.nixosModules.applications;
           inherit (applicationCatalog.specialArgs) applicationPkgs;
         };
+        fish-default = import ./nix/fish-default-test.nix { inherit pkgs inputs applicationCatalog; };
+        genkan-keyboard = import ./nix/genkan-keyboard-test.nix {
+          inherit pkgs;
+          genkan = calamares;
+          sekkaModule = inputs.calamares.nixosModules.default;
+        };
         keep-awake = import ./nix/keep-awake-test.nix {
           inherit pkgs;
           inherit (self.packages.${system}) tatami;

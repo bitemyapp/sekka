@@ -297,6 +297,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
                 property("Language", review.locale.clone()),
                 property("Time zone", zone(app, review)),
                 property("Keyboard layout", review.keyboard.clone()),
+                property("Modifier keys", Genkan::super_key_name(review.super_key)),
             ],
         ),
         group(

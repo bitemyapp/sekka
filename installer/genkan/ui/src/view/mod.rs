@@ -20,6 +20,7 @@ mod desktop;
 mod disk;
 mod github;
 mod install;
+mod keyboard;
 mod location;
 pub mod map;
 pub mod partitions;
@@ -40,6 +41,7 @@ pub fn view(app: &Genkan) -> Element<Msg> {
         Step::Desktop => desktop::page(app),
         Step::Applications => applications::page(app),
         Step::Location => location::page(app),
+        Step::Keyboard => keyboard::page(app),
         Step::Review => review::page(app),
         Step::Install if app.completed => install::done(app),
         Step::Install => install::page(app),

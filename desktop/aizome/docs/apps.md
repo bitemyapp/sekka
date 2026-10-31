@@ -135,7 +135,8 @@ palette. Search filters the sidebar and highlights options.
   In Typing → Keys → Modifier keys, choose **Swap Alt and Super** for a
   Mac-style position, or the left-only swap to keep Right Alt for accents.
   Changes apply immediately and persist across logins; **Default**
-  restores the modifier arrangement. Open this control directly with
+  restores the modifier arrangement. Until changed here, layouts and
+  options are the system's (`services.xserver.xkb`, which Genkan writes). Open this control directly with
   `aizome-settei --pane keyboard.modifiers`.
   The modifier keys, Caps Lock and Compose key can differ from keyboard to
   keyboard: Keys → Keyboard chooses whose they are, every keyboard's

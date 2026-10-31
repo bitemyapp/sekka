@@ -9,11 +9,12 @@
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
 use crate::{format::size, media, zone};
+use aizome_ipc::{KeyboardInfo, setup::Beside};
 use aizome_kit::cx::MsgSender;
 use aizome_kit::prelude::*;
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, InstallPlan, KEYBOARDS, LOCALES, RawRequest, Settings,
-    Username, applications,
+    SuperKey, Username, applications,
     disk::{self, Disk, Layout},
     github::{self, GitIdentity, GithubUser},
     install::{Event, Summary},
@@ -28,7 +29,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -44,11 +45,12 @@ pub enum Step {
     Desktop,
     Applications,
     Location,
+    Keyboard,
     Review,
     Install,
 }
 impl Step {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Welcome,
         Self::Disk,
         Self::Account,
@@ -56,6 +58,7 @@ impl Step {
         Self::Desktop,
         Self::Applications,
         Self::Location,
+        Self::Keyboard,
         Self::Review,
         Self::Install,
     ];
@@ -68,6 +71,7 @@ impl Step {
             Self::Desktop => "Desktop",
             Self::Applications => "Applications",
             Self::Location => "Location",
+            Self::Keyboard => "Keyboard",
             Self::Review => "Review",
             Self::Install => "Install",
         }
@@ -81,6 +85,7 @@ impl Step {
             Self::Desktop => "Choose Your Desktops",
             Self::Applications => "Choose Applications",
             Self::Location => "Time Zone and Language",
+            Self::Keyboard => "Set Up Your Keyboard",
             Self::Review => "Review and Confirm",
             Self::Install => "Installing",
         }
@@ -94,6 +99,7 @@ impl Step {
             Self::Desktop => Icon::Monitor,
             Self::Applications => Icon::LayoutGrid,
             Self::Location => Icon::MapPin,
+            Self::Keyboard => Icon::Keyboard,
             Self::Review => Icon::ListChecks,
             Self::Install => Icon::HardDriveDownload,
         }
@@ -108,6 +114,7 @@ impl Step {
             Self::Desktop => "desktop",
             Self::Applications => "applications",
             Self::Location => "location",
+            Self::Keyboard => "keyboard",
             Self::Review => "review",
             Self::Install => "install",
         }
@@ -183,6 +190,30 @@ pub const GITHUB_HINT: &str = "Optional. Press Return or Look Up to fetch the ac
 
 /// How long a note stays in the bar at the bottom.
 const NOTE_FOR: Duration = Duration::from_secs(6);
+
+/// The modifier arrangements the keyboard step offers, in
+/// `SuperKey::ALL`'s order, named as Settei names them.
+pub const SUPER_KEY_NAMES: [&str; 3] = [
+    "As They Are",
+    "Swap Alt and Super",
+    "Swap Control and Super",
+];
+
+/// The keyboard step's question: the key just left of the space bar.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KeyCheck {
+    /// Not asked yet, or Esc or Stop gave up on it.
+    Asking,
+    /// The compositor is catching the next key for Genkan.
+    Waiting,
+    /// The key, and the keyboard it came from (none for a key from IPC).
+    Caught {
+        keyboard: Option<KeyboardInfo>,
+        beside: Beside,
+    },
+    /// The key can't be caught here (outside Aizome): why.
+    Unavailable(String),
+}
 
 /// A field a failed check points at: it's outlined in red and focused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,8 +333,15 @@ pub enum Msg {
     Zone(u64, Result<timezone::Detection, String>),
     Internet(bool),
     Locale(usize),
-    Keyboard(usize),
     ZoneClock,
+    // Keyboard.
+    Keyboard(usize),
+    /// Wait for the key beside the space bar, or stop waiting.
+    ListenForKey,
+    StopListening,
+    /// Wait `n`'s key: its evdev code and keyboard, or `None` if given up on.
+    KeyCaught(u64, Result<Option<(u32, Option<KeyboardInfo>)>, String>),
+    SuperKey(usize),
     // Page cache warming.
     WarmStart(u64),
     Warm {
@@ -340,6 +378,7 @@ pub struct Review {
     pub locale: String,
     pub timezone: String,
     pub keyboard: String,
+    pub super_key: SuperKey,
     pub desktops: Vec<Desktop>,
     pub default_desktop: Desktop,
     pub applications: String,
@@ -377,6 +416,7 @@ impl Review {
             locale: plan.locale().into(),
             timezone: plan.timezone().as_str().into(),
             keyboard: plan.keyboard().into(),
+            super_key: plan.super_key(),
             desktops: plan.desktops().selected().to_vec(),
             default_desktop: plan.desktops().default(),
             applications: plan.applications().names(),
@@ -509,7 +549,17 @@ pub struct Genkan {
     pub zone_clock: Option<zone::Clock>,
     pub internet: bool,
     pub locale: usize,
+
+    // Keyboard.
     pub keyboard: usize,
+    /// The key just left of the space bar: waited for, or what it was.
+    pub key_check: KeyCheck,
+    /// A key that wasn't the one asked for, said while waiting again.
+    pub key_error: Option<String>,
+    /// The wait going on; moving it on gives that wait up.
+    key_waits: Arc<AtomicU64>,
+    /// What the installed system makes of that key.
+    pub super_key: SuperKey,
 
     // Review.
     pub reviewing: bool,
@@ -601,7 +651,8 @@ impl Genkan {
             git_email: String::new(),
             git_name_edited: false,
             git_email_edited: false,
-            desktops: vec![Desktop::Aizome],
+            // Aizome, logged in to by default, and Tatami beside it.
+            desktops: vec![Desktop::Aizome, Desktop::Tatami],
             default_choice: Some(Desktop::Aizome),
             wifi: true,
             unfree: calamares_nixos::DEFAULT_ALLOW_UNFREE,
@@ -624,6 +675,10 @@ impl Genkan {
             internet: true,
             locale: 0,
             keyboard: 0,
+            key_check: KeyCheck::Asking,
+            key_error: None,
+            key_waits: Arc::default(),
+            super_key: SuperKey::AsIs,
             reviewing: false,
             generation: 0,
             session: None,
@@ -691,6 +746,15 @@ impl Genkan {
         {
             self.detect_zone(cx);
         }
+        // The keyboard step asks for its key as it opens, and stops asking
+        // when it's left: the compositor holds back the next key from every
+        // app while Genkan waits for it.
+        if step != Step::Keyboard {
+            self.stop_listening();
+        } else if self.step != step && self.key_check == KeyCheck::Asking && self.preview.is_none()
+        {
+            self.listen_for_key();
+        }
         self.step = step;
         if step > self.reached {
             self.reached = step;
@@ -707,11 +771,11 @@ impl Genkan {
 
     /// Whether the sidebar's row for `step` can be chosen.
     pub fn reachable(&self, step: Step) -> bool {
-        step == self.step || (!self.locked() && step <= self.reached && step <= Step::Location)
+        step == self.step || (!self.locked() && step <= self.reached && step <= Step::Keyboard)
     }
 
     fn jump(&mut self, step: Step, cx: &mut Cx<Msg>) {
-        if !self.locked() && step <= self.reached && step <= Step::Location {
+        if !self.locked() && step <= self.reached && step <= Step::Keyboard {
             self.go(step, cx);
         }
     }
@@ -724,8 +788,8 @@ impl Genkan {
     pub fn next_label(&self) -> &'static str {
         match self.step {
             Step::Welcome => "Get Started",
-            Step::Location if self.reviewing => "Checking…",
-            Step::Location => "Review",
+            Step::Keyboard if self.reviewing => "Checking…",
+            Step::Keyboard => "Review",
             Step::Review => "Erase Disk and Install",
             Step::Install => "Close Installer",
             _ => "Next",
@@ -758,7 +822,8 @@ impl Genkan {
             }
             Step::Desktop => self.check_desktops().map(|()| Step::Applications),
             Step::Applications => Ok(Step::Location),
-            Step::Location => {
+            Step::Location => Ok(Step::Keyboard),
+            Step::Keyboard => {
                 self.start_review(cx);
                 return;
             }
@@ -789,7 +854,7 @@ impl Genkan {
                 // Withdraw the unconfirmed request; nothing was written.
                 self.session.take();
                 self.generation += 1;
-                self.go(Step::Location, cx);
+                self.go(Step::Keyboard, cx);
                 self.schedule_warm(cx);
             }
             step => self.go(Step::ALL[step.index() - 1], cx),
@@ -1318,6 +1383,74 @@ impl Genkan {
 
     // ---- Speculative caching ----------------------------------------------
 
+    // ---- Keyboard ---------------------------------------------------------
+
+    /// Ask the compositor for the next key, on a thread of its own (the wait
+    /// lasts until a key comes or it's given up on), as Settei's keyboard
+    /// setup does.
+    pub fn listen_for_key(&mut self) {
+        let Some(send) = self.sender.clone() else {
+            return;
+        };
+        let n = self.key_waits.fetch_add(1, Ordering::SeqCst) + 1;
+        let waits = self.key_waits.clone();
+        self.key_check = KeyCheck::Waiting;
+        thread::spawn(move || {
+            let tag = format!("genkan-{}-{n}", std::process::id());
+            let caught = aizome_ipc::setup::catch_key(&tag, || waits.load(Ordering::SeqCst) != n);
+            send.send(Msg::KeyCaught(n, caught));
+        });
+    }
+
+    /// Give the wait up, if there is one; the key stays unasked.
+    fn stop_listening(&mut self) {
+        self.key_waits.fetch_add(1, Ordering::SeqCst);
+        self.key_error = None;
+        if self.key_check == KeyCheck::Waiting {
+            self.key_check = KeyCheck::Asking;
+        }
+    }
+
+    /// Wait `n` answered.
+    fn key_caught(&mut self, n: u64, caught: Result<Option<(u32, Option<KeyboardInfo>)>, String>) {
+        if n != self.key_waits.load(Ordering::SeqCst) || self.key_check != KeyCheck::Waiting {
+            return;
+        }
+        match caught {
+            Ok(None) => {}
+            Ok(Some((aizome_ipc::setup::ESCAPE, _))) => self.stop_listening(),
+            Ok(Some((code, keyboard))) => self.caught(code, keyboard),
+            Err(error) => {
+                self.key_error = None;
+                self.key_check = KeyCheck::Unavailable(error);
+            }
+        }
+    }
+
+    /// The key beside the space bar came: what it is says where ❖ goes, and
+    /// Genkan suggests the arrangement that puts it there. The space bar, or
+    /// a key right of it, asks again.
+    pub fn caught(&mut self, code: u32, keyboard: Option<KeyboardInfo>) {
+        match aizome_ipc::setup::beside_space(code) {
+            Err(again) => {
+                self.key_error = Some(again.into());
+                self.listen_for_key();
+            }
+            Ok(beside) => {
+                if let Some(key) = beside.suggest.and_then(SuperKey::from_xkb_options) {
+                    self.super_key = key;
+                }
+                self.key_error = None;
+                self.key_check = KeyCheck::Caught { keyboard, beside };
+            }
+        }
+    }
+
+    /// What the review says of the key beside the space bar.
+    pub fn super_key_name(key: SuperKey) -> &'static str {
+        SUPER_KEY_NAMES[SuperKey::ALL.iter().position(|k| *k == key).unwrap_or(0)]
+    }
+
     fn stop_warm(&mut self, cx: &mut Cx<Msg>) {
         if let Some(timer) = self.warm_timer.take() {
             cx.cancel(timer);
@@ -1439,6 +1572,7 @@ impl Genkan {
                 .get(self.keyboard)
                 .unwrap_or(&KEYBOARDS[0])
                 .to_string(),
+            super_key: self.super_key,
             desktops: self.desktops.clone(),
             default_desktop: self.default_choice.unwrap_or(Desktop::Aizome),
             applications: self.selected_apps(),
@@ -2028,6 +2162,17 @@ impl Program for Genkan {
             }
             Msg::Locale(index) => self.locale = index.min(LOCALES.len() - 1),
             Msg::Keyboard(index) => self.keyboard = index.min(KEYBOARDS.len() - 1),
+            Msg::ListenForKey => {
+                if self.step == Step::Keyboard {
+                    self.key_error = None;
+                    self.listen_for_key();
+                }
+            }
+            Msg::StopListening => self.stop_listening(),
+            Msg::KeyCaught(n, caught) => self.key_caught(n, caught),
+            Msg::SuperKey(index) => {
+                self.super_key = SuperKey::ALL[index.min(SuperKey::ALL.len() - 1)]
+            }
             Msg::ZoneClock => {
                 if self.step == Step::Location {
                     self.refresh_zone_clock();
@@ -2135,6 +2280,7 @@ impl Program for Genkan {
             return false;
         }
         self.stop_warm(cx);
+        self.stop_listening();
         // Dropping an unconfirmed session withdraws its request.
         self.session.take();
         true
@@ -2167,10 +2313,35 @@ mod tests {
         assert!(overall_fraction(4, 1.0) - overall_fraction(4, 0.0) > 0.5);
     }
     #[test]
+    fn aizome_and_tatami_start_selected_with_aizome_the_default() {
+        let app = Genkan::with_zones(None, String::new(), None);
+        assert_eq!(app.desktops, [Desktop::Aizome, Desktop::Tatami]);
+        assert_eq!(app.default_choice, Some(Desktop::Aizome));
+    }
+    #[test]
     fn steps_have_unique_names() {
         let names: BTreeSet<_> = Step::ALL.iter().map(|s| s.name()).collect();
         assert_eq!(names.len(), Step::ALL.len());
         assert_eq!(LOCALE_NAMES.len(), LOCALES.len());
         assert_eq!(KEYBOARD_NAMES.len(), KEYBOARDS.len());
+        assert_eq!(SUPER_KEY_NAMES.len(), SuperKey::ALL.len());
+    }
+    #[test]
+    fn the_keyboard_step_writes_what_settei_would() {
+        // The backend can't use Aizome's crates (the helper is built from it
+        // alone), so it names the arrangements itself.
+        use aizome_ipc::setup::{SWAP_ALT_SUPER, SWAP_CONTROL_SUPER, beside_space};
+        assert_eq!(SuperKey::SwapAlt.xkb_options(), SWAP_ALT_SUPER);
+        assert_eq!(SuperKey::SwapControl.xkb_options(), SWAP_CONTROL_SUPER);
+        let suggests = |code| {
+            beside_space(code)
+                .unwrap()
+                .suggest
+                .and_then(SuperKey::from_xkb_options)
+        };
+        assert_eq!(suggests(125), Some(SuperKey::AsIs));
+        assert_eq!(suggests(56), Some(SuperKey::SwapAlt));
+        assert_eq!(suggests(29), Some(SuperKey::SwapControl));
+        assert_eq!(suggests(94), None);
     }
 }
