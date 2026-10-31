@@ -800,6 +800,11 @@
           inherit (self.packages.${system}) yukimi;
           yukimiModule = inputs.yukimi.nixosModules.default;
         };
+        yukimi-evaluation = import ./nix/yukimi-evaluation-test.nix {
+          inherit pkgs;
+          helper = self.packages.${system}.yukimi.helper;
+          nix = runnerNix;
+        };
         tools = tools;
         site = site;
         aizome-site = aizomeSite;
