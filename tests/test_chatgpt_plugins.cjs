@@ -11,17 +11,28 @@ async function main() {
   const archive = await fs.readFile(path.join(resources, "app.asar"));
   const header = JSON.parse(archive.subarray(16, 16 + archive.readUInt32LE(12)));
   const entries = header.files[".vite"].files.build.files;
-  const name = Object.keys(entries).find((name) => /^main-.*\.js$/.test(name));
-  const entry = entries[name];
-  const start = 8 + archive.readUInt32LE(4) + Number(entry.offset);
-  const code = archive.subarray(start, start + entry.size).toString();
+  // New releases move the executor into an early-bootstrap chunk. Find the
+  // actual function, requiring one definition across the packaged JS files.
+  const definitions = [];
+  for (const [name, entry] of Object.entries(entries)) {
+    if (!name.endsWith(".js") || entry.offset === undefined) continue;
+    const start = 8 + archive.readUInt32LE(4) + Number(entry.offset);
+    const bytes = archive.subarray(start, start + entry.size);
+    if (!bytes.includes(Buffer.from("executorPluginRoot:"))) continue;
+    const code = bytes.toString();
+    for (const match of code.matchAll(/async function [\w$]+\(\{executorPluginRoot:[\w$]+,resourcesPath:[\w$]+\}\).*?(?=async function )/gs)) {
+      definitions.push({ name, code, copy: match[0] });
+    }
+  }
+  assert.equal(definitions.length, 1, "exactly one executor copy function must be present");
+  const { name, code, copy } = definitions[0];
   // Compile the entire modified file, then call the real function in isolation.
   new vm.Script(code);
-  const copy = code.match(/async function [\w$]+\(\{executorPluginRoot:[\w$]+,resourcesPath:[\w$]+\}\).*?(?=async function )/s)?.[0];
-  assert(copy, "executor copy function must be present");
   const configName = copy.match(/await ([\w$]+)\(\{useWsl:!1,resourcesPath:/)[1];
-  const fsName = copy.match(/([\w$]+)\.default\.writeFile/)[1];
-  const pathName = copy.match(/([\w$]+)\.default\.join/)[1];
+  const fsBinding = copy.match(/([\w$]+)(\.default|\(\))\.writeFile/);
+  const pathBinding = copy.match(/([\w$]+)(\.default|\(\))\.join/);
+  assert(fsBinding && pathBinding, "executor filesystem and path bindings must be recognized");
+  const binding = (match, value) => match[2] === "()" ? () => value : { default: value };
   const hostName = copy.match(/CODEX_APP_TOOLS_CALLER_HOST_ID:([\w$]+)\./)[1];
   const hostProperty = copy.match(/CODEX_APP_TOOLS_CALLER_HOST_ID:[\w$]+\.([\w$]+)/)[1];
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "chatgpt-plugins-"));
@@ -35,8 +46,8 @@ async function main() {
     require: packagedRequire,
     process,
     [configName]: async () => ({ cwd: source, command, env: { KEPT: "yes" } }),
-    [fsName]: { default: fs },
-    [pathName]: { default: path },
+    [fsBinding[1]]: binding(fsBinding, fs),
+    [pathBinding[1]]: binding(pathBinding, path),
     [hostName]: { [hostProperty]: "local" },
   };
   const run = new vm.Script(`(${copy})`).runInNewContext(context);

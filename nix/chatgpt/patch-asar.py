@@ -24,12 +24,21 @@ COPY_UPSTREAM_WRITABLE = re.compile(
     rb"(?P=dest),\{recursive:!0\}\),"
     rb"await [\w$]+\(`chmod`,\[`-R`,`u\+w`,(?P=dest)\]\),"
 )
+# The newer webpack bundle exposes fs through an accessor and uses quoted
+# strings. Keep the destination backreference and the complete permission
+# repair sequence so unrelated copies cannot match.
+COPY_UPSTREAM_ACCESSOR = re.compile(
+    rb"await [\w$]+\((?P<dest>[\w$]+)\),"
+    rb"await [\w$]+\(\)\.cp\((?P<config>[\w$]+)\.cwd,"
+    rb"(?P=dest),\{recursive:!0\}\),"
+    rb'await [\w$]+\("chmod",\["-R","\+w",(?P=dest)\]\),'
+)
 
 
 def patch(data: bytes) -> bytes:
     matches = [
         match
-        for pattern in (COPY, COPY_UPSTREAM_WRITABLE)
+        for pattern in (COPY, COPY_UPSTREAM_WRITABLE, COPY_UPSTREAM_ACCESSOR)
         for match in pattern.finditer(data)
     ]
     if len(matches) != 1:
