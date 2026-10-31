@@ -113,7 +113,7 @@ kbd {
 .ws-n { color: var(--text-secondary); }
 .ws[aria-current="page"] { color: var(--text-strong); font-weight: 800; box-shadow: inset 0 -2px var(--accent); }
 .ws[aria-current="page"] .ws-n { color: var(--accent); }
-.bar-clock { grid-column: 4; margin: 0; padding: 0 1.25em; color: var(--text); white-space: nowrap; max-width: none; }
+.bar-clock { grid-column: 3; justify-self: center; margin: 0; padding: 0 1.25em; color: var(--text); white-space: nowrap; max-width: none; }
 .bar-clock-label { color: var(--text-secondary); }
 .bar-source { grid-column: 6; padding: 0 0.25em 0 0.75em; }
 /* The theme switch, a bar module as Waybar's toggles are: it shows the theme
@@ -138,8 +138,17 @@ kbd {
 :root[data-theme="day"] .bar-night, :root:has(#site-theme:checked) .bar-night { display: none; }
 :root[data-theme="day"] .bar-day, :root:has(#site-theme:checked) .bar-day { display: inline-flex; }
 .bar-theme-icon { display: block; width: 12px; height: 12px; flex: none; }
-@media (min-width: 1100px) {
+/* Centred on the page, as Tatami's clock is, only where the workspaces end
+   well short of it; otherwise it takes the free space between them and the
+   switch, losing its label and then itself as the bar narrows. */
+@media (min-width: 1440px) {
   .bar-clock { grid-column: auto; position: absolute; left: 50%; transform: translateX(-50%); padding: 0; }
+}
+@media (max-width: 1000px) {
+  .bar-clock-label { display: none; }
+}
+@media (max-width: 900px) {
+  .bar-clock { display: none; }
 }
 
 /* Windows */
@@ -150,8 +159,6 @@ kbd {
   min-width: 0;
 }
 .win.focus { border-color: var(--accent); }
-.win.warn { border-color: var(--warning); }
-.win.warn > h2 { color: var(--warning); }
 
 .tag {
   display: inline-block;
@@ -166,8 +173,6 @@ kbd {
   margin-right: 0.6em;
   vertical-align: 0.1em;
 }
-.tag-warning { color: var(--warning); }
-.notice { color: var(--text); margin-top: 0.5em; }
 
 /* Nightly builds, listed by the download page's worker: the newest is
    focused, as the active window is. */
@@ -196,6 +201,42 @@ kbd {
 .hero-text { display: flex; flex-direction: column; justify-content: center; }
 .hero-lockup { display: block; align-self: flex-start; height: clamp(60px, 6.5vw, 92px); width: auto; margin-bottom: clamp(24px, 3.5vw, 48px); }
 .hero-shot { display: flex; flex-direction: column; justify-content: center; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75em 1.5em; margin-top: 0.5em; font-family: var(--font-mono); font-weight: 800; }
+.button {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: var(--border-width) solid var(--accent);
+  padding: 0.7em 1.4em;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+.button:hover { background: var(--surface); color: var(--accent); }
+.page-head .cta { margin-top: 1.25em; }
+
+/* A closing call to action: a focused window with its button at the right. */
+.cta-band { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pad); }
+.cta-band > div { flex: 1 1 30em; min-width: 0; }
+.cta-band h2 { font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.4rem); }
+.cta-band .lead { margin: 0; }
+.cta-band .cta { margin: 0; flex: 0 1 auto; min-width: 0; }
+
+/* Aizome, Sekka's desktop, in the focused window under the hero. */
+.flagship { display: grid; gap: var(--pad); }
+.flag-head .lead { max-width: 72ch; }
+.flag-head h2 { font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.4rem); }
+.flag-points { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 1em 2.5em; }
+.flag-links { display: flex; flex-wrap: wrap; gap: 0.5em 2em; margin: 0; max-width: none; font-family: var(--font-mono); font-weight: 800; }
+
+/* Aizome's apps, each with the icon it installs. */
+.apps { list-style: none; margin: 1.5em 0; padding: 0; display: grid; gap: 1.25em var(--pad); grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
+.app { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 1em; align-items: start; border-top: var(--border-width) solid var(--border-inactive); padding-top: 1em; }
+.app img { display: block; width: 48px; height: 48px; }
+.app h3 { font-size: 1.05rem; margin: 0; display: flex; align-items: baseline; gap: 0.45em; }
+.app-ja { color: var(--text); font-weight: 400; }
+.app p { margin: 0.2em 0 0; font-size: 0.95rem; }
+.app .app-generic { margin: 0.1em 0 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); }
+
 .ink-crest { fill: var(--crest); }
 .ink-strong { fill: var(--text-strong); }
 .ink-text { fill: var(--text); }
@@ -247,8 +288,6 @@ kbd {
   background: var(--text-secondary);
 }
 .facts.good li::before { background: var(--success); }
-.facts.gaps li::before { background: transparent; border: var(--border-width) solid var(--warning); }
-.warn .facts { margin-top: 1.25em; }
 .ledger { display: grid; gap: var(--gap-in); grid-template-columns: 1fr 1fr; }
 .ledger .facts { margin-bottom: 1.25em; }
 
@@ -258,7 +297,6 @@ kbd {
 .eyebrow { font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.04em; color: var(--text-secondary); margin: 0 0 0.75em; display: flex; align-items: center; gap: 0.5em; }
 .wide-shot { width: 100%; }
 .tiles { display: grid; gap: var(--gap-in); grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
-.caveat { font-size: 0.95rem; color: var(--text); }
 .code {
   background: var(--surface-raised);
   border: var(--border-width) solid var(--border-inactive);
@@ -320,6 +358,9 @@ kbd {
 .step-figure figcaption { font-size: 0.85rem; color: var(--text-secondary); text-align: center; }
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 0 var(--pad); margin-bottom: 1.5em; }
 .downloads { font-size: 0.9rem; }
+.which { gap: 1.5em var(--pad); margin-bottom: 0; }
+.which > div { display: grid; gap: 1em; align-content: start; }
+.which h3, .which p, .which .facts { margin: 0; }
 
 .construction { width: min(100%, 400px); height: auto; overflow: visible; }
 .construction .guide { fill: none; stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }
@@ -406,8 +447,9 @@ kbd {
   .bar-theme-icon { width: 16px; height: 16px; }
   .bar-menu { height: 44px; }
   .bar-clock { display: none; }
-  .ws { padding: 0 0.55em; }
+  .ws { flex: none; padding: 0 0.55em; }
   .ws-n { display: none; }
+  .keys th { white-space: normal; width: 40%; }
   .page-head { flex-direction: column; align-items: flex-start; }
   .pair { grid-template-columns: 1fr; }
 }

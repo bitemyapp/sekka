@@ -2,54 +2,25 @@
 
 **A NixOS desktop you can install and look after through a graphical interface.**
 
-Sekka brings together **Genkan**, a graphical installer; **Aizome**, its own desktop; **Tatami**, a keyboard-driven tiling desktop; and **Yukimi**, an app for managing software and system updates. It uses Determinate Nix and lets you choose Aizome, Plasma, GNOME, Tatami, vanilla Hyprland, or Xfce—or install several and switch at login.
+Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the compositor up. **Genkan**, a graphical installer, sets it up; **Yukimi**, an app for software and system updates, keeps it current; and **Tatami**, a keyboard-driven tiling desktop, is there for people who would rather tile. Sekka uses Determinate Nix and lets you choose Aizome, Tatami, Plasma, GNOME, vanilla Hyprland, or Xfce—or install several and switch at login. Sekka and Aizome are in daily use on many machines, their developer's and their users'.
 
-## Why you shouldn't use Sekka (yet)
+## Before you install
 
-Sekka is an early, experimental project. **It is not ready to be your dependable everyday operating system.** Try it in a disposable virtual machine or on a spare computer with nothing you need to keep.
-
-- **Installation erases a whole disk.** There is no dual-boot setup, manual partitioning, or option to preserve an existing operating system. Keep backups elsewhere.
-- **RAID/LVM setup and offline installation are not implemented.** An internet connection is required.
-- **No Secure Boot or ARM image.** Secure Boot is not a supported installation path. The current image targets x86_64 PCs; there is no ARM image.
-- **Updates and recovery are still being exercised.** NixOS generations help you return to an earlier system, but they are not backups of your documents. Btrfs is available without automatic filesystem snapshots.
-- **There is no production release or support promise.** Nightly images are previews, not a release you can rely on: their automated checks run in virtual machines, and a nightly may not have been tried on hardware yet. Older screenshots and test reports are not proof of a tested Sekka release.
-
-If you need a system you can rely on today, wait before installing Sekka.
+- **Installation takes a whole disk.** Genkan erases the disk you choose. There is no dual boot, manual partitioning, or option to keep an existing operating system, so keep your files elsewhere.
+- **Installing needs an internet connection.** RAID, LVM and offline installation aren't offered.
+- **For x86_64 PCs, with Secure Boot off.** There is no ARM image.
+- **Generations aren't backups.** They return you to an earlier system, not to earlier documents. Btrfs is available without automatic filesystem snapshots.
 
 ## A look around
 
-Images below link to their original, full-resolution PNGs, captured with a scale of 2, at twice the density of the layout. Desktops are shown whole, and each application on its own, cropped to its window. Nothing is upscaled. They come from disposable test VMs built from Sekka's own modules, not from an installed release; see [screenshot provenance](docs/screenshots.md).
-
-### Genkan: welcome home
-
-Choose your disk, account, desktop, applications, location, and keyboard. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk. Genkan opens when the live session starts, and it is an Aizome app: it shares Aizome's look and menu bar, and follows its Night and Day themes.
-
-[![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
-
-*Genkan's window in preview mode, with sample data, in Aizome.*
-
-You can enable **LUKS2 disk encryption** on the disk page and choose a separate passphrase to unlock the system at startup. The system, personal files and optional swap are encrypted; boot files remain unencrypted. It works with ext4, Btrfs or XFS, using UEFI or legacy BIOS. Encryption is off by default. Remember the disk passphrase: changing your login password does not change it, and Genkan cannot recover it. TRIM is enabled through encryption to let SSDs reclaim space; this reveals which disk blocks are unused. Encrypted installation has not been validated on physical hardware.
-
-Installed systems start behind Sekka's boot splash: the crest on the night ground, with a thin rail that fills as the computer starts, and "Restarting" or "Shutting down" when it stops. Press **Esc** at any time to see the boot messages, and **Esc** again to go back; after 15 seconds the splash reminds you. On an encrypted system you type the disk passphrase into the splash, which points out Caps Lock; one passphrase opens both the system and its swap. A system installed before the splash came keeps starting without it, and updating doesn't change that: turn it on in Aizome's **Settei → General → Startup**, or with `sekka-update --choose calamares.bootSplash.enable=true`, and it shows from the next start. The splash has been tested in virtual machines, not yet on physical hardware.
-
-The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
-
-The keyboard step asks you to press the key just left of your space bar. Aizome's command key is ❖ (Super), as ⌘ is on a Mac, and it belongs under your thumb: if that key is Alt, as on most PC keyboards, Genkan strongly recommends swapping left Alt and Super, and you can keep your keys as they are instead. Right Alt (AltGr) stays available for accents and symbols. If it's ❖ already, as on a Mac, nothing needs changing. Genkan swaps nothing else: with another key there, your keys stay as they are, and Settings can rearrange them after installing. The layout and the swap apply to every keyboard of the installed system, from the login screen and the console to Aizome and Tatami; Aizome still offers to set up a keyboard you plug in later with keys of its own. Genkan hears the key through Aizome, so started anywhere else, it lets you choose the swap without pressing it. The step has been tried in virtual machines with QEMU's keyboard, not yet with physical keyboards.
-
-[![Genkan's keyboard step](docs/images/sekka/genkan-keyboard.png)](docs/images/sekka/genkan-keyboard.png)
-
-*Genkan's keyboard step in preview mode, in a test VM, having heard the Alt key beside the space bar of QEMU's keyboard.*
-
-With Aizome, your terminals (Hotaru, foot, and the others) open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work. Without Aizome, terminals open in bash, as in Omarchy; the **Terminal shell** choice on Yukimi's Desktops page turns fish on there, or off with Aizome. Hotaru also accepts a shell override in its configuration file, which takes precedence over the system choice. Systems that chose fish among Genkan's applications before it came with Aizome keep it.
-
-Programs built for other Linux distributions start as they would there. Editors and tools that download their own programs work without extra setup: Zed's language servers, debugger and AI agents, for example. These downloaded programs find the common libraries: the C and C++ runtimes, zlib, OpenSSL, curl, systemd and a few more. One that needs others, such as most graphical programs, still won't start, and neither will a script that asks for `/bin/bash`.
+Images below link to their original, full-resolution PNGs, captured with a scale of 2, at twice the density of the layout. Desktops are shown whole, and each application on its own, cropped to its window. Nothing is upscaled. They come from test VMs built from Sekka's own modules; see [screenshot provenance](docs/screenshots.md).
 
 ### Aizome: Sekka's own desktop
 
-Aizome 藍染 is the desktop Sekka is made for, and the installer's preselected
-choice, with Tatami beside it. It is written from the compositor up in Rust,
-on its own native toolkit, Sukumo 蒅, and takes its ideas from Haiku, NeXTSTEP
-and IRIX:
+Aizome 藍染 is the desktop Sekka is made for, selected by default in the
+installer with Tatami beside it. It is written from the compositor up in
+Rust, on its own native toolkit, Sukumo 蒅, and takes its ideas from Haiku,
+NeXTSTEP and IRIX:
 
 - Every window wears a tab only as wide as its title. A new window of the app
   you're using opens as another tab on its window (Settings can turn this
@@ -93,24 +64,19 @@ reader), Utsushi (Media Player) and Koe (Dictation).
 Nisshi reads the system's journal and /var/log, suggests filters from what
 wrote each message, and asks for an administrator's password only to read
 what you can't. See [its README](desktop/aizome/README.md) for what is done
-and what isn't.
+and what isn't, and [aizome.computer](https://aizome.computer/) for every app
+in detail.
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
-need a terminal open in it too. Hotaru is new, and it draws with the processor
-rather than the graphics card. Some full-screen programs may flicker or draw
-less than they would in Ghostty, because it doesn't yet support:
+need a terminal open in it too. Hotaru draws with the processor. It doesn't
+implement synchronized output (DEC mode 2026), in-band resize (2048), the
+Kitty graphics protocol, DEC modes 1039 and 1045, or DECSASD; foot is still
+installed for programs that want them. To use foot instead, choose it in
+Settei, under General → Default Apps → Terminal. Upgrading from a Sekka
+without Hotaru switches foot to Hotaru once; if you had chosen another
+terminal, it stays.
 
-- synchronized output (DEC mode 2026), so redraws can flicker;
-- in-band resize (2048);
-- the Kitty graphics protocol, so images don't show;
-- DEC modes 1039 and 1045;
-- DECSASD.
-
-foot is still installed. To go back to it, choose it in Settei, under
-General → Default Apps → Terminal. Upgrading from a Sekka without Hotaru
-switches foot to Hotaru once; if you had chosen another terminal, it stays.
-
-[![Aizome with Sumi, Files and a terminal stacked together](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
+[![Aizome with Sumi beside Files and Hotaru stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
 [![The whole menu at the pointer](docs/images/sekka/aizome-menu.png)](docs/images/sekka/aizome-menu.png)
 
@@ -118,11 +84,35 @@ switches foot to Hotaru once; if you had chosen another terminal, it stays.
 
 [![Settei, Aizome's Settings](docs/images/sekka/aizome-settings.png)](docs/images/sekka/aizome-settings.png)
 
-*Aizome in a disposable NixOS test VM, rendering in software.*
+*Aizome in a NixOS test VM, rendering in software.*
+
+### Genkan: welcome home
+
+Choose your disk, account, desktop, applications, location, and keyboard. Review everything before confirming erasure. Genkan prepares the system while you review it, then copies the prepared system to disk. Genkan opens when the live session starts, and it is an Aizome app: it shares Aizome's look and menu bar, and follows its Night and Day themes.
+
+[![Genkan graphical installer](docs/images/sekka/genkan.png)](docs/images/sekka/genkan.png)
+
+*Genkan's window in preview mode, with sample data, in Aizome.*
+
+You can enable **LUKS2 disk encryption** on the disk page and choose a separate passphrase to unlock the system at startup. The system, personal files and optional swap are encrypted; boot files remain unencrypted. It works with ext4, Btrfs or XFS, using UEFI or legacy BIOS. Encryption is off by default. Remember the disk passphrase: changing your login password does not change it, and Genkan cannot recover it. TRIM is enabled through encryption to let SSDs reclaim space; this reveals which disk blocks are unused.
+
+Installed systems start behind Sekka's boot splash: the crest on the night ground, with a thin rail that fills as the computer starts, and "Restarting" or "Shutting down" when it stops. Press **Esc** at any time to see the boot messages, and **Esc** again to go back; after 15 seconds the splash reminds you. On an encrypted system you type the disk passphrase into the splash, which points out Caps Lock; one passphrase opens both the system and its swap. A system installed before the splash came keeps starting without it, and updating doesn't change that: turn it on in Aizome's **Settei → General → Startup**, or with `sekka-update --choose calamares.bootSplash.enable=true`, and it shows from the next start.
+
+The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
+
+The keyboard step asks you to press the key just left of your space bar. Aizome's command key is ❖ (Super), as ⌘ is on a Mac, and it belongs under your thumb: if that key is Alt, as on most PC keyboards, Genkan strongly recommends swapping left Alt and Super, and you can keep your keys as they are instead. Right Alt (AltGr) stays available for accents and symbols. If it's ❖ already, as on a Mac, nothing needs changing. Genkan swaps nothing else: with another key there, your keys stay as they are, and Settings can rearrange them after installing. The layout and the swap apply to every keyboard of the installed system, from the login screen and the console to Aizome and Tatami; Aizome still offers to set up a keyboard you plug in later with keys of its own. Genkan hears the key through Aizome, so started anywhere else, it lets you choose the swap without pressing it.
+
+[![Genkan's keyboard step](docs/images/sekka/genkan-keyboard.png)](docs/images/sekka/genkan-keyboard.png)
+
+*Genkan's keyboard step in preview mode, in a test VM, having heard the Alt key beside the space bar of QEMU's keyboard.*
+
+With Aizome, your terminals (Hotaru, foot, and the others) open in the fish shell set up as Omarchy sets it up: Omarchy's Starship prompt, vi keys, `ls` as eza, a `cd` that falls back to zoxide, and fzf searches of your history (**Ctrl + R**), files (**Ctrl + Alt + F**), and Git log and status (**Ctrl + Alt + L**, **Ctrl + Alt + S**). Bash stays your login shell and runs scripts. Functions in your own `~/.config/fish` and a `~/.config/starship.toml` replace Omarchy's. Some of Omarchy's shortcuts call tools fish doesn't bring, such as tmux, ImageMagick, or ffmpeg, and `iso2sd` and `try` depend on Omarchy itself, so they don't work. Without Aizome, terminals open in bash, as in Omarchy; the **Terminal shell** choice on Yukimi's Desktops page turns fish on there, or off with Aizome. Hotaru also accepts a shell override in its configuration file, which takes precedence over the system choice. Systems that chose fish among Genkan's applications before it came with Aizome keep it.
+
+Programs built for other Linux distributions start as they would there. Editors and tools that download their own programs work without extra setup: Zed's language servers, debugger and AI agents, for example. These downloaded programs find the common libraries: the C and C++ runtimes, zlib, OpenSSL, curl, systemd and a few more. One that needs others, such as most graphical programs, still won't start, and neither will a script that asks for `/bin/bash`.
 
 ### Tatami: a desktop under your fingertips
 
-Tatami combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS. Genkan selects it beside Aizome; log in to it from the login screen, or leave it out when installing.
+Tatami is Sekka's other desktop, for people who would rather tile windows and drive everything from the keyboard. It combines Hyprland with a compact bar, searchable application launcher and menus, notifications, display settings, and keyboard shortcuts. It takes inspiration from Omarchy and adapts the experience to NixOS. Genkan selects it beside Aizome; log in to it from the login screen, or leave it out when installing.
 
 [![The Tatami menu over an empty desktop](docs/images/sekka/tatami-menu.png)](docs/images/sekka/tatami-menu.png)
 
@@ -160,16 +150,15 @@ window to the screen you are using.
 
 [![The Displays window](docs/images/sekka/displays.png)](docs/images/sekka/displays.png)
 
-Some differences remain. Unlike a Mac, the laptop also stays awake with its lid
-closed while docked on battery power. It goes to sleep when you close the lid with no
-other display connected, unless Keep Awake is on (then the built-in screen turns
-off). Lid handling and docking are in daily use on the ThinkPad X1 Carbon Gen
-14 with external displays, and virtual-machine tests with simulated displays and
-a simulated lid guard them between changes.
+Docked, the laptop stays awake with its lid closed on battery power too. With
+no other display connected, closing the lid puts it to sleep, unless Keep Awake
+is on (then the built-in screen turns off). Lid handling and docking are in
+daily use with external displays, and virtual-machine tests with simulated
+displays and a simulated lid guard them between changes.
 
 Sekka also enables USB keyboard and mouse wake paths, including their parent
-hubs. Waking from an intentional suspend still depends on the hardware and
-firmware; try a key or mouse button if mouse movement does not wake it.
+hubs. If moving the mouse doesn't wake a suspended computer, press a key or
+a mouse button.
 
 ### Yukimi: see and change your system
 
@@ -181,7 +170,7 @@ other desktops, and Super in Aizome.
 
 [![Yukimi system manager](docs/images/sekka/yukimi.png)](docs/images/sekka/yukimi.png)
 
-*Current application in Tatami, in a disposable NixOS test VM.*
+*Current application in Tatami, in a NixOS test VM.*
 
 ### Prefer a familiar desktop?
 
@@ -195,13 +184,13 @@ Plasma, GNOME and Xfce are available too. Multiple installed desktops share your
 
 ## Trying Sekka
 
-**There is no release yet, only nightly ISOs.** An ISO for x86_64 PCs is published only after that exact image has been installed and used in virtual machines: installing, booting the installed system, logging in and using its desktops. That doesn't happen every night, so the newest ISO can be older than the newest update, and an installation catches up with its first update. Each published ISO joins the last seven on [sekka.computer/download](https://sekka.computer/download/), with its checksum and the source revision it came from. A nightly may not have been tried on hardware before it is published. Versioned releases will be prereleases on the [Releases page](https://github.com/bitemyapp/sekka/releases). Do not mistake GitHub's “Source code” archives for bootable images.
+Sekka ships as nightly ISOs for x86_64 PCs. An ISO is published only after that exact image has been installed and used in UEFI and BIOS virtual machines: installing, booting the installed system, logging in and using its desktops. That doesn't happen every night, so the newest ISO can be older than the newest update, and an installation catches up with its first update. Each published ISO joins the last seven on [sekka.computer/download](https://sekka.computer/download/), with its checksum and the source revision it came from. GitHub's “Source code” archives are not bootable images.
 
-To put a nightly on a USB drive, [Kakehashi](apps/kakehashi/README.md) lists them, downloads and checks the one you pick, writes it, and reads every byte back, on Linux, macOS or Windows. On Sekka, install it from **Yukimi → Discover**. Kakehashi is new: so far it has written only virtual drives, and its macOS and Windows builds are GitHub workflow artifacts. Any tool that writes a raw disk image also works.
+To put a nightly on a USB drive, [Kakehashi](apps/kakehashi/README.md) lists them, downloads and checks the one you pick, writes it, and reads every byte back, on Linux, macOS or Windows. On Sekka, install it from **Yukimi → Discover**; its macOS and Windows builds are GitHub workflow artifacts. Any tool that writes a raw disk image also works.
 
-To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image shows Sekka's boot splash (Esc shows the boot messages), then starts a live Aizome session with Genkan open. The boot menu also offers an older kernel and a recovery entry that draws the same Aizome session in software, without a GPU driver for NVIDIA graphics. Check the live desktop on your hardware before considering installation.
+To build an image yourself, see [DEVELOPERS.md](DEVELOPERS.md). The image shows Sekka's boot splash (Esc shows the boot messages), then starts a live Aizome session with Genkan open. The boot menu also offers an older kernel and a recovery entry that draws the same Aizome session in software, without a GPU driver for NVIDIA graphics. Try the live desktop on your computer before you install.
 
-Genkan currently offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
+Genkan offers ext4, Btrfs, or XFS, with UEFI or legacy BIOS boot. Optional RAM-sized swap and system tuning are enabled by default and can be switched off. Proprietary software is allowed by default with an opt-out; redistributable firmware may still be proprietary. The configured NVIDIA driver targets Turing and newer GPUs.
 
 Native 4 KiB sector disks require booting the installation media in UEFI mode.
 Legacy BIOS installation requires 512-byte logical sectors, including 512e disks.
@@ -269,10 +258,10 @@ one, as an update does.
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.
 
-To work on the distro, start with [DEVELOPERS.md](DEVELOPERS.md). Tatami and Yukimi can also be used independently on NixOS through Sekka's individual modules.
+To work on the distro, start with [DEVELOPERS.md](DEVELOPERS.md). Aizome, Tatami and Yukimi can also be used independently on NixOS through Sekka's individual modules.
 
 ## Credits and licenses
 
-Sekka builds on NixOS, Determinate Nix, and many other free-software projects. Genkan originated as the NixOS-focused Rust implementation in our Calamares fork. Tatami is inspired by Omarchy. Sekka is not an official NixOS, Determinate Systems, Calamares, or Omarchy product.
+Sekka builds on NixOS, Determinate Nix, and many other free-software projects. Genkan originated as the NixOS-focused Rust implementation in our Calamares fork. Aizome takes its ideas from Haiku, NeXTSTEP and IRIX; Tatami is inspired by Omarchy. Sekka is not an official NixOS, Determinate Systems, Calamares, or Omarchy product.
 
-Components retain their own licenses and attribution: Genkan is GPL-3.0-or-later; Tatami and Yukimi code is MIT OR Apache-2.0, with separately attributed configuration and artwork. See [NOTICE](NOTICE), [component provenance](docs/imports.json), and the license files in each component directory.
+Components retain their own licenses and attribution: Genkan is GPL-3.0-or-later; Aizome, Tatami and Yukimi code is MIT OR Apache-2.0, with separately attributed configuration and artwork. See [NOTICE](NOTICE), [component provenance](docs/imports.json), and the license files in each component directory.

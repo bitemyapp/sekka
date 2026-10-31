@@ -108,7 +108,8 @@ let
       ../docs/brand/logos
       ../docs/brand/family
       ../docs/images/sekka
-      ../desktop/aizome/icons/apps/org.aizome.Yukimi.svg
+      ../desktop/aizome/icons/apps
+      ../desktop/aizome/apps/hotaru/data/org.aizome.Hotaru.svg
     ];
   };
   mono = pkgs.jetbrains-mono;
