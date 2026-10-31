@@ -12,6 +12,7 @@ use common::*;
 const SHIFT: u32 = 1;
 const CTRL: u32 = 4;
 const LOGO: u32 = 64;
+const KEY_A: u32 = 30;
 const KEY_C: u32 = 46;
 
 fn chord(c: &Compositor, keys: &str) {
@@ -20,16 +21,18 @@ fn chord(c: &Compositor, keys: &str) {
 
 #[test]
 fn super_becomes_ctrl_for_other_apps() {
-    let c = Compositor::start(Options::default());
-    let a = c.client(Spec::new("org.example.editor", 0x2222cc));
-    c.wait_window("org.example.editor");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "super+c");
-    let s = a.wait_seen("❖C as Ctrl+C", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
-    let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
-    assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL, "the app saw Ctrl, not Super: {mods:#x}");
-    // After the chord, nothing stays held.
-    a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+    for app_id in ["org.example.editor", "org.calamares.Other", "org.calamares.NixOSRust.Other"] {
+        let c = Compositor::start(Options::default());
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        chord(&c, "super+c");
+        let s = a.wait_seen("❖C as Ctrl+C", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
+        let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
+        assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL, "{app_id}: the app saw Ctrl, not Super: {mods:#x}");
+        // After the chord, nothing stays held.
+        a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+    }
 }
 
 #[test]
@@ -46,14 +49,20 @@ fn terminals_get_ctrl_shift() {
 
 #[test]
 fn kit_apps_keep_super() {
-    let c = Compositor::start(Options::default());
-    let a = c.client(Spec::new("org.aizome.Soroban", 0x2222cc));
-    c.wait_window("org.aizome.Soroban");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "super+c");
-    let s = a.wait_seen("❖C as is", |s| s.keys.iter().any(|(k, _)| *k == KEY_C));
-    let (_, mods) = s.keys.iter().find(|(k, _)| *k == KEY_C).unwrap();
-    assert_eq!(*mods & (CTRL | LOGO), LOGO, "{mods:#x}");
+    // Genkan uses the kit while preserving its pre-kit desktop identity.
+    for app_id in ["org.aizome.Soroban", "org.calamares.NixOSRust"] {
+        let c = Compositor::start(Options::default());
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        for (keys, code) in [("super+a", KEY_A), ("super+c", KEY_C)] {
+            chord(&c, keys);
+            let s = a.wait_seen("command key unchanged", |s| s.keys.iter().any(|(k, _)| *k == code));
+            let (_, mods) = s.keys.iter().find(|(k, _)| *k == code).unwrap();
+            assert_eq!(*mods & (CTRL | LOGO | SHIFT), LOGO, "{app_id}: {keys}: {mods:#x}");
+            a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
+        }
+    }
 }
 
 #[test]
@@ -167,13 +176,15 @@ fn f10_opens_the_menu_bar_over_aizomes_apps_and_the_desktop() {
     // Nothing focused: the desktop.
     chord(&c, "f10");
     assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"));
-    // An Aizome app.
-    let a = c.client(Spec::new("org.aizome.Soroban", 0x2222cc));
-    c.wait_window("org.aizome.Soroban");
-    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
-    chord(&c, "f10");
-    assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"));
-    assert!(!a.seen().keys.iter().any(|(k, _)| *k == 68));
+    // Kit apps, including Genkan's preserved desktop identity.
+    for app_id in ["org.aizome.Soroban", "org.calamares.NixOSRust"] {
+        let a = c.client(Spec::new(app_id, 0x2222cc));
+        c.wait_window(app_id);
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        chord(&c, "f10");
+        assert_eq!(next_binding(&mut events).as_deref(), Some("menu-bar"), "{app_id}");
+        assert!(!a.seen().keys.iter().any(|(k, _)| *k == 68), "{app_id}");
+    }
 }
 
 #[test]

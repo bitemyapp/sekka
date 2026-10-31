@@ -76,6 +76,14 @@ fn pictures() {
         for (page, _) in PAGES {
             let (mut h, w) = open_in(page, theme);
             h.save_png(w, dir.join(format!("{page}-{name}.png")), 1.0);
+            if page == "applications" {
+                h.send(Msg::AppSearch("Uta for YouTube Music".into()));
+                h.save_png(
+                    w,
+                    dir.join(format!("applications-download-{name}.png")),
+                    1.0,
+                );
+            }
         }
     }
 }
@@ -194,6 +202,34 @@ fn searching_narrows_the_catalog() {
     let (mut h, w) = open("applications");
     h.send(Msg::AppSearch("no application is called this".into()));
     assert!(says(&h, w, "No Matching Applications"));
+}
+
+#[test]
+fn download_only_applications_are_identified_before_selection() {
+    let (mut h, w) = open("applications");
+    let catalog = applications::catalog();
+    for (id, needs_internet) in [("uta", true), ("firefox", false)] {
+        let app = catalog
+            .iter()
+            .find(|app| app.id == id)
+            .expect("catalog application");
+        assert_eq!(!app.preload, needs_internet);
+        h.send(Msg::AppSearch(app.name.clone()));
+        assert!(
+            h.find_id(w, &format!("app-{id}")).is_some(),
+            "{id} is offered"
+        );
+        assert_eq!(
+            h.texts(w).iter().any(|text| text == "Internet required"),
+            needs_internet,
+            "{id}"
+        );
+    }
+    assert!(!says(
+        &h,
+        w,
+        "Everything listed is already on this installation media"
+    ));
 }
 
 #[test]
