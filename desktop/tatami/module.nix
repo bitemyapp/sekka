@@ -331,6 +331,23 @@ in
 
   options.programs.tatami = {
     enable = lib.mkEnableOption "the Tatami desktop session";
+    hotaruPackage = lib.mkOption {
+      type = lib.types.package;
+      # The full Aizome package already carries the same terminal: one
+      # package claims its executable and desktop entry.
+      default =
+        if lib.attrByPath [ "programs" "aizome" "enable" ] false config then
+          config.programs.aizome.package
+        else
+          tatamiHotaru;
+      defaultText = lib.literalMD "`programs.aizome.package` when Aizome is enabled, else Sekka's standalone Hotaru";
+      description = ''
+        The terminal Tatami's shortcuts, launcher and terminal applications
+        open. It must provide `aizome-hotaru`, which Tatami starts with
+        Hotaru's own options, and `org.aizome.Hotaru.desktop`, the session's
+        xdg-terminal-exec choice: a build of Hotaru, not another terminal.
+      '';
+    };
     wallpapers = lib.mkOption {
       type = lib.types.package;
       default = wallpapers;
@@ -506,14 +523,7 @@ in
       wallpapers
       # The weather beside the clock.
       pkgs.curl
-      # The full Aizome package already carries the same terminal. Avoid
-      # two different packages claiming its executable and desktop entry.
-      (
-        if lib.attrByPath [ "programs" "aizome" "enable" ] false config then
-          config.programs.aizome.package
-        else
-          tatamiHotaru
-      )
+      cfg.hotaruPackage
       pkgs.walker
       # walker finds its backend through PATH.
       elephant
