@@ -1,6 +1,13 @@
 //! What Chanoma draws: every screen is a 1920 × 1080 design scaled to fit
 //! the television and centred ([`Fit`]), drawn on one canvas from a
-//! [`Scene`] the program builds in `view`.
+//! [`Scene`] the program builds in `view`, in Aizome's look ([`look`]).
+//!
+//! Most screens wear the same header and foot. The header is the menu
+//! bar's, without the bar: Aizome's mark and Chanoma's name at the left
+//! (or the screen's title), and at the right what the systray would show
+//! here: grown-up mode, each controller with its player and battery, the
+//! time left today, and the clock as the menu bar sets it. The foot says
+//! what the buttons do, drawn as the controller in hand prints them.
 //!
 //! **What redraws.** The scene's hash leaves out where the focus is; the
 //! tiles and rows that move with it are the canvas's parts. Moving along a
@@ -19,9 +26,10 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect, Size};
-use aizome_kit::sidestep_ui::{Canvas, Color, Image};
-use aizome_kit::theme::Theme;
+use aizome_kit::sidestep_ui::{Canvas, Image};
+use aizome_kit::theme::{Role, Theme};
 
 use crate::pad::{Button, Family};
 use look::*;
@@ -30,9 +38,12 @@ use look::*;
 pub const W: f64 = 1920.0;
 pub const H: f64 = 1080.0;
 /// Where screens start under the header.
-pub const TOP: f64 = 196.0;
+pub const TOP: f64 = 176.0;
 /// The side margin.
 pub const MARGIN: f64 = 96.0;
+/// The header's middle, and the foot's.
+pub const HEAD_Y: f64 = 76.0;
+pub const FOOT_Y: f64 = H - 64.0;
 
 /// How the design sits in a window.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -88,11 +99,13 @@ pub struct PadBadge {
 /// The header and footer most screens wear.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Chrome {
-    pub greeting: String,
+    /// Aizome's mark and Chanoma's name at the left (screens with a title
+    /// of their own put it there instead).
+    pub brand: bool,
     pub clock: String,
     /// "45 min left" and the like.
     pub left: Option<String>,
-    /// Little time left: the pill turns amber.
+    /// Little time left: it turns amber.
     pub short: bool,
     pub grownup: bool,
     pub pads: Vec<PadBadge>,
@@ -215,7 +228,7 @@ impl Scene {
         let fit = Fit::new(b);
         let clear = matches!(self.view, View::Clear);
         if !clear {
-            backdrop(c, b);
+            backdrop(c, theme, b);
         }
         c.saved(|c| {
             fit.apply(c);
@@ -232,7 +245,8 @@ impl Scene {
         });
         match &self.overlay {
             Some(o @ (Overlay::Pin(_) | Overlay::Menu(_))) => {
-                c.fill_rect(b, VEIL);
+                // What's under it stays in sight, quietened.
+                c.fill_rect(b, theme.surface().with_alpha(0.82));
                 c.saved(|c| {
                     fit.apply(c);
                     match o {
@@ -274,21 +288,25 @@ pub enum Target {
     Key(usize),
 }
 
-/// A film's bar along the foot: its name, its time, how far through.
+/// A film's bar along the foot: its name and how far through, on a
+/// floating panel.
 pub fn film_bar(c: &mut Canvas, theme: &Theme, label: &str, progress: u16) {
-    let r = Rect::new(MARGIN, H - 190.0, W - MARGIN, H - 60.0);
-    look::card(c, r, 30.0, Color::rgba(0.07, 0.08, 0.2, 0.88));
-    let l = fit_text(theme, label, r.width() - 80.0, font(34.0, 700.0));
-    text(c, theme, &l, Point::new(r.x0 + 40.0, r.y0 + 22.0), font(34.0, 700.0), INK);
-    let bar = Rect::new(r.x0 + 40.0, r.y1 - 40.0, r.x1 - 40.0, r.y1 - 28.0);
-    c.fill(&aizome_kit::sidestep_ui::kurbo::RoundedRect::from_rect(bar, 6.0), Color::rgba(1.0, 1.0, 1.0, 0.2));
-    let done = Rect::new(bar.x0, bar.y0, bar.x0 + bar.width() * f64::from(progress.min(1000)) / 1000.0, bar.y1);
+    let r = Rect::new(MARGIN, H - 200.0, W - MARGIN, H - 64.0);
+    floating(c, theme, r);
+    let spec = font(TITLE, SEMIBOLD);
+    let l = fit_text(theme, label, r.width() - 80.0, spec);
+    text_mid(c, theme, &l, r.x0 + 40.0, r.y0 + 46.0, spec, theme.text());
+    let track = Rect::new(r.x0 + 40.0, r.y1 - 48.0, r.x1 - 40.0, r.y1 - 36.0);
+    well(c, theme, track);
+    let inner = track.inset(-EDGE);
+    let done =
+        Rect::new(inner.x0, inner.y0, inner.x0 + inner.width() * f64::from(progress.min(1000)) / 1000.0, inner.y1);
     if done.width() >= 1.0 {
-        c.fill(&aizome_kit::sidestep_ui::kurbo::RoundedRect::from_rect(done, 6.0), FOCUS);
+        c.fill_rect(done, theme.selection());
     }
 }
 
-/// What a toast is about, for its picture.
+/// What a note is about, for its icon and rail.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Note {
     #[default]
@@ -298,67 +316,62 @@ pub enum Note {
     Controller,
 }
 
-/// A note at the top, over whatever shows.
+/// A note at the top, over whatever shows: a floating panel with a rail
+/// in its kind's colour, as Aizome's notifications are.
 pub fn toast(c: &mut Canvas, theme: &Theme, t: &str, note: Note) {
-    let spec = font(34.0, 700.0);
+    let spec = font(BODY, MEDIUM);
     let size = measure(theme, t, spec);
-    let r = Rect::new(W / 2.0 - size.width / 2.0 - 90.0, 48.0, W / 2.0 + size.width / 2.0 + 40.0, 132.0);
-    look::card(c, r, 42.0, Color::hex(0x2a2f6e));
-    let at = Point::new(r.x0 + 52.0, r.center().y);
-    match note {
-        Note::Time => hourglass(c, at, 40.0, WARN),
-        Note::GrownUp => padlock(c, at, 38.0, FOCUS),
-        Note::Kids => padlock(c, at, 38.0, GOOD),
-        Note::Controller => controller(c, at, 52.0, INK, Color::hex(0x2a2f6e)),
-    }
-    text(c, theme, t, Point::new(r.x0 + 90.0, r.center().y - size.height / 2.0), spec, INK);
+    let (glyph, color) = match note {
+        Note::Time => (Icon::Hourglass, theme.role(Role::Warning)),
+        Note::GrownUp => (Icon::LockOpen, theme.focus()),
+        Note::Kids => (Icon::Lock, theme.role(Role::Success)),
+        Note::Controller => (Icon::Gamepad2, theme.text2()),
+    };
+    let w = (RAIL + 32.0 + 36.0 + 20.0 + size.width + 40.0).round();
+    let r = Rect::new((W / 2.0 - w / 2.0).round(), 36.0, (W / 2.0 + w / 2.0).round(), 116.0);
+    floating(c, theme, r);
+    c.fill_rect(Rect::new(r.x0, r.y0, r.x0 + RAIL, r.y1), color);
+    icon(c, glyph, Point::new(r.x0 + RAIL + 32.0 + 18.0, r.center().y), 36.0, color);
+    text_mid(c, theme, t, r.x0 + RAIL + 32.0 + 36.0 + 20.0, r.center().y, spec, theme.text());
 }
 
-/// The header (clock, time left, controllers) and the hints along the
-/// foot.
+/// The header (Chanoma's name; grown-up mode, the controllers, the time
+/// left and the clock) and the hints along the foot.
 pub fn paint_chrome(c: &mut Canvas, theme: &Theme, ch: &Chrome) {
-    if !ch.clock.is_empty() {
-        text(c, theme, &ch.greeting, Point::new(MARGIN, 52.0), font(30.0, 600.0), INK_SOFT);
-        text(c, theme, &ch.clock, Point::new(MARGIN, 88.0), font(60.0, 800.0), INK);
+    if ch.brand {
+        mark(c, theme, Point::new(MARGIN, HEAD_Y - 18.0), 9.0);
+        text_mid(c, theme, "Chanoma", MARGIN + 54.0, HEAD_Y, font(TITLE, BOLD), theme.text());
     }
     let mut right = W - MARGIN;
-    for p in ch.pads.iter().rev() {
-        let at = Point::new(right - 46.0, 100.0);
-        controller(c, at, 76.0, INK_SOFT, Color::hex(0x252c62));
-        text_centred(c, theme, &format!("{}", p.slot + 1), Point::new(at.x, at.y + 46.0), font(22.0, 800.0), INK_SOFT);
-        if let Some((pct, charging)) = p.battery {
-            battery(c, Point::new(at.x, at.y - 46.0), 34.0, f64::from(pct) / 100.0, charging);
-        }
-        right -= 104.0;
+    if !ch.clock.is_empty() {
+        right -= text_right(c, theme, &ch.clock, right, HEAD_Y, mono(TITLE, MEDIUM), theme.text()) + 48.0;
     }
     if let Some(left) = &ch.left {
-        let r = pill(
-            c,
-            theme,
-            left,
-            right - 12.0,
-            74.0,
-            if ch.short { WARN } else { Color::hex(0x2c3474) },
-            if ch.short { Color::hex(0x2a1e05) } else { INK },
-        );
-        hourglass(c, Point::new(r.x0 - 30.0, r.center().y), 38.0, if ch.short { WARN } else { INK_SOFT });
-        right = r.x0 - 64.0;
+        let color = if ch.short { theme.role(Role::Warning) } else { theme.text2() };
+        let w = text_right(c, theme, left, right, HEAD_Y, font(SMALL + 2.0, MEDIUM), color);
+        icon(c, Icon::Hourglass, Point::new(right - w - 26.0, HEAD_Y), 30.0, color);
+        right -= w + 44.0 + 48.0;
+    }
+    for p in ch.pads.iter().rev() {
+        if let Some((pct, charging)) = p.battery {
+            let (glyph, color) = battery(theme, pct, charging);
+            icon(c, glyph, Point::new(right - 16.0, HEAD_Y), 32.0, color);
+            right -= 32.0 + 10.0;
+        }
+        right -=
+            text_right(c, theme, &format!("{}", p.slot + 1), right, HEAD_Y, mono(SMALL, MEDIUM), theme.text2()) + 8.0;
+        icon(c, Icon::Gamepad2, Point::new(right - 18.0, HEAD_Y), 36.0, theme.text2());
+        right -= 36.0 + 32.0;
     }
     if ch.grownup {
-        let r = pill(c, theme, "Grown-up", right - 12.0, 74.0, FOCUS, Color::hex(0x2a1e05));
-        let _ = r;
+        chip(c, theme, "Grown-up", right - 16.0, HEAD_Y, 18.0);
     }
-    let y = H - 62.0;
     if let Some(b) = &ch.banner {
-        let spec = font(30.0, 700.0);
-        let size = measure(theme, b, spec);
-        let r = Rect::new(MARGIN - 20.0, y - 112.0, MARGIN + size.width + 110.0, y - 44.0);
-        c.fill(&aizome_kit::sidestep_ui::kurbo::RoundedRect::from_rect(r, 34.0), Color::hex(0x3b2a12));
-        controller(c, Point::new(r.x0 + 52.0, r.center().y), 52.0, WARN, Color::hex(0x3b2a12));
-        text(c, theme, b, Point::new(r.x0 + 96.0, r.center().y - size.height / 2.0), spec, WARN);
+        let w = text_right(c, theme, b, W - MARGIN, FOOT_Y, font(SMALL + 2.0, MEDIUM), theme.text());
+        icon(c, Icon::Gamepad2, Point::new(W - MARGIN - w - 30.0, FOOT_Y), 36.0, theme.role(Role::Warning));
     }
     let mut x = MARGIN;
     for (b, what) in &ch.hints {
-        x = hint(c, theme, ch.family, *b, what, x, y);
+        x = hint(c, theme, ch.family, *b, what, x, FOOT_Y);
     }
 }

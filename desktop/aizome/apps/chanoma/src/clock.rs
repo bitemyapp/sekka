@@ -26,9 +26,10 @@ impl Local {
         format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 
-    /// `7:30 pm`-style, as a clock on the wall says it.
-    pub fn time_label(&self) -> String {
-        minute_label(self.minute)
+    /// The time as the menu bar shows it: `19:30`, or `7:30 PM` where it
+    /// counts twelve hours.
+    pub fn time_label(&self, h24: bool) -> String {
+        minute_label(self.minute, h24)
     }
 
     /// Converted from the system's local time zone.
@@ -57,14 +58,17 @@ impl Local {
 }
 
 /// A minute of the day as `7:30 pm`.
-pub fn minute_label(minute: u16) -> String {
+pub fn minute_label(minute: u16, h24: bool) -> String {
     let h = (minute / 60) % 24;
     let m = minute % 60;
+    if h24 {
+        return format!("{h:02}:{m:02}");
+    }
     let (h12, half) = match h {
-        0 => (12, "am"),
-        1..=11 => (h, "am"),
-        12 => (12, "pm"),
-        _ => (h - 12, "pm"),
+        0 => (12, "AM"),
+        1..=11 => (h, "AM"),
+        12 => (12, "PM"),
+        _ => (h - 12, "PM"),
     };
     format!("{h12}:{m:02} {half}")
 }
@@ -169,10 +173,13 @@ mod tests {
     }
 
     #[test]
-    fn minutes_read_as_a_clock_says_them() {
-        assert_eq!(minute_label(0), "12:00 am");
-        assert_eq!(minute_label(7 * 60 + 5), "7:05 am");
-        assert_eq!(minute_label(12 * 60), "12:00 pm");
-        assert_eq!(minute_label(19 * 60 + 30), "7:30 pm");
+    fn minutes_read_as_the_menu_bar_says_them() {
+        assert_eq!(minute_label(0, true), "00:00");
+        assert_eq!(minute_label(7 * 60 + 5, true), "07:05");
+        assert_eq!(minute_label(19 * 60 + 30, true), "19:30");
+        assert_eq!(minute_label(0, false), "12:00 AM");
+        assert_eq!(minute_label(7 * 60 + 5, false), "7:05 AM");
+        assert_eq!(minute_label(12 * 60, false), "12:00 PM");
+        assert_eq!(minute_label(19 * 60 + 30, false), "7:30 PM");
     }
 }

@@ -2,7 +2,8 @@
 //! browser, signed in once by a grown-up and remembered in a browser
 //! profile of its own.
 //!
-//! Tiles are a service's colour with its name set large, never its logo.
+//! A service's tile is its colour on a square with its initial, and its
+//! name; never its logo.
 
 /// How a controller drives the page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -22,7 +23,7 @@ pub struct Service {
     /// What the tile says, where the name is long.
     pub short: &'static str,
     pub url: &'static str,
-    /// The tile's colour and its lettering's (0xRRGGBB).
+    /// The colour of its tile's square, and of the initial on it (0xRRGGBB).
     pub color: u32,
     pub ink: u32,
     /// Made for kids.

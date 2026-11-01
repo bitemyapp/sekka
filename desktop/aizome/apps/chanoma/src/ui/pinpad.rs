@@ -1,15 +1,17 @@
-//! The grown-ups' PIN pad: a dot for each digit typed, and digits in a
-//! telephone's three by four, moved through with the arrows (or typed on
-//! a keyboard). It checks the PIN as soon as it's as long as the one set;
-//! wrong ones shake out with a message, and after a few the pad waits.
+//! The grown-ups' PIN pad, as Aizome's lock screen asks for a password: a
+//! floating panel with a title strip, a sunken cell for each digit (a dot
+//! in each one typed), and the digits in a telephone's three by four,
+//! moved through with the arrows (or typed on a keyboard). It checks the
+//! PIN as soon as it's as long as the one set; wrong ones say so, and
+//! after a few the pad waits.
 
+use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect};
-use aizome_kit::sidestep_ui::kurbo::{Circle, RoundedRect};
-use aizome_kit::sidestep_ui::{Canvas, Color, StrokeStyle};
-use aizome_kit::theme::Theme;
+use aizome_kit::sidestep_ui::Canvas;
+use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Focus, W};
+use super::{Focus, H, W};
 
 /// The keys, in reading order.
 pub const KEYS: [Key; 12] = [
@@ -49,21 +51,24 @@ pub struct Pad {
     pub checking: bool,
 }
 
-const KEY: f64 = 116.0;
-const KEY_GAP: f64 = 22.0;
-const TOP: f64 = 110.0;
+const KEY_W: f64 = 136.0;
+const KEY_H: f64 = 96.0;
+const KEY_GAP: f64 = 16.0;
+const STRIP_H: f64 = 84.0;
+const HEIGHT: f64 = 770.0;
 
 fn frame() -> Rect {
-    let w = 3.0 * KEY + 2.0 * KEY_GAP + 200.0;
-    Rect::new(W / 2.0 - w / 2.0, TOP, W / 2.0 + w / 2.0, TOP + 880.0)
+    let w = 3.0 * KEY_W + 2.0 * KEY_GAP + 2.0 * 72.0;
+    let top = ((H - HEIGHT) / 2.0).round();
+    Rect::new((W / 2.0 - w / 2.0).round(), top, (W / 2.0 + w / 2.0).round(), top + HEIGHT)
 }
 
 /// Key `i`'s rectangle.
 pub fn key_rect(i: usize) -> Rect {
     let f = frame();
-    let x = f.center().x - (1.5 * KEY + KEY_GAP) + (i % 3) as f64 * (KEY + KEY_GAP);
-    let y = f.y0 + 290.0 + (i / 3) as f64 * (KEY + KEY_GAP);
-    Rect::new(x, y, x + KEY, y + KEY)
+    let x = f.center().x - (1.5 * KEY_W + KEY_GAP) + (i % 3) as f64 * (KEY_W + KEY_GAP);
+    let y = f.y0 + STRIP_H + 210.0 + (i / 3) as f64 * (KEY_H + KEY_GAP);
+    Rect::new(x.round(), y, (x + KEY_W).round(), y + KEY_H)
 }
 
 pub fn hit(p: Point) -> Option<usize> {
@@ -85,48 +90,59 @@ pub fn step(i: usize, dir: crate::pad::Dir) -> usize {
 impl Pad {
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus) {
         let f = frame();
-        panel(c, f);
-        padlock(c, Point::new(f.center().x, f.y0 + 62.0), 54.0, FOCUS);
-        text_centred(c, theme, &self.title, Point::new(f.center().x, f.y0 + 132.0), font(42.0, 800.0), INK);
+        floating(c, theme, f);
+        let strip = Rect::new(f.x0 + EDGE, f.y0 + EDGE, f.x1 - EDGE, f.y0 + STRIP_H);
+        c.fill_rect(strip, theme.menu_title());
+        icon(c, Icon::Lock, Point::new(strip.x0 + 36.0 + 15.0, strip.center().y), 30.0, theme.focus());
+        let spec = font(TITLE, SEMIBOLD);
+        text_mid(c, theme, &self.title, strip.x0 + 36.0 + 30.0 + 18.0, strip.center().y, spec, theme.on_menu_title());
         let (line, color) = match (&self.wait, &self.error) {
-            (Some(s), _) => (format!("Too many tries. Wait {}:{:02}", s / 60, s % 60), DANGER),
-            (None, Some(e)) => (e.clone(), DANGER),
-            (None, None) if self.checking => ("Checking…".into(), INK_SOFT),
-            (None, None) => (self.prompt.clone(), INK_SOFT),
+            (Some(s), _) => (format!("Too many tries. Wait {}:{:02}", s / 60, s % 60), theme.role(Role::Danger)),
+            (None, Some(e)) => (e.clone(), theme.role(Role::Danger)),
+            (None, None) if self.checking => ("Checking…".into(), theme.text2()),
+            (None, None) => (self.prompt.clone(), theme.text2()),
         };
-        text_centred(c, theme, &line, Point::new(f.center().x, f.y0 + 184.0), font(28.0, 600.0), color);
-        // The dots: as many as the PIN is long, filled as typed.
+        let line = fit_text(theme, &line, f.width() - 72.0, font(BODY - 2.0, REGULAR));
+        text_centred(
+            c,
+            theme,
+            &line,
+            Point::new(f.center().x, f.y0 + STRIP_H + 52.0),
+            font(BODY - 2.0, REGULAR),
+            color,
+        );
+        // A cell for each digit, as many as the PIN is long, a dot in
+        // those typed.
         let n = self.length.unwrap_or(self.typed.max(4)).max(self.typed);
-        let spacing = 44.0;
-        let x0 = f.center().x - spacing * (n as f64 - 1.0) / 2.0;
+        let (cw, gap) = (52.0, 14.0);
+        let total = n as f64 * cw + (n as f64 - 1.0) * gap;
+        let x0 = (f.center().x - total / 2.0).round();
+        let y0 = f.y0 + STRIP_H + 104.0;
         for i in 0..n {
-            let at = Point::new(x0 + i as f64 * spacing, f.y0 + 238.0);
+            let cell = Rect::new(x0 + i as f64 * (cw + gap), y0, x0 + i as f64 * (cw + gap) + cw, y0 + 64.0);
+            well(c, theme, cell);
             if i < self.typed {
-                c.fill(&Circle::new(at, 13.0), INK);
-            } else {
-                c.stroke(&Circle::new(at, 12.0), &StrokeStyle::new(3.0), INK_FAINT);
+                c.fill_rect(Rect::from_center_size(cell.center(), (16.0, 16.0)), theme.text());
             }
         }
         let locked = self.wait.is_some() || self.checking;
         for (i, k) in KEYS.iter().enumerate() {
             let r = key_rect(i);
             let on = focus.row == i && !locked;
-            let fill = if on { INK } else { Color::hex(0x2c3474) };
-            c.fill(&RoundedRect::from_rect(r, 30.0), fill);
             let ink = if on {
-                Color::hex(0x141a3a)
-            } else if locked {
-                INK_FAINT
+                lit(c, theme, r);
+                theme.on_selection()
             } else {
-                INK
+                face(c, theme, r, theme.raised(), theme.line2());
+                if locked { theme.faint() } else { theme.text() }
             };
             match k {
-                Key::Digit(d) => text_centred(c, theme, &d.to_string(), r.center(), font(52.0, 800.0), ink),
-                Key::Erase => text_centred(c, theme, "⌫", r.center(), font(44.0, 700.0), ink),
-                Key::Done => text_centred(c, theme, "OK", r.center(), font(36.0, 800.0), ink),
+                Key::Digit(d) => text_centred(c, theme, &d.to_string(), r.center(), mono(HEADLINE - 4.0, MEDIUM), ink),
+                Key::Erase => icon(c, Icon::Delete, r.center(), 40.0, ink),
+                Key::Done => text_centred(c, theme, "OK", r.center(), font(TITLE, SEMIBOLD), ink),
             }
             if on {
-                focus_ring(c, r, 30.0);
+                ring(c, theme, r);
             }
         }
     }

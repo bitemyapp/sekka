@@ -60,7 +60,7 @@ impl Chanoma {
         Tile {
             label: g.title.clone(),
             sub: g.system.short.to_owned(),
-            look: TileLook::Picture { art, color: g.system.color, pixels },
+            look: TileLook::Picture { art, chip: Some(g.system.color), pixels },
             badge: waiting.then(|| "New".to_owned()),
             progress: None,
         }
@@ -148,7 +148,7 @@ impl Chanoma {
                         Tile {
                             label: shelf.title.clone(),
                             sub,
-                            look: TileLook::Picture { art: shelf.poster.clone(), color: 0x30366e, pixels: false },
+                            look: TileLook::Picture { art: shelf.poster.clone(), chip: None, pixels: false },
                             badge: None,
                             progress,
                         },
@@ -204,7 +204,7 @@ impl Chanoma {
                         Tile {
                             label: s.title.clone(),
                             sub,
-                            look: TileLook::Picture { art: s.poster.clone(), color: 0x30366e, pixels: false },
+                            look: TileLook::Picture { art: s.poster.clone(), chip: None, pixels: false },
                             badge: None,
                             progress: None,
                         },
@@ -217,7 +217,7 @@ impl Chanoma {
                     Tile {
                         label: "Everything".into(),
                         sub: String::new(),
-                        look: TileLook::Symbol { symbol: Symbol::Film, color: 0x30366e },
+                        look: TileLook::Symbol { symbol: Symbol::Film },
                         badge: None,
                         progress: None,
                     },
@@ -237,7 +237,7 @@ impl Chanoma {
                     Tile {
                         label: "All games".into(),
                         sub: format!("{}", games.len()),
-                        look: TileLook::Symbol { symbol: Symbol::Grid, color: 0x3a3f86 },
+                        look: TileLook::Symbol { symbol: Symbol::Grid },
                         badge: None,
                         progress: None,
                     },
@@ -255,7 +255,7 @@ impl Chanoma {
                         Tile {
                             label: "Add games".into(),
                             sub: "Choose their folder".into(),
-                            look: TileLook::Symbol { symbol: Symbol::Plus, color: 0x3a3f86 },
+                            look: TileLook::Symbol { symbol: Symbol::Plus },
                             badge: None,
                             progress: None,
                         },
@@ -272,7 +272,7 @@ impl Chanoma {
                     Tile {
                         label: "Settings".into(),
                         sub: String::new(),
-                        look: TileLook::Symbol { symbol: Symbol::Gear, color: 0x5a3e2a },
+                        look: TileLook::Symbol { symbol: Symbol::Gear },
                         badge: None,
                         progress: None,
                     },
@@ -282,7 +282,7 @@ impl Chanoma {
                     Tile {
                         label: "Kids' mode".into(),
                         sub: "Lock grown-up mode".into(),
-                        look: TileLook::Symbol { symbol: Symbol::Lock, color: 0x5a3e2a },
+                        look: TileLook::Symbol { symbol: Symbol::Lock },
                         badge: None,
                         progress: None,
                     },
@@ -292,7 +292,7 @@ impl Chanoma {
                     Tile {
                         label: "Leave Chanoma".into(),
                         sub: "Back to the desktop".into(),
-                        look: TileLook::Symbol { symbol: Symbol::Door, color: 0x5a3e2a },
+                        look: TileLook::Symbol { symbol: Symbol::Door },
                         badge: None,
                         progress: None,
                     },
@@ -304,7 +304,7 @@ impl Chanoma {
                 Tile {
                     label: "Grown-ups".into(),
                     sub: "Needs the PIN".into(),
-                    look: TileLook::Symbol { symbol: Symbol::Lock, color: 0x3a3f86 },
+                    look: TileLook::Symbol { symbol: Symbol::Lock },
                     badge: None,
                     progress: None,
                 },
@@ -504,7 +504,7 @@ impl Chanoma {
                 .map(|s| Tile {
                     label: s.title.clone(),
                     sub: String::new(),
-                    look: TileLook::Picture { art: s.poster.clone(), color: 0x30366e, pixels: false },
+                    look: TileLook::Picture { art: s.poster.clone(), chip: None, pixels: false },
                     badge: None,
                     progress: None,
                 })
@@ -551,7 +551,7 @@ impl Chanoma {
                     } else {
                         format!("Episode {}", i + 1)
                     },
-                    look: TileLook::Picture { art: None, color: 0x30366e, pixels: false },
+                    look: TileLook::Picture { art: None, chip: None, pixels: false },
                     badge: None,
                     progress,
                 }

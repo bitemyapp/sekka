@@ -6,13 +6,13 @@
 //! The focus: `row` is the row (in the list) or the section (at the side),
 //! `col` is 0 at the side and 1 in the list.
 
+use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect};
-use aizome_kit::sidestep_ui::kurbo::{Circle, RoundedRect};
-use aizome_kit::sidestep_ui::{Canvas, Color};
-use aizome_kit::theme::Theme;
+use aizome_kit::sidestep_ui::Canvas;
+use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Fit, Focus, H, MARGIN, TOP, Target, W};
+use super::{Fit, Focus, H, HEAD_Y, MARGIN, TOP, Target, W};
 
 /// What's at a row's right.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -62,6 +62,8 @@ impl Row {
 pub struct Page {
     pub title: String,
     pub sections: Vec<String>,
+    /// Each section's icon, on a square of its colour.
+    pub icons: Vec<(Icon, Role)>,
     pub section: usize,
     pub rows: Vec<Row>,
     /// The first row showing.
@@ -138,8 +140,8 @@ impl Page {
     }
 
     fn section_rect(&self, i: usize) -> Rect {
-        let y = TOP + 20.0 + i as f64 * 84.0;
-        Rect::new(MARGIN, y, MARGIN + SIDE_W, y + 72.0)
+        let y = TOP + 20.0 + i as f64 * 78.0;
+        Rect::new(MARGIN, y, MARGIN + SIDE_W, y + 68.0)
     }
 
     pub fn parts(&self, focus: Focus, fit: &Fit) -> Vec<(Rect, u64)> {
@@ -165,15 +167,17 @@ impl Page {
     }
 
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus) {
-        // The title where Home has its clock.
-        let head = Rect::new(0.0, 40.0, W, TOP + 10.0);
+        // The title where Home has its name.
+        let head = Rect::new(0.0, 30.0, W, TOP - 10.0);
         if c.needs(head) {
-            text(c, theme, &self.title, Point::new(MARGIN, 64.0), font(58.0, 800.0), INK);
+            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
             if !self.note.is_empty() {
-                let w = measure(theme, &self.title, font(58.0, 800.0)).width;
-                text(c, theme, &self.note, Point::new(MARGIN + w + 28.0, 84.0), font(30.0, 600.0), INK_SOFT);
+                let spec = font(SMALL + 2.0, REGULAR);
+                text_mid(c, theme, &self.note, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
             }
         }
+        // The sections, as Settei's side list: each with its icon on a
+        // square of its colour, the current one lit.
         for (i, s) in self.sections.iter().enumerate() {
             let r = self.section_rect(i);
             if !c.needs(r.inflate(16.0, 16.0)) {
@@ -181,19 +185,19 @@ impl Page {
             }
             let current = i == self.section;
             let on = focus.col == 0 && focus.row == i;
-            if current || on {
-                c.fill(&RoundedRect::from_rect(r, 20.0), if on { INK } else { Color::hex(0x2c3474) });
+            if current {
+                lit(c, theme, r);
             }
-            let ink = if on {
-                Color::hex(0x141a3a)
-            } else if current {
-                INK
-            } else {
-                INK_SOFT
-            };
-            text(c, theme, s, Point::new(r.x0 + 28.0, r.y0 + 18.0), font(32.0, 700.0), ink);
+            if let Some((glyph, role)) = self.icons.get(i) {
+                let sq = Rect::new(r.x0 + 14.0, r.center().y - 20.0, r.x0 + 54.0, r.center().y + 20.0);
+                c.fill_rect(sq, theme.role(*role));
+                let ink = if theme.is_dark() { theme.surface() } else { aizome_kit::Color::WHITE };
+                icon(c, *glyph, sq.center(), 26.0, ink);
+            }
+            let ink = if current { theme.on_selection() } else { theme.text() };
+            text_mid(c, theme, s, r.x0 + 72.0, r.center().y, font(BODY, MEDIUM), ink);
             if on {
-                focus_ring(c, r, 20.0);
+                ring(c, theme, r);
             }
         }
         for i in (0..self.rows.len()).filter(|i| self.showing(*i)) {
@@ -203,61 +207,47 @@ impl Page {
             }
             let row = &self.rows[i];
             if row.heading {
-                text(c, theme, &row.label, Point::new(r.x0 + 8.0, r.y0 + 22.0), font(26.0, 800.0), FOCUS);
+                caption(c, theme, &row.label, r.x0 + 4.0, r.y1 - 22.0, theme.text3());
                 continue;
             }
             let on = focus.col == 1 && focus.row == i;
-            c.fill(&RoundedRect::from_rect(r, 20.0), if on { Color::hex(0x323b84) } else { Color::hex(0x232a5e) });
-            let label_y = if row.detail.is_empty() { r.center().y - 20.0 } else { r.y0 + 10.0 };
+            face(c, theme, r, theme.raised(), theme.line());
             let value_w = value_width(theme, &row.value);
-            let label = fit_text(theme, &row.label, r.width() - value_w - 90.0, font(32.0, 700.0));
-            text(c, theme, &label, Point::new(r.x0 + 28.0, label_y), font(32.0, 700.0), INK);
+            let room = r.width() - value_w - 90.0;
+            let spec = font(BODY + 2.0, MEDIUM);
+            let label = fit_text(theme, &row.label, room, spec);
+            let label_y = if row.detail.is_empty() { r.center().y } else { r.y0 + 30.0 };
+            let lw = text_mid(c, theme, &label, r.x0 + 28.0, label_y, spec, theme.text());
             if !row.detail.is_empty() {
-                let d = fit_text(theme, &row.detail, r.width() - value_w - 90.0, font(24.0, 600.0));
-                text(c, theme, &d, Point::new(r.x0 + 28.0, r.y0 + 50.0), font(24.0, 600.0), INK_SOFT);
+                let dspec = font(SMALL - 2.0, REGULAR);
+                let d = fit_text(theme, &row.detail, room, dspec);
+                text_mid(c, theme, &d, r.x0 + 28.0, r.y1 - 24.0, dspec, theme.text3());
             }
             if let Some(b) = &row.badge {
-                let lw = measure(theme, &label, font(32.0, 700.0)).width;
-                let spec = font(20.0, 800.0);
-                let bw = measure(theme, b, spec).width + 22.0;
-                let br = Rect::new(r.x0 + 40.0 + lw, label_y + 4.0, r.x0 + 40.0 + lw + bw, label_y + 34.0);
-                c.fill(&RoundedRect::from_rect(br, 15.0), FOCUS);
-                text_centred(c, theme, b, br.center(), spec, Color::hex(0x2a1e05));
+                let bw = caption_width(theme, b, 16.0) + 16.0 * 1.2;
+                chip(c, theme, b, r.x0 + 28.0 + lw + 16.0 + bw, label_y, 16.0);
             }
             paint_value(c, theme, &row.value, r, on);
             if on {
-                focus_ring(c, r, 20.0);
+                ring(c, theme, r);
             }
         }
-        // More below or above: a fade of the arrows' hint.
+        // More below or above.
+        let mid = (LIST_X + W - MARGIN) / 2.0;
         if self.first > 0 {
-            text_centred(
-                c,
-                theme,
-                "▲",
-                Point::new((LIST_X + W - MARGIN) / 2.0, LIST_TOP - 14.0),
-                font(22.0, 700.0),
-                INK_FAINT,
-            );
+            icon(c, Icon::ChevronUp, Point::new(mid, LIST_TOP - 10.0), 28.0, theme.text3());
         }
         if (0..self.rows.len()).any(|i| i >= self.first && !self.showing(i)) {
-            text_centred(
-                c,
-                theme,
-                "▼",
-                Point::new((LIST_X + W - MARGIN) / 2.0, LIST_BOTTOM + 8.0),
-                font(22.0, 700.0),
-                INK_FAINT,
-            );
+            icon(c, Icon::ChevronDown, Point::new(mid, LIST_BOTTOM + 14.0), 28.0, theme.text3());
         }
     }
 }
 
 fn value_width(theme: &Theme, v: &Value) -> f64 {
     match v {
-        Value::Switch(_) => 110.0,
-        Value::Choice(s) => measure(theme, s, font(30.0, 700.0)).width + 110.0,
-        Value::Note(s) => measure(theme, s, font(28.0, 600.0)).width + 30.0,
+        Value::Switch(_) => 100.0,
+        Value::Choice(s) => measure(theme, s, font(BODY, SEMIBOLD)).width + 100.0,
+        Value::Note(s) => measure(theme, s, font(SMALL + 2.0, REGULAR)).width + 30.0,
         Value::Action => 50.0,
         Value::None => 0.0,
     }
@@ -268,23 +258,36 @@ fn paint_value(c: &mut Canvas, theme: &Theme, v: &Value, r: Rect, on: bool) {
     let cy = r.center().y;
     match v {
         Value::Switch(state) => {
-            let track = Rect::new(right - 92.0, cy - 24.0, right, cy + 24.0);
-            c.fill(&RoundedRect::from_rect(track, 24.0), if *state { GOOD } else { Color::hex(0x3a427a) });
-            let knob = if *state { track.x1 - 24.0 } else { track.x0 + 24.0 };
-            c.fill(&Circle::new(Point::new(knob, cy), 19.0), INK);
+            // The kit's switch: a square track and knob, lit when on.
+            let track = Rect::new(right - 80.0, cy - 20.0, right, cy + 20.0);
+            if *state {
+                c.fill_rect(track, theme.selection());
+                aizome_kit::draw::border(c, track, theme.bevel_lo(), EDGE);
+            } else {
+                well(c, theme, track);
+            }
+            let k = 28.0;
+            let x = if *state { track.x1 - 6.0 - k } else { track.x0 + 6.0 };
+            let knob = Rect::new(x, cy - k / 2.0, x + k, cy + k / 2.0);
+            c.fill_rect(knob, if *state { theme.on_selection() } else { theme.text3() });
+            aizome_kit::draw::border(c, knob, theme.bevel_lo(), EDGE);
         }
         Value::Choice(s) => {
-            let spec = font(30.0, 700.0);
-            let w = measure(theme, s, spec).width;
-            let arrows = if on { INK } else { INK_FAINT };
-            text_right(c, theme, "›", right, cy - 22.0, font(40.0, 700.0), arrows);
-            text(c, theme, s, Point::new(right - 40.0 - w, cy - 19.0), spec, INK);
-            text(c, theme, "‹", Point::new(right - 72.0 - w, cy - 22.0), font(40.0, 700.0), arrows);
+            let arrows = if on { theme.text() } else { theme.text3() };
+            icon(c, Icon::ChevronRight, Point::new(right - 14.0, cy), 28.0, arrows);
+            let w = text_right(c, theme, s, right - 40.0, cy, font(BODY, SEMIBOLD), theme.text());
+            icon(c, Icon::ChevronLeft, Point::new(right - 40.0 - w - 26.0, cy), 28.0, arrows);
         }
-        Value::Note(s) => text_right(c, theme, s, right, cy - 17.0, font(28.0, 600.0), INK_SOFT),
-        Value::Action => {
-            text_right(c, theme, "›", right, cy - 24.0, font(42.0, 700.0), if on { INK } else { INK_FAINT })
+        Value::Note(s) => {
+            text_right(c, theme, s, right, cy, font(SMALL + 2.0, REGULAR), theme.text2());
         }
+        Value::Action => icon(
+            c,
+            Icon::ChevronRight,
+            Point::new(right - 14.0, cy),
+            32.0,
+            if on { theme.text() } else { theme.text3() },
+        ),
         Value::None => {}
     }
 }
@@ -296,7 +299,15 @@ mod tests {
     fn page(n: usize) -> Page {
         let mut rows = vec![Row::heading("Head")];
         rows.extend((0..n).map(|i| Row::new(format!("Row {i}"), Value::Action)));
-        Page { title: "T".into(), sections: vec!["A".into()], section: 0, rows, first: 0, note: String::new() }
+        Page {
+            title: "T".into(),
+            sections: vec!["A".into()],
+            icons: Vec::new(),
+            section: 0,
+            rows,
+            first: 0,
+            note: String::new(),
+        }
     }
 
     #[test]

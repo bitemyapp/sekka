@@ -187,6 +187,9 @@ pub struct Config {
     pub core_override: Option<crate::retro::ffi::Api>,
     /// Stop tidily when asked by a signal (`signals::block` was called).
     pub signals: bool,
+    /// Clocks count 24 hours, as the menu bar's does unless it's set to
+    /// twelve.
+    pub h24: bool,
 }
 
 impl Config {
@@ -206,6 +209,7 @@ impl Config {
             scan: true,
             core_override: None,
             signals: false,
+            h24: aizome_config::Settings::load_or_default().menubar_settings().clock == aizome_config::ClockFormat::H24,
         }
     }
 }
@@ -969,12 +973,6 @@ impl Chanoma {
     // What's drawn.
 
     pub fn chrome(&self, hints: Vec<(Button, String)>) -> Chrome {
-        let hour = self.local.minute / 60;
-        let greeting = match hour {
-            5..=11 => "Good morning",
-            12..=16 => "Good afternoon",
-            _ => "Good evening",
-        };
         let (left, short) = match self.gate {
             _ if self.is_grownup() => (None, false),
             Gate::Open { left: Some(s) } => {
@@ -1002,8 +1000,8 @@ impl Chanoma {
                 .map(|p| format!("Player {}'s controller needs charging soon", p.slot + 1))
         };
         Chrome {
-            greeting: greeting.into(),
-            clock: self.local.time_label(),
+            brand: true,
+            clock: self.local.time_label(self.config.h24),
             left,
             short,
             grownup: self.is_grownup(),
@@ -1019,12 +1017,9 @@ impl Chanoma {
         }
     }
 
-    /// The header without its clock, for screens with a title there.
+    /// The header without Chanoma's name, for screens with a title there.
     fn chrome_titled(&self, hints: Vec<(Button, String)>) -> Chrome {
-        let mut c = self.chrome(hints);
-        c.clock.clear();
-        c.greeting.clear();
-        c
+        Chrome { brand: false, ..self.chrome(hints) }
     }
 
     fn hints(&self, ok: &str, back: Option<&str>) -> Vec<(Button, String)> {
@@ -1146,12 +1141,12 @@ impl Chanoma {
             }
             Screen::Welcome => {
                 let m = ui::screens::Message::new(
-                    ui::screens::Art::Lamp,
+                    ui::screens::Art::Mark,
                     "Welcome to Chanoma",
                     "The family TV: shows, films and games, all from a controller. First, a grown-up chooses a PIN and what the kids may do.",
                 )
                 .actions(&["Set it up"]);
-                self.stage(self.scene(View::Message(m), Some(self.chrome(self.hints("Start", None)))))
+                self.stage(self.scene(View::Message(m), Some(self.chrome_titled(self.hints("Start", None)))))
             }
             Screen::Home => {
                 let home = self.home_view();
