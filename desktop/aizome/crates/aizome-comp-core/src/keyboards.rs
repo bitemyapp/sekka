@@ -18,6 +18,16 @@ use tracing::{info, warn};
 
 use crate::state::State;
 
+/// Keys caught over windows: an app keeping a way back out of a window it
+/// opened (Chanoma's Home key over its browser).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatchOver {
+    pub tag: String,
+    /// evdev codes.
+    pub keys: Vec<u32>,
+    pub windows: Vec<crate::WinId>,
+}
+
 /// A keyboard that types, as its device gives itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Keyboard {
@@ -104,6 +114,10 @@ pub struct Keyboards {
     /// waiting for a key, and the IPC connection that asked, which alone
     /// hears of the key: it waits only while that stays open.
     pub catch: Option<(String, u64)>,
+    /// What [`Request::CatchKeys`](aizome_ipc::Request::CatchKeys) asked
+    /// for, by the IPC connection that asked: it alone hears of the keys,
+    /// and only while it stays open.
+    pub catch_over: BTreeMap<u64, CatchOver>,
 }
 
 impl Keyboards {

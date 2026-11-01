@@ -62,6 +62,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-chanoma"
+version = "0.1.0"
+dependencies = [
+ "aizome-config",
+ "aizome-ipc",
+ "aizome-kit",
+ "aizome-media",
+ "aizome-sys",
+ "aizome-theme",
+ "env_logger",
+ "image",
+ "libc",
+ "libloading",
+ "log",
+ "pipewire",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "aizome-comp"
 version = "0.1.0"
 dependencies = [
