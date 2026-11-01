@@ -17,6 +17,9 @@ path = "src/main.rs"
 
 [dependencies]
 aizome-kit.workspace = true
+# The mark, and the clock as the menu bar sets it.
+aizome-theme.workspace = true
+aizome-config.workspace = true
 aizome-ipc.workspace = true
 # Pairing controllers through BlueZ, as Settei does.
 aizome-sys.workspace = true

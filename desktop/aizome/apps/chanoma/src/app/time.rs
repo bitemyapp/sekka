@@ -102,14 +102,14 @@ impl Chanoma {
                 Art::Moon,
                 "It's bedtime",
                 format!(
-                    "Sleep well! Everything will be here in the morning, from {}.",
-                    crate::clock::minute_label(until)
+                    "Sleep well. Everything will be here in the morning, from {}.",
+                    crate::clock::minute_label(until, self.config.h24)
                 ),
             ),
             _ => Message::new(
                 Art::Hourglass,
                 "That's all for today",
-                "Your games are kept just where you left them. Come back tomorrow!",
+                "Your games are kept just where you left them, for tomorrow.",
             ),
         }
         .actions(&["Ask a grown-up"])

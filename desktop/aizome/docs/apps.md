@@ -1089,17 +1089,23 @@ what the kids may watch and play, and for how long. It isn't in every
 Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
 (below, and [docs/chanoma.md](chanoma.md) for how it works).
 
-- **Home** is shelves of big tiles: *Keep playing* (games where they were
-  left, with a picture of where; shows and films part watched), *Watch*
-  (the services), *Films and shows*, *Games*, and the grown-ups' door. The
-  tile the controller is on is ringed in amber, its name under it. The
-  arrows or the left stick move, held they repeat; the confirm button
-  opens. The hints along the foot show the controller's own buttons:
-  Xbox's coloured letters, PlayStation's shapes, Nintendo's letters (with
-  A, on the right, saying yes), or for any other controller the four
-  buttons as a diamond with the one meant filled in; keycaps for a
-  keyboard. The header has the time, the time left today, and each
-  controller with its player number and battery.
+- **Home** is shelves of tiles under spaced captions: *Keep playing*
+  (games where they were left, with a picture of where; shows and films
+  part watched), *Watch* (the services), *Games*, *Films and shows*, and
+  the grown-ups' door. It's Aizome's look at twice the size, for a room:
+  the theme's colours (Night, Day or High contrast, and the focus colour
+  from Settings), square flat faces, Archivo and IBM Plex Mono, the kit's
+  icons. A service's tile is its colour on a square with its initial and
+  its name, never its logo. The tile the controller is on wears the focus
+  ring, its name under it. The arrows or the left stick move, held they
+  repeat; the confirm button opens. The hints along the foot show the
+  controller's own buttons: Xbox's letters in their colours, PlayStation's
+  shapes, Nintendo's letters (with A, on the right, saying yes), or for
+  any other controller the four buttons as a diamond with the one meant
+  filled in; keycaps for a keyboard. The header is the menu bar's without
+  the bar: Aizome's mark and Chanoma's name, then at the right grown-up
+  mode, each controller with its player number and battery, the time left
+  today, and the clock as the menu bar sets it (24 or 12 hours).
 - **Only a controller**: Bluetooth controllers, paired once in the
   settings, reconnect by themselves when switched on. Chanoma holds them
   exclusively while it runs. The Home button (or, on a controller

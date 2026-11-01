@@ -19,6 +19,22 @@ use crate::ui::settings::{Page, Row, Value};
 
 pub const SECTIONS: [&str; 7] = ["Time", "Watch", "Games", "Films and shows", "Controllers", "PIN and lock", "Chanoma"];
 
+/// Each section's icon and the colour of its square, as Settei's side list
+/// has them.
+const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 7] = {
+    use aizome_kit::Icon;
+    use aizome_kit::theme::Role;
+    [
+        (Icon::Clock, Role::Warning),
+        (Icon::Tv, Role::Danger),
+        (Icon::Gamepad2, Role::Violet),
+        (Icon::Film, Role::Cyan),
+        (Icon::Bluetooth, Role::Accent),
+        (Icon::Lock, Role::Success),
+        (Icon::Settings, Role::Text3),
+    ]
+};
+
 /// Where the settings' focus is.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct State {
@@ -201,11 +217,11 @@ impl Chanoma {
                     Act::Weekend,
                 ));
                 rows.push((Row::heading("Bedtime"), Act::None));
-                let bed = s.limits.bedtime.map_or("Off".to_owned(), |b| minute_label(b.from));
+                let bed = s.limits.bedtime.map_or("Off".to_owned(), |b| minute_label(b.from, self.config.h24));
                 rows.push((Row::new("Bedtime", Value::Choice(bed)).detail("Nothing plays from then"), Act::Bedtime));
                 if let Some(b) = s.limits.bedtime {
                     rows.push((
-                        Row::new("Wake up", Value::Choice(minute_label(b.until))).detail("Until then"),
+                        Row::new("Wake up", Value::Choice(minute_label(b.until, self.config.h24))).detail("Until then"),
                         Act::Wake,
                     ));
                 }
@@ -355,6 +371,7 @@ impl Chanoma {
         let mut p = Page {
             title: if self.settings.setup_done { "Settings".into() } else { "Set up Chanoma".into() },
             sections: SECTIONS.iter().map(|s| (*s).to_owned()).collect(),
+            icons: SECTION_ICONS.to_vec(),
             section: self.grownups.section,
             rows,
             first: self.grownups.first,

@@ -46,6 +46,24 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `app/` | The program: screens, input, home shelves, playing, settings, time |
 | `ui/` | What's drawn: a 1920 × 1080 stage scaled to the screen |
 
+### The look
+
+Chanoma draws on one canvas rather than with the kit's widgets (a
+television wants tiles and a focus that moves by direction, not a
+pointer's controls), but in Aizome's vocabulary (`ui/look.rs`): the
+theme's palette, so Night, Day, High contrast and the focus colour follow
+the desktop's settings; square faces with the 1pt top highlight and
+edge; the hard shadow under what floats, where the effects allow; the 2pt
+focus ring; the selection's indigo for lit rows and pressed-in choices;
+Archivo for words, IBM Plex Mono for clocks and numbers and spaced
+capitals over sections; Lucide icons from the kit; Aizome's mark beside
+the name. Every length is doubled (`K`): a 1080p television across a
+room reads as a laptop's screen at arm's length does at twice the size.
+The menus are the kit's titled menus (a dark title strip, engraved rows);
+the settings follow Settei's side list; the PIN pad and the one-thing
+screens follow the lock screen. The clock follows the menu bar's 24- or
+12-hour setting, read at start.
+
 ### Controllers
 
 Chanoma reads controllers' event devices itself, on a thread of its own,

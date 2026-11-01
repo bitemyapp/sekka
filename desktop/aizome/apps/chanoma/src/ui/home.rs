@@ -1,21 +1,23 @@
 //! Home: shelves of tiles, one above the other (keep playing, watch,
-//! films and shows, games, and the grown-ups' door), and grids of tiles
+//! games, films and shows, and the grown-ups' door), and grids of tiles
 //! (every game, a show's episodes).
 //!
-//! The focused tile is ringed in amber and a little larger; its name
+//! Tiles are flat raised faces, as Aizome's are, headed by spaced
+//! capitals. The tile the controller is on wears the focus ring; its name
 //! shows under it when the tile is a picture. A shelf scrolls as the focus
 //! nears its right edge, and every shelf remembers where it was.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use aizome_kit::layout::{Point, Rect, Size, Vec2};
-use aizome_kit::sidestep_ui::kurbo::{BezPath, Circle, Line, RoundedRect};
-use aizome_kit::sidestep_ui::{Canvas, Color, Image, ImageOptions, LineCap, StrokeStyle};
-use aizome_kit::theme::Theme;
+use aizome_kit::Icon;
+use aizome_kit::draw::border;
+use aizome_kit::layout::{Point, Rect, Size};
+use aizome_kit::sidestep_ui::{Canvas, Color, Image, ImageOptions};
+use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Fit, Focus, H, MARGIN, TOP, W};
+use super::{Fit, Focus, H, HEAD_Y, MARGIN, TOP, W};
 
 /// A tile's size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -35,7 +37,7 @@ impl TileSize {
     }
 }
 
-/// The pictures drawn for tiles without one of their own.
+/// The icons on tiles that aren't a thing to play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Grid,
@@ -47,24 +49,38 @@ pub enum Symbol {
     Film,
 }
 
+impl Symbol {
+    fn icon(self) -> Icon {
+        match self {
+            Symbol::Grid => Icon::LayoutGrid,
+            Symbol::Controller => Icon::Gamepad2,
+            Symbol::Lock => Icon::Lock,
+            Symbol::Gear => Icon::Settings,
+            Symbol::Door => Icon::LogOut,
+            Symbol::Plus => Icon::FolderPlus,
+            Symbol::Film => Icon::Film,
+        }
+    }
+}
+
 /// What a tile shows.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TileLook {
-    /// A service: its colour, its name set large.
+    /// A service: its colour on a square with its initial, and its name.
     Brand {
         color: u32,
         ink: u32,
     },
-    /// A picture (box art, a poster, where a game was left), on a card of
-    /// `color`; without one the card wears the title.
+    /// A picture (box art, a poster, where a game was left) on a mat;
+    /// without one, the title, under the system's colour and name (`chip`)
+    /// for a game.
     Picture {
         art: Option<PathBuf>,
-        color: u32,
+        chip: Option<u32>,
         pixels: bool,
     },
     Symbol {
         symbol: Symbol,
-        color: u32,
     },
 }
 
@@ -98,10 +114,10 @@ pub struct Home {
 }
 
 pub const GAP: f64 = 30.0;
-/// From a shelf's title to its tiles.
-const TITLE_H: f64 = 58.0;
+/// From a shelf's caption to its tiles.
+const TITLE_H: f64 = 52.0;
 /// Below the tiles: room for the focused tile's name.
-const BELOW: f64 = 84.0;
+const BELOW: f64 = 80.0;
 
 /// Tiles of `size` that fit across.
 pub fn across(size: TileSize) -> usize {
@@ -195,14 +211,8 @@ impl Home {
                 }
                 let title = Rect::new(MARGIN, y, W, y + TITLE_H);
                 if c.needs(title) {
-                    text(
-                        c,
-                        theme,
-                        &s.title,
-                        Point::new(MARGIN, y),
-                        font(36.0, 700.0),
-                        if focus.row == row { INK } else { INK_SOFT },
-                    );
+                    let ink = if focus.row == row { theme.text2() } else { theme.text3() };
+                    caption(c, theme, &s.title, MARGIN, y + 14.0, ink);
                 }
                 // The focused tile last, over its neighbours.
                 let mut order: Vec<usize> = (0..s.tiles.len()).filter(|col| self.showing(&tops, row, *col)).collect();
@@ -239,7 +249,7 @@ impl Grid {
     }
 
     fn body_top(&self) -> f64 {
-        TOP + if self.tabs.is_empty() { 10.0 } else { 74.0 }
+        TOP + if self.tabs.is_empty() { 10.0 } else { 84.0 }
     }
 
     fn line_height(&self) -> f64 {
@@ -283,23 +293,29 @@ impl Grid {
     }
 
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus, art: &HashMap<PathBuf, Image>) {
-        // The title where Home has its clock.
-        let head = Rect::new(0.0, 40.0, W, self.body_top() - 10.0);
+        // The title where Home has its name, the systems under it as tabs
+        // (as the palette's scopes are).
+        let head = Rect::new(0.0, 30.0, W, self.body_top() - 10.0);
         if c.needs(head) {
-            text(c, theme, &self.title, Point::new(MARGIN, 64.0), font(58.0, 800.0), INK);
+            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
             if !self.subtitle.is_empty() {
-                let w = measure(theme, &self.title, font(58.0, 800.0)).width;
-                text(c, theme, &self.subtitle, Point::new(MARGIN + w + 28.0, 84.0), font(32.0, 600.0), INK_SOFT);
+                let spec = font(SMALL + 2.0, REGULAR);
+                text_mid(c, theme, &self.subtitle, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
             }
             let mut x = MARGIN;
             for (i, t) in self.tabs.iter().enumerate() {
-                let spec = font(28.0, 700.0);
-                let w = measure(theme, t, spec).width + 48.0;
-                let r = Rect::new(x, TOP - 22.0, x + w, TOP + 32.0);
-                let on = i == self.tab;
-                c.fill(&RoundedRect::from_rect(r, 27.0), if on { INK } else { Color::hex(0x252c62) });
-                text_centred(c, theme, t, r.center(), spec, if on { Color::hex(0x141a3a) } else { INK_SOFT });
-                x += w + 14.0;
+                let spec = font(SMALL + 2.0, MEDIUM);
+                let w = (measure(theme, t, spec).width + 44.0).round();
+                let r = Rect::new(x, TOP - 6.0, x + w, TOP + 46.0);
+                let ink = if i == self.tab {
+                    lit(c, theme, r);
+                    theme.on_selection()
+                } else {
+                    face(c, theme, r, theme.raised(), theme.line());
+                    theme.text2()
+                };
+                text_centred(c, theme, t, r.center(), spec, ink);
+                x += w + 12.0;
             }
         }
         c.saved(|c| {
@@ -314,7 +330,14 @@ impl Grid {
             }
         });
         if self.tiles.is_empty() {
-            text_centred(c, theme, "Nothing here yet", Point::new(W / 2.0, H / 2.0), font(40.0, 700.0), INK_SOFT);
+            text_centred(
+                c,
+                theme,
+                "Nothing here yet",
+                Point::new(W / 2.0, H / 2.0),
+                font(TITLE, MEDIUM),
+                theme.text3(),
+            );
         }
     }
 }
@@ -323,136 +346,113 @@ fn rgb(c: u32) -> Color {
     Color::hex(c)
 }
 
-/// One tile at `r`.
+/// One tile at `r`: a flat face, its picture or its name, and while the
+/// controller is on it the focus ring, with its name under it when the
+/// tile is a picture.
 pub fn paint_tile(c: &mut Canvas, theme: &Theme, t: &Tile, r: Rect, focused: bool, art: &HashMap<PathBuf, Image>) {
-    let r = lifted(r, focused);
-    let radius = 20.0;
+    const PAD: f64 = 24.0;
     match &t.look {
         TileLook::Brand { color, ink } => {
-            card(c, r, radius, rgb(*color));
-            let size = fitted(theme, &t.label, r.width() - 48.0, 52.0, 900.0);
-            text_centred(c, theme, &t.label, r.center(), font(size, 900.0), rgb(*ink));
+            face(c, theme, r, theme.raised(), theme.line());
+            // The service's colour on a square with its initial, as an
+            // account's picture is drawn; never its logo.
+            let sq = Rect::new(r.x0 + PAD, r.y0 + PAD, r.x0 + PAD + 64.0, r.y0 + PAD + 64.0);
+            c.fill_rect(sq, rgb(*color));
+            border(c, sq, theme.bevel_lo().with_alpha(0.4), EDGE);
+            let initial: String = t.label.chars().find(|c| c.is_alphanumeric()).into_iter().collect();
+            text_centred(c, theme, &initial, sq.center(), font(36.0, BOLD), rgb(*ink));
+            let size = fitted(theme, &t.label, r.width() - PAD * 2.0, TITLE, SEMIBOLD);
+            let spec = font(size, SEMIBOLD);
+            let h = measure(theme, &t.label, spec).height;
+            text(c, theme, &t.label, Point::new(r.x0 + PAD, r.y1 - PAD - h), spec, theme.text());
         }
-        TileLook::Picture { art: path, color, pixels } => {
-            card(c, r, radius, rgb(*color));
-            match path.as_ref().and_then(|p| art.get(p)) {
-                Some(img) => c.saved(|c| {
-                    c.clip(&RoundedRect::from_rect(r, radius));
+        TileLook::Picture { art: path, chip, pixels } => match path.as_ref().and_then(|p| art.get(p)) {
+            Some(img) => {
+                well(c, theme, r);
+                c.saved(|c| {
+                    let inner = r.inset(-EDGE);
+                    c.clip_rect(inner);
                     let (iw, ih) = img.pixel_size();
-                    // The whole picture, letterboxed on its card.
-                    let s = (r.width() / f64::from(iw)).min(r.height() / f64::from(ih));
+                    // The whole picture, on its mat.
+                    let s = (inner.width() / f64::from(iw)).min(inner.height() / f64::from(ih));
                     let size = Size::new(f64::from(iw) * s, f64::from(ih) * s);
-                    let dst = Rect::from_center_size(r.center(), size);
+                    let dst = Rect::from_center_size(inner.center(), size);
                     c.draw_image_with(img, None, dst, ImageOptions { smooth: !pixels, ..ImageOptions::default() });
-                }),
-                None => {
-                    // The title on the card, where there's no picture.
-                    let lines = wrap(theme, &t.label, r.width() - 44.0, font(38.0, 800.0));
-                    let spec = if lines.len() > 3 { font(28.0, 800.0) } else { font(38.0, 800.0) };
-                    let lines = wrap(theme, &t.label, r.width() - 44.0, spec);
-                    let lh = spec.size * 1.2;
-                    let top = r.center().y - lh * lines.len().min(4) as f64 / 2.0;
-                    for (i, l) in lines.iter().take(4).enumerate() {
-                        text_centred(c, theme, l, Point::new(r.center().x, top + lh * (i as f64 + 0.5)), spec, INK);
+                });
+            }
+            None => {
+                face(c, theme, r, theme.raised(), theme.line());
+                // What it is along the top (a game's system, by its
+                // colour and name; a film's icon), its title at the foot.
+                let y = r.y0 + PAD + 12.0;
+                match chip {
+                    Some(color) => {
+                        c.fill_rect(Rect::new(r.x0 + PAD, y - 8.0, r.x0 + PAD + 16.0, y + 8.0), rgb(*color));
+                        let room = r.width() - PAD * 2.0 - 28.0;
+                        let sub = if caption_width(theme, &t.sub, CAPTION) <= room { t.sub.as_str() } else { "" };
+                        caption(c, theme, sub, r.x0 + PAD + 28.0, y, theme.text3());
                     }
+                    None => icon(c, Icon::Film, Point::new(r.x0 + PAD + 16.0, y + 4.0), 32.0, theme.text3()),
+                }
+                let spec = font(30.0, SEMIBOLD);
+                let lines = wrap(theme, &t.label, r.width() - PAD * 2.0, spec);
+                let room = ((r.height() - PAD * 2.0 - 40.0) / (spec.size * 1.2)).floor().max(1.0) as usize;
+                let lh = spec.size * 1.2;
+                let shown = lines.len().min(room);
+                let mut top = r.y1 - PAD - lh * shown as f64;
+                for (i, l) in lines.iter().take(shown).enumerate() {
+                    let l = if i + 1 == shown && lines.len() > shown { format!("{l}…") } else { l.clone() };
+                    let l = fit_text(theme, &l, r.width() - PAD * 2.0, spec);
+                    text(c, theme, &l, Point::new(r.x0 + PAD, top), spec, theme.text());
+                    top += lh;
                 }
             }
-        }
-        TileLook::Symbol { symbol, color } => {
-            card(c, r, radius, rgb(*color));
-            let at = Point::new(r.center().x, r.y0 + r.height() * 0.42);
-            draw_symbol(c, *symbol, at, r.height() * 0.34);
-            let size = fitted(theme, &t.label, r.width() - 40.0, 32.0, 800.0);
-            text_centred(
-                c,
-                theme,
-                &t.label,
-                Point::new(r.center().x, r.y1 - r.height() * 0.17),
-                font(size, 800.0),
-                INK,
-            );
+        },
+        TileLook::Symbol { symbol } => {
+            face(c, theme, r, theme.raised(), theme.line());
+            icon(c, symbol.icon(), Point::new(r.x0 + PAD + 24.0, r.y0 + PAD + 24.0), 48.0, theme.text2());
+            let size = fitted(theme, &t.label, r.width() - PAD * 2.0, 30.0, SEMIBOLD);
+            let spec = font(size, SEMIBOLD);
+            let h = measure(theme, &t.label, spec).height;
+            text(c, theme, &t.label, Point::new(r.x0 + PAD, r.y1 - PAD - h), spec, theme.text());
         }
     }
     if let Some(p) = t.progress {
-        let bar = Rect::new(r.x0 + 18.0, r.y1 - 18.0, r.x1 - 18.0, r.y1 - 10.0);
-        c.fill(&RoundedRect::from_rect(bar, 4.0), Color::rgba(0.0, 0.0, 0.0, 0.5));
-        let done = Rect::new(bar.x0, bar.y0, bar.x0 + bar.width() * f64::from(p.min(1000)) / 1000.0, bar.y1);
+        // How far through, along the foot, as Utsushi's timeline fills.
+        let track = Rect::new(r.x0 + EDGE, r.y1 - EDGE - 8.0, r.x1 - EDGE, r.y1 - EDGE);
+        c.fill_rect(track, theme.sunk());
+        let done = Rect::new(track.x0, track.y0, track.x0 + track.width() * f64::from(p.min(1000)) / 1000.0, track.y1);
         // Nothing to fill at the very start.
         if done.width() >= 1.0 {
-            c.fill(&RoundedRect::from_rect(done, 4.0), FOCUS);
+            c.fill_rect(done, theme.role(Role::Accent));
         }
     }
     if let Some(b) = &t.badge {
-        let spec = font(22.0, 800.0);
-        let w = measure(theme, b, spec).width + 26.0;
-        let br = Rect::new(r.x1 - w - 10.0, r.y0 + 10.0, r.x1 - 10.0, r.y0 + 44.0);
-        c.fill(&RoundedRect::from_rect(br, 17.0), FOCUS);
-        text_centred(c, theme, b, br.center(), spec, Color::hex(0x2a1e05));
+        chip(c, theme, b, r.x1 - 12.0, r.y0 + 28.0, 16.0);
     }
     if focused {
-        focus_ring(c, r, radius);
-        // Its name on one line under it (a picture's; a service says its
-        // own), and what it is after, softer.
-        let named = !matches!(t.look, TileLook::Brand { .. } | TileLook::Symbol { .. });
-        let label = if named { t.label.as_str() } else { "" };
-        if !label.is_empty() || !t.sub.is_empty() {
-            let y = r.y1 + 18.0;
+        ring(c, theme, r);
+        // Under it, on one line, what the tile doesn't already say: a
+        // picture's name, and what it is after, quieter (a game without a
+        // picture has both on it).
+        let pictured = matches!(&t.look, TileLook::Picture { art: Some(p), .. } if art.contains_key(p));
+        let lettered = matches!(&t.look, TileLook::Picture { chip: Some(_), .. }) && !pictured;
+        let label = if pictured { t.label.as_str() } else { "" };
+        let sub = if lettered { "" } else { t.sub.as_str() };
+        if !label.is_empty() || !sub.is_empty() {
+            let y = r.y1 + RING + 30.0;
             let room = r.width() + 300.0;
             let mut x = r.x0;
             if !label.is_empty() {
-                let l = fit_text(theme, label, room, font(30.0, 700.0));
-                text(c, theme, &l, Point::new(x, y), font(30.0, 700.0), INK);
-                x += measure(theme, &l, font(30.0, 700.0)).width + 16.0;
+                let spec = font(BODY, SEMIBOLD);
+                let l = fit_text(theme, label, room, spec);
+                x += text_mid(c, theme, &l, x, y, spec, theme.text()) + 16.0;
             }
-            if !t.sub.is_empty() && x < r.x0 + room {
-                let s = fit_text(theme, &t.sub, r.x0 + room - x, font(26.0, 600.0));
-                text(c, theme, &s, Point::new(x, y + 3.0), font(26.0, 600.0), INK_SOFT);
+            if !sub.is_empty() && x < r.x0 + room {
+                let spec = mono(SMALL - 2.0, REGULAR);
+                let s = fit_text(theme, sub, r.x0 + room - x, spec);
+                text_mid(c, theme, &s, x, y + 1.0, spec, theme.text3());
             }
-        }
-    }
-}
-
-/// A symbol, `h` tall, centred on `at`.
-pub fn draw_symbol(c: &mut Canvas, s: Symbol, at: Point, h: f64) {
-    let stroke = StrokeStyle::new(h * 0.1).with_cap(LineCap::Round);
-    match s {
-        Symbol::Grid => {
-            let k = h * 0.22;
-            for dx in [-1.0, 0.0, 1.0] {
-                for dy in [-1.0, 0.0, 1.0] {
-                    let p = at + Vec2::new(dx * k * 1.5, dy * k * 1.5);
-                    c.fill(&RoundedRect::from_rect(Rect::from_center_size(p, Size::new(k, k)), k * 0.25), INK);
-                }
-            }
-        }
-        Symbol::Controller => controller(c, at, h * 1.5, INK, Color::rgba(1.0, 1.0, 1.0, 0.1)),
-        Symbol::Lock => padlock(c, at, h, INK),
-        Symbol::Gear => {
-            c.stroke(&Circle::new(at, h * 0.3), &stroke, INK);
-            for i in 0..8 {
-                let a = f64::from(i) * std::f64::consts::TAU / 8.0;
-                let v = Vec2::new(a.cos(), a.sin());
-                c.stroke(&Line::new(at + v * (h * 0.36), at + v * (h * 0.5)), &stroke, INK);
-            }
-        }
-        Symbol::Door => {
-            let r = Rect::from_center_size(at, Size::new(h * 0.6, h));
-            c.stroke(&RoundedRect::from_rect(r, h * 0.06), &stroke, INK);
-            c.fill(&Circle::new(Point::new(r.x1 - h * 0.14, at.y), h * 0.06), INK);
-        }
-        Symbol::Plus => {
-            c.stroke(&Line::new((at.x - h * 0.4, at.y), (at.x + h * 0.4, at.y)), &stroke, INK);
-            c.stroke(&Line::new((at.x, at.y - h * 0.4), (at.x, at.y + h * 0.4)), &stroke, INK);
-        }
-        Symbol::Film => {
-            let r = Rect::from_center_size(at, Size::new(h * 1.1, h * 0.8));
-            c.stroke(&RoundedRect::from_rect(r, h * 0.08), &stroke, INK);
-            let mut tri = BezPath::new();
-            tri.move_to((at.x - h * 0.14, at.y - h * 0.2));
-            tri.line_to((at.x + h * 0.22, at.y));
-            tri.line_to((at.x - h * 0.14, at.y + h * 0.2));
-            tri.close_path();
-            c.fill(&tri, INK);
         }
     }
 }
