@@ -439,35 +439,7 @@ in
           "application/pdf"
           "application/x-pdf"
         ]
-        + entry "Utsushi" [
-          "video/mp4"
-          "video/x-matroska"
-          "video/webm"
-          "video/quicktime"
-          "video/x-msvideo"
-          "video/vnd.avi"
-          "video/mpeg"
-          "video/ogg"
-          "video/3gpp"
-          "video/mp2t"
-          "video/x-flv"
-          "video/x-m4v"
-          "video/av1"
-          "audio/mpeg"
-          "audio/mp4"
-          "audio/x-m4a"
-          "audio/aac"
-          "audio/flac"
-          "audio/x-flac"
-          "audio/ogg"
-          "audio/x-vorbis+ogg"
-          "audio/opus"
-          "audio/x-opus+ogg"
-          "audio/wav"
-          "audio/x-wav"
-          "audio/webm"
-          "audio/x-matroska"
-        ]
+        + entry "Utsushi" (import ./utsushi-mime-types.nix { inherit lib; })
         + entry "Hako" [ "inode/directory" ]
         + entry "Koyomi" [ "text/calendar" ]
         + entry "Tansu" [
