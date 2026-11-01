@@ -23,6 +23,7 @@ use aizome_chanoma::{Chanoma, Config, Msg};
 use aizome_kit::Size;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
+use aizome_kit::theme::{Appearance, ThemeChoice};
 
 // A libretro core: a 160 × 120 picture, blue (green while B is held) with
 // a white square that moves right while Right is held; it counts frames,
@@ -245,6 +246,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         scan: true,
         core_override: Some(test_core()),
         signals: false,
+        h24: true,
     }
 }
 
@@ -319,7 +321,14 @@ fn shot(h: &mut Harness<Chanoma>, name: &str) {
         let dir = PathBuf::from(dir);
         std::fs::create_dir_all(&dir).unwrap();
         let w = h.window();
-        h.save_png(w, dir.join(format!("{name}.png")), 1.0);
+        // In Night, and in Day and High contrast beside it: Aizome's apps
+        // must look finished in each.
+        for (suffix, theme) in
+            [("-day", ThemeChoice::Day), ("-hc", ThemeChoice::HighContrast), ("", ThemeChoice::Night)]
+        {
+            h.set_appearance(Appearance { theme, ..Appearance::default() });
+            h.save_png(w, dir.join(format!("{name}{suffix}.png")), 1.0);
+        }
     }
 }
 

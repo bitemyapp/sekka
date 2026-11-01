@@ -258,6 +258,19 @@ def koe():
     return g
 
 
+@icon("org.aizome.Chanoma", "Chanoma (TV)")
+def chanoma():
+    # The family room's television on its low table: antennae up, the
+    # screen deep in the dye, and a controller lit amber on it.
+    g = R(20, 10, 2, 2, MID) + R(22, 12, 2, 2, MID) + R(38, 10, 2, 2, MID) + R(36, 12, 2, 2, MID)
+    g += R(10, 14, 40, 26, MID) + R(12, 16, 36, 22, AI)
+    g += R(20, 24, 20, 6, AMBER) + R(18, 28, 6, 6, AMBER) + R(36, 28, 6, 6, AMBER)
+    g += R(22, 26, 2, 2, AI) + R(36, 26, 2, 2, AI)
+    g += R(16, 40, 4, 2, MID) + R(40, 40, 4, 2, MID)
+    g += R(10, 42, 40, 4, DEEP) + R(14, 46, 2, 4, DEEP) + R(44, 46, 2, 4, DEEP)
+    return g
+
+
 @icon("org.aizome.Toolchest", "Toolchest")
 def toolchest():
     return R(10, 10, 20, 10, AMBER) + R(10, 20, 40, 10, PALE) + R(10, 30, 40, 10, MID) + R(10, 40, 40, 10, DEEP)

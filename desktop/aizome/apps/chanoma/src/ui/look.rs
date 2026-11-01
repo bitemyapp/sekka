@@ -1,37 +1,61 @@
-//! Chanoma's look: a lamp-lit indigo evening (aizome is indigo dyeing),
-//! big rounded tiles, Archivo set large enough to read from the sofa, and
-//! the amber of Aizome's focus around whatever the controller is on.
+//! Chanoma's look: Aizome's, seen from the sofa. A television across a
+//! room reads about as a laptop's screen at arm's length does at twice
+//! the size, so Aizome's points are doubled here ([`K`]): its 1pt edges
+//! and bevels are 2, the 2pt focus ring 4, the 3pt hard shadow 6.
+//! Everything else is as the desktop draws it: the theme's colours (Night,
+//! Day or High contrast, and the focus colour chosen in Settings), square
+//! corners, flat faces with a highlight along the top, Archivo for words,
+//! IBM Plex Mono for clocks, numbers and spaced capitals over sections,
+//! and the kit's Lucide icons.
 //!
 //! The controller's buttons are drawn as the controller in hand prints
-//! them: Xbox's coloured letters, PlayStation's shapes, Nintendo's
-//! letters; and for any other controller, the four buttons as a diamond
-//! with the one meant filled in, which reads without letters.
+//! them: Xbox's letters in their colours, PlayStation's shapes, Nintendo's
+//! letters; for any other controller, the four buttons as a diamond with
+//! the one meant filled in, which reads without letters. Their colours are
+//! the theme's green, red, blue and amber, so they hold their contrast in
+//! every theme.
 
+use aizome_kit::Icon;
+use aizome_kit::draw::{border, top};
 use aizome_kit::layout::{Point, Rect, Size, Vec2};
-use aizome_kit::sidestep_ui::kurbo::{BezPath, Circle, Line, RoundedRect};
-use aizome_kit::sidestep_ui::{Canvas, Color, LineCap, StrokeStyle};
-use aizome_kit::theme::{FontSpec, Theme};
+use aizome_kit::sidestep_ui::kurbo::{BezPath, Circle};
+use aizome_kit::sidestep_ui::{Canvas, Color, LineCap, StrokeStyle, TextStyle};
+use aizome_kit::theme::{FontSpec, Role, Theme};
 
 use crate::pad::{Button, Family};
 
-pub const BG_TOP: Color = Color::hex(0x0e1230);
-pub const BG_BOTTOM: Color = Color::hex(0x1c2253);
-pub const INK: Color = Color::hex(0xf6f1e7);
-pub const INK_SOFT: Color = Color::hex(0xb3b8dc);
-pub const INK_FAINT: Color = Color::hex(0x7179a9);
-pub const CARD: Color = Color::hex(0x272e66);
-pub const CARD_EDGE: Color = Color::hex(0x3a4290);
-pub const PANEL: Color = Color::hex(0x1f2559);
-pub const FOCUS: Color = Color::hex(0xffb43c);
-pub const GOOD: Color = Color::hex(0x5cc77c);
-pub const WARN: Color = Color::hex(0xffc75a);
-pub const DANGER: Color = Color::hex(0xff6b5b);
-pub const SHADOW: Color = Color::rgba(0.0, 0.0, 0.05, 0.45);
-pub const VEIL: Color = Color::rgba(0.03, 0.04, 0.12, 0.72);
+/// Aizome's points in the design's: everything twice its desktop size.
+pub const K: f64 = 2.0;
+/// An edge, a bevel, a rule.
+pub const EDGE: f64 = K;
+/// The focus ring.
+pub const RING: f64 = 2.0 * K;
+/// The hard shadow's offset, right and down.
+pub const SLAB: f64 = 3.0 * K;
+/// The rail beside what's current (a menu's lit row, a note).
+pub const RAIL: f64 = 3.0 * K;
+
+/// Type sizes: Aizome's, doubled and rounded up a little for the room.
+pub const CAPTION: f64 = 20.0;
+pub const SMALL: f64 = 24.0;
+pub const BODY: f64 = 28.0;
+pub const TITLE: f64 = 32.0;
+pub const HEADLINE: f64 = 44.0;
+pub const DISPLAY: f64 = 60.0;
+
+pub const REGULAR: f32 = 400.0;
+pub const MEDIUM: f32 = 500.0;
+pub const SEMIBOLD: f32 = 600.0;
+pub const BOLD: f32 = 750.0;
 
 /// Archivo at `size`, `weight`.
 pub fn font(size: f64, weight: f32) -> FontSpec {
     FontSpec { weight, ..FontSpec::ui(size) }
+}
+
+/// IBM Plex Mono at `size`, `weight`, with digits all one width.
+pub fn mono(size: f64, weight: f32) -> FontSpec {
+    FontSpec { weight, tabular: true, ..FontSpec::mono(size) }
 }
 
 pub fn measure(theme: &Theme, s: &str, spec: FontSpec) -> Size {
@@ -49,10 +73,18 @@ pub fn text_centred(c: &mut Canvas, theme: &Theme, s: &str, at: Point, spec: Fon
     text(c, theme, s, Point::new(at.x - size.width / 2.0, at.y - size.height / 2.0), spec, color);
 }
 
-/// `s` with its right edge at `x`, its top at `y`.
-pub fn text_right(c: &mut Canvas, theme: &Theme, s: &str, x: f64, y: f64, spec: FontSpec, color: Color) {
+/// `s` with its left edge at `x`, centred on `y`: its width.
+pub fn text_mid(c: &mut Canvas, theme: &Theme, s: &str, x: f64, y: f64, spec: FontSpec, color: Color) -> f64 {
     let size = measure(theme, s, spec);
-    text(c, theme, s, Point::new(x - size.width, y), spec, color);
+    text(c, theme, s, Point::new(x, y - size.height / 2.0), spec, color);
+    size.width
+}
+
+/// `s` with its right edge at `x`, centred on `y`: its width.
+pub fn text_right(c: &mut Canvas, theme: &Theme, s: &str, x: f64, y: f64, spec: FontSpec, color: Color) -> f64 {
+    let size = measure(theme, s, spec);
+    text(c, theme, s, Point::new(x - size.width, y - size.height / 2.0), spec, color);
+    size.width
 }
 
 /// `s` cut to `width` with an ellipsis.
@@ -101,7 +133,7 @@ pub fn paragraph(
     spec: FontSpec,
     color: Color,
 ) -> f64 {
-    let line_h = spec.size * 1.32;
+    let line_h = spec.size * 1.4;
     let mut y = top;
     for line in wrap(theme, s, width, spec) {
         text_centred(c, theme, &line, Point::new(centre_x, y + line_h / 2.0), spec, color);
@@ -116,146 +148,169 @@ pub fn fitted(theme: &Theme, s: &str, width: f64, max: f64, weight: f32) -> f64 
     if w <= width { max } else { (max * width / w).max(14.0) }
 }
 
-/// The sky: flat bands too fine to see (a gradient over the whole window
-/// costs milliseconds a frame; flat fills almost nothing).
-pub fn backdrop(c: &mut Canvas, b: Rect) {
-    let bands = 40;
-    for i in 0..bands {
-        let t = f64::from(i) / f64::from(bands);
-        let y0 = (b.y0 + b.height() * t).floor();
-        let y1 = (b.y0 + b.height() * (t + 1.0 / f64::from(bands))).ceil();
-        let band = Rect::new(b.x0, y0, b.x1, y1);
-        if c.needs(band) {
-            c.fill_rect(band, BG_TOP.mix(BG_BOTTOM, (t + 0.5 / f64::from(bands)) as f32));
-        }
+/// A caption's style: mono capitals, spaced, as Aizome heads its
+/// sections and menus' groups.
+fn caption_style(theme: &Theme, color: Color, size: f64) -> TextStyle {
+    let mut style = theme.style(mono(size, MEDIUM), color);
+    style.letter_spacing = 1.2 * size / 10.5;
+    style
+}
+
+/// A caption (`s` set in capitals) with its left edge at `x`, centred on
+/// `y`, in `color`: its width.
+pub fn caption(c: &mut Canvas, theme: &Theme, s: &str, x: f64, y: f64, color: Color) -> f64 {
+    caption_sized(c, theme, s, x, y, CAPTION, color)
+}
+
+pub fn caption_sized(c: &mut Canvas, theme: &Theme, s: &str, x: f64, y: f64, size: f64, color: Color) -> f64 {
+    let s = s.to_uppercase();
+    let style = caption_style(theme, color, size);
+    let m = aizome_kit::sidestep_ui::measure(&s, &style);
+    c.draw_label(&s, &style, Point::new(x, y - m.height / 2.0));
+    m.width
+}
+
+pub fn caption_width(theme: &Theme, s: &str, size: f64) -> f64 {
+    aizome_kit::sidestep_ui::measure(&s.to_uppercase(), &caption_style(theme, Color::BLACK, size)).width
+}
+
+/// Chanoma's ground: the theme's surface, flat.
+pub fn backdrop(c: &mut Canvas, theme: &Theme, b: Rect) {
+    c.fill_rect(b, theme.surface());
+}
+
+/// A face (a tile, a row, a button): `fill`, an `edge` around it and the
+/// highlight along the top inside, as the kit's raised faces are.
+pub fn face(c: &mut Canvas, theme: &Theme, r: Rect, fill: Color, edge: Color) {
+    c.fill_rect(r, fill);
+    border(c, r, edge, EDGE);
+    top(c, r.inset(-EDGE), theme.bevel_hi(), EDGE);
+}
+
+/// A panel that floats (a menu, the PIN pad, a note): `raised`, a
+/// `bevel_lo` edge, the highlight, and the hard shadow right and down
+/// where the effects allow.
+pub fn floating(c: &mut Canvas, theme: &Theme, r: Rect) {
+    if theme.shadows() {
+        c.fill_rect(Rect::new(r.x0 + SLAB, r.y1, r.x1 + SLAB, r.y1 + SLAB), theme.slab());
+        c.fill_rect(Rect::new(r.x1, r.y0 + SLAB, r.x1 + SLAB, r.y1), theme.slab());
     }
+    face(c, theme, r, theme.raised(), theme.bevel_lo());
 }
 
-/// A rounded card on Aizome's hard shadow.
-pub fn card(c: &mut Canvas, r: Rect, radius: f64, fill: Color) {
-    c.fill(&RoundedRect::from_rect(r + Vec2::new(0.0, 8.0), radius), SHADOW);
-    c.fill(&RoundedRect::from_rect(r, radius), fill);
+/// A well (a field, a track, a picture's mat): `sunk`, a `line2` edge and
+/// a shade along the top inside.
+pub fn well(c: &mut Canvas, theme: &Theme, r: Rect) {
+    c.fill_rect(r, theme.sunk());
+    border(c, r, theme.line2(), EDGE);
+    let shade = if theme.is_dark() { theme.bevel_lo().with_alpha(0.55) } else { theme.bevel_lo().with_alpha(0.18) };
+    top(c, r.inset(-EDGE), shade, EDGE);
 }
 
-/// The ring around what's focused.
-pub fn focus_ring(c: &mut Canvas, r: Rect, radius: f64) {
-    c.stroke(&RoundedRect::from_rect(r.inflate(9.0, 9.0), radius + 9.0), &StrokeStyle::new(6.0), FOCUS);
+/// Lit: the selection's indigo, as the kit's primary buttons and menus'
+/// rows under the pointer are. Text on it is `on_selection`.
+pub fn lit(c: &mut Canvas, theme: &Theme, r: Rect) {
+    c.fill_rect(r, theme.selection());
+    border(c, r, theme.bevel_lo(), EDGE);
+    top(c, r.inset(-EDGE), Color::WHITE.with_alpha(0.16), EDGE);
 }
 
-/// A tile's rectangle grown a little while focused.
-pub fn lifted(r: Rect, focused: bool) -> Rect {
-    if focused { r.inflate(r.width() * 0.04, r.height() * 0.04) } else { r }
+/// The ring around what the controller is on, outside `r`.
+pub fn ring(c: &mut Canvas, theme: &Theme, r: Rect) {
+    border(c, r.inflate(RING, RING), theme.focus(), RING);
 }
 
-/// How far drawing reaches outside a tile (ring, lift, shadow): what a
-/// part's rectangle must cover.
+/// How far drawing reaches outside a tile (its ring): what a part's
+/// rectangle must cover.
 pub fn reach(r: Rect) -> Rect {
-    r.inflate(r.width() * 0.04 + 20.0, r.height() * 0.04 + 22.0)
+    r.inflate(RING + 2.0, RING + 2.0)
 }
 
-/// A rounded panel for menus and dialogs.
-pub fn panel(c: &mut Canvas, r: Rect) {
-    card(c, r, 28.0, PANEL);
-    c.stroke(&RoundedRect::from_rect(r, 28.0), &StrokeStyle::new(2.0), CARD_EDGE);
+/// A rule across, with the highlight under it.
+pub fn rule(c: &mut Canvas, theme: &Theme, x0: f64, x1: f64, y: f64) {
+    c.fill_rect(Rect::new(x0, y, x1, y + EDGE), theme.line());
+    c.fill_rect(Rect::new(x0, y + EDGE, x1, y + 2.0 * EDGE), theme.bevel_hi());
 }
 
-/// A pill of text (time left, grown-up mode): its rectangle.
-pub fn pill(c: &mut Canvas, theme: &Theme, s: &str, right: f64, top: f64, fill: Color, ink: Color) -> Rect {
-    let spec = font(28.0, 700.0);
-    let size = measure(theme, s, spec);
-    let r = Rect::new(right - size.width - 44.0, top, right, top + 52.0);
-    c.fill(&RoundedRect::from_rect(r, 26.0), fill);
-    text(c, theme, s, Point::new(r.x0 + 22.0, r.y0 + (52.0 - size.height) / 2.0), spec, ink);
+/// A push button with its label centred: lit and ringed while the
+/// controller is on it, else a raised face.
+pub fn button(c: &mut Canvas, theme: &Theme, r: Rect, label: &str, focused: bool) {
+    let ink = if focused {
+        lit(c, theme, r);
+        ring(c, theme, r);
+        theme.on_selection()
+    } else {
+        face(c, theme, r, theme.raised(), theme.line2());
+        theme.text()
+    };
+    text_centred(c, theme, label, r.center(), font(TITLE - 2.0, SEMIBOLD), ink);
+}
+
+/// A chip of capitals (`NEW`, `GROWN-UP`) with its right edge at `right`,
+/// centred on `y`, in the focus colour: its rectangle.
+pub fn chip(c: &mut Canvas, theme: &Theme, s: &str, right: f64, y: f64, size: f64) -> Rect {
+    let w = caption_width(theme, s, size) + size * 1.2;
+    let h = size * 1.8;
+    let r = Rect::new((right - w).round(), (y - h / 2.0).round(), right.round(), (y + h / 2.0).round());
+    c.fill_rect(r, theme.focus());
+    caption_sized(c, theme, s, r.x0 + size * 0.6, r.center().y, size, theme.on_focus());
     r
 }
 
-/// An hourglass, for time.
-pub fn hourglass(c: &mut Canvas, at: Point, h: f64, color: Color) {
-    let w = h * 0.62;
-    let mut p = BezPath::new();
-    p.move_to((at.x - w / 2.0, at.y - h / 2.0));
-    p.line_to((at.x + w / 2.0, at.y - h / 2.0));
-    p.line_to((at.x, at.y));
-    p.line_to((at.x + w / 2.0, at.y + h / 2.0));
-    p.line_to((at.x - w / 2.0, at.y + h / 2.0));
-    p.line_to((at.x, at.y));
-    p.close_path();
-    c.stroke(&p, &StrokeStyle::new(h * 0.09).with_cap(LineCap::Round), color);
-    let mut sand = BezPath::new();
-    sand.move_to((at.x - w * 0.3, at.y + h * 0.42));
-    sand.line_to((at.x + w * 0.3, at.y + h * 0.42));
-    sand.line_to((at.x, at.y + h * 0.12));
-    sand.close_path();
-    c.fill(&sand, color);
+/// A Lucide icon `size` square, centred on `at`.
+pub fn icon(c: &mut Canvas, i: Icon, at: Point, size: f64, color: Color) {
+    i.draw(c, Point::new(at.x - size / 2.0, at.y - size / 2.0), size, color);
 }
 
-/// A crescent moon.
-pub fn moon(c: &mut Canvas, at: Point, r: f64, color: Color, sky: Color) {
-    c.fill(&Circle::new(at, r), color);
-    c.fill(&Circle::new(at + Vec2::new(r * 0.42, -r * 0.28), r * 0.86), sky);
-}
-
-/// A padlock, shut.
-pub fn padlock(c: &mut Canvas, at: Point, h: f64, color: Color) {
-    let w = h * 0.8;
-    let body = Rect::new(at.x - w / 2.0, at.y - h * 0.1, at.x + w / 2.0, at.y + h / 2.0);
-    c.fill(&RoundedRect::from_rect(body, h * 0.1), color);
-    let mut shackle = BezPath::new();
-    let sw = w * 0.32;
-    shackle.move_to((at.x - sw, at.y - h * 0.1));
-    shackle.line_to((at.x - sw, at.y - h * 0.24));
-    shackle.curve_to((at.x - sw, at.y - h * 0.52), (at.x + sw, at.y - h * 0.52), (at.x + sw, at.y - h * 0.24));
-    shackle.line_to((at.x + sw, at.y - h * 0.1));
-    c.stroke(&shackle, &StrokeStyle::new(h * 0.11).with_cap(LineCap::Round), color);
-}
-
-/// A game controller's outline, `w` wide.
-pub fn controller(c: &mut Canvas, at: Point, w: f64, color: Color, fill: Color) {
-    let h = w * 0.62;
-    let mut p = BezPath::new();
-    let (x0, y0) = (at.x - w / 2.0, at.y - h / 2.0);
-    p.move_to((x0 + w * 0.22, y0 + h * 0.08));
-    p.line_to((x0 + w * 0.78, y0 + h * 0.08));
-    p.curve_to((x0 + w * 0.95, y0 + h * 0.08), (x0 + w * 1.02, y0 + h * 0.75), (x0 + w * 0.95, y0 + h * 0.95));
-    p.curve_to((x0 + w * 0.88, y0 + h * 1.08), (x0 + w * 0.74, y0 + h * 0.98), (x0 + w * 0.66, y0 + h * 0.74));
-    p.line_to((x0 + w * 0.34, y0 + h * 0.74));
-    p.curve_to((x0 + w * 0.26, y0 + h * 0.98), (x0 + w * 0.12, y0 + h * 1.08), (x0 + w * 0.05, y0 + h * 0.95));
-    p.curve_to((x0 - w * 0.02, y0 + h * 0.75), (x0 + w * 0.05, y0 + h * 0.08), (x0 + w * 0.22, y0 + h * 0.08));
-    p.close_path();
-    c.fill(&p, fill);
-    c.stroke(&p, &StrokeStyle::new(w * 0.035), color);
-    // The arrows and the four buttons.
-    let cross = StrokeStyle::new(w * 0.045).with_cap(LineCap::Round);
-    let dp = Point::new(x0 + w * 0.27, y0 + h * 0.4);
-    let arm = w * 0.07;
-    c.stroke(&Line::new((dp.x - arm, dp.y), (dp.x + arm, dp.y)), &cross, color);
-    c.stroke(&Line::new((dp.x, dp.y - arm), (dp.x, dp.y + arm)), &cross, color);
-    let bp = Point::new(x0 + w * 0.73, y0 + h * 0.4);
-    for (dx, dy) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)] {
-        c.fill(&Circle::new(bp + Vec2::new(dx * arm, dy * arm), w * 0.03), color);
+/// Aizome's mark (a dyer's cloth: the amber tab and three indigo
+/// stripes), 4 `m` square, its top left at `at`.
+pub fn mark(c: &mut Canvas, theme: &Theme, at: Point, m: f64) {
+    let brand = aizome_theme::Brand::for_theme(theme.palette.name);
+    for ([x, y, w, h], col) in brand.mark_rects() {
+        let r = Rect::new(
+            at.x + f64::from(x) * m,
+            at.y + f64::from(y) * m,
+            at.x + f64::from(x + w) * m,
+            at.y + f64::from(y + h) * m,
+        );
+        c.fill_rect(r, aizome_kit::theme::color(col));
     }
-    // The button in the middle that wakes it.
-    c.fill(&Circle::new(Point::new(at.x, y0 + h * 0.26), w * 0.04), FOCUS);
 }
 
-/// How a family prints a face button: its letter (or none for a shape),
-/// its colour and its letters' colour.
-fn face(family: Family, b: Button) -> (Option<&'static str>, Color, Color) {
-    let dark = Color::hex(0x2b2f45);
+/// A battery's icon for `pct` (charging or not), and its colour.
+pub fn battery(theme: &Theme, pct: u8, charging: bool) -> (Icon, Color) {
+    match (charging, pct) {
+        (true, _) => (Icon::BatteryCharging, theme.role(Role::Success)),
+        (false, 0..15) => (Icon::BatteryWarning, theme.role(Role::Warning)),
+        (false, 15..40) => (Icon::BatteryLow, theme.text2()),
+        (false, 40..75) => (Icon::BatteryMedium, theme.text2()),
+        (false, _) => (Icon::BatteryFull, theme.text2()),
+    }
+}
+
+/// How a family prints a face button: its letter (or none for a shape)
+/// and the colour it's printed in.
+fn face_print(theme: &Theme, family: Family, b: Button) -> (Option<&'static str>, Color) {
     match family {
         Family::Xbox => match b {
-            Button::South => (Some("A"), Color::hex(0x3fae49), Color::WHITE),
-            Button::East => (Some("B"), Color::hex(0xe0383e), Color::WHITE),
-            Button::West => (Some("X"), Color::hex(0x2a7bd6), Color::WHITE),
-            _ => (Some("Y"), Color::hex(0xf2b31a), Color::hex(0x1b1b1b)),
+            Button::South => (Some("A"), theme.role(Role::Success)),
+            Button::East => (Some("B"), theme.role(Role::Danger)),
+            Button::West => (Some("X"), theme.role(Role::Accent)),
+            _ => (Some("Y"), theme.role(Role::Warning)),
         },
         Family::Nintendo => match b {
-            Button::South => (Some("B"), dark, Color::WHITE),
-            Button::East => (Some("A"), dark, Color::WHITE),
-            Button::West => (Some("Y"), dark, Color::WHITE),
-            _ => (Some("X"), dark, Color::WHITE),
+            Button::South => (Some("B"), theme.text()),
+            Button::East => (Some("A"), theme.text()),
+            Button::West => (Some("Y"), theme.text()),
+            _ => (Some("X"), theme.text()),
         },
-        Family::PlayStation | Family::Generic | Family::Keyboard => (None, dark, Color::WHITE),
+        Family::PlayStation => match b {
+            Button::South => (None, theme.role(Role::Accent)),
+            Button::East => (None, theme.role(Role::Danger)),
+            Button::West => (None, theme.role(Role::Violet)),
+            _ => (None, theme.role(Role::Success)),
+        },
+        Family::Generic | Family::Keyboard => (None, theme.text()),
     }
 }
 
@@ -268,69 +323,106 @@ fn key_for(b: Button) -> &'static str {
         Button::North => "Tab",
         Button::Guide => "Home",
         Button::Start => "Menu",
-        Button::L1 => "Page Up",
-        Button::R1 => "Page Down",
+        Button::L1 => "PgUp",
+        Button::R1 => "PgDn",
         _ => "",
     }
 }
 
-/// How wide button `b`'s glyph is at radius `r`.
-pub fn glyph_width(theme: &Theme, family: Family, b: Button, r: f64) -> f64 {
-    if family == Family::Keyboard {
-        return measure(theme, key_for(b), font(r * 0.8, 700.0)).width + r * 1.1;
-    }
-    match b {
-        Button::South | Button::East | Button::West | Button::North | Button::Guide => r * 2.0,
-        Button::Start | Button::Select if family != Family::Nintendo => r * 2.0,
-        _ => r * 2.4,
+/// A shoulder's or trigger's name as `family` prints it.
+fn shoulder(family: Family, b: Button) -> &'static str {
+    match (family, b) {
+        (Family::PlayStation, Button::L1) => "L1",
+        (Family::PlayStation, Button::R1) => "R1",
+        (Family::Xbox, Button::L1) => "LB",
+        (Family::Xbox, Button::R1) => "RB",
+        (Family::Xbox, Button::L2) => "LT",
+        (Family::Xbox, Button::R2) => "RT",
+        (Family::Nintendo, Button::L2) => "ZL",
+        (Family::Nintendo, Button::R2) => "ZR",
+        (Family::Nintendo, Button::Start) => "+",
+        (Family::Nintendo, Button::Select) => "−",
+        (_, Button::L1) => "L",
+        (_, Button::R1) => "R",
+        (_, Button::L2) => "L2",
+        (_, Button::R2) => "R2",
+        _ => "•",
     }
 }
 
-/// Button `b` as the controller prints it, `r` its radius.
+/// Whether `b` is drawn as a keycap (a label in a square) rather than a
+/// round button.
+fn is_cap(family: Family, b: Button) -> bool {
+    family == Family::Keyboard
+        || match b {
+            Button::South | Button::East | Button::West | Button::North | Button::Guide => false,
+            Button::Start | Button::Select => family == Family::Nintendo,
+            _ => true,
+        }
+}
+
+fn cap_label(family: Family, b: Button) -> &'static str {
+    if family == Family::Keyboard { key_for(b) } else { shoulder(family, b) }
+}
+
+/// How wide button `b`'s glyph is at radius `r`.
+pub fn glyph_width(theme: &Theme, family: Family, b: Button, r: f64) -> f64 {
+    if is_cap(family, b) {
+        (measure(theme, cap_label(family, b), mono(r * 0.8, MEDIUM)).width + r * 1.1).max(r * 2.0)
+    } else {
+        r * 2.0
+    }
+}
+
+/// Button `b` as the controller prints it, `r` its radius: a round
+/// button on a raised face, or a keycap.
 pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at: Point, r: f64) {
-    if family == Family::Keyboard {
-        let spec = font(r * 0.8, 700.0);
+    let edge = (r / 11.0).max(EDGE).round();
+    if is_cap(family, b) {
         let w = glyph_width(theme, family, b, r);
-        let cap = Rect::new(at.x - w / 2.0, at.y - r * 0.8, at.x + w / 2.0, at.y + r * 0.8);
-        c.fill(&RoundedRect::from_rect(cap + Vec2::new(0.0, 3.0), r * 0.3), Color::hex(0x10142e));
-        c.fill(&RoundedRect::from_rect(cap, r * 0.3), Color::hex(0x2f3670));
-        text_centred(c, theme, key_for(b), at, spec, INK);
+        let cap = Rect::new(at.x - w / 2.0, at.y - r * 0.85, at.x + w / 2.0, at.y + r * 0.85);
+        let cap = Rect::new(cap.x0.round(), cap.y0.round(), cap.x1.round(), cap.y1.round());
+        c.fill_rect(cap, theme.raised());
+        border(c, cap, theme.line2(), edge);
+        text_centred(c, theme, cap_label(family, b), at, mono(r * 0.8, MEDIUM), theme.text());
         return;
     }
+    c.fill(&Circle::new(at, r), theme.raised());
+    c.stroke(&Circle::new(at, r - edge / 2.0), &StrokeStyle::new(edge), theme.line2());
     match b {
         Button::South | Button::East | Button::West | Button::North => {
-            let (letter, fill, ink) = face(family, b);
-            c.fill(&Circle::new(at, r), fill);
+            let (letter, ink) = face_print(theme, family, b);
             if let Some(l) = letter {
-                text_centred(c, theme, l, at + Vec2::new(0.0, r * 0.04), font(r * 1.15, 800.0), ink);
+                text_centred(c, theme, l, at + Vec2::new(0.0, r * 0.03), font(r * 1.05, BOLD), ink);
             } else if family == Family::PlayStation {
-                let s = StrokeStyle::new(r * 0.16).with_cap(LineCap::Round);
-                let k = r * 0.45;
+                let s = StrokeStyle::new(r * 0.13).with_cap(LineCap::Round);
+                let k = r * 0.42;
                 match b {
                     Button::South => {
-                        let col = Color::hex(0x8fb4ea);
-                        c.stroke(&Line::new((at.x - k, at.y - k), (at.x + k, at.y + k)), &s, col);
-                        c.stroke(&Line::new((at.x + k, at.y - k), (at.x - k, at.y + k)), &s, col);
+                        let mut x = BezPath::new();
+                        x.move_to((at.x - k, at.y - k));
+                        x.line_to((at.x + k, at.y + k));
+                        x.move_to((at.x + k, at.y - k));
+                        x.line_to((at.x - k, at.y + k));
+                        c.stroke(&x, &s, ink);
                     }
-                    Button::East => c.stroke(&Circle::new(at, k * 1.05), &s, Color::hex(0xee6f7a)),
-                    Button::West => c.stroke(
-                        &Rect::new(at.x - k * 0.9, at.y - k * 0.9, at.x + k * 0.9, at.y + k * 0.9),
-                        &s,
-                        Color::hex(0xe39bd0),
-                    ),
+                    Button::East => c.stroke(&Circle::new(at, k * 1.05), &s, ink),
+                    Button::West => {
+                        c.stroke(&Rect::new(at.x - k * 0.9, at.y - k * 0.9, at.x + k * 0.9, at.y + k * 0.9), &s, ink)
+                    }
                     _ => {
                         let mut t = BezPath::new();
                         t.move_to((at.x, at.y - k * 1.05));
                         t.line_to((at.x + k * 1.05, at.y + k * 0.75));
                         t.line_to((at.x - k * 1.05, at.y + k * 0.75));
                         t.close_path();
-                        c.stroke(&t, &s, Color::hex(0x5fd0b3));
+                        c.stroke(&t, &s, ink);
                     }
                 }
             } else {
                 // The diamond: the button meant filled, the others hollow.
-                let k = r * 0.42;
-                let dot = r * 0.2;
+                let k = r * 0.44;
+                let dot = r * 0.19;
                 for (bb, dx, dy) in [
                     (Button::North, 0.0, -1.0),
                     (Button::East, 1.0, 0.0),
@@ -339,101 +431,29 @@ pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at
                 ] {
                     let p = at + Vec2::new(dx * k, dy * k);
                     if bb == b {
-                        c.fill(&Circle::new(p, dot * 1.25), FOCUS);
+                        c.fill(&Circle::new(p, dot * 1.2), theme.focus());
                     } else {
-                        c.stroke(&Circle::new(p, dot), &StrokeStyle::new(r * 0.07), INK_SOFT);
+                        c.stroke(&Circle::new(p, dot), &StrokeStyle::new(r * 0.07), theme.text3());
                     }
                 }
             }
         }
-        Button::Start | Button::Select | Button::Guide if family != Family::Nintendo || b == Button::Guide => {
-            // Drawn, not lettered: Xbox's menu lines and view squares, a
-            // house for Home.
-            c.fill(&Circle::new(at, r), Color::hex(0x2b2f45));
-            let s = StrokeStyle::new(r * 0.13).with_cap(LineCap::Round);
-            let k = r * 0.42;
-            match b {
-                Button::Start => {
-                    for dy in [-k * 0.7, 0.0, k * 0.7] {
-                        c.stroke(&Line::new((at.x - k, at.y + dy), (at.x + k, at.y + dy)), &s, INK);
-                    }
-                }
-                Button::Select => {
-                    let a = Rect::new(at.x - k, at.y - k * 0.75, at.x + k * 0.35, at.y + k * 0.45);
-                    c.stroke(&RoundedRect::from_rect(a, r * 0.08), &s, INK);
-                    let b2 = a + Vec2::new(k * 0.65, k * 0.35);
-                    c.fill(&RoundedRect::from_rect(b2, r * 0.08), Color::hex(0x2b2f45));
-                    c.stroke(&RoundedRect::from_rect(b2, r * 0.08), &s, INK);
-                }
-                _ => {
-                    let mut house = BezPath::new();
-                    house.move_to((at.x - k, at.y - k * 0.05));
-                    house.line_to((at.x, at.y - k));
-                    house.line_to((at.x + k, at.y - k * 0.05));
-                    house.move_to((at.x - k * 0.7, at.y - k * 0.3));
-                    house.line_to((at.x - k * 0.7, at.y + k * 0.85));
-                    house.line_to((at.x + k * 0.7, at.y + k * 0.85));
-                    house.line_to((at.x + k * 0.7, at.y - k * 0.3));
-                    c.stroke(&house, &s, INK);
-                }
-            }
-        }
-        _ => {
-            let label = match b {
-                Button::Start => "+",
-                Button::Select => "−",
-                Button::L1 => "L",
-                Button::R1 => "R",
-                Button::L2 => "L2",
-                Button::R2 => "R2",
-                _ => "•",
-            };
-            let label = match (family, b) {
-                (Family::PlayStation, Button::L1) => "L1",
-                (Family::PlayStation, Button::R1) => "R1",
-                (Family::Xbox, Button::L1) => "LB",
-                (Family::Xbox, Button::R1) => "RB",
-                (Family::Xbox, Button::L2) => "LT",
-                (Family::Xbox, Button::R2) => "RT",
-                (Family::Nintendo, Button::L2) => "ZL",
-                (Family::Nintendo, Button::R2) => "ZR",
-                _ => label,
-            };
-            let w = (measure(theme, label, font(r * 0.95, 800.0)).width + r * 0.9).max(r * 2.0);
-            let rr = Rect::new(at.x - w / 2.0, at.y - r * 0.8, at.x + w / 2.0, at.y + r * 0.8);
-            c.fill(&RoundedRect::from_rect(rr, r * 0.8), Color::hex(0x2b2f45));
-            text_centred(c, theme, label, at, font(r * 0.95, 800.0), INK);
-        }
+        // Drawn, not lettered: Xbox's menu lines and view squares, a house
+        // for Home.
+        Button::Start => icon(c, Icon::Menu, at, r * 1.15, theme.text()),
+        Button::Select => icon(c, Icon::Copy, at, r * 1.05, theme.text()),
+        _ => icon(c, Icon::House, at, r * 1.1, theme.text()),
     }
 }
 
-/// A hint at the screen's foot: a button and what it does. Returns where
-/// the next starts.
+/// A hint along the foot: a button and what it does. Returns where the
+/// next starts.
 pub fn hint(c: &mut Canvas, theme: &Theme, family: Family, b: Button, what: &str, x: f64, y: f64) -> f64 {
     let r = 22.0;
     let w = glyph_width(theme, family, b, r);
     button_glyph(c, theme, family, b, Point::new(x + w / 2.0, y), r);
-    let spec = font(28.0, 600.0);
-    let size = measure(theme, what, spec);
-    text(c, theme, what, Point::new(x + w + 14.0, y - size.height / 2.0), spec, INK_SOFT);
-    x + w + 14.0 + size.width + 44.0
-}
-
-/// A battery, `fill` from 0 to 1.
-pub fn battery(c: &mut Canvas, at: Point, w: f64, fill: f64, charging: bool) {
-    let h = w * 0.5;
-    let body = Rect::new(at.x - w / 2.0, at.y - h / 2.0, at.x + w / 2.0 - w * 0.08, at.y + h / 2.0);
-    c.stroke(&RoundedRect::from_rect(body, h * 0.2), &StrokeStyle::new(w * 0.07), INK_SOFT);
-    c.fill_rect(Rect::new(body.x1, at.y - h * 0.2, body.x1 + w * 0.08, at.y + h * 0.2), INK_SOFT);
-    let inner = body.inflate(-w * 0.09, -w * 0.09);
-    let color = if charging {
-        GOOD
-    } else if fill < 0.2 {
-        DANGER
-    } else {
-        INK
-    };
-    c.fill_rect(Rect::new(inner.x0, inner.y0, inner.x0 + inner.width() * fill.clamp(0.05, 1.0), inner.y1), color);
+    let tw = text_mid(c, theme, what, x + w + 14.0, y, font(SMALL + 2.0, REGULAR), theme.text2());
+    x + w + 14.0 + tw + 44.0
 }
 
 #[cfg(test)]
@@ -442,9 +462,13 @@ mod tests {
 
     #[test]
     fn faces_are_where_each_maker_prints_them() {
-        assert_eq!(face(Family::Xbox, Button::South).0, Some("A"));
-        assert_eq!(face(Family::Nintendo, Button::East).0, Some("A"));
-        assert_eq!(face(Family::Nintendo, Button::South).0, Some("B"));
-        assert_eq!(face(Family::PlayStation, Button::South).0, None);
+        let t = Theme::night();
+        assert_eq!(face_print(&t, Family::Xbox, Button::South).0, Some("A"));
+        assert_eq!(face_print(&t, Family::Nintendo, Button::East).0, Some("A"));
+        assert_eq!(face_print(&t, Family::Nintendo, Button::South).0, Some("B"));
+        assert_eq!(face_print(&t, Family::PlayStation, Button::South).0, None);
+        assert!(is_cap(Family::Xbox, Button::L1));
+        assert!(!is_cap(Family::Xbox, Button::Start));
+        assert!(is_cap(Family::Nintendo, Button::Start), "Nintendo prints +");
     }
 }
